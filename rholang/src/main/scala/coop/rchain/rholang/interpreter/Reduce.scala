@@ -1,7 +1,9 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.{Applicative, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.mtl.implicits._
+import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
@@ -14,7 +16,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
-import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
+import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.Serialize
@@ -54,7 +56,8 @@ object Reduce {
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
       tupleSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
-      implicit parallel: cats.Parallel[M, F])
+      implicit parallel: cats.Parallel[M, F],
+      fTell: FunctorTell[M, InterpreterError])
       extends Reduce[M] {
 
     type Cont[Data, Body] = (Body, Env[Data])
@@ -86,7 +89,7 @@ object Reduce {
 
       for {
         substData <- data.toList.traverse(
-                      substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
+                      substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
         res <- tupleSpace.produce(Channel(chan), substData, persist = persistent)
         _   <- go(res)
       } yield ()
@@ -139,13 +142,17 @@ object Reduce {
       * @param par
       * @return
       */
-    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] =
+    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] = {
+      def handle[A](eval: (A => M[Unit]))(a: A): M[Unit] =
+        eval(a).handleError((e: InterpreterError) => {
+          fTell.tell(e)
+        })
       List(
-        Parallel.parTraverse(par.sends.toList)(send => eval(send)),
-        Parallel.parTraverse(par.receives.toList)(recv => eval(recv)),
-        Parallel.parTraverse(par.news.toList)(neu => eval(neu)),
-        Parallel.parTraverse(par.matches.toList)(mat => eval(mat)),
-        Parallel.parTraverse(par.bundles.toList)(bundle => eval(bundle)),
+        Parallel.parTraverse(par.sends.toList)(handle(eval)),
+        Parallel.parTraverse(par.receives.toList)(handle(eval)),
+        Parallel.parTraverse(par.news.toList)(handle(eval)),
+        Parallel.parTraverse(par.matches.toList)(handle(eval)),
+        Parallel.parTraverse(par.bundles.toList)(handle(eval)),
         Parallel.parTraverse(par.exprs.filter { expr =>
           expr.exprInstance match {
             case _: EVarBody    => true
@@ -156,23 +163,24 @@ object Reduce {
         }.toList)(expr =>
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
-              for {
+              (for {
                 varref <- eval(v.get)
                 _      <- eval(varref)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case e: EEvalBody =>
-              for {
+              (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case e: EMethodBody =>
-              for {
+              (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case _ => Applicative[M].pure(())
         })
       ).parSequence.map(_ => ())
+    }
 
     override def inj(par: Par): M[Unit] =
       for { _ <- eval(par)(Env[Par]()) } yield ()
@@ -203,7 +211,7 @@ object Reduce {
         quote <- eval(send.chan.get)
         data  <- send.data.toList.traverse(x => evalExpr(x))
 
-        subChan <- substituteQuote[M].substitute(quote)
+        subChan <- substituteQuote[M].substitute(quote)(0, env)
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -221,10 +229,13 @@ object Reduce {
       for {
         binds <- receive.binds.toList
                   .traverse(rb =>
-                    unbundleReceive(rb).map(q =>
-                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
+                    for {
+                      q <- unbundleReceive(rb)
+                      substPatterns <- rb.patterns.toList.traverse(pattern =>
+                                        substituteChannel[M].substitute(pattern)(1, env))
+                    } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substitute(receive.body.get)(env.shift(receive.bindCount))
+        substBody <- substitutePar[M].substitute(receive.body.get)(0, env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
       } yield ()
 
@@ -297,28 +308,36 @@ object Reduce {
           )
         )
 
-      @annotation.tailrec
-      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] =
-        cases match {
-          case Nil => Applicative[M].pure(())
-          case singleCase +: caseRem =>
-            val matchResult = SpatialMatcher
-              .spatialMatch(target, singleCase.pattern.get)
-              .runS(SpatialMatcher.emptyMap)
-            matchResult match {
-              case None => firstMatch(target, caseRem)
-              case Some(freeMap) => {
-                val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                eval(singleCase.source.get)(newEnv)
+      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
+        def firstMatchM(
+            state: Tuple2[Par, Seq[MatchCase]]): M[Either[Tuple2[Par, Seq[MatchCase]], Unit]] = {
+          val (target, cases) = state
+          cases match {
+            case Nil => Applicative[M].pure(Right(()))
+            case singleCase +: caseRem =>
+              substitutePar[M].substitute(singleCase.pattern.get)(1, env).flatMap { pattern =>
+                val matchResult =
+                  SpatialMatcher
+                    .spatialMatch(target, pattern)
+                    .runS(SpatialMatcher.emptyMap)
+                matchResult match {
+                  case None => Applicative[M].pure(Left((target, caseRem)))
+                  case Some(freeMap) => {
+                    val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
+                    eval(singleCase.source.get)(newEnv).map(Right(_))
+                  }
+                }
               }
-            }
+          }
         }
+        FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
+      }
 
       for {
         evaledTarget <- evalExpr(mat.target.get)
         // TODO(kyle): Make the matcher accept an environment, instead of
         // substituting it.
-        substTarget <- substitutePar[M].substitute(evaledTarget)(env)
+        substTarget <- substitutePar[M].substitute(evaledTarget)(0, env)
         _           <- firstMatch(substTarget, mat.cases)
       } yield ()
     }
@@ -343,7 +362,7 @@ object Reduce {
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =
       for {
         quote <- eval(rb.source.get)
-        subst <- substituteQuote[M].substitute(quote)
+        subst <- substituteQuote[M].substitute(quote)(0, env)
         // Check if we try to read from bundled channel
         unbndl <- subst.quote.get.singleBundle() match {
                    case Some(value) =>
@@ -453,15 +472,15 @@ object Reduce {
             v1 <- evalExpr(p1.get)
             v2 <- evalExpr(p2.get)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substitutePar[M].substitute(v1)
-            sv2 <- substitutePar[M].substitute(v2)
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1.get)
             v2  <- evalExpr(p2.get)
-            sv1 <- substitutePar[M].substitute(v1)
-            sv2 <- substitutePar[M].substitute(v2)
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
@@ -495,6 +514,17 @@ object Reduce {
             evaledPs  <- set.ps.sortedPars.traverse(expr => evalExpr(expr))
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield set.copy(ps = SortedParHashSet(updatedPs))
+
+        case EMapBody(map) =>
+          for {
+            evaledPs <- map.ps.sortedMap.traverse {
+                         case (key, value) =>
+                           for {
+                             eKey   <- evalExpr(key).map(updateLocallyFree)
+                             eValue <- evalExpr(value).map(updateLocallyFree)
+                           } yield (eKey, eValue)
+                       }
+          } yield map.copy(ps = SortedParMap(evaledPs))
 
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)

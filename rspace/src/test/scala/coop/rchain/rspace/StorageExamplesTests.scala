@@ -4,7 +4,8 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.extended._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.util._
 import coop.rchain.rspace.test.InMemoryStore
 import org.scalatest.BeforeAndAfterAll
 
@@ -279,7 +280,7 @@ class InMemoryStoreStorageExamplesTestsBase
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    val testSpace = new RSpace[Channel, Pattern, Entry, EntriesCaptor](testStore)
+    val testSpace = new RSpace[Channel, Pattern, Entry, EntriesCaptor](testStore, Branch.master)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
@@ -304,7 +305,7 @@ class LMDBStoreStorageExamplesTestBase
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testSpace = new RSpace(testStore)
+    val testSpace = new RSpace(testStore, Branch.master)
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)

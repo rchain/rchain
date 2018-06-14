@@ -90,7 +90,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   }
 
   "Par" should "Sort and deduplicate sets insides" in {
-    val parGround =
+    val parGround: Par =
       ParSet(
         Seq[Par](
           GInt(2),
@@ -99,7 +99,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           ParSet(Seq[Par](GInt(1), GInt(1)))
         )
       )
-    val sortedParGround: Option[Par] =
+    val sortedParGround: Par =
       ParSet(
         Seq[Par](
           GInt(1),
@@ -109,24 +109,27 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         )
       )
     val result = ParSortMatcher.sortMatch(parGround)
-    result.term should be(sortedParGround.get)
+    result.term should be(sortedParGround)
   }
 
   "Par" should "Sort map insides by key and last write should win" in {
-    val parGround =
-      EMap(
-        List(
-          KeyValuePair(GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
-          KeyValuePair(GInt(2), GInt(1)),
-          KeyValuePair(GInt(1), GInt(1))
+    val parGround: Par =
+      ParMap(
+        Seq[(Par, Par)](
+          (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
+          (GInt(2), GInt(1)),
+          (GInt(1), GInt(1))
         ),
-        locallyFree = BitSet()
+        locallyFree = BitSet(),
+        connectiveUsed = false
       )
-    val sortedParGround: Option[Par] =
-      EMap(List(KeyValuePair(GInt(1), GInt(1)), KeyValuePair(GInt(2), GInt(1))),
-           locallyFree = BitSet())
+    val sortedParGround: Par =
+      ParMap(Seq[(Par, Par)]((GInt(1), GInt(1)), (GInt(2), GInt(1))),
+             locallyFree = BitSet(),
+             connectiveUsed = false)
+
     val result = ParSortMatcher.sortMatch(parGround)
-    result.term should be(sortedParGround.get)
+    result.term should be(sortedParGround)
   }
 
   "Par" should "Keep order when adding numbers" in {
@@ -430,6 +433,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Connective(
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
                                            New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+          Connective(VarRefBody(VarRef(0, 2))),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
@@ -443,7 +447,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
           Connective(
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
-                                           New(2, EVar(Wildcard(Var.WildcardMsg())))))))
+                                           New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+          Connective(VarRefBody(VarRef(0, 2)))
         ),
         connectiveUsed = true
       )

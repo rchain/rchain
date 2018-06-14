@@ -13,7 +13,7 @@ add_executable(
     RBLstream.cc Reader.cc Table.cc Tuple.cc Vm.cc ObQue.cc ObStk.cc
     PtrCollect.cc ResizeAry.cc RblStack.cc StreamUtils.cc StringStore.cc
     Timer.cc misc.cc Timestamp.cc Opcode.cc main.cc BaseSupp.cc
-    rosette-config.cc Export.cc
+    rosette-config.cc Export.cc Import.cc
     ${PROTO_SRCS} ${PROTO_HDRS}
     )
 
