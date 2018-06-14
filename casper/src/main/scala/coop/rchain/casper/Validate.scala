@@ -54,18 +54,27 @@ object Validate {
         } yield false
     }
 
-  def validateBlockSummary[F[_]: Monad: Log](block: BlockMessage,
-                                             genesis: BlockMessage,
-                                             dag: BlockDag): F[Either[BlockStatus, BlockStatus]] =
+  /*
+   * TODO: Double check ordering of validity checks
+   *
+   * Justification regressions validation depends on sequence numbers being valid
+   */
+  def validateBlockSummary[F[_]: Monad: Log](
+      block: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
     for {
-      status <- Validate.missingBlocks[F](block, dag)
-      status <- status.traverse(_ => Validate.blockNumber[F](block, dag))
-      status <- status.joinRight.traverse(_ => Validate.parents[F](block, genesis, dag))
-      status <- status.joinRight.traverse(_ => Validate.sequenceNumber[F](block, dag))
-    } yield status.joinRight
+      missingBlockStatus <- Validate.missingBlocks[F](block, dag)
+      blockNumberStatus  <- missingBlockStatus.traverse(_ => Validate.blockNumber[F](block, dag))
+      parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
+                        Validate.parents[F](block, genesis, dag))
+      sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
+                               Validate.sequenceNumber[F](block, dag))
+    } yield sequenceNumberStatus.joinRight
 
-  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage,
-                                            dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+  def missingBlocks[F[_]: Applicative: Log](
+      block: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
     val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
     val justificationsPresent =
       block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
@@ -79,8 +88,9 @@ object Validate {
     }
   }
 
-  def blockNumber[F[_]: Applicative: Log](b: BlockMessage,
-                                          dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+  def blockNumber[F[_]: Applicative: Log](
+      b: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
     val parentNumber = ProtoUtil
       .parents(b)
       .headOption
@@ -106,9 +116,9 @@ object Validate {
     }
   }
 
-  // TODO: Double check ordering of validity checks
-  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage,
-                                             dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+  def sequenceNumber[F[_]: Applicative: Log](
+      b: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
     val creatorJustificationSeqNumber = b.justifications
       .find {
         case Justification(validator, _) => validator == b.sender
@@ -130,9 +140,10 @@ object Validate {
     }
   }
 
-  def parents[F[_]: Applicative: Log](b: BlockMessage,
-                                      genesis: BlockMessage,
-                                      dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+  def parents[F[_]: Applicative: Log](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
     val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
     if (b.justifications.isEmpty) {

@@ -250,15 +250,14 @@ sealed abstract class MultiParentCasperInstances {
           postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
           // postTransactionsCheckStatus <- validateTransactions(...)
           postEquivocationCheckStatus <- postValidationStatus.traverse(_ =>
-                                          equivocationsCheck(b, dag, expectedBlockRequests))
-          status = postEquivocationCheckStatus.merge
+                                          equivocationsCheck(b, dag))
+          status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
 
       private def equivocationsCheck(
           block: BlockMessage,
-          dag: BlockDag,
-          expectedBlockRequests: mutable.HashSet[BlockHash]): F[BlockStatus] = {
+          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
         val justificationOfCreator = block.justifications
           .find {
             case Justification(validator: Validator, _) => validator == block.sender
@@ -268,9 +267,11 @@ sealed abstract class MultiParentCasperInstances {
         val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
         val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
         if (isNotEquivocation) {
-          Applicative[F].pure(Valid)
+          Applicative[F].pure(Right(Valid))
+        } else if (expectedBlockRequests.contains(block.blockHash)) {
+          Applicative[F].pure(Right(IncludeableEquivocation))
         } else {
-          Applicative[F].pure(Equivocation)
+          Applicative[F].pure(Left(IgnorableEquivocation))
         }
       }
 
@@ -296,15 +297,12 @@ sealed abstract class MultiParentCasperInstances {
                         CommUtil.sendBlockRequest[F](
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
-          case Equivocation =>
-            if (expectedBlockRequests.contains(block.blockHash)) {
-              // We add this equivocation as is was pulled in through a justification of another block
-              addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-                s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
-            } else {
-              Log[F].info(
-                s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
-            }
+          case IncludeableEquivocation =>
+            addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+              s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+          case IgnorableEquivocation =>
+            Log[F].info(
+              s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
           case InvalidBlockNumber =>
             handleInvalidBlockEffect(block)
           case InvalidParents =>
