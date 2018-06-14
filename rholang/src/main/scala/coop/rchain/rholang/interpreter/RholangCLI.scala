@@ -96,10 +96,7 @@ object RholangCLI {
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
         Interpreter.buildNormalizedTerm(new StringReader(line)).runAttempt match {
-          case Right(par) =>
-            val evaluatorFuture = runEvaluate(runtime, par).runAsync
-            waitForSuccess(evaluatorFuture)
-            printStorageContents(runtime.space.store)
+          case Right(par) => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
             Console.err.print(ie.toString)
@@ -118,7 +115,7 @@ object RholangCLI {
     val processTerm: Par => Unit =
       if (conf.binary()) writeBinary(fileName)
       else if (conf.text()) writeHumanReadable(fileName)
-      else evaluateFile(runtime)
+      else evaluatePar(runtime)
 
     val source = reader(fileName)
 
@@ -161,7 +158,7 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  def evaluateFile(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
+  def evaluatePar(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
     val evaluatorFuture = runEvaluate(runtime, par).runAsync
     waitForSuccess(evaluatorFuture)
     printStorageContents(runtime.space.store)
