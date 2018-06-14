@@ -2,7 +2,7 @@ package coop.rchain.node
 
 import java.io.{File, PrintWriter}
 import io.grpc.Server
-
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
@@ -80,13 +80,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host           = conf.fetchHost
-  private val address        = s"rnode://$name@$host:${conf.port()}"
-  private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
-  private val storagePath    = conf.data_dir().resolve("rspace")
-  private val storageSize    = conf.map_size()
+  private val host                     = conf.fetchHost
+  private val address                  = s"rnode://$name@$host:${conf.port()}"
+  private val src                      = p2p.NetworkAddress.parse(address).right.get
+  private val remoteKeysPath           = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
+  private val keysPath                 = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
+  private val storagePath              = conf.data_dir().resolve("rspace")
+  private val storageSize              = conf.map_size()
+  private val defaultTimeout: Duration = Duration(conf.defaultTimeout(), MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -109,8 +110,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
-  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
+  implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
+    new TLNodeDiscovery[Task](src, defaultTimeout)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
@@ -272,8 +274,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               else
                 conf.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+                  .toEffect >>= (addr =>
+                  p2p.Network.connectToBootstrap[Effect](addr, 5, defaultTimeout)))
+      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect](defaultTimeout), 0)
           else ().pure[Effect]
       _ <- exit0.toEffect
     } yield ()

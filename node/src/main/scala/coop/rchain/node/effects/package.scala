@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p, p2p.NetworkAddress
 import coop.rchain.p2p.effects._
@@ -130,14 +131,15 @@ package object effects {
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
+                                                          timeout: Duration): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
       def ping(node: ProtocolNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
-          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+          res <- TransportLayer[F].roundTrip(req, node, timeout).map(_.toOption)
         } yield res.isDefined
     }
 
