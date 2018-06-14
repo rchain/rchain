@@ -10,7 +10,6 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.effects.Log
 
-import scala.collection.mutable
 import scala.util.Try
 
 object Validate {
@@ -54,6 +53,11 @@ object Validate {
         } yield false
     }
 
+  /*
+   * TODO: Double check ordering of validity checks
+   *
+   * Justification regressions validation depends on sequence numbers being valid
+   */
   def validateBlockSummary[F[_]: Monad: Log](block: BlockMessage,
                                              genesis: BlockMessage,
                                              dag: BlockDag): F[Either[BlockStatus, BlockStatus]] =
@@ -62,6 +66,8 @@ object Validate {
       status <- status.traverse(_ => Validate.blockNumber[F](block, dag))
       status <- status.joinRight.traverse(_ => Validate.parents[F](block, genesis, dag))
       status <- status.joinRight.traverse(_ => Validate.sequenceNumber[F](block, dag))
+      status <- status.joinRight.traverse(_ =>
+                 Validate.justificationRegressions[F](block, genesis, dag))
     } yield status.joinRight
 
   def missingBlocks[F[_]: Applicative: Log](block: BlockMessage,
@@ -106,7 +112,6 @@ object Validate {
     }
   }
 
-  // TODO: Double check ordering of validity checks
   def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage,
                                              dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
     val creatorJustificationSeqNumber = b.justifications
@@ -160,4 +165,40 @@ object Validate {
         } yield Left(InvalidParents)
     }
   }
+
+  /*
+   * When we switch between equivocation forks for a slashed validator, we will potentially get a
+   * justification regression that is valid. Note we can't immediately drop the slashed validator
+   * from the justifications as it might produce blocks on top of the equivocation that we
+   * need to check for justification regressions.
+   */
+  def justificationRegressions[F[_]: Applicative: Log](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+    val latestMessagesOfBlock = ProtoUtil.toLatestMessages(b.justifications)
+    val latestMessagesOfLatestMessagesForSender =
+      dag.latestMessagesOfLatestMessages.getOrElse(b.sender, latestMessagesOfBlock)
+    val containsJustificationRegression =
+      latestMessagesOfBlock.zip(latestMessagesOfLatestMessagesForSender).exists {
+        case ((validator, currentBlockJustificationHash), (_, previousBlockJustificationHash)) =>
+          val currentBlockJustification  = dag.blockLookup(currentBlockJustificationHash)
+          val previousBlockJustification = dag.blockLookup(previousBlockJustificationHash)
+          val weightOfCurrentBlockJustificationCreator =
+            ProtoUtil.weightFromValidator(b, validator, dag.blockLookup)
+          if (currentBlockJustification.seqNum < previousBlockJustification.seqNum && weightOfCurrentBlockJustificationCreator > 0) {
+            true
+          } else {
+            false
+          }
+      }
+    if (containsJustificationRegression) {
+      for {
+        _ <- Log[F].warn(ignore(b, "block contains justification regressions."))
+      } yield Left(JustificationRegression)
+    } else {
+      Applicative[F].pure(Right(Valid))
+    }
+  }
+
 }
