@@ -177,7 +177,8 @@ class TrieStructureTests
       skipLeaf1.pointer shouldBe a[LeafPointer]
       skipLeaf1.affix shouldBe ByteVector(0, 0)
 
-      val leaf1 = store.get(txn, skipLeaf1.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
+      val leaf1 =
+        store.get(txn, skipLeaf1.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
       leaf1.key shouldBe k1
       leaf1.value shouldBe TestData.val1
 
@@ -185,7 +186,8 @@ class TrieStructureTests
       skipLeaf2.pointer shouldBe a[LeafPointer]
       skipLeaf2.affix shouldBe ByteVector(0, 0)
 
-      val leaf2 = store.get(txn, skipLeaf2.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
+      val leaf2 =
+        store.get(txn, skipLeaf2.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
       leaf2.key shouldBe k2
       leaf2.value shouldBe TestData.val1
     }

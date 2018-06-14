@@ -144,7 +144,7 @@ package object history {
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      case ((lh, Node(_)), (offset, s @ Skip(affix, ptr))) =>
+      case ((lh, _), (offset, s @ Skip(affix, ptr))) =>
         //TODO figure out affix rectification for larger hops
         val ns = Skip(ByteVector(offset), NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
@@ -203,7 +203,7 @@ package object history {
 
               val hd = if (pathLeft > 1) {
                 val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
-                val skipNew = Skip(commonAffix, LeafPointer(newLeafHash))
+                val skipNew     = Skip(commonAffix, LeafPointer(newLeafHash))
 
                 val skipExisting = Skip(commonAffix, LeafPointer(Trie.hash[K, V](existingLeaf)))
 
