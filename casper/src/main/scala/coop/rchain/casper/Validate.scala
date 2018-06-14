@@ -1,10 +1,9 @@
 package coop.rchain.casper
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.Validate.ignore
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
@@ -17,20 +16,6 @@ import scala.util.Try
 object Validate {
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
-
-  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage, dag: BlockDag): F[Boolean] = {
-    val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
-    val justificationsPresent =
-      block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
-    if (parentsPresent && justificationsPresent) {
-      true.pure[F]
-    } else {
-      for {
-        _ <- Log[F].debug(
-              s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
-      } yield false
-    }
-  }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
     if (b.sigAlgorithm == "ed25519") {
@@ -53,55 +38,6 @@ object Validate {
       } yield false
     }
 
-  def blockNumber[F[_]: Applicative: Log](b: BlockMessage, dag: BlockDag): F[Boolean] = {
-    val parentNumber = ProtoUtil
-      .parents(b)
-      .headOption
-      .map(dag.blockLookup andThen ProtoUtil.blockNumber)
-    val number = ProtoUtil.blockNumber(b)
-    val result = parentNumber.fold(number == 0)(_ + 1 == number)
-
-    if (result) {
-      true.pure[F]
-    } else {
-      val log = parentNumber.fold(
-        Log[F].warn(
-          ignore(b, s"block number $number is not zero, but block has no parents.")
-        )
-      )(n => {
-        Log[F].warn(
-          ignore(b, s"block number $number is not one more than parent number $n.")
-        )
-      })
-      for {
-        _ <- log
-      } yield false
-    }
-  }
-
-  // TODO: Double check ordering of validity checks
-  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage, dag: BlockDag): F[Boolean] = {
-    val creatorJustificationSeqNumber = b.justifications
-      .find {
-        case Justification(validator, _) => validator == b.sender
-      }
-      .fold(-1) {
-        case Justification(_, latestBlockHash) => dag.blockLookup(latestBlockHash).seqNum
-      }
-    val number = b.seqNum
-    val result = creatorJustificationSeqNumber + 1 == number
-
-    if (result) {
-      true.pure[F]
-    } else {
-      for {
-        _ <- Log[F].warn(ignore(
-              b,
-              s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
-      } yield false
-    }
-  }
-
   def blockSender[F[_]: Applicative: Log](b: BlockMessage,
                                           genesis: BlockMessage,
                                           dag: BlockDag): F[Boolean] =
@@ -118,18 +54,94 @@ object Validate {
         } yield false
     }
 
+  def validateBlockSummary[F[_]: Monad: Log](block: BlockMessage,
+                                             genesis: BlockMessage,
+                                             dag: BlockDag): F[Either[BlockStatus, BlockStatus]] =
+    for {
+      status <- Validate.missingBlocks[F](block, dag)
+      status <- status.traverse(_ => Validate.blockNumber[F](block, dag))
+      status <- status.joinRight.traverse(_ => Validate.parents[F](block, genesis, dag))
+      status <- status.joinRight.traverse(_ => Validate.sequenceNumber[F](block, dag))
+    } yield status.joinRight
+
+  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage,
+                                            dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+    val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
+    val justificationsPresent =
+      block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
+    if (parentsPresent && justificationsPresent) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].debug(
+              s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
+      } yield Left(MissingBlocks)
+    }
+  }
+
+  def blockNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                          dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+    val parentNumber = ProtoUtil
+      .parents(b)
+      .headOption
+      .map(dag.blockLookup andThen ProtoUtil.blockNumber)
+    val number = ProtoUtil.blockNumber(b)
+    val result = parentNumber.fold(number == 0)(_ + 1 == number)
+
+    if (result) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      val log = parentNumber.fold(
+        Log[F].warn(
+          ignore(b, s"block number $number is not zero, but block has no parents.")
+        )
+      )(n => {
+        Log[F].warn(
+          ignore(b, s"block number $number is not one more than parent number $n.")
+        )
+      })
+      for {
+        _ <- log
+      } yield Left(InvalidBlockNumber)
+    }
+  }
+
+  // TODO: Double check ordering of validity checks
+  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                             dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
+    val creatorJustificationSeqNumber = b.justifications
+      .find {
+        case Justification(validator, _) => validator == b.sender
+      }
+      .fold(-1) {
+        case Justification(_, latestBlockHash) => dag.blockLookup(latestBlockHash).seqNum
+      }
+    val number = b.seqNum
+    val result = creatorJustificationSeqNumber + 1 == number
+
+    if (result) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(ignore(
+              b,
+              s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
+      } yield Left(InvalidSequenceNumber)
+    }
+  }
+
   def parents[F[_]: Applicative: Log](b: BlockMessage,
                                       genesis: BlockMessage,
-                                      dag: BlockDag): F[Boolean] = {
+                                      dag: BlockDag): F[Either[BlockStatus, BlockStatus]] = {
     val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
     if (b.justifications.isEmpty) {
       if (bParents.exists(_ != genesis.blockHash))
         for {
           _ <- Log[F].warn(ignore(b, "justification is empty, but block has non-genesis parents."))
-        } yield false
+        } yield Left(InvalidParents)
       else
-        true.pure[F]
+        Applicative[F].pure(Right(Valid))
     } else {
       val latestMessages = b.justifications
         .foldLeft(Map.empty[Validator, BlockHash]) {
@@ -140,12 +152,12 @@ object Validate {
       val trueParents = ProtoUtil.chooseNonConflicting(estimate, genesis, dag).map(_.blockHash)
 
       if (bParents == trueParents)
-        true.pure[F]
+        Applicative[F].pure(Right(Valid))
       else
         for {
           _ <- Log[F].warn(
                 ignore(b, "block parents did not match estimate based on justification."))
-        } yield false
+        } yield Left(InvalidParents)
     }
   }
 }

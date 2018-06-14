@@ -24,7 +24,6 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
 import java.nio.file.Path
 
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
@@ -90,26 +89,6 @@ sealed abstract class MultiParentCasperInstances {
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val expectedBlockRequests: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
-
-      type SequenceNumber = Int
-
-      case class InvalidBlockRecord(
-          invalidBlockSeqNum: Option[SequenceNumber],
-          invalidBlockDiscoveryStatuses: Map[Validator, Option[SequenceNumber]])
-      object InvalidBlockRecord {
-        def apply(): InvalidBlockRecord =
-          InvalidBlockRecord(none[SequenceNumber], Map.empty[Validator, Option[SequenceNumber]])
-      }
-
-      sealed trait EquivocationDiscoveryStatus
-      case class EquivocationDiscovered(sequenceNumber: SequenceNumber)
-          extends EquivocationDiscoveryStatus
-      case class EquivocationHalfDiscovered(sequenceNumber: SequenceNumber, blockHash: BlockHash)
-          extends EquivocationDiscoveryStatus
-      case object EquivocationOblivious extends EquivocationDiscoveryStatus
-      case class EquivocationRecord(
-          equivocationBaseBlockSeqNum: Option[SequenceNumber],
-          equivocationBlockDiscoveryStatuses: Map[Validator, EquivocationDiscoveryStatus])
 
       // Used to keep track of when other validators detect the invalid produced at the sequence number
       // identified by the first element of the tuple. If no invalid blocks have been produced by that
@@ -259,49 +238,21 @@ sealed abstract class MultiParentCasperInstances {
           maybeCheckPoint
         }
 
+      /*
+       * TODO: Put tuplespace validation back in after we have deterministic unforgeable names.
+       *
+       * We want to catch equivocations only after we confirm that the block completing
+       * the equivocation is otherwise valid.
+       */
       private def attemptAdd(b: BlockMessage): F[BlockStatus] =
         for {
-          status <- validate(b)
+          dag                  <- Capture[F].capture { _blockDag.get }
+          postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
+          // postTransactionsCheckStatus <- validateTransactions(...)
+          postEquivocationCheckStatus <- postValidationStatus.traverse(_ =>
+                                          equivocationsCheck(b, dag, expectedBlockRequests))
+          status = postEquivocationCheckStatus.merge
           _      <- addEffects(status, b)
-        } yield status
-
-      // TODO: There must be a way to do this without code duplication
-      private def validate(block: BlockMessage): F[BlockStatus] =
-        for {
-          dag <- Capture[F].capture { _blockDag.get }
-          status <- for {
-                     result <- Validate.missingBlocks[F](block, dag)
-                   } yield { if (result) { Valid } else { MissingBlocks } }
-          status <- status match {
-                     case Valid =>
-                       for {
-                         result <- Validate.blockNumber[F](block, dag)
-                       } yield { if (result) { Valid } else { InvalidBlockNumber } }
-                     case _ => status.pure[F]
-                   }
-          status <- status match {
-                     case Valid =>
-                       for {
-                         result <- Validate.parents[F](block, genesis, dag)
-                       } yield { if (result) { Valid } else { InvalidParents } }
-                     case _ => status.pure[F]
-                   }
-          status <- status match {
-                     case Valid =>
-                       for {
-                         result <- Validate.sequenceNumber[F](block, dag)
-                       } yield { if (result) { Valid } else { InvalidSequenceNumber } }
-                     case _ => status.pure[F]
-                   }
-
-          //TODO: Put tuplespace validation back in after we have deterministic unforgeable names.
-
-          // We want to catch equivocations only after we confirm that the block
-          // completing the equivocation is otherwise valid.
-          status <- status match {
-                     case Valid => equivocationsCheck(block, dag, expectedBlockRequests)
-                     case _     => status.pure[F]
-                   }
         } yield status
 
       private def equivocationsCheck(
