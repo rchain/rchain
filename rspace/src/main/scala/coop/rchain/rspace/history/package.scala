@@ -19,23 +19,24 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
-  def initialize[T, K, V](store: ITrieStore[T, K, V])(implicit
-                                                      codecK: Codec[K],
-                                                      codecV: Codec[V]): Unit =
+  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
+                                                                      codecK: Codec[K],
+                                                                      codecV: Codec[V]): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.getRoot(txn) match {
+      store.getRoot(txn, branch) match {
         case None =>
           val root     = Trie.create[K, V]()
           val rootHash = Trie.hash(root)
           store.put(txn, rootHash, root)
-          store.putRoot(txn, rootHash)
+          store.putRoot(txn, branch, rootHash)
           logger.debug(s"workingRootHash: $rootHash")
         case Some(_) =>
           ()
       }
     }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], key: K)(implicit codecK: Codec[K]): Option[V] = {
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
+      implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
     @tailrec
     def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
@@ -67,16 +68,16 @@ package object history {
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       for {
-        currentRootHash <- store.getRoot(txn)
+        currentRootHash <- store.getRoot(txn, branch)
         currentRoot     <- store.get(txn, currentRootHash)
         res             <- loop(txn, 0, currentRoot)
       } yield res
     }
   }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], keys: immutable.Seq[K])(
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    keys.traverse[Option, V]((k: K) => lookup(store, k))
+    keys.traverse[Option, V]((k: K) => lookup(store, branch, k))
 
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
                                         txn: T,
@@ -132,13 +133,14 @@ package object history {
         Some(hash)
     }
 
-  def insert[T, K, V](store: ITrieStore[T, K, V], key: K, value: V)(implicit
-                                                                    codecK: Codec[K],
-                                                                    codecV: Codec[V]): Unit =
+  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]): Unit =
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // Get the current root hash
       val currentRootHash: Blake2b256Hash =
-        store.getRoot(txn).getOrElse(throw new InsertException("could not get root"))
+        store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
       // Get the current root node
       store.get(txn, currentRootHash) match {
         case None =>
@@ -178,7 +180,7 @@ package object history {
               val nodes         = emptyNodes ++ parents
               val rehashedNodes = rehash[K, V](hd, nodes)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, newRootHash)
+              store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
             // If the "tip" is an existing leaf with the same key as the new leaf, but the
             // existing leaf and new leaf have different values, then we are in the situation
@@ -194,7 +196,7 @@ package object history {
               }
               val rehashedNodes = rehash[K, V](hd, tl)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, newRootHash)
+              store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
@@ -204,7 +206,7 @@ package object history {
               val hd            = Node(pb.updated(List((newLeafIndex, LeafPointer(newLeafHash)))))
               val rehashedNodes = rehash[K, V](hd, parents)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, newRootHash)
+              store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
           }
       }
@@ -275,13 +277,14 @@ package object history {
         }
     }
 
-  def delete[T, K, V](store: ITrieStore[T, K, V], key: K, value: V)(implicit
-                                                                    codecK: Codec[K],
-                                                                    codecV: Codec[V]): Boolean =
+  def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]): Boolean =
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // We take the current root hash, preventing other threads from operating on the Trie
       val currentRootHash: Blake2b256Hash =
-        store.getRoot(txn).getOrElse(throw new InsertException("could not get root"))
+        store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
       // Get the current root node
       store.get(txn, currentRootHash) match {
         case None =>
@@ -303,7 +306,7 @@ package object history {
               val (hd, nodesToRehash) = deleteLeaf(parents)
               val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
               val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
-              store.putRoot(txn, newRootHash)
+              store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true
             // The entry is not in the trie

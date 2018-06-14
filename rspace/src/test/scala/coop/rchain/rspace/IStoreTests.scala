@@ -21,7 +21,7 @@ trait IStoreTests
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
       val store = space.store
       val key   = List(channel)
-      val datum = Datum(datumValue, persist = false)
+      val datum = Datum.create(channel, datumValue, false)
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putDatum(txn, key, datum)
@@ -35,8 +35,8 @@ trait IStoreTests
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
       val store  = space.store
       val key    = List(channel)
-      val datum1 = Datum(datumValue, persist = false)
-      val datum2 = Datum(datumValue + "2", persist = false)
+      val datum1 = Datum.create(channel, datumValue, false)
+      val datum2 = Datum.create(channel, datumValue + "2", false)
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putDatum(txn, key, datum1)
@@ -57,7 +57,7 @@ trait IStoreTests
         val store = space.store
         val key   = List(channel)
         val data = List.tabulate(size) { i =>
-          Datum(datumValue + i, persist = false)
+          Datum.create(channel, datumValue + i, false)
         }
 
         store.withTxn(store.createTxnWrite()) { txn =>
@@ -78,7 +78,7 @@ trait IStoreTests
       val key   = List(channel)
       val hash  = store.hashChannels(key)
       store.withTxn(store.createTxnWrite()) { txn =>
-        store.putDatum(txn, key, Datum(datum, persist = false))
+        store.putDatum(txn, key, Datum.create(channel, datum, persist = false))
         // collectGarbage is called in removeDatum:
         store.removeDatum(txn, key, 0)
         store.getChannels(txn, hash) shouldBe empty
@@ -95,7 +95,7 @@ trait IStoreTests
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation(patterns, continuation, false)
+          WaitingContinuation.create(key, patterns, continuation, false)
 
         store.withTxn(store.createTxnWrite()) { txn =>
           store.putWaitingContinuation(txn, key, wc)
@@ -112,10 +112,10 @@ trait IStoreTests
       val patterns     = List(StringMatch(pattern))
       val continuation = new StringsCaptor
       val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-        WaitingContinuation(patterns, continuation, false)
+        WaitingContinuation.create(key, patterns, continuation, false)
 
       val wc2: WaitingContinuation[Pattern, StringsCaptor] =
-        WaitingContinuation(List(StringMatch(pattern + 2)), continuation, false)
+        WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putWaitingContinuation(txn, key, wc1)
@@ -134,9 +134,9 @@ trait IStoreTests
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation(patterns, continuation, false)
+          WaitingContinuation.create(key, patterns, continuation, false)
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation(List(StringMatch(pattern + 2)), continuation, false)
+          WaitingContinuation.create(key, List(StringMatch(pattern + 2)), continuation, false)
 
         store.withTxn(store.createTxnWrite()) { txn =>
           store.putWaitingContinuation(txn, key, wc1)
