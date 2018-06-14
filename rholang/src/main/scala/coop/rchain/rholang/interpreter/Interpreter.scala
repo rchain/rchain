@@ -18,18 +18,15 @@ private class FailingTask[T](task: Task[Either[Throwable, T]]) {
 object Interpreter {
   implicit private def toFailingTask[T](task: Task[Either[Throwable, T]]) = new FailingTask(task)
 
-  def execute(runtime: Runtime, reader: Reader): Task[String] =
+  def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
     for {
       term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
       errors <- evaluate(runtime, term).attempt.raiseOnLeft
       result <- if (errors.isEmpty)
-                 Task.now(storageAsString(runtime))
+                 Task.now(runtime)
                else
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield (result)
-
-  private def storageAsString(runtime: Runtime) =
-    s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
 
   private def mkErrorMsg(errors: Vector[InterpreterError]) =
     errors
