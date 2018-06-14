@@ -7,7 +7,7 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.Checkpoint
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{BlockDag, BlockGenerator, Estimator, MultiParentCasper}
 import coop.rchain.catscontrib.Catscontrib
 import org.scalatest.{FlatSpec, Matchers}
@@ -71,15 +71,14 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
 
   def testCasper[F[_]: Applicative]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[Unit]     = ().pure[F]
-      def contains(b: BlockMessage): F[Boolean]  = false.pure[F]
-      def deploy(r: Deploy): F[Unit]             = ().pure[F]
-      def estimator: F[IndexedSeq[BlockMessage]] = Estimator.tips(chain, genesis).pure[F]
-      def createBlock: F[Option[BlockMessage]]   = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                  = chain.pure[F]
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
-        Applicative[F].pure[Option[Checkpoint]](None)
-      def close(): F[Unit] = ().pure[F]
+      def addBlock(b: BlockMessage): F[Unit]          = ().pure[F]
+      def contains(b: BlockMessage): F[Boolean]       = false.pure[F]
+      def deploy(r: Deploy): F[Unit]                  = ().pure[F]
+      def estimator: F[IndexedSeq[BlockMessage]]      = Estimator.tips(chain, genesis).pure[F]
+      def createBlock: F[Option[BlockMessage]]        = Applicative[F].pure[Option[BlockMessage]](None)
+      def blockDag: F[BlockDag]                       = chain.pure[F]
+      def storageContents(hash: BlockHash): F[String] = "".pure[F]
+      def close(): F[Unit]                            = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 

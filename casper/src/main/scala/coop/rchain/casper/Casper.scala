@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.ErrorHandler
@@ -24,6 +24,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
 import java.nio.file.Path
 
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
@@ -36,7 +37,7 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
-  def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]]
+  def storageContents(hash: ByteString): F[String]
   def close(): F[Unit]
 }
 
@@ -52,11 +53,10 @@ sealed abstract class MultiParentCasperInstances {
       def deploy(r: Deploy): F[Unit]            = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                = BlockDag().pure[F]
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
-        Applicative[F].pure[Option[Checkpoint]](None)
-      def close(): F[Unit] = ().pure[F]
+      def createBlock: F[Option[BlockMessage]]         = Applicative[F].pure[Option[BlockMessage]](None)
+      def blockDag: F[BlockDag]                        = BlockDag().pure[F]
+      def storageContents(hash: ByteString): F[String] = "".pure[F]
+      def close(): F[Unit]                             = ().pure[F]
     }
 
   def hashSetCasper[
@@ -69,19 +69,19 @@ sealed abstract class MultiParentCasperInstances {
       type Validator = ByteString
 
       //TODO: Extract hardcoded version
-      val version = 0L
+      private val version = 0L
 
-      val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
+      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
 
       private val runtime = new SyncVar[Runtime]()
       runtime.put(Runtime.create(storageLocation, storageSize))
-      private val freshTS = Checkpoint.fromRuntime(runtime)
+      private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
 
-      val checkpoints: AtomicSyncVar[Map[ByteString, Checkpoint]] = new AtomicSyncVar(
-        HashMap(freshTS.hash -> freshTS)
+      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
+        Set[StateHash](initStateHash)
       )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
@@ -174,20 +174,18 @@ sealed abstract class MultiParentCasperInstances {
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
           now <- Time[F].currentMillis
-          Right((tsCheckpoint, _)) = checkpoints
-            .mapAndUpdate[(Checkpoint, Map[BlockHash, Checkpoint])](
-              InterpreterUtil.computeDeploysCheckpoint(
-                p,
-                r,
-                genesis,
-                _blockDag.get,
-                freshTS,
-                _
-              ),
-              _._2
-            )
+          Right((computedStateHash, _)) = knownStateHashesContainer
+            .mapAndUpdate[(StateHash, Set[StateHash])](
+              InterpreterUtil.computeDeploysCheckpoint(p,
+                                                       r,
+                                                       genesis,
+                                                       _blockDag.get,
+                                                       initStateHash,
+                                                       _,
+                                                       runtimeManager),
+              _._2)
           postState = RChainState()
-            .withTuplespace(tsCheckpoint.hash)
+            .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
           body = Body()
@@ -199,8 +197,12 @@ sealed abstract class MultiParentCasperInstances {
 
       def blockDag: F[BlockDag] = Capture[F].capture { _blockDag.get }
 
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] = Capture[F].capture {
-        checkpoints.get.get(hash)
+      def storageContents(hash: StateHash): F[String] = Capture[F].capture {
+        if (knownStateHashesContainer.get.contains(hash)) {
+          runtimeManager.storageRepr(hash)
+        } else {
+          s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
+        }
       }
 
       def close(): F[Unit] = Capture[F].capture {
@@ -214,8 +216,8 @@ sealed abstract class MultiParentCasperInstances {
           bn  <- Validate.blockNumber[F](block, dag)
           p   <- Validate.parents[F](block, genesis, dag)
           //only try checkpoint if other validity checks pass
-          ch <- if (bn && p) updateCheckpoints(block)
-               else Monad[F].pure[Option[Checkpoint]](None)
+          ch <- if (bn && p) validateTransactions(block)
+               else Monad[F].pure[Option[RuntimeManager]](None)
           //_  <- if (bn && p && ch.isEmpty) Log[F].warn(Validate.ignore(block, "tuplespace hash could not be reproduced.")
           //      else ().pure[F]
           //TODO: Put tuplespace validation back in after we have
@@ -224,21 +226,21 @@ sealed abstract class MultiParentCasperInstances {
           //      the same unforgable name without an execution trace).
         } yield bn && p //should be ch.isDefined
 
-      //invlaid blocks return None and don't update the checkpoints
-      private def updateCheckpoints(block: BlockMessage): F[Option[Checkpoint]] =
+      //invalid blocks return None and don't update the checkpoints
+      private def validateTransactions(block: BlockMessage): F[Option[StateHash]] =
         Capture[F].capture {
           val Right((maybeCheckPoint, _)) =
-            checkpoints.mapAndUpdate[(Option[Checkpoint], Map[ByteString, Checkpoint])](
+            knownStateHashesContainer.mapAndUpdate[(Option[StateHash], Set[StateHash])](
               InterpreterUtil.validateBlockCheckpoint(
                 block,
                 genesis,
                 _blockDag.get,
-                freshTS,
-                _
+                initStateHash,
+                _,
+                runtimeManager
               ),
               _._2
             )
-
           maybeCheckPoint
         }
 

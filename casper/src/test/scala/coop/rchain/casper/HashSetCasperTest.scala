@@ -235,9 +235,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 object HashSetCasperTest {
   def blockTuplespaceContents(block: BlockMessage)(
       implicit casper: MultiParentCasper[Id]): String = {
-    val tsHash           = block.body.get.postState.get.tuplespace
-    val Some(checkpoint) = MultiParentCasper[Id].tsCheckpoint(tsHash)
-
-    checkpoint.storageRepr
+    val tsHash = block.body.get.postState.get.tuplespace
+    MultiParentCasper[Id].storageContents(tsHash)
   }
 }

@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -31,7 +31,8 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins: Dbi[ByteBuffer],
     _trieUpdateCount: AtomicLong,
     _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
-    val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]]
+    val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]],
+    val trieBranch: Branch
 )(implicit
   codecC: Codec[C],
   codecP: Codec[P],
@@ -292,12 +293,12 @@ class LMDBStore[C, P, A, K] private (
     // TODO: Prune TrieUpdate log here
     pruneHistory(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, channelsHash, gnat)
+        history.insert(trieStore, trieBranch, channelsHash, gnat)
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, channelsHash, gnat)
+        history.delete(trieStore, trieBranch, channelsHash, gnat)
     }
     withTxn(createTxnRead()) { txn =>
-      trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
+      trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
     }
   }
 
@@ -330,15 +331,22 @@ object LMDBStore {
     * @tparam A A type representing a piece of data
     * @tparam K A type representing a continuation
     */
-  def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
-                                                    sp: Serialize[P],
-                                                    sa: Serialize[A],
-                                                    sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+  def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean = true)(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
+
+    val flags =
+      if (noTls)
+        List(EnvFlags.MDB_NOTLS)
+      else
+        List.empty[EnvFlags]
 
     val env: Env[ByteBuffer] =
       Env
@@ -346,7 +354,7 @@ object LMDBStore {
         .setMapSize(mapSize)
         .setMaxDbs(8)
         .setMaxReaders(126)
-        .open(path.toFile)
+        .open(path.toFile, flags: _*)
 
     val dbGNATs: Dbi[ByteBuffer] = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
@@ -355,10 +363,18 @@ object LMDBStore {
     val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
     trieUpdates.put(Seq.empty)
 
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+    val trieStore  = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+    val trieBranch = Branch.master
 
-    initialize(trieStore)
+    initialize(trieStore, trieBranch)
 
-    new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
+    new LMDBStore[C, P, A, K](env,
+                              path,
+                              dbGNATs,
+                              dbJoins,
+                              trieUpdateCount,
+                              trieUpdates,
+                              trieStore,
+                              trieBranch)
   }
 }

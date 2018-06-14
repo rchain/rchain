@@ -515,6 +515,17 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield set.copy(ps = SortedParHashSet(updatedPs))
 
+        case EMapBody(map) =>
+          for {
+            evaledPs <- map.ps.sortedMap.traverse {
+                         case (key, value) =>
+                           for {
+                             eKey   <- evalExpr(key).map(updateLocallyFree)
+                             eValue <- evalExpr(value).map(updateLocallyFree)
+                           } yield (eKey, eValue)
+                       }
+          } yield map.copy(ps = SortedParMap(evaledPs))
+
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
