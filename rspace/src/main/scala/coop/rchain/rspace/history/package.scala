@@ -42,6 +42,12 @@ package object history {
     @tailrec
     def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
       curr match {
+        case Skip(affix, pointer) =>
+          store.get(txn, pointer.hash) match {
+            case Some(next) => loop(txn, depth + affix.length.toInt, next)
+            case None       => throw new LookupException(s"No node at ${pointer.hash}")
+          }
+
         case Node(pointerBlock) =>
           val index: Int = JByte.toUnsignedInt(path(depth))
           // We use an explicit match here instead of flatMapping in order to make this function
@@ -49,16 +55,10 @@ package object history {
           pointerBlock.toVector(index) match {
             case EmptyPointer =>
               None
-            case NodePointer(hash: Blake2b256Hash) =>
-              store.get(txn, hash) match {
+            case pointer: NonEmptyPointer =>
+              store.get(txn, pointer.hash) match {
                 case Some(next) => loop(txn, depth + 1, next)
-                case None       => throw new LookupException(s"No node at $hash")
-              }
-
-            case LeafPointer(hash: Blake2b256Hash) =>
-              store.get(txn, hash) match {
-                case Some(next) => loop(txn, depth + 1, next)
-                case _          => throw new LookupException(s"No node at $hash")
+                case None       => throw new LookupException(s"No node at ${pointer.hash}")
               }
           }
         case Leaf(lk, lv) if key == lk =>
