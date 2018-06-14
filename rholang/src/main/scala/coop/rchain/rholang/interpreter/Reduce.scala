@@ -629,23 +629,30 @@ object Reduce {
         thunk: => M[Par]): M[Par] =
       if (argsLength != expectedArgsLength) {
         interpreterErrorM[M].raiseError(
-          ReduceError(s"Error: $methodName expects $expectedArgsLength argument(s)"))
+          ReduceError(s"Error: $methodName expects $expectedArgsLength Par argument(s)"))
       } else {
         thunk
       }
 
     private[this] def union: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
+        base.flatMap(b => other.map(o => b | o))
       def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
-            def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
-              base.flatMap(b => other.map(o => b | o))
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs.union(otherPs.sortedPars.toSet),
                        base.connectiveUsed || other.connectiveUsed,
                        locallyFreeUnion(base.locallyFree, other.locallyFree))))
-          // TODO(mateusz.gorski): add case EMapBody
+          case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
+            Applicative[M].pure[Expr](
+              EMapBody(
+                ParMap((baseMap ++ otherMap.sortedMap).toSeq,
+                       base.connectiveUsed || other.connectiveUsed,
+                       locallyFreeUnion(base.locallyFree, other.locallyFree))
+              )
+            )
           case _ =>
             interpreterErrorM[M].raiseError(
               ReduceError(
@@ -664,20 +671,19 @@ object Reduce {
     }
 
     private[this] def diff: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
+        base.flatMap(b => other.map(o => b | o))
       def diff(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
-            def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
-              base.flatMap(b => other.map(o => b | o))
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs.diff(otherPs.sortedPars.toSet),
                        base.connectiveUsed || other.connectiveUsed,
                        locallyFreeUnion(base.locallyFree, other.locallyFree))))
-          // TODO(mateusz.gorski): add case EMapBody
           case _ =>
             interpreterErrorM[M].raiseError(
-              ReduceError("Error: union applied to something that wasn't a set or a map"))
+              ReduceError("Error: diff applied to something that wasn't a Set"))
         }
       method("diff", 1, args.length) {
         for {
@@ -721,10 +727,15 @@ object Reduce {
                 ParSet(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree))))
-
+          case EMapBody(base @ ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Expr](
+              EMapBody(
+                ParMap(basePs - par,
+                       base.connectiveUsed || par.connectiveUsed,
+                       base.locallyFree.map(b => b | par.locallyFree))))
           case _ =>
             interpreterErrorM[M].raiseError(
-              ReduceError("Error: add can be called only with one Par as argument."))
+              ReduceError("Error: add can be called only on Map and Set."))
         }
 
       method("delete", 1, args.length) {
@@ -741,10 +752,11 @@ object Reduce {
         baseExpr.exprInstance match {
           case ESetBody(base @ ParSet(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
-
+          case EMapBody(base @ ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
             interpreterErrorM[M].raiseError(
-              ReduceError("Error: add can be called only with one Par as argument."))
+              ReduceError("Error: add can be called only on Map and Set."))
         }
 
       method("contains", 1, args.length) {
@@ -752,6 +764,25 @@ object Reduce {
           baseExpr <- evalSingleExpr(p)(env)
           element  <- evalExpr(args(0))(env)
           result   <- contains(baseExpr, element)
+        } yield result
+      }
+    }
+
+    private[this] def get: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def get(baseExpr: Expr, key: Par): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(map @ ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: get can be called only on Maps as argument."))
+        }
+
+      method("get", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          key      <- evalExpr(args(0))(env)
+          result   <- get(baseExpr, key)
         } yield result
       }
     }
@@ -766,6 +797,7 @@ object Reduce {
         case "add"         => Some(add)
         case "delete"      => Some(delete)
         case "contains"    => Some(contains)
+        case "get"         => Some(get)
         case _             => None
       }
 
