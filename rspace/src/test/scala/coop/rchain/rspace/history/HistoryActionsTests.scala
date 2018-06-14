@@ -421,7 +421,8 @@ trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  def withTestTrieStoreK[R, K](f: ITrieStore[Txn[ByteBuffer], K, ByteVector] => R)(implicit codecK: Codec[K]): R = {
+  def withTestTrieStoreK[R, K](f: ITrieStore[Txn[ByteBuffer], K, ByteVector] => R)(
+      implicit codecK: Codec[K]): R = {
     // @todo deliver better
     implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
     val env: Env[ByteBuffer] =
@@ -442,13 +443,11 @@ trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
     }
   }
 
-  def withTestTrieStore[R](f: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector] => R): R = {
+  def withTestTrieStore[R](f: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector] => R): R =
     withTestTrieStoreK(f)
-  }
 
-  def withTestTrieStoreKey5[R](f: ITrieStore[Txn[ByteBuffer], TestKey5, ByteVector] => R): R = {
+  def withTestTrieStoreKey5[R](f: ITrieStore[Txn[ByteBuffer], TestKey5, ByteVector] => R): R =
     withTestTrieStoreK(f)
-  }
 
   override def afterAll(): Unit =
     recursivelyDeletePath(dbDir)

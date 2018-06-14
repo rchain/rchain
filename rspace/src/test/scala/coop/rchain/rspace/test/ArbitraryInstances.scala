@@ -76,7 +76,7 @@ object ArbitraryInstances {
       Gen
         .sized { size =>
           Gen.containerOfN[Seq, (TestKey4, ByteVector)](if (size > 2) size else 2,
-                                                       Arbitrary.arbitrary[(TestKey4, ByteVector)])
+                                                        Arbitrary.arbitrary[(TestKey4, ByteVector)])
         }
         .map(_.toMap))
   }

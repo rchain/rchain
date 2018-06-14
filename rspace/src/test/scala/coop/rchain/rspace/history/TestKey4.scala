@@ -6,7 +6,7 @@ import scodec.bits.ByteVector
 
 import java.lang.{Byte => JByte}
 
-class TestKey4 private(val bytes: ByteVector) {
+class TestKey4 private (val bytes: ByteVector) {
 
   require(bytes.length == TestKey4.length)
 
@@ -15,7 +15,7 @@ class TestKey4 private(val bytes: ByteVector) {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case tk: TestKey4 => tk.bytes === bytes
-    case _           => false
+    case _            => false
   }
 
   override def hashCode(): Int =
@@ -33,7 +33,7 @@ object TestKey4 {
     fixedSizeBytes(length.toLong, bytes).as[TestKey4]
 }
 
-class TestKey5 private(val bytes: ByteVector) {
+class TestKey5 private (val bytes: ByteVector) {
 
   require(bytes.length == TestKey5.length)
 
@@ -42,7 +42,7 @@ class TestKey5 private(val bytes: ByteVector) {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case tk: TestKey5 => tk.bytes === bytes
-    case _           => false
+    case _            => false
   }
 
   override def hashCode(): Int =

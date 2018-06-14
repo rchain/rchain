@@ -127,9 +127,8 @@ class TrieStructureTests
     }
   }
 
-  implicit def lift2TestKey5(s: String): TestKey5 = {
+  implicit def lift2TestKey5(s: String): TestKey5 =
     TestKey5.create(s.map(c => Integer.parseInt(c.toString)))
-  }
 
   it should "insert skip node " in withTestTrieStoreKey5 { store =>
     val k1: TestKey5 = "10000"
@@ -141,7 +140,7 @@ class TrieStructureTests
       root.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
 
       val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
-      skip.pointer shouldBe a [LeafPointer]
+      skip.pointer shouldBe a[LeafPointer]
       skip.affix shouldBe ByteVector(0, 0, 0, 0)
 
       val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
@@ -162,7 +161,7 @@ class TrieStructureTests
       root.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
 
       val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
-      skip.pointer shouldBe a [NodePointer]
+      skip.pointer shouldBe a[NodePointer]
       skip.affix shouldBe ByteVector(1)
 
       val node = store.get(txn, skip.pointer.hash).get.asInstanceOf[Node]
@@ -171,15 +170,15 @@ class TrieStructureTests
       node.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
       node.pointerBlock.childrenWithIndex(1)._2 shouldBe 1
 
-      node.pointerBlock.childrenWithIndex(0)._1 shouldBe a [NodePointer] // do we need skip pointers?
-      node.pointerBlock.childrenWithIndex(1)._1 shouldBe a [NodePointer]
+      node.pointerBlock.childrenWithIndex(0)._1 shouldBe a[NodePointer] // do we need skip pointers?
+      node.pointerBlock.childrenWithIndex(1)._1 shouldBe a[NodePointer]
 
       val skipLeaf1 = store.get(txn, node.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
-      skipLeaf1.pointer shouldBe a [LeafPointer]
+      skipLeaf1.pointer shouldBe a[LeafPointer]
       skipLeaf1.affix shouldBe ByteVector(0, 0)
 
       val skipLeaf2 = store.get(txn, node.pointerBlock.children(1).hash).get.asInstanceOf[Skip]
-      skipLeaf2.pointer shouldBe a [LeafPointer]
+      skipLeaf2.pointer shouldBe a[LeafPointer]
       skipLeaf2.affix shouldBe ByteVector(0, 0)
     }
   }
@@ -202,7 +201,7 @@ class TrieStructureTests
     import CommonPrefixData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, NodePointer(level1Hex))))
-      expectSkip(level1Hex, ByteVector(Seq(0,0).map(_.toByte)), NodePointer(level3Hex))
+      expectSkip(level1Hex, ByteVector(Seq(0, 0).map(_.toByte)), NodePointer(level3Hex))
       expectNode(level3Hex, Seq((0, LeafPointer(leaf1Hex)), (1, LeafPointer(leaf2Hex))))
 
       val expectedLeaf1Hash = Blake2b256Hash
