@@ -6,7 +6,7 @@ import coop.rchain.models.{KeyValuePair, Par, SortedParHashSet}
 import cats.implicits._
 import cats.syntax._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.ParSet
+import coop.rchain.models.{ParMap, ParSet}
 import coop.rchain.models.rholang.sort.ordering._
 
 object GroundSortMatcher {
@@ -37,28 +37,15 @@ object GroundSortMatcher {
                             gs.locallyFree)),
                    Node(Score.ESET, sortedPars.map(_.score): _*))
       case EMapBody(gm) =>
-        def sortKeyValuePair(kv: KeyValuePair): ScoredTerm[KeyValuePair] = {
-          val sortedKey   = ParSortMatcher.sortMatch(kv.key)
-          val sortedValue = ParSortMatcher.sortMatch(kv.value)
-          ScoredTerm(KeyValuePair(sortedKey.term, sortedValue.term), sortedKey.score)
+        def sortKeyValuePair(key: Par, value: Par): ScoredTerm[(Par, Par)] = {
+          val sortedKey   = ParSortMatcher.sortMatch(key)
+          val sortedValue = ParSortMatcher.sortMatch(value)
+          ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
 
-        def deduplicateLastWins(scoredTerms: Seq[ScoredTerm[KeyValuePair]]) = {
-          var set = Set[Par]()
-          scoredTerms.reverse.filterNot { scoredTerm =>
-            {
-              val exists = set(scoredTerm.term.key.get)
-              set += scoredTerm.term.key.get
-              exists
-            }
-          }.reverse
-        }
-        val sortedPars = gm.kvs.toList
-          .map(kv => sortKeyValuePair(kv))
-          .sorted
-        val deduplicatedPars = deduplicateLastWins(sortedPars)
-        ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
-                   Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
+        val sortedPars = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
+        ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree)),
+                   Node(Score.EMAP, sortedPars.map(_.score): _*))
       case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toString)))
       case _ => //TODO(mateusz.gorski): rethink it

@@ -309,9 +309,9 @@ object Substitute {
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
-          case ESetBody(ParSet(SortedParHashSet(ps), connectiveUsed, locallyFree)) =>
+          case ESetBody(ParSet(shs, connectiveUsed, locallyFree)) =>
             for {
-              pss <- ps.toList
+              pss <- shs.sortedPars
                       .traverse(p => s1(p))
             } yield
               Expr(
@@ -320,18 +320,19 @@ object Substitute {
                          connectiveUsed,
                          locallyFree.map(_.until(env.shift)))))
 
-          case EMapBody(EMap(kvs, locallyFree, connectiveUsed)) =>
+          case EMapBody(ParMap(spm, connectiveUsed, locallyFree)) =>
             for {
-              kvps <- kvs.toList
-                       .traverse {
-                         case KeyValuePair(p1, p2) =>
-                           for {
-                             pk1 <- s1(p1.get)
-                             pk2 <- s1(p2.get)
-                           } yield KeyValuePair(pk1, pk2)
-                       }
-              newLocallyFree = locallyFree.until(env.shift)
-            } yield Expr(exprInstance = EMapBody(EMap(kvps, newLocallyFree, connectiveUsed)))
+              kvps <- spm.sortedMap.traverse {
+                       case (p1, p2) =>
+                         for {
+                           pk1 <- s1(p1)
+                           pk2 <- s1(p2)
+                         } yield (pk1, pk2)
+                     }
+            } yield
+              Expr(
+                exprInstance =
+                  EMapBody(ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)))))
           case g @ _ => Applicative[M].pure(term)
         }
       override def substitute(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =
