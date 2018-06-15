@@ -185,8 +185,10 @@ object Validate {
     val latestMessagesOfLatestMessagesForSender =
       dag.latestMessagesOfLatestMessages.getOrElse(b.sender, latestMessagesOfBlock)
     val containsJustificationRegression =
-      latestMessagesOfBlock.zip(latestMessagesOfLatestMessagesForSender).exists {
-        case ((validator, currentBlockJustificationHash), (_, previousBlockJustificationHash)) =>
+      latestMessagesOfBlock.exists {
+        case (validator, currentBlockJustificationHash) =>
+          val previousBlockJustificationHash =
+            latestMessagesOfLatestMessagesForSender.getOrElse(validator, genesis.blockHash)
           val currentBlockJustification  = dag.blockLookup(currentBlockJustificationHash)
           val previousBlockJustification = dag.blockLookup(previousBlockJustificationHash)
           val weightOfCurrentBlockJustificationCreator =
