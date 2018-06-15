@@ -323,7 +323,7 @@ sealed abstract class MultiParentCasperInstances {
                 .map(PrettyPrinter.buildString)
                 .mkString("", ",", "")} for neglecting an invalid block""")
           // TODO: Slash blocksToSlash for neglecting an invalid block
-          _ <- Capture[F].capture { blocksToSlash.map(awaitingJustificationToChild.remove) }
+          _ <- Capture[F].capture { blocksToSlash.foreach(awaitingJustificationToChild.remove) }
         } yield ()
 
       private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
