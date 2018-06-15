@@ -381,12 +381,6 @@ object Reduce {
     def eval(bundle: Bundle)(implicit env: Env[Par]): M[Unit] =
       eval(bundle.body.get)
 
-    /**
-      * Continue is straightforward in this case, it just calls eval.
-      */
-    def continue(body: Par)(implicit env: Env[Par]): M[Unit] =
-      eval(body)
-
     def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
       expr.exprInstance match {
         case EVarBody(EVar(v)) =>
