@@ -303,11 +303,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val b4 = chain.idToBlocks(4)
     val justificationsWithRegression =
       Seq(Justification(validators(0), b1.blockHash), Justification(validators(1), b4.blockHash))
-    val state = RChainState().withBonds(bonds)
-    val body  = Body().withPostState(state)
     val blockWithJustificationRegression =
       BlockMessage()
-        .withBody(body)
         .withSender(validators(1))
         .withJustifications(justificationsWithRegression)
     Validate.justificationRegressions[Id](blockWithJustificationRegression, b0, chain) should be(
