@@ -37,10 +37,10 @@ object StoragePrinter {
                                      _: Consume) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
                 case (channel, pattern) =>
-                  ReceiveBind(pattern.patterns, channel, pattern.remainder)
+                  ReceiveBind(pattern.patterns, channel, pattern.remainder, pattern.freeCount)
               }
               continuation.taggedCont match {
-                case ParBody(p) => Receive(receiveBinds, p, persist)
+                case ParBody(p) => Receive(receiveBinds, p, persist, patterns.map(_.freeCount).sum)
                 case _          => Receive(receiveBinds, Par.defaultInstance, persist)
               }
           }
