@@ -526,21 +526,6 @@ object Reduce {
                            } yield (eKey, eValue)
                        }
           } yield map.copy(ps = SortedParMap(evaledPs))
-
-        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
-          val methodLookup = methodTable(method)
-          for {
-            evaledTarget <- evalExpr(target.get)
-            evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
-            resultPar <- methodLookup match {
-                          case None =>
-                            interpreterErrorM[M].raiseError(
-                              ReduceError("Unimplemented method: " + method))
-                          case Some(f) => f(target.get, evaledArgs)(env)
-                        }
-            resultExpr <- evalSingleExpr(resultPar)
-          } yield resultExpr
-        }
         case EEvalBody(chan) =>
           for {
             q      <- eval(chan)
