@@ -1,7 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.security.MakeBrandPair
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.{BasicWallet, BasicWalletTest}
 
@@ -15,7 +14,7 @@ class BasicWalletSpec extends FlatSpec with Matchers {
 
   TestSetUtil.runTests(
     BasicWalletTest.term,
-    List(NonNegativeNumber.term, MakeBrandPair.term, MakeMint.term, BasicWallet.term),
+    List(NonNegativeNumber.term, MakeMint.term, BasicWallet.term),
     runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 

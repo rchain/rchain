@@ -1,7 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.security.MakeBrandPair
 import coop.rchain.rholang.mint.{MakeMint, MakeMintTest}
 
 import monix.execution.Scheduler.Implicits.global
@@ -13,7 +12,7 @@ class MakeMintSpec extends FlatSpec with Matchers {
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/MakeMintTest.rho").toList
 
   TestSetUtil.runTests(MakeMintTest.term,
-                       List(NonNegativeNumber.term, MakeBrandPair.term, MakeMint.term),
+                       List(NonNegativeNumber.term, MakeMint.term),
                        runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
