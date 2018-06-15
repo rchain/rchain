@@ -55,7 +55,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
@@ -306,19 +306,22 @@ def create_bootstrap_node():
     # Create key/cert pem files to be loaded into rnode volume
     bootstrap_node_demo_key=(
         "-----BEGIN PRIVATE KEY-----\n"
-        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+\n"
-        "g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf\n"
-        "qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q\n"
+        "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYcybGU15SCs2x+5I\n"
+        "JHrzzBHZ0c7k2WwokG6yU754XKKgCgYIKoZIzj0DAQehRANCAAR/MkqpcKUE+NtM\n"
+        "d8q7/IPih2vO6oMjm2ltSA2nSrueNd+jpLvxDQpRYScJBDyeylfB1VkPdpw9oqFQ\n"
+        "Y5huc38x\n"
         "-----END PRIVATE KEY-----\n"
     )
     bootstrap_node_demo_cert=(
         "-----BEGIN CERTIFICATE-----\n"
-        "MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs\n"
-        "MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j\n"
-        "YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq\n"
-        "5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG\n"
-        "CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J\n"
-        "NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=\n"
+        "MIIBXzCCAQKgAwIBAgIIU0qinJbBW5MwDAYIKoZIzj0EAwIFADAzMTEwLwYDVQQD\n"
+        "EyhjYjc0YmEwNDA4NTU3NGU5ZjAxMDJjYzEzZDM5ZjBjNzIyMTljNWJiMB4XDTE4\n"
+        "MDYxMjEzMzEyM1oXDTE5MDYxMjEzMzEyM1owMzExMC8GA1UEAxMoY2I3NGJhMDQw\n"
+        "ODU1NzRlOWYwMTAyY2MxM2QzOWYwYzcyMjE5YzViYjBZMBMGByqGSM49AgEGCCqG\n"
+        "SM49AwEHA0IABH8ySqlwpQT420x3yrv8g+KHa87qgyObaW1IDadKu54136Oku/EN\n"
+        "ClFhJwkEPJ7KV8HVWQ92nD2ioVBjmG5zfzEwDAYIKoZIzj0EAwIFAANJADBGAiEA\n"
+        "62Po1SVQyJB/2UeG5B9O1oTTlhYrLvLTWH24YiH4U4kCIQDrPa3Qop3yq83Egdq0\n"
+        "VkEqI2rycmgp03DXsStJ7IGdBQ==\n"
         "-----END CERTIFICATE-----\n"
     )
     tmp_file_key = '/tmp/node.key.pem'

@@ -4,7 +4,7 @@ import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.RholangCLI
+import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
 
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -13,7 +13,7 @@ import monix.execution.Scheduler
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
-    RholangCLI.buildNormalizedTerm(new StringReader(s)).runAttempt
+    Interpreter.buildNormalizedTerm(new StringReader(s)).runAttempt
 
   def computeDeploysCheckpoint(parents: Seq[BlockMessage],
                                deploys: Seq[Deploy],
