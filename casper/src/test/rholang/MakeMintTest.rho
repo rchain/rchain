@@ -17,6 +17,21 @@ contract @"deposit"(@dest, @amount, @src, return) = {
     return!(*deposit)
   }
 } |
+contract @"split"(@purse, @amount, destCh, return) = {
+  new split in {
+    contract split(return) = {
+      @[purse, "split"]!(amount, *destCh) |
+      for(@value <- destCh) {
+        match value {
+          [] => { return!(false) }
+          _  => { return!(true) }
+        } |
+        destCh!(value)
+      }
+    } |
+    return!(*split)
+  }
+} |
 @"MakeMint"!("mintA") | @"MakeMint"!("mintB") |
 for(@mintA <- @"mintA"; @mintB <- @"mintB") {
   @[mintA, "makePurse"]!(100, "aliceAPurse") | @[mintB, "makePurse"]!(50, "bobBPurse") |
@@ -70,7 +85,25 @@ for(@mintA <- @"mintA"; @mintB <- @"mintB") {
             ["aliceAPurseBalance", 50], // 80 - 30 = 50
           ]
         )
-      }
+      } |
+      
+      @["TestSet", "after"]!("Deposit should work as expected.", {
+        @"split"!(aliceAPurse, 500, "failPurse", "splitFail") |
+        @[aliceAPurse, "split"]!(5, "aliceAPurse5") |
+        for(@[aliceAPurse5] <- @"aliceAPurse5"){
+          @"aliceAPurse5"!([aliceAPurse5]) |
+          @"getBalance"!(aliceAPurse5, "aliceAPurse5Balance") |
+          @"TestSet"!(
+            "Split should work as expected.",
+            [
+              ["splitFail", false], //cannot split with more than you have
+              
+              ["aliceAPurse5Balance", 5], //0 + 5 = 5
+              ["aliceAPurseBalance", 45] // 50 - 5 = 45
+            ]
+          )
+        }
+      })
     })
   }
 }

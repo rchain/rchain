@@ -16,7 +16,7 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
         false => { return!([]) }
         true => {
           for (cryptoVerify <- cryptoVerifyCh) {
-            new basicWallet, withdraw, verify, nonceCh in {
+            new basicWallet, verify, nonceCh in {
               nonceCh!(-1) |
               contract verify(@nonce, @sig, return) = {
                 for(@prevNonce <- nonceCh) {
@@ -36,18 +36,6 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
                   }
                 }
               } |
-              contract withdraw(@amount, return) = {
-                new destPurseCh, success in {
-                  @[purse, "sprout"]!(*destPurseCh) | for(@destPurse <- destPurseCh) {
-                    @[destPurse, "deposit"]!(amount, purse, *success) | for(@s <- success) {
-                      match s {
-                        true => { return!([destPurse]) }
-                        _ => { return!([]) }
-                      }
-                    }
-                  }
-                }
-              } |
               contract @[*basicWallet, "getNonce"](return) = {
                 for(@nonce <- nonceCh) {
                   nonceCh!(nonce) | return!(nonce)
@@ -63,7 +51,7 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
                 new verifyResult in {
                   verify!(nonce, sig, *verifyResult) | for(@r <- verifyResult) {
                     match r {
-                      true => { withdraw!(amount, *return) }
+                      true => { @[purse, "split"]!(amount, *return) }
                       _    => { return!([]) }
                     }
                   }
