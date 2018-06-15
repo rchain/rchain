@@ -40,16 +40,21 @@ package object history {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
-    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
+    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] = {
+      println("loop", depth, curr)
       curr match {
         case Skip(affix, pointer) =>
+          println("?", depth, affix.length)
           store.get(txn, pointer.hash) match {
             case Some(next) => loop(txn, depth + affix.length.toInt, next)
-            case None       => throw new LookupException(s"No node at ${pointer.hash}")
+            case None => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
         case Node(pointerBlock) =>
+          println("pb", pointerBlock)
+          println("depth", depth)
           val index: Int = JByte.toUnsignedInt(path(depth))
+          println("index", index)
           // We use an explicit match here instead of flatMapping in order to make this function
           // tail-recursive
           pointerBlock.toVector(index) match {
@@ -58,7 +63,7 @@ package object history {
             case pointer: NonEmptyPointer =>
               store.get(txn, pointer.hash) match {
                 case Some(next) => loop(txn, depth + 1, next)
-                case None       => throw new LookupException(s"No node at ${pointer.hash}")
+                case None => throw new LookupException(s"No node at ${pointer.hash}")
               }
           }
         case Leaf(lk, lv) if key == lk =>
@@ -66,8 +71,12 @@ package object history {
         case Leaf(_, _) =>
           None
       }
+    }
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
+      println("------------------")
+      println("looking for", key)
+      println("path", path)
       for {
         currentRootHash <- store.getRoot(txn)
         currentRoot     <- store.get(txn, currentRootHash)
@@ -199,7 +208,13 @@ package object history {
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
             case existingLeaf @ Leaf(ek, _) if key != ek =>
-              val pathLength      = parents.length
+              val pathLength = parents
+                .map {
+                  case (_, s: Skip) => s.affix.size
+                  case _            => 1
+                }
+                .sum
+                .toInt
               val wholePathLength = encodedKeyNew.size
 
               val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
@@ -265,7 +280,13 @@ package object history {
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
             case Node(pb) =>
-              val pathLength      = parents.length
+              val pathLength = parents
+                .map {
+                  case (_, s: Skip) => s.affix.size
+                  case _            => 1
+                }
+                .sum
+                .toInt
               val wholePathLength = encodedKeyNew.size
               val pathLeft        = wholePathLength - pathLength
               val newLeafIndex    = JByte.toUnsignedInt(encodedKeyNew(pathLength))
@@ -288,7 +309,13 @@ package object history {
             // If the tip is a skip node -> there is no Node for this Leaf.
             // need to shorten this skip and rectify the structure
             case Skip(affix, ptr) =>
-              val pathLength      = parents.length
+              val pathLength = parents
+                .map {
+                  case (_, s: Skip) => s.affix.size
+                  case _            => 1
+                }
+                .sum
+                .toInt
               val wholePathLength = encodedKeyNew.size
 
               val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
@@ -297,6 +324,7 @@ package object history {
               val sharedSubpathLength = sharedPrefix.length
               val oldSuffix           = affix.splitAt(sharedSubpathLength)._2
               val newSuffix           = subPath.splitAt(sharedSubpathLength)._2
+
               val pn = (oldSuffix.size, newSuffix.size) match {
                 case (0, 0) => throw new RuntimeException("corrupt structure")
                 case (ol, nl) if (ol == nl) && (ol == 1) => {

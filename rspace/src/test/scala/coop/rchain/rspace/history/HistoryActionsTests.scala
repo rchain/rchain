@@ -72,9 +72,13 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
 
   "Three inserts, three lookups (alt)" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector]) =>
+      printTree(store)
       insert(store, key1, val1)
+      printTree(store)
       insert(store, key2, val2)
+      printTree(store)
       insert(store, key6, val6)
+      printTree(store)
       val actual1 = lookup(store, key1)
       val actual2 = lookup(store, key2)
       val actual3 = lookup(store, key6)
