@@ -16,8 +16,6 @@ import scala.concurrent.Await
 import scala.concurrent.{ExecutionContext, Future}
 import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory
-import coop.rchain.comm.protocol.routing.TLResponse.Payload
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import coop.rchain.comm.transport._
 
@@ -33,8 +31,8 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
     try {
       GrpcSslContexts
         .forServer(cert, key)
-        .trustManager(InsecureTrustManagerFactory.INSTANCE)
-        .clientAuth(ClientAuth.OPTIONAL)
+        .trustManager(HostnameTrustManagerFactory.Instance)
+        .clientAuth(ClientAuth.REQUIRE)
         .build()
     } catch {
       case e: Throwable =>
@@ -45,7 +43,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
   private lazy val clientSslContext: SslContext =
     try {
       val builder = GrpcSslContexts.forClient
-      builder.trustManager(InsecureTrustManagerFactory.INSTANCE)
+      builder.trustManager(HostnameTrustManagerFactory.Instance)
       builder.keyManager(cert, key)
       builder.build
     } catch {
@@ -54,18 +52,19 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
         throw e
     }
 
-  private def withClient[A](endpoint: Endpoint)(f: TransportLayerStub => Future[A]): Future[A] = {
-    val channel = clientChannel(endpoint)
+  private def withClient[A](remote: PeerNode)(f: TransportLayerStub => Future[A]): Future[A] = {
+    val channel = clientChannel(remote)
     val stub    = TransportLayerGrpc.stub(channel)
     f(stub).andThen { case _ => channel.shutdown() }
   }
 
-  private def clientChannel(endpoint: Endpoint) =
+  private def clientChannel(remote: PeerNode) =
     NettyChannelBuilder
-      .forAddress(endpoint.host, endpoint.tcpPort)
+      .forAddress(remote.endpoint.host, remote.endpoint.tcpPort)
       .negotiationType(NegotiationType.TLS)
       .sslContext(clientSslContext)
       .intercept(new SslSessionClientInterceptor())
+      .overrideAuthority(remote.id.toString)
       .build()
 
   def roundTrip(msg: ProtocolMessage,
@@ -74,30 +73,13 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
     for {
       tlResponseErr <- Capture[F].capture(
                         Try(
-                          Await.result(
-                            withClient(remote.endpoint)(_.send(TLRequest(msg.proto.some))),
-                            timeout)
+                          Await.result(withClient(remote)(_.send(TLRequest(msg.proto.some))),
+                                       timeout)
                         ).toEither.leftMap(protocolException))
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
-                    case p if p.isProtocol =>
-                      p match {
-                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _)) =>
-                          if (sender.id.toByteArray
-                                .map("%02x".format(_))
-                                .mkString == remote.id.toString) {
-                            ProtocolMessage.toProtocolMessage(tlr.getProtocol)
-                          } else {
-                            Left(
-                              internalCommunicationError(
-                                "The sender id is different from the remote id"))
-                          }
-
-                        case _ =>
-                          Left(
-                            internalCommunicationError("Was expecting a sender, nothing arrived"))
-                      }
+                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
                     case p if p.isInternalServerError =>
@@ -110,7 +92,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]
-      .capture(withClient(peer.endpoint)(_.send(TLRequest(msg.proto.some))))
+      .capture(withClient(peer)(_.send(TLRequest(msg.proto.some))))
       .as(Right(()))
 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
