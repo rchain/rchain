@@ -619,9 +619,9 @@ object Reduce {
       }
     }
 
-    private[this] def method(methodName: String, expectedArgsLength: Int, argsLength: Int)(
+    private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
         thunk: => M[Par]): M[Par] =
-      if (argsLength != expectedArgsLength) {
+      if (args.length != expectedArgsLength) {
         interpreterErrorM[M].raiseError(
           ReduceError(s"Error: $methodName expects $expectedArgsLength Par argument(s)"))
       } else {
@@ -655,7 +655,7 @@ object Reduce {
 
         }
 
-      method("union", 1, args.length) {
+      method("union", 1, args) {
         for {
           baseExpr  <- evalSingleExpr(p)(env)
           otherExpr <- evalSingleExpr(args(0))(env)
@@ -679,7 +679,7 @@ object Reduce {
             interpreterErrorM[M].raiseError(
               ReduceError("Error: diff applied to something that wasn't a Set"))
         }
-      method("diff", 1, args.length) {
+      method("diff", 1, args) {
         for {
           baseExpr  <- evalSingleExpr(p)(env)
           otherExpr <- evalSingleExpr(args(0))(env)
@@ -703,7 +703,7 @@ object Reduce {
               ReduceError("Error: add can be called only with one Par as argument."))
         }
 
-      method("add", 1, args.length) {
+      method("add", 1, args) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
           element  <- evalExpr(args(0))(env)
@@ -732,7 +732,7 @@ object Reduce {
               ReduceError("Error: add can be called only on Map and Set."))
         }
 
-      method("delete", 1, args.length) {
+      method("delete", 1, args) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
           element  <- evalExpr(args(0))(env)
@@ -753,7 +753,7 @@ object Reduce {
               ReduceError("Error: add can be called only on Map and Set."))
         }
 
-      method("contains", 1, args.length) {
+      method("contains", 1, args) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
           element  <- evalExpr(args(0))(env)
@@ -772,7 +772,7 @@ object Reduce {
               ReduceError("Error: get can be called only on Maps as argument."))
         }
 
-      method("get", 1, args.length) {
+      method("get", 1, args) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
           key      <- evalExpr(args(0))(env)
