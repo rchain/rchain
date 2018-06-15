@@ -26,6 +26,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
               descr =
                 "Path to node's private key PEM file, that is being used for TLS communication")
 
+  val noUpnp = opt[Boolean](default = Some(false), descr = "Use this flag to disable UpNp.")
+
   val defaultTimeout =
     opt[Int](default = Some(1000),
              descr = "Default timeout for roundtrip connections. Default 1 second.")
@@ -117,10 +119,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     default = None,
     descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
 
-  lazy val fetchHost: String =
+  def fetchHost(upnp: UPnP): String =
     host.toOption match {
       case Some(host) => host
-      case None       => whoami(port()).fold("localhost")(_.getHostAddress)
+      case None       => whoami(port(), upnp).fold("localhost")(_.getHostAddress)
     }
 
   def certificatePath: Path =
@@ -131,11 +133,9 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     certificate.toOption
       .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
-  private def whoami(port: Int): Option[InetAddress] = {
+  private def whoami(port: Int, upnp: UPnP): Option[InetAddress] = {
 
     val logger = Logger("conf")
-    val upnp   = new UPnP(port)
-
     logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
 
     (upnp.localAddress, upnp.externalAddress) match {

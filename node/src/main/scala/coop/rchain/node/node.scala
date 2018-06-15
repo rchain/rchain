@@ -79,8 +79,27 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   import ApplicativeError_._
 
+  /**
+    TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
+    This needs to be moved to node program! Part of execution. Effectful
+    */
+  val upnpErrorMsg =
+    s"ERROR - Could not open the port via uPnP. Please open it manaually on your router!"
+  val upnp = new UPnP
+  if (!conf.noUpnp()) {
+    println("INFO - trying to open port using uPnP....")
+    upnp.addPort(conf.port()) match {
+      case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
+      case Right(false) => println(s"$upnpErrorMsg")
+      case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
+    }
+  }
+
   /** Configuration */
-  private val host                     = conf.fetchHost
+  private val host                     = conf.fetchHost(upnp)
+  private val port                     = conf.port()
+  private val certificateFile          = conf.certificatePath.toFile
+  private val keyFile                  = conf.keyPath.toFile
   private val address                  = s"rnode://$name@$host:${conf.port()}"
   private val src                      = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath           = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
@@ -109,7 +128,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](conf)(src)
+    effects.tcpTranposrtLayer[Task](host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
