@@ -10,26 +10,29 @@ import java.util.Base64
 
 import scala.io.Source
 
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 
 object CertificateHelper {
 
-  lazy val Secp256r1: ParameterSpec = {
+  val EllipticCurveName = "secp256r1"
+
+  lazy val EllipticCurveParameterSpec: ParameterSpec = {
     val ap = AlgorithmParameters.getInstance("EC", "BC")
-    ap.init(new ECGenParameterSpec("secp256r1"))
+    ap.init(new ECGenParameterSpec(EllipticCurveName))
     ParameterSpec(ap.getParameterSpec(classOf[ECParameterSpec]))
   }
 
-  def isSecp256r1(publicKey: PublicKey): Boolean =
+  def isExpectedEllipticCurve(publicKey: PublicKey): Boolean =
     publicKey match {
       case p: ECPublicKey =>
-        ParameterSpec(p.getParams) == Secp256r1
+        ParameterSpec(p.getParams) == EllipticCurveParameterSpec
       case _ => false
     }
 
   def publicAddress(publicKey: PublicKey): Option[Array[Byte]] =
     publicKey match {
-      case p: ECPublicKey if isSecp256r1(publicKey) =>
+      case p: ECPublicKey if isExpectedEllipticCurve(publicKey) =>
         val publicKey = Array.ofDim[Byte](64)
         val x         = p.getW.getAffineX.toByteArray.takeRight(32)
         val y         = p.getW.getAffineY.toByteArray.takeRight(32)
@@ -41,9 +44,6 @@ object CertificateHelper {
 
   def publicAddress(input: Array[Byte]): Array[Byte] =
     Keccak256.hash(input).drop(12)
-
-  def publicAddressString(publicKey: PublicKey): Option[String] =
-    publicAddress(publicKey).map(_.map("%02x".format(_)).mkString)
 
   def from(certFilePath: String): X509Certificate =
     fromFile(new File(certFilePath))
@@ -62,7 +62,7 @@ object CertificateHelper {
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
     val kf       = KeyFactory.getInstance("EC", "BC")
     val sk       = kf.generatePrivate(spec).asInstanceOf[ECPrivateKey]
-    val ecSpec   = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec("secp256r1")
+    val ecSpec   = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec(EllipticCurveName)
     val Q        = ecSpec.getG.multiply(sk.getS).normalize()
     val pubPoint = new ECPoint(Q.getAffineXCoord.toBigInteger, Q.getAffineYCoord.toBigInteger)
     val pubSpec  = new ECPublicKeySpec(pubPoint, sk.getParams)
@@ -72,7 +72,7 @@ object CertificateHelper {
 
   def generateKeyPair(): KeyPair = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", "BC")
-    kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom())
+    kpg.initialize(new ECGenParameterSpec(EllipticCurveName), new SecureRandom())
     kpg.generateKeyPair
   }
 
@@ -81,7 +81,7 @@ object CertificateHelper {
 
     val privateKey  = keyPair.getPrivate
     val publicKey   = keyPair.getPublic
-    val address     = publicAddressString(publicKey).getOrElse("local")
+    val address     = publicAddress(publicKey).map(Base16.encode).getOrElse("local")
     val algorythm   = "SHA256withECDSA"
     val algorithmId = new AlgorithmId(AlgorithmId.sha256WithECDSA_oid)
 

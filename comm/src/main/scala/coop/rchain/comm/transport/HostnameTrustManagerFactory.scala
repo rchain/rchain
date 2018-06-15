@@ -4,6 +4,8 @@ import java.net.Socket
 import java.security.KeyStore
 import java.security.cert.{CertificateException, X509Certificate}
 
+import coop.rchain.crypto.codec.Base16
+
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import io.netty.util.internal.EmptyArrays
 import javax.net.ssl._
@@ -36,7 +38,8 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
 
     val cert = x509Certificates.head
     val peerHost = CertificateHelper
-      .publicAddressString(cert.getPublicKey)
+      .publicAddress(cert.getPublicKey)
+      .map(Base16.encode)
       .getOrElse(
         throw new CertificateException(s"Certificate's public key has the wrong algorithm"))
     checkIdentity(Some(peerHost), cert, "https")
@@ -63,7 +66,8 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
         val peerHost = Option(sslSession.getPeerHost)
         checkIdentity(peerHost, cert, identityAlg)
         CertificateHelper
-          .publicAddressString(cert.getPublicKey)
+          .publicAddress(cert.getPublicKey)
+          .map(Base16.encode)
           .filter(_ == peerHost.getOrElse(""))
           .getOrElse(throw new CertificateException(
             s"Certificate's public address doesn't match the hostname"))
