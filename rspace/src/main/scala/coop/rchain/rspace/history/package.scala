@@ -103,10 +103,10 @@ package object history {
                   parents(depth + 1, next, (index, node) +: acc)
               }
           }
-        case s @ Skip(affix, next) =>
-          store.get(txn, next.hash) match {
+        case s @ Skip(affix, pointer) =>
+          store.get(txn, pointer.hash) match {
             case None =>
-              throw new LookupException(s"No node at ${next.hash}")
+              throw new LookupException(s"No node at ${pointer.hash}")
             case Some(next) =>
               val index: Int = JByte.toUnsignedInt(path(depth))
               parents(affix.size.toInt + depth, next, (index, s) +: acc)
@@ -114,7 +114,6 @@ package object history {
         case leaf =>
           (leaf, acc)
       }
-
     parents(0, curr, Seq.empty)
   }
 
@@ -133,19 +132,24 @@ package object history {
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
       case ((lastHash, x), (offset, Node(pb))) if pb.children.isEmpty =>
-        val b = offset.toByte
+        val b = ByteVector(offset)
         val node = x match {
-          case Leaf(key, value)     => Skip(ByteVector.fromByte(b), LeafPointer(lastHash))
-          case Node(pointerBlock)   => Skip(ByteVector.fromByte(b), NodePointer(lastHash))
-          case Skip(affix, pointer) => Skip(ByteVector.fromByte(b) ++ affix, pointer)
+          case Leaf(key, value)     => Skip(b, LeafPointer(lastHash))
+          case Node(pointerBlock)   => Skip(b, NodePointer(lastHash))
+          case Skip(affix, pointer) => Skip(b ++ affix, pointer)
         }
         (Trie.hash[K, V](node), node)
       // intermediate
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      case ((lh, _), (offset, s @ Skip(affix, ptr))) =>
-        //TODO figure out affix rectification for larger hops
+      //skip meets skip
+      case ((lh, s2 @ Skip(affix, ptr)), (offset, s @ Skip(oldAffix, _))) =>
+        //TODO fix affix
+        val ns = Skip(oldAffix.drop(1), ptr)
+        (Trie.hash[K, V](ns), ns)
+      //point at node from skip
+      case ((lh, n2 @ Node(pb)), (offset, s @ Skip(oldAffix, _))) =>
         val ns = Skip(ByteVector(offset), NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
     }
@@ -192,7 +196,6 @@ package object history {
             case existingLeaf @ Leaf(ek, _) if key != ek =>
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
-              val pathLeft        = wholePathLength - pathLength
 
               val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
               val sharedPrefix       = commonPrefix(encodedKeyNew, encodedKeyExisting)
@@ -201,9 +204,10 @@ package object history {
               val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
               val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
 
+              val pathLeft = wholePathLength - sharedPrefixLength
               val hd = if (pathLeft > 1) {
                 val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
-                val skipNew     = Skip(commonAffix, LeafPointer(newLeafHash))
+                val skipNew = Skip(commonAffix, LeafPointer(newLeafHash))
 
                 val skipExisting = Skip(commonAffix, LeafPointer(Trie.hash[K, V](existingLeaf)))
 
@@ -227,10 +231,7 @@ package object history {
                 )
               }
 
-              val emptyNode     = Node(PointerBlock.create())
-              val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
-              val nodes         = emptyNodes ++ parents
-              val rehashedNodes = rehash[K, V](hd, nodes)
+              val rehashedNodes = rehash[K, V](hd, parents)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
@@ -243,6 +244,8 @@ package object history {
               val (hd, tl) = parents match {
                 case (idx, Node(pointerBlock)) +: remaining =>
                   (Node(pointerBlock.updated(List((idx, LeafPointer(newLeafHash))))), remaining)
+                case (idx, Skip(affix, _)) +: remaining =>
+                  (Skip(affix, LeafPointer(newLeafHash)), remaining)
                 case Seq() =>
                   throw new InsertException("A leaf had no parents")
               }
@@ -280,12 +283,16 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Trie[K, V])]): (Node, Seq[(Int, Trie[K, V])]) =
+      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
       case Seq((byte, Node(pointerBlock))) =>
         (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), Seq.empty[(Int, Node)])
+      //I'm a leaf, I encounter a skip block. I got here because all the kids were single child nodes or me - kill the skip block
+      case (byte, s @ Skip(affix, ptr)) +: tail =>
+        (Skip(affix ++ ByteVector(byte), LeafPointer(hash)), tail)
+
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -301,6 +308,7 @@ package object history {
           case _ => (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), tail)
         }
     }
+  }
 
   @tailrec
   private[this] def propagateTrieUpward[T, K, V](
@@ -344,10 +352,6 @@ package object history {
         val updated = (s, tail)
         deleteLeaf(store, txn, tail)
       case (byte, Node(pointerBlock)) +: tail =>
-        //(wait what?,1,PointerBlock(toVector: Vector(
-        // (NodePointer(Blake2b256Hash(bytes: ByteVector(32 bytes, 0x8384ec92c0bcc6c3c25633e09aa3a5c8d60342e28c11869460221be0908a4cc8))),0),
-        // (NodePointer(Blake2b256Hash(bytes: ByteVector(32 bytes, 0x8384ec92c0bcc6c3c25633e09aa3a5c8d60342e28c11869460221be0908a4cc8))),1))))
-
         val updated = (Node(pointerBlock.updated(List((byte, EmptyPointer)))), tail)
         // Get the children of the immediate parent
         pointerBlock.childrenWithIndex match {
@@ -378,7 +382,9 @@ package object history {
                   case None => throw new DeleteException("corrupt tree")
                 }
               // If the other child is a Leaf, then we must propagate it up the trie.
-              case LeafPointer(otherHash) => propagateLeafUpward(otherHash, tail)
+              case LeafPointer(otherHash) =>
+                // TODO affix
+                propagateLeafUpward(otherHash, tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `EmptyPointer`.

@@ -130,6 +130,9 @@ class TrieStructureTests
   implicit def lift2TestKey5(s: String): TestKey5 =
     TestKey5.create(s.map(c => Integer.parseInt(c.toString)))
 
+  implicit def lift2TestKey4(s: String): TestKey4 =
+    TestKey4.create(s.map(c => Integer.parseInt(c.toString)))
+
   it should "insert skip node " in withTestTrieStoreKey5 { store =>
     val k1: TestKey5 = "10000"
     insert(store, k1, TestData.val1)
@@ -146,6 +149,68 @@ class TrieStructureTests
       val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
       leaf.key shouldBe k1
       leaf.value shouldBe TestData.val1
+    }
+  }
+
+  it should "build one level of skip nodes for 4 element key" in withTestTrieStore { store =>
+    val k1: TestKey4 = "1000"
+    insert(store, k1, TestData.val1)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
+      root.pointerBlock.children should have size 1
+      root.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+
+      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a[LeafPointer]
+      skip.affix shouldBe ByteVector(0, 0, 0)
+
+      val leaf1 =
+        store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey4, ByteVector]]
+      leaf1.key shouldBe k1
+      leaf1.value shouldBe TestData.val1
+    }
+  }
+
+  it should "build two levels of skip nodes for 4 element key" in withTestTrieStore { store =>
+    val k1: TestKey4 = "1000"
+    val k2: TestKey4 = "1001"
+    insert(store, k1, TestData.val1)
+    insert(store, k2, TestData.val1)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
+      root.pointerBlock.children should have size 1
+      root.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+
+      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a[NodePointer]
+      skip.affix shouldBe ByteVector(0, 0)
+
+      val node = store.get(txn, skip.pointer.hash).get.asInstanceOf[Node]
+
+      node.pointerBlock.children should have size 2
+      node.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
+      node.pointerBlock.childrenWithIndex(1)._2 shouldBe 1
+
+      node.pointerBlock.childrenWithIndex(0)._1 shouldBe a[LeafPointer] // do we need skip pointers?
+      node.pointerBlock.childrenWithIndex(1)._1 shouldBe a[LeafPointer]
+
+      val leaf1 =
+        store
+          .get(txn, node.pointerBlock.children(0).hash)
+          .get
+          .asInstanceOf[Leaf[TestKey4, ByteVector]]
+      leaf1.key shouldBe k1
+      leaf1.value shouldBe TestData.val1
+
+      val leaf2 =
+        store
+          .get(txn, node.pointerBlock.children(1).hash)
+          .get
+          .asInstanceOf[Leaf[TestKey4, ByteVector]]
+      leaf2.key shouldBe k2
+      leaf2.value shouldBe TestData.val1
     }
   }
 
