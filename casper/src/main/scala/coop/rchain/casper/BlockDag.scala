@@ -17,7 +17,7 @@ final case class BlockDag(idToBlocks: Map[Int, BlockMessage],
 object BlockDag {
   type LatestMessages = Map[Validator, BlockHash]
   object LatestMessages {
-    def empty(): LatestMessages = HashMap.empty[Validator, BlockHash]
+    def empty: LatestMessages = HashMap.empty[Validator, BlockHash]
   }
 
   def apply(): BlockDag =
@@ -25,7 +25,7 @@ object BlockDag {
       HashMap.empty[Int, BlockMessage],
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[BlockHash, HashSet[BlockHash]],
-      LatestMessages.empty(),
+      LatestMessages.empty,
       HashMap.empty[Validator, LatestMessages],
       0,
       HashMap.empty[Validator, Int]

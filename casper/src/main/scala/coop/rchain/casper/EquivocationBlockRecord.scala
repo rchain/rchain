@@ -1,8 +1,8 @@
 package coop.rchain.casper
 
 import cats.implicits.none
+import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.InvalidBlockRecord.SequenceNumber
 
 sealed trait EquivocationDiscoveryStatus
 case class EquivocationDiscovered(sequenceNumber: SequenceNumber)
