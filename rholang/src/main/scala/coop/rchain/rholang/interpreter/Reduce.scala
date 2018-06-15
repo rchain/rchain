@@ -402,7 +402,7 @@ object Reduce {
           } yield resultPar
         }
         case EEvalBody(chan) => eval(chan).map(q => q.value)
-        case _               => evalExprToExpr(expr).map(e => (fromExpr(e)(identity)))
+        case _               => evalExprToExpr(expr).map(e => fromExpr(e)(identity))
       }
 
     def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = {
