@@ -14,7 +14,8 @@ import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{ISpace, LMDBStore, RSpace}
+import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace._
 import monix.eval.Task
 
 import scala.collection.immutable
@@ -87,11 +88,13 @@ object Runtime {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
-    val store =
-      LMDBStore
-        .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)
+    val context = Context.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](
+      dataDir,
+      mapSize
+    )
 
-    val space                                            = new RSpace(store)
+    val space = RSpace.create(context, Branch.master)
+
     val errorLog                                         = new ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 

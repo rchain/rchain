@@ -24,4 +24,6 @@ object implicits {
   implicit val serializeNew: Serialize[New]         = mkProtobufInstance(New)
   implicit val serializeExpr: Serialize[Expr]       = mkProtobufInstance(Expr)
   implicit val serializeMatch: Serialize[Match]     = mkProtobufInstance(Match)
+  implicit val serializeESet: Serialize[ESet]       = mkProtobufInstance(ESet)
+  implicit val serializeEMap: Serialize[EMap]       = mkProtobufInstance(EMap)
 }

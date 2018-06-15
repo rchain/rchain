@@ -1,12 +1,19 @@
 package coop.rchain.casper
 
 sealed trait BlockStatus
-case object Valid                   extends BlockStatus
-case object InvalidUnslashableBlock extends BlockStatus
-case object MissingBlocks           extends BlockStatus
+sealed trait IncludeableBlock extends BlockStatus
+sealed trait RejectableBlock  extends BlockStatus
+sealed trait Slashable
 
-case object InvalidBlockNumber      extends BlockStatus
-case object InvalidParents          extends BlockStatus
-case object InvalidSequenceNumber   extends BlockStatus
-case object JustificationRegression extends BlockStatus // Note equivocations will be caught before justification regressions
-case object Equivocation            extends BlockStatus
+case object Valid extends IncludeableBlock
+// IncludeableEquivocation are blocks that would create an equivocation but are
+// pulled in through a justification of another block
+case object IncludeableEquivocation extends IncludeableBlock with Slashable
+case object IgnorableEquivocation   extends RejectableBlock with Slashable
+case object InvalidUnslashableBlock extends RejectableBlock
+case object MissingBlocks           extends RejectableBlock
+
+case object InvalidBlockNumber      extends RejectableBlock with Slashable
+case object InvalidParents          extends RejectableBlock with Slashable
+case object InvalidSequenceNumber   extends RejectableBlock with Slashable
+case object JustificationRegression extends RejectableBlock with Slashable

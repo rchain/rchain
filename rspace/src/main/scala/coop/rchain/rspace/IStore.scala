@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.ITrieStore
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -68,6 +68,8 @@ trait IStore[C, P, A, K] {
   def getCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+
+  val trieBranch: Branch
 
   private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)

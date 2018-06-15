@@ -18,6 +18,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace._
+import coop.rchain.rspace.history.Branch
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -34,7 +35,7 @@ trait PersistentStoreTester {
     val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] =
       LMDBStore.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dbDir,
                                                                                1024 * 1024 * 1024)
-    val space = new RSpace(store)
+    val space = new RSpace(store, Branch("test"))
     try {
       f(space)
     } finally {

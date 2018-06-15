@@ -5,7 +5,8 @@ import java.nio.file.{Files, Path}
 import cats.syntax.either._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util._
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{LMDBStore, _}
 import org.openjdk.jmh.annotations.{Benchmark, Scope, State}
 
@@ -46,6 +47,6 @@ object BasicBench {
       LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
 
     val testSpace: RSpace[String, Pattern, String, StringsCaptor] =
-      new RSpace(testStore)
+      new RSpace(testStore, Branch("bench"))
   }
 }
