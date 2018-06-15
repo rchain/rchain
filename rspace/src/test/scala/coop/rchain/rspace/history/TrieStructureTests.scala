@@ -282,16 +282,10 @@ class TrieStructureTests
   }
 
   it should "not add unnecessary skip on 1st level after root" in withTestTrieStore { store =>
-    val kvs = Map(
-      TestKey4.create(Vector(1, 0, 1, 0)) -> TestData.val1,
-      TestKey4.create(Vector(1, 1, 0, 0)) -> TestData.val2,
-    )
-
-    kvs.foreach {
-      case (k, v) =>
-        insert(store, k, v);
-        printTree(store)
-    }
+    val k1 = TestKey4.create(Vector(1, 0, 1, 0))
+    val k2 = TestKey4.create(Vector(1, 1, 0, 0))
+    insert(store, k1, TestData.val1)
+    insert(store, k2, TestData.val2)
 
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
@@ -300,17 +294,24 @@ class TrieStructureTests
 
       val pb1 = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Node]
       pb1.pointerBlock.children should have size 2
-      pb1.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+      pb1.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
       pb1.pointerBlock.childrenWithIndex(1)._2 shouldBe 1
-    /*
-      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
-      skip.pointer shouldBe a[LeafPointer]
-      skip.affix shouldBe ByteVector(1, 0, 0, 0)
 
-      val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
+      val skip = store.get(txn, pb1.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a[LeafPointer]
+      skip.affix shouldBe ByteVector(1, 0)
+
+      val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey4, ByteVector]]
       leaf.key shouldBe k1
       leaf.value shouldBe TestData.val1
-     */
+
+      val skip2 = store.get(txn, pb1.pointerBlock.children(1).hash).get.asInstanceOf[Skip]
+      skip2.pointer shouldBe a[LeafPointer]
+      skip2.affix shouldBe ByteVector(0, 0)
+
+      val leaf2 = store.get(txn, skip2.pointer.hash).get.asInstanceOf[Leaf[TestKey4, ByteVector]]
+      leaf2.key shouldBe k2
+      leaf2.value shouldBe TestData.val2
     }
   }
 
