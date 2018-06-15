@@ -48,6 +48,11 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
                   }
                 }
               } |
+              contract @[*basicWallet, "getNonce"](return) = {
+                for(@nonce <- nonceCh) {
+                  nonceCh!(nonce) | return!(nonce)
+                }
+              } |
               contract @[*basicWallet, "getBalance"](return) = {
                 @[purse, "getBalance"]!(*return)
               } |

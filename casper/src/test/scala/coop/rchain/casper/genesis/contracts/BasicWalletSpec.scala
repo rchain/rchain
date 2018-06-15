@@ -25,8 +25,7 @@ class BasicWalletSpec extends FlatSpec with Matchers {
 
   tests.tail.map(test => {
     it should test in {
-      //TODO: remove when withdraw tests are working properly
-      (test.contains("withdraw") || TestSetUtil.testPassed(test, tuplespace)) should be(true)
+      TestSetUtil.testPassed(test, tuplespace) should be(true)
     }
   })
 }

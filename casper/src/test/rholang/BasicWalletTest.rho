@@ -34,6 +34,15 @@ contract @"getBalance"(@wallet, return) = {
   }
 } |
 
+contract @"getNonce"(@wallet, return) = {
+  new getNonce in {
+    contract getNonce(return) = {
+      @[wallet, "getNonce"]!(*return)
+    } |
+    return!(*getNonce)
+  }
+} |
+
 @"MakeMint"!("mint") | for(@mint <- @"mint") {
   @[mint, "makePurse"]!(100, "purse") |
   @[mint, "makePurse"]!(30, "otherPurse") |
@@ -65,12 +74,13 @@ contract @"getBalance"(@wallet, return) = {
   
     @"BasicWallet"!(purse, "ed25519", pk, "wallet") |
     for(@[wallet] <- @"wallet") {
-      @"getBalance"!(wallet, "walletBalance") |
-      @"deposit"!(wallet, 300, otherPurse, "overdrawDep") |
-      @"deposit"!(wallet, 30, otherPurse, "depWallet") |
-      @"withdraw"!(wallet, 60, 0, invalidSig, "failWithdraw") |
-      @"withdraw"!(wallet, 60, 0, sig0, "withdraw0Nonce") |
-      @"withdraw"!(wallet, 10, 1, sig1, "withdraw1Nonce") |
+        @"wallet"!([wallet]) |
+        @"getBalance"!(wallet, "walletBalance") |
+        @"deposit"!(wallet, 300, otherPurse, "overdrawDep") |
+        @"deposit"!(wallet, 30, otherPurse, "depWallet") |
+        @"withdraw"!(wallet, 60, 0, invalidSig, "failWithdraw") |
+        @"withdraw"!(wallet, 60, 0, sig0, "withdraw0Nonce") |
+        @"withdraw"!(wallet, 10, 1, sig1, "withdraw1Nonce") |
       @"TestSet"!(
         "Wallet deposit should work as expected.",
         [
@@ -79,9 +89,8 @@ contract @"getBalance"(@wallet, return) = {
           ["depWallet", true],
           ["walletBalance", 130]
         ]
-      )
+      ) |
       
-      /* TODO: Uncomment when Rholang bug is fixed
       @["TestSet", "after"]!("Wallet deposit should work as expected.", {
         @"TestSet"!(
           "Wallet withdraw should not accept invalid signatures or nonces.",
@@ -91,20 +100,24 @@ contract @"getBalance"(@wallet, return) = {
           ]
         ) |
         
-        for(doWithdraw <- @"withdraw0Nonce") {
-          doWithdraw!("wPurse") | for(@wPurse <- @"wPurse") {
-            @"getBalance"!(wPurse, "purseBalance") |
-            @"TestSet"!(
-              "Wallet withdraw should work as expected.",
-              [
-                ["purseBalance", 60],
-                ["walletBalance", 40]
-              ]
-            )
+        @["TestSet", "after"]!("Wallet withdraw should not accept invalid signatures or nonces.", {
+          for(doWithdraw <- @"withdraw0Nonce") {
+            @"withdraw0Nonce"!(*doWithdraw) |
+            doWithdraw!("wPurse") | for(@[wPurse] <- @"wPurse") {
+              @"getBalance"!(wPurse, "purseBalance") |
+              @"getNonce"!(wallet, "walletNonce") |
+              @"TestSet"!(
+                "Wallet withdraw should work as expected.",
+                [
+                  ["purseBalance", 60],
+                  ["walletBalance", 70],
+                  ["walletNonce", 0]
+                ]
+              )
+            }
           }
-        }
+        })
       })
-      */
     }
   }
 }
