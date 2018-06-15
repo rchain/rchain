@@ -10,7 +10,6 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.effects.Log
 
-import scala.collection.mutable
 import scala.util.Try
 
 object Validate {
@@ -171,4 +170,39 @@ object Validate {
         } yield Left(InvalidParents)
     }
   }
+
+  /*
+   * When we switch between equivocation forks for a slashed validator, we will potentially get a
+   * justification regression that is valid but since that validator is dropped from the
+   * justifications, we don't have to check for it.
+   */
+  def justificationRegressions[F[_]: Applicative: Log](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+    val latestMessagesOfBlock = ProtoUtil.toLatestMessages(b.justifications)
+    val latestMessagesOfLatestMessagesForSender =
+      dag.latestMessagesOfLatestMessages.getOrElse(b.sender, latestMessagesOfBlock)
+    val containsJustificationRegression =
+      latestMessagesOfBlock.exists {
+        case (validator, currentBlockJustificationHash) =>
+          val previousBlockJustificationHash =
+            latestMessagesOfLatestMessagesForSender.getOrElse(validator, genesis.blockHash)
+          val currentBlockJustification  = dag.blockLookup(currentBlockJustificationHash)
+          val previousBlockJustification = dag.blockLookup(previousBlockJustificationHash)
+          if (currentBlockJustification.seqNum < previousBlockJustification.seqNum) {
+            true
+          } else {
+            false
+          }
+      }
+    if (containsJustificationRegression) {
+      for {
+        _ <- Log[F].warn(ignore(b, "block contains justification regressions."))
+      } yield Left(JustificationRegression)
+    } else {
+      Applicative[F].pure(Right(Valid))
+    }
+  }
+
 }

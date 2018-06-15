@@ -256,4 +256,59 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
                                       chain) should be(Left(InvalidBlockNumber))
     log.warns.size should be(1)
   }
+
+  "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in {
+    val validators = Vector(
+      ByteString.copyFromUtf8("Validator 1"),
+      ByteString.copyFromUtf8("Validator 2")
+    )
+    val bonds = validators.zipWithIndex.map {
+      case (v, i) => Bond(v, 2 * i + 1)
+    }
+
+    def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
+      messages.map(b => b.sender -> b.blockHash).toMap
+
+    def createValidatorBlock[F[_]: Monad: BlockDagState](parents: Seq[BlockMessage],
+                                                         justifications: Seq[BlockMessage],
+                                                         validator: Int): F[BlockMessage] =
+      createBlock[F](
+        parents.map(_.blockHash),
+        creator = validators(validator),
+        bonds = bonds,
+        deploys = Seq(ProtoUtil.basicDeploy(0)),
+        justifications = latestMessages(justifications)
+      )
+
+    def createChainWithValidators[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+      for {
+        b0 <- createBlock[F](Seq.empty, bonds = bonds)
+        b1 <- createValidatorBlock[F](Seq(b0), Seq(b0, b0), 0)
+        b2 <- createValidatorBlock[F](Seq(b1), Seq(b1, b0), 0)
+        b3 <- createValidatorBlock[F](Seq(b0), Seq(b2, b0), 1)
+        b4 <- createValidatorBlock[F](Seq(b3), Seq(b2, b3), 1)
+      } yield b4
+
+    val chain = createChainWithValidators[StateWithChain].runS(initState).value
+    val b0    = chain.idToBlocks(0)
+
+    (0 to 4).forall(
+      i =>
+        Validate
+          .justificationRegressions[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
+      true)
+
+    // The justification block for validator 0 should point to b2 or above.
+    val b1 = chain.idToBlocks(1)
+    val b4 = chain.idToBlocks(4)
+    val justificationsWithRegression =
+      Seq(Justification(validators(0), b1.blockHash), Justification(validators(1), b4.blockHash))
+    val blockWithJustificationRegression =
+      BlockMessage()
+        .withSender(validators(1))
+        .withJustifications(justificationsWithRegression)
+    Validate.justificationRegressions[Id](blockWithJustificationRegression, b0, chain) should be(
+      Left(JustificationRegression))
+    log.warns.size should be(1)
+  }
 }

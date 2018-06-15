@@ -160,7 +160,7 @@ sealed abstract class MultiParentCasperInstances {
           dag            <- blockDag
           p              = chooseNonConflicting(orderedHeads, genesis, dag)
           r              <- remDeploys(dag, p)
-          justifications = justificationProto(dag.latestMessages)
+          justifications = toJustification(dag.latestMessages)
           proposal <- if (r.nonEmpty || p.length > 1) {
                        createProposal(p, r, justifications)
                      } else {
@@ -307,6 +307,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(block)
           case InvalidParents =>
             handleInvalidBlockEffect(block)
+          case JustificationRegression =>
+            handleInvalidBlockEffect(block)
           case InvalidSequenceNumber =>
             // We need to handle invalid sequence numbers separately as the invalid block tracker
             // assumes the sequence numbers inserted are valid.
@@ -358,6 +360,9 @@ sealed abstract class MultiParentCasperInstances {
               // to whatever block we have fetched latest among the blocks that
               // constitute the equivocation.
               latestMessages = bd.latestMessages.updated(block.sender, hash),
+              latestMessagesOfLatestMessages =
+                bd.latestMessagesOfLatestMessages.updated(block.sender,
+                                                          toLatestMessages(block.justifications)),
               childMap = newChildMap
             )
           })

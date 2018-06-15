@@ -13,6 +13,7 @@ case object IgnorableEquivocation   extends RejectableBlock with Slashable
 case object InvalidUnslashableBlock extends RejectableBlock
 case object MissingBlocks           extends RejectableBlock
 
-case object InvalidBlockNumber    extends RejectableBlock with Slashable
-case object InvalidParents        extends RejectableBlock with Slashable
-case object InvalidSequenceNumber extends RejectableBlock with Slashable
+case object InvalidBlockNumber      extends RejectableBlock with Slashable
+case object InvalidParents          extends RejectableBlock with Slashable
+case object InvalidSequenceNumber   extends RejectableBlock with Slashable
+case object JustificationRegression extends RejectableBlock with Slashable
