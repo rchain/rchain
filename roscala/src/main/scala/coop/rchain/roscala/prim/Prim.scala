@@ -13,7 +13,7 @@ abstract class Prim extends Ob {
   def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob =
     fn(state.ctxt, globalEnv)
 
-  override def dispatch(state: State, globalEnv: GlobalEnv): Ob = {
+  override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
     val result = dispatchHelper(state, globalEnv)
 
     if (result != Invalid && result != Upcall && result != Deadthread) {
@@ -23,8 +23,8 @@ abstract class Prim extends Ob {
     result
   }
 
-  override def invoke(state: State, globalEnv: GlobalEnv): Ob =
-    dispatch(state, globalEnv)
+  override def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob =
+    dispatch(ctxt, state, globalEnv)
 }
 
 object Prim {

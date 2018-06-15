@@ -66,6 +66,7 @@ object Vm {
         * `Ctxt` in the VM.
         */
       case OpPush =>
+        logger.debug("OpPush")
         state.ctxt = Ctxt(state.ctxt)
         state.nextOpFlag = true
 
@@ -74,6 +75,7 @@ object Vm {
         * Throws away the installed `Ctxt`.
         */
       case OpPop =>
+        logger.debug("OpPop")
         state.ctxt = state.ctxt.ctxt.get
         state.nextOpFlag = true
 
@@ -83,6 +85,7 @@ object Vm {
         * `Ctxt`.
         */
       case OpNargs(n) =>
+        logger.debug(s"OpNargs($n)")
         state.ctxt.nargs = n
         state.nextOpFlag = true
 
@@ -91,11 +94,8 @@ object Vm {
         * `argvec` of the installed `Ctxt`.
         */
       case OpAlloc(n) =>
+        logger.debug(s"OpAlloc($n)")
         state.ctxt.argvec = Tuple(new Array[Ob](n))
-        state.nextOpFlag = true
-
-      case OpNargs(n) =>
-        state.ctxt.nargs = n
         state.nextOpFlag = true
 
       /**
@@ -103,6 +103,7 @@ object Vm {
         * `Ctxt` contains an `argvec` of size `n`.
         */
       case OpPushAlloc(n) =>
+        logger.debug(s"OpPushAlloc($n)")
         val t = Tuple(new Array[Ob](n))
         state.ctxt = Ctxt(t, state.ctxt)
         state.nextOpFlag = true
@@ -114,6 +115,7 @@ object Vm {
         * bound to the actuals.
         */
       case OpExtend(lit) =>
+        logger.debug(s"OpExtend($lit)")
         val formals    = state.code.litvec(lit).asInstanceOf[Template]
         val optActuals = formals.matchPattern(state.ctxt.argvec, state.ctxt.nargs)
 
@@ -161,6 +163,7 @@ object Vm {
         * bytecode once all child `Ctxt` returned their results back.
         */
       case OpOutstanding(pc, n) =>
+        logger.debug(s"OpOutstanding(pc = $pc, n = $n)")
         state.ctxt.pc = pc
         state.ctxt.outstanding = n
         state.nextOpFlag = true
@@ -171,6 +174,7 @@ object Vm {
         * will start at the position `pc`.
         */
       case OpFork(pc) =>
+        logger.debug(s"OpFork($pc)")
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
         state.strandPool.prepend(newCtxt)
@@ -184,7 +188,7 @@ object Vm {
         * `OpXmitTag` will take a location from the `litvec`.
         */
       case OpXmitTag(unwind, next, nargs, lit) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,litvec[$lit]")
+        logger.debug(s"OpXmitTag(unwind = $unwind, next = $next, nargs = $nargs, lit = $lit)")
         state.ctxt.nargs = nargs
         state.ctxt.tag = state.code.litvec(lit).asInstanceOf[Location]
         doXmit(next, unwind, state, globalEnv)
@@ -194,7 +198,7 @@ object Vm {
         * Then behaves like `OpXmitTag`.
         */
       case OpXmitArg(unwind, next, nargs, arg) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,arg[$arg]")
+        logger.debug(s"OpXmitReg(unwind = $unwind, next = $next, nargs = $nargs, arg = $arg)")
         state.ctxt.nargs = nargs
         state.ctxt.tag = ArgRegister(arg)
         doXmit(next, unwind, state, globalEnv)
@@ -204,7 +208,8 @@ object Vm {
         * Then behaves like `OpXmitTag`.
         */
       case OpXmitReg(unwind, next, nargs, reg) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,${regName(reg)}")
+        logger.debug(
+          s"OpXmitReg(unwind = $unwind, next = $next, nargs = $nargs, reg = ${regName(reg)})")
         state.ctxt.nargs = nargs
         state.ctxt.tag = CtxtRegister(reg)
         doXmit(next, unwind, state, globalEnv)
@@ -222,7 +227,7 @@ object Vm {
         * to the VM. The VM will then get the next available `Ctxt`.
         */
       case OpXmit(unwind, next, nargs) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs")
+        logger.debug(s"OpXmit(unwind = $unwind, next = $next, nargs = $nargs)")
         state.ctxt.nargs = nargs
         doXmit(next, unwind, state, globalEnv)
 
@@ -231,6 +236,7 @@ object Vm {
         * be ignored and will not get written anywhere.
         */
       case OpSend(unwind, next, nargs) =>
+        logger.debug(s"OpSend(unwind = $unwind, next = $next, nargs = $nargs)")
         state.ctxt.ctxt = None
         state.ctxt.nargs = nargs
         state.ctxt.tag = LocLimbo
@@ -247,6 +253,8 @@ object Vm {
         * The VM will then get the next available `Ctxt`.
         */
       case OpApplyPrimTag(unwind, next, nargs, primNum, lit) =>
+        logger.debug(
+          s"OpApplyPrimTag(unwind = $unwind, next = $next, nargs = $nargs, primNum = $primNum, lit = $lit)")
         state.ctxt.nargs = nargs
         val prim = Prim.nthPrim(primNum)
         val result =
@@ -270,6 +278,8 @@ object Vm {
 
       /* See `OpApplyPrimTag` */
       case OpApplyPrimArg(unwind, next, nargs, primNum, arg) =>
+        logger.debug(
+          s"OpApplyPrimArg(unwind = $unwind, next = $next, nargs = $nargs, primNum = $primNum, arg = $arg)")
         state.ctxt.nargs = nargs
         val prim = Prim.nthPrim(primNum)
         val result =
@@ -291,6 +301,8 @@ object Vm {
 
       /* See `OpApplyPrimTag` */
       case OpApplyPrimReg(unwind, next, nargs, primNum, reg) =>
+        logger.debug(
+          s"OpApplyPrimArg(unwind = $unwind, next = $next, nargs = $nargs, primNum = $primNum, reg = ${regName(reg)})")
         state.ctxt.nargs = nargs
         val prim = Prim.nthPrim(primNum)
         val result =
@@ -310,6 +322,8 @@ object Vm {
 
       /* See `OpApplyPrimTag` */
       case OpApplyCmd(unwind, next, nargs, primNum) =>
+        logger.debug(
+          s"OpApplyPrimArg(unwind = $unwind, next = $next, nargs = $nargs, primNum = $primNum)")
         state.ctxt.nargs = nargs
         val prim = Prim.nthPrim(primNum)
         val result =
@@ -341,20 +355,24 @@ object Vm {
         * the continuation.
         */
       case OpRtn(next) =>
+        logger.debug(s"OpRtn(next = $next)")
         doRtn(next, state)
 
       /* See `OpRtn` */
       case OpRtnTag(next, lit) =>
+        logger.debug(s"OpRtnTag(next = $next, lit = $lit)")
         state.ctxt.tag = state.code.litvec(lit).asInstanceOf[Location]
         doRtn(next, state)
 
       /* See `OpRtn` */
       case OpRtnArg(next, arg) =>
+        logger.debug(s"OpRtnArg(next = $next, arg = $arg)")
         state.ctxt.tag = ArgRegister(arg)
         doRtn(next, state)
 
       /* See `OpRtn` */
       case OpRtnReg(next, reg) =>
+        logger.debug(s"OpRtnReg(next = $next, reg = ${regName(reg)})")
         state.ctxt.tag = CtxtRegister(reg)
         doRtn(next, state)
 
@@ -364,6 +382,7 @@ object Vm {
         * default sets the `tag` register to `litvec[lit]`.
         */
       case OpUpcallRtn(next, lit) =>
+        logger.debug(s"OpUpcallRtn(next = $next, lit = $lit)")
         state.ctxt.tag = state.code.litvec(lit).asInstanceOf[Location]
         if (store(state.ctxt.tag, state.ctxt.ctxt.get, state.ctxt.rslt)) {
           state.vmErrorFlag = true
@@ -381,6 +400,7 @@ object Vm {
         * scheduler to install the next available `Ctxt`.
         */
       case OpUpcallResume =>
+        logger.debug("OpUpcallResume")
         state.ctxt.ctxt.get.scheduleStrand(state)
         state.doNextThreadFlag = true
 
@@ -388,6 +408,7 @@ object Vm {
         * Forces the scheduler to install the next available `Ctxt`.
         */
       case OpNxt =>
+        logger.debug("OpNxt")
         state.doNextThreadFlag = true
 
       /**
@@ -396,6 +417,7 @@ object Vm {
         * counter of the VM to `pc`.
         */
       case OpJmpCut(pc, cut) =>
+        logger.debug(s"OpJmpCut(pc = $pc, cut = $cut)")
         var newEnv = state.ctxt.env
         for (_ <- 0 until cut) newEnv = newEnv.parent
         state.ctxt.env = newEnv
@@ -406,6 +428,7 @@ object Vm {
         * Sets the program counter of the VM to `pc`.
         */
       case OpJmp(pc) =>
+        logger.debug(s"OpJmp(pc = $pc)")
         state.pc = pc
         state.nextOpFlag = true
 
@@ -414,6 +437,7 @@ object Vm {
         * the installed `Ctxt` equals `RblFalse`.
         */
       case OpJmpFalse(pc) =>
+        logger.debug(s"OpJmpFalse(pc = $pc)")
         if (state.ctxt.rslt == RblFalse) {
           logger.debug(s"Jump to $pc")
           state.pc = pc
@@ -426,6 +450,7 @@ object Vm {
         * `argvec[arg]`.
         */
       case OpLookupToArg(lit, arg) =>
+        logger.debug(s"OpLookupToArg(lit = $lit, arg = $arg)")
         val key   = state.code.litvec(lit)
         val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
 
@@ -446,6 +471,7 @@ object Vm {
         * register defined by `reg`.
         */
       case OpLookupToReg(lit, reg) =>
+        logger.debug(s"OpLookupToReg(lit = $lit, reg = ${regName(reg)})")
         val key   = state.code.litvec(lit)
         val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
 
@@ -466,6 +492,8 @@ object Vm {
         * to `argvec[arg]`.
         */
       case OpXferLexToArg(indirect, level, offset, arg) =>
+        logger.debug(
+          s"OpXferLexToArg(indirect = $indirect, level = $level, offset = $offset, arg = $arg)")
         var env = state.ctxt.env
         for (_ <- 0 until level) env = env.parent
 
@@ -482,6 +510,8 @@ object Vm {
         * the register defined by `reg`.
         */
       case OpXferLexToReg(indirect, level, offset, reg) =>
+        logger.debug(
+          s"OpXferLexToArg(indirect = $indirect, level = $level, offset = $offset, reg = ${regName(reg)})")
         var env = state.ctxt.env
         for (_ <- 0 until level) env = env.parent
 
@@ -497,6 +527,7 @@ object Vm {
         * to `argvec[arg]`.
         */
       case OpXferGlobalToArg(global, arg) =>
+        logger.debug(s"OpXferGlobalToArg(global = $global, arg = $arg)")
         val ob = globalEnv.values(global)
         state.ctxt.argvec.update(arg, ob)
         state.nextOpFlag = true
@@ -506,6 +537,7 @@ object Vm {
         * to the register defined by `reg`.
         */
       case OpXferGlobalToReg(global, reg) =>
+        logger.debug(s"OpXferGlobalToReg(global = $global, reg = ${regName(reg)})")
         val ob = globalEnv.values(global)
         state.ctxt.setReg(reg, ob)
         state.nextOpFlag = true
@@ -514,6 +546,7 @@ object Vm {
         * Copy `argvec[src]` to `argvec[dest]`.
         */
       case OpXferArgToArg(dest, src) =>
+        logger.debug(s"OpXferArgToArg(dest = $dest, src = $src)")
         val ob = state.ctxt.arg(src)
         state.ctxt.argvec.update(dest, ob)
         state.nextOpFlag = true
@@ -522,6 +555,7 @@ object Vm {
         * Copy `rslt` register to `argvec[arg]`.
         */
       case OpXferRsltToArg(arg) =>
+        logger.debug(s"OpXferRsltToArg(arg = $arg)")
         val rslt = state.ctxt.rslt
         state.ctxt.argvec.update(arg, rslt)
         state.nextOpFlag = true
@@ -530,6 +564,7 @@ object Vm {
         * Copy `argvec[arg]` to `rslt` register.
         */
       case OpXferArgToRslt(arg) =>
+        logger.debug(s"OpXferArgToRslt(arg = $arg)")
         val ob = state.ctxt.arg(arg)
         state.ctxt.rslt = ob
         state.nextOpFlag = true
@@ -538,6 +573,7 @@ object Vm {
         * Copy `rslt` to register defined by `reg`.
         */
       case OpXferRsltToReg(reg) =>
+        logger.debug(s"OpXferRsltToReg(reg = ${regName(reg)})")
         val rslt = state.ctxt.rslt
         state.ctxt.setReg(reg, rslt)
         state.nextOpFlag = true
@@ -547,6 +583,7 @@ object Vm {
         * register.
         */
       case OpXferRegToRslt(reg) =>
+        logger.debug(s"OpXferRegToRslt(reg = ${regName(reg)})")
         state.ctxt.rslt = state.ctxt.reg(reg)
         state.nextOpFlag = true
 
@@ -556,6 +593,7 @@ object Vm {
         * the given location.
         */
       case OpXferRsltToDest(lit) =>
+        logger.debug(s"OpXferRsltToDest(lit = $lit)")
         val location = state.code.litvec(lit).asInstanceOf[Location]
         logger.debug(s"Xfer ${state.ctxt.rslt} to $location")
         if (store(location, state.ctxt, state.ctxt.rslt))
@@ -569,6 +607,7 @@ object Vm {
         * the `rslt` register.
         */
       case OpXferSrcToRslt(lit) =>
+        logger.debug(s"OpXferSrcToRslt(lit = $lit)")
         val location = state.code.litvec(lit).asInstanceOf[Location]
         state.ctxt.rslt = fetch(location, state.ctxt, globalEnv)
         state.nextOpFlag = true
@@ -577,6 +616,7 @@ object Vm {
         * Copy `litvec[lit]` to `argvec[arg]`.
         */
       case OpIndLitToArg(lit, arg) =>
+        logger.debug(s"OpIndLitToArg(lit = $lit, arg = $arg)")
         val ob = state.code.litvec(lit)
         state.ctxt.argvec.update(arg, ob)
         state.nextOpFlag = true
@@ -585,6 +625,7 @@ object Vm {
         * Copy `litvec[lit]` to the register defined by `reg`.
         */
       case OpIndLitToReg(lit, reg) =>
+        logger.debug(s"OpIndLitToReg(lit = $lit, reg = ${regName(reg)})")
         val ob = state.code.litvec(lit)
         state.ctxt.setReg(reg, ob)
         state.nextOpFlag = true
@@ -593,6 +634,7 @@ object Vm {
         * Copy `litvec[lit]` to the `rslt` register.
         */
       case OpIndLitToRslt(lit) =>
+        logger.debug(s"OpIndLitToRslt(lit = $lit)")
         val ob = state.code.litvec(lit)
         state.ctxt.rslt = ob
         state.nextOpFlag = true
@@ -601,6 +643,7 @@ object Vm {
         * Copy the VM literal defined by `literal` to `argvec[arg]`.
         */
       case OpImmediateLitToArg(literal, arg) =>
+        logger.debug(s"OpImmediateLitToArg(literal = $literal, arg = $arg)")
         state.ctxt.argvec.update(arg, vmLiterals(literal))
         state.nextOpFlag = true
 
@@ -609,6 +652,7 @@ object Vm {
         * defined by `reg`.
         */
       case OpImmediateLitToReg(literal, reg) =>
+        logger.debug(s"OpImmediateLitToReg(literal = $literal, reg = ${regName(reg)})")
         state.ctxt.setReg(reg, vmLiterals(literal))
         state.nextOpFlag = true
     }
@@ -673,7 +717,7 @@ object Vm {
   def doXmit(next: Boolean, unwind: Boolean, state: State, globalEnv: GlobalEnv): Unit = {
     val result =
       if (unwind) unwindAndDispatch(state, globalEnv)
-      else state.ctxt.trgt.dispatch(state, globalEnv)
+      else state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
 
     if (result == Deadthread)
       state.doNextThreadFlag = true
@@ -721,7 +765,7 @@ object Vm {
     state.ctxt.argvec = newArgvec
     state.ctxt.nargs = 0
 
-    state.ctxt.trgt.dispatch(state, globalEnv)
+    state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
   }
 
 }

@@ -15,7 +15,9 @@ abstract class Ob {
   var meta: Meta = _
   var parent: Ob = _
 
-  def dispatch(state: State, globalEnv: GlobalEnv): Ob = Niv
+  def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
+
+  def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
 
   def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
     if (keyMeta == NilMeta)
@@ -23,16 +25,16 @@ abstract class Ob {
     else
       argvec.becomeExtension(keyMeta.asInstanceOf[Meta], this)
 
-  def invoke(state: State, globalEnv: GlobalEnv): Ob = Niv
+  def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
 
   /** Tries to lookup value for key and then invokes the value
     *
     * `ctxt.trgt` contains the key.
     */
-  def lookupAndInvoke(state: State, globalEnv: GlobalEnv): Ob = {
-    val fn = meta.lookupObo(this, state.ctxt.trgt)(globalEnv)
+  def lookupAndInvoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
+    val fn = meta.lookupObo(this, ctxt.trgt)(globalEnv)
     logger.debug(s"Lookup and invoke $fn")
-    fn.invoke(state, globalEnv)
+    fn.invoke(ctxt, state, globalEnv)
   }
 
   def lookup(key: Ob)(globalEnv: GlobalEnv): Ob = {
@@ -71,7 +73,7 @@ abstract class Ob {
     value
   }
 
-  def numberOfSlots = slot.size
+  def numberOfSlots: Int = slot.size
 }
 
 object Ob {
@@ -82,10 +84,12 @@ case class Monitor()             extends Ob
 case class Symbol(value: String) extends Ob
 
 case object Absent     extends Ob
-case object Suicide    extends Ob
-case object Invalid    extends Ob
-case object Upcall     extends Ob
 case object Deadthread extends Ob
+case object Invalid    extends Ob
 case object Niv        extends Ob
+case object Qanon      extends Ob
 case object RblFalse   extends Ob
 case object RblTrue    extends Ob
+case object Suicide    extends Ob
+case object Suspended  extends Ob
+case object Upcall     extends Ob
