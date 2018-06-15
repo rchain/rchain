@@ -280,6 +280,39 @@ class TrieStructureTests
     }
   }
 
+  it should "not add unnecessary skip on 1st level after root" in withTestTrieStore { store =>
+    val kvs = Map(
+      TestKey4.create(Vector(1, 0, 1, 0)) -> TestData.val1,
+      TestKey4.create(Vector(1, 1, 0, 0)) -> TestData.val2,
+    )
+
+    kvs.foreach {
+      case (k, v) =>
+        insert(store, k, v);
+        printTree(store)
+    }
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
+      root.pointerBlock.children should have size 1
+      root.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+
+      val pb1 = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Node]
+      pb1.pointerBlock.children should have size 2
+      pb1.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+      pb1.pointerBlock.childrenWithIndex(1)._2 shouldBe 1
+    /*
+      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a[LeafPointer]
+      skip.affix shouldBe ByteVector(1, 0, 0, 0)
+
+      val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
+      leaf.key shouldBe k1
+      leaf.value shouldBe TestData.val1
+     */
+    }
+  }
+
   private[this] def assertSingleElementTrie(
       implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
     import SingleElementData._
