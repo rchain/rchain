@@ -58,15 +58,16 @@ package object test {
             pointerBlock.childrenWithIndex.foreach {
               case (p, i) =>
                 val n = store.get(txn, p.hash).get
-                println(offset(d), "index", i)
+                println(offset(d), "index", i, "#", p.hash)
                 printBranch(d + 1, n)
             }
           case Skip(affix, p) =>
             val n = store.get(txn, p.hash).get
-            println(offset(d), "skip", affix)
+            println(offset(d), "skip", affix, "#", p.hash)
             printBranch(d + 1, n)
         }
-      val root     = store.getRoot(txn)
+      val root = store.getRoot(txn)
+      println("root#", root)
       val rootNode = store.get(txn, root.get).get
       printBranch(0, rootNode)
     }

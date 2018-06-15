@@ -39,7 +39,8 @@ class TrieStructureTests
   private[this] val SingleElementData = new {
     val key1    = TestData.key1
     val val1    = TestData.val1
-    val rootHex = "f8758db35082dc03c90db2e1686e2a72394a7618f74e4e8cea2da516896b8a68"
+    val rootHex = "8d7806ccff9076e74e54527eda803e822fc3c4fddf05e61ebe2b811954441152"
+    val skipHex = "ce8440b9229db5cc26f72d72ee67789d3b0ba715ee74996ba07c72383dc48af6"
     val leafHex = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
   }
 
@@ -49,9 +50,8 @@ class TrieStructureTests
     val key2 = TestData.key2
     val val2 = TestData.val2
 
-    val rootHex   = "67bbd01c5d66fc26b0c966c2bf0698ecb12cef1d718598ec6f0364431c32c675"
-    val level1Hex = "536a45e654a07426112ac146e11b18e929f61687499e19925832c0d1dba60013"
-    val level2Hex = "488827a0e0e6a09f46719888a23a19ca4ceb18df2bc3a5bca2462dd0d278bbb3"
+    val rootHex   = "4d804b270adec22350ef441b1e2744dad665a8dcfc8f2ea952396172582f7bfa"
+    val level1Hex = "105920546af96d5321e4e771cb9cba3c179d33528203ffa8059c8dec0bd3cb4e"
     val level3Hex = "7b60933db17d93a3b1039131a33137b16e5e60818f5c1f264639e20c2d4874af"
     val leaf1Hex  = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
     val leaf2Hex  = "f22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
@@ -75,11 +75,10 @@ class TrieStructureTests
       case _ => fail("expected a node")
     }
 
-  it should "have two levels after inserting one element" in {
+  it should "have three levels after inserting one element" in {
     withTestTrieStore { implicit store =>
       import SingleElementData._
       insert(store, key1, val1)
-
       assertSingleElementTrie
     }
   }
@@ -219,8 +218,6 @@ class TrieStructureTests
     insert(store, k1, TestData.val1)
     insert(store, k2, TestData.val1)
 
-    printTree(store)
-
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
       root.pointerBlock.children should have size 1
@@ -319,10 +316,12 @@ class TrieStructureTests
       implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
-      expectNode(rootHex, Seq((1, LeafPointer(leafHex))))
-      val expectedLeafHash = Blake2b256Hash
-        .fromHex(leafHex)
+      expectNode(rootHex, Seq((1, NodePointer(skipHex))))
+      val expectedSkipHash = Blake2b256Hash.fromHex(skipHex)
+      store.get(txn, expectedSkipHash) shouldBe Some(
+        Skip(ByteVector(0, 0, 0), LeafPointer(leafHex)))
 
+      val expectedLeafHash = Blake2b256Hash.fromHex(leafHex)
       store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
     }
 

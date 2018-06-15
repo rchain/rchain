@@ -40,21 +40,16 @@ package object history {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
-    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] = {
-      println("loop", depth, curr)
+    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
       curr match {
         case Skip(affix, pointer) =>
-          println("?", depth, affix.length)
           store.get(txn, pointer.hash) match {
             case Some(next) => loop(txn, depth + affix.length.toInt, next)
             case None       => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
         case Node(pointerBlock) =>
-          println("pb", pointerBlock)
-          println("depth", depth)
           val index: Int = JByte.toUnsignedInt(path(depth))
-          println("index", index)
           // We use an explicit match here instead of flatMapping in order to make this function
           // tail-recursive
           pointerBlock.toVector(index) match {
@@ -71,12 +66,8 @@ package object history {
         case Leaf(_, _) =>
           None
       }
-    }
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
-      println("------------------")
-      println("looking for", key)
-      println("path", path)
       for {
         currentRootHash <- store.getRoot(txn)
         currentRoot     <- store.get(txn, currentRootHash)
