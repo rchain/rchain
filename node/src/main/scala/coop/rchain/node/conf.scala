@@ -6,7 +6,7 @@ import java.nio.file.{Path, Paths}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
 import org.rogach.scallop._
-
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 import scala.collection.JavaConverters._
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -122,7 +122,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   def fetchHost(upnp: UPnP): String =
     host.toOption match {
       case Some(host) => host
-      case None       => whoami(port(), upnp).fold("localhost")(_.getHostAddress)
+      case None       => whoami(port(), upnp)
     }
 
   def certificatePath: Path =
@@ -133,35 +133,26 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     certificate.toOption
       .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
-  private def whoami(port: Int, upnp: UPnP): Option[InetAddress] = {
+  def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
+    Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-    val logger = Logger("conf")
-    logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
-
-    (upnp.localAddress, upnp.externalAddress) match {
-      case (_, Some(addy)) => Some(InetAddress.getByName(addy))
-      case (Some(addy), _) => Some(addy)
-      case _ => {
-        val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
-        val addresses = ifaces
-          .flatMap(_.asScala)
-          .map(_.getAddress)
-          .toList
-          .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-        if (addresses.contains(false)) {
-          Some(addresses(false).head)
-        } else {
-          val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (locals.contains(false)) {
-            Some(locals(false).head)
-          } else if (locals.contains(true)) {
-            Some(locals(true).head)
-          } else {
-            None
-          }
-        }
+  def checkAll: (String, String) = {
+    val func: PartialFunction[Unit, (String, String)] =
+      check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse {
+        case _ => ("failed to guess", "localhost")
       }
-    }
+    func.apply(())
+  }
+
+  private def whoami(port: Int, upnp: UPnP): String = {
+    println("INFO - flag --host was not provided, guessing your external IP address")
+
+    val (source, ip) = upnp.externalAddress
+      .map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress))
+      .getOrElse(checkAll)
+    println(s"INFO - guessed $ip from source: $source")
+    ip
   }
 
   verify()
