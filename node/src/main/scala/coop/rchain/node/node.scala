@@ -89,6 +89,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   if (!conf.noUpnp()) {
     println("INFO - trying to open port using uPnP....")
     upnp.addPort(conf.port()) match {
+      case Left(UnknownCommError("no gateway")) =>
+        println(s"INFO - [OK] no gateway found, no need to open any port.")
       case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
       case Right(false) => println(s"$upnpErrorMsg")
       case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
