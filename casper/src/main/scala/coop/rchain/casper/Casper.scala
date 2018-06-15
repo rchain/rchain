@@ -326,16 +326,12 @@ sealed abstract class MultiParentCasperInstances {
           _ <- Capture[F].capture { blocksToSlash.map(awaitingJustificationToChild.remove) }
         } yield ()
 
-      private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] = {
-        val maybeChildren = map.get(element)
-        maybeChildren match {
-          case Some(children) =>
-            children.foldLeft(Set(element)) {
-              case (acc, child) => acc.union(allChildren(map, child))
-            }
-          case None => Set(element)
-        }
-      }
+      private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
+        DagOperations
+          .bfTraverse[A](Some(element)) { (el: A) =>
+            map.getOrElse(el, Set.empty[A]).iterator
+          }
+          .toSet
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
