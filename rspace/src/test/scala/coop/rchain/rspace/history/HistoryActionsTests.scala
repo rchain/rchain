@@ -312,68 +312,77 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
 
   "Round trip rollback" should "work" in {
-    forAll { (kvs: Map[TestKey4, ByteVector]) =>
-      withTestTrieStore { store =>
-        val pairs = kvs.toList
+    //forAll { (kvs: Map[TestKey4, ByteVector]) =>
+    withTestTrieStore { store =>
+      val kvs = Map(TestKey4.create(Seq(0, 212, 0, 3)) -> val1,
+                    TestKey4.create(Seq(0, 255, 39, 137)) -> val2)
 
-        val (first, second) = pairs.splitAt(pairs.length / 2)
+      val pairs = kvs.toList
 
-        val root0 = getRoot(store)
+      val (first, second) = pairs.splitAt(pairs.length / 2)
 
-        HistoryActionsTests.insertAll(store, first)
-        val root1 = getRoot(store)
-        val ret1  = HistoryActionsTests.lookupAll(store, first)
+      val root0 = getRoot(store)
 
-        ret1 shouldBe first
+      HistoryActionsTests.insertAll(store, first)
+      printTree(store)
+      println
+      val root1 = getRoot(store)
+      val ret1  = HistoryActionsTests.lookupAll(store, first)
 
-        HistoryActionsTests.insertAll(store, second)
-        val root2 = getRoot(store)
-        val ret2f = HistoryActionsTests.lookupAll(store, first)
-        val ret2s = HistoryActionsTests.lookupAll(store, second)
+      ret1 shouldBe first
 
-        root2 should not be root1
-        ret2f shouldBe first
-        ret2s shouldBe second
+      HistoryActionsTests.insertAll(store, second)
+      printTree(store)
+      println
 
-        HistoryActionsTests.deleteAll(store, second)
-        val root3 = getRoot(store)
-        val ret3f = HistoryActionsTests.lookupAll(store, first)
-        val ret3s = HistoryActionsTests.lookupAll(store, second)
+      val root2 = getRoot(store)
+      val ret2f = HistoryActionsTests.lookupAll(store, first)
+      val ret2s = HistoryActionsTests.lookupAll(store, second)
 
-        root3 shouldBe root1
-        ret3f shouldBe first
-        ret3s shouldBe empty
+      root2 should not be root1
+      ret2f shouldBe first
+      ret2s shouldBe second
 
-        HistoryActionsTests.deleteAll(store, first)
-        val root4 = getRoot(store)
-        val ret4f = HistoryActionsTests.lookupAll(store, first)
-        val ret4s = HistoryActionsTests.lookupAll(store, second)
+      HistoryActionsTests.deleteAll(store, second)
+      val root3 = getRoot(store)
+      val ret3f = HistoryActionsTests.lookupAll(store, first)
+      val ret3s = HistoryActionsTests.lookupAll(store, second)
 
-        root4 shouldBe root0
-        ret4f shouldBe empty
-        ret4s shouldBe empty
+      printTree(store)
+      root3 shouldBe root1
+      ret3f shouldBe first
+      ret3s shouldBe empty
 
-        root2.foreach(setRoot(store, _))
+      HistoryActionsTests.deleteAll(store, first)
+      val root4 = getRoot(store)
+      val ret4f = HistoryActionsTests.lookupAll(store, first)
+      val ret4s = HistoryActionsTests.lookupAll(store, second)
 
-        HistoryActionsTests.deleteAll(store, second)
-        val root5 = getRoot(store)
-        val ret5f = HistoryActionsTests.lookupAll(store, first)
-        val ret5s = HistoryActionsTests.lookupAll(store, second)
+      root4 shouldBe root0
+      ret4f shouldBe empty
+      ret4s shouldBe empty
 
-        root5 shouldBe root1
-        ret5f shouldBe first
-        ret5s shouldBe empty
+      root2.foreach(setRoot(store, _))
 
-        HistoryActionsTests.deleteAll(store, first)
-        val root6 = getRoot(store)
-        val ret6f = HistoryActionsTests.lookupAll(store, first)
-        val ret6s = HistoryActionsTests.lookupAll(store, second)
+      HistoryActionsTests.deleteAll(store, second)
+      val root5 = getRoot(store)
+      val ret5f = HistoryActionsTests.lookupAll(store, first)
+      val ret5s = HistoryActionsTests.lookupAll(store, second)
 
-        root6 shouldBe root0
-        ret6f shouldBe empty
-        ret6s shouldBe empty
-      }
+      root5 shouldBe root1
+      ret5f shouldBe first
+      ret5s shouldBe empty
+
+      HistoryActionsTests.deleteAll(store, first)
+      val root6 = getRoot(store)
+      val ret6f = HistoryActionsTests.lookupAll(store, first)
+      val ret6s = HistoryActionsTests.lookupAll(store, second)
+
+      root6 shouldBe root0
+      ret6f shouldBe empty
+      ret6s shouldBe empty
     }
+    //}
   }
 
   "getLeaves on an empty store" should "return an empty sequence" in

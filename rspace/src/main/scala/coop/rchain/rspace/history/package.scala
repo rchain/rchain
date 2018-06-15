@@ -40,21 +40,16 @@ package object history {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
-    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] = {
-      println("loop", depth, curr)
+    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
       curr match {
         case Skip(affix, pointer) =>
-          println("?", depth, affix.length)
           store.get(txn, pointer.hash) match {
             case Some(next) => loop(txn, depth + affix.length.toInt, next)
             case None       => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
         case Node(pointerBlock) =>
-          println("pb", pointerBlock)
-          println("depth", depth)
           val index: Int = JByte.toUnsignedInt(path(depth))
-          println("index", index)
           // We use an explicit match here instead of flatMapping in order to make this function
           // tail-recursive
           pointerBlock.toVector(index) match {
@@ -71,12 +66,8 @@ package object history {
         case Leaf(_, _) =>
           None
       }
-    }
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
-      println("------------------")
-      println("looking for", key)
-      println("path", path)
       for {
         currentRootHash <- store.getRoot(txn)
         currentRoot     <- store.get(txn, currentRootHash)
@@ -140,6 +131,10 @@ package object history {
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] = {
     val lastOpt = parents.lastOption.map(_._2)
+    println
+    println(trie)
+    println(parents)
+    println
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // root
       case ((lastHash, _), (offset, current @ Node(pb))) if lastOpt.contains(current) =>
@@ -381,7 +376,8 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
+    println("Propagate: " + parents)
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
@@ -406,6 +402,7 @@ package object history {
           case _ => (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), tail)
         }
     }
+  }
 
   @tailrec
   private[this] def propagateTrieUpward[T, K, V](
@@ -446,6 +443,8 @@ package object history {
         (Node(pointerBlock.updated(List((index, EmptyPointer)))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, s @ Skip(_, LeafPointer(lh))) +: tail =>
+        println("Tutaj deleteLeaf?")
+        println(parents)
         val updated = (s, tail)
         deleteLeaf(store, txn, tail)
       case (byte, Node(pointerBlock)) +: tail =>
