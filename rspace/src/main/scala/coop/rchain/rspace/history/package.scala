@@ -104,12 +104,17 @@ package object history {
               }
           }
         case s @ Skip(affix, pointer) =>
-          store.get(txn, pointer.hash) match {
-            case None =>
-              throw new LookupException(s"No node at ${pointer.hash}")
-            case Some(next) =>
-              val index: Int = JByte.toUnsignedInt(path(depth))
-              parents(affix.size.toInt + depth, next, (index, s) +: acc)
+          val subPath = ByteVector(path.splitAt(depth)._2.take(affix.size.toInt))
+          if (subPath === affix) {
+            store.get(txn, pointer.hash) match {
+              case None =>
+                throw new LookupException(s"No node at ${pointer.hash}")
+              case Some(next) =>
+                val index: Int = JByte.toUnsignedInt(path(depth))
+                parents(affix.size.toInt + depth, next, (index, s) +: acc)
+            }
+          } else {
+            (s, acc)
           }
         case leaf =>
           (leaf, acc)
@@ -185,19 +190,15 @@ package object history {
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
-//          println("tip", tip)
-//          println("+parents")
-//          parents.foreach(println)
-//          println("-parents")
-          (tip, parents) match {
+          tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
-            case (existingLeaf @ Leaf(_, _), _) if existingLeaf == newLeaf =>
+            case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
               logger.debug(s"workingRootHash: $currentRootHash")
             // If the "tip" is an existing leaf with a different key than the new leaf, then
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
-            case (existingLeaf @ Leaf(ek, _), _) if key != ek =>
+            case existingLeaf @ Leaf(ek, _) if key != ek =>
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
 
@@ -207,9 +208,6 @@ package object history {
               val sharedPath         = sharedPrefix.drop(parents.length).reverse
               val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
               val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
-
-//              println(s"pl ${pathLength}, wpl ${wholePathLength}, eke ${encodedKeyExisting}, shp ${sharedPrefix}, shpl ${sharedPrefixLength}")
-//              println(s"pl ${sharedPath}, wpl ${newLeafIndex}, eke ${existingLeafIndex}, shp ${sharedPrefix}")
 
               val pathLeft = wholePathLength - sharedPrefixLength
               val hd = if (pathLeft > 1) {
@@ -249,7 +247,7 @@ package object history {
             // If the "tip" is an existing leaf with the same key as the new leaf, but the
             // existing leaf and new leaf have different values, then we are in the situation
             // where we are "updating" an existing leaf
-            case (Leaf(ek, ev), _) if key == ek && value != ev =>
+            case Leaf(ek, ev) if key == ek && value != ev =>
               // Update the pointer block of the immediate parent at the given index
               // to point to the new leaf instead of the existing leaf
               val (hd, tl) = parents match {
@@ -266,7 +264,7 @@ package object history {
               logger.debug(s"workingRootHash: $newRootHash")
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
-            case (Node(pb), _) =>
+            case Node(pb) =>
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
               val pathLeft        = wholePathLength - pathLength
@@ -284,6 +282,67 @@ package object history {
               }
               val hd            = Node(pb.updated(List((newLeafIndex, ptr))))
               val rehashedNodes = rehash[K, V](hd, parents)
+              val newRootHash   = insertTries(store, txn, rehashedNodes).get
+              store.putRoot(txn, newRootHash)
+              logger.debug(s"workingRootHash: $newRootHash")
+            // If the tip is a skip node -> there is no Node for this Leaf.
+            // need to shorten this skip and rectify the structure
+            case Skip(affix, ptr) =>
+              val pathLength      = parents.length
+              val wholePathLength = encodedKeyNew.size
+
+              val subPath = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
+              val pathLeft = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
+              val sharedPrefix = commonPrefix(affix.toSeq, subPath.toSeq)
+              val sharedSubpathLength = sharedPrefix.length
+              val oldSuffix = affix.splitAt(sharedSubpathLength)._2
+              val newSuffix = subPath.splitAt(sharedSubpathLength)._2
+              val pn = (oldSuffix.size, newSuffix.size) match {
+                case (0, 0) => throw new RuntimeException("corrupt structure")
+                case (ol, nl) if (ol == nl) && (ol == 1) => {
+                  val oldLeafIndex = JByte.toUnsignedInt(oldSuffix(0))
+                  val newLeafIndex = JByte.toUnsignedInt(newSuffix(0))
+                  val newPtr = if (pathLeft.size > 0) {
+                    val newSkip     = Skip(pathLeft, LeafPointer(newLeafHash))
+                    val newSkipHash = Trie.hash(newSkip)(codecK, codecV)
+                    store.put(txn, newSkipHash, newSkip)
+                    NodePointer(newSkipHash)
+                  } else {
+                    LeafPointer(newLeafHash)
+                  }
+                  Node(
+                    PointerBlock
+                      .create()
+                      .updated(List((oldLeafIndex, ptr), (newLeafIndex, newPtr))))
+                }
+                case (ol, nl) if (ol == nl) && (ol > 1) => {
+                  val oldLeafIndex = JByte.toUnsignedInt(oldSuffix(0))
+                  val newLeafIndex = JByte.toUnsignedInt(newSuffix(0))
+                  val newSkip      = Skip(newSuffix.drop(1) ++ pathLeft, LeafPointer(newLeafHash))
+                  val newSkipHash  = Trie.hash(newSkip)(codecK, codecV)
+                  store.put(txn, newSkipHash, newSkip)
+                  val oldSkip     = Skip(oldSuffix.drop(1), ptr)
+                  val oldSkipHash = Trie.hash(oldSkip)(codecK, codecV)
+                  store.put(txn, oldSkipHash, oldSkip)
+                  Node(
+                    PointerBlock
+                      .create()
+                      .updated(List((oldLeafIndex, NodePointer(oldSkipHash)),
+                                    (newLeafIndex, NodePointer(newSkipHash)))))
+                }
+                case _ => throw new RuntimeException("is this possible?")
+              }
+
+              val pnHash = Trie.hash(pn)(codecK, codecV)
+              store.put(txn, pnHash, pn)
+
+              val add = if (sharedSubpathLength > 0) {
+                Skip(ByteVector(sharedPrefix), NodePointer(pnHash))
+              } else {
+                pn
+              }
+              //analyze:
+              val rehashedNodes = rehash[K, V](add, parents)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")

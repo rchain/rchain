@@ -25,31 +25,6 @@ trait HistoryTestsBase[T, K, V]
       }
     }
 
-  def offset(d: Int) = ("..." * d)
-
-  def printTree(store: ITrieStore[T, K, V]): Unit =
-    store.withTxn(store.createTxnRead()) { txn =>
-      def printBranch(d: Int, t: Trie[K, V]): Unit =
-        t match {
-          case Leaf(key, value) => println(offset(d), "Leaf", key, value)
-          case Node(pointerBlock) =>
-            println(offset(d), "Node, pb")
-            pointerBlock.childrenWithIndex.foreach {
-              case (p, i) =>
-                val n = store.get(txn, p.hash).get
-                println(offset(d), "index", i)
-                printBranch(d + 1, n)
-            }
-          case Skip(affix, p) =>
-            val n = store.get(txn, p.hash).get
-            println(offset(d), "skip", affix)
-            printBranch(d + 1, n)
-        }
-      val root     = store.getRoot(txn)
-      val rootNode = store.get(txn, root.get).get
-      printBranch(0, rootNode)
-    }
-
   def getLeaves(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Seq[Leaf[K, V]] =
     store.withTxn(store.createTxnRead())(txn => store.getLeaves(txn, hash))
 

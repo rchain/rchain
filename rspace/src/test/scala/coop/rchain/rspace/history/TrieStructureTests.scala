@@ -3,12 +3,11 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.test.printTree
 import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
-
-import scala.collection.immutable
 
 class TrieStructureTests
     extends HistoryTestsBase[Txn[ByteBuffer], TestKey4, ByteVector]
@@ -219,6 +218,8 @@ class TrieStructureTests
     val k2: TestKey5 = "01100"
     insert(store, k1, TestData.val1)
     insert(store, k2, TestData.val1)
+
+    printTree(store)
 
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
