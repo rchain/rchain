@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.ErrorHandler
@@ -24,6 +24,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
 import java.nio.file.Path
 
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
@@ -36,7 +37,7 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
-  def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]]
+  def storageContents(hash: ByteString): F[String]
   def close(): F[Unit]
 }
 
@@ -52,11 +53,10 @@ sealed abstract class MultiParentCasperInstances {
       def deploy(r: Deploy): F[Unit]            = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                = BlockDag().pure[F]
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
-        Applicative[F].pure[Option[Checkpoint]](None)
-      def close(): F[Unit] = ().pure[F]
+      def createBlock: F[Option[BlockMessage]]         = Applicative[F].pure[Option[BlockMessage]](None)
+      def blockDag: F[BlockDag]                        = BlockDag().pure[F]
+      def storageContents(hash: ByteString): F[String] = "".pure[F]
+      def close(): F[Unit]                             = ().pure[F]
     }
 
   def hashSetCasper[
@@ -69,19 +69,19 @@ sealed abstract class MultiParentCasperInstances {
       type Validator = ByteString
 
       //TODO: Extract hardcoded version
-      val version = 0L
+      private val version = 0L
 
-      val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
+      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
 
       private val runtime = new SyncVar[Runtime]()
       runtime.put(Runtime.create(storageLocation, storageSize))
-      private val freshTS = Checkpoint.fromRuntime(runtime)
+      private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
 
-      val checkpoints: AtomicSyncVar[Map[ByteString, Checkpoint]] = new AtomicSyncVar(
-        HashMap(freshTS.hash -> freshTS)
+      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
+        Set[StateHash](initStateHash)
       )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
@@ -90,13 +90,23 @@ sealed abstract class MultiParentCasperInstances {
       private val expectedBlockRequests: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
 
+      // Used to keep track of when other validators detect the invalid produced at the sequence number
+      // identified by the first element of the tuple. If no invalid blocks have been produced by that
+      // validator, the sequence number is None.
+      private val invalidBlockTracker: mutable.HashMap[Validator, InvalidBlockRecord] =
+        new mutable.HashMap[Validator, InvalidBlockRecord]()
+      // Used to keep track of when other validators detect the equivocation consisting of the base block
+      // at the sequence number identified by the first element of the tuple.
+      private val equivocationsTracker: mutable.HashMap[Validator, EquivocationRecord] =
+        new mutable.HashMap[Validator, EquivocationRecord]()
+
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
-          attempt <- if (!validSig) InvalidBlockSignature.pure[F]
-                    else if (!validSender) InvalidSender.pure[F]
+          attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
+                    else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case Valid => reAttemptBuffer
@@ -174,20 +184,18 @@ sealed abstract class MultiParentCasperInstances {
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
           now <- Time[F].currentMillis
-          Right((tsCheckpoint, _)) = checkpoints
-            .mapAndUpdate[(Checkpoint, Map[BlockHash, Checkpoint])](
-              InterpreterUtil.computeDeploysCheckpoint(
-                p,
-                r,
-                genesis,
-                _blockDag.get,
-                freshTS,
-                _
-              ),
-              _._2
-            )
+          Right((computedStateHash, _)) = knownStateHashesContainer
+            .mapAndUpdate[(StateHash, Set[StateHash])](
+              InterpreterUtil.computeDeploysCheckpoint(p,
+                                                       r,
+                                                       genesis,
+                                                       _blockDag.get,
+                                                       initStateHash,
+                                                       _,
+                                                       runtimeManager),
+              _._2)
           postState = RChainState()
-            .withTuplespace(tsCheckpoint.hash)
+            .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
           body = Body()
@@ -199,8 +207,12 @@ sealed abstract class MultiParentCasperInstances {
 
       def blockDag: F[BlockDag] = Capture[F].capture { _blockDag.get }
 
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] = Capture[F].capture {
-        checkpoints.get.get(hash)
+      def storageContents(hash: StateHash): F[String] = Capture[F].capture {
+        if (knownStateHashesContainer.get.contains(hash)) {
+          runtimeManager.storageRepr(hash)
+        } else {
+          s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
+        }
       }
 
       def close(): F[Unit] = Capture[F].capture {
@@ -208,39 +220,60 @@ sealed abstract class MultiParentCasperInstances {
         _runtime.close()
       }
 
-      private def isValid(block: BlockMessage): F[Boolean] =
-        for {
-          dag <- Capture[F].capture { _blockDag.get }
-          bn  <- Validate.blockNumber[F](block, dag)
-          p   <- Validate.parents[F](block, genesis, dag)
-          //only try checkpoint if other validity checks pass
-          ch <- if (bn && p) updateCheckpoints(block)
-               else Monad[F].pure[Option[Checkpoint]](None)
-          //_  <- if (bn && p && ch.isEmpty) Log[F].warn(Validate.ignore(block, "tuplespace hash could not be reproduced.")
-          //      else ().pure[F]
-          //TODO: Put tuplespace validation back in after we have
-          //      tuplespace replay. Cannot put it in now because
-          //      it fails on unforgable names (no way to replicate
-          //      the same unforgable name without an execution trace).
-        } yield bn && p //should be ch.isDefined
-
-      //invlaid blocks return None and don't update the checkpoints
-      private def updateCheckpoints(block: BlockMessage): F[Option[Checkpoint]] =
+      //invalid blocks return None and don't update the checkpoints
+      private def validateTransactions(block: BlockMessage): F[Option[StateHash]] =
         Capture[F].capture {
           val Right((maybeCheckPoint, _)) =
-            checkpoints.mapAndUpdate[(Option[Checkpoint], Map[ByteString, Checkpoint])](
+            knownStateHashesContainer.mapAndUpdate[(Option[StateHash], Set[StateHash])](
               InterpreterUtil.validateBlockCheckpoint(
                 block,
                 genesis,
                 _blockDag.get,
-                freshTS,
-                _
+                initStateHash,
+                _,
+                runtimeManager
               ),
               _._2
             )
-
           maybeCheckPoint
         }
+
+      /*
+       * TODO: Put tuplespace validation back in after we have deterministic unforgeable names.
+       *
+       * We want to catch equivocations only after we confirm that the block completing
+       * the equivocation is otherwise valid.
+       */
+      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
+        for {
+          dag                  <- Capture[F].capture { _blockDag.get }
+          postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
+          // postTransactionsCheckStatus <- validateTransactions(...)
+          postEquivocationCheckStatus <- postValidationStatus.traverse(_ =>
+                                          equivocationsCheck(b, dag))
+          status = postEquivocationCheckStatus.joinRight.merge
+          _      <- addEffects(status, b)
+        } yield status
+
+      private def equivocationsCheck(
+          block: BlockMessage,
+          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+        val justificationOfCreator = block.justifications
+          .find {
+            case Justification(validator: Validator, _) => validator == block.sender
+          }
+          .getOrElse(Justification.defaultInstance)
+          .latestBlockHash
+        val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
+        val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
+        if (isNotEquivocation) {
+          Applicative[F].pure(Right(Valid))
+        } else if (expectedBlockRequests.contains(block.blockHash)) {
+          Applicative[F].pure(Right(IncludeableEquivocation))
+        } else {
+          Applicative[F].pure(Left(IgnorableEquivocation))
+        }
+      }
 
       // TODO: Handle slashing
       private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
@@ -264,38 +297,44 @@ sealed abstract class MultiParentCasperInstances {
                         CommUtil.sendBlockRequest[F](
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
-          case Equivocation =>
+          case IncludeableEquivocation =>
+            addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+              s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+          case IgnorableEquivocation =>
             Log[F].info(
               s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
-          case InvalidBlock =>
-            Log[F].info(
-              s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+          case InvalidBlockNumber =>
+            handleInvalidBlockEffect(block)
+          case InvalidParents =>
+            handleInvalidBlockEffect(block)
+          case InvalidSequenceNumber =>
+            // We need to handle invalid sequence numbers separately as the invalid block tracker
+            // assumes the sequence numbers inserted are valid.
+            throw new Error("InvalidSequenceNumber unimplemented")
+          case InvalidUnslashableBlock =>
+            for {
+              _ <- Log[F].info(
+                    s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+            } yield ()
           case _ => throw new Error("Should never reach")
         }
 
-      private def canAdd(block: BlockMessage): BlockStatus = {
-        val dag            = _blockDag.get
-        val parentsPresent = parents(block).forall(p => dag.blockLookup.contains(p))
-        val justificationsPresent =
-          block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
-        if (parentsPresent && justificationsPresent) {
-          val justificationOfCreator = block.justifications
-            .find {
-              case Justification(validator: Validator, _) => validator == block.sender
-            }
-            .getOrElse(Justification.defaultInstance)
-            .latestBlockHash
-          val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
-          val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
-          if (isNotEquivocation || expectedBlockRequests.contains(block.blockHash)) {
-            Undecided
-          } else {
-            Equivocation
-          }
-        } else {
-          MissingBlocks
-        }
-      }
+      private def handleInvalidBlockEffect(block: BlockMessage): F[Unit] =
+        for {
+          _ <- Log[F].info(
+                s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+          _ <- Capture[F].capture {
+                val invalidBlockRecord =
+                  invalidBlockTracker.getOrElse(block.sender, InvalidBlockRecord())
+                val updatedInvalidBlockRecord = invalidBlockRecord.invalidBlockSeqNum match {
+                  case Some(_) => invalidBlockRecord
+                  case None =>
+                    InvalidBlockRecord(Some(block.seqNum),
+                                       invalidBlockRecord.invalidBlockDiscoveryStatuses)
+                }
+                invalidBlockTracker.update(block.sender, updatedInvalidBlockRecord)
+              }
+        } yield ()
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
@@ -324,25 +363,6 @@ sealed abstract class MultiParentCasperInstances {
           })
         }
 
-      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
-        canAdd(b) match {
-          case MissingBlocks =>
-            for {
-              _ <- addEffects(MissingBlocks, b)
-            } yield MissingBlocks
-          case Equivocation =>
-            for {
-              _ <- addEffects(Equivocation, b)
-            } yield Equivocation
-          case Undecided =>
-            for {
-              valid  <- isValid(b)
-              result = if (valid) Valid else InvalidBlock
-              _      <- addEffects(result, b)
-            } yield result
-          case _ => throw new Error("Should never reach")
-        }
-
       private def reAttemptBuffer: F[Unit] = {
         def findAddedBlockMessages(
             attempts: List[(BlockMessage, BlockStatus)]): List[BlockMessage] =
@@ -350,7 +370,7 @@ sealed abstract class MultiParentCasperInstances {
 
         def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, BlockStatus)]) =
           attempts.flatMap {
-            case (b, InvalidBlock) =>
+            case (b, InvalidUnslashableBlock) =>
               blockBuffer -= b
               None
             case pair =>

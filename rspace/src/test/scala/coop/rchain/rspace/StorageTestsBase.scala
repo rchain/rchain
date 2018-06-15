@@ -6,6 +6,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.test._
 import org.scalatest._
 import scodec.Codec
@@ -30,7 +31,7 @@ class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, S
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
-    val testSpace = new RSpace(testStore)
+    val testSpace = new RSpace(testStore, Branch("test"))
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
@@ -53,12 +54,12 @@ class LMDBStoreTestsBase
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testSpace = new RSpace(testStore)
+    val testSpace = new RSpace(testStore, Branch("test"))
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)
     }
-    history.initialize(testStore.trieStore)
+    history.initialize(testStore.trieStore, testStore.trieBranch)
     try {
       f(testSpace)
     } finally {

@@ -2,7 +2,7 @@ package coop.rchain.rspace
 
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import org.scalatest._
 

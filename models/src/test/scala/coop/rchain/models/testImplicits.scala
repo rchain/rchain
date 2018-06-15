@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.Expr.ExprInstance
-import org.scalacheck.Arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Gen.{const, frequency, resize, sized}
 import coop.rchain.models.rholang.sort.ordering._
@@ -34,4 +34,7 @@ object testImplicits {
       Arbitrary
         .arbitrary[Seq[Par]]
         .map(pars => SortedParHashSet(pars)))
+
+  implicit def arbParTupleSeq: Arbitrary[Seq[(Par, Par)]] =
+    Arbitrary(Gen.listOf(Gen.zip(arbPar.arbitrary, arbPar.arbitrary)))
 }

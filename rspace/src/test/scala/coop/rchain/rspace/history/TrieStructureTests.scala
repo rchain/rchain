@@ -15,9 +15,9 @@ class TrieStructureTests
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
   def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
-    withTestTrieStore { store =>
+    withTestTrieStore { (store, branch) =>
       store.withTxn(store.createTxnRead()) { txn =>
-        val trieOpt = store.get(txn, store.getRoot(txn).get)
+        val trieOpt = store.get(txn, store.getRoot(txn, branch).get)
         trieOpt should not be empty
         f(trieOpt.get)
       }
@@ -25,13 +25,14 @@ class TrieStructureTests
 
   def withTrieTxnAndStore[R](
       f: (ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
+          Branch,
           Txn[ByteBuffer],
           Trie[TestKey, ByteVector]) => R): R =
-    withTestTrieStore { store =>
+    withTestTrieStore { (store, branch) =>
       store.withTxn(store.createTxnRead()) { txn =>
-        val trieOpt = store.get(txn, store.getRoot(txn).get)
+        val trieOpt = store.get(txn, store.getRoot(txn, branch).get)
         trieOpt should not be empty
-        f(store, txn, trieOpt.get)
+        f(store, branch, txn, trieOpt.get)
       }
     }
 
@@ -57,11 +58,11 @@ class TrieStructureTests
   }
 
   "insert's effect" should "be visible in the outer read transaction" ignore {
-    withTrieTxnAndStore { (store, txn, trie) =>
+    withTrieTxnAndStore { (store, branch, txn, trie) =>
       import SingleElementData._
-      insert(store, key1, val1)
+      insert(store, branch, key1, val1)
       // Insert was made in a nested transaction, so it's effect should be visible
-      store.get(txn, store.getRoot(txn).get) should not be None
+      store.get(txn, store.getRoot(txn, branch).get) should not be None
     }
   }
 
@@ -75,53 +76,54 @@ class TrieStructureTests
     }
 
   it should "have two levels after inserting one element" in {
-    withTestTrieStore { implicit store =>
+    withTestTrieStore { (store, branch) =>
       import SingleElementData._
-      insert(store, key1, val1)
+      insert(store, branch, key1, val1)
 
-      assertSingleElementTrie
+      assertSingleElementTrie(store)
     }
   }
 
   it should "have four levels after inserting second element with same hash prefix" in {
-    withTestTrieStore { implicit store =>
+    withTestTrieStore { (store, branch) =>
       import CommonPrefixData._
-      insert(store, key1, val1)
-      insert(store, key2, val2)
+      insert(store, branch, key1, val1)
+      insert(store, branch, key2, val2)
 
-      assertCommonPrefixTrie
+      assertCommonPrefixTrie(store)
     }
   }
 
   it should "retain previous structure after delete" in {
-    withTestTrieStore { implicit store =>
+    withTestTrieStore { (store, branch) =>
       import CommonPrefixData._
 
-      insert(store, key1, val1)
-      insert(store, key2, val2)
-      delete(store, key2, val2)
-      delete(store, key1, val1)
+      insert(store, branch, key1, val1)
+      insert(store, branch, key2, val2)
+      delete(store, branch, key2, val2)
+      delete(store, branch, key1, val1)
 
-      assertSingleElementTrie
-      assertCommonPrefixTrie
+      assertSingleElementTrie(store)
+      assertCommonPrefixTrie(store)
     }
   }
 
   it should "retain previous structure after rollback" in {
-    withTestTrieStore { implicit store =>
+    withTestTrieStore { (store, branch) =>
       import CommonPrefixData._
 
-      insert(store, key1, val1)
-      insert(store, key2, val2)
+      insert(store, branch, key1, val1)
+      insert(store, branch, key2, val2)
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putRoot(txn,
+                      branch,
                       Blake2b256Hash
                         .fromHex(SingleElementData.rootHex))
       }
 
-      assertSingleElementTrie
-      assertCommonPrefixTrie
+      assertSingleElementTrie(store)
+      assertCommonPrefixTrie(store)
     }
   }
 
