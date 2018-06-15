@@ -185,15 +185,19 @@ package object history {
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
-          tip match {
+//          println("tip", tip)
+//          println("+parents")
+//          parents.foreach(println)
+//          println("-parents")
+          (tip, parents) match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
-            case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
+            case (existingLeaf @ Leaf(_, _), _) if existingLeaf == newLeaf =>
               logger.debug(s"workingRootHash: $currentRootHash")
             // If the "tip" is an existing leaf with a different key than the new leaf, then
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
-            case existingLeaf @ Leaf(ek, _) if key != ek =>
+            case (existingLeaf @ Leaf(ek, _), _) if key != ek =>
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
 
@@ -204,10 +208,13 @@ package object history {
               val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
               val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
 
+//              println(s"pl ${pathLength}, wpl ${wholePathLength}, eke ${encodedKeyExisting}, shp ${sharedPrefix}, shpl ${sharedPrefixLength}")
+//              println(s"pl ${sharedPath}, wpl ${newLeafIndex}, eke ${existingLeafIndex}, shp ${sharedPrefix}")
+
               val pathLeft = wholePathLength - sharedPrefixLength
               val hd = if (pathLeft > 1) {
                 val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
-                val skipNew = Skip(commonAffix, LeafPointer(newLeafHash))
+                val skipNew     = Skip(commonAffix, LeafPointer(newLeafHash))
 
                 val skipExisting = Skip(commonAffix, LeafPointer(Trie.hash[K, V](existingLeaf)))
 
@@ -231,14 +238,18 @@ package object history {
                 )
               }
 
-              val rehashedNodes = rehash[K, V](hd, parents)
+              val emptyNode  = Node(PointerBlock.create())
+              val emptyNodes = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
+              val nodes      = emptyNodes ++ parents
+
+              val rehashedNodes = rehash[K, V](hd, nodes)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
             // If the "tip" is an existing leaf with the same key as the new leaf, but the
             // existing leaf and new leaf have different values, then we are in the situation
             // where we are "updating" an existing leaf
-            case Leaf(ek, ev) if key == ek && value != ev =>
+            case (Leaf(ek, ev), _) if key == ek && value != ev =>
               // Update the pointer block of the immediate parent at the given index
               // to point to the new leaf instead of the existing leaf
               val (hd, tl) = parents match {
@@ -255,7 +266,7 @@ package object history {
               logger.debug(s"workingRootHash: $newRootHash")
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
-            case Node(pb) =>
+            case (Node(pb), _) =>
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
               val pathLeft        = wholePathLength - pathLength
@@ -283,7 +294,7 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
+      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
@@ -308,7 +319,6 @@ package object history {
           case _ => (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), tail)
         }
     }
-  }
 
   @tailrec
   private[this] def propagateTrieUpward[T, K, V](
