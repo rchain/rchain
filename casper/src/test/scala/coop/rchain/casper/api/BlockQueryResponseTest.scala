@@ -61,7 +61,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
             ProtoUtil.stringToByteString(secondHashString)  -> secondBlock
           ),
           HashMap.empty[BlockHash, HashSet[BlockHash]],
-          LatestMessages.empty(),
+          LatestMessages.empty,
           HashMap.empty[Validator, LatestMessages],
           0,
           HashMap.empty[Validator, Int]
