@@ -291,12 +291,12 @@ package object history {
               val pathLength      = parents.length
               val wholePathLength = encodedKeyNew.size
 
-              val subPath = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
-              val pathLeft = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
-              val sharedPrefix = commonPrefix(affix.toSeq, subPath.toSeq)
+              val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
+              val pathLeft            = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
+              val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
               val sharedSubpathLength = sharedPrefix.length
-              val oldSuffix = affix.splitAt(sharedSubpathLength)._2
-              val newSuffix = subPath.splitAt(sharedSubpathLength)._2
+              val oldSuffix           = affix.splitAt(sharedSubpathLength)._2
+              val newSuffix           = subPath.splitAt(sharedSubpathLength)._2
               val pn = (oldSuffix.size, newSuffix.size) match {
                 case (0, 0) => throw new RuntimeException("corrupt structure")
                 case (ol, nl) if (ol == nl) && (ol == 1) => {
