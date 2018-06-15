@@ -90,11 +90,6 @@ sealed abstract class MultiParentCasperInstances {
       private val expectedBlockRequests: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
 
-      // Used to keep track of when other validators detect the invalid produced at the sequence number
-      // identified by the first element of the tuple. If no invalid blocks have been produced by that
-      // validator, the sequence number is None.
-      private val invalidBlockTracker: mutable.HashMap[Validator, InvalidBlockRecord] =
-        new mutable.HashMap[Validator, InvalidBlockRecord]()
       // Used to keep track of when other validators detect the equivocation consisting of the base block
       // at the sequence number identified by the first element of the tuple.
       private val equivocationsTracker: mutable.HashMap[Validator, EquivocationRecord] =
