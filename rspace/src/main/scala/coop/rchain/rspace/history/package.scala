@@ -47,7 +47,7 @@ package object history {
           println("?", depth, affix.length)
           store.get(txn, pointer.hash) match {
             case Some(next) => loop(txn, depth + affix.length.toInt, next)
-            case None => throw new LookupException(s"No node at ${pointer.hash}")
+            case None       => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
         case Node(pointerBlock) =>
@@ -63,7 +63,7 @@ package object history {
             case pointer: NonEmptyPointer =>
               store.get(txn, pointer.hash) match {
                 case Some(next) => loop(txn, depth + 1, next)
-                case None => throw new LookupException(s"No node at ${pointer.hash}")
+                case None       => throw new LookupException(s"No node at ${pointer.hash}")
               }
           }
         case Leaf(lk, lv) if key == lk =>
@@ -164,7 +164,7 @@ package object history {
         (Trie.hash[K, V](ns), ns)
       //point at node from skip
       case ((lh, n2 @ Node(pb)), (offset, s @ Skip(oldAffix, _))) =>
-        val ns = Skip(ByteVector(offset), NodePointer(lh))
+        val ns = Skip(oldAffix, NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
     }
   }
