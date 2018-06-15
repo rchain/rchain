@@ -4,30 +4,35 @@ import java.io.{File, FileInputStream}
 import java.math.BigInteger
 import java.security._
 import java.security.cert._
-import java.security.interfaces.ECPublicKey
+import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
 
+import scala.io.Source
+
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
 
 object CertificateHelper {
 
-  lazy val Secp256r1: ParameterSpec = {
+  val EllipticCurveName = "secp256r1"
+
+  lazy val EllipticCurveParameterSpec: ParameterSpec = {
     val ap = AlgorithmParameters.getInstance("EC", "BC")
-    ap.init(new ECGenParameterSpec("secp256r1"))
+    ap.init(new ECGenParameterSpec(EllipticCurveName))
     ParameterSpec(ap.getParameterSpec(classOf[ECParameterSpec]))
   }
 
-  def isSecp256r1(publicKey: PublicKey): Boolean =
+  def isExpectedEllipticCurve(publicKey: PublicKey): Boolean =
     publicKey match {
       case p: ECPublicKey =>
-        ParameterSpec(p.getParams) == Secp256r1
+        ParameterSpec(p.getParams) == EllipticCurveParameterSpec
       case _ => false
     }
 
   def publicAddress(publicKey: PublicKey): Option[Array[Byte]] =
     publicKey match {
-      case p: ECPublicKey if isSecp256r1(publicKey) =>
+      case p: ECPublicKey if isExpectedEllipticCurve(publicKey) =>
         val publicKey = Array.ofDim[Byte](64)
         val x         = p.getW.getAffineX.toByteArray.takeRight(32)
         val y         = p.getW.getAffineY.toByteArray.takeRight(32)
@@ -49,9 +54,25 @@ object CertificateHelper {
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
   }
 
+  def readKeyPair(keyFile: File): KeyPair = {
+    import coop.rchain.shared.Resources._
+    val str = withResource(Source.fromFile(keyFile)) {
+      _.getLines().filter(!_.contains("KEY")).mkString
+    }
+    val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
+    val kf       = KeyFactory.getInstance("EC", "BC")
+    val sk       = kf.generatePrivate(spec).asInstanceOf[ECPrivateKey]
+    val ecSpec   = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec(EllipticCurveName)
+    val Q        = ecSpec.getG.multiply(sk.getS).normalize()
+    val pubPoint = new ECPoint(Q.getAffineXCoord.toBigInteger, Q.getAffineYCoord.toBigInteger)
+    val pubSpec  = new ECPublicKeySpec(pubPoint, sk.getParams)
+    val pk       = kf.generatePublic(pubSpec)
+    new KeyPair(pk, sk)
+  }
+
   def generateKeyPair(): KeyPair = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", "BC")
-    kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom())
+    kpg.initialize(new ECGenParameterSpec(EllipticCurveName), new SecureRandom())
     kpg.generateKeyPair
   }
 
@@ -60,6 +81,7 @@ object CertificateHelper {
 
     val privateKey  = keyPair.getPrivate
     val publicKey   = keyPair.getPublic
+    val address     = publicAddress(publicKey).map(Base16.encode).getOrElse("local")
     val algorythm   = "SHA256withECDSA"
     val algorithmId = new AlgorithmId(AlgorithmId.sha256WithECDSA_oid)
 
@@ -68,7 +90,7 @@ object CertificateHelper {
     val to       = new java.util.Date(from.getTime + 365 * 86400000l)
     val interval = new CertificateValidity(from, to)
     val serial   = new BigInteger(64, new SecureRandom())
-    val owner    = new X500Name(s"CN=local")
+    val owner    = new X500Name(s"CN=$address")
 
     info.set(X509CertInfo.VALIDITY, interval)
     info.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(serial))

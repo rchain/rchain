@@ -126,8 +126,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](1).runS(initState).value
     val block = chain.idToBlocks(0)
 
-    Validate.blockNumber[Id](block.withBlockNumber(1), chain) should be(false)
-    Validate.blockNumber[Id](block, chain) should be(true)
+    Validate.blockNumber[Id](block.withBlockNumber(1), chain) should be(Left(InvalidBlockNumber))
+    Validate.blockNumber[Id](block, chain) should be(Right(Valid))
     log.warns.size should be(1)
     log.warns.head.contains("not zero, but block has no parents") should be(true)
   }
@@ -136,8 +136,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](2).runS(initState).value
     val block = chain.idToBlocks(1)
 
-    Validate.blockNumber[Id](block.withBlockNumber(17), chain) should be(false)
-    Validate.blockNumber[Id](block, chain) should be(true)
+    Validate.blockNumber[Id](block.withBlockNumber(17), chain) should be(Left(InvalidBlockNumber))
+    Validate.blockNumber[Id](block, chain) should be(Right(Valid))
     log.warns.size should be(1)
     log.warns.head.contains("is not one more than parent number") should be(true)
   }
@@ -146,7 +146,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val n     = 6
     val chain = createChain[StateWithChain](n).runS(initState).value
 
-    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain)) should be(true)
+    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
+      true)
     log.warns should be(Nil)
   }
 
@@ -154,8 +155,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](1).runS(initState).value
     val block = chain.idToBlocks(0)
 
-    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(false)
-    Validate.sequenceNumber[Id](block, chain) should be(true)
+    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(Left(InvalidSequenceNumber))
+    Validate.sequenceNumber[Id](block, chain) should be(Right(Valid))
     log.warns.size should be(1)
   }
 
@@ -163,7 +164,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](2).runS(initState).value
     val block = chain.idToBlocks(1)
 
-    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(false)
+    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(Left(InvalidSequenceNumber))
     log.warns.size should be(1)
   }
 
@@ -173,7 +174,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain =
       createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState).value
 
-    (0 until n).forall(i => Validate.sequenceNumber[Id](chain.idToBlocks(i), chain)) should be(true)
+    (0 until n).forall(i => Validate.sequenceNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
+      true)
     log.warns should be(Nil)
   }
 
@@ -231,8 +233,10 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChainWithValidators[StateWithChain].runS(initState).value
     val b0    = chain.idToBlocks(0)
 
-    (0 to 6).forall(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain)) should be(true)
-    (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain)) should be(false)
+    (0 to 6).forall(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
+      true)
+    (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
+      false)
     log.warns.size should be(3)
     log.warns.last.contains("justification is empty, but block has non-genesis parents") should be(
       true)
@@ -240,5 +244,16 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
       .dropRight(1)
       .forall(_.contains("block parents did not match estimate based on justification")) should be(
       true)
+  }
+
+  // Creates a block with an invalid block number and sequence number
+  "Block summary validation" should "short circuit after first invalidity" in {
+    val chain = createChain[StateWithChain](2).runS(initState).value
+    val block = chain.idToBlocks(1)
+
+    Validate.validateBlockSummary[Id](block.withBlockNumber(17).withSeqNum(1),
+                                      BlockMessage(),
+                                      chain) should be(Left(InvalidBlockNumber))
+    log.warns.size should be(1)
   }
 }
