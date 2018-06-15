@@ -57,11 +57,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   "Three inserts, three lookups" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector]) =>
       insert(store, key1, val1)
-      printTree(store)
       insert(store, key2, val2)
-      printTree(store)
       insert(store, key3, val3)
-      printTree(store)
       val actual1 = lookup(store, key1)
       val actual2 = lookup(store, key2)
       val actual3 = lookup(store, key3)
@@ -72,13 +69,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
 
   "Three inserts, three lookups (alt)" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector]) =>
-      printTree(store)
       insert(store, key1, val1)
-      printTree(store)
       insert(store, key2, val2)
-      printTree(store)
       insert(store, key6, val6)
-      printTree(store)
       val actual1 = lookup(store, key1)
       val actual2 = lookup(store, key2)
       val actual3 = lookup(store, key6)
@@ -149,13 +142,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     withTestTrieStore { (store: ITrieStore[T, TestKey4, ByteVector]) =>
       val root0 = getRoot(store)
 
-      printTree(store)
-
       insert(store, key1, val1)
       val root1 = getRoot(store)
       root1 should not be root0
-
-      printTree(store)
 
       insert(store, key2, val2)
       val root2 = getRoot(store)
@@ -164,12 +153,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
 
-      printTree(store)
-
       delete(store, key2, val2) shouldBe true
       val root3 = getRoot(store)
-
-      printTree(store)
 
       root3 shouldBe root1
 
