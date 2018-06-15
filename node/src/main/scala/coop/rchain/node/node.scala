@@ -190,6 +190,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       ts    <- timeEffect.currentMillis
       msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
       _     <- transportLayerEffect.broadcast(msg, peers)
+      // TODO remove that once broadcast and send reuse roundTrip
+      _ <- IOUtil.sleep[Task](5000L)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
