@@ -9,6 +9,8 @@ object Branch {
 
   val master: Branch = Branch("master")
 
+  val replay: Branch = Branch("replay")
+
   implicit val codecBranch: Codec[Branch] =
     utf8.as[Branch]
 }

@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import com.google.common.collect.{HashMultiset, Multiset}
 import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
@@ -7,6 +8,7 @@ import scodec.bits.ByteVector
 import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
 
 import scala.collection.immutable.Seq
+import scala.collection.mutable
 
 object internal {
 
@@ -84,4 +86,37 @@ object internal {
     (codecSeq(codecC) ::
       codecSeq(codecDatum(codecA)) ::
       codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
+
+  type MultisetMultiMap[K, V] = mutable.HashMap[K, Multiset[V]]
+
+  object MultisetMultiMap {
+    def empty[K, V]: MultisetMultiMap[K, V] = new mutable.HashMap[K, Multiset[V]]()
+  }
+
+  implicit class RichMultisetMultiMap[K, V](msmm: MultisetMultiMap[K, V]) {
+
+    def addBinding(key: K, value: V): MultisetMultiMap[K, V] =
+      msmm.get(key) match {
+        case Some(current) =>
+          current.add(value)
+          msmm
+        case None =>
+          val ms = HashMultiset.create[V]()
+          ms.add(value)
+          msmm.put(key, ms)
+          msmm
+      }
+
+    def removeBinding(key: K, value: V): MultisetMultiMap[K, V] =
+      msmm.get(key) match {
+        case Some(current) =>
+          current.remove(value)
+          if (current.isEmpty) {
+            msmm.remove(key)
+          }
+          msmm
+        case None =>
+          msmm
+      }
+  }
 }
