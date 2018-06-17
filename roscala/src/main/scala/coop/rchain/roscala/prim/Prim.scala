@@ -7,11 +7,20 @@ import coop.rchain.roscala.prim.fixnum.fxPlus
 import coop.rchain.roscala.prim.rblfloat.flPlus
 
 abstract class Prim extends Ob {
+  val name: String
+  val minArgs: Int
+  val maxArgs: Int
   def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob
 
   // TODO: Add error case
-  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob =
-    fn(state.ctxt, globalEnv)
+  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
+    val n = state.ctxt.nargs
+    if(minArgs <= n && n <= maxArgs)
+      fn(state.ctxt, globalEnv)
+    else
+      mismatch()
+  }
+
 
   override def dispatch(state: State, globalEnv: GlobalEnv): Ob = {
     val result = dispatchHelper(state, globalEnv)
@@ -28,6 +37,7 @@ abstract class Prim extends Ob {
 }
 
 object Prim {
+  val MaxArgs  = 255
 
   /**
     * The mapping from primnum to function-name show below.
