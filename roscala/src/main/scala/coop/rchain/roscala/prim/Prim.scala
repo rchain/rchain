@@ -10,6 +10,9 @@ import coop.rchain.roscala.util.misc.{numberSuffix, properPrep}
 import scala.reflect.{classTag, ClassTag}
 
 abstract class Prim extends Ob {
+  val name: String
+  val minArgs: Int
+  val maxArgs: Int
   def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob
 
   def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {

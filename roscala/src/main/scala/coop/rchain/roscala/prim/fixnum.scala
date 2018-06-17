@@ -13,7 +13,12 @@ import coop.rchain.roscala.prim.Prim.mismatchType
   */
 object fixnum {
   object fxPlus extends Prim {
-    def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
+    override val name: String = "fx+"
+    override val minArgs: Int = 0
+    override val maxArgs: Int = MaxArgs
+
+    @checkTypeMismatch[Fixnum]
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) { (accum, fixnum) =>
