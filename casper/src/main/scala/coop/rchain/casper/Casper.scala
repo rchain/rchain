@@ -264,7 +264,7 @@ sealed abstract class MultiParentCasperInstances {
         if (isNotEquivocation) {
           Applicative[F].pure(Right(Valid))
         } else if (awaitingJustificationToChild.contains(block.blockHash)) {
-          Applicative[F].pure(Right(IncludeableEquivocation))
+          Applicative[F].pure(Right(AdmissibleEquivocation))
         } else {
           Applicative[F].pure(Left(IgnorableEquivocation))
         }
@@ -294,7 +294,7 @@ sealed abstract class MultiParentCasperInstances {
                         CommUtil.sendBlockRequest[F](
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
-          case IncludeableEquivocation =>
+          case AdmissibleEquivocation =>
             addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
               s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
           case IgnorableEquivocation =>
