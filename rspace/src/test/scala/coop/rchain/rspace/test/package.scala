@@ -46,7 +46,7 @@ package object test {
   def roundTripCodec[T](t: T)(implicit codec: Codec[T]): Attempt[DecodeResult[T]] =
     codec.encode(t).flatMap((vector: BitVector) => codec.decode(vector))
 
-  def offset(d: Int) = ("..." * d)
+  def offset(d: Int) = ("   " * d)
 
   def printTree[T, K, V](store: ITrieStore[T, K, V]): Unit =
     store.withTxn(store.createTxnRead()) { txn =>
@@ -54,11 +54,11 @@ package object test {
         t match {
           case Leaf(key, value) => println(offset(d), "Leaf", key, value)
           case Node(pointerBlock) =>
-            println(offset(d), "Node, pb")
+            println(offset(d), "node")
             pointerBlock.childrenWithIndex.foreach {
               case (p, i) =>
                 val n = store.get(txn, p.hash).get
-                println(offset(d), "index", i, "#", p.hash)
+                println(offset(d), i, "#", p.hash)
                 printBranch(d + 1, n)
             }
           case Skip(affix, p) =>
@@ -67,9 +67,11 @@ package object test {
             printBranch(d + 1, n)
         }
       val root = store.getRoot(txn)
+      println("---------------------")
       println("root#", root)
       val rootNode = store.get(txn, root.get).get
       printBranch(0, rootNode)
+      println("---------------------")
     }
 
 }

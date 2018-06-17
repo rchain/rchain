@@ -131,10 +131,6 @@ package object history {
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] = {
     val lastOpt = parents.lastOption.map(_._2)
-    println
-    println(trie)
-    println(parents)
-    println
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // root
       case ((lastHash, _), (offset, current @ Node(pb))) if lastOpt.contains(current) =>
@@ -311,7 +307,6 @@ package object history {
                 }
                 .sum
                 .toInt
-              val wholePathLength = encodedKeyNew.size
 
               val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
               val pathLeft            = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
@@ -374,10 +369,14 @@ package object history {
     }
 
   @tailrec
-  private[this] def propagateLeafUpward[T, K, V](
-      hash: Blake2b256Hash,
-      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
-    println("Propagate: " + parents)
+  private[this] def propagateLeafUpward[T, K, V](store: ITrieStore[T, K, V],
+                                                 txn: T,
+                                                 hash: Blake2b256Hash,
+                                                 incomingAffix: ByteVector,
+                                                 parents: Seq[(Int, Trie[K, V])])(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
@@ -385,7 +384,7 @@ package object history {
         (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), Seq.empty[(Int, Node)])
       //I'm a leaf, I encounter a skip block. I got here because all the kids were single child nodes or me - kill the skip block
       case (byte, s @ Skip(affix, ptr)) +: tail =>
-        (Skip(affix ++ ByteVector(byte), LeafPointer(hash)), tail)
+        (Skip(affix ++ incomingAffix, LeafPointer(hash)), tail)
 
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
@@ -396,24 +395,60 @@ package object history {
           case Vector() => throw new DeleteException("PointerBlock has no children")
           // If there are is only one child, then we know that it is the thing we are trying to
           // propagate upwards, and we can go ahead and do that.
-          case Vector(_) => propagateLeafUpward(hash, tail)
+          case Vector(_) =>
+            propagateLeafUpward(store, txn, hash, incomingAffix, tail)
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the leaf.
-          case _ => (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), tail)
+          case _ =>
+            val newPtr = if (incomingAffix.length > 0) {
+              val skip     = Skip(incomingAffix, LeafPointer(hash))
+              val skipHash = Trie.hash(skip)(codecK, codecV)
+              store.put(txn, skipHash, skip)
+              NodePointer(skipHash)
+            } else {
+              LeafPointer(hash)
+            }
+            (Node(pointerBlock.updated(List((byte, newPtr)))), tail)
         }
     }
-  }
 
   @tailrec
-  private[this] def propagateTrieUpward[T, K, V](
-      ptr: NonEmptyPointer,
-      incomingAffix: ByteVector,
-      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+  private[this] def propagateTrieUpward[T, K, V](store: ITrieStore[T, K, V],
+                                                 txn: T,
+                                                 ptr: NonEmptyPointer,
+                                                 incomingAffix: ByteVector,
+                                                 parents: Seq[(Int, Trie[K, V])])(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the node.
       case Seq((byte, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((byte, ptr)))), Seq.empty[(Int, Node)])
+        ptr match {
+          case _: LeafPointer => {
+            //TODO assumption - key > 2. bagd assumption
+            val skip     = Skip(incomingAffix, ptr)
+            val skipHash = Trie.hash(skip)(codecK, codecV)
+            store.put(txn, skipHash, skip)
+            (Node(pointerBlock.updated(List((byte, NodePointer(skipHash))))),
+             Seq.empty[(Int, Node)])
+          }
+          case _: NodePointer =>
+            val setPtr =
+              if (incomingAffix.length > 0 || pointerBlock.children.size == 1) {
+                // I'm collapsing a bridging node into a skip node
+                val skip     = Skip(incomingAffix, ptr)
+                val skipHash = Trie.hash(skip)(codecK, codecV)
+                store.put(txn, skipHash, skip)
+                NodePointer(skipHash)
+              } else {
+                val option = store.get(txn, ptr.hash)
+                ptr
+              }
+            (Node(pointerBlock.updated(List((byte, setPtr)))), Seq.empty[(Int, Node)])
+        }
+
       // Otherwise,
       case (byte, s @ Skip(affix, _)) +: tail =>
         (Skip(affix ++ incomingAffix, ptr), tail)
@@ -425,17 +460,30 @@ package object history {
           case Vector() => throw new DeleteException("PointerBlock has no children")
           // If there are is only one child, then we know that it is the thing we are trying to
           // propagate upwards, and we can go ahead and do that.
-          case Vector(_) => propagateTrieUpward(ptr, ByteVector(byte), tail)
+          case Vector(_) =>
+            propagateTrieUpward(store, txn, ptr, ByteVector(byte), tail)
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the leaf.
-          case _ => (Node(pointerBlock.updated(List((byte, ptr)))), tail)
+          case _ =>
+            val setPtr = if (incomingAffix.length > 0) {
+              val skip     = Skip(incomingAffix, ptr)
+              val skipHash = Trie.hash(skip)(codecK, codecV)
+              store.put(txn, skipHash, skip)
+              NodePointer(skipHash)
+            } else {
+              ptr
+            }
+            (Node(pointerBlock.updated(List((byte, setPtr)))), tail)
         }
     }
+
   @tailrec
-  private[this] def deleteLeaf[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
-      parents: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
+                                        txn: T,
+                                        parents: Seq[(Int, Trie[K, V])])(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `EmptyPointer`
@@ -443,9 +491,6 @@ package object history {
         (Node(pointerBlock.updated(List((index, EmptyPointer)))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, s @ Skip(_, LeafPointer(lh))) +: tail =>
-        println("Tutaj deleteLeaf?")
-        println(parents)
-        val updated = (s, tail)
         deleteLeaf(store, txn, tail)
       case (byte, Node(pointerBlock)) +: tail =>
         val updated = (Node(pointerBlock.updated(List((byte, EmptyPointer)))), tail)
@@ -472,15 +517,15 @@ package object history {
               case NodePointer(hash) =>
                 store.get(txn, hash) match {
                   case Some(Node(pb)) =>
-                    propagateTrieUpward(otherPointer, ByteVector(otherByte), tail)
+                    propagateTrieUpward(store, txn, otherPointer, ByteVector(otherByte), tail)
                   case Some(Skip(affix, ptr)) =>
-                    propagateTrieUpward(ptr, ByteVector(otherByte) ++ affix, tail)
+                    propagateTrieUpward(store, txn, ptr, ByteVector(otherByte) ++ affix, tail)
                   case None => throw new DeleteException("corrupt tree")
                 }
               // If the other child is a Leaf, then we must propagate it up the trie.
               case LeafPointer(otherHash) =>
                 // TODO affix
-                propagateLeafUpward(otherHash, tail)
+                propagateLeafUpward(store, txn, otherHash, ByteVector(otherByte), tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `EmptyPointer`.
