@@ -333,3 +333,18 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
 
   def close(): Unit = store.close()
 }
+
+object RSpace {
+
+  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): RSpace[C, P, A, K] = {
+
+    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
+
+    new RSpace[C, P, A, K](mainStore, branch)
+  }
+}

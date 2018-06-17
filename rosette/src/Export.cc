@@ -60,6 +60,7 @@ void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
         if (TAG(ob) == OTptr) {
             // It's a real Rosette object (not RblAtom derived)
             lvOb->set_object_id(BASE(ob)->objectId);
+            lvOb->set_reference(true);
 
             // See if already exported
             auto id = exportedIds.find(std::make_pair(BASE(ob)->objectId, ob));
@@ -70,6 +71,7 @@ void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
                 storeOb->set_object_id(BASE(ob)->objectId);
                 storeOb->set_meta_id(BASE(ob)->meta()->objectId);
                 storeOb->set_parent_id(BASE(ob)->parent()->objectId);
+                storeOb->set_reference(false);
 
                 handler(storeOb, ob, obType);
                 exportedIds.insert(std::make_pair(BASE(ob)->objectId, ob));

@@ -6,7 +6,7 @@ import coop.rchain.rspace.internal._
 
 trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
-  "joins" should "remove joins if no PsK" ignore withTestSpace { space =>
+  "joins" should "remove joins if no PsK" in withTestSpace { space =>
     val store = space.store
 
     store.withTxn(store.createTxnWrite()) { txn =>
@@ -42,7 +42,6 @@ trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, Stri
     store.withTxn(store.createTxnWrite()) { txn =>
       store.removeDatum(txn, List("ch1"), 0)
       store.removeDatum(txn, List("ch2"), 0)
-      store.removeDatum(txn, List("ch1", "ch2"), 0)
     }
 
     store.isEmpty shouldBe true
