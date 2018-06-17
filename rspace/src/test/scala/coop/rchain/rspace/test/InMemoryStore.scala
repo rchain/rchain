@@ -4,7 +4,7 @@ import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.{dropIndex, removeFirst}
+import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.BitVector
