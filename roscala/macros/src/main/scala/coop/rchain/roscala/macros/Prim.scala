@@ -23,7 +23,7 @@ object TypeMismatchMacro {
         case q"$mods def fn(ctxt: Ctxt, globalEnv: GlobalEnv): $returnType = { ..$body }" :: Nil =>
           q"""$mods def fn(ctxt: Ctxt, globalEnv: GlobalEnv): $returnType =  {
               mismatchType[$typeParam](ctxt) match {
-                case Some(typeMismatch) => Left(typeMismatch)
+                case Some(typeMismatch) => typeMismatch
                 case None => {..$body}
               }
           }"""

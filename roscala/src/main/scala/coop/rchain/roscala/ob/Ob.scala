@@ -14,7 +14,6 @@ abstract class Ob {
   val slot       = Slot()
   var meta: Meta = _
   var parent: Ob = _
-  val MaxArgs = 255
 
   def dispatch(state: State, globalEnv: GlobalEnv): Ob = Niv
 
@@ -73,26 +72,6 @@ abstract class Ob {
   }
 
   def numberOfSlots = slot.size
-
-  def mismatch(state: State, minArgs: Int, maxArgs: Int): Ob = {
-    if (maxArgs == MaxArgs) {
-      return runtimeError(state.ctxt, "expected %d or more arguments", minArgs)
-    } else if (minArgs == maxArgs) {
-      if (minArgs == 1) {
-        return runtimeError(state.ctxt, "expected 1 argument")
-      } else {
-        return runtimeError(state.ctxt, "expected %d arguments", minArgs)
-      }
-    } else {
-      return runtimeError(state.ctxt, "expected between %d and %d arguments",
-        minArgs, maxArgs)
-    }
-  }
-
-  def runtimeError(ctxt: Ctxt, msg: String, xs: Any*): Ob = {
-    //todo implement this
-    return Deadthread;
-  }
 }
 
 object Ob {
