@@ -106,7 +106,7 @@ class BuiltinPrim {
     static BuiltinPrimRecord INTERNAL_PRIM_REC(int_name) = {     \
         ext_name, PRIM_NAME(int_name), (min), (max), &int_name}; \
     static BuiltinPrim INTERNAL_PRIM_NAME(int_name)(             \
-        &INTERNAL_PRIM_REC(int_name));                           \
+        &INTEBUILTIN_PRIMRNAL_PRIM_REC(int_name));                           \
     BUILTIN_PRIM(int_name)
 #else
 #define DEF(ext_name, int_name, min, max)                           \
