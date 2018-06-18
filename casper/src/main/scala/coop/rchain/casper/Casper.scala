@@ -214,7 +214,8 @@ sealed abstract class MultiParentCasperInstances {
       }
 
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
-        (equivocationsTracker.map(_.equivocator).map(weights).sum.toFloat / weightMapTotal(weights))
+        (equivocationsTracker.map(_.equivocator).toSet.map(weights).sum.toFloat / weightMapTotal(
+          weights))
           .pure[F]
 
       //invalid blocks return None and don't update the checkpoints
