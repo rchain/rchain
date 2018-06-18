@@ -24,12 +24,11 @@ package object history {
 
     def countPathLength() =
       parents
-        .map {
-          case (_, s: Skip) => s.affix.size
-          case _            => 1
-        }
-        .sum
-        .toInt
+        .foldLeft(0)((acc, el) =>
+          el match {
+            case (_, s: Skip) => acc + s.affix.size.toInt
+            case _            => acc + 1
+        })
 
   }
 
