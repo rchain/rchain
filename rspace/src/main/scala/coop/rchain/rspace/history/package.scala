@@ -23,6 +23,8 @@ package object history {
   private[this] implicit class ParentsOps[K, V](val parents: Seq[(Int, Trie[K, V])])
       extends AnyVal {
 
+    def maybeRoot: Option[Trie[K, V]] = parents.lastOption.map(_._2)
+
     def countPathLength =
       parents
         .foldLeft(0)((acc, el) =>
@@ -143,11 +145,10 @@ package object history {
   private[this] def rehash[K, V](trie: Trie[K, V], parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] = {
-    val lastOpt = parents.lastOption.map(_._2)
+      codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // root
-      case ((lastHash, _), (offset, current @ Node(pb))) if lastOpt.contains(current) =>
+      case ((lastHash, _), (offset, current @ Node(pb))) if parents.maybeRoot.contains(current) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
       // no children - collapse to skip
@@ -168,7 +169,6 @@ package object history {
         val ns = Skip(oldAffix, NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
     }
-  }
 
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
