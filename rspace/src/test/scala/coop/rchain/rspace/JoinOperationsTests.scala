@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
+import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 
 trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
@@ -9,16 +10,14 @@ trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, Stri
     val store = space.store
 
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.putDatum(txn, List("ch1"), Datum("datum1", persist = false))
-      store.putDatum(txn, List("ch2"), Datum("datum2", persist = false))
+      store.putDatum(txn, List("ch1"), Datum.create("ch1", "datum1", persist = false))
+      store.putDatum(txn, List("ch2"), Datum.create("ch2", "datum2", persist = false))
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
 
       //ensure that doubled addJoin creates only one entry
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
-
-      store.putDatum(txn, List("ch1", "ch2"), Datum("datum_ch1_ch2", persist = false))
     }
 
     store.withTxn(store.createTxnRead()) { txn =>
@@ -43,7 +42,6 @@ trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, Stri
     store.withTxn(store.createTxnWrite()) { txn =>
       store.removeDatum(txn, List("ch1"), 0)
       store.removeDatum(txn, List("ch2"), 0)
-      store.removeDatum(txn, List("ch1", "ch2"), 0)
     }
 
     store.isEmpty shouldBe true
@@ -55,19 +53,22 @@ trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, Stri
     store.withTxn(store.createTxnWrite()) { txn =>
       store.putWaitingContinuation(txn,
                                    List("ch1"),
-                                   WaitingContinuation(List(Wildcard),
-                                                       new StringsCaptor,
-                                                       persist = false))
+                                   WaitingContinuation.create(List("ch1"),
+                                                              List[Pattern](Wildcard),
+                                                              new StringsCaptor,
+                                                              persist = false))
       store.putWaitingContinuation(txn,
                                    List("ch2"),
-                                   WaitingContinuation(List(Wildcard),
-                                                       new StringsCaptor,
-                                                       persist = false))
+                                   WaitingContinuation.create(List("ch2"),
+                                                              List[Pattern](Wildcard),
+                                                              new StringsCaptor,
+                                                              persist = false))
       store.putWaitingContinuation(txn,
                                    List("ch1", "ch2"),
-                                   WaitingContinuation(List(Wildcard),
-                                                       new StringsCaptor,
-                                                       persist = false))
+                                   WaitingContinuation.create(List("ch1", "ch2"),
+                                                              List[Pattern](Wildcard, Wildcard),
+                                                              new StringsCaptor,
+                                                              persist = false))
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
     }

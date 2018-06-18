@@ -10,20 +10,19 @@ import coop.rchain.models.rholang.implicits._
 
 object ReceiveBindsSortMatcher {
   // Used during normalize to presort the binds.
-  def preSortBinds[M[_], T](binds: Seq[(Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T])])(
-      implicit err: MonadError[M, InterpreterError]): M[Seq[(ReceiveBind, DebruijnLevelMap[T])]] = {
-    val sortedBind = binds.toList
-      .traverse {
+  def preSortBinds[M[_], T](binds: Seq[(Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T])])
+    : Seq[(ReceiveBind, DebruijnLevelMap[T])] =
+    binds.toList
+      .map {
         case (patterns: Seq[Channel],
               channel: Channel,
               remainder: Option[Var],
               knownFree: DebruijnLevelMap[T]) =>
-          sortBind(
+          val sortedBind = sortBind(
             ReceiveBind(patterns, channel, remainder, freeCount = knownFree.countNoWildcards))
-            .map(sortedBind => ScoredTerm((sortedBind.term, knownFree), sortedBind.score))
+          ScoredTerm((sortedBind.term, knownFree), sortedBind.score)
       }
-      .map(_.sorted)
+      .sorted
+      .map(_.term)
 
-    err.fromEither(sortedBind.leftMap(th => SortMatchError(th.getMessage))).map(_.map(_.term))
-  }
 }

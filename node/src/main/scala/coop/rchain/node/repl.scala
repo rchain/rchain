@@ -34,10 +34,10 @@ class ReplRuntime(conf: Conf) {
     ConsoleIO[F].println(logo) >>= kp(repl)
   }
 
-  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileName: String): F[Unit] =
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] =
     for {
-      _   <- ConsoleIO[F].println(s"Evaluating from $fileName")
-      res <- ReplClient[F].eval(fileName)
+      _   <- ConsoleIO[F].println(s"Evaluating from $fileNames")
+      res <- ReplClient[F].eval(fileNames)
       _   <- ConsoleIO[F].println(res)
       _   <- ConsoleIO[F].close
     } yield ()

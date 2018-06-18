@@ -208,7 +208,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -324,4 +324,4 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+  .aggregate(casper, crypto, comm, models, regex, rspace, rspaceBench, node, rholang, rholangCLI, roscala)

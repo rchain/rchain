@@ -12,6 +12,11 @@ object errors {
   trait InterpreterError                                          extends Throwable
   final case class NormalizerError(override val toString: String) extends InterpreterError
   final case class SyntaxError(override val toString: String)     extends InterpreterError
+  final case class UnboundVariableRef(varName: String, line: Int, col: Int)
+      extends InterpreterError {
+    override def toString: String =
+      s"Variable reference: =$varName at $line:$col is unbound."
+  }
   final case class UnexpectedNameContext(varName: String,
                                          procVarLine: Int,
                                          procVarCol: Int,

@@ -29,6 +29,8 @@
 #include "misc.h"
 #include <fstream>
 
+#include "Import.h" // temp debug
+
 unsigned SurvivorSpaceSize = 128 * 1024;
 unsigned InfantSpaceSize = 512 * 1024;
 unsigned OldSpaceChunkSize = 32 * 1024;
@@ -44,6 +46,7 @@ bool ForceEnableRepl = false;
 int VerboseFlag = 0;
 int DeferLookupFlag = 0;
 char ExportFile[MAXPATHLEN] = "";
+char ImportFile[MAXPATHLEN] = "";
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -75,6 +78,7 @@ void usage(const char* name, bool fatal = false, const char* msg = NULL) {
             " -i, --interactive-repl Always run the REPL, even if passed a\n"
             "                        script file to run.\n"
             " -x, --export=FILE      Export compiled object code to FILE\n"
+            " -c, --import=FILE      Import compiled object code from FILE\n"
             "\n",
             name);
 
@@ -123,6 +127,7 @@ int ParseCommandLine(int argc, char** argv) {
         {"boot-dir", required_argument, 0, 'd'},
         {"boot", required_argument, 0, 'b'},
         {"export", required_argument, 0, 'x'},
+        {"import", required_argument, 0, 'c'},
         {0, 0, 0, 0},
     };
 
@@ -206,6 +211,13 @@ int ParseCommandLine(int argc, char** argv) {
         {
             strncpy(ExportFile, optarg, MAXPATHLEN);    // Save the filename
             DeferLookupFlag = 1;    // Defer is required when exporting object code
+            break;
+        }
+
+        case 'c':
+        {
+            strncpy(ImportFile, optarg, MAXPATHLEN);    // Save the filename
+            readImportCode();   // temp debug
             break;
         }
 

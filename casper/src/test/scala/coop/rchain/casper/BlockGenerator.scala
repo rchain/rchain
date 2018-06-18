@@ -51,6 +51,8 @@ trait BlockGenerator {
       idToBlocks     = chain.idToBlocks + (nextId               -> block)
       blockLookup    = chain.blockLookup + (serializedBlockHash -> block)
       latestMessages = chain.latestMessages + (block.sender     -> serializedBlockHash)
+      latestMessagesOfLatestMessages = chain.latestMessagesOfLatestMessages + (block.sender -> ProtoUtil
+        .toLatestMessages(serializedJustifications))
       updatedChildren = HashMap[BlockHash, Set[BlockHash]](parentsHashList.map {
         parentHash: BlockHash =>
           val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])
@@ -64,6 +66,7 @@ trait BlockGenerator {
                                     blockLookup,
                                     childMap,
                                     latestMessages,
+                                    latestMessagesOfLatestMessages,
                                     nextId,
                                     updatedSeqNumbers)
       _ <- blockDagState[F].set(newChain)

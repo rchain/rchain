@@ -82,7 +82,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
 
     def keyPath: Path =
-      certificate.toOption
+      key.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
     def fetchHost(): String =
@@ -107,7 +107,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val eval = new Subcommand("eval") {
     descr(
       "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.")
-    val fileName = trailArg[String](required = true)
+
+    val fileNames = trailArg[List[String]](required = true)(stringListConverter)
   }
   addSubcommand(eval)
 

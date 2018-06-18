@@ -9,6 +9,9 @@ import scodec.{Attempt, Codec}
 import coop.rchain.rspace.internal._
 import coop.rchain.scodec.codecs._
 import scala.collection.immutable.Seq
+import scodec.Codec
+import scodec.bits.ByteVector
+import scodec.codecs._
 
 /**
   * Broadly speaking, there are two kinds of events in RSpace,
@@ -37,20 +40,25 @@ class Produce private (val hash: Blake2b256Hash) extends IOEvent {
 
 object Produce {
 
-  def apply[C, A](channel: C, datum: A)(implicit
-                                        serializeC: Serialize[C],
-                                        serializeA: Serialize[A]): Produce = {
+  val length: Int = 32
+
+  def create[C, A](channel: C, datum: A, persist: Boolean)(implicit
+                                                           serializeC: Serialize[C],
+                                                           serializeA: Serialize[A]): Produce = {
     implicit val codecC: Codec[C] = serializeC.toCodec
     implicit val codecA: Codec[A] = serializeA.toCodec
 
     val hash: Blake2b256Hash =
-      List(Codec[C].encode(channel), Codec[A].encode(datum))
+      List(Codec[C].encode(channel), Codec[A].encode(datum), (ignore(7) ~> bool).encode(persist))
         .sequence[Attempt, BitVector]
         .map((vectors: List[BitVector]) => Blake2b256Hash.create(vectors.combineAll.toByteArray))
         .get
 
     new Produce(hash)
   }
+
+  implicit val codecProduce: Codec[Produce] =
+    Codec[Blake2b256Hash].as[Produce]
 }
 
 class Consume private (val hash: Blake2b256Hash) extends IOEvent {
@@ -69,7 +77,9 @@ class Consume private (val hash: Blake2b256Hash) extends IOEvent {
 
 object Consume {
 
-  def apply[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K)(
+  val length: Int = 32
+
+  def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
@@ -81,11 +91,15 @@ object Consume {
     val hash: Blake2b256Hash =
       List(Codec[Seq[C]].encode(channels),
            Codec[Seq[P]].encode(patterns),
-           Codec[K].encode(continuation))
+           Codec[K].encode(continuation),
+           (ignore(7) ~> bool).encode(persist))
         .sequence[Attempt, BitVector]
         .map((vectors: List[BitVector]) => Blake2b256Hash.create(vectors.combineAll.toByteArray))
         .get
 
     new Consume(hash)
   }
+
+  implicit val codecConsume: Codec[Consume] =
+    Codec[Blake2b256Hash].as[Consume]
 }
