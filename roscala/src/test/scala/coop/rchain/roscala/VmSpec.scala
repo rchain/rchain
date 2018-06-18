@@ -12,7 +12,7 @@ class VmSpec extends FlatSpec with Matchers {
 
   val globalEnv = new GlobalEnv()
   // this is defined in BigBang.cc#InitBuiltinObs
-  val topMeta   = Meta.empty
+  val topMeta = Meta.empty
 
   /**
     * Add key-value pair to the parent (sbo) of all `Fixnum`s
@@ -650,21 +650,21 @@ class VmSpec extends FlatSpec with Matchers {
     val codevec = Seq(
       OpAlloc(n = 1),
       OpImmediateLitToArg(literal = `1`, arg = 0),
-      OpLookupToReg(lit = `1`, reg = trgt),
+      OpLookupToReg(lit = 1, reg = trgt),
       OpXmit(unwind = false, next = true, nargs = 1)
     )
 
     val rtnCtxt = Ctxt.outstanding(1)
 
-    val code = Code(litvec = Seq(Niv, RblString("cat")), codevec = codevec)
+    val code = Code(litvec = Seq(Niv, Symbol("cat")), codevec = codevec)
 
-    val ctxt        = Ctxt(code, rtnCtxt, LocRslt)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
     // todo we set RequestExpr's parent and meta to the most outer case for simplicity, actually there would be RequestExprSBO and RequestExprMeta
     val requestExpr = new RequestExpr(Seq.empty[Ob])
 
     // we need RBLtopenv to end the recurse `lookup`
     requestExpr.parent = new RBLtopenv
-    requestExpr.meta = topMeta
+    requestExpr.meta = Meta.empty
     ctxt.selfEnv = requestExpr
     ctxt.env = new Extension()
 
