@@ -1,5 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
+import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.Capture.taskCapture
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Par
@@ -21,16 +22,25 @@ object TestSetUtil {
     Runtime.create(storageLocation, size)(taskCapture)
   }
 
+  def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler): Unit =
+    runtime.reducer.inj(term).unsafeRunSync
+
+  def eval(code: String, runtime: Runtime)(implicit scheduler: Scheduler): Unit =
+    mkTerm(code) match {
+      case Right(term) => eval_term(term, runtime)
+      case Left(ex)    => throw ex
+    }
+
   def runTests(tests: Par, otherLibs: Seq[Par], runtime: Runtime)(
       implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
-    runtime.reducer.inj(LinkedList.term).unsafeRunSync
-    runtime.reducer.inj(TestSet.term).unsafeRunSync
+    eval_term(LinkedList.term, runtime)
+    eval_term(TestSet.term, runtime)
 
     //load "libraries" required for this particular set of tests
-    otherLibs.foreach(lib => runtime.reducer.inj(lib).unsafeRunSync)
+    otherLibs.foreach(lib => eval_term(lib, runtime))
 
-    runtime.reducer.inj(tests).unsafeRunSync
+    eval_term(tests, runtime)
   }
 
   /**
