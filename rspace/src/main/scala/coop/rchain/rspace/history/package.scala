@@ -149,15 +149,16 @@ package object history {
       case ((lastHash, _), (offset, current @ Node(pb))) if lastOpt.contains(current) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      case ((lastHash, x), (offset, Node(pb))) if pb.children.isEmpty =>
+      // no children - collapse to skip
+      case ((lastHash, node), (offset, Node(pb))) if pb.children.isEmpty =>
         val b = ByteVector(offset)
-        val node = x match {
+        val skip = node match {
           case Leaf(_, _)           => Skip(b, LeafPointer(lastHash))
           case Node(_)              => Skip(b, NodePointer(lastHash))
           case Skip(affix, pointer) => Skip(b ++ affix, pointer)
         }
-        (Trie.hash[K, V](node), node)
-      // intermediate
+        (Trie.hash[K, V](skip), skip)
+      // node with children, just rehash
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
@@ -171,16 +172,6 @@ package object history {
         (Trie.hash[K, V](ns), ns)
     }
   }
-
-  private[this] def insertTries[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
-      rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
-    rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
-      case (_, (hash, trie)) =>
-        store.put(txn, hash, trie)
-        Some(hash)
-    }
 
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
@@ -399,7 +390,7 @@ package object history {
         }
     }
 
-  private def setupSkipNode[V, K, T](
+  private[this] def setupSkipNode[V, K, T](
       store: ITrieStore[T, K, V],
       txn: T,
       ptr: NonEmptyPointer,
@@ -409,6 +400,16 @@ package object history {
     store.put(txn, skipHash, skip)
     NodePointer(skipHash)
   }
+
+  private[this] def insertTries[T, K, V](
+                                          store: ITrieStore[T, K, V],
+                                          txn: T,
+                                          rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
+    rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
+      case (_, (hash, trie)) =>
+        store.put(txn, hash, trie)
+        Some(hash)
+    }
 
   @tailrec
   private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
