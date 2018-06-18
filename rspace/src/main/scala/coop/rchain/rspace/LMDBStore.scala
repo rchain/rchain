@@ -66,12 +66,13 @@ class LMDBStore[C, P, A, K] private (
 
   /* Basic operations */
 
-  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
-    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
+  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+    fetchGNAT(txn, channelsHash.bytes.toDirectByteBuffer)
+
+  private[this] def fetchGNAT(txn: T, channelsHashBuff: ByteBuffer): Option[GNAT[C, P, A, K]] =
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
       Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
     }
-  }
 
   private[this] def insertGNAT(txn: T,
                                channelsHash: Blake2b256Hash,
@@ -250,6 +251,26 @@ class LMDBStore[C, P, A, K] private (
         ()
     }
   }
+
+  private[rspace] def joinMap: Map[C, Seq[Seq[C]]] =
+    withTxn(createTxnRead()) { txn =>
+      withResource(_dbJoins.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+        it.asScala
+          .flatMap { (x: CursorIterator.KeyVal[ByteBuffer]) =>
+            val channelSeq = fetchGNAT(txn, x.key()).map(_.channels).getOrElse(Seq.empty)
+            if (channelSeq.isEmpty) {
+              //TODO: Investigate why this can happen? Remove entire 'if' after fix
+              None
+            } else {
+              if (channelSeq.size != 1)
+                throw new Exception(
+                  s"Join key channel not found or invalid (keys seq size = ${channelSeq.size}).")
+              val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
+              Some(channelSeq.head -> channels)
+            }
+          }.toMap
+      }
+    }
 
   private[rspace] def clear(txn: T): Unit = {
     _dbGNATs.drop(txn)

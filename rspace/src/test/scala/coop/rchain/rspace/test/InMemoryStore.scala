@@ -160,6 +160,13 @@ class InMemoryStore[C, P, A, K](
       (ns, ())
     })
 
+  private[rspace] def joinMap: Map[C, Seq[Seq[C]]] =
+    withTxn(createTxnRead()) { txn =>
+      txn.readState(state => {
+        state.dbJoins
+      })
+    }
+
   private[this] def handleGNATChange(
       state: StateType,
       key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {

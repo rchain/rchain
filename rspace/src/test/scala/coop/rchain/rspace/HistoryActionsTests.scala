@@ -36,23 +36,30 @@ trait HistoryActionsTests
 
   case class State(
       checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]]
+      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
+      joins: Map[String, Seq[Seq[String]]]
   )
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
-        case (State(checkpoint, expectedContents), chunkNo) =>
+        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
-          val test = space.store.toMap == expectedContents
-          val num  = "%02d".format(chunkNo)
-          if (test) {
+          val num          = "%02d".format(chunkNo)
+          val contentsTest = space.store.toMap == expectedContents
+          if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
           }
-          test
+          val joinsTest = space.store.joinMap == expectedJoins
+          if (joinsTest) {
+            logger.debug(s"$num: store had expected joins")
+          } else {
+            logger.error(s"$num: store had unexpected joins")
+          }
+          contentsTest && joinsTest
       }
     !tests.contains(false)
   }
@@ -90,7 +97,9 @@ trait HistoryActionsTests
 
       space.getCheckpoint().root shouldBe nodeHash
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash).value shouldBe gnat
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash)
+        .value shouldBe gnat
     }
 
   "consume twice then getCheckpoint" should "persist the expected values in the TrieStore" in
@@ -133,9 +142,13 @@ trait HistoryActionsTests
 
       val _ = space.getCheckpoint()
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1).value shouldBe gnat1
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash1)
+        .value shouldBe gnat1
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2).value shouldBe gnat2
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+        .value shouldBe gnat2
     }
 
   "produce a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
@@ -308,7 +321,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $size produces")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -332,7 +345,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(consumes.size)
             logger.debug(s"$num: checkpointing $size consumes")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -341,7 +354,6 @@ trait HistoryActionsTests
     check(prop)
   }
 
-  // TODO: get the join map in the mix
   "when resetting to a bunch of checkpoints made with consumes and produces, the store" should
     "have the expected contents" in {
     val prop = Prop.forAllNoShrink { (data: Seq[(TestConsumeMap, TestProduceMap)]) =>
@@ -362,7 +374,7 @@ trait HistoryActionsTests
             val consumesSize = "%02d".format(consumes.size)
             val producesSize = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
