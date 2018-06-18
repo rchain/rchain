@@ -58,16 +58,21 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
         }
 
-        def storeWaitingContinuation(replays: ReplayData, consume: Consume): None.type = {
+        def storeWaitingContinuation(replays: ReplayData,
+                                     consumeRef: Consume,
+                                     maybeCommRef: Option[COMM]): None.type = {
           store.putWaitingContinuation(
             txn,
             channels,
-            WaitingContinuation(patterns, continuation, persist, consume))
+            WaitingContinuation(patterns, continuation, persist, consumeRef))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(s"""|consume: no data found,
                            |storing <(patterns, continuation): ($patterns, $continuation)>
                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-          replayData.put(replays)
+          replayData.put(maybeCommRef match {
+            case Some(commRef: COMM) => replays.removeBinding(consumeRef, commRef)
+            case None                => replays
+          })
           None
         }
 
@@ -102,28 +107,30 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
           case None =>
             runMatcher(None) match {
               case None =>
-                storeWaitingContinuation(replays, consumeRef)
+                storeWaitingContinuation(replays, consumeRef, None)
               case Some(_) =>
                 val msg = "untraced event resulted in a comm event"
                 logger.error(msg)
                 throw new ReplayException(msg)
             }
           case Some(comms) =>
-            val maybeDataCandidates: Option[Seq[DataCandidate[C, A]]] =
+            val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, A]]] =
               comms
                 .iterator()
                 .asScala
-                .map { comm: COMM =>
-                  runMatcher(Some(comm))
-                }
                 .collectFirst {
-                  case Some(x) => x
+                  case commRef: COMM =>
+                    runMatcher(Some(commRef)) match {
+                      case Some(x) => Right(x)
+                      case None    => Left(commRef)
+                    }
                 }
+                .get
 
-            maybeDataCandidates match {
-              case None =>
-                storeWaitingContinuation(replays, consumeRef)
-              case Some(dataCandidates) =>
+            commOrDataCandidates match {
+              case Left(commRef) =>
+                storeWaitingContinuation(replays, consumeRef, Some(commRef))
+              case Right(dataCandidates) =>
                 handleMatches(dataCandidates, replays, consumeRef, comms)
             }
         }
@@ -170,11 +177,16 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
               }
           }
 
-        def storeDatum(replays: ReplayData, produce: Produce): None.type = {
-          store.putDatum(txn, Seq(channel), Datum(data, persist, produce))
+        def storeDatum(replays: ReplayData,
+                       produceRef: Produce,
+                       maybeCommRef: Option[COMM]): None.type = {
+          store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
           logger.debug(s"""|produce: no matching continuation found
                            |storing <data: $data> at <channel: $channel>""".stripMargin)
-          replayData.put(replays)
+          replayData.put(maybeCommRef match {
+            case Some(commRef: COMM) => replays.removeBinding(produceRef, commRef)
+            case None                => replays
+          })
           None
         }
 
@@ -201,10 +213,12 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
                       store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                     }
                     store.removeJoin(txn, candidateChannel, channels)
-                    replays.removeBinding(prodRef, commRef)
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              replayData.put(replays.removeBinding(consumeRef, commRef))
+              replayData.put(
+                replays
+                  .removeBinding(produceRef, commRef)
+                  .removeBinding(consumeRef, commRef))
               Some((continuation, dataCandidates.map(_.datum.a)))
           }
 
@@ -220,7 +234,7 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
           case None =>
             runMatcher(None, produceRef, groupedChannels) match {
               case None =>
-                storeDatum(replays, produceRef)
+                storeDatum(replays, produceRef, None)
               case Some(ProduceCandidate(channels, _, _, _)) =>
                 logger.debug(s"produce: matching continuation found at <channels: $channels>")
                 val msg = "untraced event resulted in a comm event"
@@ -228,21 +242,23 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
                 throw new ReplayException(msg)
             }
           case Some(comms) =>
-            val maybeProduceCandidate: Option[ProduceCandidate[C, P, A, K]] =
+            val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, A, K]] =
               comms
                 .iterator()
                 .asScala
-                .map { comm: COMM =>
-                  runMatcher(Some(comm), produceRef, groupedChannels)
-                }
                 .collectFirst {
-                  case Some(x) => x
+                  case commRef: COMM =>
+                    runMatcher(Some(commRef), produceRef, groupedChannels) match {
+                      case Some(mat) => Right(mat)
+                      case None      => Left(commRef)
+                    }
                 }
+                .get
 
-            maybeProduceCandidate match {
-              case None =>
-                storeDatum(replays, produceRef)
-              case Some(produceCandidate) =>
+            commOrProduceCandidate match {
+              case Left(comm) =>
+                storeDatum(replays, produceRef, Some(comm))
+              case Right(produceCandidate) =>
                 handleMatch(produceCandidate, replays, produceRef, comms)
             }
         }

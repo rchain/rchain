@@ -2,14 +2,16 @@ package coop.rchain.rspace
 
 import java.nio.file.Files
 
+import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
-import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples._
+import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import org.scalatest._
 
 import scala.Function.const
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import scala.util.Random
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
@@ -606,6 +608,96 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       finalPoint.root shouldBe rigPoint.root
       replaySpace.getReplayData shouldBe empty
     }
+
+  "consuming" should "correctly remove things from replay data" in withTestSpaces {
+    (space, replaySpace) =>
+      val emptyPoint = space.getCheckpoint()
+
+      val channels = List("ch1")
+      val patterns = List[Pattern](Wildcard)
+      val k        = "continuation"
+      val datum    = "datum"
+
+      val cr = Consume.create(channels, patterns, k, persist = false)
+
+      consumeMany(
+        space,
+        range = 0 to 1,
+        shuffle = false,
+        channelsCreator = const(channels),
+        patterns = patterns,
+        continuationCreator = const(k),
+        persist = false
+      )
+      produceMany(
+        space,
+        range = 0 to 1,
+        shuffle = false,
+        channelCreator = const(channels(0)),
+        datumCreator = const(datum),
+        persist = false
+      )
+      val rigPoint = space.getCheckpoint()
+
+      replaySpace.rig(emptyPoint.root, rigPoint.log)
+
+      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.getReplayData
+
+      mm.get(cr).map(_.size).value shouldBe 2
+
+      replaySpace.consume(channels, patterns, k, persist = false)
+
+      mm.get(cr).map(_.size).value shouldBe 1
+
+      replaySpace.consume(channels, patterns, k, persist = false)
+
+      mm.get(cr) shouldBe None
+  }
+
+  "producing" should "correctly remove things from replay data" in withTestSpaces {
+    (space, replaySpace) =>
+      val emptyPoint = space.getCheckpoint()
+
+      val channels = List("ch1")
+      val patterns = List[Pattern](Wildcard)
+      val k        = "continuation"
+      val datum    = "datum"
+
+      val pr = Produce.create(channels(0), datum, persist = false)
+
+      consumeMany(
+        space,
+        range = 0 to 1,
+        shuffle = false,
+        channelsCreator = const(channels),
+        patterns = patterns,
+        continuationCreator = const(k),
+        persist = false
+      )
+      produceMany(
+        space,
+        range = 0 to 1,
+        shuffle = false,
+        channelCreator = const(channels(0)),
+        datumCreator = const(datum),
+        persist = false
+      )
+      val rigPoint = space.getCheckpoint()
+
+      replaySpace.rig(emptyPoint.root, rigPoint.log)
+
+      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.getReplayData
+
+      mm.get(pr).map(_.size).value shouldBe 2
+
+      replaySpace.produce(channels(0), datum, persist = false)
+
+      mm.get(pr).map(_.size).value shouldBe 1
+
+      replaySpace.produce(channels(0), datum, persist = false)
+
+      mm.get(pr) shouldBe None
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]
