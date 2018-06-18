@@ -234,6 +234,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     // Node 1 should contain both blocks constituting the equivocation
     nodes(1).casperEff.contains(signedBlock1) should be(true)
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
+
+    nodes(1).logEff.infos.count(_ startsWith "CASPER: Did not add invalid block ") should be(1)
+    nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {
