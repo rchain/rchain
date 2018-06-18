@@ -31,8 +31,15 @@ new value, add, sub in {
   @"NonNegativeNumber"!(15, "properBal") |
   @"NonNegativeNumber"!(100, "addTest") |
   @"NonNegativeNumber"!(100, "subTest") |
+  @"NonNegativeNumber"!(2147483597, "overflowTest") |
 
-  for(@negBal <- @"negBal"; @properBal <- @"properBal"; @addTest <- @"addTest"; @subTest <- @"subTest") {
+  for(
+    @negBal <- @"negBal"; 
+    @properBal <- @"properBal"; 
+    @addTest <- @"addTest"; 
+    @subTest <- @"subTest";
+    @overflowTest <- @"overflowTest"
+  ) {
     value!(negBal, "negBalValue") |
     @"TestSet"!(
       "Initially negative balances are be converted to 0.",
@@ -86,6 +93,14 @@ new value, add, sub in {
         ["subTestValue", 100],
         ["subTest30", true],
         ["subTestValue", 70]
+      ]
+    ) |
+    
+    add!(overflowTest, 100, "overflowTestAdd") |
+    @"TestSet"!(
+      "Addition overflow is prevented",
+      [
+        ["overflowTestAdd", false]
       ]
     )
   }

@@ -4,28 +4,30 @@
 contract @"NonNegativeNumber"(@init, return) = {
   new this, valueStore in {
     contract @[*this, "add"](@x, success) = {
-      match x >= 0 {
-        true => {
-          for(@v <- valueStore){
+      if (x >= 0) {
+        for(@v <- valueStore){
+          if (v + x > v) {
             valueStore!(v + x) | success!(true)
+          } else {
+            //overflow
+            valueStore!(v) | success!(false)
           }
         }
-        _ => { success!(false)  }
+      } else {
+        success!(false)
       }
     } |
     contract @[*this, "sub"](@x, success) = {
-      match x >= 0 {
-        true => {
-          for(@v <- valueStore) {
-            match x <= v {
-              true => {
-                valueStore!(v - x) | success!(true)
-              }
-              _ => { valueStore!(v) | success!(false) }
-            }
+      if (x >= 0) {
+        for(@v <- valueStore) {
+          if (x <= v) {
+            valueStore!(v - x) | success!(true)
+          } else {
+            valueStore!(v) | success!(false)
           }
         }
-        _ => { success!(false) }
+      } else {
+        success!(false)
       }
     } |
     contract @[*this, "value"](return) = {
