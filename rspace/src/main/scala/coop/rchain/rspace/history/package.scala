@@ -18,6 +18,21 @@ import scala.collection.immutable
 
 package object history {
 
+  private[this] type Parents[K, V] = Seq[(Int, Trie[K, V])]
+
+  private[this] implicit class ParentsOps[K, V](parents: Seq[(Int, Trie[K, V])]) {
+
+    def countPathLength() =
+      parents
+        .map {
+          case (_, s: Skip) => s.affix.size
+          case _            => 1
+        }
+        .sum
+        .toInt
+
+  }
+
   private val logger: Logger = Logger[this.type]
 
   def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
@@ -84,12 +99,10 @@ package object history {
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
                                         txn: T,
                                         path: Seq[Byte],
-                                        curr: Trie[K, V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
+                                        curr: Trie[K, V]): (Trie[K, V], Parents[K, V]) = {
 
     @tailrec
-    def parents(depth: Int,
-                curr: Trie[K, V],
-                acc: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+    def parents(depth: Int, curr: Trie[K, V], acc: Parents[K, V]): (Trie[K, V], Parents[K, V]) =
       curr match {
         case node @ Node(pointerBlock) =>
           val index: Int = JByte.toUnsignedInt(path(depth))
@@ -127,7 +140,7 @@ package object history {
   private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
-  private[this] def rehash[K, V](trie: Trie[K, V], parents: Seq[(Int, Trie[K, V])])(
+  private[this] def rehash[K, V](trie: Trie[K, V], parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] = {
@@ -170,15 +183,6 @@ package object history {
         Some(hash)
     }
 
-  def countPathLength[K, V](parents: Seq[(Int, Trie[K, V])]) =
-    parents
-      .map {
-        case (_, s: Skip) => s.affix.size
-        case _            => 1
-      }
-      .sum
-      .toInt
-
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
@@ -220,7 +224,7 @@ package object history {
 
               val pathLeft = wholePathLength - sharedPrefixLength
               val update = if (pathLeft > 1) {
-                val pathLength  = countPathLength(parents)
+                val pathLength  = parents.countPathLength
                 val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
                 val skipExistingPtr =
                   setupSkipNode(store, txn, LeafPointer(newLeafHash), commonAffix)
@@ -265,7 +269,7 @@ package object history {
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
             case Node(pb) =>
-              val pathLength      = countPathLength(parents)
+              val pathLength      = parents.countPathLength
               val wholePathLength = encodedKeyNew.size
               val pathLeft        = wholePathLength - pathLength
               val newLeafIndex    = JByte.toUnsignedInt(encodedKeyNew(pathLength))
@@ -288,7 +292,7 @@ package object history {
             // If the tip is a skip node -> there is no Node for this Leaf.
             // need to shorten this skip and rectify the structure
             case Skip(affix, ptr) =>
-              val pathLength          = countPathLength(parents)
+              val pathLength          = parents.countPathLength
               val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
               val pathLeft            = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
               val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
@@ -347,9 +351,9 @@ package object history {
                                                  txn: T,
                                                  ptr: NonEmptyPointer,
                                                  incomingAffix: ByteVector,
-                                                 parents: Seq[(Int, Trie[K, V])])(
+                                                 parents: Parents[K, V])(
       implicit codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+      codecV: Codec[V]): (Trie[K, V], Parents[K, V]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the node.
@@ -408,12 +412,10 @@ package object history {
   }
 
   @tailrec
-  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
-                                        txn: T,
-                                        parents: Seq[(Int, Trie[K, V])])(
+  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+      codecV: Codec[V]): (Trie[K, V], Parents[K, V]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `EmptyPointer`
