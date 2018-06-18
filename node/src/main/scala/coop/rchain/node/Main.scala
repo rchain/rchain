@@ -63,6 +63,8 @@ object Main {
         }
       case Some(conf.showBlock) =>
         DeployRuntime.showBlock[Task](conf.showBlock.hash.toOption.get)
+      case Some(conf.showBlocks) =>
+        DeployRuntime.showBlocks[Task]()
       case Some(conf.run) =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()

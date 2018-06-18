@@ -15,6 +15,7 @@ trait DeployService[F[_]] {
   //add the appropriate values of the sender, sig and sigAlgorithm fields.
   def createBlock(): F[Option[BlockMessage]]
   def showBlock(q: BlockQuery): F[String]
+  def showBlocks(): F[String]
   def addBlock(b: BlockMessage): F[Unit] //add a block to Casper internal state
 }
 
@@ -40,6 +41,11 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] {
 
   def showBlock(q: BlockQuery): Task[String] = Task.delay {
     val response = blockingStub.showBlock(q)
+    response.toProtoString
+  }
+
+  def showBlocks(): Task[String] = Task.delay {
+    val response = blockingStub.showBlocks(Empty())
     response.toProtoString
   }
 
