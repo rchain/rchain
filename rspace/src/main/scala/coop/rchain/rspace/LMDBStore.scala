@@ -4,13 +4,14 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{Branch, ITrieStore, initialize}
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.SeqOps._
-import coop.rchain.shared.Resources.withResource
+import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Resources.withResource
+import coop.rchain.shared.SeqOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
