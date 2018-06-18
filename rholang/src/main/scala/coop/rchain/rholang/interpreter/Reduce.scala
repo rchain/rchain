@@ -25,6 +25,7 @@ import coop.rchain.rspace.pure.PureRSpace
 import scala.collection.immutable.BitSet
 import scala.util.Try
 import coop.rchain.models.rholang.sort.ordering._
+import monix.eval.Coeval
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -208,7 +209,7 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): M[Unit] =
       for {
-        quote <- eval(send.chan.get)
+        quote <- eval(send.chan)
         data  <- send.data.toList.traverse(x => evalExpr(x))
 
         subChan <- substituteQuote[M].substitute(quote)(0, env)
@@ -549,7 +550,9 @@ object Reduce {
       }
     }
 
-    private[this] def nth: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    type MethodType = (Par, Seq[Par]) => Env[Par] => M[Par]
+
+    private[this] def nth: MethodType = {
       def localNth(ps: Seq[Par], nth: Int): Either[ReduceError, Par] =
         if (ps.isDefinedAt(nth)) {
           Right(ps(nth))
@@ -580,7 +583,7 @@ object Reduce {
         }
     }
 
-    private[this] def toByteArray: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    private[this] def toByteArray: MethodType = {
       def serialize(p: Par): Either[ReduceError, Array[Byte]] =
         Either
           .fromTry(Try(Serialize[Par].encode(p)))
@@ -601,34 +604,168 @@ object Reduce {
         }
     }
 
-    private[this] def hexToBytes: (Par, Seq[Par]) => Env[Par] => M[Par] = {
-      (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
-        {
-          if (args.nonEmpty) {
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: hexToBytes does not take arguments"))
-          } else {
-            p.singleExpr() match {
-              case Some(Expr(GString(encoded))) =>
-                def decodingError(th: Throwable) =
-                  ReduceError(
-                    s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}")
-                Try(Expr(GByteArray(ByteString.copyFrom(Base16.decode(encoded)))))
-                  .fold(th => interpreterErrorM[M].raiseError[Par](decodingError(th)),
-                        x => interpreterErrorM[M].pure[Par](x))
-              case _ =>
-                interpreterErrorM[M].raiseError(
-                  ReduceError("Error: hexToBytes can be called only on single strings."))
-            }
+    private[this] def hexToBytes: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      {
+        if (args.nonEmpty) {
+          interpreterErrorM[M].raiseError(ReduceError("Error: hexToBytes does not take arguments"))
+        } else {
+          p.singleExpr() match {
+            case Some(Expr(GString(encoded))) =>
+              def decodingError(th: Throwable) =
+                ReduceError(
+                  s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}")
+              Try(Expr(GByteArray(ByteString.copyFrom(Base16.decode(encoded)))))
+                .fold(th => interpreterErrorM[M].raiseError[Par](decodingError(th)),
+                      x => interpreterErrorM[M].pure[Par](x))
+            case _ =>
+              interpreterErrorM[M].raiseError(
+                ReduceError("Error: hexToBytes can be called only on single strings."))
           }
         }
+      }
     }
 
-    def methodTable(method: String): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
+    private[this] def method(methodName: String, expectedArgsLength: Int, argsLength: Int)(
+        thunk: => M[Par]): M[Par] =
+      if (argsLength != expectedArgsLength) {
+        interpreterErrorM[M].raiseError(
+          ReduceError(s"Error: $methodName expects $expectedArgsLength argument(s)"))
+      } else {
+        thunk
+      }
+
+    private[this] def union: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
+        (baseExpr.exprInstance, otherExpr.exprInstance) match {
+          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
+            def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
+              base.flatMap(b => other.map(o => b | o))
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs.union(otherPs.sortedPars.toSet),
+                       base.connectiveUsed || other.connectiveUsed,
+                       locallyFreeUnion(base.locallyFree, other.locallyFree))))
+          // TODO(mateusz.gorski): add case EMapBody
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError(
+                "Error: union applied to something that wasn't a set or a map"
+              ))
+
+        }
+
+      method("union", 1, args.length) {
+        for {
+          baseExpr  <- evalSingleExpr(p)(env)
+          otherExpr <- evalSingleExpr(args(0))(env)
+          result    <- union(baseExpr, otherExpr)
+        } yield result
+      }
+    }
+
+    private[this] def diff: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def diff(baseExpr: Expr, otherExpr: Expr): M[Expr] =
+        (baseExpr.exprInstance, otherExpr.exprInstance) match {
+          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
+            def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
+              base.flatMap(b => other.map(o => b | o))
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs.diff(otherPs.sortedPars.toSet),
+                       base.connectiveUsed || other.connectiveUsed,
+                       locallyFreeUnion(base.locallyFree, other.locallyFree))))
+          // TODO(mateusz.gorski): add case EMapBody
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: union applied to something that wasn't a set or a map"))
+        }
+      method("diff", 1, args.length) {
+        for {
+          baseExpr  <- evalSingleExpr(p)(env)
+          otherExpr <- evalSingleExpr(args(0))(env)
+          result    <- diff(baseExpr, otherExpr)
+        } yield result
+      }
+    }
+
+    private[this] def add: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def add(baseExpr: Expr, par: Par): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs + par,
+                       base.connectiveUsed || par.connectiveUsed,
+                       base.locallyFree.map(b => b | par.locallyFree))))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("add", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalExpr(args(0))(env)
+          result   <- add(baseExpr, element)
+        } yield result
+      }
+    }
+
+    private[this] def delete: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def delete(baseExpr: Expr, par: Par): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs - par,
+                       base.connectiveUsed || par.connectiveUsed,
+                       base.locallyFree.map(b => b | par.locallyFree))))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("delete", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalExpr(args(0))(env)
+          result   <- delete(baseExpr, element)
+        } yield result
+      }
+    }
+
+    private[this] def contains: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def contains(baseExpr: Expr, par: Par): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](GBool(basePs.contains(par)))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("contains", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalExpr(args(0))(env)
+          result   <- contains(baseExpr, element)
+        } yield result
+      }
+    }
+
+    def methodTable(method: String): Option[MethodType] =
       method match {
         case "nth"         => Some(nth)
         case "toByteArray" => Some(toByteArray)
         case "hexToBytes"  => Some(hexToBytes)
+        case "union"       => Some(union)
+        case "diff"        => Some(diff)
+        case "add"         => Some(add)
+        case "delete"      => Some(delete)
+        case "contains"    => Some(contains)
         case _             => None
       }
 

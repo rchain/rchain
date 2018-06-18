@@ -9,6 +9,7 @@ import scala.collection.JavaConverters._
 
 import coop.rchain.comm._
 import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeployService}
+import coop.rchain.node.effects.{ConsoleIO, GrpcReplClient, ReplClient}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
@@ -29,8 +30,8 @@ object Main {
 
     implicit val io: SchedulerService = Scheduler.io("repl-io")
 
-    implicit val replService: ReplService[Task] =
-      new GrpcReplService(conf.grpcHost(), conf.grpcPort())
+    implicit val replService: ReplClient[Task] =
+      new GrpcReplClient(conf.grpcHost(), conf.grpcPort())
     implicit val diagnosticsService: diagnostics.client.DiagnosticsService[Task] =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
     implicit val deployService: DeployService[Task] =
@@ -72,10 +73,7 @@ object Main {
             println("Node could not connect to bootstrap node.")
           case Left(error) => println(s"Failed! Reason: '$error")
         }
-      case _ =>
-        Task.delay {
-          conf.printHelp()
-        }
+      case _ => Task.delay(conf.printHelp())
     }
     exec.unsafeRunSync
   }

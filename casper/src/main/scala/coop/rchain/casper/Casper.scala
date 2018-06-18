@@ -10,12 +10,12 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.AtomicSyncVar
+import coop.rchain.shared.{AtomicSyncVar, Log, Time}
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
@@ -278,12 +278,11 @@ sealed abstract class MultiParentCasperInstances {
         }
       }
 
+      // See EquivocationRecord.scala for summary of algorithm.
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
-        if (equivocationsTracker.isEmpty) {
-          Applicative[F].pure(Right(Valid))
-        } else {
+        Capture[F].capture {
           val neglectedEquivocationDetected =
             equivocationsTracker.foldLeft(false) {
               case (acc, equivocationRecord) =>
@@ -306,9 +305,9 @@ sealed abstract class MultiParentCasperInstances {
 
             }
           if (neglectedEquivocationDetected) {
-            Applicative[F].pure(Left(NeglectedEquivocation))
+            Left(NeglectedEquivocation)
           } else {
-            Applicative[F].pure(Right(Valid))
+            Right(Valid)
           }
         }
 

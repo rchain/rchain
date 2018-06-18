@@ -2,7 +2,7 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
-import coop.rchain.rspace.util._
+import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
 
 import scala.collection.mutable

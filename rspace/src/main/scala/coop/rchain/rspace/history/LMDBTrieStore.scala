@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.util.withResource
+import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
