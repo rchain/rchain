@@ -6,7 +6,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util._
+import coop.rchain.shared.SeqOps._
+import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
