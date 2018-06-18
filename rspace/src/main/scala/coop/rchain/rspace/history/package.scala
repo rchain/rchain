@@ -23,7 +23,7 @@ package object history {
   private[this] implicit class ParentsOps[K, V](val parents: Seq[(Int, Trie[K, V])])
       extends AnyVal {
 
-    def countPathLength() =
+    def countPathLength =
       parents
         .foldLeft(0)((acc, el) =>
           el match {
