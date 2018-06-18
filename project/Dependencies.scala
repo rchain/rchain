@@ -29,7 +29,7 @@ object Dependencies {
   val kalium              = "org.abstractj.kalium"        % "kalium"                    % "0.7.0"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
-  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.0"
+  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"

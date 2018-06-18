@@ -10,20 +10,20 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.AtomicSyncVar
+import coop.rchain.shared.{AtomicSyncVar, Log, Time}
 
 import scala.annotation.tailrec
-import scala.collection.mutable
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
 import java.nio.file.Path
 
+import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
@@ -87,18 +87,15 @@ sealed abstract class MultiParentCasperInstances {
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
-      private val expectedBlockRequests: mutable.HashSet[BlockHash] =
-        new mutable.HashSet[BlockHash]()
+      private val awaitingJustificationToChild =
+        new mutable.HashMap[BlockHash, mutable.Set[BlockHash]]
+        with mutable.MultiMap[BlockHash, BlockHash]
 
-      // Used to keep track of when other validators detect the invalid produced at the sequence number
-      // identified by the first element of the tuple. If no invalid blocks have been produced by that
-      // validator, the sequence number is None.
-      private val invalidBlockTracker: mutable.HashMap[Validator, InvalidBlockRecord] =
-        new mutable.HashMap[Validator, InvalidBlockRecord]()
       // Used to keep track of when other validators detect the equivocation consisting of the base block
-      // at the sequence number identified by the first element of the tuple.
-      private val equivocationsTracker: mutable.HashMap[Validator, EquivocationRecord] =
-        new mutable.HashMap[Validator, EquivocationRecord]()
+      // at the sequence number identified by the (validator, base equivocation sequence number) pair of
+      // each EquivocationRecord.
+      private val equivocationsTracker: mutable.Set[EquivocationRecord] =
+        new mutable.HashSet[EquivocationRecord]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -109,8 +106,9 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case Valid => reAttemptBuffer
-                case _     => ().pure[F]
+                case Valid                  => reAttemptBuffer
+                case AdmissibleEquivocation => reAttemptBuffer
+                case _                      => ().pure[F]
               }
           estimates <- estimator
           tip       = estimates.head
@@ -248,9 +246,14 @@ sealed abstract class MultiParentCasperInstances {
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
           postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
-          // postTransactionsCheckStatus <- validateTransactions(...)
-          postEquivocationCheckStatus <- postValidationStatus.traverse(_ =>
-                                          equivocationsCheck(b, dag))
+          // TODO: postTransactionsCheckStatus <- validateTransactions(...)
+          postedNeglectedEquivocationCheckStatus <- postValidationStatus.traverse(
+                                                     _ =>
+                                                       neglectedEquivocationsCheckWithRecordUpdate(
+                                                         b,
+                                                         dag))
+          postEquivocationCheckStatus <- postedNeglectedEquivocationCheckStatus.joinRight.traverse(
+                                          _ => equivocationsCheck(b, dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
@@ -268,10 +271,140 @@ sealed abstract class MultiParentCasperInstances {
         val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
         if (isNotEquivocation) {
           Applicative[F].pure(Right(Valid))
-        } else if (expectedBlockRequests.contains(block.blockHash)) {
-          Applicative[F].pure(Right(IncludeableEquivocation))
+        } else if (awaitingJustificationToChild.contains(block.blockHash)) {
+          Applicative[F].pure(Right(AdmissibleEquivocation))
         } else {
           Applicative[F].pure(Left(IgnorableEquivocation))
+        }
+      }
+
+      // See EquivocationRecord.scala for summary of algorithm.
+      private def neglectedEquivocationsCheckWithRecordUpdate(
+          block: BlockMessage,
+          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+        Capture[F].capture {
+          val neglectedEquivocationDetected =
+            equivocationsTracker.foldLeft(false) {
+              case (acc, equivocationRecord) =>
+                getEquivocationDiscoveryStatus(block,
+                                               dag,
+                                               equivocationRecord,
+                                               Set.empty[BlockMessage]) match {
+                  case EquivocationNeglected =>
+                    true
+                  case EquivocationDetected =>
+                    val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
+                    equivocationsTracker.remove(equivocationRecord)
+                    equivocationsTracker.add(
+                      equivocationRecord.copy(
+                        equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes))
+                    acc
+                  case EquivocationOblivious =>
+                    acc
+                }
+
+            }
+          if (neglectedEquivocationDetected) {
+            Left(NeglectedEquivocation)
+          } else {
+            Right(Valid)
+          }
+        }
+
+      private def getEquivocationDiscoveryStatus(
+          block: BlockMessage,
+          dag: BlockDag,
+          equivocationRecord: EquivocationRecord,
+          equivocationChild: Set[BlockMessage]): EquivocationDiscoveryStatus = {
+        val equivocatingValidator = equivocationRecord.equivocator
+        val latestMessages        = toLatestMessages(block.justifications)
+        if (equivocationDetectable(latestMessages.toSeq,
+                                   dag,
+                                   equivocationRecord,
+                                   equivocationChild)) {
+          if (latestMessages.contains(equivocatingValidator)) {
+            EquivocationNeglected
+          } else {
+            EquivocationDetected
+          }
+        } else {
+          // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
+          // TODO: We check for unjustified droppings of validators in validateBlockSummary.
+          EquivocationOblivious
+        }
+      }
+
+      @tailrec
+      private def equivocationDetectable(latestMessages: Seq[(Validator, BlockHash)],
+                                         dag: BlockDag,
+                                         equivocationRecord: EquivocationRecord,
+                                         equivocationChildren: Set[BlockMessage]): Boolean = {
+        def maybeAddEquivocationChildren(
+            justificationBlock: BlockMessage,
+            dag: BlockDag,
+            equivocatingValidator: Validator,
+            equivocationBaseBlockSeqNum: SequenceNumber,
+            equivocationChildren: Set[BlockMessage]): Set[BlockMessage] =
+          if (justificationBlock.sender == equivocatingValidator) {
+            if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
+              findJustificationParentWithSeqNum(justificationBlock,
+                                                dag.blockLookup,
+                                                equivocationBaseBlockSeqNum + 1) match {
+                case Some(equivocationChild) => equivocationChildren + equivocationChild
+                case None =>
+                  throw new Error(
+                    "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
+              }
+            } else {
+              equivocationChildren
+            }
+          } else {
+            // Latest according to the justification block
+            val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
+              toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
+            maybeLatestEquivocatingValidatorBlockHash match {
+              case Some(blockHash) =>
+                val latestEquivocatingValidatorBlock = dag.blockLookup(blockHash)
+                if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum)
+                  findJustificationParentWithSeqNum(latestEquivocatingValidatorBlock,
+                                                    dag.blockLookup,
+                                                    equivocationBaseBlockSeqNum + 1) match {
+                    case Some(equivocationChild) => equivocationChildren + equivocationChild
+                    case None =>
+                      throw new Error(
+                        "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
+                  } else
+                  equivocationChildren
+              case None =>
+                throw new Error(
+                  "justificationBlock is missing justification pointers to equivocatingValidator even though justificationBlock isn't a part of equivocationDetectedBlockHashes for this equivocation record.")
+            }
+          }
+
+        latestMessages match {
+          case Nil => false
+          case (_, justificationBlockHash) +: remainder =>
+            val justificationBlock = dag.blockLookup(justificationBlockHash)
+            if (equivocationRecord.equivocationDetectedBlockHashes.contains(justificationBlockHash)) {
+              true
+            } else {
+              val equivocatingValidator       = equivocationRecord.equivocator
+              val equivocationBaseBlockSeqNum = equivocationRecord.equivocationBaseBlockSeqNum
+              val updatedEquivocationChildren = maybeAddEquivocationChildren(
+                justificationBlock,
+                dag,
+                equivocatingValidator,
+                equivocationBaseBlockSeqNum,
+                equivocationChildren)
+              if (updatedEquivocationChildren.size > 1) {
+                true
+              } else {
+                equivocationDetectable(remainder,
+                                       dag,
+                                       equivocationRecord,
+                                       updatedEquivocationChildren)
+              }
+            }
         }
       }
 
@@ -293,54 +426,75 @@ sealed abstract class MultiParentCasperInstances {
                 .toSet
               _ <- (missingParents union missingJustifictions).toList.traverse(
                     hash =>
-                      Capture[F].capture { expectedBlockRequests += hash } *>
+                      Capture[F].capture {
+                        awaitingJustificationToChild.addBinding(hash, block.blockHash)
+                      } *>
                         CommUtil.sendBlockRequest[F](
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
-          case IncludeableEquivocation =>
-            addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-              s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+          case AdmissibleEquivocation =>
+            Capture[F].capture {
+              val baseEquivocationBlockSeqNum = block.seqNum - 1
+              if (equivocationsTracker.exists {
+                    case EquivocationRecord(validator, seqNum, _) =>
+                      block.sender == validator && baseEquivocationBlockSeqNum == seqNum
+                  }) {
+                // More than 2 equivocating children from base equivocation block and base block has already been recorded
+              } else {
+                val newEquivocationRecord = EquivocationRecord(block.sender,
+                                                               baseEquivocationBlockSeqNum,
+                                                               Set.empty[BlockHash])
+                equivocationsTracker.add(newEquivocationRecord)
+              }
+            } *>
+              addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+              s"CASPER: Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}")
           case IgnorableEquivocation =>
+            /*
+             * We don't have to include these blocks to the equivocation tracker because if any validator
+             * will build off this side of the equivocation, we will get another attempt to add this block
+             * through the admissible equivocations.
+             */
             Log[F].info(
               s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
-          case InvalidBlockNumber =>
-            handleInvalidBlockEffect(block)
-          case InvalidParents =>
-            handleInvalidBlockEffect(block)
-          case JustificationRegression =>
-            handleInvalidBlockEffect(block)
-          case InvalidSequenceNumber =>
-            // We need to handle invalid sequence numbers separately as the invalid block tracker
-            // assumes the sequence numbers inserted are valid.
-            throw new Error("InvalidSequenceNumber unimplemented")
           case InvalidUnslashableBlock =>
-            for {
-              _ <- Log[F].info(
-                    s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
-            } yield ()
+            handleInvalidBlockEffect(status, block)
+          case InvalidBlockNumber =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidParents =>
+            handleInvalidBlockEffect(status, block)
+          case JustificationRegression =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidSequenceNumber =>
+            handleInvalidBlockEffect(status, block)
+          case NeglectedEquivocation =>
+            handleInvalidBlockEffect(status, block)
           case _ => throw new Error("Should never reach")
         }
 
-      private def handleInvalidBlockEffect(block: BlockMessage): F[Unit] =
+      private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
         for {
-          _ <- Log[F].info(
-                s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
-          _ <- Capture[F].capture {
-                val invalidBlockRecord =
-                  invalidBlockTracker.getOrElse(block.sender, InvalidBlockRecord())
-                val updatedInvalidBlockRecord = invalidBlockRecord.invalidBlockSeqNum match {
-                  case Some(_) => invalidBlockRecord
-                  case None =>
-                    InvalidBlockRecord(Some(block.seqNum),
-                                       invalidBlockRecord.invalidBlockDiscoveryStatuses)
-                }
-                invalidBlockTracker.update(block.sender, updatedInvalidBlockRecord)
-              }
+          _ <- Log[F].info(s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(
+                block.blockHash)} for ${status.toString}.")
+          // TODO: Slash block.blockHash for status except InvalidUnslashableBlock
+          blocksToSlash = allChildren[BlockHash](awaitingJustificationToChild, block.blockHash) - block.blockHash
+          _ <- Log[F].warn(s"""CASPER: About to slash the following blocks ${blocksToSlash
+                .map(PrettyPrinter.buildString)
+                .mkString("", ",", "")} for neglecting an invalid block""")
+          // TODO: Slash blocksToSlash for neglecting an invalid block
+          _ <- Capture[F].capture { blocksToSlash.foreach(awaitingJustificationToChild.remove) }
         } yield ()
+
+      private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
+        DagOperations
+          .bfTraverse[A](Some(element)) { (el: A) =>
+            map.getOrElse(el, Set.empty[A]).iterator
+          }
+          .toSet
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
-          expectedBlockRequests -= block.blockHash
+          awaitingJustificationToChild -= block.blockHash
           _blockDag.update(bd => {
             val hash = block.blockHash
 

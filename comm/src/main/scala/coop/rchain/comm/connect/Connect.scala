@@ -1,4 +1,4 @@
-package coop.rchain.p2p
+package coop.rchain.comm.connect
 
 import coop.rchain.p2p.effects._
 
@@ -17,10 +17,10 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import com.google.protobuf.ByteString
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
+import coop.rchain.shared._
+import coop.rchain.comm.CommError.ErrorHandler
 
-object Network {
-
-  type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
+object Connect {
 
   val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
@@ -132,6 +132,7 @@ object Network {
         .fold(Log[F].error("Upstream not available").as(notHandled)) { usmsg =>
           usmsg.typeUrl match {
             // TODO interpolate this string to check if class exists
+
             case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
               handlePacket[F](sender, toPacket(proto).toOption)
 

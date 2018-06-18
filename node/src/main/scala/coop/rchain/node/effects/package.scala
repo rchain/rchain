@@ -14,6 +14,7 @@ import monix.eval.Task
 import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared._
 
 package object effects {
 
