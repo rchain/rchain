@@ -2,6 +2,7 @@ package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag
+import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -11,7 +12,6 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 
 import scala.annotation.tailrec
-
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -48,6 +48,27 @@ object ProtoUtil {
       case None => acc :+ estimate
     }
   }
+
+  @tailrec
+  def findJustificationParentWithSeqNum(b: BlockMessage,
+                                        blockLookup: collection.Map[BlockHash, BlockMessage],
+                                        seqNum: SequenceNumber): Option[BlockMessage] =
+    if (b.seqNum == seqNum) {
+      Some(b)
+    } else {
+      val creatorJustificationHash = b.justifications.find {
+        case Justification(validator, _) => validator == b.sender
+      }
+      creatorJustificationHash match {
+        case Some(Justification(_, blockHash)) =>
+          val creatorJustification = blockLookup.get(blockHash)
+          creatorJustification match {
+            case Some(block) => findJustificationParentWithSeqNum(block, blockLookup, seqNum)
+            case None        => None
+          }
+        case None => None
+      }
+    }
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
     blockMessage.body match {
