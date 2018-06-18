@@ -20,7 +20,8 @@ package object history {
 
   private[this] type Parents[K, V] = Seq[(Int, Trie[K, V])]
 
-  private[this] implicit class ParentsOps[K, V](parents: Seq[(Int, Trie[K, V])]) {
+  private[this] implicit class ParentsOps[K, V](val parents: Seq[(Int, Trie[K, V])])
+      extends AnyVal {
 
     def countPathLength() =
       parents
@@ -402,9 +403,9 @@ package object history {
   }
 
   private[this] def insertTries[T, K, V](
-                                          store: ITrieStore[T, K, V],
-                                          txn: T,
-                                          rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
+      store: ITrieStore[T, K, V],
+      txn: T,
+      rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
     rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
       case (_, (hash, trie)) =>
         store.put(txn, hash, trie)
