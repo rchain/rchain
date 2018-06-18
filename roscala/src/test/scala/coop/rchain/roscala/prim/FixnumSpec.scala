@@ -94,6 +94,71 @@ class FixnumSpec extends FlatSpec with Matchers {
     fxLt.fn(newCtxt, globalEnv) should be(Deadthread)
   }
 
+  "fxLe" should "correctly return whether former smaller than or equal to latter" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Fixnum(2)))
+    fxLe.fn(newCtxt, globalEnv) should be(RblBool(true))
+
+    val newCtxt2 = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Niv))
+    fxLe.fn(newCtxt2, globalEnv) should be(RblBool(false))
+  }
+
+  it should "fail for non-fixnum arguments" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
+    fxLe.fn(newCtxt, globalEnv) should be(Deadthread)
+  }
+
+  "fxGt" should "correctly return whether former greater than latter" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(5), Fixnum(2)))
+    fxGt.fn(newCtxt, globalEnv) should be(RblBool(true))
+
+    val newCtxt2 = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Niv))
+    fxGt.fn(newCtxt2, globalEnv) should be(RblBool(false))
+  }
+
+  it should "fail for non-fixnum arguments" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
+    fxGt.fn(newCtxt, globalEnv) should be(Deadthread)
+  }
+
+  "fxGe" should "correctly return whether former greater than or equal to latter" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(5), Fixnum(5)))
+    fxGe.fn(newCtxt, globalEnv) should be(RblBool(true))
+
+    val newCtxt2 = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Niv))
+    fxGe.fn(newCtxt2, globalEnv) should be(RblBool(false))
+  }
+
+  it should "fail for non-fixnum arguments" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
+    fxGe.fn(newCtxt, globalEnv) should be(Deadthread)
+  }
+
+  "fxEq" should "correctly return whether former equal to latter" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(5), Fixnum(5)))
+    fxEq.fn(newCtxt, globalEnv) should be(RblBool(true))
+
+    val newCtxt2 = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Niv))
+    fxEq.fn(newCtxt2, globalEnv) should be(RblBool(false))
+  }
+
+  it should "fail for non-fixnum arguments" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
+    fxEq.fn(newCtxt, globalEnv) should be(Deadthread)
+  }
+
+  "fxNe" should "correctly return whether former is not equal to latter" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(5), Fixnum(5)))
+    fxNe.fn(newCtxt, globalEnv) should be(RblBool(false))
+
+    val newCtxt2 = reAssignCtxtArgs(ctxt, 2, Tuple(Fixnum(2), Niv))
+    fxNe.fn(newCtxt2, globalEnv) should be(RblBool(false))
+  }
+
+  it should "fail for non-fixnum arguments" in {
+    val newCtxt = reAssignCtxtArgs(ctxt, 2, Tuple(2, Niv))
+    fxNe.fn(newCtxt, globalEnv) should be(Deadthread)
+  }
+
   "fxMin" should "correctly return the smallest one" in {
     val newCtxt = reAssignCtxtArgs(ctxt, 4, Tuple(Fixnum(2), Fixnum(2), Fixnum(2), Fixnum(5)))
     fxMin.fn(newCtxt, globalEnv) should be(Fixnum(2))

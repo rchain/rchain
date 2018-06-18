@@ -116,6 +116,86 @@ object fixnum {
       }
   }
 
+  object fxLe extends Prim {
+    override val name: String = "fx<="
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+      checkFixnum(ctxt, 0, ctxt.argvec.value) match {
+        case a: Fixnum =>
+          checkFixnum(ctxt, 1, ctxt.argvec.value) match {
+            case b: Fixnum => a <= b
+            case _         => RblBool(false)
+          }
+        case _ => Prim.runtimeError(ctxt, "arithmetic exception")
+      }
+  }
+
+  object fxGt extends Prim {
+    override val name: String = "fx>"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+      checkFixnum(ctxt, 0, ctxt.argvec.value) match {
+        case a: Fixnum =>
+          checkFixnum(ctxt, 1, ctxt.argvec.value) match {
+            case b: Fixnum => a > b
+            case _         => RblBool(false)
+          }
+        case _ => Prim.runtimeError(ctxt, "arithmetic exception")
+      }
+  }
+
+  object fxGe extends Prim {
+    override val name: String = "fx>="
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+      checkFixnum(ctxt, 0, ctxt.argvec.value) match {
+        case a: Fixnum =>
+          checkFixnum(ctxt, 1, ctxt.argvec.value) match {
+            case b: Fixnum => a >= b
+            case _         => RblBool(false)
+          }
+        case _ => Prim.runtimeError(ctxt, "arithmetic exception")
+      }
+  }
+
+  object fxEq extends Prim {
+    override val name: String = "fx="
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+      checkFixnum(ctxt, 0, ctxt.argvec.value) match {
+        case a: Fixnum =>
+          checkFixnum(ctxt, 1, ctxt.argvec.value) match {
+            case b: Fixnum => a == b
+            case _         => RblBool(false)
+          }
+        case _ => Prim.runtimeError(ctxt, "arithmetic exception")
+      }
+  }
+
+  object fxNe extends Prim {
+    override val name: String = "fx!="
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+      checkFixnum(ctxt, 0, ctxt.argvec.value) match {
+        case a: Fixnum =>
+          checkFixnum(ctxt, 1, ctxt.argvec.value) match {
+            case b: Fixnum => a != b
+            case _         => RblBool(false)
+          }
+        case _ => Prim.runtimeError(ctxt, "arithmetic exception")
+      }
+  }
+
   object fxMin extends Prim {
     override val name: String = "fx-min"
     override val minArgs: Int = 1
