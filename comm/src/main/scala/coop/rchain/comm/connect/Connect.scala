@@ -1,4 +1,4 @@
-package coop.rchain.node.connect
+package coop.rchain.comm.connect
 
 import coop.rchain.p2p.effects._
 
@@ -132,6 +132,7 @@ object Connect {
         .fold(Log[F].error("Upstream not available").as(notHandled)) { usmsg =>
           usmsg.typeUrl match {
             // TODO interpolate this string to check if class exists
+
             case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
               handlePacket[F](sender, toPacket(proto).toOption)
 

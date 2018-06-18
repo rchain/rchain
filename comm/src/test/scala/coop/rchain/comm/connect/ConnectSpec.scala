@@ -1,4 +1,4 @@
-package coop.rchain.node.connect
+package coop.rchain.comm.connect
 
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._

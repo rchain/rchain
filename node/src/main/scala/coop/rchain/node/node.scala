@@ -29,7 +29,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
-import coop.rchain.node.connect.Connect
+import coop.rchain.comm.connect.Connect
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}

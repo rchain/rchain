@@ -1,4 +1,4 @@
-package coop.rchain.node.connect
+package coop.rchain.comm.connect
 
 import org.scalatest._
 import com.google.common.io.BaseEncoding
