@@ -76,7 +76,7 @@ object BlockAPI {
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
-        faultTolerance = normalizedFaultTolerance + initialFault,
+        faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
       )
