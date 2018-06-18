@@ -13,7 +13,7 @@ case "$SUBPROJECT" in "rosette")
 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate coverage test coverageReport
 
-    for sub in casper crypto comm rholang roscala node rspace
+    for sub in casper crypto comm rholang roscala node rspace shared
     do
         (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
     done
