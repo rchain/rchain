@@ -88,11 +88,13 @@ trait HistoryActionsTests
                     gnat.wks.head.continuation,
                     gnat.wks.head.persist)
 
-      history.lookup(space.store.trieStore, channelsHash) shouldBe None
+      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
       space.getCheckpoint().root shouldBe nodeHash
 
-      history.lookup(space.store.trieStore, channelsHash).value shouldBe gnat
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash)
+        .value shouldBe gnat
     }
 
   "consume twice then getCheckpoint" should "persist the expected values in the TrieStore" in
@@ -129,15 +131,19 @@ trait HistoryActionsTests
                     gnat2.wks.head.continuation,
                     gnat2.wks.head.persist)
 
-      history.lookup(space.store.trieStore, channelsHash1) shouldBe None
+      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1) shouldBe None
 
-      history.lookup(space.store.trieStore, channelsHash2) shouldBe None
+      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe None
 
       val _ = space.getCheckpoint()
 
-      history.lookup(space.store.trieStore, channelsHash1).value shouldBe gnat1
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash1)
+        .value shouldBe gnat1
 
-      history.lookup(space.store.trieStore, channelsHash2).value shouldBe gnat2
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+        .value shouldBe gnat2
     }
 
   "produce a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
@@ -158,12 +164,12 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
 
-        history.lookup(space.store.trieStore, channelHashes) shouldBe None
+        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
         val _ = space.getCheckpoint()
 
         history
-          .lookup(space.store.trieStore, channelHashes)
+          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
           .value should contain theSameElementsAs gnats
       }
   }
@@ -184,12 +190,12 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
 
-        history.lookup(space.store.trieStore, channelHashes) shouldBe None
+        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
         val _ = space.getCheckpoint()
 
         history
-          .lookup(space.store.trieStore, channelHashes)
+          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
           .value should contain theSameElementsAs gnats
       }
     }
@@ -207,12 +213,12 @@ trait HistoryActionsTests
 
       r2 shouldBe defined
 
-      history.lookup(space.store.trieStore, channelsHash) shouldBe None
+      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
       space.getCheckpoint().root shouldBe Blake2b256Hash.fromHex(
         "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
 
-      history.lookup(space.store.trieStore, channelsHash) shouldBe None
+      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
     }
 
   "getCheckpoint, consume, reset" should "result in an empty store" in

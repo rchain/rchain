@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import coop.rchain.rspace.history.{ITrieStore, Leaf, Node, Skip, Trie}
+import coop.rchain.rspace.history.{Branch, ITrieStore, Leaf, Node, Skip, Trie}
 import coop.rchain.rspace.util.ignore
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
@@ -48,7 +48,7 @@ package object test {
 
   def offset(d: Int) = ("   " * d)
 
-  def printTree[T, K, V](store: ITrieStore[T, K, V]): Unit =
+  def printTree[T, K, V](store: ITrieStore[T, K, V], branch: Branch = Branch.master): Unit =
     store.withTxn(store.createTxnRead()) { txn =>
       def printBranch(d: Int, t: Trie[K, V]): Unit =
         t match {
@@ -66,7 +66,7 @@ package object test {
             println(offset(d), "skip", affix, "#", p.hash)
             printBranch(d + 1, n)
         }
-      val root = store.getRoot(txn)
+      val root = store.getRoot(txn, branch)
       println("---------------------")
       println("root#", root)
       val rootNode = store.get(txn, root.get).get

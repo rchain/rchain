@@ -108,7 +108,7 @@ object CollectionNormalizeMatcher {
     }
 
     def foldMatchMap(listProc: List[AbsynKeyValuePair]): M[CollectVisitOutputs] = {
-      val init = (Vector[KeyValuePair](), input.knownFree, BitSet(), false)
+      val init = (Vector[(Par, Par)](), input.knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
           e match {
@@ -121,7 +121,7 @@ object CollectionNormalizeMatcher {
                               e.proc_2,
                               ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree))
               } yield
-                (Vector(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
+                (Vector((keyResult.par, valResult.par)) ++ acc._1,
                  valResult.knownFree,
                  acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
                  acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed)
@@ -129,7 +129,7 @@ object CollectionNormalizeMatcher {
         }
         .map { folded =>
           val resultKnownFree = folded._2
-          CollectVisitOutputs(EMap(folded._1.reverse, folded._3, folded._4), resultKnownFree)
+          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3), resultKnownFree)
         }
     }
 

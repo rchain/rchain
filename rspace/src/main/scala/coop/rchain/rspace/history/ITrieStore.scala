@@ -16,9 +16,9 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
-  private[rspace] def getRoot(txn: T): Option[Blake2b256Hash]
+  private[rspace] def getRoot(txn: T, branch: Branch): Option[Blake2b256Hash]
 
-  private[rspace] def putRoot(txn: T, hash: Blake2b256Hash): Unit
+  private[rspace] def putRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit
 
   private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit
 

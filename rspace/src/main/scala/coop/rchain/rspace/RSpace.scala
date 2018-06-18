@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Leaf
+import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 
@@ -13,12 +13,13 @@ import scala.concurrent.SyncVar
 import coop.rchain.shared.SyncVarOps._
 import scala.util.Random
 
-class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
-                                                        serializeC: Serialize[C],
-                                                        serializeP: Serialize[P],
-                                                        serializeA: Serialize[A],
-                                                        serializeK: Serialize[K])
-    extends ISpace[C, P, A, K] {
+class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
+    implicit
+    serializeC: Serialize[C],
+    serializeP: Serialize[P],
+    serializeA: Serialize[A],
+    serializeK: Serialize[K]
+) extends ISpace[C, P, A, K] {
 
   private val logger: Logger = Logger[this.type]
 
@@ -324,11 +325,26 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
   def reset(hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.putRoot(txn, hash)
+      store.trieStore.putRoot(txn, branch, hash)
       val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }
 
   def close(): Unit = store.close()
+}
+
+object RSpace {
+
+  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): RSpace[C, P, A, K] = {
+
+    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
+
+    new RSpace[C, P, A, K](mainStore, branch)
+  }
 }

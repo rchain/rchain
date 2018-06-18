@@ -1,6 +1,6 @@
 package coop.rchain.rholang.build
 
-import coop.rchain.rholang.interpreter.RholangCLI
+import coop.rchain.rholang.interpreter.Interpreter
 import coop.rchain.models.Par
 
 import java.io.{File, FileInputStream, FileReader}
@@ -13,7 +13,7 @@ object CompiledRholangSource {
   def fromSourceFile(file: File): Either[Throwable, Par] = {
     val reader = new FileReader(file)
 
-    RholangCLI.buildNormalizedTerm(reader).runAttempt
+    Interpreter.buildNormalizedTerm(reader).runAttempt
   }
 
   def fromProtoFile(path: String): Par = {

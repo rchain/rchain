@@ -5,9 +5,7 @@ import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
 
 //locallyFree is of type Coeval to make use of memoization
-case class ParSet private (ps: SortedParHashSet,
-                           connectiveUsed: Boolean,
-                           locallyFree: Coeval[BitSet]) {
+case class ParSet(ps: SortedParHashSet, connectiveUsed: Boolean, locallyFree: Coeval[BitSet]) {
 
   override def equals(o: scala.Any): Boolean = o match {
     case parSet: ParSet =>
