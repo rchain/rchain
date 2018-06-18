@@ -209,7 +209,7 @@ message TupleExpr {
 
 // The OT_ prefix avoids conflicts with various Rosette #define macros
 enum ObType {
-    OT_ACTOR = 0;
+    OT_NOT_SET = 0;
     OT_BLOCK_EXPR = 1;
     OT_CHAR = 2;
     OT_CODE = 3;
@@ -253,6 +253,7 @@ enum ObType {
     OT_SYSVAL = 41;
     OT_CONST_PATTERN = 42;
     OT_RBL_TABLE = 43;
+    OT_ACTOR = 44;
     OT_UNKNOWN = 999;
 }
 
@@ -262,6 +263,7 @@ message Object {
     uint64 meta_id = 3;
     uint64 parent_id = 4;
     bool looped = 5;
+    bool reference = 6;
 
     // One and only one of these should be populated. These contain information specific to the
     // Object type.

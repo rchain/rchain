@@ -2,9 +2,13 @@ package coop.rchain.casper
 
 import cats.Id
 import cats.implicits._
-import coop.rchain.casper.protocol.BlockMessage
+import com.google.protobuf.ByteString
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.comm.transport.CommMessages.{packet, PacketMessage}
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -143,14 +147,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys = (0 until 3).map(i => ProtoUtil.basicDeploy(i))
 
     val Some(block1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val signedBlock1 = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val signedBlock1 = ProtoUtil.signBlock(block1.withSeqNum(0), validatorKeys.head)
 
     nodes(0).casperEff.addBlock(signedBlock1)
     nodes(1).receive()
     nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
 
     val Some(block2) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
-    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+    val signedBlock2 = ProtoUtil.signBlock(block2.withSeqNum(1), validatorKeys.head)
 
     nodes(0).casperEff.addBlock(signedBlock2)
     nodes(1).receive() //receives block2
@@ -182,15 +186,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.casperEff.contains(signedBlock1) should be(true)
     node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
   }
-  it should "not ignore equivocation blocks that are missing parents of proper nodes" in {
+
+  // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" in {
     val nodes   = HashSetCasperTestNode.network(3, genesis)
     val deploys = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
 
     // Creates a pair that constitutes equivocation blocks
     val Some(block1)      = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val signedBlock1      = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val signedBlock1      = ProtoUtil.signBlock(block1.withSeqNum(0), validatorKeys.head)
     val Some(block1Prime) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
-    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime, validatorKeys.head)
+    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime.withSeqNum(0), validatorKeys.head)
 
     nodes(1).casperEff.addBlock(signedBlock1)
     nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
@@ -206,9 +212,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
 
     val Some(block2) = nodes(1).casperEff.deploy(deploys(2)) *> nodes(1).casperEff.createBlock
-    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+    val signedBlock2 = ProtoUtil.signBlock(block2.withSeqNum(0), validatorKeys(1))
     val Some(block3) = nodes(2).casperEff.deploy(deploys(3)) *> nodes(2).casperEff.createBlock
-    val signedBlock3 = ProtoUtil.signBlock(block3, validatorKeys.head)
+    val signedBlock3 = ProtoUtil.signBlock(block3.withSeqNum(0), validatorKeys(2))
 
     nodes(2).casperEff.addBlock(signedBlock3)
     nodes(1).casperEff.addBlock(signedBlock2)
@@ -221,7 +227,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
 
     val Some(block4) = nodes(1).casperEff.deploy(deploys(4)) *> nodes(1).casperEff.createBlock
-    val signedBlock4 = ProtoUtil.signBlock(block4, validatorKeys.head)
+    val signedBlock4 = ProtoUtil.signBlock(block4.withSeqNum(1), validatorKeys(1))
 
     nodes(1).casperEff.addBlock(signedBlock4)
 
@@ -230,6 +236,43 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
   }
 
+  it should "prepare to slash an block that includes a invalid block pointer" in {
+    val nodes   = HashSetCasperTestNode.network(2, genesis)
+    val deploys = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
+
+    val Some(invalidBlock) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val signedInvalidBlock = ProtoUtil.signBlock(invalidBlock.withSeqNum(-2), validatorKeys.head) // Invalid seq num
+
+    val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
+    val postStateHash = Blake2b256.hash(postState.toByteArray)
+    val header = Header()
+      .withPostStateHash(ByteString.copyFrom(postStateHash))
+      .withParentsHashList(Seq(signedInvalidBlock.blockHash))
+    val blockHash = Blake2b256.hash(header.toByteArray)
+    val body      = Body().withPostState(postState).withNewCode(deploys)
+    val serializedJustifications =
+      Seq(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
+    val serializedBlockHash = ByteString.copyFrom(blockHash)
+    val blockThatPointsToInvalidBlock = BlockMessage(serializedBlockHash,
+                                                     Some(header),
+                                                     Some(body),
+                                                     serializedJustifications,
+                                                     seqNum = 0)
+    val signedBlockThatPointsToInvalidBlock =
+      ProtoUtil.signBlock(blockThatPointsToInvalidBlock, validatorKeys(1))
+
+    nodes(1).casperEff.addBlock(signedBlockThatPointsToInvalidBlock)
+    nodes(0).transportLayerEff
+      .msgQueues(nodes(0).local)
+      .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
+    val signedInvalidBlockPacketMessage =
+      PacketMessage(packet(nodes(1).local, signedInvalidBlock.toByteString))
+    nodes(0).transportLayerEff.send(signedInvalidBlockPacketMessage, nodes(1).local)
+    nodes(1).receive() // receives signedBlockThatPointsToInvalidBlock; attempts to add both blocks
+
+    nodes(1).logEff.warns.count(_ startsWith "CASPER: Ignoring block ") should be(1)
+    nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
+  }
 }
 
 object HashSetCasperTest {

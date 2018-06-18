@@ -3,6 +3,7 @@ package coop.rchain.casper.api
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.{BlockDag, MultiParentCasper}
 import coop.rchain.casper.protocol._
@@ -60,7 +61,8 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
             ProtoUtil.stringToByteString(secondHashString)  -> secondBlock
           ),
           HashMap.empty[BlockHash, HashSet[BlockHash]],
-          HashMap.empty[Validator, BlockHash],
+          LatestMessages.empty,
+          HashMap.empty[Validator, LatestMessages],
           0,
           HashMap.empty[Validator, Int]
         ).pure[F]

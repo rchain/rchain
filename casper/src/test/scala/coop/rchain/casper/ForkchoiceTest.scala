@@ -19,15 +19,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[BlockDag, A]
-  val initState =
-    BlockDag(
-      HashMap.empty[Int, BlockMessage],
-      HashMap.empty[BlockHash, BlockMessage],
-      HashMap.empty[BlockHash, HashSet[BlockHash]],
-      HashMap.empty[Validator, BlockHash],
-      0,
-      HashMap.empty[Validator, Int]
-    )
+  val initState = BlockDag()
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in {

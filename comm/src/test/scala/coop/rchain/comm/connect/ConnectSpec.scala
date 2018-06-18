@@ -1,20 +1,20 @@
-package coop.rchain.p2p
+package coop.rchain.comm.connect
 
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, Network.defaultTimeout
+import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.comm.discovery._
-import EffectsTestInstances._
+import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared._
+import Connect.defaultTimeout
 
-class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
-
-  val encoder = BaseEncoding.base16().lowerCase()
+class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   val src: PeerNode    = peerNode("src", 30300)
   val remote: PeerNode = peerNode("remote", 30301)
@@ -39,7 +39,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         // given
         transportLayerEff.setResponses(kp(alwaysSuccess))
         // when
-        Network.connect[Effect](remote, defaultTimeout)
+        Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
         val ProtocolHandshakeMessage(_) = transportLayerEff.requests(0)
@@ -48,7 +48,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         // given
         transportLayerEff.setResponses(kp(alwaysSuccess))
         // when
-        Network.connect[Effect](remote, defaultTimeout)
+        Connect.connect[Effect](remote, defaultTimeout)
         // then
         nodeDiscoveryEff.nodes should not be empty
       }
