@@ -8,7 +8,7 @@ import cats._
 import cats.data._
 import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.{MultiParentCasper}
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -32,7 +32,7 @@ import coop.rchain.rholang.interpreter.Interpreter._
 object GrpcServer {
 
   def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
+      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable: SafetyOracle](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
@@ -50,7 +50,7 @@ object GrpcServer {
       _ <- Log[F].info("gRPC server started, listening on ")
     } yield ()
 
-  class DeployImpl[F[_]: Monad: MultiParentCasper: Futurable]
+  class DeployImpl[F[_]: Monad: MultiParentCasper: Futurable: SafetyOracle]
       extends DeployServiceGrpc.DeployService {
     override def doDeploy(d: DeployString): Future[DeployServiceResponse] =
       InterpreterUtil.mkTerm(d.term) match {
