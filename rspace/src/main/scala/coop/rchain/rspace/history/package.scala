@@ -155,8 +155,8 @@ package object history {
       case ((lastHash, node), (offset, Node(pb))) if pb.children.isEmpty =>
         val b = ByteVector(offset)
         val skip = node match {
-          case Leaf(_, _)           => Skip(b, LeafPointer(lastHash))
-          case Node(_)              => Skip(b, NodePointer(lastHash))
+          case _: Leaf[K, V]        => Skip(b, LeafPointer(lastHash))
+          case _: Node              => Skip(b, NodePointer(lastHash))
           case Skip(affix, pointer) => Skip(b ++ affix, pointer)
         }
         (Trie.hash[K, V](skip), skip)
@@ -165,7 +165,7 @@ package object history {
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
       //point at node from skip
-      case ((lh, Node(_)), (_, Skip(oldAffix, _))) =>
+      case ((lh, _: Node), (_, Skip(oldAffix, _))) =>
         val ns = Skip(oldAffix, NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
     }
