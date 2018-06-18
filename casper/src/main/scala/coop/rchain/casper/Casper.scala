@@ -282,9 +282,7 @@ sealed abstract class MultiParentCasperInstances {
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
-        if (equivocationsTracker.isEmpty) {
-          Applicative[F].pure(Right(Valid))
-        } else {
+        Capture[F].capture {
           val neglectedEquivocationDetected =
             equivocationsTracker.foldLeft(false) {
               case (acc, equivocationRecord) =>
@@ -307,9 +305,9 @@ sealed abstract class MultiParentCasperInstances {
 
             }
           if (neglectedEquivocationDetected) {
-            Applicative[F].pure(Left(NeglectedEquivocation))
+            Left(NeglectedEquivocation)
           } else {
-            Applicative[F].pure(Right(Valid))
+            Right(Valid)
           }
         }
 
