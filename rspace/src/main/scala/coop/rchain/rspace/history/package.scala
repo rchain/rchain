@@ -163,10 +163,6 @@ package object history {
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      //two skips in a chain can be collapsed
-      case ((_, Skip(_, ptr)), (_, Skip(oldAffix, _))) =>
-        val ns = Skip(oldAffix.drop(1), ptr)
-        (Trie.hash[K, V](ns), ns)
       //point at node from skip
       case ((lh, Node(_)), (_, Skip(oldAffix, _))) =>
         val ns = Skip(oldAffix, NodePointer(lh))
