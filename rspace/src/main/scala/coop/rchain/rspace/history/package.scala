@@ -207,8 +207,6 @@ package object history {
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
             case existingLeaf @ Leaf(ek, _) if key != ek =>
-              val pathLength = countPathLength(parents)
-
               val wholePathLength = encodedKeyNew.size
 
               val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
@@ -219,31 +217,22 @@ package object history {
               val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
 
               val pathLeft = wholePathLength - sharedPrefixLength
-              val hd = if (pathLeft > 1) {
+              val update = if (pathLeft > 1) {
+                val pathLength  = countPathLength(parents)
                 val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
-                val skipNew     = Skip(commonAffix, LeafPointer(newLeafHash))
-
-                val skipExisting = Skip(commonAffix, LeafPointer(Trie.hash[K, V](existingLeaf)))
-
-                val skipNewHash      = Trie.hash(skipNew)(codecK, codecV)
-                val skipExistingHash = Trie.hash(skipExisting)(codecK, codecV)
-
-                store.put(txn, skipNewHash, skipNew)
-                store.put(txn, skipExistingHash, skipExisting)
-                Node(
-                  PointerBlock
-                    .create()
-                    .updated(List((newLeafIndex, NodePointer(skipNewHash)),
-                                  (existingLeafIndex, NodePointer(skipExistingHash))))
-                )
+                val skipExistingPtr =
+                  setupSkipNode(store, txn, LeafPointer(newLeafHash), commonAffix)
+                val skipNewPtr =
+                  setupSkipNode(store, txn, LeafPointer(Trie.hash[K, V](existingLeaf)), commonAffix)
+                List((newLeafIndex, skipNewPtr), (existingLeafIndex, skipExistingPtr))
               } else {
-                Node(
-                  PointerBlock
-                    .create()
-                    .updated(List((newLeafIndex, LeafPointer(newLeafHash)),
-                                  (existingLeafIndex, LeafPointer(Trie.hash[K, V](existingLeaf)))))
-                )
+                List((newLeafIndex, LeafPointer(newLeafHash)),
+                     (existingLeafIndex, LeafPointer(Trie.hash[K, V](existingLeaf))))
               }
+              val hd = Node(
+                PointerBlock
+                  .create()
+                  .updated(update))
 
               val emptyNode  = Node(PointerBlock.create())
               val emptyNodes = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
@@ -262,7 +251,7 @@ package object history {
               val (hd, tl) = parents match {
                 case (idx, Node(pointerBlock)) +: remaining =>
                   (Node(pointerBlock.updated(List((idx, LeafPointer(newLeafHash))))), remaining)
-                case (idx, Skip(affix, _)) +: remaining =>
+                case (_, Skip(affix, _)) +: remaining =>
                   (Skip(affix, LeafPointer(newLeafHash)), remaining)
                 case Seq() =>
                   throw new InsertException("A leaf had no parents")
@@ -297,7 +286,7 @@ package object history {
             // If the tip is a skip node -> there is no Node for this Leaf.
             // need to shorten this skip and rectify the structure
             case Skip(affix, ptr) =>
-              val pathLength = countPathLength(parents)
+              val pathLength          = countPathLength(parents)
               val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
               val pathLeft            = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
               val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
@@ -306,7 +295,7 @@ package object history {
               val newSuffix           = subPath.splitAt(sharedSubpathLength)._2
 
               val pn = (oldSuffix.size, newSuffix.size) match {
-                case (0, 0) => throw new RuntimeException("corrupt structure")
+                case (0, 0) => throw new InsertException("corrupt structure")
                 case (ol, nl) if (ol == nl) && (ol == 1) =>
                   val oldLeafIndex = JByte.toUnsignedInt(oldSuffix(0))
                   val newLeafIndex = JByte.toUnsignedInt(newSuffix(0))
@@ -331,7 +320,7 @@ package object history {
                     PointerBlock
                       .create()
                       .updated(List((oldLeafIndex, oldNode), (newLeafIndex, newNode))))
-                case _ => throw new RuntimeException("is this possible?")
+                case _ => throw new InsertException("corrupt structure")
               }
 
               val pnHash = Trie.hash(pn)(codecK, codecV)
@@ -381,7 +370,7 @@ package object history {
         }
 
       // Otherwise,
-      case (byte, s @ Skip(affix, _)) +: tail =>
+      case (_, Skip(affix, _)) +: tail =>
         (Skip(affix ++ incomingAffix, ptr), tail)
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -455,11 +444,11 @@ package object history {
               // Vector at the given index to `None`.
               case NodePointer(hash) =>
                 store.get(txn, hash) match {
-                  case Some(Node(pb)) =>
+                  case Some(Node(_)) =>
                     propagateTrieUpward(store, txn, otherPointer, ByteVector(otherByte), tail)
                   case Some(Skip(affix, ptr)) =>
                     propagateTrieUpward(store, txn, ptr, ByteVector(otherByte) ++ affix, tail)
-                  case None => throw new DeleteException("corrupt tree")
+                  case _ => throw new DeleteException("corrupt tree")
                 }
               // If the other child is a Leaf, then we must propagate it up the trie.
               case lp: LeafPointer =>
