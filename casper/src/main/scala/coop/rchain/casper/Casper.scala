@@ -106,8 +106,9 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case Valid => reAttemptBuffer
-                case _     => ().pure[F]
+                case Valid                  => reAttemptBuffer
+                case AdmissibleEquivocation => reAttemptBuffer
+                case _                      => ().pure[F]
               }
           estimates <- estimator
           tip       = estimates.head
