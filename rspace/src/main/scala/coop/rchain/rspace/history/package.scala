@@ -165,7 +165,7 @@ package object history {
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
       //point at node from skip
-      case ((lh, Node(_)), (_, Skip(oldAffix, _))) =>
+      case ((lh, _: Node), (_, Skip(oldAffix, _))) =>
         val ns = Skip(oldAffix, NodePointer(lh))
         (Trie.hash[K, V](ns), ns)
     }
