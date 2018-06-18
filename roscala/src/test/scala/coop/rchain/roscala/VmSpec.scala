@@ -639,7 +639,7 @@ class VmSpec extends FlatSpec with Matchers {
       * this use case will go through the `absent` branch of `OpLookUpReg`, and the successful use case should be:
       *
       * (defProc (sbo& Top) (cat x) (+ x 1))
-      * (free [cat] (cat 1)     // this will print out `2`
+      * (free [cat] (cat 1))     // this will print out `2`
       *
       * (free [〈id〉 …] 〈body〉) ⇒ result of 〈body〉
       * The free form informs the compiler that the 〈id〉 are to be treated as free in 〈body〉;
