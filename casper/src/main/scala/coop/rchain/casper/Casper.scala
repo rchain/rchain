@@ -278,6 +278,7 @@ sealed abstract class MultiParentCasperInstances {
         }
       }
 
+      // See EquivocationRecord.scala for summary of algorithm.
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
