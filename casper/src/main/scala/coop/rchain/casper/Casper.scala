@@ -10,12 +10,12 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.AtomicSyncVar
+import coop.rchain.shared.{AtomicSyncVar, Log, Time}
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}

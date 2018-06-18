@@ -11,7 +11,7 @@ import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.p2p.Network.dispatch
+import coop.rchain.comm.connect.Connect.dispatch
 import coop.rchain.comm.transport._
 
 import java.nio.file.Files
