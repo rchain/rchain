@@ -301,7 +301,7 @@ package object history {
               val newSuffix           = subPath.splitAt(sharedSubpathLength)._2
 
               val pn = (oldSuffix.size, newSuffix.size) match {
-                case (0, 0) => throw new InsertException("corrupt structure")
+                case (0, 0) => throw new InsertException("Found empty affixes")
                 case (ol, nl) if (ol == nl) && (ol == 1) =>
                   val oldLeafIndex = JByte.toUnsignedInt(oldSuffix(0))
                   val newLeafIndex = JByte.toUnsignedInt(newSuffix(0))
@@ -326,7 +326,7 @@ package object history {
                     PointerBlock
                       .create()
                       .updated(List((oldLeafIndex, oldNode), (newLeafIndex, newNode))))
-                case _ => throw new InsertException("corrupt structure")
+                case _ => throw new InsertException("Affixes have different lengths")
               }
 
               val pnHash = Trie.hash(pn)(codecK, codecV)
