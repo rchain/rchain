@@ -356,7 +356,7 @@ package object history {
             (Node(pointerBlock.updated(List((byte, nodePtr)))), Seq.empty[(Int, Node)])
           case _: NodePointer =>
             val setPtr =
-              if (incomingAffix.length > 0 || pointerBlock.children.size == 1) {
+              if (incomingAffix.length > 0) {
                 // collapsing a bridging node into a skip node
                 setupSkipNode(store, txn, ptr, incomingAffix)
               } else {
