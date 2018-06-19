@@ -90,7 +90,9 @@ trait HistoryActionsTests
 
       space.getCheckpoint().root shouldBe nodeHash
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash).value shouldBe gnat
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash)
+        .value shouldBe gnat
     }
 
   "consume twice then getCheckpoint" should "persist the expected values in the TrieStore" in
@@ -133,9 +135,13 @@ trait HistoryActionsTests
 
       val _ = space.getCheckpoint()
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1).value shouldBe gnat1
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash1)
+        .value shouldBe gnat1
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2).value shouldBe gnat2
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+        .value shouldBe gnat2
     }
 
   "produce a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {

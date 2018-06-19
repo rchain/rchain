@@ -51,6 +51,7 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+  val apacheLang     = "org.apache.commons" % "commons-lang3" % "3.7"
 
   // format: on
 
