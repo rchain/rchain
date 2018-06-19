@@ -675,6 +675,11 @@ object Reduce {
                 ParSet(basePs.diff(otherPs.sortedPars.toSet),
                        base.connectiveUsed || other.connectiveUsed,
                        locallyFreeUnion(base.locallyFree, other.locallyFree))))
+          case (EMapBody(base @ ParMap(basePs, _, _)), EMapBody(other @ ParMap(otherPs, _, _))) =>
+            val newMap = basePs -- otherPs.keys
+            Applicative[M].pure[Expr](
+              EMapBody(ParMap(newMap))
+            )
           case _ =>
             interpreterErrorM[M].raiseError(
               ReduceError("Error: diff applied to something that wasn't a Set"))
