@@ -4,6 +4,7 @@ import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.protocol.rchain.Packet
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.shared._
 
 trait PacketHandler[F[_]] {
   def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]]

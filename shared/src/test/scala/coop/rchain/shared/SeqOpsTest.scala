@@ -23,7 +23,7 @@ class SeqOpsTest extends FlatSpec with Matchers {
   }
 
   "dropIndex" should "ignore invalid indexes" in {
-    dropIndex(Seq(1, 2, 3), 10) shouldBe Seq(1, 2, 3)
+    an[IndexOutOfBoundsException] shouldBe thrownBy(dropIndex(Seq(1, 2, 3), 10))
   }
 
   "removeFirst" should "remove first element" in {

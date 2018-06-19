@@ -1,6 +1,5 @@
 package coop.rchain.node.effects
 
-import coop.rchain.node.ConsoleIO
 import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._

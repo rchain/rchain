@@ -226,9 +226,6 @@ class InMemoryStore[C, P, A, K](
       }
     }
 
-  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
-    withJoin(txn, channel)(_ => none)
-
   def close(): Unit = ()
 
   private[rspace] def clear(txn: T): Unit =

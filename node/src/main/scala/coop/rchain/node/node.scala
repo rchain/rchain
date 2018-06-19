@@ -27,6 +27,9 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.node.api._
+import coop.rchain.comm.connect.Connect
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -95,12 +98,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       .map("%02x".format(_))
       .mkString
-  }
-
-  implicit class ThrowableOps(th: Throwable) {
-    def containsMessageWith(str: String): Boolean =
-      if (th.getCause == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -277,7 +274,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => p2p.Network.dispatch[Effect](pm)
+        case NotHandled => Connect.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
     }
 
@@ -296,8 +293,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               else
                 conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+                  .toEffect >>= (addr => Connect.connectToBootstrap[Effect](addr)))
+      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect], 0)
           else ().pure[Effect]
       _ <- casperEffect.close()
       _ <- exit0.toEffect

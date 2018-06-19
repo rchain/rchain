@@ -54,9 +54,6 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
-  // Delete?
-  private[rspace] def removeAllJoins(txn: T, channel: C): Unit
-
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   private[rspace] def close(): Unit
