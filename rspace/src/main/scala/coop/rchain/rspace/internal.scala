@@ -93,30 +93,30 @@ object internal {
     def empty[K, V]: MultisetMultiMap[K, V] = new mutable.HashMap[K, Multiset[V]]()
   }
 
-  implicit class RichMultisetMultiMap[K, V](msmm: MultisetMultiMap[K, V]) {
+  implicit class RichMultisetMultiMap[K, V](val value: MultisetMultiMap[K, V]) extends AnyVal {
 
-    def addBinding(key: K, value: V): MultisetMultiMap[K, V] =
-      msmm.get(key) match {
+    def addBinding(k: K, v: V): MultisetMultiMap[K, V] =
+      value.get(k) match {
         case Some(current) =>
-          current.add(value)
-          msmm
+          current.add(v)
+          value
         case None =>
           val ms = HashMultiset.create[V]()
-          ms.add(value)
-          msmm.put(key, ms)
-          msmm
+          ms.add(v)
+          value.put(k, ms)
+          value
       }
 
-    def removeBinding(key: K, value: V): MultisetMultiMap[K, V] =
-      msmm.get(key) match {
+    def removeBinding(k: K, v: V): MultisetMultiMap[K, V] =
+      value.get(k) match {
         case Some(current) =>
-          current.remove(value)
+          current.remove(v)
           if (current.isEmpty) {
-            msmm.remove(key)
+            value.remove(k)
           }
-          msmm
+          value
         case None =>
-          msmm
+          value
       }
   }
 }
