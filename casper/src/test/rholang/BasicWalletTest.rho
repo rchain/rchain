@@ -1,0 +1,125 @@
+//scalapackage coop.rchain.rholang.wallet
+
+//requires BasicWallet, MakeMint, TestSet, LinkedList
+@"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
+@"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
+@"sig0"!("facc9e70f74c118fab7680f8ab7619198571bb7ebdcc80cc527982a358194858157c5f3dd422bf68cc9dc6a3b7b2b99b69ec9e0ebf54f26d57bda1d4d5c5a70a") |
+@"sig1"!("10bbfbd09e6490bac5621a994b0bb2ff3d2437d05f315d397c14765c9a4c31a598ba267213646bcfd2615e51f36c6c0c8c315ffa7565b654015d09a92a46d507") |
+@"invalidSig"!("b8cea97ee7afdab7eb6ebabe8fde9ca8f9dbd3b877e8fe6b6cfd4bcef5cfdcfccec9fd8de9e39df4b6f5a2f7b6d9da8cffef48fab85faddbaab8ebca4af4ab07") |
+
+contract @"deposit"(@wallet, @amount, @otherPurse, return) = {
+  new deposit in {
+    contract deposit(return) = {
+      @[wallet, "deposit"]!(amount, otherPurse, *return)
+    } |
+    return!(*deposit)
+  }
+} |
+
+contract @"withdraw"(@wallet, @amount, @nonce, @sig, return) = {
+  new withdraw in {
+    contract withdraw(return) = {
+      //send to known channel so that I can make the right signature
+      @[wallet, "withdraw"]!(amount, nonce, sig, "myWithdraw") |
+      for(@result <- @"myWithdraw"){ return!(result) }
+    } |
+    return!(*withdraw)
+  }
+} |
+
+contract @"getBalance"(@wallet, return) = {
+  new getBalance in {
+    contract getBalance(return) = {
+      @[wallet, "getBalance"]!(*return)
+    } |
+    return!(*getBalance)
+  }
+} |
+
+contract @"getNonce"(@wallet, return) = {
+  new getNonce in {
+    contract getNonce(return) = {
+      @[wallet, "getNonce"]!(*return)
+    } |
+    return!(*getNonce)
+  }
+} |
+
+@"MakeMint"!("mint") | for(@mint <- @"mint") {
+  @[mint, "makePurse"]!(100, "purse") |
+  @[mint, "makePurse"]!(30, "otherPurse") |
+  for(
+    @purse <- @"purse"; 
+    @otherPurse <- @"otherPurse"; 
+    @pk <- @"pk";
+    @sig0 <- @"sig0";
+    @sig1 <- @"sig1";
+    @invalidSig <- @"invalidSig"
+  ) {
+    contract @"newWallet"(@algorithm, return) = {
+      new makeWallet in {
+        contract makeWallet(return) = {
+          @"BasicWallet"!(purse, algorithm, pk, *return)
+        } |
+        return!(*makeWallet)
+      }
+    } |
+  
+  
+    @"newWallet"!("fake21564", "badAlgorithm") |
+    @"TestSet"!(
+      "A wallet should not be created if the signature algorithm is unknown.",
+      [
+        ["badAlgorithm", []]
+      ]
+    ) |
+  
+    @"BasicWallet"!(purse, "ed25519", pk, "wallet") |
+    for(@[wallet] <- @"wallet") {
+        @"wallet"!([wallet]) |
+        @"getBalance"!(wallet, "walletBalance") |
+        @"deposit"!(wallet, 300, otherPurse, "overdrawDep") |
+        @"deposit"!(wallet, 30, otherPurse, "depWallet") |
+        @"withdraw"!(wallet, 60, 0, invalidSig, "failWithdraw") |
+        @"withdraw"!(wallet, 60, 0, sig0, "withdraw0Nonce") |
+        @"withdraw"!(wallet, 10, 1, sig1, "withdraw1Nonce") |
+      @"TestSet"!(
+        "Wallet deposit should work as expected.",
+        [
+          ["walletBalance", 100],
+          ["overdrawDep", false],
+          ["depWallet", true],
+          ["walletBalance", 130]
+        ]
+      ) |
+      
+      @["TestSet", "after"]!("Wallet deposit should work as expected.", {
+        @"TestSet"!(
+          "Wallet withdraw should not accept invalid signatures or nonces.",
+          [
+            ["failWithdraw", []], //bad signature
+            ["withdraw1Nonce", []] //nonce out of order
+          ]
+        ) |
+        
+        @["TestSet", "after"]!("Wallet withdraw should not accept invalid signatures or nonces.", {
+          for(doWithdraw <- @"withdraw0Nonce") {
+            @"withdraw0Nonce"!(*doWithdraw) |
+            doWithdraw!("wPurse") | for(@[wPurse] <- @"wPurse") {
+              @"getBalance"!(wPurse, "purseBalance") |
+              @"getNonce"!(wallet, "walletNonce") |
+              @"TestSet"!(
+                "Wallet withdraw should work as expected.",
+                [
+                  ["purseBalance", 60],
+                  ["walletBalance", 70],
+                  ["walletNonce", 0]
+                ]
+              )
+            }
+          }
+        })
+      })
+    }
+  }
+}

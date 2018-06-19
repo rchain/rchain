@@ -5,8 +5,8 @@ import cats.implicits._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.casper.genesis.contracts.LinkedList
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.collection.LinkedList
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
