@@ -28,6 +28,8 @@ object Tuple {
   def apply(value: Array[Ob]): Tuple = new Tuple(value)
 
   def apply(obs: Ob*): Tuple = new Tuple(obs.toArray[Ob])
+
+  def apply(a: Int, b: Ob): Tuple = Tuple(Array.fill(a)(b))
 }
 
-object Nil extends Tuple(null)
+object Nil extends Tuple(Array.empty[Ob])
