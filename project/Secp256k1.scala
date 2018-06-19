@@ -32,8 +32,10 @@ object Secp256k1 {
     val binariesSourceFolder = baseDir / "secp256k1" / ".libs"
     val resourcesFolder = baseDir / "src" / "main" / "resources"
     val makeResourcesFolderCmd = s"mkdir ${resourcesFolder.getAbsolutePath}"
+    val mkResourcesFolderProcess = Process(makeResourcesFolderCmd)
     val copyBinariesCmd: String = s"cp libsecp256k1.so ${resourcesFolder.getAbsolutePath}/"
-    val status = autogenProcess #&& configureProcess #&& makeProcess #&& Process(makeResourcesFolderCmd) #&& Process(copyBinariesCmd, binariesSourceFolder.getAbsoluteFile) !
+    val copyBinariesProcess = Process(copyBinariesCmd, binariesSourceFolder.getAbsoluteFile)
+    val status = autogenProcess #&& configureProcess #&& makeProcess #&& mkResourcesFolderProcess  #&& copyBinariesProcess !
 
     if (status != 0) {
       cleanProject(baseDir / "secp256k1", resourcesFolder)
@@ -43,7 +45,6 @@ object Secp256k1 {
   }
 
   lazy val secp256k1Settings = inConfig(Secp256k1Config)(Defaults.configSettings ++ Seq(
-    javaSource := baseDirectory.value / "secp256k1" / "src" / "java",
     secp256kOutputDir := baseDirectory.value / "src" / "main" / "resources",
     clean := cleanProject(baseDirectory.value / "secp256k1", Seq(secp256kOutputDir.value, baseDirectory.value / "secp256k1"/ ".libs"):_*),
     generate := secp256k1Generate(baseDirectory.value)
