@@ -282,7 +282,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def getCheckpoint(): Blake2b256Hash = {
+  def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)

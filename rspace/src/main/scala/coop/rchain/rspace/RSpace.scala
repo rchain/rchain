@@ -316,8 +316,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
       }
     }
 
-  def getCheckpoint(): Checkpoint = {
-    val root   = store.getCheckpoint()
+  def createCheckpoint(): Checkpoint = {
+    val root   = store.createCheckpoint()
     val events = eventLog.take()
     eventLog.put(Seq.empty)
     Checkpoint(root, events)
