@@ -11,8 +11,6 @@ import org.scalatest.{FlatSpec, Matchers}
 class VmSpec extends FlatSpec with Matchers {
 
   val globalEnv = new GlobalEnv()
-  // this is defined in BigBang.cc#InitBuiltinObs
-  val topMeta = Meta.empty
 
   /**
     * Add key-value pair to the parent (sbo) of all `Fixnum`s
