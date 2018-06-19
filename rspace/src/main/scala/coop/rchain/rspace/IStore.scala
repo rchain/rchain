@@ -68,7 +68,8 @@ trait IStore[C, P, A, K] {
 
   val trieBranch: Branch
 
-  private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
+  private[rspace] def collapseTrieUpdates(
+      in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)
       .flatMap {
         case (_, value) =>
