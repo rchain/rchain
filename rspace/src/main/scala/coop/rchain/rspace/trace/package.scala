@@ -1,10 +1,12 @@
 package coop.rchain.rspace
 
-import scala.collection.immutable.Seq
+import coop.rchain.rspace.internal.MultisetMultiMap
+
+import scala.collection.immutable
 
 package object trace {
 
-  type Log = Seq[Event]
+  type Log = immutable.Seq[Event]
 
-  type ReplayData = Map[IOEvent, COMM]
+  type ReplayData = MultisetMultiMap[IOEvent, COMM]
 }

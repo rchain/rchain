@@ -3,7 +3,29 @@ package coop.rchain.roscala.ob
 import scala.collection.mutable
 
 case class RblFloat(value: Double) extends Ob {
+  override def toString: String = s"Float($value)"
+
   def +(that: RblFloat) = RblFloat(this.value + that.value)
+
+  def -(that: RblFloat) = RblFloat(this.value - that.value)
+
+  def unary_-() = RblFloat(-this.value)
+
+  def *(that: RblFloat) = RblFloat(this.value * that.value)
+
+  def /(that: RblFloat) = RblFloat(this.value / that.value)
+
+  def <(that: RblFloat) = RblBool(this.value < that.value)
+
+  def <=(that: RblFloat) = RblBool(this.value <= that.value)
+
+  def >(that: RblFloat) = RblBool(this.value > that.value)
+
+  def >=(that: RblFloat) = RblBool(this.value >= that.value)
+
+  def ==(that: RblFloat) = RblBool(this.value == that.value)
+
+  def !=(that: RblFloat) = RblBool(this.value != that.value)
 }
 
 object RblFloat {

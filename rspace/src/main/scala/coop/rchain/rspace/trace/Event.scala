@@ -35,10 +35,11 @@ class Produce private (val hash: Blake2b256Hash) extends IOEvent {
 
   override def toString: String = s"Produce(hash: ${hash.toString})"
 
-  def unapply(arg: Produce): Option[Blake2b256Hash] = Some(arg.hash)
 }
 
 object Produce {
+
+  def unapply(arg: Produce): Option[Blake2b256Hash] = Some(arg.hash)
 
   val length: Int = 32
 
@@ -71,13 +72,13 @@ class Consume private (val hash: Blake2b256Hash) extends IOEvent {
   override def hashCode(): Int = hash.hashCode()
 
   override def toString: String = s"Consume(hash: ${hash.toString})"
-
-  def unapply(arg: Consume): Option[Blake2b256Hash] = Some(arg.hash)
 }
 
 object Consume {
 
   val length: Int = 32
+
+  def unapply(arg: Consume): Option[Blake2b256Hash] = Some(arg.hash)
 
   def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit

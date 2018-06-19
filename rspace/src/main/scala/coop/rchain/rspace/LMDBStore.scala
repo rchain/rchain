@@ -4,13 +4,14 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.SeqOps._
-import coop.rchain.shared.Resources.withResource
+import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Resources.withResource
+import coop.rchain.shared.SeqOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
@@ -256,7 +257,6 @@ class LMDBStore[C, P, A, K] private (
   def close(): Unit = {
     _dbGNATs.close()
     _dbJoins.close()
-    env.close()
   }
 
   def getStoreCounters: StoreCounters =
@@ -286,11 +286,11 @@ class LMDBStore[C, P, A, K] private (
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
-    pruneHistory(trieUpdates).foreach {
+    collapse(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, gnat)
+        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, gnat)
+        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
     withTxn(createTxnRead()) { txn =>
       trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
@@ -332,8 +332,6 @@ object LMDBStore {
     val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
     trieUpdates.put(Seq.empty)
 
-    initialize(context.trieStore, branch)
-
     new LMDBStore[C, P, A, K](context.env,
                               context.path,
                               dbGnats,
@@ -349,6 +347,10 @@ object LMDBStore {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+    implicit val codecC: Codec[C] = sc.toCodec
+    implicit val codecP: Codec[P] = sp.toCodec
+    implicit val codecA: Codec[A] = sa.toCodec
+    implicit val codecK: Codec[K] = sk.toCodec
 
     val flags =
       if (noTls)
@@ -356,8 +358,11 @@ object LMDBStore {
       else
         List.empty[EnvFlags]
 
-    val env = Context.create[C, P, A, K](path, mapSize, flags)
+    val env    = Context.create[C, P, A, K](path, mapSize, flags)
+    val branch = Branch.MASTER
 
-    create(env, Branch.master)
+    initialize(env.trieStore, branch)
+
+    create(env, branch)
   }
 }

@@ -276,7 +276,8 @@ lazy val rspace = (project in file("rspace"))
       catsCore,
       scodecCore,
       scodecCats,
-      scodecBits
+      scodecBits,
+      guava
     ),
     /* Tutorial */
     tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
