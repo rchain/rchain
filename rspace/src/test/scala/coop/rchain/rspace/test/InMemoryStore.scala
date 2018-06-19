@@ -4,7 +4,7 @@ import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.{dropIndex, removeFirst}
+import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.BitVector
@@ -226,9 +226,6 @@ class InMemoryStore[C, P, A, K](
       }
     }
 
-  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
-    withJoin(txn, channel)(_ => none)
-
   def close(): Unit = ()
 
   private[rspace] def clear(txn: T): Unit =
@@ -252,7 +249,7 @@ class InMemoryStore[C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+  def createCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 
   private[rspace] def bulkInsert(txn: Transaction[StateType],
                                  gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =

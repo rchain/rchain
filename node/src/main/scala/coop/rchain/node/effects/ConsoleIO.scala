@@ -1,4 +1,4 @@
-package coop.rchain.node
+package coop.rchain.node.effects
 
 import coop.rchain.catscontrib._, Catscontrib._
 import cats._, cats.data._, cats.implicits._

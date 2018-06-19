@@ -22,7 +22,7 @@ class RuntimeManager private (runtime: SyncVar[Runtime]) {
     val active = getActive(hash)
     val error  = eval(terms, active)
     val newHash = error.fold[Either[Throwable, ByteString]](
-      Right(ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)))(Left(_))
+      Right(ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)))(Left(_))
     runtime.put(active)
     newHash
   }
@@ -63,7 +63,7 @@ object RuntimeManager {
 
   def fromRuntime(runtime: SyncVar[Runtime]): (StateHash, RuntimeManager) = {
     val active = runtime.take()
-    val hash   = ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)
+    val hash   = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     runtime.put(active)
 
     (hash, new RuntimeManager(runtime))

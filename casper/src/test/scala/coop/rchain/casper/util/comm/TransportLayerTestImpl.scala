@@ -7,7 +7,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
 import coop.rchain.p2p.effects._
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.metrics.Metrics
 
 import scala.concurrent.duration.Duration
