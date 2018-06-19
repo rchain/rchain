@@ -44,7 +44,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     withTestSpaces { (space, replaySpace) =>
       val ch1 = "ch1"
 
-      val initialCheckpoint = space.getCheckpoint()
+      val initialCheckpoint = space.createCheckpoint()
       replaySpace.rig(initialCheckpoint.root, initialCheckpoint.log)
 
       replaySpace.consume(List(ch1), List(Wildcard), "continuation", false)
@@ -61,11 +61,11 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val continuation = "continuation"
       val datum        = "datum1"
 
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val resultConsume = space.consume(channels, patterns, continuation, false)
       val resultProduce = space.produce(channels(0), datum, false)
-      val rigPont       = space.getCheckpoint()
+      val rigPont       = space.createCheckpoint()
 
       resultConsume shouldBe None
       resultProduce shouldBe defined
@@ -74,7 +74,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       val replayResultConsume = replaySpace.consume(channels, patterns, continuation, false)
       val replayResultProduce = replaySpace.produce(channels(0), datum, false)
-      val finalPoint          = space.getCheckpoint()
+      val finalPoint          = space.createCheckpoint()
 
       replayResultConsume shouldBe None
       replayResultProduce shouldBe resultProduce
@@ -84,7 +84,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking a datum from 100 waiting datums" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -102,7 +102,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuation = "continuation1",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -120,7 +120,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuation = "continuation1",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResult shouldBe result
       finalPoint.root shouldBe rigPoint.root
@@ -129,7 +129,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 datums from 100 waiting datums" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -150,7 +150,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -171,7 +171,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -180,7 +180,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 datums from 100 persistent waiting datums" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -201,7 +201,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -222,7 +222,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -231,7 +231,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking a continuation from 100 waiting continuations" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -249,7 +249,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         data = "datum1",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -267,7 +267,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         data = "datum1",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResult shouldBe result
       finalPoint.root shouldBe rigPoint.root
@@ -276,7 +276,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 continuations from 100 waiting continuations" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -297,7 +297,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -318,7 +318,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -327,7 +327,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 continuations from 100 persistent waiting continuations" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -348,7 +348,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -369,7 +369,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -378,7 +378,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Pick 100 continuations from 100 waiting continuations stored at two channels" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val range: Range = 0 until 100
 
@@ -407,7 +407,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = const("datum2"),
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -436,7 +436,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = const("datum2"),
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -445,7 +445,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 datums from 100 waiting datums while doing a bunch of other junk" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       produceMany(
         space,
@@ -481,7 +481,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -519,7 +519,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         continuationCreator = i => s"continuation$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -528,7 +528,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "Picking 100 continuations from 100 persistent waiting continuations while doing a bunch of other junk" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       consumeMany(
         space,
@@ -564,7 +564,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -602,7 +602,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = i => s"datum$i",
         persist = false
       )
-      val finalPoint = replaySpace.getCheckpoint()
+      val finalPoint = replaySpace.createCheckpoint()
 
       replayResults should contain theSameElementsAs results
       finalPoint.root shouldBe rigPoint.root
@@ -611,7 +611,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "consuming" should "correctly remove things from replay data" in withTestSpaces {
     (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val channels = List("ch1")
       val patterns = List[Pattern](Wildcard)
@@ -637,7 +637,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = const(datum),
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 
@@ -656,7 +656,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "producing" should "correctly remove things from replay data" in withTestSpaces {
     (space, replaySpace) =>
-      val emptyPoint = space.getCheckpoint()
+      val emptyPoint = space.createCheckpoint()
 
       val channels = List("ch1")
       val patterns = List[Pattern](Wildcard)
@@ -682,7 +682,7 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         datumCreator = const(datum),
         persist = false
       )
-      val rigPoint = space.getCheckpoint()
+      val rigPoint = space.createCheckpoint()
 
       replaySpace.rig(emptyPoint.root, rigPoint.log)
 

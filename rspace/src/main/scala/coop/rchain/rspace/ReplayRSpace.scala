@@ -265,8 +265,8 @@ class ReplayRSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch
       }
     }
 
-  def getCheckpoint(): Checkpoint = {
-    val root = store.getCheckpoint()
+  def createCheckpoint(): Checkpoint = {
+    val root = store.createCheckpoint()
     Checkpoint(root, Seq.empty)
   }
 
