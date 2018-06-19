@@ -3,10 +3,10 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test._
 import org.lmdbjava.{Env, Txn}
+import org.scalacheck.Arbitrary
 import org.scalatest.{BeforeAndAfterAll, Suite}
 import scodec.Codec
 import scodec.codecs._
@@ -14,7 +14,8 @@ import scodec.bits.ByteVector
 
 abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, ByteVector] {
 
-  implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
+  implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
+  implicit val codecK: Codec[TestKey4]   = TestKey4.codecTestKey
 
   import TestData._
 
@@ -296,8 +297,44 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
       root5 shouldBe root4
     }
 
+  "getLeaves on an empty store" should "return an empty sequence" in
+    withTestTrieStore { (store, branch) =>
+      val leaves = getRoot(store, branch).map(getLeaves(store, _))
+      leaves.value shouldBe empty
+    }
+
+  "insert 6 things and getLeaves" should "return all of the leaves" in
+    withTestTrieStore { (store, branch) =>
+      val expected: Vector[Leaf[TestKey4, ByteVector]] = Vector(
+        Leaf(key1, val1),
+        Leaf(key2, val2),
+        Leaf(key3, val3),
+        Leaf(key4, val4),
+        Leaf(key5, val5),
+        Leaf(key6, val6)
+      )
+
+      insert(store, branch, key1, val1)
+      insert(store, branch, key2, val2)
+      insert(store, branch, key3, val3)
+      insert(store, branch, key4, val4)
+      insert(store, branch, key5, val5)
+      insert(store, branch, key6, val6)
+
+      val leaves = getRoot(store, branch).map(getLeaves(store, _))
+
+      leaves.value should contain theSameElementsAs expected
+    }
+}
+
+trait GenerativeHistoryActionsTests[T, K]
+    extends HistoryTestsBase[T, K, ByteVector]
+    with WithTestStore[T, K, ByteVector] {
+
+  implicit def arbitraryMap: Arbitrary[Map[K, ByteVector]]
+
   "Round trip rollback" should "work" in {
-    forAll { (kvs: Map[TestKey4, ByteVector]) =>
+    forAll { (kvs: Map[K, ByteVector]) =>
       withTestTrieStore { (store, branch) =>
         val pairs = kvs.toList
 
@@ -361,37 +398,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
     }
   }
 
-  "getLeaves on an empty store" should "return an empty sequence" in
-    withTestTrieStore { (store, branch) =>
-      val leaves = getRoot(store, branch).map(getLeaves(store, _))
-      leaves.value shouldBe empty
-    }
-
-  "insert 6 things and getLeaves" should "return all of the leaves" in
-    withTestTrieStore { (store, branch) =>
-      val expected: Vector[Leaf[TestKey4, ByteVector]] = Vector(
-        Leaf(key1, val1),
-        Leaf(key2, val2),
-        Leaf(key3, val3),
-        Leaf(key4, val4),
-        Leaf(key5, val5),
-        Leaf(key6, val6)
-      )
-
-      insert(store, branch, key1, val1)
-      insert(store, branch, key2, val2)
-      insert(store, branch, key3, val3)
-      insert(store, branch, key4, val4)
-      insert(store, branch, key5, val5)
-      insert(store, branch, key6, val6)
-
-      val leaves = getRoot(store, branch).map(getLeaves(store, _))
-
-      leaves.value should contain theSameElementsAs expected
-    }
-
   "insert a bunch of things and getLeaves" should "return all of the leaves" in
-    forAll { (kvs: Map[TestKey4, ByteVector]) =>
+    forAll { (kvs: Map[K, ByteVector]) =>
       withTestTrieStore { (store, branch) =>
         val expected = kvs.map { case (k, v) => Leaf(k, v) }
         kvs.foreach { case (k, v) => insert(store, branch, k, v) }
@@ -420,14 +428,15 @@ object HistoryActionsTests {
     pairs.flatMap { case (k, _) => lookup(store, branch, k).map((v: V) => (k, v)).toList }
 }
 
-trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
+trait LMDBWithTestTrieStore[K]
+    extends BeforeAndAfterAll
+    with WithTestStore[Txn[ByteBuffer], K, ByteVector] { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  def withTestTrieStoreK[R, K](f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R)(
-      implicit codecK: Codec[K]): R = {
+  override def withTestTrieStore[R](
+      f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R = {
     // @todo deliver better
-    implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
     val env: Env[ByteBuffer] =
       Env
         .create()
@@ -447,17 +456,21 @@ trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
     }
   }
 
-  def withTestTrieStore[R](f: (ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector], Branch) => R): R =
-    withTestTrieStoreK(f)
-
-  def withTestTrieStoreKey5[R](
-      f: (ITrieStore[Txn[ByteBuffer], TestKey5, ByteVector], Branch) => R): R =
-    withTestTrieStoreK(f)
-
   override def afterAll(): Unit =
     recursivelyDeletePath(dbDir)
 }
 
 class LMDBHistoryActionsTests
     extends HistoryActionsTests[Txn[ByteBuffer]]
-    with LMDBTrieStoreFixtures {}
+    with GenerativeHistoryActionsTests[Txn[ByteBuffer], TestKey4]
+    with LMDBWithTestTrieStore[TestKey4] {
+  implicit val arbitraryMap = ArbitraryInstances.arbitraryNonEmptyMapTestKeyByteVector
+}
+
+class LMDBHistoryActionsTestsKey32
+    extends GenerativeHistoryActionsTests[Txn[ByteBuffer], TestKey32]
+    with LMDBWithTestTrieStore[TestKey32] {
+  implicit val codecV: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
+  implicit val codecK: Codec[TestKey32]  = TestKey32.codecTestKey
+  implicit val arbitraryMap              = ArbitraryInstances.arbitraryNonEmptyMapTestKey32ByteVector
+}

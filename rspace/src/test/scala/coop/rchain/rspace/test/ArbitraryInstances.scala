@@ -81,6 +81,22 @@ object ArbitraryInstances {
         .map(_.toMap))
   }
 
+  implicit val arbitraryTestKey32: Arbitrary[TestKey32] =
+    Arbitrary(Gen.sized { _ =>
+      Gen
+        .listOfN(32, Arbitrary.arbitrary[Int])
+        .map(ints => TestKey32.create(ints))
+    })
+
+  implicit val arbitraryNonEmptyMapTestKey32ByteVector: Arbitrary[Map[TestKey32, ByteVector]] = {
+    Arbitrary(Gen
+      .sized { size =>
+        Gen.containerOfN[Seq, (TestKey32, ByteVector)](if (size > 2) size else 2,
+                                                       Arbitrary.arbitrary[(TestKey32, ByteVector)])
+      }
+      .map(_.toMap))
+  }
+
   implicit def arbitraryNonEmptyMapStringDatumString(
       implicit serializeString: Serialize[String]): Arbitrary[Map[String, Datum[String]]] =
     Arbitrary(

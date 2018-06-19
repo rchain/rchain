@@ -2,9 +2,11 @@ package coop.rchain.rspace.history
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.test.TestKey4
 import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.{Configuration, GeneratorDrivenPropertyChecks}
 import org.scalatest.{FlatSpec, Matchers, OptionValues, Outcome}
+import scodec.Codec
 import scodec.bits.ByteVector
 
 trait HistoryTestsBase[T, K, V]
@@ -12,7 +14,8 @@ trait HistoryTestsBase[T, K, V]
     with Matchers
     with OptionValues
     with GeneratorDrivenPropertyChecks
-    with Configuration {
+    with Configuration
+    with WithTestStore[T, K, V] {
 
   def getRoot(store: ITrieStore[T, K, V], branch: Branch): Option[Blake2b256Hash] =
     store.withTxn(store.createTxnRead())(txn => store.getRoot(txn, branch))
@@ -52,6 +55,12 @@ trait HistoryTestsBase[T, K, V]
     logger.debug(s"Test: ${test.name}")
     super.withFixture(test)
   }
+}
+
+trait WithTestStore[T, K, V] {
+
+  implicit def codecK: Codec[K]
+  implicit def codecV: Codec[V]
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
