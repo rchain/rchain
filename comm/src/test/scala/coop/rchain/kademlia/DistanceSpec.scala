@@ -1,14 +1,12 @@
 package coop.rchain.comm.discovery
 
 import org.scalatest._
-import scala.util.{Success, Try}
-import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 import cats._
 
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm._
-import coop.rchain.comm.discovery._
+import coop.rchain.crypto.codec.Base16
 
 object b {
   val rand                   = new scala.util.Random(System.currentTimeMillis)
@@ -60,7 +58,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     }
 
     def keyString(key: Seq[Byte]): String =
-      key.map("%02x".format(_)).mkString
+      Base16.encode(key.toArray)
 
     val k0 = Array.fill(width)(b(0))
     s"A node with key all zeroes (${keyString(k0)})" should "compute distance correctly" in {

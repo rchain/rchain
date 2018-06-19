@@ -89,15 +89,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       case _ => None
     }
 
-    publicKey
-      .flatMap(CertificateHelper.publicAddress)
-      .getOrElse {
-        println("Certificate must contain a secp256r1 EC Public Key")
-        System.exit(1)
-        Array[Byte]()
-      }
-      .map("%02x".format(_))
-      .mkString
+    Base16.encode(
+      publicKey
+        .flatMap(CertificateHelper.publicAddress)
+        .getOrElse {
+          println("Certificate must contain a secp256r1 EC Public Key")
+          System.exit(1)
+          Array[Byte]()
+        })
   }
 
   import ApplicativeError_._
