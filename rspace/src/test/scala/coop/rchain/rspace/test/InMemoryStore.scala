@@ -39,12 +39,12 @@ object State {
 
 class InMemoryStore[C, P, A, K](
     val trieStore: ITrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
-    val trieBranch: Branch
+    val trieBranch: Branch,
+    val eventsCounter: StoreEventsCounter
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K] {
 
   private implicit val codecC: Codec[C] = sc.toCodec
-  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[this] val stateRef: SyncVar[State[C, P, A, K]] = {
     val sv = new SyncVar[StateType]
@@ -267,6 +267,7 @@ object InMemoryStore {
   def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       new DummyTrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
-      Branch("dummy")
+      Branch("dummy"),
+      new StoreEventsCounter
     )
 }
