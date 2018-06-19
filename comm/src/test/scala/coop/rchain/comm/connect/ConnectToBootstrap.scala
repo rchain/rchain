@@ -1,4 +1,4 @@
-package coop.rchain.p2p
+package coop.rchain.comm.connect
 
 import org.scalatest._
 import com.google.common.io.BaseEncoding
@@ -8,8 +8,7 @@ import cats._
 import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
-
-import EffectsTestInstances._
+import coop.rchain.p2p.EffectsTestInstances._
 
 class ConnectToBootstrapSpec
     extends FunSpec
@@ -39,7 +38,7 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(failEverything))
       // when
-      val _ = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val _ = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
       logEff.warns should equal(
         List(
@@ -55,7 +54,7 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(failEverything))
       // when
-      val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
       logEff.errors should equal(List("Failed to connect to bootstrap node, exiting..."))
       result.value should equal(Left(couldNotConnectToBootstrap))
@@ -65,7 +64,7 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(alwaysSuccess))
       // when
-      val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
       logEff.infos should contain(s"Bootstrapping from $remote.")
       logEff.infos should contain(s"Connected $remote.")
