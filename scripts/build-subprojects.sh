@@ -11,7 +11,7 @@ case "$SUBPROJECT" in "rosette")
 
 "core")
 
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate secp256k1:generate coverage test coverageReport
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate secp256k1/secp256k1:generate coverage test coverageReport
 
     for sub in casper crypto comm rholang roscala node rspace
     do
