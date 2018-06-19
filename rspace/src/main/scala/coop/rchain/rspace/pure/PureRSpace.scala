@@ -22,7 +22,7 @@ class PureRSpace[F[_], C, P, A, K](space: ISpace[C, P, A, K]) {
                                                      c: Capture[F]): F[Option[(K, Seq[A])]] =
     c.capture(space.produce(channel, data, persist))
 
-  def getCheckpoint()(c: Capture[F]): F[Checkpoint] = c.capture(space.getCheckpoint())
+  def createCheckpoint()(c: Capture[F]): F[Checkpoint] = c.capture(space.createCheckpoint())
 
   def reset(hash: Blake2b256Hash)(c: Capture[F]): F[Unit] = c.capture(space.reset(hash))
 
