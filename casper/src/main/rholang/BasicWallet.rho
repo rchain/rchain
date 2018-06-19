@@ -19,19 +19,16 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
             nonceCh!(-1) |
             contract verify(@nonce, @amount, @retCh, @sig, return) = {
               for(@prevNonce <- nonceCh) {
-                match nonce == (prevNonce + 1) {
-                  true => { 
-                    new result in {
-                      @cryptoVerify!([nonce, amount, retCh].toByteArray(), sig.hexToBytes(), pk.hexToBytes(), *result) |
-                      for(@r <- result) {
-                        match r {
-                          true => { nonceCh!(nonce) | return!(true) }
-                          _    => { nonceCh!(prevNonce) | return!(false) }
-                        }
-                      }
+                if (nonce == (prevNonce + 1)) {
+                  new result in {
+                    @cryptoVerify!([nonce, amount, retCh].toByteArray(), sig.hexToBytes(), pk.hexToBytes(), *result) |
+                    for(@r <- result) {
+                      if (r) { nonceCh!(nonce) | return!(true) }
+                      else { nonceCh!(prevNonce) | return!(false) }
                     }
                   }
-                  _ => { nonceCh!(prevNonce) | return!(false) }
+                } else {
+                  nonceCh!(prevNonce) | return!(false)
                 }
               }
             } |
@@ -48,11 +45,9 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
             } |
             contract @[*basicWallet, "withdraw"](@amount, @nonce, @sig, return) = {
               new verifyResult in {
-                verify!(nonce, amount, *return, sig, *verifyResult) | for(@r <- verifyResult) {
-                  match r {
-                    true => { @[purse, "split"]!(amount, *return) }
-                    _    => { return!([]) }
-                  }
+                verify!(nonce, amount, *return, sig, *verifyResult) | for(@verified <- verifyResult) {
+                  if (verified) { @[purse, "split"]!(amount, *return) }
+                  else { return!([]) }
                 }
               }
             } |
