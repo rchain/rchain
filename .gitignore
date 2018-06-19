@@ -44,7 +44,7 @@ rholang/src/main/java/
 
 # Secp256k1
 ###################
-crypto/secp256k1/
+secp256k1Native/src/main/resources/
 
 # Rosette
 ###################
