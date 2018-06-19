@@ -73,13 +73,15 @@ trait HistoryActionsTests
 
       val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
 
+      val leafPointer = LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat)))
+      val skip        = Skip(channelsHash.bytes.drop(1), leafPointer)
+      val skipHash    = Trie.hash(skip)(codecK, Codec[String])
+
       val nodeHash = Trie.hash[Blake2b256Hash, TestGNAT](
         Node(
           PointerBlock
             .create()
-            .updated(
-              List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                    LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))))
 
       space.consume(gnat.channels,
                     gnat.wks.head.patterns,
