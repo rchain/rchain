@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import coop.rchain.rspace.util.ignore
+import coop.rchain.shared.Language.ignore
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
 

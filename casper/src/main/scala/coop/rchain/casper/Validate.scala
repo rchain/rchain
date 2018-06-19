@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.p2p.effects.Log
+import coop.rchain.shared.Log
 
 import scala.util.Try
 
@@ -55,7 +55,7 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   *
+   * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
   def validateBlockSummary[F[_]: Monad: Log](

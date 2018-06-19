@@ -1,6 +1,5 @@
 package coop.rchain.node
 
-import coop.rchain.p2p.effects._
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import scala.tools.jline.console._
@@ -11,7 +10,7 @@ import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
 import coop.rchain.comm.transport.TcpTransportLayer._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.MonixMonadState
+import coop.rchain.shared._
 
 package object effects {
 

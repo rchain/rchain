@@ -16,6 +16,8 @@ syntax ProcNoVars ::=
               | "contract" Name "(" Names ")" "=" "{" Proc "}"
               // Send
               | Name "!" "(" Procs ")"
+              // Persistent send
+              | Name "!!" "(" Procs ")"
               // Evaluate
               | "*" Name
               // New
@@ -80,6 +82,10 @@ syntax HigherProcOrChanNoVars ::= ChanNoVars
 // We need higher processes, including variables
 syntax HigherProc ::= HigherProcNoVars
               | Id
+              // Lists
+              | "[" HigherProcs "]"
+              // Lists with (a possibly empty) remainder
+              | "[" HigherProcs "..." Id "]"
 
 // Channels and Hiher Processes, specifically for sending and listening for tuples
 syntax Chans ::= List{ Chan, "," }
@@ -91,6 +97,7 @@ syntax HigherProcNoVars ::=
               | "for" "(" Chans "<=" Chan ")" "{" HigherProc "}" [binder(1 -> 3)]
               | "contract" Chan "(" Chans ")" "=" "{" HigherProc "}"
               | Chan "!" "(" HigherProcs ")"
+              | Chan "!!" "(" HigherProcs ")"
               | "*" Chan
               | "new" Ids "in" "{" HigherProc "}" [binder]
               | "match" HigherProcOrChan "{" HigherMatchCases "}"
@@ -313,8 +320,82 @@ rule <thread>
 
 
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
-// PERSISTENT SENDING (AND RECEIVING)
+// PERSISTENT SENDING AND RECEIVING
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+
+// 1. Persistent sending
+// We create an "out" cell just as we would have previously.
+rule <thread>
+        (<k> C:Chan!!(P:HigherProcs) </k> => <out> C!!(P) </out>)
+        (.Bag => <OutData> I ; L </OutData> )
+     </thread>
+     <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
+     <GlobalListofOutIds> ... .List => ListItem(I) ... </GlobalListofOutIds>
+     <GlobalListofInIds> L </GlobalListofInIds> [outcreation]
+
+// Verify the ID of one is in the list of the other
+// If they are, begin checking if there is a match.
+// Do this without absorbing the "in" cell.
+
+// (a) the "in"'s ID is in the "send"'s list of receives
+rule
+    <thread>
+        <out> C:Chan!!(P:HigherProcs) </out>
+        <OutData> I:Int ; L:List </OutData>
+     </thread>
+     // Combine the two threads
+     <thread>
+        <in> for(D:Chans <- C){ Q:HigherProc } </in>
+        <InData> J ; ListHead:List (ListItem(I) => .) ListTail:List </InData>
+        // Import all the information from the out-cell
+        (.Bag => <out> "persistent" </out>)
+        // Begin checking the match in the k-cell
+        (.Bag => <k> listmatch( P ; D ) </k>)
+        // Keep the body of the listen statement to rewrite as we go along
+        (.Bag => <subst> Q </subst>)
+      </thread>
+
+
+// (b) the (persistent) send's ID is in the receive's list of sends
+rule <thread>
+       <out> C:Chan!!(P:HigherProcs) </out>
+       <OutData> J:Int ; ListHead:List (ListItem(I) => .) ListTail:List </OutData>
+    </thread>
+    <thread> ...
+       <in> for(D:Chans <- C){ Q:HigherProc } </in>
+       <InData> I:Int ; L:List </InData>
+       // Import all the information from the out-cell
+       (.Bag => <out> "persistent" </out>)
+       // Begin checking the match in the k-cell
+       (.Bag => <k> listmatch( P ; D ) </k>)
+       // Keep the body of the listen statement to rewrite as we go along
+       (.Bag => <subst> Q </subst>)
+    </thread>
+
+// If there is ever a $(MATCHFAIL), we have not matched and we separate the thread
+// into their original in- and out-threads.
+rule <thread> ...
+        // The trigger
+        <k> #(MATCHFAIL) ~> _ => . </k>
+        // Check to make sure the receive is not persistent
+        <in> for(D:Chans <- C){ Q:HigherProc } </in>
+        // Delete the rest
+        <out> "persistent" => . </out>
+        <subst> B => . </subst>
+    ... </thread>
+
+// When we've finished matching, we're ready to execute Q after having replaced all the variables
+rule <thread>
+        <in> for(D:Chans <- C){ P:HigherProc } => . </in>
+        <InData> I1:Int ; L1:List => . </InData>
+        <out> "persistent" => . </out>
+        <subst> Q:HigherProc  => . </subst>
+     </thread>
+     (.Bag => <thread> <k> Q </k> </thread>)
+     <GlobalListofInIds> ... ListItem(I1) => . ... </GlobalListofInIds>
+
+
+// 2. Persistent receiving
 
 // The same idea as before, but for persistent listens. This means that
 // We don't absorb the "in" cell, and when there's a match we don't delete
@@ -374,7 +455,7 @@ rule <thread> ...
 // into their original in- and out-threads.
 rule <thread>
         // Keep the out-thread intact, deleting everything else
-        <out> O </out>
+        <out> C:Chan!(P:HigherProcs) </out>
         <OutData> S:Int ; L:List </OutData>
         // The trigger
         <k> #(MATCHFAIL) ~> _ => . </k>
@@ -388,12 +469,90 @@ rule <thread>
 // Note that we don't delete the "in" cell.
 rule <thread>
         <in> "persistent" => . </in>
-        <out> O => . </out>
+        <out> C:Chan!(P:HigherProcs) => . </out>
         <OutData> I:Int ; L:List => . </OutData>
         <subst> Q:HigherProc  => . </subst>
      </thread>
      (.Bag => <thread> <k> Q </k> </thread>)
      <GlobalListofOutIds> ... ListItem(I) => . ... </GlobalListofOutIds>
+
+
+// 3. Finally, we need semantics for how a persistent send and receive can interact.
+//    We note that allowing them to interact can introduce infinite loops.
+//    Previously, with matching, we have absorbed the data from either an <in> or
+//    <out> cell into (resp.) an <out> or <in> cell, barring the case that one is
+//    persistent. Since both are persistent, we create a new cell which will go through
+//    the matching calculations.
+
+// Create the new cell
+rule <thread> ...
+        <out> C:Chan!!(P:HigherProcs) </out>
+        <OutData> I:Int ; ListHead:List (ListItem(J) => .) ListTail:List </OutData>
+     ... </thread>
+     <thread> ...
+        <in> for(D:Chans <= C){ Q:HigherProc } </in>
+        <InData> J:Int ; M:List </InData>
+     ... </thread>
+     (.Bag => <thread> ...
+        <k> listmatch(P ; D) </k>
+        <subst> Q </subst>
+        <in> "persistent" </in>
+        <InData> J ; .List </InData>
+        <out> "persistent" </out>
+        <OutData> I ; .List </OutData>
+      ... </thread>)
+
+rule <thread> ...
+        <out> C:Chan!!(P:HigherProcs) </out>
+        <OutData> I:Int ; L:List </OutData>
+     ... </thread>
+     <thread> ...
+        <in> for(D:Chans <= C){ Q:HigherProc } </in>
+        <InData> J:Int ; ListHead:List (ListItem(I) => .) ListTail:List </InData>
+     ... </thread>
+     (.Bag => <thread> ...
+        <k> listmatch(P ; D) </k>
+        <subst> Q </subst>
+        <in> "persistent" </in>
+        <InData> J ; .List </InData>
+        <out> "persistent" </out>
+        <OutData> I ; .List </OutData>
+      ... </thread>)
+
+// If there's been a match, we need to replace the Id number we deleted from the last step
+// This will initiate an infinite loop.
+rule <thread> ...
+        <subst> Q => . </subst>
+        <in> "persistent" => . </in>
+        <InData> J ; .List => . </InData>
+        <out> "persistent" => . </out>
+        <OutData> I ; .List => . </OutData> ...
+     </thread>
+     <thread> ... <InData> J ; L:List </InData> ... </thread>
+     <thread> ... <OutData> I ; (.List => ListItem(J)) M:List </OutData> ... </thread>
+     (.Bag => <thread> ... <k> Q </k> ... </thread>)
+
+rule <thread> ...
+        <subst> Q => . </subst>
+        <in> "persistent" => . </in>
+        <InData> J ; .List => . </InData>
+        <out> "persistent" => . </out>
+        <OutData> I ; .List => . </OutData> ...
+     </thread>
+     <thread> ... <InData> J ; (.List => ListItem(I)) L:List  </InData> ... </thread>
+     <thread> ... <OutData> I ; M:List </OutData> ... </thread>
+     (.Bag => <thread> ... <k> Q </k> ... </thread>)
+
+// If there's been no match, we just delete the cell and they won't try to match again.
+rule <thread> ...
+        <k> #(MATCHFAIL) ~> _ => . </k>
+        <subst> Q => . </subst>
+        <in> "persistent" => . </in>
+        <InData> J ; .List => . </InData>
+        <out> "persistent" => . </out>
+        <OutData> I ; .List => . </OutData>
+     ... </thread>
+
 
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 // THE DEFINITION OF THE "match" PROCESS (NOT the match function)
@@ -462,6 +621,7 @@ rule intostdmatchform(contract D:Chan(C:Chan) = { P:HigherProc }) => "persistent
 rule intostdmatchform(new X:Ids in { P:HigherProc }) => "new"[X][P]
 rule intostdmatchform(match P:HigherProcOrChan { H:HigherMatchCases} ) => "match"[P][H]
 rule intostdmatchform(C:Chan!(P:HigherProc)) => "send"[C][P]
+rule intostdmatchform(C:Chan!!(P:HigherProc)) => "persistentsend"[C][P]
 rule intostdmatchform( Nil ) => "Nil"[ ]
 //rule intostdmatchform(E:Exp) => E
 rule intostdmatchform(S:String) => "string"[S]
@@ -555,6 +715,10 @@ rule <thread> ... <k> ... match("persistentlisten"(D:Chan)(P:HigherProc),"persis
 rule <thread> ... <k> ... matchstdform( "send"[C:Chan][P:HigherProc] ; "send"[D:Chan][R:HigherProc] ; true)
           => match( C ; D ) ~> match( P ; R ) ... </k> ... </thread>
 
+// When the pattern is "persistentsend"
+rule <thread> ... <k> ... matchstdform( "persistentsend"[C:Chan][P:HigherProc] ; "persistentsend"[D:Chan][R:HigherProc] ; true)
+          => match( C ; D ) ~> match( P ; R ) ... </k> ... </thread>
+
 // When the pattern is "hash"
 rule <thread> ... <k> ... matchstdform( "hash"[I:Int] ; "hash"[J:Int] ; true)
           => match( I ; J ) ... </k> ... </thread>
@@ -627,6 +791,7 @@ rule intostdtfmatchform(for(C:Chan <= D:Chan){P:HigherProc}) => "persistentliste
 rule intostdtfmatchform(contract D:Chan(C:Chan) = { P:HigherProc }) => "persistentlisten"[C][D][P]
 rule intostdtfmatchform(new X:Ids in { P:HigherProc }) => "new"[X][P]
 rule intostdtfmatchform(C:Chan!(P:HigherProc)) => "send"[C][P]
+rule intostdtfmatchform(C:Chan!!(P:HigherProc)) => "persistentsend"[C][P]
 rule intostdtfmatchform(match P:HigherProcOrChan { H:HigherMatchCases} ) => "match"[P][H]
 rule intostdtfmatchform( Nil ) => "Nil"[ ]
 // Expressions
@@ -713,6 +878,10 @@ rule <thread> ... <k> ... DoTheseMatch("persistentlisten"(D:Chan)(P:HigherProc),
 
 // When the pattern is "send"
 rule <thread> ... <k> ... tfmatchstdform( "send"[C:Chan][P:HigherProc] ; "send"[D:Chan][R:HigherProc] ; true)
+          => DoTheseMatch( C ; D ) ~> DoTheseMatch( P ; R ) ... </k> ... </thread>
+
+// When the pattern is "persistentsend"
+rule <thread> ... <k> ... tfmatchstdform( "persistentsend"[C:Chan][P:HigherProc] ; "persistentsend"[D:Chan][R:HigherProc] ; true)
           => DoTheseMatch( C ; D ) ~> DoTheseMatch( P ; R ) ... </k> ... </thread>
 
 // When the pattern is "hash"
@@ -805,6 +974,9 @@ rule <thread> ... <ParMatch> ... <from> fromparmatchstdform(new X:Ids in { P:Hig
 rule <thread> ... <ParMatch> ... <from> fromparmatchstdform(C:Chan!(P:HigherProc))
                   => ["send"][false][C!(P)][ -1 ][ I ]["inactive"]{ListItem(-1)}  </from>
                   <MatchFromCounter> I => I +Int 1 </MatchFromCounter> ... </ParMatch> ... </thread>
+rule <thread> ... <ParMatch> ... <from> fromparmatchstdform(C:Chan!!(P:HigherProc))
+                  => ["persistentsend"][false][C!!(P)][ -1 ][ I ]["inactive"]{ListItem(-1)}  </from>
+                  <MatchFromCounter> I => I +Int 1 </MatchFromCounter> ... </ParMatch> ... </thread>
 rule <thread> ... <ParMatch> ... <from> fromparmatchstdform(match P:HigherProcOrChan { H:HigherMatchCases })
                   => ["match"][false][match P { H }][ -1 ][ I ]["inactive"]{ListItem(-1)}  </from>
                   <MatchFromCounter> I => I +Int 1 </MatchFromCounter> ... </ParMatch> ... </thread>
@@ -838,6 +1010,10 @@ rule <thread> ... <ParMatch> ... <to> toparmatchstdform(new X:Id in { P:HigherPr
                   <ListofAllToCells> ... .List => ListItem(I) ... </ListofAllToCells> ... </ParMatch> ... </thread>
 rule <thread> ... <ParMatch> ... <to> toparmatchstdform(C:Chan!(P:HigherProc))
                   => ["send"][false][C!(P)][ I ]["available"]  </to>
+                  <MatchToCounter> I => I +Int 1 </MatchToCounter>
+                  <ListofAllToCells> ... .List => ListItem(I) ... </ListofAllToCells> ... </ParMatch> ... </thread>
+rule <thread> ... <ParMatch> ... <to> toparmatchstdform(C:Chan!(P:HigherProc))
+                  => ["persistentsend"][false][C!!(P)][ I ]["available"]  </to>
                   <MatchToCounter> I => I +Int 1 </MatchToCounter>
                   <ListofAllToCells> ... .List => ListItem(I) ... </ListofAllToCells> ... </ParMatch> ... </thread>
 rule <thread> ... <ParMatch> ... <to> toparmatchstdform(match P:HigherProcOrChan { H:HigherMatchCases })
@@ -1120,3 +1296,4 @@ configuration <T color="yellow">
 
 
 endmodule
+

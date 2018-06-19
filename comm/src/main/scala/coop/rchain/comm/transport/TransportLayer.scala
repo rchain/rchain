@@ -9,9 +9,9 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
+import coop.rchain.shared._
 
 trait TransportLayer[F[_]] {
-
   def roundTrip(msg: ProtocolMessage,
                 remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
