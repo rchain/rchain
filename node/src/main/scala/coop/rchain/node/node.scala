@@ -31,6 +31,9 @@ import coop.rchain.comm.discovery._
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
+import coop.rchain.comm.transport.TcpTransportLayer.Connections
+import coop.rchain.shared.MonixMonadState
+
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   // Generate certificate if not provided as option or in the data dir
@@ -124,11 +127,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                     = effects.log
-  implicit val timeEffect: Time[Task]                   = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val logEffect: Log[Task]                           = effects.log
+  implicit val timeEffect: Time[Task]                         = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]             = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                   = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]       = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonixMonadState[Connections] = effects.connectionsState
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)

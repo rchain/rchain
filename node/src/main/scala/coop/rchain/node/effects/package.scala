@@ -1,19 +1,17 @@
 package coop.rchain.node
 
-import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.p2p
 import coop.rchain.p2p.effects._
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
-import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
-import java.nio.file.{Files, Path}
-import scala.tools.jline.console._, completer.StringsCompleter
+import scala.tools.jline.console._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import monix.eval.Task
+import monix.eval._
 import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.TcpTransportLayer._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared.MonixMonadState
 
 package object effects {
 
@@ -48,12 +46,19 @@ package object effects {
         } yield res.isDefined
     }
 
-  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
-      implicit executionContext: ExecutionContext) =
+  def tcpTranposrtLayer[
+      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
+      src: PeerNode)(implicit executionContext: ExecutionContext) =
     new TcpTransportLayer[F](conf.run.localhost,
                              conf.run.port(),
                              conf.run.certificatePath.toFile,
                              conf.run.keyPath.toFile)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
+
+  def connectionsState: MonixMonadState[TcpTransportLayer.Connections] = {
+    import monix.execution.Scheduler.Implicits.global
+    val state: Task[MVar[Connections]] = MVar[TcpTransportLayer.Connections](Map.empty)
+    new MonixMonadState(state.unsafeRunSync)
+  }
 }
