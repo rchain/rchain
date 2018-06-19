@@ -1038,53 +1038,68 @@ rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ J1:
                                  <to> [S2:String][false][P2:HigherProcNoVars][I]["taken"] </to> ... </ParMatch> ... </thread>
 
 // There's been a match!
-// We need to do this in two steps, in order to deal with indices
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ (J:Int => J +Int 1) ][ "active" ]{ L1 } </from>
+// We change the current from cell from active to inactive, reserve the to cell it matched with, and move up to the next from cell
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ J:Int ][ ("active" => "inactive") ]{ L1 } </from>
                                  <to> [S2:String][false][P2:HigherProc][I][("available" => "taken")] </to>
                                  <id> ID </id>
-                                 // We snag one of the "to" cells to move forward
-                                 <MatchToCounter> I2:Int => I2 +Int -1 </MatchToCounter> ... </ParMatch>
-                  // There's been a match because there is nothing before the #(PARPAUSE) in the k-cell
-                  // This means that the "match["TFSTDMATCH"]" function was successful, and left nothing.
-                  <k> #(PARPAUSE)[S:String,ID:Int] ... </k> ... </thread>
-
-// Now we put the index in our successful from cell back, using it to grab the next one
-// We mark P2 as taken, mark P1 as inactive and then move up one, marking P as active and grabbing a list of all the "to" cells to work on.
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ (J:Int => J +Int -1) ][ ("active" => "inactive") ]{ L1 } </from>
-                                 <to> [S2:String][false][P2:HigherProc][I]["taken"] </to>
-                                 <from> [S3:String][false][ P3:HigherProc ][ M:Int ][ J ][ ("inactive" => "active") ]{ _ => L2 } </from>
+                                 // We have just taken one of the "to" cells, so we keep track of that in the counter
+                                 <MatchToCounter> I2:Int => I2 +Int -1 </MatchToCounter>
+                                 // We grab the next "from" cell up
+                                 <from> [S3:String][false][ P3:HigherProc ][ M:Int ][ J2:Int ][ ("inactive" => "active") ]{ _ => L2 } </from>
                                  <ListofAllToCells> L2:List </ListofAllToCells> ... </ParMatch>
                   // There's been a match because there is nothing before the #(PARPAUSE) in the k-cell
                   // This means that the "match["TFSTDMATCH"]" function was successful, and left nothing.
                   <k> #(PARPAUSE)[S:String,ID:Int] ... </k> ... </thread>
+                  requires (J2 =Int J +Int 1)
 
 // We have to do the same rule, but in the case we matched on level 0 (since we changed 0 to -1)
-// We can do it in one rule because there is no problem with indices
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ (0 => -1) ][ ("active" => "inactive") ]{ L1 } </from>
-                                 <to> [S2:String][false][P2:HigherProc][I]["taken"] </to>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ -1 ][ ("active" => "inactive") ]{ L1 } </from>
+                                 <to> [S2:String][false][P2:HigherProc][I][("available" => "taken")] </to>
+                                 <id> ID </id>
+                                 // We have just taken one of the "to" cells, so we keep track of that in the counter
+                                 <MatchToCounter> I2:Int => I2 +Int -1 </MatchToCounter>
+                                 // We grab the next "from" cell up
                                  <from> [S3:String][false][ P3:HigherProc ][ M:Int ][ 1 ][ ("inactive" => "active") ]{ _ => L2 } </from>
                                  <ListofAllToCells> L2:List </ListofAllToCells> ... </ParMatch>
                   // There's been a match because there is nothing before the #(PARPAUSE) in the k-cell
                   // This means that the "match["TFSTDMATCH"]" function was successful, and left nothing.
                   <k> #(PARPAUSE)[S:String,ID:Int] ... </k> ... </thread>
 
+// Finally, we do the same rule, but in the case that we've matched on the last "from" cell
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ J1:Int ][ ("active" => "done") ]{ L1 } </from>
+                                 <to> [S2:String][false][P2:HigherProc][I][("available" => "taken")] </to>
+                                 <id> ID </id>
+                                 // We have just taken one of the "to" cells, so we keep track of that in the counter
+                                 <MatchToCounter> I2:Int => I2 +Int -1 </MatchToCounter>
+                                 // We're at the top
+                                 <MatchFromCounter> J2:Int </MatchFromCounter> ... </ParMatch>
+                  // There's been a match because there is nothing before the #(PARPAUSE) in the k-cell
+                  // This means that the "match["TFSTDMATCH"]" function was successful, and left nothing.
+                  <k> #(PARPAUSE)[S:String,ID:Int] ... </k> ... </thread>
+                  requires (J2 =Int J1 +Int 1)
 
 // There's been a match! (with a variable)
 // General step for binding to variables
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ (-1 => "var") ][ (J:Int => J +Int 1) ][ "active" ]{ ListHead:List (ListItem("var") => .) ListTail:List } </from>
-                  ... </ParMatch> ... </thread>
-
-rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ "var" ][ (J:Int => J +Int -1) ][ ("active" => "inactive") ]{ L1:List } </from>
-                    <from> [S2:String][false][ P2:HigherProc ][ I2:Int ][ J ][ ("inactive" => "active") ]{ _ => L2:List } </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ (-1 => "var") ][ J:Int ][ ("active" => "inactive") ]{ ListHead:List (ListItem("var") => .) ListTail:List } </from>
+                    <from> [S2:String][false][ P2:HigherProc ][ I2:Int ][ J2:Int ][ ("inactive" => "active") ]{ _ => L2:List } </from>
                     <ListofAllToCells> L2:List </ListofAllToCells>
                   ... </ParMatch> ... </thread>
+                  requires (J2 =Int J +Int 1)
 
 // Same step, but if we are at the 0 level
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ "var" ][ (0 => 1) ][ "active" ]{ L:List } </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ (-1 => "var") ][ -1 ][ ("active" => "inactive") ]{ ListHead:List (ListItem("var") => .) ListTail:List } </from>
+                    <from> [S2:String][false][ P2:HigherProc ][ I2:Int ][ 1 ][ ("inactive" => "active") ]{ _ => L2:List } </from>
+                    <ListofAllToCells> L2:List </ListofAllToCells>
                   ... </ParMatch> ... </thread>
+
+// Same step, but if we're at the last "from" cell
+rule <thread> ... <ParMatch> ...
+                    <from> [S1:String][false][ P1:HigherProc ][ (-1 => "var") ][ J:Int ][ ("active" => "done") ]{ ListHead:List (ListItem("var") => .) ListTail:List } </from>
+                    <MatchFromCounter> J2:Int </MatchFromCounter>
+                  ... </ParMatch> ... </thread>
+                  requires (J2 =Int J +Int 1)
 
 // The match failed, so we try another one (we redo the general step)
 rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I => -1) ][ J:Int ][ "active" ]{ L1 } </from>
@@ -1098,50 +1113,45 @@ rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I 
 
 // There are no more options for possible matches (go back down)
 // This is for a non-variable
-rule <thread> ... <ParMatch> ...
-                      <from> [S1:String][false][ P1:HigherProc ][ -1 ][ (J:Int => J +Int -1) ][ ("active" => "transition") ]{ .List } </from>
-                  ... </ParMatch> ... </thread>
-
-
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ (J:Int => J:Int +Int 1) ][ ("transition" => "inactive") ]{ .List } </from>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ -1 ][ J:Int ][ ("active" => "inactive") ]{ .List } </from>
                                  // Go down one; you can't use what you had before
-                                 <from> [R1:String][false][ Q1:HigherProc ][ (I2 => -1) ][ J ][ ("inactive" => "active") ]{ L } </from>
+                                 <from> [R1:String][false][ Q1:HigherProc ][ (I2 => -1) ][ J2:Int ][ ("inactive" => "active") ]{ L } </from>
                                  <to> [R2:String][false][Q2:HigherProc][I2:Int][("taken" => "available")] </to>
                                  // We have to return one of the "to" cells to move forward
                                  <MatchToCounter> C => C +Int 1 </MatchToCounter> ... </ParMatch> ... </thread>
-
+                                 requires (J2 =Int J +Int -1)
 
 // We have to do the same rule, but in the case that we were on the first level and we have to go back down to 0
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ (0 => 1) ][ ("transition" => "inactive") ]{ .List } </from>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ -1 ][ 1 ][ ("active" => "inactive") ]{ .List } </from>
                                  // Go down one; you can't use what you had before
                                  <from> [R1:String][false][ Q1:HigherProc ][ (I2 => -1) ][ -1 ][ ("inactive" => "active") ]{ L } </from>
                                  <to> [R2:String][false][Q2:HigherProc][I2:Int][("taken" => "available")] </to>
                                  // We have to return one of the "to" cells to move forward
-                                 <MatchToCounter> C => C +Int 1 </MatchToCounter>  ... </ParMatch> ... </thread>
+                                 <MatchToCounter> C => C +Int 1 </MatchToCounter> ... </ParMatch> ... </thread>
 
 // Going back down where the thing below matched to a variable (essential duplicate of rules above)
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ (J:Int => J:Int +Int 1) ][ ("transition" => "inactive") ]{ .List } </from>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ J:Int ][ ("active" => "inactive") ]{ .List } </from>
                                  // Go down one; you can't use what you had before
-                                 <from> [R1:String][false][ Q1:HigherProc ][ ("var" => -1) ][ J ][ ("inactive" => "active") ]{ L } </from>
-                  ... </ParMatch> ... </thread>
+                                 <from> [R1:String][false][ Q1:HigherProc ][ ("var" => -1) ][ J2:Int ][ ("inactive" => "active") ]{ L } </from>
+                                 ... </ParMatch> ... </thread>
+                                 requires (J2 =Int J +Int -1)
 
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ (0 => 1) ][ ("transition" => "inactive") ]{ .List } </from>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ (I1 => -1) ][ 1 ][ ("active" => "inactive") ]{ .List } </from>
                                  // Go down one; you can't use what you had before
                                  <from> [R1:String][false][ Q1:HigherProc ][ ("var" => -1) ][ -1 ][ ("inactive" => "active") ]{ L } </from>
-              ... </ParMatch> ... </thread>
-
+                                 ... </ParMatch> ... </thread>
 
 // There are no more options on the 0 level, so the match fails and we rewrite #(PARPAUSE) as #(MATCHFAIL)
 // (a) We first write these rules for nested ParMatches.
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -2 ][ "transition" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -2 ][ "active" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
                     <id> ID:Int </id> ... </ParMatch>
                    <k> #(PARPAUSE)[S:String,ID] => #(MATCHFAIL)["TF" +String S] ... </k> ... </thread>
                    <ParMatchCounter> ID => ID +Int -1 </ParMatchCounter>
                    requires ID >Int 1
 
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -1 ][ "transition" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -1 ][ "active" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
                     <id> ID:Int </id> ... </ParMatch>
                    <k> #(PARPAUSE)[S:String,ID] => #(MATCHFAIL)["TF" +String S] ... </k> ... </thread>
                    <ParMatchCounter> ID => ID +Int -1 </ParMatchCounter>
@@ -1154,14 +1164,14 @@ rule <thread> ... <ParMatch> ... <from> #(MATCHFAIL)[ "TFSTDMATCH" ] </from> <id
 // (b) Now the rules for the case that we're at the base ParMatch. The difference is that we throw an
 //     error matching the original request, instead of a "TFSTDMATCH" matchfail.
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -2 ][ "transition" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -2 ][ "active" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
                     <id> ID:Int </id> ... </ParMatch>
                    <k> #(PARPAUSE)[S:String,ID] => #(MATCHFAIL)[S] ... </k> ... </thread>
                    <ParMatchCounter> ID => ID +Int -1 </ParMatchCounter>
                    requires ID =Int 1
 
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -1 ][ "transition" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ -1 ][ -1 ][ "active" ]{ .List } => #(MATCHFAIL)[ "TFSTDMATCH" ] </from>
                     <id> ID:Int </id> ... </ParMatch>
                    <k> #(PARPAUSE)[S:String,ID] => #(MATCHFAIL)[S] ... </k> ... </thread>
                    <ParMatchCounter> ID => ID +Int -1 </ParMatchCounter>
@@ -1181,38 +1191,41 @@ rule <thread> ... <ParMatch> ... <from> #(MATCHFAIL)[ "TFSTDMATCH" ] </from> <id
 // First we see if the MatchToCounter is 0. If it is, that means we
 // didn't neglect any "to" cells. If not, then we need to try again
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ E:Exp ][ J:Int ][ "active" ]{ L1:List } </from>
-                    <MatchFromCounter> J </MatchFromCounter>
+                    <from> [S1:String][false][ P1:HigherProc ][ E:Exp ][ J:Int ][ "done" ]{ L1:List } </from>
+                    <MatchFromCounter> J1:Int </MatchFromCounter>
                     <MatchToCounter> J2:Int </MatchToCounter>
                     <Matched> .K => (J2 =Int 0) </Matched>
                     <id> ID:Int </id>
                   ... </ParMatch> ... </thread>
                   <ParMatchCounter> ID </ParMatchCounter>
+                  requires (J +Int 1 =Int J1)
 
 // If there are leftover "to" cells, we need to go back down
 // If the last thing we matched to was a variable, then we just go back down and try again
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ ("var" => -1) ][ (J:Int => J +Int -1) ][ "active" ]{ L1:List } </from>
-                    <MatchFromCounter> J </MatchFromCounter>
+                    <from> [S1:String][false][ P1:HigherProc ][ ("var" => -1) ][ J:Int ][ ("done" => "active") ]{ L1:List } </from>
+                    <MatchFromCounter> J2:Int </MatchFromCounter>
                     <Matched> false => . </Matched>
                     <id> ID:Int </id>
                   ... </ParMatch> ... </thread>
                   <ParMatchCounter> ID </ParMatchCounter>
+                  requires (J2 =Int J +Int 1)
 
 // If the last thing we matched to was not a variable, we need to go back down
 // and update the thing we were matched to to say "available"
 rule <thread> ... <ParMatch> ...
-                    <from> [S1:String][false][ P1:HigherProc ][ (I:Int => -1) ][ (J:Int => J +Int -1) ][ "active" ]{ L1:List } </from>
+                    <from> [S1:String][false][ P1:HigherProc ][ (I:Int => -1) ][ J:Int ][ ("done" => "active") ]{ L1:List } </from>
                     <to> [S2:String][false][P2:HigherProc][I][("taken" => "available")] </to>
-                    <MatchFromCounter> J </MatchFromCounter>
+                    <MatchFromCounter> J2:Int </MatchFromCounter>
+                    // We need to put back the "to" cell
+                    <MatchToCounter> I2:Int => I2 +Int -1 </MatchToCounter>
                     <Matched> false => . </Matched>
                   ... </ParMatch> ... </thread>
-
+                  requires (J2 =Int J +Int 1)
 
 // We've matched everything, this match as a whole is a success!
 // (We may have extra variables left over, which we bind to "Nil")
-
-rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ J:Int ][ ("active" => "inactive") ]{ L1 } </from>
+rule <thread> ... <ParMatch> ... <from> [S1:String][false][ P1:HigherProc ][ I ][ J:Int ][ ("done" => "inactive") ]{ L1 } </from>
                                  // So we matched
                                  <Matched> true </Matched>
                                  // Work on the furthest ParMatch invoked
@@ -1254,7 +1267,7 @@ rule <thread> ... <ParMatch> ...
 // Once that is done, we send all the vars to be matched; if they got no processes
 // they get the "Nil" process
 rule <thread> ... <ParMatch> ...
-                            <to> [S1:String][false][P1:HigherProc][I]["variable"]{ P2:HigherProc } => . </to>
+                            <to> [S1:String][false][P1:Id][I]["variable"]{ P2:HigherProc } => . </to>
                             <Matched> true </Matched>
                             <MatchFromCounter> 0 </MatchFromCounter>
                             <id> ID </id>
@@ -1287,7 +1300,6 @@ rule <thread> ... <ParMatch> ... <Wildcards> .K </Wildcards> => . ... </ParMatch
 rule <thread> ... <ParMatch> ... <BindToVars> .K </BindToVars> => . ... </ParMatch> ... </thread>
 rule <thread> ... <ParMatch> ... <id> .K </id> => . ... </ParMatch> ... </thread>
 rule <thread> ... <ParMatch> <Matched> .K </Matched> </ParMatch> => . ... </thread>
-
 
 
 // Configuration
