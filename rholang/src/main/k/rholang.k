@@ -35,14 +35,20 @@ syntax ProcNoVars ::=
 syntax Ground ::= "Nil"
               | Exp
 
-// We need names with no variables
+// We need names with no variables or logical connectives
 syntax NameNoVars ::= "@" Proc
 
-// The general idea of a name can be a (bound) variable
+// The general idea of a name can be a (bound) variable. It can also
+// contain logical connectives. We need to distinguish between non-variable
+// terms, with no logical connectives, etc and those that are or have them.
 syntax Name ::= NameNoVars
               | Id
+              // logical "and"
+              | Name "/\\" Name [left]
+              // logical "or"
+              > Name "\\/" Name [left]
 
-// Names and Processes, used specifically for sending and listening for tuples
+// Names and Processes, used specifically for -arity matching
 syntax Names ::= List{ Name, "," }
 syntax Procs ::= List{ Proc, "," }
 syntax Ids   ::= List{Id, ","}
@@ -82,10 +88,6 @@ syntax HigherProcOrChanNoVars ::= ChanNoVars
 // We need higher processes, including variables
 syntax HigherProc ::= HigherProcNoVars
               | Id
-              // Lists
-              | "[" HigherProcs "]"
-              // Lists with (a possibly empty) remainder
-              | "[" HigherProcs "..." Id "]"
 
 // Channels and Hiher Processes, specifically for sending and listening for tuples
 syntax Chans ::= List{ Chan, "," }
@@ -107,9 +109,15 @@ syntax HigherProcNoVars ::=
               | HigherProc "|" HigherProc [left]
               | "{" HigherProc "}" [bracket]
 
-// The general idea of a channel can be a (bound) variable
+// The general idea of a channel can be a (bound) variable. It can also
+// contain logical connectives. We need to distinguish between non-variable
+// terms, with no logical connectives, etc and those that are or have them.
 syntax Chan ::= ChanNoVars
               | Id
+              // logical "and"
+              | Chan "/\\" Chan [left]
+              // logical "or"
+              > Chan "\\/" Chan [left]
 
 // We need channels, with no variables
 syntax ChanNoVars ::= "@" HigherProc
@@ -122,6 +130,7 @@ syntax Exp  ::= Int
 syntax KVariable ::= Id
 syntax KResult ::= Int
               | String StringlessMatchFormSyntax
+              | ChanNoVars
               | Id
               | Bool
 
@@ -130,6 +139,7 @@ syntax CanBeStdMatched ::= Id
               | "intostdmatchform(" HigherProcOrChan ")"
               | "intostdtfmatchform(" HigherProcOrChan ")"
               | Ground
+              | ChanNoVars
 
 syntax Fun  ::= "match" "(" HigherProcOrChan ";" HigherProcOrChan ")"
               | "listmatch" "(" HigherProcs ";" Chans ")"
@@ -144,6 +154,7 @@ syntax Fun  ::= "match" "(" HigherProcOrChan ";" HigherProcOrChan ")"
               | "#(TFMATCHFAIL)"
               | "#(PARPAUSE)"
               | "#(MATCHPAUSE)"
+              | "#(ORPAUSE)"
 
 syntax StringlessMatchFormSyntax ::=
               // Quote, Eval and Var
@@ -157,6 +168,8 @@ syntax StringlessMatchFormSyntax ::=
               // Match
               | "[" HigherProcOrChan "][" HigherMatchCases "]"
               | "[" HigherProcOrChan "][" HigherProc "]"
+              // Logical And's and Or's
+              | "[" String "][" Chan "][" Chan "]"
               // Nil
               | "[" "]"
               // Hashed new channels
@@ -611,6 +624,42 @@ rule <thread> ... <k> ... match( P:HigherProcOrChan ; X:Id )
 //rule <thread> ... <k> ... match(S:Stmt, X:Id) => freevars(S,X) ... </k> ... </thread>
 
 
+// We also split things up if there are logical connectives: "and's" or "or's"
+// (i) The "and's" are straightforward, since we need to match with all of them
+rule <thread> ... <k> ... match( P:HigherProcOrChan ; C:Chan /\ D:Chan )
+               => match(P ; C) ~> match( P ; D ) ... </k> ... </thread>
+
+// (ii) The "or's" are a little more complicated, but not by much
+syntax OrCheckSyntax ::= "["HigherProcOrChan"]["Chan"]["List"]"
+
+rule <thread> ... <k> match( P:HigherProcOrChan ; C:Chan \/ D:Chan )
+               =>  #(ORPAUSE) ... </k>
+               (.Bag => <OrCheck> [P][.K][ListItem(C) ListItem(D)]  </OrCheck>) ... </thread>
+
+// Make the first choice nondetermistically
+rule <thread> ... <k> #(ORPAUSE) => DoTheseMatch(P ; C) ~> #(ORPAUSE) ... </k>
+               <OrCheck> [P][(.K => C)][ListHead:List (ListItem(C:Chan) => .) ListTail:List] </OrCheck> ... </thread>
+
+// If the match fails, keep checking
+rule <thread> ... <k> ... #(TFMATCHFAIL) ~> #(ORPAUSE) => DoTheseMatch(P ; D) ~> #(ORPAUSE) ... </k>
+                  <OrCheck> [P:HigherProcOrChan][(C:Chan => D)][ListHead:List (ListItem(D:Chan) => .) ListTail:List] </OrCheck> ... </thread>
+
+// If the match succeeds, substitute
+rule <thread> ... <k> #(ORPAUSE) => match(P ; C) ... </k>
+                  (<OrCheck> [P:HigherProcOrChan][C:Chan][L:List] </OrCheck> => .) ... </thread>
+
+// If nothing succeeds, then these do not match
+rule <thread> ... <k> ... #(TFMATCHFAIL) ~> #(ORPAUSE) => #(MATCHFAIL) ... </k>
+                  (<OrCheck> [P:HigherProcOrChan][C:Chan][.List] </OrCheck> => .) ... </thread>
+
+// In order to be sure that the "or"s break up sufficiently, we need to tell "DoTheseMatch" how to handle them.
+rule <thread> ... <k> ... DoTheseMatch( P:HigherProcOrChan ; (C:Chan \/ D:Chan => C) ) ... </k>
+                  <OrCheck> [P:HigherProcOrChan][(C \/ D => C)][(.List => ListItem(D)) L:List] </OrCheck> ... </thread>
+
+// Because of precedence rules, we may end up with "and"s in the DoTheseMatch( ) function
+// In that case, we have to check if both match. If we do, we'll send it to the match( ) function
+rule <thread> ... <k> ... DoTheseMatch( P:HigherProcOrChan ; C:Chan /\ D:Chan )
+                  => DoTheseMatch( P:HigherProcOrChan ; C ) ~> DoTheseMatch( P:HigherProcOrChan ; D ) ... </k> ... </thread>
 
 // (b) Put everything into a standard form that's easy to work with
 rule intostdmatchform(@P:HigherProc) => "quote"[ P ]
@@ -623,10 +672,11 @@ rule intostdmatchform(match P:HigherProcOrChan { H:HigherMatchCases} ) => "match
 rule intostdmatchform(C:Chan!(P:HigherProc)) => "send"[C][P]
 rule intostdmatchform(C:Chan!!(P:HigherProc)) => "persistentsend"[C][P]
 rule intostdmatchform( Nil ) => "Nil"[ ]
-//rule intostdmatchform(E:Exp) => E
+// Expressions
 rule intostdmatchform(S:String) => "string"[S]
 rule intostdmatchform(B:Bool) => "bool"[B]
 rule intostdmatchform(I:Int) => "int"[I]
+// Misc
 rule intostdmatchform( #(I:Int) ) => "hash"[I]
 rule intostdmatchform( P1:HigherProc | P2:HigherProc ) => "par"[P1][P2]
 // This should not be necessary; will be removed later,
@@ -761,10 +811,8 @@ rule <thread> ... <k> ... matchstdform("match"[P1:HigherProcOrChan][.HigherMatch
 // T/F Matching, i.e. the "DoTheseMatch( )" function
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
-// Match Function that rewrites to true if there is a match, and false otherwise
-// INITIALLY WILL NOT SUPPORT PAR'S BUT SHOULD IN THE FUTURE
-// THIS WILL BE VITAL FOR THE MORE GENERAL MATCH FUNCTION; YOU NEEED TO KNOW
-// WHICH ONES MATCH BEFORE SUBSTITUTING.
+// Match Function that rewrites to nothing if there is a match, and #(TFMATCHFAIL) otherwise
+// This does not yet support parallel processes, but it may in the future.
 // *** All calculations come before a #(PARPAUSE) tag to pause computation ****
 
 // This is essentially the same as the match functin before; mostly just rewritten.
@@ -1278,6 +1326,7 @@ configuration <T color="yellow">
                   <InData multiplicity="*"> .K </InData>
                   <OutData multiplicity="*"> .K </OutData>
                   <subst multiplicity="*" color="orange"> .K </subst>
+                  // to match patterns with parallel processes in them
                   <ParMatch multiplicity="*">
                     <to multiplicity="*"> .K </to>
                     <from multiplicity="*"> .K </from>
@@ -1288,6 +1337,8 @@ configuration <T color="yellow">
                     <BindToVars> Nil </BindToVars>
                     <Matched> .K </Matched>
                   </ParMatch>
+                  // to check patterns with a logical "or" in them
+                  <OrCheck multiplicity="*"> .K </OrCheck>
                 </thread>
                 <GlobalListofOutIds color="orange"> .List </GlobalListofOutIds>
                 <GlobalListofInIds color="purple"> .List </GlobalListofInIds>
@@ -1296,4 +1347,3 @@ configuration <T color="yellow">
 
 
 endmodule
-
