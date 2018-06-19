@@ -251,20 +251,19 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] def joinMap: Map[C, Seq[Seq[C]]] =
     withTxn(createTxnRead()) { txn =>
       withResource(_dbJoins.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
-        it.asScala
-          .flatMap { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-            val channelSeq = fetchGNAT(txn, x.key()).map(_.channels).getOrElse(Seq.empty)
-            if (channelSeq.isEmpty) {
-              //TODO: Investigate why this can happen? Remove entire 'if' after fix
-              None
-            } else {
-              if (channelSeq.size != 1)
-                throw new Exception(
-                  s"Join key channel not found or invalid (keys seq size = ${channelSeq.size}).")
-              val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
-              Some(channelSeq.head -> channels)
-            }
-          }.toMap
+        it.asScala.flatMap { (x: CursorIterator.KeyVal[ByteBuffer]) =>
+          val channelSeq = fetchGNAT(txn, x.key()).map(_.channels).getOrElse(Seq.empty)
+          if (channelSeq.isEmpty) {
+            //TODO: Investigate why this can happen? Remove entire 'if' after fix
+            None
+          } else {
+            if (channelSeq.size != 1)
+              throw new Exception(
+                s"Join key channel not found or invalid (keys seq size = ${channelSeq.size}).")
+            val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
+            Some(channelSeq.head -> channels)
+          }
+        }.toMap
       }
     }
 
@@ -303,7 +302,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def getCheckpoint(): Blake2b256Hash = {
+  def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)

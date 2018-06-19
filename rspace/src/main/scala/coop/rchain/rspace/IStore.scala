@@ -64,7 +64,7 @@ trait IStore[C, P, A, K] {
 
   private[rspace] val eventsCounter: StoreEventsCounter
 
-  def getCheckpoint(): Blake2b256Hash
+  def createCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
 

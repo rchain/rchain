@@ -256,7 +256,7 @@ class InMemoryStore[C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+  def createCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 
   private[rspace] def bulkInsert(txn: Transaction[StateType],
                                  gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
