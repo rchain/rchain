@@ -1,7 +1,5 @@
 package coop.rchain.roscala.ob
 
-import scala.collection.mutable
-
 case class RblFloat(value: Double) extends Ob {
   def +(that: RblFloat) = RblFloat(this.value + that.value)
 }
