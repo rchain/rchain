@@ -12,7 +12,13 @@ class Context[C, P, A, K] private (
     val env: Env[ByteBuffer],
     val path: Path,
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]]
-)
+) {
+
+  def close(): Unit = {
+    trieStore.close()
+    env.close()
+  }
+}
 
 object Context {
 
