@@ -96,9 +96,9 @@ object Runtime {
       mapSize
     )
 
-    val space = RSpace.create(context, Branch.master)
+    val space = RSpace.create(context, Branch.MASTER)
 
-    val replaySpace = ReplayRSpace.create(context, Branch.replay)
+    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     val errorLog                                         = new ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog

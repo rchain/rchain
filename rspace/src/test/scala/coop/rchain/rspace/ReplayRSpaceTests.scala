@@ -722,8 +722,8 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create(context, Branch.master)
-    val replaySpace = ReplayRSpace.create(context, Branch.replay)
+    val space       = RSpace.create(context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)

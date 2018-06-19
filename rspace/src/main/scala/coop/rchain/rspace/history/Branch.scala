@@ -7,9 +7,9 @@ case class Branch(name: String)
 
 object Branch {
 
-  val master: Branch = Branch("master")
+  val MASTER: Branch = Branch("master")
 
-  val replay: Branch = Branch("replay")
+  val REPLAY: Branch = Branch("replay")
 
   implicit val codecBranch: Codec[Branch] =
     utf8.as[Branch]

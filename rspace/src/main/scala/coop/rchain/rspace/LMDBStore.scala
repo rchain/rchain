@@ -365,7 +365,7 @@ object LMDBStore {
         List.empty[EnvFlags]
 
     val env    = Context.create[C, P, A, K](path, mapSize, flags)
-    val branch = Branch.master
+    val branch = Branch.MASTER
 
     initialize(env.trieStore, branch)
 
