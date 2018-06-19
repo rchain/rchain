@@ -55,8 +55,8 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(1)) {
-        (accum, fixnum) => accum * fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(1)) { (accum, fixnum) =>
+        accum * fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -204,9 +204,9 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MaxValue)) {
-        (minVal, fixnum) =>
-          if (minVal.value < fixnum.asInstanceOf[Fixnum].value) minVal else fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MaxValue)) { (minVal, fixnum) =>
+        if (minVal.value < fixnum.asInstanceOf[Fixnum].value) minVal
+        else fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -220,8 +220,9 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MinValue)) {
-        (maxVal, fixnum) => if (maxVal.value > fixnum.asInstanceOf[Fixnum].value) maxVal else fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MinValue)) { (maxVal, fixnum) =>
+        if (maxVal.value > fixnum.asInstanceOf[Fixnum].value) maxVal
+        else fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -316,8 +317,8 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) {
-        (accum, fixnum) => accum & fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) { (accum, fixnum) =>
+        accum & fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -331,8 +332,8 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) {
-        (accum, fixnum) => accum | fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) { (accum, fixnum) =>
+        accum | fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -346,8 +347,8 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) {
-        (accum, fixnum) => accum ^ fixnum.asInstanceOf[Fixnum]
+      ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) { (accum, fixnum) =>
+        accum ^ fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -374,8 +375,8 @@ object fixnum {
     override def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 
-      val commonBits = ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) {
-        (accum, fixnum) => accum & fixnum.asInstanceOf[Fixnum]
+      val commonBits = ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) { (accum, fixnum) =>
+        accum & fixnum.asInstanceOf[Fixnum]
       }
 
       if (commonBits.value != 0) {
