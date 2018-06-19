@@ -56,8 +56,7 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(1)) {
-        case (accum, fixnum: Fixnum) =>
-          accum * fixnum
+        (accum, fixnum) => accum * fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -206,8 +205,8 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MaxValue)) {
-        case (minVal: Fixnum, fixnum: Fixnum) =>
-          if (minVal.value < fixnum.value) minVal else fixnum
+        (minVal, fixnum) =>
+          if (minVal.value < fixnum.asInstanceOf[Fixnum].value) minVal else fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -222,8 +221,7 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(Int.MinValue)) {
-        case (maxVal, fixnum: Fixnum) =>
-          if (maxVal.value > fixnum.value) maxVal else fixnum
+        (maxVal, fixnum) => if (maxVal.value > fixnum.asInstanceOf[Fixnum].value) maxVal else fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -319,7 +317,7 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) {
-        case (accum, fixnum: Fixnum) => accum & fixnum
+        (accum, fixnum) => accum & fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -334,7 +332,7 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum | fixnum
+        (accum, fixnum) => accum | fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -349,7 +347,7 @@ object fixnum {
       val n = ctxt.nargs
 
       ctxt.argvec.value.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum ^ fixnum
+        (accum, fixnum) => accum ^ fixnum.asInstanceOf[Fixnum]
       }
     }
   }
@@ -377,8 +375,7 @@ object fixnum {
       val n = ctxt.nargs
 
       val commonBits = ctxt.argvec.value.take(n).foldLeft(Fixnum(~0)) {
-        case (accum, fixnum: Fixnum) =>
-          accum & fixnum
+        (accum, fixnum) => accum & fixnum.asInstanceOf[Fixnum]
       }
 
       if (commonBits.value != 0) {
