@@ -162,11 +162,11 @@ trait ISpace[C, P, A, K] {
     */
   def produce(channel: C, data: A, persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])]
 
-  /** Gets a checkpoint.
+  /** Creates a checkpoint.
     *
     * @return A [[Checkpoint]]
     */
-  def getCheckpoint(): Checkpoint
+  def createCheckpoint(): Checkpoint
 
   /** Resets the store to the given root.
     *

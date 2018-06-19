@@ -184,19 +184,6 @@ trait IStoreTests
     }
   }
 
-  "removeAllJoins" should "remove all joins for a channel" in withTestSpace { space =>
-    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
-      val store = space.store
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.addJoin(txn, channel, channels)
-        store.addJoin(txn, channel, List("otherChannel"))
-        store.removeAllJoins(txn, channel)
-        store.getJoin(txn, channel) shouldBe List()
-        store.clear(txn)
-      }
-    }
-  }
-
   "pruneHistory" should "work on empty history" in withTestSpace { space =>
     space.store.pruneHistory(List.empty) shouldBe List.empty
   }

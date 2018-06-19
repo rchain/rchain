@@ -57,12 +57,12 @@ trait HistoryActionsTests
     !tests.contains(false)
   }
 
-  "getCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
-    space.getCheckpoint().root shouldBe Blake2b256Hash.fromHex(
+  "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
+    space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
       "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
   }
 
-  "consume then getCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
+  "consume then createCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
     withTestSpace { space =>
       val channels = List("ch1")
       val gnat = GNAT(
@@ -88,12 +88,14 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
-      space.getCheckpoint().root shouldBe nodeHash
+      space.createCheckpoint().root shouldBe nodeHash
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash).value shouldBe gnat
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash)
+        .value shouldBe gnat
     }
 
-  "consume twice then getCheckpoint" should "persist the expected values in the TrieStore" in
+  "consume twice then createCheckpoint" should "persist the expected values in the TrieStore" in
     withTestSpace { space =>
       val gnat1 = {
         val channels = List("ch1")
@@ -131,14 +133,18 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2) shouldBe None
 
-      val _ = space.getCheckpoint()
+      val _ = space.createCheckpoint()
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash1).value shouldBe gnat1
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash1)
+        .value shouldBe gnat1
 
-      history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash2).value shouldBe gnat2
+      history
+        .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+        .value shouldBe gnat2
     }
 
-  "produce a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
+  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
     space =>
       forAll { (data: TestProduceMap) =>
         val gnats: Seq[TestGNAT] =
@@ -158,7 +164,7 @@ trait HistoryActionsTests
 
         history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
-        val _ = space.getCheckpoint()
+        val _ = space.createCheckpoint()
 
         history
           .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
@@ -166,7 +172,7 @@ trait HistoryActionsTests
       }
   }
 
-  "consume a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in
+  "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     withTestSpace { space =>
       forAll { (data: TestConsumeMap) =>
         val gnats: Seq[TestGNAT] =
@@ -184,7 +190,7 @@ trait HistoryActionsTests
 
         history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
-        val _ = space.getCheckpoint()
+        val _ = space.createCheckpoint()
 
         history
           .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
@@ -192,7 +198,7 @@ trait HistoryActionsTests
       }
     }
 
-  "consume and produce a match and then getCheckpoint " should "result in an empty TrieStore" in
+  "consume and produce a match and then createCheckpoint " should "result in an empty TrieStore" in
     withTestSpace { space =>
       val channels     = List("ch1")
       val channelsHash = space.store.hashChannels(channels)
@@ -207,15 +213,15 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
-      space.getCheckpoint().root shouldBe Blake2b256Hash.fromHex(
+      space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
         "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
     }
 
-  "getCheckpoint, consume, reset" should "result in an empty store" in
+  "createCheckpoint, consume, reset" should "result in an empty store" in
     withTestSpace { space =>
-      val root0 = space.getCheckpoint().root
+      val root0 = space.createCheckpoint().root
 
       val gnat1 = {
         val channels = List("ch1")
@@ -238,10 +244,10 @@ trait HistoryActionsTests
       space.store.isEmpty shouldBe true
     }
 
-  "getCheckpoint, consume, getCheckpoint, reset to first checkpoint, reset to second checkpoint" should
+  "createCheckpoint, consume, createCheckpoint, reset to first checkpoint, reset to second checkpoint" should
     "result in a store that contains the consume and appropriate join map" in withTestSpace {
     space =>
-      val root0 = space.getCheckpoint().root
+      val root0 = space.createCheckpoint().root
 
       val gnat1 = {
         val channels = List("ch1", "ch2")
@@ -257,7 +263,7 @@ trait HistoryActionsTests
                     gnat1.wks.head.continuation,
                     gnat1.wks.head.persist)
 
-      val root1 = space.getCheckpoint().root
+      val root1 = space.createCheckpoint().root
 
       val contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
 
@@ -308,7 +314,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $size produces")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -332,7 +338,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(consumes.size)
             logger.debug(s"$num: checkpointing $size consumes")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -362,7 +368,7 @@ trait HistoryActionsTests
             val consumesSize = "%02d".format(consumes.size)
             val producesSize = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
-            (State(space.getCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -391,7 +397,7 @@ trait HistoryActionsTests
 
     val commEvent = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
 
-    val Checkpoint(_, log) = space.getCheckpoint()
+    val Checkpoint(_, log) = space.createCheckpoint()
 
     log should contain theSameElementsInOrderAs Seq(commEvent,
                                                     expectedProduce2,

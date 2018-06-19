@@ -232,11 +232,6 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeAllJoins(txn: T, channel: C): Unit = {
-    val joinedChannelHash = hashChannels(Seq(channel))
-    _dbJoins.delete(txn, joinedChannelHash.bytes.toDirectByteBuffer)
-  }
-
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
@@ -246,7 +241,7 @@ class LMDBStore[C, P, A, K] private (
           if (newJoins.nonEmpty)
             insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
           else
-            removeAllJoins(txn, channel)
+            _dbJoins.delete(txn, joinedChannelHash.bytes.toDirectByteBuffer)
         }
       case None =>
         ()
@@ -287,7 +282,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def getCheckpoint(): Blake2b256Hash = {
+  def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
