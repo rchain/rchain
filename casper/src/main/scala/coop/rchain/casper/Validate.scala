@@ -55,7 +55,7 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
-   *
+   * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
   def validateBlockSummary[F[_]: Monad: Log](
