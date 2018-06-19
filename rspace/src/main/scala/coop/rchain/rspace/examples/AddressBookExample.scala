@@ -5,8 +5,9 @@ import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.extended._
-import coop.rchain.rspace.util.ignore
+import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.Language.ignore
+import coop.rchain.rspace.util.runKs
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -169,7 +170,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store)
+    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.master)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -203,7 +204,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store)
+    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.master)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 

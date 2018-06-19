@@ -1,4 +1,4 @@
-package coop.rchain.p2p.effects
+package coop.rchain.shared
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._

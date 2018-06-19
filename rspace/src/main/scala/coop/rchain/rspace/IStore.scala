@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.ITrieStore
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -54,9 +54,6 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
-  // Delete?
-  private[rspace] def removeAllJoins(txn: T, channel: C): Unit
-
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   private[rspace] def close(): Unit
@@ -65,9 +62,11 @@ trait IStore[C, P, A, K] {
 
   private[rspace] val eventsCounter: StoreEventsCounter
 
-  def getCheckpoint(): Blake2b256Hash
+  def createCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+
+  val trieBranch: Branch
 
   private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)

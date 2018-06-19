@@ -18,6 +18,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace._
+import coop.rchain.rspace.history.Branch
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -34,7 +35,7 @@ trait PersistentStoreTester {
     val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] =
       LMDBStore.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dbDir,
                                                                                1024 * 1024 * 1024)
-    val space = new RSpace(store)
+    val space = new RSpace(store, Branch("test"))
     try {
       f(space)
     } finally {
@@ -117,12 +118,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("channel")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("channel")))) ->
+        List(channel) ->
           Row(
-            List(Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
-                                      false)),
+            List(
+              Datum.create(channel,
+                           Seq[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
+                           false)),
             List()
           )
       ))
@@ -189,12 +194,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("channel")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("channel")))) ->
+        List(channel) ->
           Row(
-            List(Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
-                                      false)),
+            List(
+              Datum.create(channel,
+                           Seq[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
+                           false)),
             List()
           )
       ))
@@ -216,9 +225,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(task.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(x))
+
     result should be(
-      HashMap(List(Channel(Quote(x))) ->
-        Row(List(Datum[List[Channel]](List[Channel](Quote(GInt(7))), false)), List())))
+      HashMap(List(channel) -> Row(List(Datum.create(channel, Seq[Channel](Quote(GInt(7))), false)),
+                                   List())))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -243,21 +254,25 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channels = List(Channel(Quote(GString("channel"))))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("channel")))) ->
+        channels ->
           Row(
             List(),
             List(
-              WaitingContinuation[BindPattern, TaggedContinuation](
-                List(
-                  BindPattern(List(Channel(ChanVar(FreeVar(0))),
-                                   Channel(ChanVar(FreeVar(1))),
-                                   Channel(ChanVar(FreeVar(2)))),
-                              None)),
-                TaggedContinuation(ParBody(Par())),
-                false
-              )
+              WaitingContinuation
+                .create[Channel, BindPattern, TaggedContinuation](
+                  channels,
+                  List(
+                    BindPattern(List(Channel(ChanVar(FreeVar(0))),
+                                     Channel(ChanVar(FreeVar(1))),
+                                     Channel(ChanVar(FreeVar(2)))),
+                                None)),
+                  TaggedContinuation(ParBody(Par())),
+                  false
+                )
             )
           )
       ))
@@ -284,13 +299,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(task.runAsync, 3.seconds)
     }
 
+    val channels = List(Channel(Quote(y)))
+
     result should be(
       HashMap(
-        List(Channel(Quote(y))) ->
+        channels ->
           Row(
             List(),
             List(
-              WaitingContinuation[BindPattern, TaggedContinuation](
+              WaitingContinuation.create[Channel, BindPattern, TaggedContinuation](
+                channels,
                 List(BindPattern(List(Channel(Quote(Par()))), None)),
                 TaggedContinuation(ParBody(Par())),
                 false))
@@ -322,10 +340,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     sendFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -339,10 +360,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
+
     receiveFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -372,10 +394,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     sendFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -391,8 +416,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     receiveFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -427,19 +452,22 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
+
+    val channels = List(Channel(Quote(GInt(2))))
+
     sendFirstResult should be(
       HashMap(
-        List(Channel(Quote(GInt(2)))) ->
-          Row(List(),
-              List(
-                WaitingContinuation[BindPattern, TaggedContinuation](
-                  List(
-                    BindPattern(
-                      List(Quote(GInt(2)))
-                    )),
-                  TaggedContinuation(ParBody(Par())),
-                  false)
-              ))
+        channels ->
+          Row(
+            List(),
+            List(
+              WaitingContinuation.create[Channel, BindPattern, TaggedContinuation](
+                channels,
+                List(BindPattern(List(Quote(GInt(2))))),
+                TaggedContinuation(ParBody(Par())),
+                false)
+            )
+          )
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -455,17 +483,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     receiveFirstResult should be(
       HashMap(
-        List(Channel(Quote(GInt(2)))) ->
-          Row(List(),
-              List(
-                WaitingContinuation[BindPattern, TaggedContinuation](
-                  List(
-                    BindPattern(
-                      List(Quote(GInt(2)))
-                    )),
-                  TaggedContinuation(ParBody(Par())),
-                  false)
-              ))
+        channels ->
+          Row(
+            List(),
+            List(
+              WaitingContinuation.create[Channel, BindPattern, TaggedContinuation](
+                channels,
+                List(BindPattern(List(Quote(GInt(2))))),
+                TaggedContinuation(ParBody(Par())),
+                false))
+          )
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -500,13 +527,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
+        List(channel) ->
           Row(
             List(
-              Datum[List[Channel]](List[Channel](Quote(GPrivate("one")), Quote(GPrivate("zero"))),
-                                   false)),
+              Datum.create(channel,
+                           Seq[Channel](Quote(GPrivate("one")), Quote(GPrivate("zero"))),
+                           false)),
             List()
           )
       )
@@ -544,10 +574,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     sendFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -564,8 +597,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     receiveFirstResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -582,8 +615,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     interleavedResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -606,12 +639,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(task.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
+        List(channel) ->
           Row(List(
-                Datum[List[Channel]](List[Channel](Quote(EList(List(GInt(7), GInt(8), GInt(9))))),
-                                     false)),
+                Datum.create(channel,
+                             Seq[Channel](Quote(EList(List(GInt(7), GInt(8), GInt(9))))),
+                             false)),
               List())
       )
     )
@@ -648,10 +685,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     indirectResult should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
@@ -678,13 +718,17 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
+
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
+        List(channel) ->
           Row(
             List(
-              Datum[List[Channel]](
-                List[Channel](
+              Datum.create(
+                channel,
+                Seq[Channel](
                   Quote(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))),
                 false)),
             List())
@@ -712,11 +756,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(Expr(GByteArray(serializedProcess)))),
-                                        persist = false)),
+        List(channel) ->
+          Row(List(
+                Datum.create(channel,
+                             Seq[Channel](Quote(Expr(GByteArray(serializedProcess)))),
+                             persist = false)),
               List())
       )
     )
@@ -762,12 +810,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
+        List(channel) ->
           Row(List(
-                Datum[List[Channel]](
-                  List[Channel](Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))),
+                Datum.create(channel,
+                  Seq[Channel](Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))),
                   persist = false)),
               List())
       )
@@ -804,10 +854,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("true"))), persist = false)),
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("true"))), persist = false)),
               List())
       )
     )
@@ -832,10 +884,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
+    val channel = Channel(Quote(GString("result")))
+
     result should be(
       HashMap(
-        List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("true"))), persist = false)),
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("true"))), persist = false)),
               List())
       )
     )

@@ -3,11 +3,12 @@ package coop.rchain.casper.api
 import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.{BlockDag, MultiParentCasper}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.Checkpoint
+import coop.rchain.casper.util.rholang.RuntimeManager
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -60,13 +61,13 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
             ProtoUtil.stringToByteString(secondHashString)  -> secondBlock
           ),
           HashMap.empty[BlockHash, HashSet[BlockHash]],
-          HashMap.empty[Validator, BlockHash],
+          LatestMessages.empty,
+          HashMap.empty[Validator, LatestMessages],
           0,
           HashMap.empty[Validator, Int]
         ).pure[F]
-      def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
-        Applicative[F].pure[Option[Checkpoint]](None)
-      def close(): F[Unit] = ().pure[F]
+      def storageContents(hash: BlockHash): F[String] = "".pure[F]
+      def close(): F[Unit]                            = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 

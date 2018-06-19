@@ -245,6 +245,14 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
     incrementalAssembly in Compile := _incrementalAssembly.value
   )
   .dependsOn(rholang)
+
+lazy val roscala_macros = (project in file("roscala/macros"))
+  .settings(commonSettings: _*)
+  .settings(
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+    )
+  )
   
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
@@ -255,7 +263,7 @@ lazy val roscala = (project in file("roscala"))
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies
-  )
+  ).dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
@@ -324,4 +332,17 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+  .aggregate(
+    casper,
+    comm,
+    crypto,
+    models,
+    node,
+    regex,
+    rholang,
+    rholangCLI,
+    roscala,
+    rspace,
+    rspaceBench,
+    shared
+  )

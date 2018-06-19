@@ -1,6 +1,7 @@
 package coop.rchain.comm
 
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 // TODO we need lower level errors and general error, for now all in one place
 sealed trait CommError
@@ -22,6 +23,8 @@ final case class InternalCommunicationError(msg: String) extends CommError
 // TODO add Show instance
 
 object CommError {
+
+  type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
 
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type CommErr[A]        = Either[CommError, A]

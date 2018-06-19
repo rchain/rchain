@@ -5,42 +5,18 @@ import scala.collection.immutable.Seq
 package object util {
 
   /**
-    * Runs a computation for its side-effects, discarding its value
-    *
-    * @param a A computation to run
+    * Extracts a continuation from a produce result
     */
-  def ignore[A](a: => A): Unit = {
-    val _: A = a
-    ()
-  }
+  def getK[A, K](t: Option[(K, A)]): K =
+    t.map(_._1).get
 
-  /**
-    * Executes a function `f` with a given [[AutoCloseable]] `a` as its argument,
-    * returning the result of the function and closing the `a`
-    *
-    * Compare to Java's "try-with-resources"
-    *
-    * @param a A given resource implementing [[AutoCloseable]]
-    * @param f A function that takes this resource as its argument
+  /** Runs a continuation with the accompanying data
     */
-  def withResource[A <: AutoCloseable, B](a: A)(f: A => B): B =
-    try {
-      f(a)
-    } finally {
-      a.close()
-    }
+  def runK[T](t: Option[((T) => Unit, T)]): Unit =
+    t.foreach { case (k, data) => k(data) }
 
-  /** Drops the 'i'th element of a list.
+  /** Runs a list of continuations with the accompanying data
     */
-  def dropIndex[T](xs: Seq[T], n: Int): Seq[T] = {
-    val (l1, l2) = xs splitAt n
-    l1 ++ (l2 drop 1)
-  }
-
-  /** Removes the first occurrence of an element that matches the given predicate.
-    */
-  def removeFirst[T](xs: Seq[T])(p: T => Boolean): Seq[T] = {
-    val (l1, l2) = xs.span(x => !p(x))
-    l1 ++ (l2 drop 1)
-  }
+  def runKs[T](t: Seq[Option[((T) => Unit, T)]]): Unit =
+    t.foreach { case Some((k, data)) => k(data); case None => () }
 }

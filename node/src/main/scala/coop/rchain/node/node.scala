@@ -27,6 +27,9 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.node.api._
+import coop.rchain.comm.connect.Connect
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -35,19 +38,31 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
-      && conf.run.key.toOption.isEmpty
       && !conf.run.certificatePath.toFile.exists()) {
     println(s"No certificate found at path ${conf.run.certificatePath}")
-    println("Generating a X.509 certificate and secret key for the node")
+    println("Generating a X.509 certificate for the node")
 
     import coop.rchain.shared.Resources._
-    val keyPair = CertificateHelper.generateKeyPair()
-    val cert    = CertificateHelper.generate(keyPair)
-    withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) { pw =>
-      pw.write(CertificatePrinter.print(cert))
-    }
-    withResource(new java.io.PrintWriter(conf.run.keyPath.toFile)) { pw =>
-      pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+    // If there is a private key, use it for the certificate
+    if (conf.run.keyPath.toFile.exists()) {
+      println(s"Using secret key ${conf.run.keyPath}")
+      Try(CertificateHelper.readKeyPair(conf.run.keyPath.toFile)) match {
+        case Success(keyPair) =>
+          withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) {
+            _.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
+          }
+        case Failure(e) =>
+          println(s"Invalid secret key: ${e.getMessage}")
+      }
+    } else {
+      println("Generating a PEM secret key for the node")
+      val keyPair = CertificateHelper.generateKeyPair()
+      withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) { pw =>
+        pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
+      }
+      withResource(new java.io.PrintWriter(conf.run.keyPath.toFile)) { pw =>
+        pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+      }
     }
   }
 
@@ -83,12 +98,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       .map("%02x".format(_))
       .mkString
-  }
-
-  implicit class ThrowableOps(th: Throwable) {
-    def containsMessageWith(str: String): Boolean =
-      if (th.getCause == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -265,7 +274,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => p2p.Network.dispatch[Effect](pm)
+        case NotHandled => Connect.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
     }
 
@@ -284,8 +293,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               else
                 conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+                  .toEffect >>= (addr => Connect.connectToBootstrap[Effect](addr)))
+      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect], 0)
           else ().pure[Effect]
       _ <- casperEffect.close()
       _ <- exit0.toEffect

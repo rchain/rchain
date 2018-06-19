@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 
 import cats.syntax.either._
-import coop.rchain.rspace.util.withResource
+import coop.rchain.shared.Resources.withResource
 
 package object examples {
 

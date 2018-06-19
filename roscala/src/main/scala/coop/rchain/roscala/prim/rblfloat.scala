@@ -5,6 +5,9 @@ import coop.rchain.roscala.ob.{Ctxt, Ob, RblFloat}
 
 object rblfloat {
   object flPlus extends Prim {
+    val name    = "fl+"
+    val maxArgs = Prim.MaxArgs
+    val minArgs = 1
     def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val n = ctxt.nargs
 

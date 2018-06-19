@@ -2,7 +2,7 @@ package coop.rchain.node.diagnostics.client
 
 import cats._
 import cats.implicits._
-import coop.rchain.node.ConsoleIO
+import coop.rchain.node.effects.ConsoleIO
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.shared.LongOps._
 
