@@ -151,9 +151,9 @@ package object history {
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
       //point at node from skip
-      case ((lh, _: Node), (_, Skip(oldAffix, _))) =>
-        val ns = Skip(oldAffix, NodePointer(lh))
-        (Trie.hash[K, V](ns), ns)
+      case ((lastHash, _: Node), (_, s: Skip)) =>
+        val node = s.copy(pointer = NodePointer(lastHash))
+        (Trie.hash[K, V](node), node)
     }
 
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
