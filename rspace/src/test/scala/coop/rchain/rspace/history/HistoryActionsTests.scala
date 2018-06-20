@@ -3,7 +3,6 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test._
 import org.lmdbjava.{Env, Txn}
 import org.scalacheck.Arbitrary
@@ -436,7 +435,6 @@ trait LMDBWithTestTrieStore[K]
 
   override def withTestTrieStore[R](
       f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R = {
-    // @todo deliver better
     val env: Env[ByteBuffer] =
       Env
         .create()
