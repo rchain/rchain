@@ -12,9 +12,9 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.implicits._
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.{IStore, Serialize}
@@ -37,6 +37,9 @@ class CryptoChannelsSpec
 
   type Store = IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]
 
+  implicit val serializeChannel: Serialize[Channel]       = storage.implicits.serializeChannel
+  implicit val serializeChannels: Serialize[Seq[Channel]] = storage.implicits.serializeChannels
+
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode _
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
@@ -56,55 +59,62 @@ class CryptoChannelsSpec
     Await.ready(reduce.eval(consume).runAsync, 3.seconds)
   }
 
-  def assertStoreContains(store: Store)(ackChannel: GString)(data: List[Channel]): Assertion =
-    store.toMap(List(Channel(Quote(ackChannel)))) should be(
+  def assertStoreContains(store: Store)(ackChannel: GString)(data: Seq[Channel])(
+      implicit
+      serializeChannel: Serialize[Channel],
+      serializeChannels: Serialize[Seq[Channel]]): Assertion = {
+    val channel = Channel(Quote(ackChannel))
+    store.toMap(List(channel)) should be(
       Row(
-        List(Datum[List[Channel]](data, false)),
+        List(Datum.create[Channel, Seq[Channel]](channel, data, false)),
         List()
       )
     )
+  }
 
-  def hashingChannel(channelName: String, hashFn: Array[Byte] => Array[Byte]): FixtureParam => Any =
-    fixture => {
-      val (reduce, store) = fixture
+  def hashingChannel(channelName: String,
+                     hashFn: Array[Byte] => Array[Byte],
+                     fixture: FixtureParam)(implicit
+                                            serializeChannel: Serialize[Channel],
+                                            serializeChannels: Serialize[Seq[Channel]]): Any = {
+    val (reduce, store) = fixture
 
-      val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
-        hashFn => serialize andThen hashFn
+    val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
+      hashFn => serialize andThen hashFn
 
-      val hashChannel              = Quote(GString(channelName))
-      val hash: Par => Array[Byte] = serializeAndHash(hashFn)
+    val hashChannel              = Quote(GString(channelName))
+    val hash: Par => Array[Byte] = serializeAndHash(hashFn)
 
-      val ackChannel        = GString("x")
-      implicit val emptyEnv = Env[Par]()
+    val ackChannel        = GString("x")
+    implicit val emptyEnv = Env[Par]()
 
-      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+    val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel)(_)
 
-      forAll { (par: Par) =>
-        val byteArrayToSend = Expr(GByteArray(par.toByteString))
-        val data: List[Par] = List(byteArrayToSend, ackChannel)
-        val send            = Send(hashChannel, data, false, BitSet())
-        val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
-        // Send byte array on hash channel. This should:
-        // 1. meet with the system process in the tuplespace
-        // 2. hash input array
-        // 3. send result on supplied ack channel
-        Await.result(reduce.eval(send).runAsync, 3.seconds)
-        storeContainsTest(List[Channel](Quote(expected)))
-        clearStore(store, reduce, ackChannel)
-      }
+    forAll { (par: Par) =>
+      val byteArrayToSend = Expr(GByteArray(par.toByteString))
+      val data: List[Par] = List(byteArrayToSend, ackChannel)
+      val send            = Send(hashChannel, data, false, BitSet())
+      val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
+      // Send byte array on hash channel. This should:
+      // 1. meet with the system process in the tuplespace
+      // 2. hash input array
+      // 3. send result on supplied ack channel
+      Await.result(reduce.eval(send).runAsync, 3.seconds)
+      storeContainsTest(List[Channel](Quote(expected)))
+      clearStore(store, reduce, ackChannel)
     }
+  }
 
   "sha256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("sha256Hash", Sha256.hash _)(fixture)
-
+    hashingChannel("sha256Hash", Sha256.hash _, fixture)
   }
 
   "blake2b256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("blake2b256Hash", Blake2b256.hash _)(fixture)
+    hashingChannel("blake2b256Hash", Blake2b256.hash _, fixture)
   }
 
   "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("keccak256Hash", Keccak256.hash _)(fixture)
+    hashingChannel("keccak256Hash", Keccak256.hash _, fixture)
 
   }
 
@@ -190,9 +200,9 @@ class CryptoChannelsSpec
     val runtime   = Runtime.create(dbDir, size)(Capture.taskCapture)
 
     try {
-      test((runtime.reducer, runtime.store))
+      test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.store.close()
+      runtime.close()
       recursivelyDeletePath(dbDir)
     }
   }

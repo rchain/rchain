@@ -1,0 +1,109 @@
+//scalapackage coop.rchain.rholang.mint
+
+//requires MakeMint, TestSet
+contract @"getBalance"(@purse, return) = {
+  new getBalance in {
+    contract getBalance(return) = {
+      @[purse, "getBalance"]!(*return)
+    } |
+    return!(*getBalance)
+  }
+} |
+contract @"deposit"(@dest, @amount, @src, return) = {
+  new deposit in {
+    contract deposit(return) = {
+      @[dest, "deposit"]!(amount, src, *return)
+    } |
+    return!(*deposit)
+  }
+} |
+contract @"split"(@purse, @amount, destCh, return) = {
+  new split in {
+    contract split(return) = {
+      @[purse, "split"]!(amount, *destCh) |
+      for(@value <- destCh) {
+        match value {
+          [] => { return!(false) }
+          _  => { return!(true) }
+        } |
+        destCh!(value)
+      }
+    } |
+    return!(*split)
+  }
+} |
+@"MakeMint"!("mintA") | @"MakeMint"!("mintB") |
+for(@mintA <- @"mintA"; @mintB <- @"mintB") {
+  @[mintA, "makePurse"]!(100, "aliceAPurse") | @[mintB, "makePurse"]!(50, "bobBPurse") |
+  for(@aliceAPurse <- @"aliceAPurse"; @bobBPurse <- @"bobBPurse") {
+    @"getBalance"!(aliceAPurse, "aliceAPurseBalance") |
+    @"getBalance"!(bobBPurse, "bobBPurseBalance") |
+    @"TestSet"!(
+      "Purses should be created with the given balance.",
+      [
+        ["aliceAPurseBalance", 100],
+        ["bobBPurseBalance", 50]
+      ]
+    ) |
+    
+    
+    @["TestSet", "after"]!("Purses should be created with the given balance.", {
+      @"deposit"!(aliceAPurse, 10, bobBPurse, "ccDep1") |
+      @"deposit"!(bobBPurse, 10, aliceAPurse, "ccDep2") |
+      @"TestSet"!( //cannot deposit tokens across different mints
+        "Cross-currency deposits should fail.",
+        [
+          ["ccDep1", false],
+          ["ccDep2", false],
+        ]
+      )
+    }) |
+    
+    
+    @["TestSet", "after"]!("Cross-currency deposits should fail.", {
+      @[aliceAPurse, "sprout"]!("bobAPurse") |
+      @[bobBPurse, "sprout"]!("aliceBPurse") |
+      for(@aliceBPurse <- @"aliceBPurse"; @bobAPurse <- @"bobAPurse") {
+        @"getBalance"!(aliceBPurse, "aliceBPurseBalance") |
+        @"getBalance"!(bobAPurse, "bobAPurseBalance") |
+        @"deposit"!(aliceBPurse, 10, bobBPurse, "bDep") |
+        @"deposit"!(bobAPurse, 20, aliceAPurse, "aDep1") |
+        @"deposit"!(bobAPurse, 30, aliceAPurse, "aDep2") |
+        @"TestSet"!(
+          "Deposit should work as expected.",
+          [
+            ["bDep", true], //10 from Bob to Alice
+            ["aliceBPurseBalance", 10], //0 + 10 = 10
+            ["bobBPurseBalance", 40], // 50 - 10 = 40
+            
+            ["aDep1", true], //20 from Alice to Bob
+            ["bobAPurseBalance", 20], //0 + 20 = 20
+            ["aliceAPurseBalance", 80], // 100 - 20 = 80
+            
+            ["aDep2", true], //30 from Alice to Bob again
+            ["bobAPurseBalance", 50], //20 + 30 = 50
+            ["aliceAPurseBalance", 50], // 80 - 30 = 50
+          ]
+        )
+      } |
+      
+      @["TestSet", "after"]!("Deposit should work as expected.", {
+        @"split"!(aliceAPurse, 500, "failPurse", "splitFail") |
+        @[aliceAPurse, "split"]!(5, "aliceAPurse5") |
+        for(@[aliceAPurse5] <- @"aliceAPurse5"){
+          @"aliceAPurse5"!([aliceAPurse5]) |
+          @"getBalance"!(aliceAPurse5, "aliceAPurse5Balance") |
+          @"TestSet"!(
+            "Split should work as expected.",
+            [
+              ["splitFail", false], //cannot split with more than you have
+              
+              ["aliceAPurse5Balance", 5], //0 + 5 = 5
+              ["aliceAPurseBalance", 45] // 50 - 5 = 45
+            ]
+          )
+        }
+      })
+    })
+  }
+}

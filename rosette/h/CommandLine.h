@@ -36,6 +36,7 @@ extern bool ForceEnableRepl;
 extern int VerboseFlag;
 extern int DeferLookupFlag;
 extern char ExportFile[];
+extern char ImportFile[];
 
 extern int ParseCommandLine(int, char**);
 

@@ -5,8 +5,9 @@ import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.extended._
-import coop.rchain.rspace.util.ignore
+import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.Language.ignore
+import coop.rchain.rspace.util.runKs
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -169,20 +170,21 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
+    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
     val cres =
-      consume(store,
-              Seq(Channel("friends")),
-              Seq(CityMatch(city = "Crystal Lake")),
-              new Printer,
-              persist = true)
+      space.consume(Seq(Channel("friends")),
+                    Seq(CityMatch(city = "Crystal Lake")),
+                    new Printer,
+                    persist = true)
 
     assert(cres.isEmpty)
 
-    val pres1 = produce(store, Channel("friends"), alice, persist = false)
-    val pres2 = produce(store, Channel("friends"), bob, persist = false)
-    val pres3 = produce(store, Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(Channel("friends"), alice, persist = false)
+    val pres2 = space.produce(Channel("friends"), bob, persist = false)
+    val pres3 = space.produce(Channel("friends"), carol, persist = false)
 
     assert(pres1.nonEmpty)
     assert(pres2.nonEmpty)
@@ -202,22 +204,23 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
+    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
-    val pres1 = produce(store, Channel("friends"), alice, persist = false)
-    val pres2 = produce(store, Channel("friends"), bob, persist = false)
-    val pres3 = produce(store, Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(Channel("friends"), alice, persist = false)
+    val pres2 = space.produce(Channel("friends"), bob, persist = false)
+    val pres3 = space.produce(Channel("friends"), carol, persist = false)
 
     assert(pres1.isEmpty)
     assert(pres2.isEmpty)
     assert(pres3.isEmpty)
 
     val consumer = () =>
-      consume(store,
-              Seq(Channel("friends")),
-              Seq(NameMatch(last = "Lahblah")),
-              new Printer,
-              persist = false)
+      space.consume(Seq(Channel("friends")),
+                    Seq(NameMatch(last = "Lahblah")),
+                    new Printer,
+                    persist = false)
 
     val cres1 = consumer()
     val cres2 = consumer()

@@ -1,9 +1,19 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
-import scodec.bits.BitVector
+import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
+
+sealed trait Pointer
+sealed trait NonEmptyPointer extends Pointer {
+  def hash: Blake2b256Hash
+}
+
+case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
+case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
+case object EmptyPointer                     extends Pointer
 
 sealed trait Trie[+K, +V]                         extends Product with Serializable
 final case class Leaf[K, V](key: K, value: V)     extends Trie[K, V]
@@ -16,13 +26,11 @@ object Trie {
   implicit def codecTrie[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Trie[K, V]] =
     discriminated[Trie[K, V]]
       .by(uint8)
-      .subcaseO(0) {
-        case (leaf: Leaf[K, V]) => Some(leaf)
-        case _                  => None
+      .subcaseP(0) {
+        case (leaf: Leaf[K, V]) => leaf
       }((codecK :: codecV).as[Leaf[K, V]])
-      .subcaseO(1) {
-        case (node: Node) => Some(node)
-        case _            => None
+      .subcaseP(1) {
+        case (node: Node) => node
       }(PointerBlock.codecPointerBlock.as[Node])
 
   def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =

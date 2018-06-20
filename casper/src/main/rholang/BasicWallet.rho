@@ -1,0 +1,60 @@
+//scalapackage coop.rchain.rholang.wallet
+
+//assumes standard purse API from MakeMint
+contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
+  new cryptoVerifyCh in {
+    match algorithm {
+      "ed25519" => {
+        cryptoVerifyCh!(["ed25519Verify"])
+      }
+      _ => {
+        cryptoVerifyCh!([])
+      }
+    } |
+    for(@maybeCryptoVerify <- cryptoVerifyCh) {
+      match maybeCryptoVerify {
+        []             => { return!([]) }
+        [cryptoVerify] => {
+          new basicWallet, verify, nonceCh in {
+            nonceCh!(-1) |
+            contract verify(@nonce, @amount, @retCh, @sig, return) = {
+              for(@prevNonce <- nonceCh) {
+                if (nonce == (prevNonce + 1)) {
+                  new result in {
+                    @cryptoVerify!([nonce, amount, retCh].toByteArray(), sig.hexToBytes(), pk.hexToBytes(), *result) |
+                    for(@r <- result) {
+                      if (r) { nonceCh!(nonce) | return!(true) }
+                      else { nonceCh!(prevNonce) | return!(false) }
+                    }
+                  }
+                } else {
+                  nonceCh!(prevNonce) | return!(false)
+                }
+              }
+            } |
+            contract @[*basicWallet, "getNonce"](return) = {
+              for(@nonce <- nonceCh) {
+                nonceCh!(nonce) | return!(nonce)
+              }
+            } |
+            contract @[*basicWallet, "getBalance"](return) = {
+              @[purse, "getBalance"]!(*return)
+            } |
+            contract @[*basicWallet, "deposit"](@amount, @src, success) = {
+              @[purse, "deposit"]!(amount, src, *success)
+            } |
+            contract @[*basicWallet, "withdraw"](@amount, @nonce, @sig, return) = {
+              new verifyResult in {
+                verify!(nonce, amount, *return, sig, *verifyResult) | for(@verified <- verifyResult) {
+                  if (verified) { @[purse, "split"]!(amount, *return) }
+                  else { return!([]) }
+                }
+              }
+            } |
+            return!([*basicWallet])
+          }
+        }
+      }
+    }
+  }
+}

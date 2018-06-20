@@ -59,6 +59,16 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
+RChain Node 0.4.1
+      --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
+                           running.
+  -g, --grpc-port  <arg>   Port used for gRPC API.
+      --help               Show help message
+      --version            Show version of this program
+
+Subcommand: diagnostics (alias: d) - Node diagnostics
+      --help   Show help message
+Subcommand: run
       --bonds-file  <arg>       Plain text file consisting of lines of the form
                                 `<pk> <stake>`, which defines the bond amounts
                                 for each validator at genesis. <pk> is the
@@ -69,23 +79,8 @@ You can run node with the following flags:
   -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
   -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
                                 being used for identification
-      --data_dir  <arg>         Path to data directory. Defaults to
+  -d, --data_dir  <arg>         Path to data directory. Defaults to
                                 /var/lib/rnode
-      --deploy  <arg>           Deploy a Rholang source file to Casper on an
-                                existing running node. The deploy will be
-                                packaged and sent as a block to the network
-                                depending on the configuration of the Casper
-                                instance.
-      --deploy-demo             Demo sending some placeholder Deploy operations
-                                to Casper on an existing running node at regular
-                                intervals
-  -d, --diagnostics             Node diagnostics
-  -e, --eval  <arg>             Starts a thin client that will evaluate rholang
-                                in file on a existing running node. See grpcHost
-                                and grpcPort.
-      --grpc-host  <arg>        Hostname or IP of node on which gRPC service is
-                                running.
-  -g, --grpc-port  <arg>        Port used for gRPC API.
       --host  <arg>             Hostname or IP of this node.
   -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
                                 ported to gRPC API).
@@ -95,20 +90,33 @@ You can run node with the following flags:
   -m, --metrics-port  <arg>     Port used by metrics API.
   -n, --num-validators  <arg>   Number of validators at genesis.
   -p, --port  <arg>             Network port to use.
-      --propose                 Force Casper (on an existing running node) to
-                                propose a block based on its accumulated
-                                deploys. Requires a value of --secret-key to be
-                                set.
-  -r, --repl                    Starts a thin client, that will connect to
-                                existing node. See grpcHost and grpcPort.
-      --secret-key  <arg>       Base16 encoding of the Ed25519 private key to
-                                use for signing a proposed block.
-      --show-block  <arg>       View properties of a block known by Casper on an
-                                existing running node.Output includes: parent
-                                hashes, storage contents of the tuplespace.
   -s, --standalone              Start a stand-alone node (no bootstrapping).
       --help                    Show help message
-      --version                 Show version of this program
+Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
+      --help   Show help message
+Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
+      --help   Show help message
+
+ trailing arguments:
+  file-name (required)
+Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
+      --help   Show help message
+Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
+      --help   Show help message
+
+ trailing arguments:
+  location (required)
+Subcommand: show-block - View properties of a block known by Casper on an existing running node.Output includes: parent hashes, storage contents of the tuplespace.
+      --help   Show help message
+
+ trailing arguments:
+  hash (required)   the hash value of the block
+Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node. 
+    --help   Show help message
+Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
+  -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
+                            for signing a proposed block.
+      --help                Show help message
 ```
 
 ### 2.1 The Node
@@ -182,9 +190,9 @@ To use both the peer-to-peer and REPL capabilities of RNode, two containers runn
 ```bash
 > docker network create rnode-net
 
-> docker run -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
+> docker run -dit --name rnode0 --network rnode-net rchain/rnode:latest run -s
 
-> docker run -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
+> docker run -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 repl
 ```
 
 ##### 2.1.2.2 via Java
@@ -209,7 +217,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
 ```
 
 ### 2.2 REPL
-When running the program with `--repl`, it will fire up a thin REPL client. This client will connect to running node instance via gRPC to provide simple REPL functionality. You can control to which node you will connect by providing `--grpc-host` and `--grpc-port`.
+When running the program with sub command `repl`, it will fire up a thin REPL client. This client will connect to running node instance via gRPC to provide simple REPL functionality. You can control to which node you will connect by providing `--grpc-host` and `--grpc-port`.
 In REPL mode users have the ability to execute Rholang commands in REPL environment, which will be evaluated by the Rholang interpreter
 
 
@@ -217,24 +225,24 @@ In REPL mode users have the ability to execute Rholang commands in REPL environm
 Assuming you have a RNode running in Docker, use the command below to run the node in REPL mode.
 
 ```
-$ docker run -ti rchain/rnode --repl
+$ docker run -ti rchain/rnode repl
 ```
 
 #### 2.2.2. Running via Java
 This will run Node from JAR file that was built in [Building from source](#building-from-source)
 
 ```
-$ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar --repl
+$ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar repl
 ```
 
 ### 2.3 Eval
-When running the program with `--eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code that is stored in a plain text file on the node itself.
+When running the program with sub command `eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code that is stored in a plain text file on the node itself.
 
 ### 2.3.1 Running via Docker
 This assumes you have a RNode running in Docker. To run Rholang that is stored in a plain text file (filename.rho), use
 
 '''
-docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode --eval /tmp/filename.rho
+docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode eval /tmp/filename.rho
 '''
 
 This command will run the node in interpreter mode and will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed. When running your docker container, be aware of your current path - the 'pwd' command sticks your current path in the bind command.

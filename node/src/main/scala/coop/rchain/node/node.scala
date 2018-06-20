@@ -1,11 +1,16 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import io.grpc.Server
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.casper.MultiParentCasper
+import io.grpc.Server
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
@@ -14,42 +19,66 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
-import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-
 import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
-import coop.rchain.node.effects.TLNodeDiscovery
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
+import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.node.api._
+import coop.rchain.comm.connect.Connect
+
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   // Generate certificate if not provided as option or in the data dir
-  if (conf.certificate.toOption.isEmpty
-      && conf.key.toOption.isEmpty
-      && !conf.certificatePath.toFile.exists()) {
-    println(s"No certificate found at path ${conf.certificatePath}")
+  if (conf.run.certificate.toOption.isEmpty
+      && !conf.run.certificatePath.toFile.exists()) {
+    println(s"No certificate found at path ${conf.run.certificatePath}")
     println("Generating a X.509 certificate for the node")
-    CertificateHelper.generate(conf.data_dir().toString)
+
+    import coop.rchain.shared.Resources._
+    // If there is a private key, use it for the certificate
+    if (conf.run.keyPath.toFile.exists()) {
+      println(s"Using secret key ${conf.run.keyPath}")
+      Try(CertificateHelper.readKeyPair(conf.run.keyPath.toFile)) match {
+        case Success(keyPair) =>
+          withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) {
+            _.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
+          }
+        case Failure(e) =>
+          println(s"Invalid secret key: ${e.getMessage}")
+      }
+    } else {
+      println("Generating a PEM secret key for the node")
+      val keyPair = CertificateHelper.generateKeyPair()
+      withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) { pw =>
+        pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
+      }
+      withResource(new java.io.PrintWriter(conf.run.keyPath.toFile)) { pw =>
+        pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+      }
+    }
   }
 
-  if (!conf.certificatePath.toFile.exists()) {
-    println(s"Certificate file ${conf.certificatePath} not found")
+  if (!conf.run.certificatePath.toFile.exists()) {
+    println(s"Certificate file ${conf.run.certificatePath} not found")
     System.exit(-1)
   }
 
-  if (!conf.keyPath.toFile.exists()) {
-    println(s"Secret key file ${conf.keyPath} not found")
+  if (!conf.run.keyPath.toFile.exists()) {
+    println(s"Secret key file ${conf.run.keyPath} not found")
     System.exit(-1)
   }
 
   private val name: String = {
-    val certPath = conf.certificate.toOption
-      .getOrElse(java.nio.file.Paths.get(conf.data_dir().toString, "node.certificate.pem"))
+    val certPath = conf.run.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.run.data_dir().toString, "node.certificate.pem"))
 
     val publicKey = Try(CertificateHelper.fromFile(certPath.toFile)) match {
       case Success(c) => Some(c.getPublicKey)
@@ -71,22 +100,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       .mkString
   }
 
-  implicit class ThrowableOps(th: Throwable) {
-    def containsMessageWith(str: String): Boolean =
-      if (th.getCause == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
-  }
-
   import ApplicativeError_._
 
   /** Configuration */
-  private val host           = conf.localhost
-  private val address        = s"rnode://$name@$host:${conf.port()}"
-  private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
-  private val storagePath    = conf.data_dir().resolve("rspace")
-  private val storageSize    = conf.map_size()
+  private val host        = conf.run.localhost
+  private val address     = s"rnode://$name@$host:${conf.run.port()}"
+  private val src         = PeerNode.parse(address).right.get
+  private val storagePath = conf.run.data_dir().resolve("rspace")
+  private val storageSize = conf.run.map_size()
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -100,20 +121,18 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                     = effects.log
   implicit val timeEffect: Time[Task]                   = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
   implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
-    conf.bondsFile.toOption
+    conf.run.bondsFile.toOption
       .flatMap(path => {
         val f = new File(path)
         if (f.exists) Some(f)
@@ -143,12 +162,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       })
     case None => newValidators
   }
+  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    storagePath,
+    storagePath.resolve("casper"),
     storageSize,
     genesisBlock(genesisBonds)
   )
-  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )
 
@@ -162,12 +182,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- {
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.store, conf.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
-      metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
-      httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
+      metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
+      httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
 
   def startResources(resources: Resources): Effect[Unit] =
@@ -194,7 +214,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down HTTP server....")
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
-    resources.runtime.store.close()
+    resources.runtime.close()
 
     println("Goodbye.")
   }
@@ -209,7 +229,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.store, conf.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
@@ -219,10 +239,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def newValidators: Map[Array[Byte], Int] = {
-    val numValidators  = conf.numValidators.toOption.getOrElse(5)
+    val numValidators  = conf.run.numValidators.toOption.get
     val keys           = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys)   = keys.unzip
-    val validatorsPath = conf.data_dir().resolve("validators")
+    val validatorsPath = conf.run.data_dir().resolve("validators")
     validatorsPath.toFile.mkdir()
 
     keys.foreach { //create files showing the secret key for each public key
@@ -254,12 +274,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => p2p.Network.dispatch[Effect](pm)
+        case NotHandled => Connect.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
     }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
+      _         <- Log[Effect].info(s"RChain Node ${BuildInfo.version}")
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
@@ -268,13 +289,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
-              if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
+              if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
-                conf.bootstrap.toOption
+                conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+                  .toEffect >>= (addr => Connect.connectToBootstrap[Effect](addr)))
+      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect], 0)
           else ().pure[Effect]
+      _ <- casperEffect.close()
       _ <- exit0.toEffect
     } yield ()
 

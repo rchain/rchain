@@ -25,12 +25,14 @@ _. Proc16 ::= "{" Proc "}" ;
 PGround.      Proc16 ::= Ground ;
 PCollect.     Proc16 ::= Collection ;
 PVar.         Proc16 ::= ProcVar ;
+PVarRef.      Proc13 ::= VarRefKind Var ;
 PNil.         Proc16 ::= "Nil" ;
 PNegation.    Proc15 ::= "~" Proc15 ;
 PConjunction. Proc14 ::= Proc14 "/\\" Proc15 ;
 PDisjunction. Proc13 ::= Proc13 "\\/" Proc14 ;
 PEval.        Proc12 ::= "*" Name ;
 PMethod.      Proc11 ::= Proc11 "." Var "(" [Proc] ")" ;
+PExprs.       Proc11  ::= "(" Proc4 ")" ;
 PNot.         Proc10 ::= "not" Proc10 ;
 PNeg.         Proc10 ::= "-" Proc10 ;
 PMult.        Proc9  ::= Proc9 "*" Proc10 ;
@@ -124,11 +126,14 @@ GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
 CollectList.   Collection ::= "[" [Proc] Remainder "]" ;
-CollectTuple.  Collection ::= "(" [Proc] ")" ;
+CollectTuple.  Collection ::= Tuple;
 CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
 CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
+
+TupleSingle.    Tuple ::= "(" Proc ",)" ;
+TupleMultiple.  Tuple ::= "(" Proc "," [Proc] ")" ;
 
 -- Remainders:
 RemainderVar.   Remainder ::= "..." ProcVar ;
@@ -136,6 +141,9 @@ RemainderEmpty. Remainder ::= "" ;
 NameRemainderVar.   NameRemainder ::= "..." "@" ProcVar ;
 NameRemainderEmpty. NameRemainder ::= "" ;
 
+-- VarRefKind:
+VarRefKindProc. VarRefKind ::= "=" ;
+VarRefKindName. VarRefKind ::= "=" "*" ;
 
 token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 
