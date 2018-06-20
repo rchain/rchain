@@ -352,9 +352,9 @@ In the code below, we show an example of iterating through a list.
 
 15-18) This `contract` gets invoked for each item in the list.  On line 17, we tell the iterator that we're done with this item.
 
-19) This `for` contains the code that should be executed when the interation is complete.
+19) This `for` contains the code that should be executed when the interaction is complete.
 
-## Maps
+## Coat check
 
      1 new MakeCoatCheck in {
      2   contract MakeCoatCheck(ret) = {
