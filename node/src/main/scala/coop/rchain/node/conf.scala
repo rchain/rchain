@@ -136,6 +136,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   }
   addSubcommand(showBlock)
 
+  val showBlocks = new Subcommand("show-blocks") {
+    descr(
+      "View list of blocks on the main chain in the current Casper view on an existing running node.")
+  }
+  addSubcommand(showBlocks)
+
   val propose = new Subcommand("propose") {
     descr(
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys. " +
