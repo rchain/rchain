@@ -198,42 +198,8 @@ package object history {
             // If the "tip" is an existing leaf with a different key than the new leaf, then
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
-            case existingLeaf @ Leaf(ek, _) if key != ek =>
-              val wholePathLength = encodedKeyNew.size
-
-              val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
-              val sharedPrefix       = commonPrefix(encodedKeyNew, encodedKeyExisting)
-              val sharedPrefixLength = sharedPrefix.length
-              val sharedPath         = sharedPrefix.drop(parents.length).reverse
-              val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
-              val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
-
-              val pathLeft = wholePathLength - sharedPrefixLength
-              val update = if (pathLeft > 1) {
-                val pathLength  = parents.countPathLength
-                val commonAffix = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
-                val skipExistingPtr =
-                  setupSkipNode(store, txn, LeafPointer(newLeafHash), commonAffix)
-                val skipNewPtr =
-                  setupSkipNode(store, txn, LeafPointer(Trie.hash[K, V](existingLeaf)), commonAffix)
-                List((newLeafIndex, skipNewPtr), (existingLeafIndex, skipExistingPtr))
-              } else {
-                List((newLeafIndex, LeafPointer(newLeafHash)),
-                     (existingLeafIndex, LeafPointer(Trie.hash[K, V](existingLeaf))))
-              }
-              val hd = Node(
-                PointerBlock
-                  .create()
-                  .updated(update))
-
-              val emptyNode  = Node(PointerBlock.create())
-              val emptyNodes = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
-              val nodes      = emptyNodes ++ parents
-
-              val rehashedNodes = rehash[K, V](hd, nodes)
-              val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, branch, newRootHash)
-              logger.debug(s"workingRootHash: $newRootHash")
+            case Leaf(ek, _) if key != ek =>
+              throw new InsertException("Trie parents tip should not hold a leaf.")
             // If the "tip" is an existing leaf with the same key as the new leaf, but the
             // existing leaf and new leaf have different values, then we are in the situation
             // where we are "updating" an existing leaf
@@ -257,11 +223,11 @@ package object history {
             case Node(pb) =>
               val pathLength      = parents.countPathLength
               val wholePathLength = encodedKeyNew.size
-              val pathLeft        = wholePathLength - pathLength
+              val pathRemaining   = wholePathLength - pathLength
               val newLeafIndex    = JByte.toUnsignedInt(encodedKeyNew(pathLength))
               logger.debug(
-                s"Node state, current:$pathLength, left: $pathLeft, whole: $wholePathLength")
-              val ptr = if (pathLeft > 1) {
+                s"Node state, current:$pathLength, remaining: $pathRemaining, whole: $wholePathLength")
+              val ptr = if (pathRemaining > 1) {
                 val skip = Skip(ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2),
                                 LeafPointer(newLeafHash))
                 val skipHash = Trie.hash(skip)(codecK, codecV)
@@ -278,9 +244,10 @@ package object history {
             // If the tip is a skip node -> there is no Node for this Leaf.
             // need to shorten this skip and rectify the structure
             case Skip(affix, ptr) =>
-              val pathLength          = parents.countPathLength
-              val subPath             = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
-              val pathLeft            = ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
+              val pathLength = parents.countPathLength
+              val subPath    = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt)) //subpath does not match affix
+              val pathRemaining =
+                ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
               val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
               val sharedSubpathLength = sharedPrefix.length.toLong
               val oldSuffix           = affix.splitAt(sharedSubpathLength)._2
@@ -291,8 +258,8 @@ package object history {
                 case (ol, nl) if (ol == nl) && (ol == 1) =>
                   val oldLeafIndex = JByte.toUnsignedInt(oldSuffix(0))
                   val newLeafIndex = JByte.toUnsignedInt(newSuffix(0))
-                  val newPtr = if (pathLeft.size > 0) {
-                    setupSkipNode(store, txn, LeafPointer(newLeafHash), pathLeft)
+                  val newPtr = if (pathRemaining.size > 0) {
+                    setupSkipNode(store, txn, LeafPointer(newLeafHash), pathRemaining)
                   } else {
                     LeafPointer(newLeafHash)
                   }
@@ -306,7 +273,7 @@ package object history {
                   val newNode = setupSkipNode(store,
                                               txn,
                                               LeafPointer(newLeafHash),
-                                              newSuffix.drop(1) ++ pathLeft)
+                                              newSuffix.drop(1) ++ pathRemaining)
                   val oldNode = setupSkipNode(store, txn, ptr, oldSuffix.drop(1))
                   Node(
                     PointerBlock
@@ -355,12 +322,10 @@ package object history {
                 // collapsing a bridging node into a skip node
                 setupSkipNode(store, txn, ptr, incomingAffix)
               } else {
-                store.get(txn, ptr.hash)
                 ptr
               }
             (Node(pointerBlock.updated(List((byte, setPtr)))), Seq.empty[(Int, Node)])
         }
-
       // Otherwise,
       case (_, Skip(affix, _)) +: tail =>
         (Skip(affix ++ incomingAffix, ptr), tail)

@@ -3,7 +3,7 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.test.{TestKey4, TestKey5}
+import coop.rchain.rspace.test.{printTree, TestKey4}
 import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -41,8 +41,8 @@ class TrieStructureTests
   private[this] val SingleElementData = new {
     val key1    = TestData.key1
     val val1    = TestData.val1
-    val rootHex = "8d7806ccff9076e74e54527eda803e822fc3c4fddf05e61ebe2b811954441152"
-    val skipHex = "ce8440b9229db5cc26f72d72ee67789d3b0ba715ee74996ba07c72383dc48af6"
+    val rootHex = "a63410f3d715a183efbd3763189f9150deefeb538d51dc451d54d3a08100b114"
+    val skipHex = "4869cd2d0a62a8eb80e54764d940b404ce098bb0bcda55877ea42c3ffbe49e4e"
     val leafHex = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
   }
 
@@ -52,8 +52,8 @@ class TrieStructureTests
     val key2 = TestData.key2
     val val2 = TestData.val2
 
-    val rootHex   = "4d804b270adec22350ef441b1e2744dad665a8dcfc8f2ea952396172582f7bfa"
-    val level1Hex = "105920546af96d5321e4e771cb9cba3c179d33528203ffa8059c8dec0bd3cb4e"
+    val rootHex   = "244d4b0f670b4a3b30a2e494b42c054d9e9add68c0d6af4145ebf769182bb542"
+    val level1Hex = "4946e174de1a6cac3deeee59465d152412a62f4486f9aa67afcd51788d8e4023"
     val level3Hex = "7b60933db17d93a3b1039131a33137b16e5e60818f5c1f264639e20c2d4874af"
     val leaf1Hex  = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
     val leaf2Hex  = "f22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
