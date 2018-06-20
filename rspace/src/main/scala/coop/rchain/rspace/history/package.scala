@@ -22,8 +22,6 @@ package object history {
 
   private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
-    def maybeRoot: Option[Trie[K, V]] = parents.lastOption.map(_._2)
-
     def countPathLength =
       parents
         .foldLeft(0)((acc, el) =>
