@@ -21,6 +21,23 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   val numValidators  = 5
   implicit val log   = new LogStub[Id]
 
+  val validators = Seq(
+    "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
+    "6bf1b2753501d02d386789506a6d93681d2299c6edfd4455f596b97bc5725968"
+  ).zipWithIndex
+
+  def printBonds(bondsFile: String): Unit = {
+    val pw = new PrintWriter(bondsFile)
+    pw.println(
+      validators
+        .map {
+          case (v, i) => s"$v $i"
+        }
+        .mkString("\n")
+    )
+    pw.close()
+  }
+
   override def beforeEach(): Unit =
     log.reset()
 
@@ -61,26 +78,31 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in {
     val path      = validatorsPath
-    val bondsFile = path.resolve("bonds.txt").toString
-    val validators = Seq(
-      "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
-      "6bf1b2753501d02d386789506a6d93681d2299c6edfd4455f596b97bc5725968"
-    ).zipWithIndex
-
-    val pw = new PrintWriter(bondsFile)
-    pw.println(
-      validators
-        .map {
-          case (v, i) => s"$v $i"
-        }
-        .mkString("\n")
-    )
-    pw.close()
+    val bondsFile = path.resolve("givenBonds.txt").toString
+    printBonds(bondsFile)
 
     val genesis = Genesis.fromBondsFile[Id](Some(bondsFile), numValidators, path)
     val bonds   = ProtoUtil.bonds(genesis)
 
     log.infos.isEmpty should be(true)
+    validators
+      .map {
+        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)
+      }
+      .forall(
+        bonds.contains(_)
+      ) should be(true)
+  }
+
+  it should "detect an existing bonds file in the default location" in {
+    val path      = validatorsPath
+    val bondsFile = path.resolve("bonds.txt").toString
+    printBonds(bondsFile)
+
+    val genesis = Genesis.fromBondsFile[Id](None, numValidators, path)
+    val bonds   = ProtoUtil.bonds(genesis)
+
+    log.infos.length should be(1)
     validators
       .map {
         case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)

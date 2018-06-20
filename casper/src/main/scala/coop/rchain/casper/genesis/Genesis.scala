@@ -25,7 +25,7 @@ object Genesis {
                                                numValidators: Int,
                                                validatorsPath: Path): F[BlockMessage] =
     for {
-      bondsFile <- toFile[F](maybePath)
+      bondsFile <- toFile[F](maybePath, validatorsPath)
       bonds     <- getBonds[F](bondsFile, numValidators, validatorsPath)
     } yield fromBonds(bonds)
 
@@ -48,7 +48,8 @@ object Genesis {
     unsignedBlockProto(body, header, List.empty[Justification])
   }
 
-  private def toFile[F[_]: Applicative: Log](maybePath: Option[String]): F[Option[File]] =
+  private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
+                                             validatorsPath: Path): F[Option[File]] =
     maybePath match {
       case Some(path) =>
         val f = new File(path)
@@ -60,7 +61,12 @@ object Genesis {
         }
 
       case None =>
-        none[File].pure[F]
+        val default = validatorsPath.resolve("bonds.txt").toFile
+        if (default.exists) {
+          Log[F].info(
+            s"Found default bonds file ${default.getPath}."
+          ) *> default.some.pure[F]
+        } else none[File].pure[F]
     }
 
   private def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
@@ -85,7 +91,7 @@ object Genesis {
             case Success(bonds) => bonds.pure[F]
             case Failure(_) =>
               Log[F].warn(
-                s"Specified bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
+                s"Bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
               ) *> newValidators[F](numValidators, validatorsPath)
           }
       case None => newValidators[F](numValidators, validatorsPath)
