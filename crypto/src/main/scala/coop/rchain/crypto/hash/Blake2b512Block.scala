@@ -1,11 +1,18 @@
 package coop.rchain.crypto.hash
 
+import com.google.protobuf.ByteString
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.bouncycastle.util.Pack
+import scalapb.TypeMapper
 
 /**
 Block oriented Blake2b512 class.
 
-Only supports hashes of data a positive number of whole blocks.
+Only supports hashes of data that is a positive number of whole blocks.
+
+This class is an abbreviated version of Blake2bDigest.java from BouncyCastle
+https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/crypto/digests/Blake2bDigest.java
   */
 class Blake2b512Block {
   import Blake2b512Block._
@@ -43,22 +50,26 @@ class Blake2b512Block {
       internalState(posB) = rotr64(internalState(posB) ^ internalState(posC), 63);
     }
 
-    Array.copy(chainValue, 0, internalState, 0, CHAIN_VALUE_LENGTH)
-    Array.copy(IV, 0, internalState, CHAIN_VALUE_LENGTH, 4)
-    val f0    = if (peek) 0xffffffffffffffffL else 0x0L
     val newT0 = t0 + BLOCK_LENGTH_BYTES
     val newT1 = if (newT0 == 0) t1 + 1 else t1
-    internalState(12) = newT0 ^ IV(4)
-    internalState(13) = newT1 ^ IV(5)
-    internalState(14) = f0 ^ IV(6)
-    internalState(15) = IV(7)
+
+    def init(): Unit = {
+      Array.copy(chainValue, 0, internalState, 0, CHAIN_VALUE_LENGTH)
+      Array.copy(IV, 0, internalState, CHAIN_VALUE_LENGTH, 4)
+      val f0 = if (peek) 0xffffffffffffffffL else 0x0L
+      internalState(12) = newT0 ^ IV(4)
+      internalState(13) = newT1 ^ IV(5)
+      internalState(14) = f0 ^ IV(6)
+      internalState(15) = IV(7)
+    }
+    init()
 
     val m: Array[Long] = new Array(BLOCK_LENGTH_LONGS)
-    0.until(BLOCK_LENGTH_LONGS).foreach { i =>
+    for (i <- 0 until BLOCK_LENGTH_LONGS) {
       m(i) = Pack.littleEndianToLong(msg, offset + i * 8)
     }
 
-    0.until(ROUNDS).foreach { round =>
+    for (round <- 0 until ROUNDS) {
       // columns
       g(m(SIGMA(round)(0).toInt), m(SIGMA(round)(1).toInt), 0, 4, 8, 12);
       g(m(SIGMA(round)(2).toInt), m(SIGMA(round)(3).toInt), 1, 5, 9, 13);
@@ -74,11 +85,10 @@ class Blake2b512Block {
       t0 = newT0
       t1 = newT1
     }
-    0.until(CHAIN_VALUE_LENGTH).foreach { i =>
+    for (i <- 0 until CHAIN_VALUE_LENGTH) {
       newChainValue(i) = chainValue(i) ^ internalState(i) ^ internalState(i + 8)
     }
   }
-
 }
 
 object Blake2b512Block {
@@ -95,6 +105,28 @@ object Blake2b512Block {
     result.t0 = src.t0
     result.t1 = src.t1
     result
+  }
+
+  implicit val typeMapper = TypeMapper((byteStr: ByteString) => {
+    val result     = new Blake2b512Block
+    val longBuffer = byteStr.asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN).asLongBuffer()
+    longBuffer.get(result.chainValue, 0, CHAIN_VALUE_LENGTH)
+    result.t0 = longBuffer.get()
+    result.t1 = longBuffer.get()
+    result
+  })((block: Blake2b512Block) => {
+    val result: ByteBuffer = ByteBuffer.allocateDirect(80)
+    fillByteBuffer(block, result)
+    result.rewind()
+    ByteString.copyFrom(result)
+  })
+
+  def fillByteBuffer(block: Blake2b512Block, buf: ByteBuffer): Unit = {
+    val view = buf.duplicate().order(ByteOrder.LITTLE_ENDIAN).asLongBuffer()
+    view.put(block.chainValue)
+    view.put(block.t0)
+    view.put(block.t1)
+    buf.position(buf.position() + 80)
   }
 
   // Produced from the square root of primes 2, 3, 5, 7, 11, 13, 17, 19.
@@ -127,4 +159,8 @@ object Blake2b512Block {
   val DIGEST_LENGTH_BYTES: Int = 64
   // Depth = 1, Fanout = 1, Keylength = 0, Digest length = 64 bytes
   val PARAM_VALUE: Long = 0x01010040L
+
+  // This will give invalid results and is for testing only.
+  def tweakT0(src: Blake2b512Block): Unit =
+    src.t0 = -1
 }

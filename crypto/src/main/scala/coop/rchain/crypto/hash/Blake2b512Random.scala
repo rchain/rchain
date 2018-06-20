@@ -1,9 +1,11 @@
 package coop.rchain.crypto.hash
 
+import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.LongBuffer
 import org.bouncycastle.util.Pack
+import scalapb.TypeMapper
 
 class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: ByteBuffer) {
   val pathView: ByteBuffer = lastBlock.duplicate()
@@ -99,6 +101,41 @@ object Blake2b512Random {
   }
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
+
+  implicit val typeMapper = TypeMapper((byteStr: ByteString) => {
+    if (byteStr.isEmpty)
+      Blake2b512Random(new Array[Byte](0))
+    else {
+      val digest                 = Blake2b512Block.typeMapper.toCustom(byteStr.substring(0, 80))
+      val result                 = new Blake2b512Random(digest, ByteBuffer.allocate(128))
+      val byteBuffer             = byteStr.substring(80).asReadOnlyByteBuffer().order(ByteOrder.LITTLE_ENDIAN)
+      val remainderPosition: Int = byteBuffer.getInt()
+      if (remainderPosition != 0)
+        byteBuffer.put(result.hashArray, remainderPosition, 64 - remainderPosition)
+      result
+    }
+  })((rand: Blake2b512Random) => {
+    val remainderSize =
+      if (rand.position == 0)
+        0
+      else
+        64 - rand.position
+    val digestSize = 80
+    val totalSize  = digestSize + remainderSize + 4
+    val result     = ByteBuffer.allocateDirect(totalSize)
+    Blake2b512Block.fillByteBuffer(rand.digest, result)
+    result.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().put(rand.position)
+    if (remainderSize != 0) {
+      result.position(84)
+      result.put(rand.hashArray, rand.position, 64 - rand.position)
+    }
+    result.rewind()
+    ByteString.copyFrom(result)
+  })
+
+  // For testing only, will result in incorrect results otherwise
+  def tweakLength0(rand: Blake2b512Random): Unit =
+    rand.countView.put(0, -1)
 
   val BLANK_BLOCK = ByteBuffer.allocateDirect(128).asReadOnlyBuffer()
 }

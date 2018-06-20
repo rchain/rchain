@@ -90,6 +90,9 @@ lazy val crypto = (project in file("crypto"))
       kalium,
       jaxb
     ),
+    PB.targets in Compile := Seq(
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+    ),
     fork := true,
     unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
     javaOptions += "-Djava.library.path=secp256k1/.libs",
