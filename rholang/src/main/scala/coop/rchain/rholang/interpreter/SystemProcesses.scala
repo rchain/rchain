@@ -64,8 +64,6 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  //TODO(mateusz.gorski): we decided to look into delivering secp256k1 library (https://github.com/bitcoin-core/secp256k1)
-  // as separate jar in the future
   def secp256k1Verify(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                       dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
