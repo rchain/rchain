@@ -10,7 +10,9 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import CommunicationResponse._
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
+class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+    src: PeerNode,
+    timeout: Duration)
     extends NodeDiscovery[F] {
 
   private val local = ProtocolNode(src)
@@ -117,7 +119,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
       req = LookupMessage(ProtocolMessage.lookup(local, key), System.currentTimeMillis)
       r <- TransportLayer[F]
-            .roundTrip(req, remoteNode, 500.milliseconds)
+            .roundTrip(req, remoteNode, timeout)
             .map(_.toOption
               .map {
                 case LookupResponseMessage(proto, _) =>

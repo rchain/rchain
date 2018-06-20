@@ -58,18 +58,16 @@ object Network {
   import NetworkProtocol._
   import Encryption._
 
-  val defaultTimeout: Duration = Duration(500, MILLISECONDS)
-
   def unsafeRoundTrip[F[_]: Capture: TransportLayer]
     : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
     (pm: ProtocolMessage, pn: ProtocolNode) => {
-      val result = TransportLayer[F].roundTrip(pm, pn, defaultTimeout)
+      val result = TransportLayer[F].roundTrip(pm, pn, Duration(500, MILLISECONDS))
       Capture[F].unsafeUncapture(result)
     }
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler]
-    : Int => F[Int] =
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
+      defaultTimeout: Duration): Int => F[Int] =
     (lastCount: Int) =>
       for {
         _         <- IOUtil.sleep[F](5000L)
@@ -82,7 +80,8 @@ object Network {
   def connectToBootstrap[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
       bootstrapAddrStr: String,
-      maxNumOfAttempts: Int = 5): F[Unit] = {
+      maxNumOfAttempts: Int = 5,
+      defaultTimeout: Duration): F[Unit] = {
 
     def connectAttempt(attempt: Int, timeout: Duration, bootstrapAddr: PeerNode): F[Unit] =
       if (attempt > maxNumOfAttempts) for {

@@ -71,12 +71,14 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                 remote: ProtocolNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] =
     for {
-      tlResponseErr <- Capture[F].capture(
+      tlResponseErr <- Capture[F].capture {
                         Try(
-                          Await.result(
-                            withClient(remote.endpoint)(_.send(TLRequest(msg.proto.some))),
-                            timeout)
-                        ).toEither.leftMap(protocolException))
+                          Await
+                            .result(withClient(remote.endpoint)(_.send(TLRequest(msg.proto.some))),
+                                    timeout)
+                        ).toEither
+                          .leftMap(protocolException)
+                      }
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {

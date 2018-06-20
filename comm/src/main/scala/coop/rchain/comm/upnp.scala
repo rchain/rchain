@@ -16,10 +16,10 @@ import com.typesafe.scalalogging.Logger
   *
   * Cribbed from https://github.com/ScorexFoundation/Scorex/blob/503fda982d96707db8731f954ac6428b1d17e4e8/src/main/scala/scorex/core/network/UPnP.scala.
   */
-class UPnP(port: Int) {
+class UPnP {
   val logger = Logger("upnp")
 
-  val gateway: Option[GatewayDevice] = {
+  lazy val gateway: Option[GatewayDevice] = {
     GatewayDevice.setHttpReadTimeout(5000)
     val discover = new GatewayDiscover
     discover.setTimeout(5000)
@@ -32,13 +32,11 @@ class UPnP(port: Int) {
   def localAddress: Option[InetAddress] = gateway.map(_.getLocalAddress)
   def externalAddress: Option[String]   = gateway.map(_.getExternalIPAddress)
 
-  addPort(port)
-
   def addPort(port: Int): Either[CommError, Boolean] =
     try {
       gateway match {
         case Some(device) =>
-          Right(device.addPortMapping(port, port, localAddress.get.getHostAddress, "UDP", "RChain"))
+          Right(device.addPortMapping(port, port, localAddress.get.getHostAddress, "TCP", "RChain"))
         case None => Left(UnknownCommError("no gateway"))
       }
     } catch {
@@ -49,7 +47,7 @@ class UPnP(port: Int) {
     try {
       gateway match {
         case Some(device) =>
-          device.deletePortMapping(port, "UDP")
+          device.deletePortMapping(port, "TCP")
           Right(())
         case None => Left(UnknownCommError("no gateway"))
       }
