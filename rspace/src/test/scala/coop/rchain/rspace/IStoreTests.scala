@@ -184,21 +184,8 @@ trait IStoreTests
     }
   }
 
-  "removeAllJoins" should "remove all joins for a channel" in withTestSpace { space =>
-    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
-      val store = space.store
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.addJoin(txn, channel, channels)
-        store.addJoin(txn, channel, List("otherChannel"))
-        store.removeAllJoins(txn, channel)
-        store.getJoin(txn, channel) shouldBe List()
-        store.clear(txn)
-      }
-    }
-  }
-
-  "pruneHistory" should "work on empty history" in withTestSpace { space =>
-    space.store.pruneHistory(List.empty) shouldBe List.empty
+  "collapse" should "work on empty history" in withTestSpace { space =>
+    space.store.collapse(List.empty) shouldBe List.empty
   }
 
   it should "return unmodified history when nothing to prune" in withTestSpace { space =>
@@ -209,7 +196,7 @@ trait IStoreTests
 
       val store   = space.store
       val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
-      store.pruneHistory(history) shouldBe history
+      store.collapse(history) shouldBe history
     }
   }
 
@@ -221,7 +208,7 @@ trait IStoreTests
           val history = gnats
             .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
             .toList
-          store.pruneHistory(history) should contain theSameElementsAs (history)
+          store.collapse(history) should contain theSameElementsAs (history)
       }
   }
 
@@ -235,7 +222,7 @@ trait IStoreTests
                               TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1))
           val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
           val history  = gnat1Ops ++ gnat2Ops
-          store.pruneHistory(history) shouldBe gnat2Ops
+          store.collapse(history) shouldBe gnat2Ops
       }
   }
 
@@ -249,7 +236,7 @@ trait IStoreTests
           TrieUpdate(2, Insert, store.hashChannels(gnat1.channels), gnat1),
           TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1),
         )
-        store.pruneHistory(gnatOps) shouldBe empty
+        store.collapse(gnatOps) shouldBe empty
       }
   }
 
@@ -261,7 +248,7 @@ trait IStoreTests
 
         val history =
           List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat), lastInsert)
-        store.pruneHistory(history) shouldBe List(lastInsert)
+        store.collapse(history) shouldBe List(lastInsert)
       }
   }
 
@@ -274,7 +261,7 @@ trait IStoreTests
         val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
                            lastInsert,
                            TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
-        store.pruneHistory(history) shouldBe List(lastInsert)
+        store.collapse(history) shouldBe List(lastInsert)
       }
   }
 }

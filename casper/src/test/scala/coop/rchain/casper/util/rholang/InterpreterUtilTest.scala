@@ -82,6 +82,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                                        knownStateHashes,
                                                        runtimeManager)
     val genPostState = runtimeManager.storageRepr(postGenStateHash)
+
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
 
