@@ -18,7 +18,7 @@ class VmSpec extends FlatSpec with Matchers {
     * primitive for addition of `Fixnum`s.
     * And do the same for `RblFloat`.
     */
-  val addOprn = Oprn()
+  val addOprn = new Oprn
   Fixnum.fixnumSbo.meta.add(Fixnum.fixnumSbo, addOprn, fxPlus, ctxt = null)(globalEnv)
   RblFloat.rblFloatSbo.meta.add(RblFloat.rblFloatSbo, addOprn, flPlus, ctxt = null)(globalEnv)
 

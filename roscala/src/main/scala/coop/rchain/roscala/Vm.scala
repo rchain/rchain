@@ -41,6 +41,7 @@ object Vm {
 
     while (state.pc < state.code.codevec.size && !state.exitFlag) {
       val opcode = state.code.codevec(state.pc)
+      logger.debug(opcode.toString)
       state.pc += 1
 
       // execute `opcode`
@@ -56,7 +57,6 @@ object Vm {
     opcode match {
       /* Halts the VM */
       case OpHalt =>
-        logger.warn("Halting")
         state.exitFlag = true
 
       /**
@@ -92,10 +92,6 @@ object Vm {
         */
       case OpAlloc(n) =>
         state.ctxt.argvec = Tuple(new Array[Ob](n))
-        state.nextOpFlag = true
-
-      case OpNargs(n) =>
-        state.ctxt.nargs = n
         state.nextOpFlag = true
 
       /**
@@ -184,7 +180,6 @@ object Vm {
         * `OpXmitTag` will take a location from the `litvec`.
         */
       case OpXmitTag(unwind, next, nargs, lit) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,litvec[$lit]")
         state.ctxt.nargs = nargs
         state.ctxt.tag = state.code.litvec(lit).asInstanceOf[Location]
         doXmit(next, unwind, state, globalEnv)
@@ -194,7 +189,6 @@ object Vm {
         * Then behaves like `OpXmitTag`.
         */
       case OpXmitArg(unwind, next, nargs, arg) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,arg[$arg]")
         state.ctxt.nargs = nargs
         state.ctxt.tag = ArgRegister(arg)
         doXmit(next, unwind, state, globalEnv)
@@ -204,7 +198,6 @@ object Vm {
         * Then behaves like `OpXmitTag`.
         */
       case OpXmitReg(unwind, next, nargs, reg) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs,${regName(reg)}")
         state.ctxt.nargs = nargs
         state.ctxt.tag = CtxtRegister(reg)
         doXmit(next, unwind, state, globalEnv)
@@ -222,7 +215,6 @@ object Vm {
         * to the VM. The VM will then get the next available `Ctxt`.
         */
       case OpXmit(unwind, next, nargs) =>
-        logger.debug(s"doXmit${if (next) "/nxt"} $nargs")
         state.ctxt.nargs = nargs
         doXmit(next, unwind, state, globalEnv)
 
@@ -673,7 +665,7 @@ object Vm {
   def doXmit(next: Boolean, unwind: Boolean, state: State, globalEnv: GlobalEnv): Unit = {
     val result =
       if (unwind) unwindAndDispatch(state, globalEnv)
-      else state.ctxt.trgt.dispatch(state, globalEnv)
+      else state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
 
     if (result == Deadthread)
       state.doNextThreadFlag = true
@@ -721,7 +713,7 @@ object Vm {
     state.ctxt.argvec = newArgvec
     state.ctxt.nargs = 0
 
-    state.ctxt.trgt.dispatch(state, globalEnv)
+    state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
   }
 
 }
