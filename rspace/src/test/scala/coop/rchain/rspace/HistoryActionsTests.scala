@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.implicits._
+import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -12,6 +13,7 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
+import scala.collection.JavaConverters._
 
 import scala.collection.immutable.Seq
 
@@ -37,7 +39,7 @@ trait HistoryActionsTests
   case class State(
       checkpoint: Blake2b256Hash,
       contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
-      joins: Map[String, Seq[Seq[String]]]
+      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, StringsCaptor],
@@ -46,19 +48,32 @@ trait HistoryActionsTests
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
-          val num          = "%02d".format(chunkNo)
+          val num = "%02d".format(chunkNo)
+
           val contentsTest = space.store.toMap == expectedContents
+
           if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
           }
-          val joinsTest = space.store.joinMap == expectedJoins
+
+          val actualJoins = space.store.joinMap
+
+          val joinsTest =
+            expectedJoins.forall {
+              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
+                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
+                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
+                expected.equals(actual)
+            }
+
           if (joinsTest) {
             logger.debug(s"$num: store had expected joins")
           } else {
             logger.error(s"$num: store had unexpected joins")
           }
+
           contentsTest && joinsTest
       }
     !tests.contains(false)

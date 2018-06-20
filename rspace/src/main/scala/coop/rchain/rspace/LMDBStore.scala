@@ -249,22 +249,16 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def joinMap: Map[C, Seq[Seq[C]]] =
+  private[rspace] def joinMap: Map[Blake2b256Hash, Seq[Seq[C]]] =
     withTxn(createTxnRead()) { txn =>
       withResource(_dbJoins.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
-        it.asScala.flatMap { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-          val channelSeq = fetchGNAT(txn, x.key()).map(_.channels).getOrElse(Seq.empty)
-          if (channelSeq.isEmpty) {
-            //TODO: Investigate why this can happen? Remove entire 'if' after fix
-            None
-          } else {
-            if (channelSeq.size != 1)
-              throw new Exception(
-                s"Join key channel not found or invalid (keys seq size = ${channelSeq.size}).")
-            val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
-            Some(channelSeq.head -> channels)
+        it.asScala
+          .foldLeft(Map.empty[Blake2b256Hash, Seq[Seq[C]]]) {
+            (acc: Map[Blake2b256Hash, Seq[Seq[C]]], x: CursorIterator.KeyVal[ByteBuffer]) =>
+              val hash     = Codec[Blake2b256Hash].decode(BitVector(x.key())).map(_.value).get
+              val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
+              acc.updated(hash, channels)
           }
-        }.toMap
       }
     }
 
