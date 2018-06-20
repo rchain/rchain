@@ -20,10 +20,10 @@ service DeployService {
 }
 
 message DeployString {
-  bytes  user  = 1; //public key
-  int32  nonce = 2; //for uniqueness
-  string term  = 3; //rholang source code to deploy (will be parsed into `Par`)
-  bytes  sig   = 4; //signature of (hash(resource) + nonce) using private key
+  bytes  user      = 1; //public key
+  string term      = 2; //rholang source code to deploy (will be parsed into `Par`)
+  int64  timestamp = 3; //millisecond timestamp
+  bytes  sig       = 4; //signature of (hash(term) + timestamp) using private key
 }
 
 message BlockRequest {
@@ -121,10 +121,8 @@ message RChainState {
 }
 
 message Deploy {
-  bytes user  = 1; //public key
-  int32 nonce = 2; //for uniqueness
-  Par   term  = 3; //rholang term to deploy
-  bytes sig   = 4; //signature of (hash(resource) + nonce) using private key
+  Par          term  = 1; //rholang term to deploy
+  DeployString raw   = 2; //raw deploy, before parsing the rholang
 }
 // --------- End Core Protocol  --------
 
