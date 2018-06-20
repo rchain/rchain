@@ -1,6 +1,5 @@
-package coop.rchain.rholang.crypto
+package coop.rchain.crypto.hash
 
-import coop.rchain.rspace.Serialize
 import org.bouncycastle.util.Pack
 
 /**
@@ -96,27 +95,6 @@ object Blake2b512Block {
     result.t0 = src.t0
     result.t1 = src.t1
     result
-  }
-
-  implicit val serialize: Serialize[Blake2b512Block] = new Serialize[Blake2b512Block] {
-    override def encode(block: Blake2b512Block) = {
-      val result: Array[Byte] = new Array[Byte](80)
-      Pack.longToLittleEndian(block.chainValue, result, 0)
-      Pack.longToLittleEndian(block.t0, result, DIGEST_LENGTH_BYTES)
-      Pack.longToLittleEndian(block.t1, result, DIGEST_LENGTH_BYTES + 8)
-      result
-    }
-
-    override def decode(bytes: Array[Byte]): Either[Throwable, Blake2b512Block] =
-      if (bytes.length != 80)
-        Left(new Error("Invalid decode of Blake2b512Block"))
-      else {
-        val result = new Blake2b512Block
-        Pack.littleEndianToLong(bytes, 0, result.chainValue, 0, CHAIN_VALUE_LENGTH)
-        result.t0 = Pack.littleEndianToLong(bytes, DIGEST_LENGTH_BYTES)
-        result.t1 = Pack.littleEndianToLong(bytes, DIGEST_LENGTH_BYTES + 8)
-        Right(result)
-      }
   }
 
   // Produced from the square root of primes 2, 3, 5, 7, 11, 13, 17, 19.

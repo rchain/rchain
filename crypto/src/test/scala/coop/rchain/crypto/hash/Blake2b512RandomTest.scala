@@ -1,4 +1,4 @@
-package coop.rchain.rholang.crypto
+package coop.rchain.crypto.hash
 
 import coop.rchain.crypto.codec._
 import org.scalatest._

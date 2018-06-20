@@ -1,14 +1,9 @@
-package coop.rchain.rholang.crypto
+package coop.rchain.crypto.hash
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.LongBuffer
-import org.bouncycastle.crypto.digests.Blake2bDigest
 import org.bouncycastle.util.Pack
-
-import coop.rchain.rspace.Serialize
-
-import coop.rchain.crypto.codec._
 
 class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: ByteBuffer) {
   val pathView: ByteBuffer = lastBlock.duplicate()
@@ -104,35 +99,6 @@ object Blake2b512Random {
   }
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
-
-  implicit val serialize: Serialize[Blake2b512Random] = new Serialize[Blake2b512Random] {
-    def encode(rand: Blake2b512Random): Array[Byte] = {
-      val remainderSize =
-        if (rand.position == 0)
-          0
-        else
-          64 - rand.position
-      val digestSize = 80
-      val totalSize  = digestSize + remainderSize + 4
-      val result     = new Array[Byte](totalSize)
-      Array.copy(Blake2b512Block.serialize.encode(rand.digest), 0, result, 0, digestSize)
-      Pack.intToLittleEndian(rand.position, result, digestSize)
-      if (remainderSize != 0)
-        Array.copy(rand.hashArray, rand.position, result, digestSize + 4, remainderSize)
-      result
-    }
-
-    override def decode(bytes: Array[Byte]): Either[Throwable, Blake2b512Random] =
-      Blake2b512Block.serialize
-        .decode(bytes.slice(0, 80))
-        .map(digest => {
-          val remainderPosition: Int = Pack.littleEndianToInt(bytes, 80)
-          val result                 = new Blake2b512Random(digest, ByteBuffer.allocate(128))
-          if (remainderPosition != 0)
-            Array.copy(bytes, 84, result.hashArray, remainderPosition, 64 - remainderPosition)
-          result
-        })
-  }
 
   val BLANK_BLOCK = ByteBuffer.allocateDirect(128).asReadOnlyBuffer()
 }
