@@ -20,13 +20,13 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
     5   }
     6 }
 
-1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.
+1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
 
 2) Every name is of the form `@P`, where `P` is a rholang process.  The `!` production takes a name `n` on its left and a process `P` on its right, then sends `@P` over the channel named `n`.  Line 2 forms the name `@"Hello, world"` and sends it on the channel whose name is stored in the variable `HelloWorld`.
 
 3) This `for` production creates a process that waits for a single message to be sent on the channel whose name is stored in the variable `HelloWorld`.  The pattern `@text` gets matched against the serialized process, binding the process-valued variable `text` to the original process that was sent.
 
-4) The built-in name `@"stdout"` designates a channel on which scala code is listening.  The scala code prints out the process it receives.
+4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
 
 ## Replicated receive
 
@@ -117,11 +117,39 @@ In order to have one message follow after another is known to have been received
 
 ## Pattern matching and channels as databases
 
-There are two kinds of value in Rholang, names and processes.  A variable is either name-valued or process-valued.  It is an error to use a process-valued variable in name position and vice-versa.  Name-valued variables are bound by a `new` production and in name positions in patterns, which appear to the left of an arrow in a `for` or a `match`.  Process-valued variables are bound in process positions in patterns.  Name positions are to the right of a `new`, to the right of an asterisk `*`, to the right and left of an arrow in a `for`, and to the left of an exclamation mark `!` in a send.  Process positions are after an at sign `@`, in the body of a send, in the body of a `for`, and in all process constructors like expressions, collections, and so on.  A pattern is a process with free variables.
+There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`:
+
+    for (<name pattern> <- <channel>) { <process> }
+    match <process> { <process pattern> => <process> }
+
+A variable is either name-valued or process-valued.  It is an error to use a process-valued variable in name position and vice-versa.  Name positions are to the right of a `new`, to the right of an asterisk `*`, to the right and left of an arrow in a `for` (and in the desugaring of a contract), and to the left of an exclamation mark `!` in a send.  Name-valued variables are bound by a `new` production and in name positions in patterns.  In each of the following examples, `x` is a new name-valued variable whose scope is `P`:
+
+    new x in P
+    for (w, x <- y) { P }
+    for (@{x!(Q)} <- y) { P }
+    for (@{for(z <- x) { Q }} <- y) { P }
+    contract foo(x) = { P }
+    match R { x!(Q) => P }
+    match R { contract x(y) = { Q } => P }
+
+Process-valued variables are bound in process positions in patterns.  Process positions are after an at sign `@`, in the body of a send, in the body of a `for`, and in all process constructors like expressions, collections, and so on.  In each of the following examples, `P` is a new process-valued variable whose scope is `Q`.
+
+    contract foo(@P) = { Q }
+    for (@{x!(P)} <- y) { Q }
+    for (@{for (@P <- z) { R }} <- y) { Q }
+    for (@{ P | R } <- y) { Q }
+    match R { P => Q }
+    match R { [P, S, ...T] => Q }
+    match R { contract foo(x) = { P } => Q }
+    match R { contract foo(@S) = { x!(P + S) } => Q }
 
 ### Patterns in a `for`
 
-The term `for (@{x!(P)}, @{for(y <- z) { y!(Q) }} <- chan) { ... }` expects to receive two names on the channel `chan`, where the names are serializations of certain processes that must match the given patterns.  The first name should be the serialization of a single send of a single process; the name variable `x` gets bound to the channel on which the send occurs, and the process variable `P` gets bound to its payload.  The second name should be the serialization of a single receive, whose body consists of a single send of a single process.  The name variable `z` gets bound to the channel on which the receive is listening, and the process variable `Q` gets bound to the payload of the send.  The name variable `y` does not get bound, but the matcher checks to see that the same variable is used to the left of the arrow in the `for` and to the left of the exclamation mark in the send.
+The term 
+
+    for (@{x!(P)}, @{for(y <- z) { y!(Q) }} <- chan) { ... }
+
+expects to receive two names on the channel `chan`, where the names are serializations of certain processes that must match the given patterns.  The first name should be the serialization of a single send of a single process; the name variable `x` gets bound to the channel on which the send occurs, and the process variable `P` gets bound to its payload.  The second name should be the serialization of a single receive, whose body consists of a single send of a single process.  The name variable `z` gets bound to the channel on which the receive is listening, and the process variable `Q` gets bound to the payload of the send.  The name variable `y` does not get bound, but the matcher checks to see that the same variable is used to the left of the arrow in the `for` and to the left of the exclamation mark in the send.
 
 Patterns let us implement structured queries on data.  Suppose that we send lots of processes with a similar structure on a name `people`:
 
@@ -130,7 +158,7 @@ Patterns let us implement structured queries on data.  Suppose that we send lots
     people!(@"name"!("Jane") | @"age"!(40) | @"eyes"!("green") | @"seq"!(0)) |
     people!(@"name"!("Jack") | @"age"!(50) | @"eyes"!("grey") | @"seq"!(0))
 
-Then we can think of the name `people` as a table in a database and query it.  A rough translation the SQL statement `SELECT age, name FROM people WHERE age > 35` in the context of the data above would be
+Then we can think of the name `people` as a table in a database and query it.  A rough translation of the SQL statement `SELECT age, name FROM people WHERE age > 35` in the context of the data above would be
 
      1 new people in {
      2   people!(@"name"!("Joe") | @"age"!(20) | @"eyes"!("blue") | @"seq"!(0)) |
