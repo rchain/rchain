@@ -150,15 +150,6 @@ package object history {
       case ((lastHash, _), (offset, current @ Node(pb))) if parents.maybeRoot.contains(current) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      // no children - collapse to skip
-      case ((lastHash, node), (offset, Node(pb))) if pb.children.isEmpty =>
-        val b = ByteVector(offset)
-        val skip = node match {
-          case _: Leaf[K, V]        => Skip(b, LeafPointer(lastHash))
-          case _: Node              => Skip(b, NodePointer(lastHash))
-          case Skip(affix, pointer) => Skip(b ++ affix, pointer)
-        }
-        (Trie.hash[K, V](skip), skip)
       // node with children, just rehash
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
