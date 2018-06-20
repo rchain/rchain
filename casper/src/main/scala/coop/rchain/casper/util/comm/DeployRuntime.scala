@@ -30,6 +30,9 @@ object DeployRuntime {
   def showBlock[F[_]: Functor: DeployService](hash: String): F[Unit] =
     DeployService[F].showBlock(BlockQuery(hash)).map(println(_))
 
+  def showBlocks[F[_]: Functor: DeployService](): F[Unit] =
+    DeployService[F].showBlocks.map(println(_))
+
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Capture: DeployService](file: String): F[Unit] =
     Try(Source.fromFile(file).mkString) match {

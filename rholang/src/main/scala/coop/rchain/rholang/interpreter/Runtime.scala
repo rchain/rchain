@@ -20,9 +20,12 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                       var errorLog: Runtime.ErrorLog) {
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+    var errorLog: Runtime.ErrorLog) {
   def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
   def close(): Unit                                       = space.close()
 }
@@ -93,13 +96,18 @@ object Runtime {
       mapSize
     )
 
-    val space = RSpace.create(context, Branch.master)
+    val space = RSpace.create(context, Branch.MASTER)
+
+    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     val errorLog                                         = new ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       RholangAndScalaDispatcher.create(space, dispatchTable)
+
+    lazy val replayDispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
+      RholangAndScalaDispatcher.create(replaySpace, dispatchTable)
 
     lazy val dispatchTable: Map[Ref, Seq[Seq[Channel]] => Task[Unit]] = Map(
       0L -> SystemProcesses.stdout,
@@ -132,6 +140,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, space, errorLog)
+    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog)
   }
 }

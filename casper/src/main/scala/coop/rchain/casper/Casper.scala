@@ -24,6 +24,7 @@ import scala.concurrent.SyncVar
 import java.nio.file.Path
 
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
@@ -37,6 +38,10 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
+  // This is the weight of faults that have been accumulated so far.
+  // We want the clique oracle to give us a fault tolerance that is greater than
+  // this initial fault weight combined with our fault tolerance threshold t.
+  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
   def storageContents(hash: ByteString): F[String]
   def close(): F[Unit]
 }
@@ -53,10 +58,11 @@ sealed abstract class MultiParentCasperInstances {
       def deploy(r: Deploy): F[Unit]            = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def createBlock: F[Option[BlockMessage]]         = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                        = BlockDag().pure[F]
-      def storageContents(hash: ByteString): F[String] = "".pure[F]
-      def close(): F[Unit]                             = ().pure[F]
+      def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
+      def blockDag: F[BlockDag]                                          = BlockDag().pure[F]
+      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def storageContents(hash: ByteString): F[String]                   = "".pure[F]
+      def close(): F[Unit]                                               = ().pure[F]
     }
 
   def hashSetCasper[
@@ -114,14 +120,6 @@ sealed abstract class MultiParentCasperInstances {
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-          // TODO: Replace with getMainChainUntilLastFinalizedBlock
-          forkchoice = getMainChain(dag, tip, IndexedSeq.empty[BlockMessage])
-          forkchoiceSafety <- forkchoice.toList.traverse(block =>
-                               SafetyOracle[F]
-                                 .normalizedFaultTolerance(dag, block)
-                                 .flatMap(faultTolerance =>
-                                   Log[F].info(s"CASPER: Block ${PrettyPrinter
-                                     .buildString(block.blockHash)} has a fault tolerance of ${faultTolerance}.")))
         } yield ()
 
       def contains(b: BlockMessage): F[Boolean] =
@@ -217,6 +215,15 @@ sealed abstract class MultiParentCasperInstances {
         val _runtime = runtime.take()
         _runtime.close()
       }
+
+      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
+        (equivocationsTracker
+          .map(_.equivocator)
+          .toSet
+          .flatMap(weights.get)
+          .sum
+          .toFloat / weightMapTotal(weights))
+          .pure[F]
 
       //invalid blocks return None and don't update the checkpoints
       private def validateTransactions(block: BlockMessage): F[Option[StateHash]] =

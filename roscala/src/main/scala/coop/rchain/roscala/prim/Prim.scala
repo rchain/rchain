@@ -5,15 +5,25 @@ import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.prim.fixnum.fxPlus
 import coop.rchain.roscala.prim.rblfloat.flPlus
+import coop.rchain.roscala.util.misc.{numberSuffix, properPrep}
+
+import scala.reflect.{classTag, ClassTag}
 
 abstract class Prim extends Ob {
+  val name: String
+  val minArgs: Int
+  val maxArgs: Int
   def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob
 
-  // TODO: Add error case
-  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob =
-    fn(state.ctxt, globalEnv)
+  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
+    val n = state.ctxt.nargs
+    if (minArgs <= n && n <= maxArgs)
+      fn(state.ctxt, globalEnv)
+    else
+      Prim.mismatchArgs(state, minArgs, maxArgs)
+  }
 
-  override def dispatch(state: State, globalEnv: GlobalEnv): Ob = {
+  override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
     val result = dispatchHelper(state, globalEnv)
 
     if (result != Invalid && result != Upcall && result != Deadthread) {
@@ -23,11 +33,12 @@ abstract class Prim extends Ob {
     result
   }
 
-  override def invoke(state: State, globalEnv: GlobalEnv): Ob =
-    dispatch(state, globalEnv)
+  override def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob =
+    dispatch(ctxt, state, globalEnv)
 }
 
 object Prim {
+  val MaxArgs = 255
 
   /**
     * The mapping from primnum to function-name show below.
@@ -363,5 +374,45 @@ object Prim {
     */
   val map = Map(202 -> flPlus, 232 -> fxPlus)
 
+  def mismatchArgs(state: State, minArgs: Int, maxArgs: Int): Ob = {
+    val msg = if (maxArgs == MaxArgs) {
+      s"expected $minArgs or more arguments"
+    } else if (minArgs == maxArgs) {
+      if (minArgs == 1) {
+        "expected 1 argument"
+      } else {
+        s"expected $minArgs arguments"
+      }
+    } else {
+      s"expected between $minArgs and $maxArgs arguments"
+    }
+    return runtimeError(state.ctxt, msg)
+  }
+
+  def runtimeError(ctxt: Ctxt, msg: String, xs: Any*): Ob =
+    //todo implement this
+    return Deadthread;
+
+  def mismatch(ctxt: Ctxt, argNum: Int, typeName: String): Ob =
+    runtimeError(ctxt,
+                 "%d%s argument is not %s %s",
+                 argNum + 1,
+                 numberSuffix(argNum + 1),
+                 properPrep(typeName),
+                 typeName);
+
   def nthPrim(n: Int): Prim = map(n)
+
+  def mismatchType[T <: Ob: ClassTag](ctxt: Ctxt): Option[Ob] = {
+    val n        = ctxt.nargs
+    val typeName = classTag[T].runtimeClass.getName
+
+    val nonT = ctxt.argvec.value.take(n).find {
+      case _: T => false
+      case _    => true
+    }
+
+    nonT.map(ob => mismatch(ctxt, ctxt.argvec.value.indexOf(nonT), typeName))
+  }
+
 }

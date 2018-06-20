@@ -1,0 +1,107 @@
+//scalapackage coop.rchain.casper.genesis.contracts
+
+//requires NonNegativeNumber, TestSet
+new value, add, sub in {
+  contract value(@nn, return) = {
+    new nnValue in {
+      contract nnValue(return) = {
+        @[nn, "value"]!(*return)
+      } |
+      return!(*nnValue)
+    }
+  } |
+  contract add(@nn, @x, return) = {
+    new nnAdd in {
+      contract nnAdd(return) = {
+        @[nn, "add"]!(x, *return)
+      } |
+      return!(*nnAdd)
+    }
+  } |
+  contract sub(@nn, @x, return) = {
+    new nnSub in {
+      contract nnSub(return) = {
+        @[nn, "sub"]!(x, *return)
+      } |
+      return!(*nnSub)
+    }
+  } |
+
+  @"NonNegativeNumber"!(-5, "negBal") |
+  @"NonNegativeNumber"!(15, "properBal") |
+  @"NonNegativeNumber"!(100, "addTest") |
+  @"NonNegativeNumber"!(100, "subTest") |
+  @"NonNegativeNumber"!(2147483597, "overflowTest") |
+
+  for(
+    @negBal <- @"negBal"; 
+    @properBal <- @"properBal"; 
+    @addTest <- @"addTest"; 
+    @subTest <- @"subTest";
+    @overflowTest <- @"overflowTest"
+  ) {
+    value!(negBal, "negBalValue") |
+    @"TestSet"!(
+      "Initially negative balances are be converted to 0.",
+      [
+        ["negBalValue", 0]
+      ]
+    ) |
+
+    value!(properBal, "properBalValue") |
+    @"TestSet"!(
+      "Positive initial balances are preserved.",
+      [
+        ["properBalValue", 15]
+      ]
+    ) | 
+
+    add!(properBal, -1, "properBalAddNeg") |
+    sub!(properBal, -1, "properBalSubNeg") |
+    @"TestSet"!(
+      "Adding or subtracting a negative number fails.",
+      [
+        ["properBalAddNeg", false],
+        ["properBalSubNeg", false]
+      ]
+    ) |
+
+    sub!(properBal, 27, "properBalSubBig") |
+    @"TestSet"!(
+      "Subtracting an amount larger than the balance fails.",
+      [
+        ["properBalSubBig", false]
+      ]
+    ) |
+
+    add!(addTest, 50, "addTest50") |
+    value!(addTest, "addTestValue") |
+    @"TestSet"!(
+      "Adding a positive number works.",
+      [
+        ["addTestValue", 100],
+        ["addTest50", true],
+        ["addTestValue", 150]
+      ]
+    ) |
+
+    sub!(subTest, 30, "subTest30") |
+    value!(subTest, "subTestValue") |
+    @"TestSet"!(
+      "Subtracting a positive number less than or equal to the balance works",
+      [
+        ["subTestValue", 100],
+        ["subTest30", true],
+        ["subTestValue", 70]
+      ]
+    ) |
+    
+    add!(overflowTest, 100, "overflowTestAdd") |
+    @"TestSet"!(
+      "Addition overflow is prevented",
+      [
+        ["overflowTestAdd", false]
+      ]
+    )
+  }
+}

@@ -56,7 +56,7 @@ object Location {
         ctxt.env.getLex(indirect, level, offset)
 
       case GlobalVar(offset) =>
-        if (offset < globalEnv.numberOfSlots())
+        if (offset < globalEnv.numberOfSlots)
           globalEnv.slot.unsafeGet(offset)
         else
           Invalid

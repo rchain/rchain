@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.{BlockDag, MultiParentCasper}
+import coop.rchain.casper.{BlockDag, MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -24,9 +24,11 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val blockNumber = 0L
     val timestamp   = 1527191663L
-    val ps          = RChainState().withBlockNumber(blockNumber)
-    val body        = Body().withPostState(ps)
-    val header      = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
+    val ps = RChainState()
+      .withBlockNumber(blockNumber)
+      .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
+    val body   = Body().withPostState(ps)
+    val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
     BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
@@ -44,6 +46,8 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
   val secondBlock: BlockMessage =
     BlockMessage().withBlockHash(blockHash).withHeader(header).withBody(body)
+
+  val faultTolerance = -1f
 
   def testCasper[F[_]: Applicative]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
@@ -66,10 +70,12 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
           0,
           HashMap.empty[Validator, Int]
         ).pure[F]
-      def storageContents(hash: BlockHash): F[String] = "".pure[F]
-      def close(): F[Unit]                            = ().pure[F]
+      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
+      def close(): F[Unit]                                               = ().pure[F]
     }
-  implicit val casperEffect = testCasper[Id]
+  implicit val casperEffect                        = testCasper[Id]
+  implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
@@ -83,6 +89,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
     blockInfo.blockNumber should be(blockNumber)
     blockInfo.version should be(version)
     blockInfo.deployCount should be(deployCount)
+    blockInfo.faultTolerance should be(faultTolerance)
     blockInfo.mainParentHash should be(genesisHashString)
     blockInfo.parentsHashList should be(parentsString)
   }
