@@ -146,10 +146,6 @@ package object history {
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
-      // root
-      case ((lastHash, _), (offset, current @ Node(pb))) if parents.maybeRoot.contains(current) =>
-        val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
-        (Trie.hash[K, V](node), node)
       // node with children, just rehash
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
