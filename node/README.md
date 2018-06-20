@@ -111,6 +111,8 @@ Subcommand: show-block - View properties of a block known by Casper on an existi
 
  trailing arguments:
   hash (required)   the hash value of the block
+Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node. 
+    --help   Show help message
 Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
   -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
                             for signing a proposed block.
