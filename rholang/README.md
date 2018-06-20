@@ -29,8 +29,9 @@ Currently we have a working interpreter for the language. It should be considere
     * [libsodium](https://github.com/jedisct1/libsodium) - You can use the scripts/install_sodium.sh helper script
     * Scala
 4. Run `sbt rholang/bnfc:generate` to generate the lexer/parser. Re-run whenever you modify the grammar
-5. Run `sbt rholang/compile` to compile classes
-6. Run `sbt rholangCLI/assembly` to build a stand-alone `.jar` file
+5. Run `sbt secp256k1/secp256k1:generate` to build native `secp256k1` library and copy bindings file for usage in `crypto` project.
+6. Run `sbt rholang/compile` to compile classes
+7. Run `sbt rholangCLI/assembly` to build a stand-alone `.jar` file
 
 ### Command-line usage
 

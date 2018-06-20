@@ -1,5 +1,6 @@
 import Dependencies._
 import BNFC._
+import Secp256k1._
 import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
@@ -80,6 +81,16 @@ lazy val comm = (project in file("comm"))
     )
   ).dependsOn(shared, crypto)
 
+lazy val secp256k1 = (project in file("secp256k1Native"))
+  .settings(commonSettings: _*)
+  .settings(secp256k1Settings: _*)
+  .settings(
+    libraryDependencies ++= Seq(
+      guava,
+      apacheLang
+    )
+  )
+
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
@@ -91,10 +102,8 @@ lazy val crypto = (project in file("crypto"))
       jaxb
     ),
     fork := true,
-    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
-    javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
-  )
+  ).dependsOn(secp256k1)
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
