@@ -20,8 +20,7 @@ package object history {
 
   private[this] type Parents[K, V] = Seq[(Int, Trie[K, V])]
 
-  private[this] implicit class ParentsOps[K, V](val parents: Seq[(Int, Trie[K, V])])
-      extends AnyVal {
+  private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
     def maybeRoot: Option[Trie[K, V]] = parents.lastOption.map(_._2)
 
