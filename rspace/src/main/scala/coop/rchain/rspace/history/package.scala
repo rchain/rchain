@@ -22,12 +22,12 @@ package object history {
 
   private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
-    def countPathLength: Int =
+    def countPathLength: Long =
       parents
-        .foldLeft(0)((acc, el) =>
+        .foldLeft(0L)((acc, el) =>
           el match {
-            case (_, s: Skip) => acc + s.affix.size.toInt
-            case _            => acc + 1
+            case (_, s: Skip) => acc + s.affix.size
+            case _            => acc + 1L
         })
 
   }
@@ -117,7 +117,7 @@ package object history {
               }
           }
         case s @ Skip(affix, pointer) =>
-          val subPath = ByteVector(path.splitAt(depth)._2.take(affix.size.toInt))
+          val subPath = ByteVector(path).slice(depth.toLong, depth.toLong + affix.size)
           if (subPath === affix) {
             store.get(txn, pointer.hash) match {
               case None =>
@@ -168,14 +168,15 @@ package object history {
           throw new LookupException(s"No node at $currentRootHash")
         case Some(currentRoot) =>
           // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
-          val encodedKeyNew = codecK.encode(key).map(_.bytes.toSeq).get
+          val encodedKeyNew        = codecK.encode(key).map(_.bytes.toSeq).get
+          val encodedKeyByteVector = ByteVector(encodedKeyNew)
           // Create the new leaf and put it into the store
           val newLeaf     = Leaf(key, value)
           val newLeafHash = Trie.hash(newLeaf)
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
-          val nodesOpt: Option[Seq[(Blake2b256Hash, Trie[K, V])]] = tip match {
+          val maybeNewNodes: Option[Seq[(Blake2b256Hash, Trie[K, V])]] = tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
             case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
@@ -198,16 +199,16 @@ package object history {
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
             case Node(pb) =>
-              Some(insertLeafAsNodeChild(encodedKeyNew, newLeafHash, parents, pb))
+              Some(insertLeafAsNodeChild(encodedKeyByteVector, newLeafHash, parents, pb))
             // If the tip is a skip node -> there is no Node in the Trie for this Leaf.
             // need to:
             // - shorten (a new skip that holds the common path)
             // - remove (no new skip, just the new trie)
             // and rectify the structure
             case Skip(affix, ptr) =>
-              Some(insertLeafOntoSkipNode(encodedKeyNew, newLeafHash, parents, affix, ptr))
+              Some(insertLeafOntoSkipNode(encodedKeyByteVector, newLeafHash, parents, affix, ptr))
           }
-          nodesOpt match {
+          maybeNewNodes match {
             case Some(nodes) =>
               val newRootHash = insertTries(store, txn, nodes).get
               store.putRoot(txn, branch, newRootHash)
@@ -219,15 +220,15 @@ package object history {
     }
 
   private[this] def insertLeafOntoSkipNode[V, K, T](
-      encodedKeyNew: Seq[Byte],
+      encodedKeyByteVector: ByteVector,
       newLeafHash: Blake2b256Hash,
       parents: Parents[K, V],
       affix: ByteVector,
       ptr: NonEmptyPointer)(implicit codecK: Codec[K], codecV: Codec[V]) = {
     val pathLength = parents.countPathLength
-    val subPath    = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt))
+    val subPath    = encodedKeyByteVector.slice(pathLength, pathLength + affix.size)
     val pathRemaining =
-      ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
+      encodedKeyByteVector.slice(pathLength + affix.size, encodedKeyByteVector.length)
     val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
     val sharedSubPathLength = sharedPrefix.length.toLong
     val oldSuffix           = affix.splitAt(sharedSubPathLength)._2
@@ -266,13 +267,13 @@ package object history {
   }
 
   private[this] def insertLeafAsNodeChild[V, K, T](
-      encodedKeyNew: Seq[Byte],
+      encodedKeyByteVector: ByteVector,
       newLeafHash: Blake2b256Hash,
       parents: Parents[K, V],
       pb: PointerBlock)(implicit codecK: Codec[K], codecV: Codec[V]) = {
     val pathLength    = parents.countPathLength
-    val newLeafIndex  = JByte.toUnsignedInt(encodedKeyNew(pathLength))
-    val remainingPath = ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2)
+    val newLeafIndex  = JByte.toUnsignedInt(encodedKeyByteVector(pathLength))
+    val remainingPath = encodedKeyByteVector.splitAt(pathLength + 1)._2
     val (ptr, newParents) =
       setupSkipNodeFree(LeafPointer(newLeafHash), remainingPath)(codecK, codecV)
     val hd            = Node(pb.updated(List((newLeafIndex, ptr))))
