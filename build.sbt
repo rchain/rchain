@@ -51,7 +51,7 @@ lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
     name := "casper",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
       monix
@@ -84,14 +84,12 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
+      scalacheckNoTest,
       kalium,
       jaxb
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
     ),
     fork := true,
     unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",

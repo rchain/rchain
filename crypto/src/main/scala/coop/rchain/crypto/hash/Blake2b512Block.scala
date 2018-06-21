@@ -3,7 +3,9 @@ package coop.rchain.crypto.hash
 import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Arrays
 import org.bouncycastle.util.Pack
+import org.scalacheck.{Arbitrary, Gen}
 import scalapb.TypeMapper
 
 /**
@@ -163,4 +165,24 @@ object Blake2b512Block {
   // This will give invalid results and is for testing only.
   def tweakT0(src: Blake2b512Block): Unit =
     src.t0 = -1
+
+  implicit val arbitrary: Arbitrary[Blake2b512Block] = Arbitrary(for {
+    chainValue <- Gen.containerOfN[Array, Long](8, Arbitrary.arbitrary[Long])
+    t0         <- Arbitrary.arbitrary[Long]
+    t1         <- Arbitrary.arbitrary[Long]
+  } yield {
+    val result = new Blake2b512Block
+    Array.copy(chainValue, 0, result.chainValue, 0, CHAIN_VALUE_LENGTH)
+    result.t0 = t0
+    result.t1 = t1
+    result
+  })
+
+  def same(b1: Blake2b512Block, b2: Blake2b512Block): Boolean =
+    Arrays.equals(b1.chainValue, b2.chainValue) && b1.t0 == b2.t0 && b1.t1 == b2.t1
+
+  def debugStr(b: Blake2b512Block): String =
+    s"chainValue: ${b.chainValue.mkString(", ")}\n" +
+      s"t0: ${b.t0}\n" +
+      s"t1: ${b.t1}\n"
 }

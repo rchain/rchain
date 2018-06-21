@@ -2,9 +2,12 @@ package coop.rchain.crypto.hash
 
 import coop.rchain.crypto.codec._
 import org.scalatest._
+import org.scalacheck.{Arbitrary, Gen, Prop}
+import org.scalatest.prop.{Checkers, Configuration}
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.Arrays
 
 /**
   * All of the test vectors here were created with the b2sum utility and a
@@ -13,7 +16,84 @@ import java.nio.charset.StandardCharsets
   * For the rollover tests, we use the block format which is 112 bytes of path
   * info, followed by 16 bytes of length info in little endian format.
   */
-class Blake2b512RandomSpec extends FlatSpec with Matchers {
+class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Configuration {
+  implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
+    PropertyCheckConfiguration(minSuccessful = 1000)
+
+  "An arbitrary random-state" should "survive serialization round-tripping" in {
+    val propRoundTripTypeMapper: Prop = Prop.forAll { (rand: Blake2b512Random) =>
+      val tm          = Blake2b512Random.typeMapper
+      val half        = tm.toBase(rand)
+      val result      = tm.toCustom(half)
+      val onceAndHalf = tm.toBase(result)
+      val repeat      = tm.toBase(rand)
+
+      (Blake2b512Random.same(rand, result) || { println("not same"); false }) &&
+      (half == repeat || {
+        println("not repeatable encoding.")
+        println(s"halfEncode:   ${Base16.encode(half.toByteArray)}")
+        println(s"repeatEncode: ${Base16.encode(repeat.toByteArray)}")
+        false
+      }) &&
+      (half == onceAndHalf || {
+        println("not same encoding.")
+        println(s"halfEncode:        ${Base16.encode(half.toByteArray())}")
+        println(s"onceAndHalfEncode: ${Base16.encode(onceAndHalf.toByteArray())}")
+        false
+      }) && {
+        val baseNext   = rand.next()
+        val resultNext = result.next()
+        if (Arrays.equals(baseNext, resultNext))
+          true
+        else {
+          println("not same next.")
+          println(s"randEncode:   ${Base16.encode(tm.toBase(rand).toByteArray)}")
+          println(s"resultEncode: ${Base16.encode(tm.toBase(result).toByteArray)}")
+          println(s"baseNext:   ${Base16.encode(baseNext)}")
+          println(s"resultNext: ${Base16.encode(resultNext)}")
+          false
+        }
+      }
+    }
+
+    check(propRoundTripTypeMapper)
+
+    val zeroPositionRand = Arbitrary.arbitrary[Blake2b512Random] suchThat (_.position == 0)
+    val propNextNotSame: Prop = Prop.forAll(zeroPositionRand) { (rand: Blake2b512Random) =>
+      val tm       = Blake2b512Random.typeMapper
+      val randCopy = rand.copy()
+      randCopy.next()
+      tm.toBase(randCopy) != tm.toBase(rand) || {
+        println("next1")
+        println(s"randEncode: ${Base16.encode(tm.toBase(rand).toByteArray)}")
+        println(s"randCopyEncode: ${Base16.encode(tm.toBase(randCopy).toByteArray)}")
+        false
+      }
+      randCopy.next()
+      tm.toBase(randCopy) != tm.toBase(rand) || {
+        println("next2")
+        println(s"randEncode: ${Base16.encode(tm.toBase(rand).toByteArray)}")
+        println(s"randCopyEncode: ${Base16.encode(tm.toBase(randCopy).toByteArray)}")
+        false
+      }
+    }
+
+    check(propNextNotSame)
+
+    val propSplitNotSame: Prop = Prop.forAll(zeroPositionRand) { (rand: Blake2b512Random) =>
+      val tm       = Blake2b512Random.typeMapper
+      val randCopy = rand.splitByte(0)
+      tm.toBase(randCopy) != tm.toBase(rand) || {
+        println("split")
+        println(s"randEncode: ${Base16.encode(tm.toBase(rand).toByteArray)}")
+        println(s"randCopyEncode: ${Base16.encode(tm.toBase(randCopy).toByteArray)}")
+        false
+      }
+    }
+
+    check(propSplitNotSame)
+  }
+
   val emptyMsg: Array[Byte] = new Array[Byte](0)
   "Empty" should "give a predictable result" in {
     val b2Random = Blake2b512Random(emptyMsg)
