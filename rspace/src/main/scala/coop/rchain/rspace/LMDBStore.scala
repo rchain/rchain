@@ -67,14 +67,12 @@ class LMDBStore[C, P, A, K] private (
     }
 
   /* Basic operations */
-
-  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
-    fetchGNAT(txn, channelsHash.bytes.toDirectByteBuffer)
-
-  private[this] def fetchGNAT(txn: T, channelsHashBuff: ByteBuffer): Option[GNAT[C, P, A, K]] =
+  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
+    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
       Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
     }
+  }
 
   private[this] def insertGNAT(txn: T,
                                channelsHash: Blake2b256Hash,
