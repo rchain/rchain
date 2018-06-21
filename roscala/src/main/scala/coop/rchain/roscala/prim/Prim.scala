@@ -13,7 +13,7 @@ sealed trait PrimError
 case class TypeMismatch(argNum: Int, typeName: String) extends PrimError {
   override def toString: String = ""
 }
-case class IndexOutOfBounds(argNum: Int, size: Int)    extends PrimError {
+case class IndexOutOfBounds(argNum: Int, size: Int) extends PrimError {
   override def toString: String = s"Index $argNum out of bounds $size"
 }
 case object ArithmeticError extends PrimError {
@@ -24,13 +24,12 @@ abstract class Prim extends Ob {
   val name: String
   val minArgs: Int
   val maxArgs: Int
-  def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
+  def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
     fnSimple(ctxt) match {
-      case Right(m) => m
+      case Right(m)              => m
       case Left(e: TypeMismatch) => Prim.mismatch(ctxt, e.argNum, e.typeName)
-      case Left(e) => Prim.runtimeError(ctxt, e.toString)
+      case Left(e)               => Prim.runtimeError(ctxt, e.toString)
     }
-  }
   def fnSimple(ctxt: Ctxt): Either[PrimError, Ob]
 
   def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
@@ -421,7 +420,7 @@ object Prim {
 
   def nthPrim(n: Int): Prim = map(n)
 
-  def mismatchType[T <: Ob: ClassTag](ctxt: Ctxt): Option[Ob] = {
+  def mismatchType[T <: Ob: ClassTag](ctxt: Ctxt): Option[TypeMismatch] = {
     val n        = ctxt.nargs
     val typeName = classTag[T].runtimeClass.getName
 
@@ -430,7 +429,6 @@ object Prim {
       case _    => true
     }
 
-    nonT.map(ob => mismatch(ctxt, ctxt.argvec.value.indexOf(nonT), typeName))
+    nonT.map(ob => TypeMismatch(ctxt.argvec.value.indexOf(ob), typeName))
   }
-
 }

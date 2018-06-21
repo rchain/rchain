@@ -1,8 +1,7 @@
-package coop.rchain.rosette.prim
+package coop.rchain.roscala.prim
 import coop.rchain.roscala.macros.checkTypeMismatch
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.prim.Prim._
-import coop.rchain.roscala.prim.{IndexOutOfBounds, Prim, PrimError, TypeMismatch}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.HashSet
@@ -165,14 +164,14 @@ object rblstring {
     override val maxArgs: Int = 2
 
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
-      val elem  = ctxt.argvec.value
+      val elem = ctxt.argvec.value
 
       for {
         n <- checkType[Fixnum](0, elem)
         res <- checkType[RblChar](1, elem) match {
-          case Right(ch) => Right(RblString(ch.value.toString * n.value))
-          case Left(_)   => Right(RblString(" " * n.value))
-        }
+                case Right(ch) => Right(RblString(ch.value.toString * n.value))
+                case Left(_)   => Right(RblString(" " * n.value))
+              }
       } yield res
     }
   }
@@ -227,7 +226,7 @@ object rblstring {
         w   <- checkType[Fixnum](1, elem)    // Ensure arg1 is a Fixnum
         sep <- checkType[RblString](2, elem) // Ensure arg2 is a RblString
       } yield {
-        val tokens = str.value.split(sep.value)
+        val tokens = str.value.split(sep.value.toCharArray)
         if ((w.value >= 0) && (w.value < tokens.length))
           RblString(tokens(w.value))
         else
@@ -270,11 +269,11 @@ object rblstring {
         str <- checkType[RblString](0, elem) // Ensure arg0 is a RblString
         sep <- checkType[RblString](1, elem) // Ensure arg1 is a RblString
         w <- checkType[Fixnum](2, elem) // Ensure optional arg2 is a Fixnum
-        match {
-          case Right(v)                 => Right(v)
-          case Left(TypeMismatch(_, _)) => Left(TypeMismatch(2, Fixnum.getClass.getName))
-          case Left(_)                  => Right(Fixnum(Int.MaxValue))
-        }
+            match {
+              case Right(v)                 => Right(v)
+              case Left(TypeMismatch(_, _)) => Left(TypeMismatch(2, Fixnum.getClass.getName))
+              case Left(_)                  => Right(Fixnum(Int.MaxValue))
+            }
       } yield {
 
         // At this point:
@@ -288,14 +287,14 @@ object rblstring {
           else
             str.value.split(sep.value.toArray) // split ignores trailing separators
 
-        val tr = tl.dropWhile(_.isEmpty)// Trim off leading separators
+        val tr = tl.dropWhile(_.isEmpty) // Trim off leading separators
 
         if (sep.value.isEmpty) { // no separators? return a Tuple of RblChars
           Tuple(str.value.toCharArray.map(RblChar): _*)
         } else if (w.value <= 0) { // Invalid count yields an empty Tuple
           Nil
         } else if (w.value > tr.length) { // Consuming the whole string yields the tokens plus NIV
-          Tuple(tr.map(RblString) :+ Niv :_*)
+          Tuple(tr.map(RblString) :+ Niv: _*)
         } else {
           // Handle counts less than available tokens.
           // This yields the tokens plus the remaining string
@@ -304,7 +303,7 @@ object rblstring {
           val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
           val rest   = str.value.drop(idx)                         // The rest of the string
 
-          Tuple(tokens.map(RblString) :+ RblString(rest) :_*)
+          Tuple(tokens.map(RblString) :+ RblString(rest): _*)
         }
       }
     }
