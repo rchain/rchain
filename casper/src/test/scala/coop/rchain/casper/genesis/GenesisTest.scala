@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol.Bond
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 
 import java.io.PrintWriter
 import java.nio.file.Files
@@ -20,6 +20,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   def validatorsPath = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators  = 5
   implicit val log   = new LogStub[Id]
+  implicit val time  = new LogicalTime[Id]
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",

@@ -5,32 +5,65 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib._
+import coop.rchain.casper.genesis.contracts.{Rev, Wallet}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.Log
+import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.math.NonNegativeNumber
+import coop.rchain.rholang.mint.MakeMint
+import coop.rchain.rholang.wallet.BasicWallet
+import coop.rchain.shared.{Log, Time}
 
 import java.io.{File, PrintWriter}
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
+import monix.execution.Scheduler
+
+import scala.concurrent.SyncVar
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 object Genesis {
 
-  def fromBondsFile[F[_]: Monad: Capture: Log](maybePath: Option[String],
-                                               numValidators: Int,
-                                               validatorsPath: Path): F[BlockMessage] =
-    for {
-      bondsFile <- toFile[F](maybePath, validatorsPath)
-      bonds     <- getBonds[F](bondsFile, numValidators, validatorsPath)
-    } yield fromBonds(bonds)
+  def withContracts(initial: BlockMessage,
+                    wallets: Seq[Wallet],
+                    startHash: StateHash,
+                    runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
 
-  // TODO: Extract hard-coded version and timestamp
-  def fromBonds(bonds: Map[Array[Byte], Int]): BlockMessage = {
+    val blessedTerms = List(
+      LinkedList.term,
+      NonNegativeNumber.term,
+      MakeMint.term,
+      BasicWallet.term,
+      (new Rev(wallets)).term
+    )
+
+    val Right(stateHash) = runtimeManager.computeState(startHash, blessedTerms)
+
+    val stateWithContracts = for {
+      bd <- initial.body
+      ps <- bd.postState
+    } yield ps.withTuplespace(stateHash)
+    val version   = initial.header.get.version
+    val timestamp = initial.header.get.timestamp
+
+    //TODO: add comm reductions
+    val body   = Body(postState = stateWithContracts, newCode = blessedTerms.map(termDeploy))
+    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
+
+    unsignedBlockProto(body, header, List.empty[Justification])
+  }
+
+  def withoutContracts(bonds: Map[Array[Byte], Int],
+                       version: Long,
+                       timestamp: Long): BlockMessage = {
     import Sorting.byteArrayOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
@@ -38,14 +71,50 @@ object Genesis {
         val validator = ByteString.copyFrom(pk)
         Bond(validator, stake)
     }
+
     val state = RChainState()
       .withBlockNumber(0)
       .withBonds(bondsProto)
     val body = Body()
       .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString], 0L, 0L)
+    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification])
+  }
+
+  //TODO: Decide on version number
+  //TODO: Include wallets input file
+  def fromBondsFile[F[_]: Monad: Capture: Log: Time](
+      maybePath: Option[String],
+      numValidators: Int,
+      validatorsPath: Path)(implicit scheduler: Scheduler): F[BlockMessage] =
+    for {
+      bondsFile <- toFile[F](maybePath, validatorsPath)
+      bonds     <- getBonds[F](bondsFile, numValidators, validatorsPath)
+      now       <- Time[F].currentMillis
+      initial   = withoutContracts(bonds = bonds, timestamp = now, version = 0L)
+      genesis <- createRuntime[F].flatMap {
+                  case (startHash, runtimeManager, runtime) =>
+                    val result =
+                      withContracts(initial, Seq.empty[Wallet], startHash, runtimeManager)
+                    result.pure[F] <* closeRuntime(runtime)(Capture[F])
+                }
+    } yield genesis
+
+  //TODO: remove in favour of having a runtime passed in
+  private def createRuntime[F[_]: Capture]: F[(StateHash, RuntimeManager, SyncVar[Runtime])] =
+    Capture[F].capture {
+      val storageSize     = 1024L * 1024
+      val storageLocation = Files.createTempDirectory(s"casper-genesis-runtime")
+      val runtime         = new SyncVar[Runtime]()
+      runtime.put(Runtime.create(storageLocation, storageSize))
+      val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
+      (initStateHash, runtimeManager, runtime)
+    }
+
+  private def closeRuntime[F[_]: Capture](runtime: SyncVar[Runtime]): F[Unit] = Capture[F].capture {
+    val active = runtime.take()
+    active.close()
   }
 
   private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
