@@ -298,7 +298,6 @@ class LMDBStore[C, P, A, K] private (
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
-    // TODO: Prune TrieUpdate log here
     collapse(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
