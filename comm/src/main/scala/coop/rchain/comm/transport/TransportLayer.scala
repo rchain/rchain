@@ -1,12 +1,8 @@
 package coop.rchain.comm.transport
 
-import coop.rchain.p2p.effects._
-import java.net.SocketAddress
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.FiniteDuration
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
 import coop.rchain.shared._
@@ -14,7 +10,7 @@ import coop.rchain.shared._
 trait TransportLayer[F[_]] {
   def roundTrip(msg: ProtocolMessage,
                 remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]]
+                timeout: FiniteDuration): F[CommErr[ProtocolMessage]]
   // TODO return PeerNode, do we still neeed it?
   def local: F[PeerNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
@@ -37,7 +33,7 @@ sealed abstract class TransportLayerInstances {
     new TransportLayer[EitherT[F, E, ?]] {
       def roundTrip(msg: ProtocolMessage,
                     remote: PeerNode,
-                    timeout: Duration): EitherT[F, E, CommErr[ProtocolMessage]] =
+                    timeout: FiniteDuration): EitherT[F, E, CommErr[ProtocolMessage]] =
         EitherT.liftF(evF.roundTrip(msg, remote, timeout))
 
       def local: EitherT[F, E, PeerNode] =

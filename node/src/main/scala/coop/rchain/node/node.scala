@@ -124,6 +124,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
   implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val tcpClientEffect: TcpClient[Task] =
+    new GrpcTcpClient(conf.run.certificatePath.toFile, conf.run.keyPath.toFile)
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)

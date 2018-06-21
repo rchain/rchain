@@ -3,26 +3,23 @@ package coop.rchain.comm.connect
 import coop.rchain.p2p.effects._
 
 import coop.rchain.comm.discovery._
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
 
-import scala.util.control.NonFatal
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
-import com.google.protobuf.ByteString
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
 import coop.rchain.shared._
 import coop.rchain.comm.CommError.ErrorHandler
 
 object Connect {
 
-  val defaultTimeout: Duration = Duration(500, MILLISECONDS)
+  val defaultTimeout: FiniteDuration = 500.milliseconds
 
   def findAndConnect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler]
@@ -41,7 +38,7 @@ object Connect {
       bootstrapAddrStr: String,
       maxNumOfAttempts: Int = 5): F[Unit] = {
 
-    def connectAttempt(attempt: Int, timeout: Duration, bootstrapAddr: PeerNode): F[Unit] =
+    def connectAttempt(attempt: Int, timeout: FiniteDuration, bootstrapAddr: PeerNode): F[Unit] =
       if (attempt > maxNumOfAttempts) for {
         _ <- Log[F].error("Failed to connect to bootstrap node, exiting...")
         _ <- errorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
@@ -70,7 +67,7 @@ object Connect {
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       peer: PeerNode,
-      timeout: Duration): F[Unit] = {
+      timeout: FiniteDuration): F[Unit] = {
 
     def initProtocolHandshake: F[Unit] =
       for {

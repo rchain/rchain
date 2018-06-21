@@ -49,8 +49,8 @@ package object effects {
         } yield res.isDefined
     }
 
-  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
-      implicit executionContext: ExecutionContext) =
+  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable: TcpClient](conf: Conf)(
+      src: PeerNode)(implicit executionContext: ExecutionContext) =
     new TcpTransportLayer[F](conf.run.localhost,
                              conf.run.port(),
                              conf.run.certificatePath.toFile,
