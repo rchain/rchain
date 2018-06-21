@@ -1,4 +1,4 @@
-package coop.rchain.rholang.genesis.contracts
+package coop.rchain.casper.genesis.contracts
 
 case class Wallet(algorithm: String, pk: String, initRevBalance: Int)
 
