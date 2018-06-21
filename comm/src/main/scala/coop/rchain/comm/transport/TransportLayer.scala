@@ -32,6 +32,8 @@ sealed abstract class TransportLayerInstances {
 
   import CommunicationResponse._
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   implicit def eitherTTransportLayer[E, F[_]: Monad: Log](
       implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, E, ?]] =
     new TransportLayer[EitherT[F, E, ?]] {

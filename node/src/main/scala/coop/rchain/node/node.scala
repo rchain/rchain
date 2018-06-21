@@ -34,6 +34,8 @@ import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
       && !conf.run.certificatePath.toFile.exists()) {

@@ -35,6 +35,8 @@ import coop.rchain.shared._
 
 object GrpcServer {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def acquireServer[
       F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable: SafetyOracle](
       port: Int,

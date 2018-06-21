@@ -8,11 +8,13 @@ import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, LogSource}
 
 import scala.util.Try
 
 object Validate {
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 

@@ -15,7 +15,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.{AtomicSyncVar, Log, Time}
+import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
@@ -51,6 +51,9 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 sealed abstract class MultiParentCasperInstances {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def noOpsCasper[F[_]: Applicative]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
