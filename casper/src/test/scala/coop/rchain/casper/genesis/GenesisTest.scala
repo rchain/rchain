@@ -14,6 +14,8 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import java.io.PrintWriter
 import java.nio.file.Files
 
+import monix.execution.Scheduler.Implicits.global
+
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {

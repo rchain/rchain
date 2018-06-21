@@ -17,10 +17,17 @@ final class Rev(wallets: Seq[Wallet]) extends CompiledRholangSource {
     |    } |
     |
     |    //basic wallets which exist from genesis
-    |    ${wallets.map(Wallet.rhoCode).mkString(" |\n")}
+    |    $walletCode
     |  }
     |}
   """.stripMargin
+
+  private def walletCode: String =
+    if (wallets.isEmpty) {
+      "Nil"
+    } else {
+      wallets.map(Wallet.rhoCode).mkString(" |\n")
+    }
 
   override val term: Par = InterpreterUtil.mkTerm(code).right.get
 }
