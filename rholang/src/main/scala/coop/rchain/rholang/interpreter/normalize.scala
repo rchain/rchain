@@ -234,7 +234,7 @@ object ProcNormalizeMatcher {
 
     def normalizeIfElse(valueProc: Proc,
                         trueBodyProc: Proc,
-                        falseBodyProc: Proc): M[ProcVisitOutputs] =
+                        falseBodyProc: Proc, input: ProcVisitInputs): M[ProcVisitOutputs] =
       for {
         targetResult <- normalizeMatch[M](valueProc, input)
         trueCaseBody <- normalizeMatch[M](
@@ -762,8 +762,18 @@ object ProcNormalizeMatcher {
           )
       }
 
-      case p: PIf     => normalizeIfElse(p.proc_1, p.proc_2, new PNil())
-      case p: PIfElse => normalizeIfElse(p.proc_1, p.proc_2, p.proc_3)
+      case p: PIf     =>
+        normalizeIfElse(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
+          .map(normalized => ProcVisitOutputs(
+            input.par ++ normalized.par,
+            normalized.knownFree
+          ))
+      case p: PIfElse =>
+        normalizeIfElse(p.proc_1, p.proc_2, p.proc_3, input.copy(par = VectorPar()))
+          .map(normalized => ProcVisitOutputs(
+            input.par ++ normalized.par,
+            normalized.knownFree
+          ))
 
       case _ =>
         err.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
