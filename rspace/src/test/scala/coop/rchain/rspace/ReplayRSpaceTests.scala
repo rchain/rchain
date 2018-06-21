@@ -698,6 +698,27 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       mm.get(pr) shouldBe None
   }
+
+  "checkpoints" should "have the same root hashes" in
+    withTestSpaces { (space, replaySpace) =>
+      val ch1        = "ch1"
+      val emptyPoint = space.createCheckpoint()
+
+      (0 until 10).foreach { i: Int =>
+        replaySpace.produce(ch1, s"datum$i", false)
+      }
+
+      val step1point = space.createCheckpoint()
+      replaySpace.rig(emptyPoint.root, emptyPoint.log)
+
+      (9 to 0 by -1).foreach { i: Int =>
+        replaySpace.produce(ch1, s"datum$i", false)
+      }
+
+      val step2point = space.createCheckpoint()
+      printf(s"${step1point.root} AND ${step2point.root}")
+      step1point.root shouldBe step2point.root
+    }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]
