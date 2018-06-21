@@ -408,9 +408,69 @@ val pres14 = space.produce(Channel("friends"), erin, persist = true)
 println(space.store.toMap)
 ```
 
+### History & rollback
+
+It is possible to save the current state of RSpace in the form of a checkpoint (root hash of a given Merkle Patricia Trie).
+```scala
+val checkpoint = space.createCheckpoint()
+val checkpointHash = checkpoint.root
+```
+
+To rollback the state of the RSpace to a given checkpoint one simply calls the `reset` method with the hash of the root of the checkpoint provided as parameter.
+```scala
+space.reset(checkpointHash)
+```
+
+Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
+```tut
+    val storePath2: Path = Files.createTempDirectory("rspace-address-book-example-")
+    val store2: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath2, 1024L * 1024L * 100L)
+    val space2 = new RSpace[Channel, Pattern, Entry, Printer](store2, coop.rchain.rspace.history.Branch.MASTER)
+
+    val cres =
+      space2.consume(List(Channel("friends")),
+                    List(CityMatch(city = "Crystal Lake")),
+                    new Printer,
+                    persist = false)
+    assert(cres.isEmpty)
+
+```
+
+We can now create a checkpoint and store it's root
+```tut
+    val checkpointHash = space2.createCheckpoint.root
+```
+
+The first `produceAlice` operation should be able to find data stored by the consume, hence:
+```tut
+    def produceAlice = space2.produce(Channel("friends"), alice, persist = false)
+    assert(produceAlice.isDefined)
+```
+
+Running the same operation again shouldn't return anything, as data hasn't been persisted:
+```tut
+    assert(produceAlice.isEmpty)
+```
+Every following repetition of the operation above should yield an empty result.
+```tut
+    assert(produceAlice.isEmpty)
+```
+
+After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result:
+```tut
+    space2.reset(checkpointHash)
+    assert(produceAlice.isDefined)
+```
+And again, every following operation should yield an empty result
+Every following repetition of the operation above should yield an empty result.
+```tut
+    assert(produceAlice.isEmpty)
+```
+
 ### Finishing Up
 
-When we are finished using the space, we close it.
+When we are finished using the spaces, we close them.
 ```tut
 space.close()
+space2.close()
 ```
