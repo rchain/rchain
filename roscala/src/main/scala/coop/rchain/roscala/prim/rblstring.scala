@@ -294,7 +294,7 @@ object rblstring {
         } else if (w.value <= 0) { // Invalid count yields an empty Tuple
           Nil
         } else if (w.value > tr.length) { // Consuming the whole string yields the tokens plus NIV
-          Tuple(tr.map(RblString) :+ Niv: _*)
+          Tuple(tr.map(RblString(_)) :+ Niv: _*)
         } else {
           // Handle counts less than available tokens.
           // This yields the tokens plus the remaining string
@@ -303,7 +303,7 @@ object rblstring {
           val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
           val rest   = str.value.drop(idx)                         // The rest of the string
 
-          Tuple(tokens.map(RblString) :+ RblString(rest): _*)
+          Tuple(tokens.map(RblString(_)) :+ RblString(rest): _*)
         }
       }
     }

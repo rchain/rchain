@@ -19,8 +19,8 @@ object rblfloat {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(0.0)) {
-        case (accum, float: RblFloat) => accum + float
+      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(0.0)) { (accum, float) =>
+        accum + float.asInstanceOf[RblFloat]
       })
     }
   }
@@ -53,8 +53,8 @@ object rblfloat {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(1)) {
-        case (accum, float: RblFloat) => accum * float
+      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(1)) { (accum, float) =>
+        accum * float.asInstanceOf[RblFloat]
       })
     }
   }
@@ -171,9 +171,9 @@ object rblfloat {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(Double.MaxValue)) {
-        case (minVal, float: RblFloat) =>
-          if (minVal.value < float.value) minVal else float
+      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(Double.MaxValue)) { (minVal, float) =>
+        if (minVal.value < float.asInstanceOf[RblFloat].value) minVal
+        else float.asInstanceOf[RblFloat]
       })
     }
   }
@@ -187,9 +187,9 @@ object rblfloat {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(Double.MinValue)) {
-        case (maxVal, float: RblFloat) =>
-          if (maxVal.value > float.value) maxVal else float
+      Right(ctxt.argvec.value.take(n).foldLeft(RblFloat(Double.MinValue)) { (maxVal, float) =>
+        if (maxVal.value > float.asInstanceOf[RblFloat].value) maxVal
+        else float.asInstanceOf[RblFloat]
       })
     }
   }
