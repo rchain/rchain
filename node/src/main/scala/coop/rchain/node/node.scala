@@ -6,6 +6,7 @@ import io.grpc.Server
 import cats._
 import cats.data._
 import cats.implicits._
+import cats.mtl._
 import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
@@ -33,6 +34,8 @@ import coop.rchain.crypto.codec.Base16
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+
+import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
@@ -122,11 +125,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                     = effects.log
-  implicit val timeEffect: Time[Task]                   = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val logEffect: Log[Task]                            = effects.log
+  implicit val timeEffect: Time[Task]                          = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]              = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
