@@ -245,7 +245,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     result should be(expectedResult)
     val targetPar: Par  = target
     val patternPar: Par = pattern
-    val parResult = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
     parResult should be(expectedResult)
   }
 

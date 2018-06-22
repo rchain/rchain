@@ -602,7 +602,9 @@ object ProcNormalizeMatcher {
           sourcesP                                                         <- processSources(bindingsRaw)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsProcessed                                                <- processBindings(sources)
-          bindingsConnectiveUsed = bindingsProcessed.flatMap(_._1).exists(c => ChannelLocallyFree.connectiveUsed(c))
+          bindingsConnectiveUsed = bindingsProcessed
+            .flatMap(_._1)
+            .exists(c => ChannelLocallyFree.connectiveUsed(c))
           receipts = ReceiveBindsSortMatcher
             .preSortBinds[M, VarSort](bindingsProcessed)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
