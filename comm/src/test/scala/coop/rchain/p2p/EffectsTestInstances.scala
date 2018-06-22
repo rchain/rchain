@@ -13,6 +13,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+import coop.rchain.comm.protocol.routing._
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
@@ -51,21 +52,21 @@ object EffectsTestInstances {
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
-    type Responses = PeerNode => (ProtocolMessage => CommErr[ProtocolMessage])
-    var reqresp: Option[Responses]      = None
-    var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
+    type Responses = PeerNode => (Protocol => CommErr[Protocol])
+    var reqresp: Option[Responses] = None
+    var requests: List[Protocol]   = List.empty[Protocol]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
 
     def reset(): Unit = {
       reqresp = None
-      requests = List.empty[ProtocolMessage]
+      requests = List.empty[Protocol]
     }
 
-    def roundTrip(msg: ProtocolMessage,
+    def roundTrip(msg: Protocol,
                   remote: PeerNode,
-                  timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
+                  timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[Protocol]] =
       Capture[F].capture {
         requests = requests :+ msg
         reqresp.get.apply(remote).apply(msg)
@@ -74,7 +75,7 @@ object EffectsTestInstances {
     def local: F[PeerNode] = src.pure[F]
     def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
-        requests = requests :+ msg
+        requests = requests :+ msg.proto
         Right(())
       }
     def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???

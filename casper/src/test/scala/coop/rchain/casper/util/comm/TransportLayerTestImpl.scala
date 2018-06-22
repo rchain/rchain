@@ -3,6 +3,7 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad}
 import cats.implicits._
 
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
@@ -19,9 +20,7 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
     val msgQueues: collection.Map[PeerNode, mutable.Queue[ProtocolMessage]])
     extends TransportLayer[F] {
 
-  def roundTrip(msg: ProtocolMessage,
-                remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]] = ???
+  def roundTrip(msg: Protocol, remote: PeerNode, timeout: Duration): F[CommErr[Protocol]] = ???
 
   def local: F[PeerNode] = identity.pure[F]
 

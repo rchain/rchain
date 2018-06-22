@@ -44,7 +44,7 @@ package object effects {
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
-          req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
+          req = ProtocolMessage.ping(src)
           res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
         } yield res.isDefined
     }

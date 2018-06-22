@@ -10,6 +10,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+import coop.rchain.comm.protocol.routing._
 
 class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
     extends NodeDiscovery[F] {
@@ -71,7 +72,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def handleCommunications: ProtocolMessage => F[CommunicationResponse] =
     pm =>
-      pm.sender.fold(notHandled.pure[F]) { sender =>
+      ProtocolMessage.sender(pm.proto).fold(notHandled.pure[F]) { sender =>
         updateLastSeen(sender) >>= kp(pm match {
           case ping @ PingMessage(_, _)             => handlePing(sender, ping)
           case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
@@ -115,15 +116,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
     for {
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = LookupMessage(ProtocolMessage.lookup(src, key), System.currentTimeMillis)
+      req = ProtocolMessage.lookup(src, key)
       r <- TransportLayer[F]
             .roundTrip(req, remoteNode, 500.milliseconds)
             .map(_.toOption
               .map {
-                case LookupResponseMessage(proto, _) =>
-                  proto.message.lookupResponse
-                    .map(_.nodes.map(ProtocolMessage.toPeerNode))
-                    .getOrElse(Seq())
+                case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
+                  lr.nodes.map(ProtocolMessage.toPeerNode)
                 case _ => Seq()
               }
               .getOrElse(Seq()))

@@ -67,19 +67,16 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
       .overrideAuthority(remote.id.toString)
       .build()
 
-  def roundTrip(msg: ProtocolMessage,
-                remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]] =
+  def roundTrip(msg: Protocol, remote: PeerNode, timeout: Duration): F[CommErr[Protocol]] =
     for {
       tlResponseErr <- Capture[F].capture(
                         Try(
-                          Await.result(withClient(remote)(_.send(TLRequest(msg.proto.some))),
-                                       timeout)
+                          Await.result(withClient(remote)(_.send(TLRequest(msg.some))), timeout)
                         ).toEither.leftMap(protocolException))
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
-                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                    case p if p.isProtocol => Right(tlr.getProtocol)
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
                     case p if p.isInternalServerError =>

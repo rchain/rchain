@@ -1,7 +1,8 @@
 package coop.rchain.comm.connect
 
 import org.scalatest._
-import coop.rchain.comm.protocol.rchain._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
@@ -42,7 +43,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val ProtocolHandshakeMessage(_) = transportLayerEff.requests(0)
+        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0)
+        upstream.unpack(ProtocolHandshake)
       }
       it("should then add remote node to communication layer") {
         // given
@@ -63,8 +65,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
 
   }
 
-  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
-    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
+  def alwaysSuccess: Protocol => CommErr[Protocol] =
+    kp(Right(protocolHandshake(src)))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

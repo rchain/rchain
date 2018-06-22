@@ -18,14 +18,6 @@ trait ProtocolMessage {
 
   def header: Option[Header] = proto.header
 
-  def sender: Option[PeerNode] =
-    for {
-      h <- header
-      s <- h.sender
-    } yield
-      PeerNode(NodeIdentifier(s.id.toByteArray),
-               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
-
   def toByteSeq: Seq[Byte] =
     proto.toByteArray
 }
@@ -75,6 +67,14 @@ final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends Proto
   * Utility functions for working with protocol buffers.
   */
 object ProtocolMessage {
+
+  def sender(proto: Protocol): Option[PeerNode] =
+    for {
+      h <- proto.header
+      s <- h.sender
+    } yield
+      PeerNode(NodeIdentifier(s.id.toByteArray),
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   implicit def toProtocolBytes(x: String): ByteString =
     com.google.protobuf.ByteString.copyFromUtf8(x)

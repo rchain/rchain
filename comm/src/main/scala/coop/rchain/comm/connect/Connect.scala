@@ -76,10 +76,11 @@ object Connect {
       for {
         _       <- Log[F].info(s"Initialize protocol handshake to $peer")
         local   <- TransportLayer[F].local
-        ph      = ProtocolHandshakeMessage(protocolHandshake(local))
+        ph      = protocolHandshake(local)
         phsresp <- TransportLayer[F].roundTrip(ph, peer, timeout) >>= errorHandler[F].fromEither
-        _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-        _       <- NodeDiscovery[F].addNode(peer)
+        _ <- Log[F].debug(
+              s"Received protocol handshake response from ${ProtocolMessage.sender(phsresp).get}.")
+        _ <- NodeDiscovery[F].addNode(peer)
       } yield ()
 
     for {
@@ -146,10 +147,11 @@ object Connect {
 
     msg match {
       case UpstreamMessage(proto, _) =>
-        msg.sender.fold(Log[F].error(s"Sender not present, DROPPING msg $msg").as(notHandled)) {
-          sender =>
+        ProtocolMessage
+          .sender(msg.proto)
+          .fold(Log[F].error(s"Sender not present, DROPPING msg $msg").as(notHandled)) { sender =>
             dispatchForUpstream(proto, sender)
-        }
+          }
       case _ => Log[F].error(s"Unrecognized msg $msg") *> notHandled.pure[F]
     }
   }

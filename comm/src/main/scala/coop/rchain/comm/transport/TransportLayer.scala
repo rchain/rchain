@@ -10,11 +10,10 @@ import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
 import coop.rchain.shared._
+import coop.rchain.comm.protocol.routing._
 
 trait TransportLayer[F[_]] {
-  def roundTrip(msg: ProtocolMessage,
-                remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]]
+  def roundTrip(msg: Protocol, remote: PeerNode, timeout: Duration): F[CommErr[Protocol]]
   // TODO return PeerNode, do we still neeed it?
   def local: F[PeerNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
@@ -35,9 +34,9 @@ sealed abstract class TransportLayerInstances {
   implicit def eitherTTransportLayer[E, F[_]: Monad: Log](
       implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, E, ?]] =
     new TransportLayer[EitherT[F, E, ?]] {
-      def roundTrip(msg: ProtocolMessage,
+      def roundTrip(msg: Protocol,
                     remote: PeerNode,
-                    timeout: Duration): EitherT[F, E, CommErr[ProtocolMessage]] =
+                    timeout: Duration): EitherT[F, E, CommErr[Protocol]] =
         EitherT.liftF(evF.roundTrip(msg, remote, timeout))
 
       def local: EitherT[F, E, PeerNode] =
