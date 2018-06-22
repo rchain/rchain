@@ -34,6 +34,10 @@ trait ITrieStore[T, K, V] {
           ls
         case tries =>
           val (next, acc) = tries.foldLeft((Seq.empty[Trie[K, V]], ls)) {
+            case ((nexts, leaves), Skip(_, pointer)) =>
+              val next = get(txn, pointer.hash)
+              (nexts ++ next.toSeq, leaves)
+
             case ((nexts, leaves), Node(pointerBlock)) =>
               val children =
                 pointerBlock.children

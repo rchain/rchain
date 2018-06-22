@@ -228,25 +228,6 @@ object ProtoUtil {
     signedBlock
   }
 
-  // TODO: Extract hard-coded version and timestamp
-  def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    import Sorting.byteArrayOrdering
-    //sort to have deterministic order (to get reproducible hash)
-    val bondsProto = bonds.toIndexedSeq.sorted.map {
-      case (pk, stake) =>
-        val validator = ByteString.copyFrom(pk)
-        Bond(validator, stake)
-    }
-    val state = RChainState()
-      .withBlockNumber(0)
-      .withBonds(bondsProto)
-    val body = Body()
-      .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString], 0L, 0L)
-
-    unsignedBlockProto(body, header, List.empty[Justification])
-  }
-
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def stringToByteString(string: String): ByteString =

@@ -19,7 +19,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     opt[String](default = Some("localhost"),
                 descr = "Hostname or IP of node on which gRPC service is running.")
 
-  val diagnostics = new Subcommand("diagnostics", "d") {
+  val diagnostics = new Subcommand("diagnostics") {
     descr("Node diagnostics")
   }
   addSubcommand(diagnostics)
@@ -135,6 +135,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
   }
   addSubcommand(showBlock)
+
+  val showBlocks = new Subcommand("show-blocks") {
+    descr(
+      "View list of blocks on the main chain in the current Casper view on an existing running node.")
+  }
+  addSubcommand(showBlocks)
 
   val propose = new Subcommand("propose") {
     descr(

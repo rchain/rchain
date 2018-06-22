@@ -54,6 +54,8 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
+  private[rspace] def joinMap: Map[Blake2b256Hash, Seq[Seq[C]]]
+
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   private[rspace] def close(): Unit
@@ -68,7 +70,7 @@ trait IStore[C, P, A, K] {
 
   val trieBranch: Branch
 
-  private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
+  private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)
       .flatMap {
         case (_, value) =>

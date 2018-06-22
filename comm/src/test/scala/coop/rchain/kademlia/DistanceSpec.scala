@@ -1,14 +1,12 @@
 package coop.rchain.comm.discovery
 
 import org.scalatest._
-import scala.util.{Success, Try}
-import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 import cats._
 
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm._
-import coop.rchain.comm.discovery._
+import coop.rchain.crypto.codec.Base16
 
 object b {
   val rand                   = new scala.util.Random(System.currentTimeMillis)
@@ -60,7 +58,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     }
 
     def keyString(key: Seq[Byte]): String =
-      key.map("%02x".format(_)).mkString
+      Base16.encode(key.toArray)
 
     val k0 = Array.fill(width)(b(0))
     s"A node with key all zeroes (${keyString(k0)})" should "compute distance correctly" in {
@@ -97,7 +95,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       val toAdd = oneOffs(kr).head
       val dist  = table.distance(toAdd).get
       for (i <- 1 to 10) {
-        table.observe[Id](PeerNode(NodeIdentifier(toAdd), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(toAdd), endpoint))
         table.table(dist).size should be(1)
       }
     }
@@ -105,7 +103,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     s"A table of width $width with peers at all distances" should "have no empty buckets" in {
       val table = PeerTable(PeerNode(NodeIdentifier(kr), endpoint))
       for (k <- oneOffs(kr.toArray)) {
-        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint))
       }
       assert(table.table.forall(_.nonEmpty))
     }
@@ -113,7 +111,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should s"return min(k, ${8 * width}) peers on lookup" in {
       val table = PeerTable(PeerNode(NodeIdentifier(kr), endpoint))
       for (k <- oneOffs(kr.toArray)) {
-        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint))
       }
       table.lookup(b.rand(width)).size should be(scala.math.min(table.k, 8 * width))
     }
@@ -121,7 +119,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should "not return sought peer on lookup" in {
       val table = PeerTable(PeerNode(NodeIdentifier(kr), endpoint))
       for (k <- oneOffs(kr.toArray)) {
-        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint))
       }
       val target = table.table(table.width * 4)(0)
       val resp   = table.lookup(target.key)
@@ -131,7 +129,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should s"return ${8 * width} peers when sequenced" in {
       val table = PeerTable(PeerNode(NodeIdentifier(kr), endpoint))
       for (k <- oneOffs(kr.toArray)) {
-        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint))
       }
       table.peers.size should be(8 * width)
     }
@@ -139,7 +137,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     it should "find each added peer" in {
       val table = PeerTable(PeerNode(NodeIdentifier(kr), endpoint))
       for (k <- oneOffs(kr.toArray)) {
-        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint), true)
+        table.observe[Id](PeerNode(NodeIdentifier(k), endpoint))
       }
       for (k <- oneOffs(kr.toArray)) {
         table.find(k) should be(Some(PeerNode(NodeIdentifier(k), endpoint)))

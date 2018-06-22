@@ -2,11 +2,12 @@ package coop.rchain.casper
 
 import cats.Id
 import cats.implicits._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.casper.genesis.contracts.LinkedList
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.collection.LinkedList
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -14,7 +15,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = ProtoUtil.genesisBlock(bonds)
+  val genesis                     = Genesis.fromBonds(bonds)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

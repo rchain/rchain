@@ -17,7 +17,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   private val table = PeerTable(src)
 
   private def updateLastSeen(peer: PeerNode): F[Unit] =
-    table.observe[F](peer, add = true)
+    table.observe[F](peer)
 
   private val id: NodeIdentifier = src.id
 

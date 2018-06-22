@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter}
+import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter, SafetyOracle}
 import coop.rchain.crypto.codec.Base16
 
 import scala.annotation.tailrec
@@ -18,7 +18,7 @@ object BlockAPI {
   def addBlock[F[_]: Monad: MultiParentCasper](b: BlockMessage): F[Empty] =
     MultiParentCasper[F].addBlock(b).map(_ => Empty())
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
+  def getBlocksResponse[F[_]: Monad: MultiParentCasper: SafetyOracle]: F[BlocksResponse] =
     for {
       estimates <- MultiParentCasper[F].estimator
       dag       <- MultiParentCasper[F].blockDag
@@ -30,7 +30,8 @@ object BlockAPI {
     } yield
       BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
-  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockQueryResponse] =
+  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      q: BlockQuery): F[BlockQueryResponse] =
     for {
       dag        <- MultiParentCasper[F].blockDag
       maybeBlock = getBlock[F](q, dag)
@@ -48,8 +49,8 @@ object BlockAPI {
                            }
     } yield blockQueryResponse
 
-  // TODO: Add fault tolerance
-  private def getBlockInfo[F[_]: Monad: MultiParentCasper](block: BlockMessage): F[BlockInfo] =
+  private def getBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      block: BlockMessage): F[BlockInfo] =
     for {
       header      <- block.header.getOrElse(Header.defaultInstance).pure[F]
       version     <- header.version.pure[F]
@@ -58,10 +59,13 @@ object BlockAPI {
         val ps = block.body.flatMap(_.postState)
         ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
       }
-      tsDesc          <- MultiParentCasper[F].storageContents(tsHash)
-      timestamp       <- header.timestamp.pure[F]
-      mainParent      <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
-      parentsHashList <- header.parentsHashList.pure[F]
+      tsDesc                   <- MultiParentCasper[F].storageContents(tsHash)
+      timestamp                <- header.timestamp.pure[F]
+      mainParent               <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
+      parentsHashList          <- header.parentsHashList.pure[F]
+      dag                      <- MultiParentCasper[F].blockDag
+      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
+      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
     } yield {
       BlockInfo(
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -72,6 +76,7 @@ object BlockAPI {
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
+        faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit)
       )

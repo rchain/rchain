@@ -229,68 +229,72 @@ Next we create an instance of `LMDBStore` using `storePath`.  We will create our
 ```tut
 val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
 ```
+Now we can create an RSpace using the created store
+```tut
+val space = new RSpace[Channel, Pattern, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
+```
 
 ### Producing and Consuming
 
 First we will install a "query" in the store using `consume`.
 ```tut
-val cres1 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+val cres1 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 ```
 
 Here we are installing a continuation in the store at the "friends" `Channel`.  This continuation will be returned to us when a piece of matching data is introduced to the store at that channel.
 
-Now let's try introducing a piece of data to the store using `produce`.
+Now let's try introducing a piece of data to the space using `produce`.
 ```tut
-val pres1 = produce(store, Channel("friends"), alice, persist = false)
+val pres1 = space.produce(Channel("friends"), alice, persist = false)
 ```
 
 If we look closely at the result, we can see that we have received back an `Option` containing a `<function1>` along with the data we passed to `produce`.  This is because this data has satisfied the match with the `Pattern` we provided in our call to `consume`.
 
-Let's run the continuation using a function from the `extended` package.
+Let's run the continuation using a function from the `util` package.
 ```tut
-import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util._
 runK(pres1)
 ```
 
 When we inspect the contents of the store, we notice that the store is empty.  The continuation has been removed.  The data was also not stored because a matching continuation was found.
 ```tut
-println(store.toMap)
+println(space.store.toMap)
 ```
 
 Let's reinstall the same continuation.
 ```tut
-val cres2 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+val cres2 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 ```
 
-Now let's try introducing another piece of data to the store.
+Now let's try introducing another piece of data to the space.
 ```tut
-val pres2 = produce(store, Channel("friends"), bob, persist = false)
+val pres2 = space.produce(Channel("friends"), bob, persist = false)
 ```
 
 Let's also run the continuation and inspect the store.
 ```tut
 runK(pres2)
-println(store.toMap)
+println(space.store.toMap)
 ```
 
-Now let's reinstall the the continuation and introduce another piece of data to the store.
+Now let's reinstall the the continuation and introduce another piece of data to the space.
 ```tut
-val cres3 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
-val pres3 = produce(store, Channel("friends"), carol, persist = false)
+val cres3 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+val pres3 = space.produce(Channel("friends"), carol, persist = false)
 ```
 
 This time we receive a `None` back from `produce`, indicating that no match has been made.
 
 Let's inspect the contents of the store again.
 ```tut
-println(store.toMap)
+println(space.store.toMap)
 ```
 
 Here we can see that that at `Channel("friends")`, we have now stored Carol's `Entry` record along with our continuations and its patterns.
 
 Let's `consume` again, but this time, let's use a different pattern - one that will match Carol's `Entry` - returning it to us.
 ```tut
-val cres4 = consume(store, List(Channel("friends")), List(NameMatch(last = "Lahblah")), new Printer, persist = false)
+val cres4 = space.consume(List(Channel("friends")), List(NameMatch(last = "Lahblah")), new Printer, persist = false)
 runK(cres4)
 ```
 
@@ -298,14 +302,14 @@ Indeed, our call to `consume` has returned another continuation along with Carol
 
 In the store, we see that there is still a waiting continuation at `Channel("friends")`
 ```tut
-println(store.toMap)
+println(space.store.toMap)
 ```
 
 Let's produce one more time to let this sink in.
 ```tut
-val pres4 = produce(store, Channel("friends"), alice, persist = false)
+val pres4 = space.produce(Channel("friends"), alice, persist = false)
 runK(pres4)
-println(store.toMap)
+println(space.store.toMap)
 ```
 
 
@@ -325,29 +329,29 @@ val erin = Entry(name = Name("Erin", "Rush"),
 
 Let's introduce Dan and Erin to the store with `produce`.
 ```tut
-val pres5 = produce(store, Channel("colleagues"), dan, persist = false)
-val pres6 = produce(store, Channel("friends"), erin, persist = false)
+val pres5 = space.produce(Channel("colleagues"), dan, persist = false)
+val pres6 = space.produce(Channel("friends"), erin, persist = false)
 ```
 
 Now let's `consume` on multiple channels, searching for our friends and colleagues who live in Idaho.
 ```tut
-val cres5 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
+val cres5 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
 runK(cres5)
 ```
 
 Now let's do the same thing in the opposite order.
 ```tut
-val cres6 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
-val pres7 = produce(store, Channel("colleagues"), dan, persist = false)
-val pres8 = produce(store, Channel("friends"), erin, persist = false)
+val cres6 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
+val pres7 = space.produce(Channel("colleagues"), dan, persist = false)
+val pres8 = space.produce(Channel("friends"), erin, persist = false)
 runK(pres7)
 ```
 
 Note that we can provide different patterns to match with the data on each channel.
 ```tut
-val cres7 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), CityMatch("Crystal Lake")), new Printer, persist = false)
-val pres9 = produce(store, Channel("colleagues"), dan, persist = false)
-val pres10 = produce(store, Channel("friends"), erin, persist = false)
+val cres7 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), CityMatch("Crystal Lake")), new Printer, persist = false)
+val pres9 = space.produce(Channel("colleagues"), dan, persist = false)
+val pres10 = space.produce(Channel("friends"), erin, persist = false)
 runK(pres10)
 ```
 
@@ -357,13 +361,13 @@ So far we've seen that every matching piece of data or continuation returned to 
 
 Let's try to persist a continuation, but first let's put our Crystal Lake-dwelling friends back in the store.
 ```tut
-val pres11 = produce(store, Channel("friends"), alice, persist = false)
-val pres12 = produce(store, Channel("friends"), bob, persist = false)
+val pres11 = space.produce(Channel("friends"), alice, persist = false)
+val pres12 = space.produce(Channel("friends"), bob, persist = false)
 ```
 
 Now let's try to do a `consume` with the persist flag set to `true`.
 ```tut
-val cres8 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+val cres8 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 ```
 
 Look, data!
@@ -378,7 +382,7 @@ As a side note, we can observe the fact there is no particular order to which we
 So did our `consume` stick?
 
 ```tut
-println(store.toMap)
+println(space.store.toMap)
 ```
 
 It did not!  That's strange...
@@ -386,27 +390,27 @@ It did not!  That's strange...
 This quirk of `rspace` is to address the circumstance where matches already exist for a particular continuation that we are trying to persist.  If we were able to persist the continuation without retrieving the existing matches, those matches might end up "lost" in the store.  Instead, we should keep re-attempting to do a persistent consume until all existing matches have been "drained" from the store.  When we receive a `None`, we know that all existing matches have been returned from the store and the continuation has been persisted.
 
 ```tut
-val cres9 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+val cres9 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 runK(cres9)
-val cres10 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
-println(store.toMap)
+val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+println(space.store.toMap)
 ```
 
 The same rule applies for doing a persistent `produce` - if any matching continuations exist in the store, they must be drained before the data will be persisted.
 
 For example,
 ```tut
-val cres11 = consume(store, List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
-val pres13 = produce(store, Channel("friends"), erin, persist = true)
+val cres11 = space.consume(List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
+val pres13 = space.produce(Channel("friends"), erin, persist = true)
 runK(pres13)
-println(store.toMap)
-val pres14 = produce(store, Channel("friends"), erin, persist = true)
-println(store.toMap)
+println(space.store.toMap)
+val pres14 = space.produce(Channel("friends"), erin, persist = true)
+println(space.store.toMap)
 ```
 
 ### Finishing Up
 
-When we are finished using the store, we close it.
+When we are finished using the space, we close it.
 ```tut
-store.close()
+space.close()
 ```

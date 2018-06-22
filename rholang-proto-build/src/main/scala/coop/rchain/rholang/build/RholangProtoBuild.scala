@@ -23,7 +23,9 @@ object RholangProtoBuild {
 
   def createProtoArtifact(input: Path, output: Path): Unit =
     CompiledRholangSource.fromSourceFile(input.toFile) match {
-      case Left(ex) => throw ex
+      case Left(ex) =>
+        println(s"Rholang compilation failed for file $input")
+        throw ex
 
       case Right(term) => term.writeTo(new FileOutputStream(output.toFile))
     }

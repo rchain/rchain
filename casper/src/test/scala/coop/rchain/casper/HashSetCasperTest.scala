@@ -4,6 +4,7 @@ import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -20,7 +21,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = ProtoUtil.genesisBlock(bonds)
+  val genesis                     = Genesis.fromBonds(bonds)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -235,8 +236,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1) should be(true)
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
 
+    // Rejected due to neglected equivocation
+    nodes(1).casperEff.contains(signedBlock4) should be(false)
+
     nodes(1).logEff.infos.count(_ startsWith "CASPER: Did not add invalid block ") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
+
+    nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
+      1f / (1f + 3f + 5f + 7f))
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {

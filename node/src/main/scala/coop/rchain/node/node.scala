@@ -12,11 +12,9 @@ import Catscontrib._
 import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
-import coop.rchain.casper.util.ProtoUtil.genesisBlock
+import coop.rchain.casper.genesis.Genesis.fromBondsFile
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
@@ -28,9 +26,11 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.crypto.codec.Base16
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -92,15 +92,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       case _ => None
     }
 
-    publicKey
+    val publicKeyHash = publicKey
       .flatMap(CertificateHelper.publicAddress)
-      .getOrElse {
-        println("Certificate must contain a secp256r1 EC Public Key")
-        System.exit(1)
-        Array[Byte]()
-      }
-      .map("%02x".format(_))
-      .mkString
+      .map(Base16.encode)
+
+    if (publicKeyHash.isEmpty) {
+      println("Certificate must contain a secp256r1 EC Public Key")
+      System.exit(1)
+    }
+
+    publicKeyHash.get
   }
 
   import ApplicativeError_._
@@ -134,43 +135,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
-
-  val bondsFile: Option[File] =
-    conf.run.bondsFile.toOption
-      .flatMap(path => {
-        val f = new File(path)
-        if (f.exists) Some(f)
-        else {
-          Log[Task].warn(
-            s"Specified bonds file $path does not exist. Falling back on generating random validators."
-          )
-          None
-        }
-      })
-  val genesisBonds: Map[Array[Byte], Int] = bondsFile match {
-    case Some(file) =>
-      Try {
-        Source
-          .fromFile(file)
-          .getLines()
-          .map(line => {
-            val Array(pk, stake) = line.trim.split(" ")
-            Base16.decode(pk) -> (stake.toInt)
-          })
-          .toMap
-      }.getOrElse({
-        Log[Task].warn(
-          s"Specified bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
-        )
-        newValidators
-      })
-    case None => newValidators
-  }
-  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
+  implicit val turanOracleEffect: SafetyOracle[Effect]  = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath.resolve("casper"),
     storageSize,
-    genesisBlock(genesisBonds)
+    fromBondsFile[Task](conf.run.bondsFile.toOption,
+                        conf.run.numValidators(),
+                        conf.run.data_dir().resolve("validators")).unsafeRunSync
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
@@ -241,39 +212,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
-
-  private def newValidators: Map[Array[Byte], Int] = {
-    val numValidators  = conf.run.numValidators.toOption.get
-    val keys           = Vector.fill(numValidators)(Ed25519.newKeyPair)
-    val (_, pubKeys)   = keys.unzip
-    val validatorsPath = conf.run.data_dir().resolve("validators")
-    validatorsPath.toFile.mkdir()
-
-    keys.foreach { //create files showing the secret key for each public key
-      case (sec, pub) =>
-        val sk      = Base16.encode(sec)
-        val pk      = Base16.encode(pub)
-        val skFile  = validatorsPath.resolve(s"$pk.sk").toFile
-        val printer = new PrintWriter(skFile)
-        printer.println(sk)
-        printer.close()
-    }
-
-    val bonds        = pubKeys.zip((1 to numValidators).toVector).toMap
-    val genBondsFile = validatorsPath.resolve(s"bonds.txt").toFile
-
-    //create bonds file for editing/future use
-    val printer = new PrintWriter(genBondsFile)
-    bonds.foreach {
-      case (pub, stake) =>
-        val pk = Base16.encode(pub)
-        Log[Task].info(s"Created validator $pk with bond $stake")
-        printer.println(s"$pk $stake")
-    }
-    printer.close()
-
-    bonds
-  }
 
   def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
