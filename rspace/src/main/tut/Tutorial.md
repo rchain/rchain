@@ -441,7 +441,7 @@ We can now create a checkpoint and store it's root.
 
 The first `produceAlice` operation should be able to find data stored by the consume.
 ```tut
-def produceAlice = space2.produce(Channel("friends"), alice, persist = false)
+def produceAlice(): Option[(Printer, Seq[Entry])] = space2.produce(Channel("friends"), alice, persist = false)
 assert(produceAlice.isDefined)
 ```
 

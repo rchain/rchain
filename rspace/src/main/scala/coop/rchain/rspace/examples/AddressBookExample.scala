@@ -251,7 +251,8 @@ object AddressBookExample {
     println("Rollback example: And create a checkpoint...")
     val checkpointHash = space.createCheckpoint.root
 
-    def produceAlice = space.produce(Channel("friends"), alice, persist = false)
+    def produceAlice(): Option[(Printer, Seq[Entry])] =
+      space.produce(Channel("friends"), alice, persist = false)
 
     println("Rollback example: First produce result should return some data")
     assert(produceAlice.isDefined)
