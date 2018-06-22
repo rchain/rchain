@@ -359,7 +359,9 @@ object rblstring {
       }
     }
 
-  // Helper to find the index after the nth token.
+  /**
+    * Helper to find the index after the nth token.
+    */
   private def nthIndex(n: Int, str: String, sep: String): Int = {
     val sepSet: HashSet[Char] = HashSet.empty[Char] ++ sep
 
