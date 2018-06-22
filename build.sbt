@@ -88,7 +88,8 @@ lazy val crypto = (project in file("crypto"))
       guava,
       bouncyCastle,
       kalium,
-      jaxb
+      jaxb,
+      scodecBits
     ),
     fork := true,
     unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",

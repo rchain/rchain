@@ -47,6 +47,13 @@ trait IStoreTests
     }
   }
 
+  "hashChannels" should "return same hashes for unordered channels" in withTestSpace { space =>
+    val store  = space.store
+    val hash12 = store.hashChannels(List("ch1", "ch2"))
+    val hash21 = store.hashChannels(List("ch2", "ch1"))
+    hash12 shouldBe hash21
+  }
+
   private[this] val validIndices =
     for (n <- Gen.choose(1, 10)) yield n
 
