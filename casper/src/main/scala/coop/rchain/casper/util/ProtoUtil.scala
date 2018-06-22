@@ -253,7 +253,7 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
-    val timestamp = System.nanoTime() / 1000000L
+    val timestamp = System.currentTimeMillis()
     val term      = s"@${id}!($id)"
 
     DeployString()

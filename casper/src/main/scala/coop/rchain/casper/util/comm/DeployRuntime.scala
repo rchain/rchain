@@ -38,7 +38,7 @@ object DeployRuntime {
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         for {
-          timestamp <- Capture[F].capture { System.nanoTime() / 1000000L }
+          timestamp <- Capture[F].capture { System.currentTimeMillis() }
           //TODO: allow user to specify their public key
           d        = DeployString().withTimestamp(timestamp).withTerm(code)
           response <- DeployService[F].deploy(d)
