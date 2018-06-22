@@ -25,9 +25,11 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.crypto.codec.Base16
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
