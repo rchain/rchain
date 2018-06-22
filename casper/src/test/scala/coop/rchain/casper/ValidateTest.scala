@@ -1,26 +1,24 @@
 package coop.rchain.casper
 
 import cats.{Id, Monad}
-import cats.data.State
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.helper.BlockDagState._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.StateWithChain.StateWithChain
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
 class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with BlockGenerator {
-
-  type StateWithChain[A] = State[BlockDag, A]
   implicit val log = new LogStub[Id]
   val initState    = BlockDag().copy(currentId = -1)
   val ed25519      = "ed25519"

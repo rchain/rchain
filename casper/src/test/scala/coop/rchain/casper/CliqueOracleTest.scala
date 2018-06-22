@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
@@ -11,6 +10,9 @@ import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.helper.BlockDagState.BlockDagState
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.StateWithChain.StateWithChain
 import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -18,7 +20,6 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
-  type StateWithChain[A] = State[BlockDag, A]
   val initState = BlockDag()
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram

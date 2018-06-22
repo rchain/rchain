@@ -1,21 +1,18 @@
-package coop.rchain.casper
-
-import cats._
-import cats.implicits._
-
-import coop.rchain.catscontrib._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._
-import coop.rchain.metrics.Metrics
-import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.comm.connect.Connect.dispatch
-import coop.rchain.comm.transport._
+package coop.rchain.casper.helper
 
 import java.nio.file.Files
 
+import cats._
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.util.comm.TransportLayerTestImpl
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
+import coop.rchain.catscontrib._
+import coop.rchain.comm._
+import coop.rchain.comm.connect.Connect.dispatch
+import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.p2p.effects.PacketHandler
 import monix.execution.Scheduler
 
 import scala.collection.mutable
@@ -27,7 +24,7 @@ class HashSetCasperTestNode(name: String,
                             genesis: BlockMessage,
                             storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 
-  import HashSetCasperTestNode.{errorHandler, peerNode, randomBytes}
+  import HashSetCasperTestNode.errorHandler
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 

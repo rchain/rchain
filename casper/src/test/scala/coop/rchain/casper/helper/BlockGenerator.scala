@@ -1,19 +1,28 @@
-package coop.rchain.casper
+package coop.rchain.casper.helper
 
+import cats._
+import cats.data.State
+import cats.implicits._
+import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.BlockDag
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.helper.BlockDagState._
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
-import coop.rchain.catscontrib._
-import Catscontrib._
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol._
+
+object StateWithChain {
+  type StateWithChain[A] = State[BlockDag, A]
+}
+
+object BlockDagState {
+  type BlockDagState[F[_]] = MonadState[F, BlockDag]
+  def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, BlockDag]
+}
 
 trait BlockGenerator {
   def createBlock[F[_]: Monad: BlockDagState](

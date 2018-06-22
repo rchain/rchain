@@ -2,8 +2,7 @@ package coop.rchain.casper.util
 
 import ProtoUtil._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{BlockDag, BlockGenerator}
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
@@ -13,13 +12,13 @@ import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.helper.BlockDagState.BlockDagState
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.StateWithChain.StateWithChain
 
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
-
-  type StateWithChain[A] = State[BlockDag, A]
-
   val initState = BlockDag()
 
   "isInMainChain" should "classify appropriately" in {

@@ -1,18 +1,17 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.{BlockDag, BlockGenerator}
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
-
 import cats.Monad
 import cats.data.State
 import cats.implicits._
 import cats.mtl.implicits._
+import coop.rchain.casper.helper.BlockDagState.BlockDagState
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.StateWithChain.StateWithChain
 
 class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
-
-  type StateWithChain[A] = State[BlockDag, A]
   val initState = BlockDag().copy(currentId = -1)
 
   "Greatest common ancestor" should "be computed properly" in {

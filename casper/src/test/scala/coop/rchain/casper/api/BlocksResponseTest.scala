@@ -9,6 +9,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
+import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.catscontrib.Catscontrib
 import org.scalatest.{FlatSpec, Matchers}
 
