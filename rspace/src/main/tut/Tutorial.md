@@ -410,7 +410,7 @@ println(space.store.toMap)
 
 ### History & rollback
 
-It is possible to save the current state of RSpace in the form of a `Checkpoint`.A `Checkpoint` value contains the root hash of a Merkle Patricia Trie built from the contents of RSpace.
+It is possible to save the current state of RSpace in the form of a `Checkpoint`. A `Checkpoint` value contains the root hash of a Merkle Patricia Trie built from the contents of RSpace.
 ```scala
 val checkpoint = space.createCheckpoint()
 val checkpointHash = checkpoint.root
@@ -423,11 +423,11 @@ space.reset(checkpointHash)
 
 Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
 ```tut
-val storePath2: Path = Files.createTempDirectory("rspace-address-book-example-")
-val store2: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath2, 1024L * 1024L * 100L)
-val space2 = new RSpace[Channel, Pattern, Entry, Printer](store2, coop.rchain.rspace.history.Branch.MASTER)
+val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath, 1024L * 1024L * 100L)
+val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
 val cres =
-  space2.consume(List(Channel("friends")),
+  rollbackExampleSpace.consume(List(Channel("friends")),
                 List(CityMatch(city = "Crystal Lake")),
                 new Printer,
                 persist = false)
@@ -436,12 +436,12 @@ cres.isEmpty
 
 We can now create a checkpoint and store it's root.
 ```tut
-val checkpointHash = space2.createCheckpoint.root
+val checkpointHash = rollbackExampleSpace.createCheckpoint.root
 ```
 
 The first `produceAlice` operation should be able to find data stored by the consume.
 ```tut
-def produceAlice(): Option[(Printer, Seq[Entry])] = space2.produce(Channel("friends"), alice, persist = false)
+def produceAlice(): Option[(Printer, Seq[Entry])] = rollbackExampleSpace.produce(Channel("friends"), alice, persist = false)
 produceAlice.isDefined
 ```
 
@@ -456,7 +456,7 @@ produceAlice.isEmpty
 
 After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
 ```tut
-space2.reset(checkpointHash)
+rollbackExampleSpace.reset(checkpointHash)
 produceAlice.isDefined
 ```
 And again, every following operation should yield an empty result
@@ -470,5 +470,5 @@ produceAlice.isEmpty
 When we are finished using the spaces, we close them.
 ```tut
 space.close()
-space2.close()
+rollbackExampleSpace.close()
 ```
