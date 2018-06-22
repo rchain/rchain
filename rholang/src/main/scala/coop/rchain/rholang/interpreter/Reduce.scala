@@ -580,7 +580,7 @@ object Reduce {
     private[this] def toByteArray: MethodType = {
       def serialize(p: Par): Either[ReduceError, Array[Byte]] =
         Either
-          .fromTry(Try(Serialize[Par].encode(p)))
+          .fromTry(Try(Serialize[Par].encode(p).toArray))
           .leftMap(th =>
             ReduceError(s"Error: exception thrown when serializing $p." + th.getMessage))
 
