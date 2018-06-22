@@ -4,26 +4,26 @@ import cats._, cats.implicits._, cats.mtl.MonadState
 
 import monix.eval.{MVar, Task}
 
-class MonixMonadState[S](state: MVar[S])(implicit val monad: Monad[Task])
+class MVarMonadState[S](state: Task[MVar[S]])(implicit val monad: Monad[Task])
     extends MonadState[Task, S] {
   /*
     Removes a value from the state.
     Blocks if the state is empty.
    */
-  def get: Task[S] = state.take
+  def get: Task[S] = state >>= (_.take)
 
   /*
     Sets a value in the state
     Blocks if the state is non-empty
    */
-  def set(s: S): Task[Unit] = state.put(s)
+  def set(s: S): Task[Unit] = state >>= (_.put(s))
 
   /*
     Don't use inspect for a read & write access pattern.
     Don't use inspect & set or inspect & modify
     because the state may have changed in the meantime
    */
-  def inspect[A](f: S => A): Task[A] = state.read.map(f)
+  def inspect[A](f: S => A): Task[A] = state >>= (_.read.map(f))
 
   /*
     Use with care. You probably should use set instead.

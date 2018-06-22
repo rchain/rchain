@@ -62,11 +62,10 @@ class TcpTransportLayer[
 
   private def transportLayerStub(remote: PeerNode): F[TransportLayerStub] =
     for {
-      state    <- ConnectionsState[F].get
-      stubTry  = Try(state.getOrElse(remote.id, TransportLayerGrpc.stub(clientChannel(remote))))
-      newState = stubTry.map(stub => state + (remote.id -> stub)).getOrElse(state)
-      _        <- ConnectionsState[F].set(newState)
-    } yield stubTry.get // should throw on Failure
+      state <- ConnectionsState[F].get
+      stub  = state.getOrElse(remote.id, TransportLayerGrpc.stub(clientChannel(remote)))
+      _     <- ConnectionsState[F].modify(_ + (remote.id -> stub))
+    } yield stub
 
   def disconnect(remote: PeerNode): F[Unit] =
     for {
@@ -74,7 +73,7 @@ class TcpTransportLayer[
       _ = state
         .get(remote.id)
         .foreach(c => Try(c.getChannel.asInstanceOf[ManagedChannel].shutdown()))
-      _ <- ConnectionsState[F].set(state - remote.id)
+      _ <- ConnectionsState[F].modify(_ - remote.id)
     } yield ()
 
   private def sendRequest(msg: ProtocolMessage,

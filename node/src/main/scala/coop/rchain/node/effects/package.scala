@@ -3,12 +3,12 @@ package coop.rchain.node
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.implicits._, cats.mtl.MonadState
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
+import monix.execution.atomic._
 import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
-import coop.rchain.comm.transport.TcpTransportLayer._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
@@ -55,9 +55,8 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def connectionsState: MonixMonadState[TcpTransportLayer.Connections] = {
-    import monix.execution.Scheduler.Implicits.global
-    val state: Task[MVar[Connections]] = MVar[TcpTransportLayer.Connections](Map.empty)
-    new MonixMonadState(state.unsafeRunSync)
+  def connectionsState[F[_]: Monad]: MonadState[F, TcpTransportLayer.Connections] = {
+    val state = AtomicAny[TcpTransportLayer.Connections](Map.empty)
+    new AtomicMonadState[F, TcpTransportLayer.Connections](state)
   }
 }
