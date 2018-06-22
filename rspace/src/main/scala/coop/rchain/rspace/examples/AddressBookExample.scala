@@ -236,4 +236,53 @@ object AddressBookExample {
 
     store.close()
   }
+
+  def rollbackExample(): Unit = withSpace { space =>
+    println("Rollback example: Let's consume...")
+
+    val cres =
+      space.consume(Seq(Channel("friends")),
+                    Seq(CityMatch(city = "Crystal Lake")),
+                    new Printer,
+                    persist = false)
+
+    assert(cres.isEmpty)
+
+    println("Rollback example: And create a checkpoint...")
+    val checkpointHash = space.createCheckpoint.root
+
+    def produceAlice(): Option[(Printer, Seq[Entry])] =
+      space.produce(Channel("friends"), alice, persist = false)
+
+    println("Rollback example: First produce result should return some data")
+    assert(produceAlice.isDefined)
+
+    println("Rollback example: Second produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    println("Rollback example: Every following produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    println(
+      "Rollback example: Let's reset RSpace to the state from before running the produce operations")
+    space.reset(checkpointHash)
+
+    println("Rollback example: Again, first produce result should return some data")
+    assert(produceAlice.isDefined)
+
+    println("Rollback example: And again second produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    space.store.close()
+  }
+
+  private[this] def withSpace(f: RSpace[Channel, Pattern, Entry, Printer] => Unit) = {
+    // Here we define a temporary place to put the store's files
+    val storePath = Files.createTempDirectory("rspace-address-book-example-")
+    // Let's define our store
+    val store = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+
+    f(new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER))
+  }
+
 }
