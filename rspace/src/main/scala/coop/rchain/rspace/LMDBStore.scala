@@ -67,7 +67,6 @@ class LMDBStore[C, P, A, K] private (
     }
 
   /* Basic operations */
-
   private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
@@ -248,6 +247,19 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
+  private[rspace] def joinMap: Map[Blake2b256Hash, Seq[Seq[C]]] =
+    withTxn(createTxnRead()) { txn =>
+      withResource(_dbJoins.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+        it.asScala
+          .foldLeft(Map.empty[Blake2b256Hash, Seq[Seq[C]]]) {
+            (acc: Map[Blake2b256Hash, Seq[Seq[C]]], x: CursorIterator.KeyVal[ByteBuffer]) =>
+              val hash     = Codec[Blake2b256Hash].decode(BitVector(x.key())).map(_.value).get
+              val channels = joinCodec.decode(BitVector(x.`val`())).map(_.value).get
+              acc.updated(hash, channels)
+          }
+      }
+    }
+
   private[rspace] def clear(txn: T): Unit = {
     _dbGNATs.drop(txn)
     _dbJoins.drop(txn)
@@ -286,7 +298,6 @@ class LMDBStore[C, P, A, K] private (
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
-    // TODO: Prune TrieUpdate log here
     collapse(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))

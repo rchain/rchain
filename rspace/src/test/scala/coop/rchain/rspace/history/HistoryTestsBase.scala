@@ -2,9 +2,11 @@ package coop.rchain.rspace.history
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.test.TestKey4
 import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.{Configuration, GeneratorDrivenPropertyChecks}
 import org.scalatest.{FlatSpec, Matchers, OptionValues, Outcome}
+import scodec.Codec
 import scodec.bits.ByteVector
 
 trait HistoryTestsBase[T, K, V]
@@ -12,7 +14,8 @@ trait HistoryTestsBase[T, K, V]
     with Matchers
     with OptionValues
     with GeneratorDrivenPropertyChecks
-    with Configuration {
+    with Configuration
+    with WithTestStore[T, K, V] {
 
   def getRoot(store: ITrieStore[T, K, V], branch: Branch): Option[Blake2b256Hash] =
     store.withTxn(store.createTxnRead())(txn => store.getRoot(txn, branch))
@@ -29,17 +32,17 @@ trait HistoryTestsBase[T, K, V]
     store.withTxn(store.createTxnRead())(txn => store.getLeaves(txn, hash))
 
   object TestData {
-    val key1 = TestKey.create(Seq(1, 0, 0, 0))
+    val key1 = TestKey4.create(Seq(1, 0, 0, 0))
     val val1 = ByteVector("value1".getBytes)
-    val key2 = TestKey.create(Seq(1, 0, 0, 1))
+    val key2 = TestKey4.create(Seq(1, 0, 0, 1))
     val val2 = ByteVector("value2".getBytes)
-    val key3 = TestKey.create(Seq(1, 0, 1, 0))
+    val key3 = TestKey4.create(Seq(1, 0, 1, 0))
     val val3 = ByteVector("value3".getBytes)
-    val key4 = TestKey.create(Seq(1, 0, 1, 1))
+    val key4 = TestKey4.create(Seq(1, 0, 1, 1))
     val val4 = ByteVector("value4".getBytes)
-    val key5 = TestKey.create(Seq(1, 0, 2, 1))
+    val key5 = TestKey4.create(Seq(1, 0, 2, 1))
     val val5 = ByteVector("value5".getBytes)
-    val key6 = TestKey.create(Seq(1, 0, 0, 2))
+    val key6 = TestKey4.create(Seq(1, 0, 0, 2))
     val val6 = ByteVector("value6".getBytes)
   }
 
@@ -52,6 +55,12 @@ trait HistoryTestsBase[T, K, V]
     logger.debug(s"Test: ${test.name}")
     super.withFixture(test)
   }
+}
+
+trait WithTestStore[T, K, V] {
+
+  implicit def codecK: Codec[K]
+  implicit def codecV: Codec[V]
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */

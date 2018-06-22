@@ -5,6 +5,7 @@ import scala.collection.mutable
 import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.Capture
+import coop.rchain.shared._
 
 trait Keyed {
   def key: Seq[Byte]
@@ -109,22 +110,10 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
   private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
   private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
-  private def ping[F[_]: Functor: Ping](ps: mutable.ListBuffer[Entry],
-                                        older: Entry,
-                                        newer: A): F[Unit] =
-    Ping[F].ping(older.entry).map { response =>
-      val winner = if (response) older else new Entry(newer, _.key)
-      ps synchronized {
-        ps -= older
-        ps += winner
-        winner.pinging = false
-      }
-    }
-
   /** Update the last-seen time of `peer`, possibly adding it to the
     * routing table.
     *
-    * If `add` is true, and `peer` is not in the table, it is
+    * If the `peer` is not in the table, it is
     * added. If the table was already full at that distance, test the
     * least recently seen peer at that distance. If that peer
     * responds, discard `peer`; otherwise, discard the older entry and
@@ -133,39 +122,55 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
     * If `peer` is already in the table, it becomes the most recently
     * seen entry at its distance.
     */
-  def observe[F[_]: Applicative: Capture: Ping](peer: A, add: Boolean): F[Unit] =
-    distance(home.key, peer.key) match {
-      case Some(index) =>
-        if (index < 8 * width) {
-          val ps = table(index)
-          ps synchronized {
-            ps.find(_.key == peer.key) match {
-              case Some(entry) =>
-                Capture[F].capture {
-                  ps -= entry
-                  ps += entry
+  def observe[F[_]: Monad: Capture: Ping](peer: A): F[Unit] = {
+
+    def bucket: F[Option[mutable.ListBuffer[Entry]]] =
+      Capture[F].capture(distance(home.key, peer.key).filter(_ < 8 * width).map(table.apply))
+
+    def addUpdateOrPickOldPeer(ps: mutable.ListBuffer[Entry]): F[Option[Entry]] =
+      Capture[F].capture {
+        ps synchronized {
+          ps.find(_.key == peer.key) match {
+            case Some(entry) =>
+              ps -= entry
+              ps += entry
+              None
+            case None =>
+              if (ps.size < k) {
+                ps += new Entry(peer, _.key)
+                None
+              } else {
+                // ping first (oldest) element that isn't already being
+                // pinged. If it responds, move it to back (newest
+                // position); if it doesn't respond, remove it and place
+                // a in back instead
+                ps.find(!_.pinging).map { candidate =>
+                  candidate.pinging = true
+                  candidate
                 }
-              case None if add =>
-                if (ps.size < k) {
-                  Capture[F].capture(ps += new Entry(peer, _.key))
-                } else {
-                  // ping first (oldest) element that isn't already being
-                  // pinged. If it responds, move it to back (newest
-                  // position); if it doesn't respond, remove it and place
-                  // a in back instead
-                  ps.find(!_.pinging)
-                    .map { candidate =>
-                      candidate.pinging = true
-                      ping[F](ps, candidate, peer)
-                    }
-                    .getOrElse(().pure[F])
-                }
-              case None => ().pure[F]
-            }
+              }
           }
-        } else ().pure[F]
-      case None => ().pure[F]
-    }
+        }
+      }
+
+    def ping(ps: mutable.ListBuffer[Entry], older: Entry): F[Unit] =
+      Ping[F].ping(older.entry).map { response =>
+        val winner = if (response) older else new Entry(peer, _.key)
+        ps synchronized {
+          ps -= older
+          ps += winner
+          winner.pinging = false
+        }
+      }
+
+    val result = for {
+      ps    <- OptionT(bucket)
+      older <- OptionT(addUpdateOrPickOldPeer(ps))
+      _     <- OptionT.liftF(ping(ps, older))
+    } yield ()
+
+    result.value.void
+  }
 
   /**
     * Remove a peer with the given key.

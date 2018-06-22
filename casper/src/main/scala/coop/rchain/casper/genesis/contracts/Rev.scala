@@ -1,4 +1,4 @@
-package coop.rchain.rholang.genesis.contracts
+package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.rholang.build.CompiledRholangSource

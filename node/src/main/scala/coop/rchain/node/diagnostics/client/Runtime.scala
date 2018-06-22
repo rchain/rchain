@@ -28,6 +28,7 @@ object Runtime {
       _       <- ConsoleIO[F].println(showThreads(threads))
       store   <- DiagnosticsService[F].store
       _       <- ConsoleIO[F].println(showStoreUsage(store))
+      _       <- ConsoleIO[F].close
     } yield ()
 
   def showPeers(peers: Seq[PeerNode]): String =

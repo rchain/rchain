@@ -158,13 +158,13 @@ import coop.rchain.rspace.examples._
 Let's go ahead use that to make instances for our other types.
 ```scala
 scala> implicit val serializeEntry: Serialize[Entry] = makeSerializeFromSerializable[Entry]
-serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@70319098
+serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@76c2394a
 
 scala> implicit val serializePattern: Serialize[Pattern] = makeSerializeFromSerializable[Pattern]
-serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@494a3f64
+serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@4d6b3518
 
 scala> implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
-serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@59218a52
+serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@26998d03
 ```
 
 Now we will define some example `Entry`s.
@@ -243,20 +243,23 @@ scala> import java.nio.file.{Files, Path}
 import java.nio.file.{Files, Path}
 
 scala> val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-storePath: java.nio.file.Path = /var/folders/95/k150s30j5yj6tt31f1v49hsr0000gn/T/rspace-address-book-example-2121142630754763137
+storePath: java.nio.file.Path = /tmp/rspace-address-book-example-6158749586538887529
 ```
 
 Next we create an instance of `LMDBStore` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```scala
 scala> val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
-store: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@48137d28
+store: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@34f7168f
+
+scala> val space = new RSpace[Channel, Pattern, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
+space: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@14b3dcf1
 ```
 
 ### Producing and Consuming
 
 First we will install a "query" in the store using `consume`.
 ```scala
-scala> val cres1 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+scala> val cres1 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 cres1: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 ```
 
@@ -264,16 +267,16 @@ Here we are installing a continuation in the store at the "friends" `Channel`.  
 
 Now let's try introducing a piece of data to the store using `produce`.
 ```scala
-scala> val pres1 = produce(store, Channel("friends"), alice, persist = false)
+scala> val pres1 = space.produce(Channel("friends"), alice, persist = false)
 pres1: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212))))
 ```
 
 If we look closely at the result, we can see that we have received back an `Option` containing a `<function1>` along with the data we passed to `produce`.  This is because this data has satisfied the match with the `Pattern` we provided in our call to `consume`.
 
-Let's run the continuation using a function from the `extended` package.
+Let's run the continuation using a function from the `util` package.
 ```scala
-scala> import coop.rchain.rspace.extended._
-import coop.rchain.rspace.extended._
+scala> import coop.rchain.rspace.util._
+import coop.rchain.rspace.util._
 
 scala> runK(pres1)
 
@@ -286,19 +289,19 @@ phone:   777-555-1212
 
 When we inspect the contents of the store, we notice that the store is empty.  The continuation has been removed.  The data was also not stored because a matching continuation was found.
 ```scala
-scala> println(store.toMap)
+scala> println(space.store.toMap)
 Map()
 ```
 
 Let's reinstall the same continuation.
 ```scala
-scala> val cres2 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+scala> val cres2 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 cres2: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 ```
 
 Now let's try introducing another piece of data to the store.
 ```scala
-scala> val pres2 = produce(store, Channel("friends"), bob, persist = false)
+scala> val pres2 = space.produce(Channel("friends"), bob, persist = false)
 pres2: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212))))
 ```
 
@@ -318,10 +321,10 @@ Map()
 
 Now let's reinstall the the continuation and introduce another piece of data to the store.
 ```scala
-scala> val cres3 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
+scala> val cres3 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 cres3: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres3 = produce(store, Channel("friends"), carol, persist = false)
+scala> val pres3 = space.produce(Channel("friends"), carol, persist = false)
 pres3: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 ```
 
@@ -329,15 +332,15 @@ This time we receive a `None` back from `produce`, indicating that no match has 
 
 Let's inspect the contents of the store again.
 ```scala
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Carol,Lahblah),Address(22 Goldwater Way,Herbert,Nevada,334433),carol@blablah.org,232-555-1212),false)),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false))))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Carol,Lahblah),Address(22 Goldwater Way,Herbert,Nevada,334433),carol@blablah.org,232-555-1212),false,Produce(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x975eb3540b641c2da343a3fd62cbca0bd151d41218001c385f8eb4cfc6112b61))))),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false,Consume(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xa7ef08203b03834d49e7c878aaad575f8ddca07a0e2a0de98c9c577ebd2f6117)))))))
 ```
 
 Here we can see that that at `Channel("friends")`, we have now stored Carol's `Entry` record along with our continuations and its patterns.
 
 Let's `consume` again, but this time, let's use a different pattern - one that will match Carol's `Entry` - returning it to us.
 ```scala
-scala> val cres4 = consume(store, List(Channel("friends")), List(NameMatch(last = "Lahblah")), new Printer, persist = false)
+scala> val cres4 = space.consume(List(Channel("friends")), List(NameMatch(last = "Lahblah")), new Printer, persist = false)
 cres4: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Carol,Lahblah),Address(22 Goldwater Way,Herbert,Nevada,334433),carol@blablah.org,232-555-1212))))
 
 scala> runK(cres4)
@@ -353,13 +356,13 @@ Indeed, our call to `consume` has returned another continuation along with Carol
 
 In the store, we see that there is still a waiting continuation at `Channel("friends")`
 ```scala
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false))))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,false,Consume(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0xa7ef08203b03834d49e7c878aaad575f8ddca07a0e2a0de98c9c577ebd2f6117)))))))
 ```
 
 Let's produce one more time to let this sink in.
 ```scala
-scala> val pres4 = produce(store, Channel("friends"), alice, persist = false)
+scala> val pres4 = space.produce(Channel("friends"), alice, persist = false)
 pres4: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212))))
 
 scala> runK(pres4)
@@ -370,7 +373,7 @@ address: 777 Ford St., Crystal Lake, Idaho 223322
 email:   alicel@ringworld.net
 phone:   777-555-1212
 
-scala> println(store.toMap)
+scala> println(space.store.toMap)
 Map()
 ```
 
@@ -394,16 +397,16 @@ erin: coop.rchain.rspace.examples.AddressBookExample.Entry = Entry(Name(Erin,Rus
 
 Let's introduce Dan and Erin to the store with `produce`.
 ```scala
-scala> val pres5 = produce(store, Channel("colleagues"), dan, persist = false)
+scala> val pres5 = space.produce(Channel("colleagues"), dan, persist = false)
 pres5: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres6 = produce(store, Channel("friends"), erin, persist = false)
+scala> val pres6 = space.produce(Channel("friends"), erin, persist = false)
 pres6: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 ```
 
 Now let's `consume` on multiple channels, searching for our friends and colleagues who live in Idaho.
 ```scala
-scala> val cres5 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
+scala> val cres5 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
 cres5: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212), Entry(Name(Dan,Walters),Address(40 Shady Lane,Crystal Lake,Idaho,223322),deejwalters@sdf.lonestar.org,444-555-1212))))
 
 scala> runK(cres5)
@@ -423,13 +426,13 @@ phone:   444-555-1212
 
 Now let's do the same thing in the opposite order.
 ```scala
-scala> val cres6 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
+scala> val cres6 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
 cres6: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres7 = produce(store, Channel("colleagues"), dan, persist = false)
+scala> val pres7 = space.produce(Channel("colleagues"), dan, persist = false)
 pres7: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres8 = produce(store, Channel("friends"), erin, persist = false)
+scala> val pres8 = space.produce(Channel("friends"), erin, persist = false)
 pres8: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212), Entry(Name(Dan,Walters),Address(40 Shady Lane,Crystal Lake,Idaho,223322),deejwalters@sdf.lonestar.org,444-555-1212))))
 
 scala> runK(pres7)
@@ -437,13 +440,13 @@ scala> runK(pres7)
 
 Note that we can provide different patterns to match with the data on each channel.
 ```scala
-scala> val cres7 = consume(store, List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), CityMatch("Crystal Lake")), new Printer, persist = false)
+scala> val cres7 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), CityMatch("Crystal Lake")), new Printer, persist = false)
 cres7: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres9 = produce(store, Channel("colleagues"), dan, persist = false)
+scala> val pres9 = space.produce(Channel("colleagues"), dan, persist = false)
 pres9: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres10 = produce(store, Channel("friends"), erin, persist = false)
+scala> val pres10 = space.produce(Channel("friends"), erin, persist = false)
 pres10: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212), Entry(Name(Dan,Walters),Address(40 Shady Lane,Crystal Lake,Idaho,223322),deejwalters@sdf.lonestar.org,444-555-1212))))
 
 scala> runK(pres10)
@@ -467,16 +470,16 @@ So far we've seen that every matching piece of data or continuation returned to 
 
 Let's try to persist a continuation, but first let's put our Crystal Lake-dwelling friends back in the store.
 ```scala
-scala> val pres11 = produce(store, Channel("friends"), alice, persist = false)
+scala> val pres11 = space.produce(Channel("friends"), alice, persist = false)
 pres11: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres12 = produce(store, Channel("friends"), bob, persist = false)
+scala> val pres12 = space.produce(Channel("friends"), bob, persist = false)
 pres12: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 ```
 
 Now let's try to do a `consume` with the persist flag set to `true`.
 ```scala
-scala> val cres8 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+scala> val cres8 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 cres8: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212))))
 ```
 
@@ -498,8 +501,8 @@ As a side note, we can observe the fact there is no particular order to which we
 So did our `consume` stick?
 
 ```scala
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212),false)),List()))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212),false,Produce(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x72506bd33bd762b126f00f9479b9218c397cbb526bb3b912bd9e4cd0943e19e5))))),List()))
 ```
 
 It did not!  That's strange...
@@ -507,7 +510,7 @@ It did not!  That's strange...
 This quirk of `rspace` is to address the circumstance where matches already exist for a particular continuation that we are trying to persist.  If we were able to persist the continuation without retrieving the existing matches, those matches might end up "lost" in the store.  Instead, we should keep re-attempting to do a persistent consume until all existing matches have been "drained" from the store.  When we receive a `None`, we know that all existing matches have been returned from the store and the continuation has been persisted.
 
 ```scala
-scala> val cres9 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+scala> val cres9 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 cres9: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212))))
 
 scala> runK(cres9)
@@ -518,21 +521,21 @@ address: 1000 Main St, Crystal Lake, Idaho 223322
 email:   blablah@tenex.net
 phone:   698-555-1212
 
-scala> val cres10 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
+scala> val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 cres10: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true))))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x63fe6eeeb92a6e6b3ef52df7ff57b6947de9f0b056c5a03e9cf6248bb0d878c1)))))))
 ```
 
 The same rule applies for doing a persistent `produce` - if any matching continuations exist in the store, they must be drained before the data will be persisted.
 
 For example,
 ```scala
-scala> val cres11 = consume(store, List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
+scala> val cres11 = space.consume(List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
 cres11: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> val pres13 = produce(store, Channel("friends"), erin, persist = true)
+scala> val pres13 = space.produce(Channel("friends"), erin, persist = true)
 pres13: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212))))
 
 scala> runK(pres13)
@@ -543,19 +546,19 @@ address: 23 Market St., Peony, Idaho 224422
 email:   erush@lasttraintogoa.net
 phone:   333-555-1212
 
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true))))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x63fe6eeeb92a6e6b3ef52df7ff57b6947de9f0b056c5a03e9cf6248bb0d878c1)))))))
 
-scala> val pres14 = produce(store, Channel("friends"), erin, persist = true)
+scala> val pres14 = space.produce(Channel("friends"), erin, persist = true)
 pres14: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
 
-scala> println(store.toMap)
-Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212),true)),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true))))
+scala> println(space.store.toMap)
+Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Erin,Rush),Address(23 Market St.,Peony,Idaho,224422),erush@lasttraintogoa.net,333-555-1212),true,Produce(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x597e22fa0458d896eae8a01d7eeb5a959f5a6084af5b97238ff19f092796fc76))))),List(WaitingContinuation(List(CityMatch(Crystal Lake)),<function1>,true,Consume(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x63fe6eeeb92a6e6b3ef52df7ff57b6947de9f0b056c5a03e9cf6248bb0d878c1)))))))
 ```
 
 ### Finishing Up
 
-When we are finished using the store, we close it.
+When we are finished using the space, we close it.
 ```scala
-scala> store.close()
+scala> space.close()
 ```
