@@ -434,18 +434,18 @@ val cres =
 assert(cres.isEmpty)
 ```
 
-We can now create a checkpoint and store it's root
+We can now create a checkpoint and store it's root.
 ```tut
     val checkpointHash = space2.createCheckpoint.root
 ```
 
-The first `produceAlice` operation should be able to find data stored by the consume, hence:
+The first `produceAlice` operation should be able to find data stored by the consume.
 ```tut
 def produceAlice = space2.produce(Channel("friends"), alice, persist = false)
 assert(produceAlice.isDefined)
 ```
 
-Running the same operation again shouldn't return anything, as data hasn't been persisted:
+Running the same operation again shouldn't return anything, as data hasn't been persisted.
 ```tut
 assert(produceAlice.isEmpty)
 ```
@@ -454,7 +454,7 @@ Every following repetition of the operation above should yield an empty result.
 assert(produceAlice.isEmpty)
 ```
 
-After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result:
+After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
 ```tut
 space2.reset(checkpointHash)
 assert(produceAlice.isDefined)
