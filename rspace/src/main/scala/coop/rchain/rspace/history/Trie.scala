@@ -16,11 +16,9 @@ case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case object EmptyPointer                     extends Pointer
 
-sealed trait Trie[+K, +V]                     extends Product with Serializable
-final case class Leaf[K, V](key: K, value: V) extends Trie[K, V]
-final case class Node(pointerBlock: PointerBlock) extends Trie[Nothing, Nothing] {
-  def update(item: (Int, Pointer)): Node = Node(pointerBlock.updated(List(item)))
-}
+sealed trait Trie[+K, +V]                                          extends Product with Serializable
+final case class Leaf[K, V](key: K, value: V)                      extends Trie[K, V]
+final case class Node(pointerBlock: PointerBlock)                  extends Trie[Nothing, Nothing]
 final case class Skip(affix: ByteVector, pointer: NonEmptyPointer) extends Trie[Nothing, Nothing]
 
 object Trie {
@@ -45,7 +43,4 @@ object Trie {
       .encode(trie)
       .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
       .get
-
-  def node(first: (Int, Pointer), second: (Int, Pointer)) =
-    Node(PointerBlock.create().updated(List(first, second)))
 }

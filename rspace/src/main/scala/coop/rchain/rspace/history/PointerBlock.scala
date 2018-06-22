@@ -13,6 +13,9 @@ class PointerBlock private (val toVector: Vector[Pointer]) {
       vec.updated(curr._1, curr._2)
     })
 
+  def updated(tuples: (Int, Pointer)*): PointerBlock =
+    updated(tuples.toList)
+
   def children: Vector[NonEmptyPointer] =
     toVector.collect {
       case p: NonEmptyPointer => p
@@ -38,6 +41,12 @@ object PointerBlock {
   val length = 256
 
   def create(): PointerBlock = new PointerBlock(Vector.fill(length)(EmptyPointer))
+
+  def create(first: (Int, Pointer)): PointerBlock =
+    PointerBlock.create().updated(List(first))
+
+  def create(first: (Int, Pointer), second: (Int, Pointer)): PointerBlock =
+    PointerBlock.create().updated(List(first, second))
 
   def fromVector(vector: Vector[Pointer]): PointerBlock = new PointerBlock(vector)
   implicit val codecPointerBlock: Codec[PointerBlock] =

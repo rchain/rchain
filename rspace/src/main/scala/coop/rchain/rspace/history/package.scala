@@ -145,8 +145,8 @@ package object history {
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // node with children, just rehash
-      case ((lastHash, _), (offset, incoming: Node)) =>
-        val node = incoming.update((offset, NodePointer(lastHash)))
+      case ((lastHash, _), (offset, Node(pointerBlock))) =>
+        val node = Node(pointerBlock.updated((offset, NodePointer(lastHash))))
         (Trie.hash[K, V](node), node)
       //point at node from skip
       case ((lastHash, _: Node), (_, s: Skip)) =>
@@ -239,21 +239,22 @@ package object history {
       case (ol, nl) if ol != nl => throw new InsertException("Affixes have different lengths")
       case (len, _) if len == 1 =>
         val (newPtr, newParents) =
-          setupSkipNodeFree(LeafPointer(newLeafHash), pathRemaining)(codecK, codecV)
+          setupSkipNode(LeafPointer(newLeafHash), pathRemaining)(codecK, codecV)
         (ptr, newPtr, newParents)
       case (len, _) if len > 1 =>
         val (newSkip, newParents) =
-          setupSkipNodeFree(LeafPointer(newLeafHash), newSuffix.drop(1) ++ pathRemaining)(codecK,
-                                                                                          codecV)
+          setupSkipNode(LeafPointer(newLeafHash), newSuffix.drop(1) ++ pathRemaining)(codecK,
+                                                                                      codecV)
         val (oldSkip, oldParents) =
-          setupSkipNodeFree(ptr, oldSuffix.drop(1))(codecK, codecV)
+          setupSkipNode(ptr, oldSuffix.drop(1))(codecK, codecV)
         (oldSkip, newSkip, newParents ++ oldParents)
       case _ => throw new InsertException("Affix corrupt in skip node")
     }
 
-    val oldNodeIndex    = JByte.toUnsignedInt(oldSuffix(0))
-    val newNodeIndex    = JByte.toUnsignedInt(newSuffix(0))
-    val newCombinedNode = Trie.node((oldNodeIndex, existingPtr), (newNodeIndex, newPtr))
+    val oldNodeIndex = JByte.toUnsignedInt(oldSuffix(0))
+    val newNodeIndex = JByte.toUnsignedInt(newSuffix(0))
+    val newCombinedNode = Node(
+      PointerBlock.create((oldNodeIndex, existingPtr), (newNodeIndex, newPtr)))
 
     val (toBeAdded, skips) = if (sharedSubPathLength > 0) {
       val combinedHash = Trie.hash(newCombinedNode)(codecK, codecV)
@@ -275,7 +276,7 @@ package object history {
     val newLeafIndex  = JByte.toUnsignedInt(encodedKeyByteVector(pathLength))
     val remainingPath = encodedKeyByteVector.splitAt(pathLength + 1)._2
     val (ptr, newParents) =
-      setupSkipNodeFree(LeafPointer(newLeafHash), remainingPath)(codecK, codecV)
+      setupSkipNode(LeafPointer(newLeafHash), remainingPath)(codecK, codecV)
     val hd            = Node(pb.updated(List((newLeafIndex, ptr))))
     val rehashedNodes = rehash[K, V](hd, parents)
     newParents ++ rehashedNodes
@@ -285,8 +286,8 @@ package object history {
       implicit codecK: Codec[K],
       codecV: Codec[V]) = {
     val (hd, tl) = parents match {
-      case (idx, node: Node) +: remaining =>
-        (node.update((idx, LeafPointer(newLeafHash))), remaining)
+      case (idx, Node(pointerBlock)) +: remaining =>
+        (Node(pointerBlock.updated((idx, LeafPointer(newLeafHash)))), remaining)
       case (_, Skip(affix, _)) +: remaining =>
         (Skip(affix, LeafPointer(newLeafHash)), remaining)
       case Seq() =>
@@ -305,14 +306,14 @@ package object history {
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the node.
-      case Seq((byte, node: Node)) =>
-        val (newPtr, newParents) = setupSkipNodeFree(ptr, incomingAffix)(codecK, codecV)
-        (node.update((byte, newPtr)), Seq.empty[(Int, Node)], newParents)
+      case Seq((byte, Node(pointerBlock))) =>
+        val (newPtr, newParents) = setupSkipNode(ptr, incomingAffix)(codecK, codecV)
+        (Node(pointerBlock.updated((byte, newPtr))), Seq.empty[(Int, Node)], newParents)
       // if the node is a Skip it can append the collapsed affix
       case (_, Skip(affix, _)) +: tail =>
         (Skip(affix ++ incomingAffix, ptr), tail, Seq.empty)
       // otherwise it has to be a Node
-      case (byte, node @ Node(pointerBlock)) +: tail =>
+      case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
         pointerBlock.children match {
           // If there are no children, then something is wrong, because one of the children
@@ -325,12 +326,12 @@ package object history {
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the propagated node.
           case _ =>
-            val (newPtr, newParents) = setupSkipNodeFree(ptr, incomingAffix)(codecK, codecV)
-            (node.update((byte, newPtr)), tail, newParents)
+            val (newPtr, newParents) = setupSkipNode(ptr, incomingAffix)(codecK, codecV)
+            (Node(pointerBlock.updated((byte, newPtr))), tail, newParents)
         }
     }
 
-  private[this] def setupSkipNodeFree[V, K, T](ptr: NonEmptyPointer, incomingAffix: ByteVector)(
+  private[this] def setupSkipNode[V, K, T](ptr: NonEmptyPointer, incomingAffix: ByteVector)(
       implicit codecK: Codec[K],
       codecV: Codec[V]) =
     if (incomingAffix.size > 0) {
@@ -359,13 +360,13 @@ package object history {
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `EmptyPointer`
-      case Seq((index, node: Node)) =>
-        (node.update((index, EmptyPointer)), Seq.empty[(Int, Node)], Seq.empty)
+      case Seq((index, Node(pointerBlock))) =>
+        (Node(pointerBlock.updated((index, EmptyPointer))), Seq.empty[(Int, Node)], Seq.empty)
       // A skip pointing at a leaf needs to be collapsed
       case (_, Skip(_, LeafPointer(_))) +: tail =>
         deleteLeaf(store, txn, tail)
       // Otherwise a Node needs to be handled
-      case (byte, node @ Node(pointerBlock)) +: tail =>
+      case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
         pointerBlock.childrenWithIndex match {
           // If there are no children, then something is wrong, because one of the children
@@ -400,7 +401,7 @@ package object history {
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `EmptyPointer`.
-          case _ => (node.update((byte, EmptyPointer)), tail, Seq.empty)
+          case _ => (Node(pointerBlock.updated((byte, EmptyPointer))), tail, Seq.empty)
         }
     }
 
