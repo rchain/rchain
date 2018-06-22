@@ -526,6 +526,8 @@ sealed abstract class MultiParentCasperInstances {
                 acc.updated(p, currChildren + hash)
             }
 
+            val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
+
             bd.copy(
               blockLookup = bd.blockLookup.updated(hash, block),
               //Assume that a non-equivocating validator must include
@@ -538,7 +540,8 @@ sealed abstract class MultiParentCasperInstances {
               latestMessagesOfLatestMessages =
                 bd.latestMessagesOfLatestMessages.updated(block.sender,
                                                           toLatestMessages(block.justifications)),
-              childMap = newChildMap
+              childMap = newChildMap,
+              currentSeqNum = newSeqNum
             )
           })
         }

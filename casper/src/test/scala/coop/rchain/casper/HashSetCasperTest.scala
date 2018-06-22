@@ -106,8 +106,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val Some(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeploy(0)) *> MultiParentCasper[
       Id].createBlock
+    val invalidBlock = block.withSig(ByteString.EMPTY)
 
-    MultiParentCasper[Id].addBlock(block)
+    MultiParentCasper[Id].addBlock(invalidBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
   }
