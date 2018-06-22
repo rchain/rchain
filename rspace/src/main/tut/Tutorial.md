@@ -89,9 +89,9 @@ Here is the definition of the `Serialize` type class:
   */
 trait Serialize[A] {
 
-  def encode(a: A): Array[Byte]
+  def encode(a: A): ByteVector
 
-  def decode(bytes: Array[Byte]): Either[Throwable, A]
+  def decode(bytes: ByteVector): Either[Throwable, A]
 }
 ```
 
@@ -100,26 +100,27 @@ Let's try defining an instance of `Serialize` for `Channel` using Java serializa
 First we will need to import some more stuff.
 ```tut
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import scodec.bits.ByteVector
 ```
 
 Now we define an instance of `Serialize`.
 ```tut
 implicit object serializeChannel extends Serialize[Channel] {
 
-  def encode(channel: Channel): Array[Byte] = {
+  def encode(channel: Channel): ByteVector = {
     val baos = new ByteArrayOutputStream()
     try {
       val oos = new ObjectOutputStream(baos)
       try { oos.writeObject(channel) } finally { oos.close() }
-      baos.toByteArray
+      ByteVector.view(baos.toByteArray)
     } finally {
       baos.close()
     }
   }
 
-  def decode(bytes: Array[Byte]): Either[Throwable, Channel] = {
+  def decode(bytes: ByteVector): Either[Throwable, Channel] = {
     try {
-      val bais = new ByteArrayInputStream(bytes)
+      val bais = new ByteArrayInputStream(bytes.toArray)
       try {
         val ois = new ObjectInputStream(bais)
         try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
