@@ -431,7 +431,7 @@ val cres =
                 List(CityMatch(city = "Crystal Lake")),
                 new Printer,
                 persist = false)
-assert(cres.isEmpty)
+cres.isEmpty
 ```
 
 We can now create a checkpoint and store it's root.
@@ -442,27 +442,27 @@ val checkpointHash = space2.createCheckpoint.root
 The first `produceAlice` operation should be able to find data stored by the consume.
 ```tut
 def produceAlice(): Option[(Printer, Seq[Entry])] = space2.produce(Channel("friends"), alice, persist = false)
-assert(produceAlice.isDefined)
+produceAlice.isDefined
 ```
 
 Running the same operation again shouldn't return anything, as data hasn't been persisted.
 ```tut
-assert(produceAlice.isEmpty)
+produceAlice.isEmpty
 ```
 Every following repetition of the operation above should yield an empty result.
 ```tut
-assert(produceAlice.isEmpty)
+produceAlice.isEmpty
 ```
 
 After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
 ```tut
 space2.reset(checkpointHash)
-assert(produceAlice.isDefined)
+produceAlice.isDefined
 ```
 And again, every following operation should yield an empty result
 Every following repetition of the operation above should yield an empty result.
 ```tut
-assert(produceAlice.isEmpty)
+produceAlice.isEmpty
 ```
 
 ### Finishing Up
