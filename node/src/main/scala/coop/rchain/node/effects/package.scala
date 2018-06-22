@@ -55,7 +55,7 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def connectionsState[F[_]: Monad]: MonadState[F, TcpTransportLayer.Connections] = {
+  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TcpTransportLayer.Connections] = {
     val state = AtomicAny[TcpTransportLayer.Connections](Map.empty)
     new AtomicMonadState[F, TcpTransportLayer.Connections](state)
   }

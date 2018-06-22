@@ -60,17 +60,17 @@ class TcpTransportLayer[
       .overrideAuthority(remote.id.toString)
       .build()
 
-  private def transportLayerStub(remote: PeerNode): F[TransportLayerStub] =
+  private def connection(remote: PeerNode): F[TransportLayerStub] =
     for {
-      state <- ConnectionsState[F].get
-      stub  = state.getOrElse(remote.id, TransportLayerGrpc.stub(clientChannel(remote)))
-      _     <- ConnectionsState[F].modify(_ + (remote.id -> stub))
+      connections <- ConnectionsState[F].get
+      stub        = connections.getOrElse(remote.id, TransportLayerGrpc.stub(clientChannel(remote)))
+      _           <- ConnectionsState[F].modify(_ + (remote.id -> stub))
     } yield stub
 
   def disconnect(remote: PeerNode): F[Unit] =
     for {
-      state <- ConnectionsState[F].get
-      _ = state
+      connections <- ConnectionsState[F].get
+      _ = connections
         .get(remote.id)
         .foreach(c => Try(c.getChannel.asInstanceOf[ManagedChannel].shutdown()))
       _ <- ConnectionsState[F].modify(_ - remote.id)
@@ -80,7 +80,7 @@ class TcpTransportLayer[
                           remote: PeerNode,
                           timeout: Duration): F[Either[CommError, TLResponse]] =
     for {
-      stub   <- transportLayerStub(remote)
+      stub   <- connection(remote)
       result <- Capture[F].capture(Try(Await.result(stub.send(TLRequest(msg.proto.some)), timeout)))
       resp <- result match {
                case Success(response) =>
@@ -113,7 +113,7 @@ class TcpTransportLayer[
   // TODO: Perform a disconnect on failure
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     for {
-      stub <- transportLayerStub(peer)
+      stub <- connection(peer)
       res  <- Capture[F].capture(stub.send(TLRequest(msg.proto.some))).as(Right(()))
     } yield res
 
@@ -135,7 +135,8 @@ class TcpTransportLayer[
 
 object TcpTransportLayer {
   import cats.mtl.MonadState
-  type Connections            = Map[NodeIdentifier, TransportLayerStub]
+  type Connection             = TransportLayerStub
+  type Connections            = Map[NodeIdentifier, Connection]
   type ConnectionsState[F[_]] = MonadState[F, Connections]
 
   object ConnectionsState {
