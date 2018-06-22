@@ -13,6 +13,7 @@ import TaskContrib._
 import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.genesis.Genesis.fromBondsFile
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
