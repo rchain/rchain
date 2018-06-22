@@ -482,6 +482,33 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )))
     result.knownFree should be(inputs.knownFree)
   }
+
+  "PInput" should "bind whole list to the list remainder" in {
+    // for (@[...a] <- @0) { … }
+    val listBindings = new ListName()
+    listBindings.add(new NameQuote(new PCollect(new CollectList(new ListProc(), new RemainderVar(new ProcVarVar("a"))))))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt = new ReceiptLinear(linearSimple)
+    val bindCount = 1
+    val pInput = new PInput(receipt, new PNil())
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
+    val expected = inputs.par.prepend(Receive(
+      List(
+        ReceiveBind(List(Quote(Par(connectiveUsed = true, exprs = List(EList(connectiveUsed = true, remainder = Some(FreeVar(0))))))), Quote(Par()), freeCount = 1)
+      ),
+      Par(),
+      persistent = false,
+      bindCount,
+      BitSet(),
+      connectiveUsed = true
+    ))
+
+    result.par should be(expected)
+  }
+
   "PInput" should "Fail if a free variable is used in 2 different receives" in {
     // for ( (x1, @y1) <- @Nil ; (x2, @y1) <- @1) { Nil }
     val listBindings1 = new ListName()
