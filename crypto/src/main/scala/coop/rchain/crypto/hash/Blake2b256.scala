@@ -23,23 +23,19 @@ object Blake2b256 {
 
   def hash(input: Array[Byte]): Array[Byte] = {
     val digestFn = new Blake2bDigest(256)
-    synchronized {
-      digestFn.update(input, 0, input.length)
-      val res = new Array[Byte](32)
-      digestFn.doFinal(res, 0)
-      res
-    }
+    digestFn.update(input, 0, input.length)
+    val res = new Array[Byte](32)
+    digestFn.doFinal(res, 0)
+    res
   }
 
   def hash(inputs: Seq[ByteVector]): Array[Byte] = {
     val outStream = new DigestOutputStream(new Blake2bDigest(256))
-    synchronized {
-      for (input <- inputs) {
-        input.copyToStream(outStream)
-      }
-      outStream.getDigest
-      //no calls to .close() since
-      //DigestOutputStream doesn't use any closeable resources,
+    for (input <- inputs) {
+      input.copyToStream(outStream)
     }
+    outStream.getDigest
+    //no calls to .close() since
+    //DigestOutputStream doesn't use any closeable resources
   }
 }
