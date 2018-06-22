@@ -14,10 +14,9 @@ import coop.rchain.comm.protocol.routing._
 
 trait TransportLayer[F[_]] {
   def roundTrip(msg: Protocol, remote: PeerNode, timeout: Duration): F[CommErr[Protocol]]
-  // TODO return PeerNode, do we still neeed it?
+  // TODO local should be avaialble via ApplicativeAsk, not be part of TransportLayer
   def local: F[PeerNode]
-  // TODO remove ProtocolMessage, use raw messages from protocol
-  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
+  def send(msg: Protocol, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit]
 }
@@ -41,7 +40,7 @@ sealed abstract class TransportLayerInstances {
 
       def local: EitherT[F, E, PeerNode] =
         EitherT.liftF(evF.local)
-      def send(msg: ProtocolMessage, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
+      def send(msg: Protocol, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
         EitherT.liftF(evF.send(msg, p))
 
       def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =

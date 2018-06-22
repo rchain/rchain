@@ -87,13 +87,13 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
 
   val local: F[PeerNode] = src.pure[F]
 
-  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+  def send(msg: Protocol, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]
-      .capture(withClient(peer)(_.send(TLRequest(msg.proto.some))))
+      .capture(withClient(peer)(_.send(TLRequest(msg.some))))
       .as(Right(()))
 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
-    peers.toList.traverse(peer => send(msg, peer)).map(_.toSeq)
+    peers.toList.traverse(peer => send(msg.proto, peer)).map(_.toSeq)
 
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
     Capture[F].capture {
