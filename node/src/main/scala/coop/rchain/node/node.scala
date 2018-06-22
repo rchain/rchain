@@ -6,6 +6,7 @@ import io.grpc.Server
 import cats._
 import cats.data._
 import cats.implicits._
+import cats.mtl._
 import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
@@ -25,12 +26,16 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.crypto.codec.Base16
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+
+import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
@@ -87,15 +92,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       case _ => None
     }
 
-    publicKey
+    val publicKeyHash = publicKey
       .flatMap(CertificateHelper.publicAddress)
-      .getOrElse {
-        println("Certificate must contain a secp256r1 EC Public Key")
-        System.exit(1)
-        Array[Byte]()
-      }
-      .map("%02x".format(_))
-      .mkString
+      .map(Base16.encode)
+
+    if (publicKeyHash.isEmpty) {
+      println("Certificate must contain a secp256r1 EC Public Key")
+      System.exit(1)
+    }
+
+    publicKeyHash.get
   }
 
   import ApplicativeError_._
@@ -119,13 +125,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                     = effects.log
-  implicit val timeEffect: Time[Task]                   = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
-  implicit val tcpClientEffect: TcpClient[Task] =
-    new GrpcTcpClient(conf.run.certificatePath.toFile, conf.run.keyPath.toFile)
+  implicit val logEffect: Log[Task]                            = effects.log
+  implicit val timeEffect: Time[Task]                          = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]              = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)

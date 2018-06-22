@@ -1,16 +1,12 @@
 package coop.rchain.node
 
-import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.p2p
-import coop.rchain.p2p.effects._
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
-import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
-import java.nio.file.{Files, Path}
-import scala.tools.jline.console._, completer.StringsCompleter
-import cats._, cats.data._, cats.implicits._
+import scala.tools.jline.console._
+import cats._, cats.data._, cats.implicits._, cats.mtl.MonadState
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import monix.eval.Task
+import monix.eval._
+import monix.execution.atomic._
 import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
@@ -49,7 +45,8 @@ package object effects {
         } yield res.isDefined
     }
 
-  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable: TcpClient](conf: Conf)(
+  def tcpTranposrtLayer[
+      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
       src: PeerNode)(implicit executionContext: ExecutionContext) =
     new TcpTransportLayer[F](conf.run.localhost,
                              conf.run.port(),
@@ -57,4 +54,9 @@ package object effects {
                              conf.run.keyPath.toFile)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
+
+  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TcpTransportLayer.Connections] = {
+    val state = AtomicAny[TcpTransportLayer.Connections](Map.empty)
+    new AtomicMonadState[F, TcpTransportLayer.Connections](state)
+  }
 }
