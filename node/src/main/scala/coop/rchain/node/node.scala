@@ -87,15 +87,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       case _ => None
     }
 
-    publicKey
+    val publicKeyHash = publicKey
       .flatMap(CertificateHelper.publicAddress)
-      .getOrElse {
-        println("Certificate must contain a secp256r1 EC Public Key")
-        System.exit(1)
-        Array[Byte]()
-      }
-      .map("%02x".format(_))
-      .mkString
+      .map(Base16.encode)
+
+    if (publicKeyHash.isEmpty) {
+      println("Certificate must contain a secp256r1 EC Public Key")
+      System.exit(1)
+    }
+
+    publicKeyHash.get
   }
 
   import ApplicativeError_._
