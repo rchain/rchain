@@ -3,6 +3,8 @@
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
 # Return code of 0 is success on test and 1 is fail.
+# Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
+# ./p2p-test-tool.py -b -m 2048m -i rchain/rnode:dev -T propose -t
 from pexpect import replwrap
 import subprocess
 import argparse
@@ -100,7 +102,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests',
                     type=str,
                     nargs='+',
-                    default=['network_sockets', 'count', 'eval', 'repl', 'errors', 'RuntimeException'],
+                    default=['network_sockets', 'count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 # Print -h/help if no args
 if len(sys.argv)==1:
@@ -116,9 +118,6 @@ RNODE_CMD = '/opt/docker/bin/rnode'
 
 def main():
     """Main program"""
-    if args.run_tests == True:
-        run_tests()
-        return
     if args.logs == True:
         show_logs()
         return
@@ -134,10 +133,13 @@ def main():
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
                 check_network_convergence(container)
-        deploy_demo()
+        #deploy_demo()
         if args.tests:
             run_tests()
             return
+    if args.run_tests == True:
+        run_tests()
+        return
 
 
 def run_tests():
@@ -174,6 +176,12 @@ def run_tests():
                     notices['pass'].append(f"{container.name}: Peers count correct in node logs.")
                 else:
                     notices['fail'].append(f"{container.name}: Peers count incorrect in node logs.")
+        if test == "propose":
+            for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
+                if test_propose(container) == 0:
+                    notices['pass'].append(f"{container.name}: Proposal of blocks for deployed contracts worked.")
+                else:
+                    notices['fail'].append(f"{container.name}: Proposal of blocks for deployed contracts failed.")
         if test == "eval":
             for container in client.containers.list(filters={"name":f"peer\d.{args.network}"}):
                 if test_node_eval_of_rholang_files(container) == 0:
@@ -228,6 +236,26 @@ def test_node_eval_of_rholang_files(container):
             if 'ERROR' in line.upper():
                 print(line)
                 return 1 
+    return 0 
+
+def test_propose(container):
+    print(f"Running propose tests after deploy using /usr/share/rnode/validators/*.sk on container {container.name}.")
+    # Deploy example contracts
+    cmd = "for i in `ls /opt/docker/examples/*.rho`; do /opt/docker/bin/rnode deploy ${i}; done"
+    r = container.exec_run(['sh', '-c', cmd])
+    for line in r.output.decode('utf-8').splitlines():
+        print(line)
+        # if 'ERROR' in line.upper():
+        #     print(line)
+        #     return 1 
+    cmd = "/opt/docker/bin/rnode propose --secret-key $(cat $(ls /var/lib/rnode/validators/*.sk | head -n 1))"
+    # You could loop add validator sk files but we'll just do one for now
+    r = container.exec_run(['sh', '-c', cmd])
+    for line in r.output.decode('utf-8').splitlines():
+        print(line)
+        # if 'ERROR' in line.upper():
+        #     print(line)
+        #     return 1 
     return 0 
 
 
