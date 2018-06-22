@@ -5,6 +5,7 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
+import coop.rchain.casper.CasperConf
 import org.rogach.scallop._
 
 import scala.collection.JavaConverters._
@@ -77,6 +78,21 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
 
+    val validatorPK = opt[String](
+      default = None,
+      descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
+        "Can be inferred from the private key for some signature algorithms."
+    )
+
+    val validatorSK = opt[String](
+      default = None,
+      descr = "Base16 encoding of the private key to use for signing a proposed blocks.")
+
+    val validatorSigAlgorithm = opt[String](
+      default = Some("ed25519"),
+      descr = "Name of the algorithm to use for signing proposed blocks. " +
+        "Currently supported values: ed25519")
+
     def certificatePath: Path =
       certificate.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
@@ -144,12 +160,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val propose = new Subcommand("propose") {
     descr(
-      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys. " +
-        "Requires a value of --secret-key to be set.")
-
-    val secretKey = opt[String](
-      default = None,
-      descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
   }
   addSubcommand(propose)
 
@@ -184,6 +195,17 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       }
     }
   }
+
+  def casperConf: CasperConf = CasperConf(
+    run.validatorPK.toOption,
+    run.validatorSK(),
+    run.validatorSigAlgorithm(),
+    run.bondsFile.toOption,
+    run.numValidators(),
+    run.data_dir().resolve("validators"),
+    run.data_dir().resolve("rspace").resolve("casper"),
+    run.map_size()
+  )
 
   verify()
 }

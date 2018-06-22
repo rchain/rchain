@@ -3,6 +3,8 @@ package coop.rchain.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
@@ -10,6 +12,8 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
@@ -26,6 +30,7 @@ import java.nio.file.Path
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import monix.eval.Task
 import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
@@ -69,6 +74,9 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
       storageLocation: Path,
       storageSize: Long,
+      pk: Array[Byte],
+      sk: Array[Byte],
+      sigAlgorithm: String,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -76,6 +84,12 @@ sealed abstract class MultiParentCasperInstances {
 
       //TODO: Extract hardcoded version
       private val version = 0L
+
+      //TODO: accept other signature algorithms
+      private val signFunction = sigAlgorithm match {
+        case "ed25519" => Ed25519.sign _
+        case _         => throw new Exception(s"Unknown signature algorithm $sigAlgorithm")
+      }
 
       private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
@@ -162,7 +176,7 @@ sealed abstract class MultiParentCasperInstances {
                      } else {
                        none[BlockMessage].pure[F]
                      }
-        } yield proposal
+        } yield proposal.map(signBlock(_, dag, pk, sk, sigAlgorithm, signFunction))
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         Capture[F].capture {
@@ -554,4 +568,29 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
       }
     }
+
+  def fromConfig[
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
+      conf: CasperConf)(implicit scheduler: Scheduler, taskLog: Log[Task]): MultiParentCasper[F] = {
+    val genesis = Genesis
+      .fromBondsFile[Task](conf.bondsFile, conf.numValidators, conf.validatorsPath)
+      .unsafeRunSync
+    val pk = conf.sigAlgorithm match {
+      case "ed25519" =>
+        Ed25519.toPublic(conf.sk)
+
+      case _ =>
+        conf.pk.getOrElse(throw new Exception(
+          "Public key must be specified, cannot infer from private key with given signature algorithm."))
+    }
+    if (conf.pk.exists(_.zip(pk).exists { case (x, y) => x != y })) {
+      throw new Exception("Public key not compatible with given private key!")
+    }
+    hashSetCasper[F](conf.storageLocation,
+                     conf.storageSize,
+                     pk,
+                     conf.sk,
+                     conf.sigAlgorithm,
+                     genesis)
+  }
 }
