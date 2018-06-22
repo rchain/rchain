@@ -80,6 +80,8 @@ object EffectsTestInstances {
     def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
+
+    def disconnect(peer: PeerNode): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {
