@@ -436,7 +436,7 @@ assert(cres.isEmpty)
 
 We can now create a checkpoint and store it's root.
 ```tut
-    val checkpointHash = space2.createCheckpoint.root
+val checkpointHash = space2.createCheckpoint.root
 ```
 
 The first `produceAlice` operation should be able to find data stored by the consume.
