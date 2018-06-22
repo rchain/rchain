@@ -35,7 +35,7 @@ object rblfloat {
       ctxt.nargs match {
         case 1 =>
           val n = ctxt.argvec.value.head.asInstanceOf[RblFloat]
-          Right(RblFloat(-n.value))
+          Right(-n)
 
         case 2 =>
           val m = ctxt.argvec.value.head.asInstanceOf[RblFloat]
