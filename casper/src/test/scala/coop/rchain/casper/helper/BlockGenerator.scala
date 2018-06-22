@@ -1,31 +1,40 @@
 package coop.rchain.casper.helper
 
 import cats._
-import cats.data.State
+import cats.data.StateT
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.BlockDagState._
+import coop.rchain.casper.helper.BlockGenerator.BlockDagState
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Time
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 
-object StateWithChain {
-  type StateWithChain[A] = State[BlockDag, A]
-}
+object BlockGenerator {
+  implicit def idCapture: Capture[Id] = new Capture[Id] {
+    def capture[A](a: => A): Id[A]       = a
+    def unsafeUncapture[A](fa: Id[A]): A = fa
+  }
+  implicit val timeEff = new LogicalTime[Id]
 
-object BlockDagState {
+  type StateWithChain[A] = StateT[Id, BlockDag, A]
+
   type BlockDagState[F[_]] = MonadState[F, BlockDag]
   def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, BlockDag]
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: BlockDagState](
+  import BlockGenerator._
+
+  def createBlock[F[_]: Monad: BlockDagState: Time](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -34,6 +43,7 @@ trait BlockGenerator {
       tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
+      now               <- Time[F].currentMillis
       nextId            = chain.currentId + 1
       nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, -1) + 1
       postState = RChainState()
@@ -44,6 +54,7 @@ trait BlockGenerator {
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
+        .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withPostState(postState).withNewCode(deploys)
       serializedJustifications = justifications.toList.map {
