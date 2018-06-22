@@ -410,13 +410,13 @@ println(space.store.toMap)
 
 ### History & rollback
 
-It is possible to save the current state of RSpace in the form of a checkpoint (root hash of a given Merkle Patricia Trie).
+It is possible to save the current state of RSpace in the form of a `Checkpoint`.A `Checkpoint` value contains the root hash of a Merkle Patricia Trie built from the contents of RSpace.
 ```scala
 val checkpoint = space.createCheckpoint()
 val checkpointHash = checkpoint.root
 ```
 
-To rollback the state of the RSpace to a given checkpoint one simply calls the `reset` method with the hash of the root of the checkpoint provided as parameter.
+To rollback the state of the RSpace to a given `Checkpoint` one simply calls the `reset` method with the hash of the root of the `Checkpoint` provided as parameter.
 ```scala
 space.reset(checkpointHash)
 ```
