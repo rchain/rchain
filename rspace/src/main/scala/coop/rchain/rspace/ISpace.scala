@@ -53,6 +53,16 @@ trait ISpace[C, P, A, K] {
         }
     }
 
+  def getData(channel: C): Seq[Datum[A]] =
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getData(txn, Seq(channel))
+    }
+
+  def getWaitingContinuations(channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getWaitingContinuation(txn, channels)
+    }
+
   /** Iterates through (channel, pattern) pairs looking for matching data.
     *
     * Potential match candidates are supplied by the `channelToIndexedData` cache.
