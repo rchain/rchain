@@ -99,9 +99,16 @@ object Validate {
       beforeFuture = currentTime >= timestamp
       latestParentTimestamp = ProtoUtil
         .parents(b)
-        .map(dag.blockLookup)
-        .map(_.header.get.timestamp)
-        .max
+        .foldLeft(0L) {
+          case (latestTimestamp, parentHash) =>
+            val parent    = dag.blockLookup(parentHash)
+            val timestamp = parent.header.get.timestamp
+            if (latestTimestamp > timestamp) {
+              latestTimestamp
+            } else {
+              timestamp
+            }
+        }
       afterLatestParent = timestamp >= latestParentTimestamp
       result <- if (beforeFuture && afterLatestParent) {
                  Applicative[F].pure(Right(Valid))
