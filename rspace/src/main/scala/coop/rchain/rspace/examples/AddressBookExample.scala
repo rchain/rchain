@@ -8,6 +8,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util.runKs
+import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -80,20 +81,20 @@ object AddressBookExample {
       */
     implicit val serializeChannel: Serialize[Channel] = new Serialize[Channel] {
 
-      def encode(channel: Channel): Array[Byte] = {
+      def encode(channel: Channel): ByteVector = {
         val baos = new ByteArrayOutputStream()
         try {
           val oos = new ObjectOutputStream(baos)
           try { oos.writeObject(channel) } finally { oos.close() }
-          baos.toByteArray
+          ByteVector.view(baos.toByteArray)
         } finally {
           baos.close()
         }
       }
 
-      def decode(bytes: Array[Byte]): Either[Throwable, Channel] =
+      def decode(bytes: ByteVector): Either[Throwable, Channel] =
         try {
-          val bais = new ByteArrayInputStream(bytes)
+          val bais = new ByteArrayInputStream(bytes.toArray)
           try {
             val ois = new ObjectInputStream(bais)
             try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
