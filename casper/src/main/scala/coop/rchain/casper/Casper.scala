@@ -25,6 +25,8 @@ import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
+import scala.io.Source
+import scala.util.Try
 import java.nio.file.Path
 
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -74,8 +76,8 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
       storageLocation: Path,
       storageSize: Long,
-      pk: Array[Byte],
-      sk: Array[Byte],
+      publicKey: Array[Byte],
+      privateKey: Array[Byte],
       sigAlgorithm: String,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
@@ -176,7 +178,7 @@ sealed abstract class MultiParentCasperInstances {
                      } else {
                        none[BlockMessage].pure[F]
                      }
-        } yield proposal.map(signBlock(_, dag, pk, sk, sigAlgorithm, signFunction))
+        } yield proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, signFunction))
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         Capture[F].capture {
@@ -578,22 +580,42 @@ sealed abstract class MultiParentCasperInstances {
     val genesis = Genesis
       .fromBondsFile[Task](conf.bondsFile, conf.numValidators, conf.validatorsPath)
       .unsafeRunSync
-    val pk = conf.sigAlgorithm match {
+    val privateKey = conf.privateKey
+      .orElse(defaultPrivateKey(conf, genesis))
+      .getOrElse(throw new Exception("Private key must be specified!"))
+    val publicKey = conf.sigAlgorithm match {
       case "ed25519" =>
-        Ed25519.toPublic(conf.sk)
+        Ed25519.toPublic(privateKey)
 
       case _ =>
-        conf.pk.getOrElse(throw new Exception(
+        conf.publicKey.getOrElse(throw new Exception(
           "Public key must be specified, cannot infer from private key with given signature algorithm."))
     }
-    if (conf.pk.exists(_.zip(pk).exists { case (x, y) => x != y })) {
+    if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
       throw new Exception("Public key not compatible with given private key!")
     }
     hashSetCasper[F](conf.storageLocation,
                      conf.storageSize,
-                     pk,
-                     conf.sk,
+                     publicKey,
+                     privateKey,
                      conf.sigAlgorithm,
                      genesis)
+  }
+
+  private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
+    val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {
+      case (currMax @ (_, maxBond), Bond(validator, stake)) =>
+        if (maxBond < stake) Some(Base16.encode(validator.toByteArray)) -> stake
+        else currMax
+    }
+
+    val privateKey = maxValidator.flatMap(publicKey => {
+      val file = conf.validatorsPath.resolve(s"$publicKey.sk").toFile
+      Try(
+        Source.fromFile(file).mkString.trim
+      ).toOption
+    })
+
+    privateKey.map(Base16.decode)
   }
 }

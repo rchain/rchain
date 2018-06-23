@@ -78,13 +78,13 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
 
-    val validatorPK = opt[String](
+    val validatorPublicKey = opt[String](
       default = None,
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
     )
 
-    val validatorSK = opt[String](
+    val validatorPrivateKey = opt[String](
       default = None,
       descr = "Base16 encoding of the private key to use for signing a proposed blocks.")
 
@@ -197,8 +197,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   }
 
   def casperConf: CasperConf = CasperConf(
-    run.validatorPK.toOption,
-    run.validatorSK(),
+    run.validatorPublicKey.toOption,
+    run.validatorPrivateKey.toOption,
     run.validatorSigAlgorithm(),
     run.bondsFile.toOption,
     run.numValidators(),
