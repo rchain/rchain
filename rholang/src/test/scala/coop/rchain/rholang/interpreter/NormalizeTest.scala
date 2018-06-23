@@ -425,9 +425,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         List(
           ReceiveBind(List(ChanVar(FreeVar(0)), ChanVar(FreeVar(1))), Quote(Par()), freeCount = 2)),
         Send(ChanVar(BoundVar(1)), List[Par](EEvalBody(ChanVar(BoundVar(0)))), false, BitSet(0, 1)),
-        false, // persistent
+        persistent = false,
         bindCount,
-        BitSet()
+        BitSet(),
+        connectiveUsed = true
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -467,7 +468,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                       freeCount = 2),
           ReceiveBind(List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))),
                       Quote(GInt(1)),
-                      freeCount = 2),
+                      freeCount = 2)
         ),
         Par().copy(
           sends = List(
@@ -476,9 +477,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           ),
           locallyFree = BitSet(0, 1, 2, 3)
         ),
-        false, // persistent
+        persistent = false,
         bindCount,
-        BitSet()
+        BitSet(),
+        connectiveUsed = true
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -595,20 +597,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val bindCount = 1
 
     val expectedResult =
-      inputs.par.copy(
-        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, BitSet())),
-        receives = List(
-          Receive(
-            List(ReceiveBind(List(Quote(EVar(FreeVar(0)))), Quote(Par()), freeCount = 1)),
-            Match(EVar(BoundVar(0)),
-                  List(MatchCase(GInt(42), Par()),
-                       MatchCase(EVar(FreeVar(0)), Par(), freeCount = 1)),
-                  BitSet(0)),
-            false,
-            bindCount,
-            BitSet()
-          ))
-      )
+      inputs.par
+        .prepend(Send(Quote(Par()), List[Par](GInt(47)), false, BitSet()))
+        .prepend(
+        Receive(
+          List(ReceiveBind(List(Quote(EVar(FreeVar(0)))), Quote(Par()), freeCount = 1)),
+          Match(EVar(BoundVar(0)),
+                List(MatchCase(GInt(42), Par()),
+                     MatchCase(EVar(FreeVar(0)), Par(), freeCount = 1)),
+                BitSet(0)),
+          persistent = false,
+          bindCount,
+          BitSet(),
+          connectiveUsed = true
+        ))
+
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
@@ -736,8 +739,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val matchTarget = EVar(FreeVar(1)).prepend(EVar(FreeVar(0)))
     val expectedResult =
-      inputs.par.copy(
-        receives = List(
+      inputs.par.prepend(
           Receive(
             List(
               ReceiveBind(
@@ -746,10 +748,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                 Quote(Par()),
                 freeCount = 2)),
             Par(),
-            false,
+            persistent = false,
             bindCount,
-          ))
-      )
+            connectiveUsed = true))
+
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
