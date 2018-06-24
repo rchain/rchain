@@ -69,6 +69,11 @@ parser.add_argument("--prompt",
                     type=str,
                     default="rholang $ ",
                     help="set REPL prompt")
+parser.add_argument("--propose-loop-amount",
+                    dest='propose_loop_amount',
+                    type=int,
+                    default="3",
+                    help="set amount of times propose test will loop before checking logs for issues")
 parser.add_argument("--repl-commands",
                     dest='repl_cmds',
                     type=str,
@@ -239,24 +244,30 @@ def test_node_eval_of_rholang_files(container):
     return 0 
 
 def test_propose(container):
+    retval = 0
     print(f"Running propose tests after deploy using /usr/share/rnode/validators/*.sk on container {container.name}.")
-    # Deploy example contracts
-    cmd = "for i in `ls /opt/docker/examples/*.rho`; do /opt/docker/bin/rnode deploy ${i}; done"
-    r = container.exec_run(['sh', '-c', cmd])
-    for line in r.output.decode('utf-8').splitlines():
-        print(line)
-        # if 'ERROR' in line.upper():
-        #     print(line)
-        #     return 1 
-    cmd = "/opt/docker/bin/rnode propose --secret-key $(cat $(ls /var/lib/rnode/validators/*.sk | head -n 1))"
-    # You could loop add validator sk files but we'll just do one for now
-    r = container.exec_run(['sh', '-c', cmd])
-    for line in r.output.decode('utf-8').splitlines():
-        print(line)
-        # if 'ERROR' in line.upper():
-        #     print(line)
-        #     return 1 
-    return 0 
+    for i in range(args.propose_loop_amount):
+        print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+        # Deploy example contracts using 3 random example files
+        cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
+        # cmd = "/opt/docker/bin/rnode propose secret-key $(cat $(ls /var/lib/rnode/validators/*.sk | head -n 1))" # old cmd
+        cmd = "/opt/docker/bin/rnode propose"
+        # You could loop add validator sk files but we'll just do one for now
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
+
+        #Check logs for warnings(WARN) on CASPER    
+        time.sleep(20) # Allow for logs to fill out
+        for line in container.logs().decode('utf-8').splitlines():
+            if "WARN" in line and "CASPER" in line:
+                print(f"{container.name}: {line}")
+                retval = 1
+
+    return retval 
 
 
 def show_logs():
@@ -271,7 +282,7 @@ def boot_p2p_network():
         client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
         create_bootstrap_node()
-        time.sleep(10) # give bootstrap node an early start
+        time.sleep(20) # give bootstrap node an early start
         print("Starting peer nodes.")
         create_peer_nodes()
         return 0
