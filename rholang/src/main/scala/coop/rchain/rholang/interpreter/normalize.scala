@@ -234,7 +234,8 @@ object ProcNormalizeMatcher {
 
     def normalizeIfElse(valueProc: Proc,
                         trueBodyProc: Proc,
-                        falseBodyProc: Proc, input: ProcVisitInputs): M[ProcVisitOutputs] =
+                        falseBodyProc: Proc,
+                        input: ProcVisitInputs): M[ProcVisitOutputs] =
       for {
         targetResult <- normalizeMatch[M](valueProc, input)
         trueCaseBody <- normalizeMatch[M](
@@ -762,7 +763,7 @@ object ProcNormalizeMatcher {
           )
       }
 
-      case p: PIf     =>
+      case p: PIf =>
         normalizeIfElse(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
           .map(n => n.copy(par = n.par ++ input.par))
       case p: PIfElse =>

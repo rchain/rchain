@@ -40,7 +40,7 @@ class CryptoChannelsSpec
   implicit val serializeChannel: Serialize[Channel]       = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[Seq[Channel]] = storage.implicits.serializeChannels
 
-  val serialize: Par => Array[Byte]                    = Serialize[Par].encode _
+  val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
   val byteArrayToExpr                                  = byteArrayToByteString andThen byteStringToExpr
