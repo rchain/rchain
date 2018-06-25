@@ -51,7 +51,8 @@ package object history {
       }
     }
 
-  def lookup[T, K, V](branch: Branch, key: K)(implicit store: ITrieStore[T, K, V],
+  def lookup[T, K, V](branch: Branch, key: K)(implicit
+                                              store: ITrieStore[T, K, V],
                                               codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
@@ -93,13 +94,10 @@ package object history {
   }
 
   def lookup[T, K, V](branch: Branch, keys: immutable.Seq[K])(
-      implicit store: ITrieStore[T, K, V],
+      implicit
+      store: ITrieStore[T, K, V],
       codecK: Codec[K]): Option[immutable.Seq[V]] =
     keys.traverse[Option, V]((k: K) => lookup(branch, k))
-  @deprecated("Use `history.lookup(branch, keys)` instead.", "0.4.2")
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
-      implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    lookup(branch, keys)(store, codecK)
 
   private[this] def getParents[T, K, V](path: Seq[Byte], curr: Trie[K, V])(
       implicit store: ITrieStore[T, K, V],
@@ -411,7 +409,8 @@ package object history {
         }
     }
 
-  def delete[T, K, V](branch: Branch, key: K, value: V)(implicit store: ITrieStore[T, K, V],
+  def delete[T, K, V](branch: Branch, key: K, value: V)(implicit
+                                                        store: ITrieStore[T, K, V],
                                                         codecK: Codec[K],
                                                         codecV: Codec[V]): Boolean =
     store.withTxn(store.createTxnWrite()) { implicit txn: T =>
