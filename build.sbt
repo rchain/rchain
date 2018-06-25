@@ -33,6 +33,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsMtl,
       monix,
       scodecCore,
       scodecBits
@@ -71,6 +72,7 @@ lazy val comm = (project in file("comm"))
       weupnp,
       hasher,
       catsCore,
+      catsMtl,
       monix,
       guava
     ),
@@ -115,7 +117,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.4.1",
+    version := "0.4.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",

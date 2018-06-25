@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.implicits._
+import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -12,6 +13,7 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
+import scala.collection.JavaConverters._
 
 import scala.collection.immutable.Seq
 
@@ -36,23 +38,43 @@ trait HistoryActionsTests
 
   case class State(
       checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]]
+      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
+      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
-        case (State(checkpoint, expectedContents), chunkNo) =>
+        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
-          val test = space.store.toMap == expectedContents
-          val num  = "%02d".format(chunkNo)
-          if (test) {
+          val num = "%02d".format(chunkNo)
+
+          val contentsTest = space.store.toMap == expectedContents
+
+          if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
           }
-          test
+
+          val actualJoins = space.store.joinMap
+
+          val joinsTest =
+            expectedJoins.forall {
+              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
+                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
+                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
+                expected.equals(actual)
+            }
+
+          if (joinsTest) {
+            logger.debug(s"$num: store had expected joins")
+          } else {
+            logger.error(s"$num: store had unexpected joins")
+          }
+
+          contentsTest && joinsTest
       }
     !tests.contains(false)
   }
@@ -73,13 +95,15 @@ trait HistoryActionsTests
 
       val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
 
+      val leafPointer = LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat)))
+      val skip        = Skip(channelsHash.bytes.drop(1), leafPointer)
+      val skipHash    = Trie.hash(skip)(codecK, Codec[String])
+
       val nodeHash = Trie.hash[Blake2b256Hash, TestGNAT](
         Node(
           PointerBlock
             .create()
-            .updated(
-              List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                    LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head), NodePointer(skipHash))))))
 
       space.consume(gnat.channels,
                     gnat.wks.head.patterns,
@@ -314,7 +338,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $size produces")
-            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -338,7 +362,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(consumes.size)
             logger.debug(s"$num: checkpointing $size consumes")
-            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -347,7 +371,6 @@ trait HistoryActionsTests
     check(prop)
   }
 
-  // TODO: get the join map in the mix
   "when resetting to a bunch of checkpoints made with consumes and produces, the store" should
     "have the expected contents" in {
     val prop = Prop.forAllNoShrink { (data: Seq[(TestConsumeMap, TestProduceMap)]) =>
@@ -368,7 +391,7 @@ trait HistoryActionsTests
             val consumesSize = "%02d".format(consumes.size)
             val producesSize = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
-            (State(space.createCheckpoint().root, space.store.toMap), chunkNo)
+            (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
         validateIndexedStates(space, states)

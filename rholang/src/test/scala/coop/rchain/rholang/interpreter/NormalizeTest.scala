@@ -638,6 +638,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  it should "not mix Par from the input with normalized one (RHOL-444)" in {
+    val rightProc = new PIf(new PGround(new GroundBool(new BoolTrue())), new PGround(new GroundInt(10)))
+
+    val input = inputs.copy(par = Par(exprs = Seq(GInt(7))))
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](rightProc, input).value
+
+    result.knownFree should be(inputs.knownFree)
+    result.par should be(
+      inputs.par.copy(
+        matches = Seq(Match(GBool(true), Seq(MatchCase(GBool(true), GInt(10)), MatchCase(GBool(false), Par())))),
+        exprs = Seq(GInt(7)))
+    )
+  }
+
+
   "PIfElse" should "Handle a more complicated if statement with an else clause" in {
     // if (47 == 47) { new x in { x!(47) } } else { new y in { y!(47) } }
     val condition = new PEq(new PGround(new GroundInt(47)), new PGround(new GroundInt(47)))

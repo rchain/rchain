@@ -12,12 +12,13 @@ import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.comm.discovery._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
-import Connect.defaultTimeout
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  val src: PeerNode    = peerNode("src", 30300)
-  val remote: PeerNode = peerNode("remote", 30301)
+  val defaultTimeout: Duration = Duration(1, MILLISECONDS)
+  val src: PeerNode            = peerNode("src", 30300)
+  val remote: PeerNode         = peerNode("remote", 30301)
 
   type Effect[A] = CommErrT[Id, A]
 
