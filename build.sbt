@@ -33,6 +33,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsMtl,
       monix,
       scodecCore,
       scodecBits
@@ -71,6 +72,7 @@ lazy val comm = (project in file("comm"))
       weupnp,
       hasher,
       catsCore,
+      catsMtl,
       monix,
       guava
     ),

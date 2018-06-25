@@ -11,7 +11,9 @@ import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
+class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+    src: PeerNode,
+    timeout: Duration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
@@ -20,6 +22,8 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
     table.observe[F](peer)
 
   private val id: NodeIdentifier = src.id
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def addNode(peer: PeerNode): F[Unit] =
     for {
@@ -107,6 +111,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
                                disconnect: DisconnectMessage): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about $sender.")
+      _ <- TransportLayer[F].disconnect(sender)
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
@@ -117,7 +122,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
       req = LookupMessage(ProtocolMessage.lookup(src, key), System.currentTimeMillis)
       r <- TransportLayer[F]
-            .roundTrip(req, remoteNode, 500.milliseconds)
+            .roundTrip(req, remoteNode, timeout)
             .map(_.toOption
               .map {
                 case LookupResponseMessage(proto, _) =>
