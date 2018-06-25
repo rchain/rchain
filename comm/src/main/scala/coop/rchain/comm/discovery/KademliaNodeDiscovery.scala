@@ -21,6 +21,8 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   private val id: NodeIdentifier = src.id
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- updateLastSeen(peer)
