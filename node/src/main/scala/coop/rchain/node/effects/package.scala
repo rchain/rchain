@@ -17,12 +17,14 @@ package object effects {
   def log: Log[Task] = new Log[Task] {
     import com.typesafe.scalalogging.Logger
 
-    val logger = Logger("logger")
-
-    def debug(msg: String): Task[Unit] = Task.delay(logger.debug(msg))
-    def info(msg: String): Task[Unit]  = Task.delay(logger.info(msg))
-    def warn(msg: String): Task[Unit]  = Task.delay(logger.warn(msg))
-    def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
+    def debug(msg: String)(implicit ev: LogSource): Task[Unit] =
+      Task.delay(Logger(ev.clazz).debug(msg))
+    def info(msg: String)(implicit ev: LogSource): Task[Unit] =
+      Task.delay(Logger(ev.clazz).info(msg))
+    def warn(msg: String)(implicit ev: LogSource): Task[Unit] =
+      Task.delay(Logger(ev.clazz).warn(msg))
+    def error(msg: String)(implicit ev: LogSource): Task[Unit] =
+      Task.delay(Logger(ev.clazz).error(msg))
   }
 
   def time: Time[Task] = new Time[Task] {
