@@ -50,7 +50,6 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
   def storageContents(hash: ByteString): F[String]
-  def close(): F[Unit]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -72,7 +71,6 @@ sealed abstract class MultiParentCasperInstances {
       def blockDag: F[BlockDag]                                          = BlockDag().pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: ByteString): F[String]                   = "".pure[F]
-      def close(): F[Unit]                                               = ().pure[F]
     }
 
   def hashSetCasper[
@@ -227,11 +225,6 @@ sealed abstract class MultiParentCasperInstances {
         } else {
           s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
         }
-      }
-
-      def close(): F[Unit] = Capture[F].capture {
-        val _runtime = runtime.take()
-        _runtime.close()
       }
 
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
@@ -577,29 +570,28 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   def fromConfig[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      conf: CasperConf,
-      activeRuntime: Runtime)(implicit scheduler: Scheduler,
-                              taskLog: Log[Task]): MultiParentCasper[F] = {
-    val genesis = Genesis
-      .fromBondsFile[Task](conf.bondsFile, conf.numValidators, conf.validatorsPath)
-      .unsafeRunSync
-    val privateKey = conf.privateKey
-      .orElse(defaultPrivateKey(conf, genesis))
-      .getOrElse(throw new Exception("Private key must be specified!"))
-    val publicKey = conf.sigAlgorithm match {
-      case "ed25519" =>
-        Ed25519.toPublic(privateKey)
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
+      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
+    Genesis
+      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
+      .map(genesis => {
+        val privateKey = conf.privateKey
+          .orElse(defaultPrivateKey(conf, genesis))
+          .getOrElse(throw new Exception("Private key must be specified!"))
+        val publicKey = conf.sigAlgorithm match {
+          case "ed25519" =>
+            Ed25519.toPublic(privateKey)
 
-      case _ =>
-        conf.publicKey.getOrElse(throw new Exception(
-          "Public key must be specified, cannot infer from private key with given signature algorithm."))
-    }
-    if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
-      throw new Exception("Public key not compatible with given private key!")
-    }
-    hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
-  }
+          case _ =>
+            conf.publicKey.getOrElse(throw new Exception(
+              "Public key must be specified, cannot infer from private key with given signature algorithm."))
+        }
+        if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
+          throw new Exception("Public key not compatible with given private key!")
+        }
+        hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
+      })
 
   private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
     val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {
