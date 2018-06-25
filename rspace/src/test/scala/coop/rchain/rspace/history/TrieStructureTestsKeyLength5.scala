@@ -20,9 +20,9 @@ class TrieStructureTestsKeyLength5
 
   behavior of "A trie"
 
-  it should "insert skip node " in withTestTrieStore { (store, branch) =>
+  it should "insert skip node " in withTestTrieStore { implicit store => branch =>
     val k1: TestKey5 = "10000"
-    insert(store, branch, k1, TestData.val1)
+    insert(branch, k1, TestData.val1)
 
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn, branch).get).get.asInstanceOf[Node]
@@ -39,11 +39,11 @@ class TrieStructureTestsKeyLength5
     }
   }
 
-  it should "build two levels of skip nodes" in withTestTrieStore { (store, branch) =>
+  it should "build two levels of skip nodes" in withTestTrieStore { implicit store => branch =>
     val k1: TestKey5 = "01000"
     val k2: TestKey5 = "01100"
-    insert(store, branch, k1, TestData.val1)
-    insert(store, branch, k2, TestData.val1)
+    insert(branch, k1, TestData.val1)
+    insert(branch, k2, TestData.val1)
 
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn, branch).get).get.asInstanceOf[Node]
@@ -83,12 +83,12 @@ class TrieStructureTestsKeyLength5
     }
   }
 
-  it should "collapse structure after delete" in withTestTrieStore { (store, branch) =>
+  it should "collapse structure after delete" in withTestTrieStore { implicit store => branch =>
     val k1: TestKey5 = "01000"
     val k2: TestKey5 = "01100"
-    insert(store, branch, k1, TestData.val1)
-    insert(store, branch, k2, TestData.val1)
-    delete(store, branch, k2, TestData.val1)
+    insert(branch, k1, TestData.val1)
+    insert(branch, k2, TestData.val1)
+    delete(branch, k2, TestData.val1)
 
     store.withTxn(store.createTxnRead()) { txn =>
       val root = store.get(txn, store.getRoot(txn, branch).get).get.asInstanceOf[Node]
