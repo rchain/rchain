@@ -22,6 +22,8 @@ import coop.rchain.comm.CommError.ErrorHandler
 
 object Connect {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def findAndConnect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       defaultTimeout: Duration): Int => F[Int] =
