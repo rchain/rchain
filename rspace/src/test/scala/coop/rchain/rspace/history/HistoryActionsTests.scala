@@ -439,7 +439,7 @@ trait LMDBWithTestTrieStore[K]
       Env
         .create()
         .setMapSize(mapSize)
-        .setMaxDbs(2)
+        .setMaxDbs(3)
         .setMaxReaders(126)
         .open(dbDir.toFile)
     val testStore  = LMDBTrieStore.create[K, ByteVector](env)

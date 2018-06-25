@@ -1,24 +1,25 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.shared.Resources.withResource
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
+import coop.rchain.shared.Resources.withResource
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
 import scodec.bits.BitVector
 
+import scala.collection.immutable.Seq
 import scala.collection.JavaConverters._
 
 class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
                                    _dbTrie: Dbi[ByteBuffer],
-                                   _dbRoot: Dbi[ByteBuffer])(implicit
-                                                             codecK: Codec[K],
-                                                             codecV: Codec[V])
+                                   _dbRoot: Dbi[ByteBuffer],
+                                   _dbCheckpoints: Dbi[ByteBuffer])(implicit
+                                                                    codecK: Codec[K],
+                                                                    codecV: Codec[V])
     extends ITrieStore[Txn[ByteBuffer], K, V] {
 
   private[rspace] def createTxnRead(): Txn[ByteBuffer] = env.txnRead
@@ -73,6 +74,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
   private[rspace] def clear(txn: Txn[ByteBuffer]): Unit = {
     _dbTrie.drop(txn)
     _dbRoot.drop(txn)
+    _dbCheckpoints.drop(txn)
   }
 
   private[rspace] def getRoot(txn: Txn[ByteBuffer], branch: Branch): Option[Blake2b256Hash] = {
@@ -83,6 +85,23 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
     }
   }
 
+  private[rspace] def persistCheckpointAndGetRoot(txn: Txn[ByteBuffer],
+                                                  branch: Branch): Option[Blake2b256Hash] =
+    getRoot(txn, branch)
+      .map { currentRoot =>
+        val checkpoints = getCheckpointsInBranch(txn, branch).filter(_ != currentRoot)
+        (currentRoot, currentRoot +: checkpoints)
+      }
+      .map {
+        case (currentRoot, updatedCheckpoints) =>
+          val encodedBranch          = Codec[Branch].encode(branch).get
+          val encodedBranchBuff      = encodedBranch.bytes.toDirectByteBuffer
+          val encodedCheckpoints     = Codec[Seq[Blake2b256Hash]].encode(updatedCheckpoints).get
+          val encodedCheckpointsBuff = encodedCheckpoints.bytes.toDirectByteBuffer
+          _dbCheckpoints.put(txn, encodedBranchBuff, encodedCheckpointsBuff)
+          currentRoot
+      }
+
   private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit = {
     val encodedBranch     = Codec[Branch].encode(branch).get
     val encodedBranchBuff = encodedBranch.bytes.toDirectByteBuffer
@@ -92,6 +111,47 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       throw new Exception(s"could not persist: $hash")
     }
   }
+
+  private[this] def getAllCheckpoints(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
+    withResource(_dbCheckpoints.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+      it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
+        acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get
+      }
+    }
+
+  private[this] def getCheckpointsInBranch(txn: Txn[ByteBuffer],
+                                           branch: Branch): Seq[Blake2b256Hash] = {
+    val encodedBranch     = Codec[Branch].encode(branch).get
+    val encodedBranchBuff = encodedBranch.bytes.toDirectByteBuffer
+    Option(_dbCheckpoints.get(txn, encodedBranchBuff))
+      .map { bytes =>
+        Codec[Seq[Blake2b256Hash]].decode(BitVector(bytes)).map(_.value).get
+      }
+      .getOrElse(Seq.empty)
+  }
+
+  private[rspace] def validateCheckpointAndPutRoot(txn: Txn[ByteBuffer],
+                                                   branch: Branch,
+                                                   hash: Blake2b256Hash): Unit =
+    getRoot(txn, branch)
+      .find(_ == hash)
+      .orElse {
+        getCheckpointsInBranch(txn, branch)
+          .find(_ == hash)
+          .map { blake: Blake2b256Hash =>
+            putRoot(txn, branch, blake)
+            blake
+          }
+      }
+      .orElse {
+        getAllCheckpoints(txn)
+          .find(_ == hash)
+          .map { blake: Blake2b256Hash =>
+            putRoot(txn, branch, blake)
+            blake
+          }
+      }
+      .getOrElse(throw new Exception(s"Unknown checkpoint."))
 }
 
 object LMDBTrieStore {
@@ -99,8 +159,9 @@ object LMDBTrieStore {
   def create[K, V](env: Env[ByteBuffer])(implicit
                                          codecK: Codec[K],
                                          codecV: Codec[V]): LMDBTrieStore[K, V] = {
-    val dbTrie: Dbi[ByteBuffer]  = env.openDbi("Trie", MDB_CREATE)
-    val dbRoots: Dbi[ByteBuffer] = env.openDbi("Roots", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, dbTrie, dbRoots)
+    val dbTrie: Dbi[ByteBuffer]        = env.openDbi("Trie", MDB_CREATE)
+    val dbRoots: Dbi[ByteBuffer]       = env.openDbi("Roots", MDB_CREATE)
+    val dbCheckpoints: Dbi[ByteBuffer] = env.openDbi("Checkpoints", MDB_CREATE)
+    new LMDBTrieStore[K, V](env, dbTrie, dbRoots, dbCheckpoints)
   }
 }
