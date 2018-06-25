@@ -19,9 +19,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey4, Byte
   import TestData._
 
   "Insert, lookup" should "work" in withTestTrieStore {
-    (store: ITrieStore[T, TestKey4, ByteVector], branch: Branch) =>
-      insert(store, branch, key1, val1)
-      val actual = lookup(store, branch, key1)
+    implicit store: ITrieStore[T, TestKey4, ByteVector] => branch: Branch =>
+      insert(branch, key1, val1)
+      val actual = lookup(branch, key1)
       actual.value shouldBe val1
   }
 
@@ -434,7 +434,11 @@ trait LMDBWithTestTrieStore[K]
   val mapSize: Long = 1024L * 1024L * 1024L
 
   override def withTestTrieStore[R](
-      f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R = {
+      f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R =
+    withTestTrieStore(f.curried)
+
+  override def withTestTrieStore[R](
+      f: ITrieStore[Txn[ByteBuffer], K, ByteVector] => Branch => R): R = {
     val env: Env[ByteBuffer] =
       Env
         .create()
@@ -442,12 +446,12 @@ trait LMDBWithTestTrieStore[K]
         .setMaxDbs(2)
         .setMaxReaders(126)
         .open(dbDir.toFile)
-    val testStore  = LMDBTrieStore.create[K, ByteVector](env)
-    val testBranch = Branch("test")
+    implicit val testStore = LMDBTrieStore.create[K, ByteVector](env)
+    val testBranch         = Branch("test")
     testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
     try {
-      initialize(testStore, testBranch)
-      f(testStore, testBranch)
+      initialize(testBranch)
+      f(testStore)(testBranch)
     } finally {
       testStore.close()
       env.close()
