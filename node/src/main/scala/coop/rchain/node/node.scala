@@ -134,7 +134,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val address                  = s"rnode://$name@$host:$port"
   private val src                      = PeerNode.parse(address).right.get
   private val storagePath              = conf.run.data_dir().resolve("rspace")
+  private val casperStoragePath        = storagePath.resolve("casper")
   private val storageSize              = conf.run.map_size()
+  private val casperRuntime            = Runtime.create(casperStoragePath, storageSize)
   private val defaultTimeout: Duration = Duration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
@@ -162,7 +164,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] =
-    MultiParentCasper.fromConfig[Effect](conf.casperConf)
+    MultiParentCasper.fromConfig[Effect](conf.casperConf, casperRuntime)
   implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )
@@ -185,7 +187,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
 
- def startResources(resources: Resources): Effect[Unit] =
+  def startResources(resources: Resources): Effect[Unit] =
     for {
       _ <- resources.httpServer.start.toEffect
       _ <- resources.metricsServer.start.toEffect

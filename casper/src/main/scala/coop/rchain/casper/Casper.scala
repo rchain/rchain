@@ -77,8 +77,7 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      storageLocation: Path,
-      storageSize: Long,
+      activeRuntime: Runtime,
       publicKey: Array[Byte],
       privateKey: Array[Byte],
       sigAlgorithm: String,
@@ -102,7 +101,7 @@ sealed abstract class MultiParentCasperInstances {
       )
 
       private val runtime = new SyncVar[Runtime]()
-      runtime.put(Runtime.create(storageLocation, storageSize))
+      runtime.put(activeRuntime)
       private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
 
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
@@ -579,7 +578,9 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      conf: CasperConf)(implicit scheduler: Scheduler, taskLog: Log[Task]): MultiParentCasper[F] = {
+      conf: CasperConf,
+      activeRuntime: Runtime)(implicit scheduler: Scheduler,
+                              taskLog: Log[Task]): MultiParentCasper[F] = {
     val genesis = Genesis
       .fromBondsFile[Task](conf.bondsFile, conf.numValidators, conf.validatorsPath)
       .unsafeRunSync
@@ -597,12 +598,7 @@ sealed abstract class MultiParentCasperInstances {
     if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
       throw new Exception("Public key not compatible with given private key!")
     }
-    hashSetCasper[F](conf.storageLocation,
-                     conf.storageSize,
-                     publicKey,
-                     privateKey,
-                     conf.sigAlgorithm,
-                     genesis)
+    hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
   }
 
   private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
