@@ -32,10 +32,9 @@ import ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.crypto.codec.Base16
-
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
@@ -108,11 +107,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host        = conf.run.localhost
-  private val address     = s"rnode://$name@$host:${conf.run.port()}"
-  private val src         = PeerNode.parse(address).right.get
-  private val storagePath = conf.run.data_dir().resolve("rspace")
-  private val storageSize = conf.run.map_size()
+  private val host                     = conf.run.localhost
+  private val address                  = s"rnode://$name@$host:${conf.run.port()}"
+  private val src                      = PeerNode.parse(address).right.get
+  private val storagePath              = conf.run.data_dir().resolve("rspace")
+  private val storageSize              = conf.run.map_size()
+  private val defaultTimeout: Duration = Duration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -134,9 +134,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
-  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
-  implicit val turanOracleEffect: SafetyOracle[Effect]  = SafetyOracle.turanOracle[Effect]
+  implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
+    new TLNodeDiscovery[Task](src, defaultTimeout)
+  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] =
     MultiParentCasper.fromConfig[Effect](conf.casperConf)
   implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
@@ -231,8 +232,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               else
                 conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => Connect.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect], 0)
+                  .toEffect >>= (
+                    addr =>
+                      Connect.connectToBootstrap[Effect](addr,
+                                                         maxNumOfAttempts = 5,
+                                                         defaultTimeout = defaultTimeout)))
+      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
           else ().pure[Effect]
       _ <- casperEffect.close()
       _ <- exit0.toEffect

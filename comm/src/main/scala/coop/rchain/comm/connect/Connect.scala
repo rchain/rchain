@@ -22,11 +22,9 @@ import coop.rchain.comm.CommError.ErrorHandler
 
 object Connect {
 
-  val defaultTimeout: Duration = Duration(500, MILLISECONDS)
-
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler]
-    : Int => F[Int] =
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
+      defaultTimeout: Duration): Int => F[Int] =
     (lastCount: Int) =>
       for {
         _         <- IOUtil.sleep[F](5000L)
@@ -39,7 +37,8 @@ object Connect {
   def connectToBootstrap[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       bootstrapAddrStr: String,
-      maxNumOfAttempts: Int = 5): F[Unit] = {
+      maxNumOfAttempts: Int = 5,
+      defaultTimeout: Duration): F[Unit] = {
 
     def connectAttempt(attempt: Int, timeout: Duration, bootstrapAddr: PeerNode): F[Unit] =
       if (attempt > maxNumOfAttempts) for {

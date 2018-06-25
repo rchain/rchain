@@ -11,6 +11,7 @@ import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 package object effects {
 
@@ -34,14 +35,15 @@ package object effects {
     }
   }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
+                                                          timeout: Duration): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
-          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+          res <- TransportLayer[F].roundTrip(req, node, timeout).map(_.toOption)
         } yield res.isDefined
     }
 

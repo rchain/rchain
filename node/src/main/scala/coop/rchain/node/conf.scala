@@ -27,6 +27,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val run = new Subcommand("run") {
 
+    val defaultTimeout =
+      opt[Int](default = Some(1000),
+               descr = "Default timeout for roundtrip connections. Default 1 second.")
+
     val certificate =
       opt[Path](required = false,
                 short = 'c',

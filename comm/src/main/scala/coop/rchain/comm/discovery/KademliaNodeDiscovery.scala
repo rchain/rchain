@@ -11,7 +11,9 @@ import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
+class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+    src: PeerNode,
+    timeout: Duration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
