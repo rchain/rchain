@@ -7,7 +7,7 @@ import cats._, cats.data._, cats.implicits._, cats.mtl.MonadState
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
 import monix.execution.atomic._
-import scala.concurrent.ExecutionContext
+import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
@@ -45,13 +45,13 @@ package object effects {
         } yield res.isDefined
     }
 
-  def tcpTranposrtLayer[
-      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
-      src: PeerNode)(implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.run.localhost,
-                             conf.run.port(),
-                             conf.run.certificatePath.toFile,
-                             conf.run.keyPath.toFile)(src)
+  def tcpTranposrtLayer(conf: Conf)(src: PeerNode)(
+      implicit scheduler: Scheduler,
+      connections: TcpTransportLayer.ConnectionsState) =
+    new TcpTransportLayer(conf.run.localhost,
+                          conf.run.port(),
+                          conf.run.certificatePath.toFile,
+                          conf.run.keyPath.toFile)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 

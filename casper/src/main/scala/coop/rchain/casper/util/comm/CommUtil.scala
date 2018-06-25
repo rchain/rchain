@@ -49,7 +49,7 @@ object CommUtil {
       local <- TransportLayer[F].local
       sends <- peers.toList.traverse { peer =>
                 val msg = PacketMessage(packet(local, serializedMessage))
-                TransportLayer[F].send(msg, peer).map(res => (res, peer))
+                TransportLayer[F].send(peer, msg).map(res => (res, peer))
               }
       successes <- sends.traverse {
                     case (Left(err), _) =>
@@ -85,7 +85,7 @@ object CommUtil {
             block = dag.blockLookup.get(r.hash).map(_.toByteString)
             maybeMsg = block.map(serializedMessage =>
               PacketMessage(packet(local, serializedMessage)))
-            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(msg, peer))
+            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
             hash     = PrettyPrinter.buildString(r.hash)
             logIntro = s"Received request for block $hash from $peer. "
             _ <- send match {

@@ -131,11 +131,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
-  implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](conf)(src)
-  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
-  implicit val turanOracleEffect: SafetyOracle[Effect]  = SafetyOracle.turanOracle[Effect]
+  implicit val transportLayerEffect: TransportLayer[Task]      = effects.tcpTranposrtLayer(conf)(src)
+  implicit val pingEffect: Ping[Task]                          = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]        = new TLNodeDiscovery[Task](src)
+  implicit val turanOracleEffect: SafetyOracle[Effect]         = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath.resolve("casper"),
     storageSize,
@@ -182,7 +181,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       loc   <- transportLayerEffect.local
       ts    <- timeEffect.currentMillis
       msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
-      _     <- transportLayerEffect.broadcast(msg, peers)
+      _     <- transportLayerEffect.broadcast(peers, msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
