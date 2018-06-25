@@ -100,7 +100,8 @@ package object history {
     keys.traverse[Option, V]((k: K) => lookup(branch, k))
 
   private[this] def getParents[T, K, V](path: Seq[Byte], curr: Trie[K, V])(
-      implicit store: ITrieStore[T, K, V],
+      implicit
+      store: ITrieStore[T, K, V],
       txn: T): (Trie[K, V], Parents[K, V]) = {
 
     @tailrec
@@ -346,7 +347,8 @@ package object history {
     }
 
   private[this] def insertTries[T, K, V](rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])])(
-      implicit store: ITrieStore[T, K, V],
+      implicit
+      store: ITrieStore[T, K, V],
       txn: T): Option[Blake2b256Hash] =
     rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
       case (_, (hash, trie)) =>
