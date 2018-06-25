@@ -105,13 +105,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       key.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
-    def fetchHost(): String =
-      host.toOption match {
-        case Some(host) => host
-        case None       => whoami(port()).fold("localhost")(_.getHostAddress)
-      }
-
-    lazy val localhost: String =
+    lazy val fetchHost: String =
       host.toOption match {
         case Some(host) => host
         case None       => whoami(port()).fold("localhost")(_.getHostAddress)

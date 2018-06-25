@@ -107,7 +107,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host                     = conf.run.localhost
+  private val host                     = conf.run.fetchHost
   private val address                  = s"rnode://$name@$host:${conf.run.port()}"
   private val src                      = PeerNode.parse(address).right.get
   private val storagePath              = conf.run.data_dir().resolve("rspace")

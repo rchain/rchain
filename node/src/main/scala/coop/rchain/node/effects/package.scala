@@ -50,7 +50,7 @@ package object effects {
   def tcpTranposrtLayer[
       F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
       src: PeerNode)(implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.run.localhost,
+    new TcpTransportLayer[F](conf.run.fetchHost,
                              conf.run.port(),
                              conf.run.certificatePath.toFile,
                              conf.run.keyPath.toFile)(src)
