@@ -29,7 +29,8 @@ object Tuple {
 
   def apply(obs: Ob*): Tuple = new Tuple(obs.toArray[Ob])
 
-  def apply(a: Int, b: Ob): Tuple = Tuple(Array.fill(a)(b))
+  def apply(a: Int, b: Ob): Tuple   = Tuple(Array.fill(a)(b))
+  def cons(ob: Ob, t: Tuple): Tuple = Tuple(ob +: t.value)
 }
 
 object Nil extends Tuple(Array.empty[Ob])
