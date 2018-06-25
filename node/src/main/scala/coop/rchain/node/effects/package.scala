@@ -11,6 +11,8 @@ import scala.concurrent.ExecutionContext
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+import scala.concurrent.duration.{Duration, MILLISECONDS}
+import java.io.File
 
 package object effects {
 
@@ -36,24 +38,25 @@ package object effects {
     }
   }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
+                                                          timeout: Duration): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
-          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+          res <- TransportLayer[F].roundTrip(req, node, timeout).map(_.toOption)
         } yield res.isDefined
     }
 
   def tcpTranposrtLayer[
-      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
-      src: PeerNode)(implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.run.localhost,
-                             conf.run.port(),
-                             conf.run.certificatePath.toFile,
-                             conf.run.keyPath.toFile)(src)
+      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](
+      host: String,
+      port: Int,
+      cert: File,
+      key: File)(src: PeerNode)(implicit executionContext: ExecutionContext) =
+    new TcpTransportLayer[F](host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
