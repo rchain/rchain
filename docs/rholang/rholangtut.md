@@ -1,8 +1,8 @@
 # A Rholang tutorial
 
-Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax that will be used in the RNode-0.3 release.
+Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax in the latest version of RNode.
 
-Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues but behave like sets rather than queues.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver. Note that throughout this document the words "name" and "channel" are used interchangeably. This is because in the rho-calculus (on which Rholang is based) the term name is used, however because you can send and receive information on names, semantically they are like channels.
+Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues; however, the channels behave more like bags (multisets) rather than queues, since there is no implicit ordering on messages.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver.  Every channel has a name, and every name denotes a unique channel.
 
 ## Getting started
 
@@ -11,44 +11,266 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 * __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
 * __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
 
-## Contracts and sending data
+## Sending and receiving data
 
     1 new HelloWorld in {
-    2   contract HelloWorld(return) = {
-    3     return!("Hello, World!")
+    2   HelloWorld!("Hello, world!") |
+    3   for (@text <- HelloWorld) {
+    4     @"stdout"!(text)
+    5   }
+    6 }
+
+1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
+
+2) Every name is of the form `@P`, where `P` is a rholang process.  The `!` production takes a name `n` on its left and a process `P` on its right, then sends `@P` over the channel named `n`.  Line 2 forms the name `@"Hello, world"` and sends it on the channel whose name is stored in the variable `HelloWorld`.
+
+3) This `for` production creates a process that waits for a single message to be sent on the channel whose name is stored in the variable `HelloWorld`.  The pattern `@text` gets matched against the serialized process, binding the process-valued variable `text` to the original process that was sent.
+
+4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
+
+## Replicated receive
+
+    1 new HelloWorld in {
+    2   for (@text <= HelloWorld) {
+    3     @"stdout"!(text)
     4   } |
-    5   new myChannel in {
-    6     HelloWorld!(*myChannel)
-    7   }
-    8 }
+    5   HelloWorld!("Hello, world!") |
+    6   HelloWorld!("Hola, mundo!")
+    7 }
 
-1-2) To create a new, private channel, we use the `new ... in` construction. No other process can send or receive messages over this channel unless we explicitly send this channel to the other process.  This process starts by creating a new name `HelloWorld` and then running a contract on it.  The `contract` production creates a process that spawns a copy of its body whenever it receives a message. 
+2) Instead of handling only a single message, a `for` using a double arrow `<=` will persist, spawning a copy of the body for each message received.
 
-3) On the return channel we send a process, which is the string `"Hello, World!"`.
+5-6) We send the string processes `"Hello, world!"` and `"Hola, mundo!"` on the channel `HelloWorld`.  It is non-deterministic which message will be processed first.
 
-6) We send the channel `myChannel` to the contract at `HelloWorld`. The `*` operator "unquotes" a channel to get its underlying process. In Rholang you can only send processes over channels; you cannot send channels over channels directly. Therefore, we use `*` to turn the private channel into a process prior to sending.
+## Contracts as sugar for replicated receive
 
-## Receiving data
+    1 new HelloWorld in {
+    2   contract HelloWorld(@text) = {
+    3     @"stdout"!(text)
+    4   } |
+    5   HelloWorld!("Hello, world!") |
+    6   HelloWorld!("Hola, mundo!")
+    7 }
 
-    1 new HelloAgain in {
-    2   contract HelloAgain(_) = {
-    3     new chan in {
-    4       chan!("Hello again, world!") |
-    5       for (@text <- chan) { Nil }
-    6     }
-    7   } | HelloAgain!(Nil)
-    8 }
+2) The only difference between this example and the last one is this line.  The `contract` production is syntactic sugar.  The process `contract Name(...formals) = { P }` means the same as `for (...formals <= Name) { P }`.
+
+## Replicated send
+
+    1 new HelloWorld in {
+    2   HelloWorld!!("Hello, world!") |
+    3   for (@text <- HelloWorld) {
+    4     @"stdout"!(text)
+    5   } |
+    6   for (@text <- HelloWorld) {
+    7     @"stderr"!(text)
+    8   }
+    9 }
+
+2) The double-bang `!!` means that this message will be sent again as soon as it is read.
+
+3-4, 6-7) There are two listening processes; each one consumes a single message from the channel and forwards it to either `"stdout"` or `"stderr"`.  The order in which they get forwarded to those channels is nondeterministic.
+
+## Sequential send
+
+In order to have one message follow after another is known to have been received, we must use an acknowledgement message.
+
+    1 new chan, ack in {
+    2   chan!(0) |
+    3   for (_ <- ack) {
+    4     chan!(1)
+    5   } |
+    6   for (@num <= chan) {
+    7     @"stdoutAck"(num, *ack)
+    8   }
+    9 }
+
+2) We send the message 0 on `chan`.
+3) We wait for a message on the channel `ack`, throw it away, and then proceed with the body.
+4) We send the message 1 on `chan`.
+6) We listen persistently for messages sent on `chan`.
+7) We forward each message to the channel `"stdoutAck"`, which expects both a value to print and a channel on which to send an acknowledgement message that the text has been received and printed.  In this program, we are guaranteed that 0 will be printed before 1.
+
+## Sending and receiving multiple processes
+
+     1 new chan in {
+     2   chan!(1,2,3) |
+     3   chan!((4,5,6)) |
+     4   chan!(7,8) |
+     5   chan!([9, 10], 11) |
+     6   chan!(12 | 13) |
+     7   for (@x, @y, @z <= chan) { 
+     8     @"stdout"!(["three", x, y, z])
+     9   } |
+    10   for (@a, @b <= chan) {
+    11     @"stdout"!(["two", a, b])
+    12   } |
+    13   for (@a <= chan) {
+    14     @"stdout"!(["one", a])
+    15   }
+    16 }
+
+2) We send three numeric processes on `chan`.  This send necessarily synchronizes with the `for` on line 7.
+3) We send one tuple process on `chan`.  This send necessarily synchronizes with the `for` on line 13.
+4) We send two numeric processes on `chan`.    This send necessarily synchronizes with the `for` on line 10.
+5) We send a list process and a numeric process on `chan`.    This send necessarily synchronizes with the `for` on line 10.
+6) We send a single process that is the par of two numeric expressions on `chan`.  This send necessarily synchronizes with the `for` on line 13.
+
+## Pattern matching and channels as databases
+
+There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`:
+
+    for (<name pattern> <- <channel>) { <process> }
+    match <process> { <process pattern> => <process> }
+
+A variable is either name-valued or process-valued.  It is an error to use a process-valued variable in name position and vice-versa.  Name positions are to the right of a `new`, to the right of an asterisk `*`, to the right and left of an arrow in a `for` (and in the desugaring of a contract), and to the left of an exclamation mark `!` in a send.  Name-valued variables are bound by a `new` production and in name positions in patterns.  In each of the following examples, `x` is a new name-valued variable whose scope is `P`:
+
+    new x in P
+    for (w, x <- y) { P }
+    for (@{x!(Q)} <- y) { P }
+    for (@{for(z <- x) { Q }} <- y) { P }
+    contract foo(x) = { P }
+    match R { x!(Q) => P }
+    match R { contract x(y) = { Q } => P }
+
+Process-valued variables are bound in process positions in patterns.  Process positions are after an at sign `@`, in the body of a send, in the body of a `for`, and in all process constructors like expressions, collections, and so on.  In each of the following examples, `P` is a new process-valued variable whose scope is `Q`.
+
+    contract foo(@P) = { Q }
+    for (@{x!(P)} <- y) { Q }
+    for (@{for (@P <- z) { R }} <- y) { Q }
+    for (@{ P | R } <- y) { Q }
+    match R { P => Q }
+    match R { [P, S, ...T] => Q }
+    match R { contract foo(x) = { P } => Q }
+    match R { contract foo(@S) = { x!(P + S) } => Q }
+
+### Patterns in a `for`
+
+The term 
+
+    for (@{x!(P)}, @{for(y <- z) { y!(Q) }} <- chan) { ... }
+
+expects to receive two names on the channel `chan`, where the names are serializations of certain processes that must match the given patterns.  The first name should be the serialization of a single send of a single process; the name variable `x` gets bound to the channel on which the send occurs, and the process variable `P` gets bound to its payload.  The second name should be the serialization of a single receive, whose body consists of a single send of a single process.  The name variable `z` gets bound to the channel on which the receive is listening, and the process variable `Q` gets bound to the payload of the send.  The name variable `y` does not get bound, but the matcher checks to see that the same variable is used to the left of the arrow in the `for` and to the left of the exclamation mark in the send.
+
+Patterns let us implement structured queries on data.  Suppose that we send lots of processes with a similar structure on a name `people`:
+
+    people!(@"name"!("Joe") | @"age"!(20) | @"eyes"!("blue") | @"seq"!(0)) |
+    people!(@"name"!("Julie") | @"age"!(30) | @"eyes"!("brown") | @"seq"!(0)) |
+    people!(@"name"!("Jane") | @"age"!(40) | @"eyes"!("green") | @"seq"!(0)) |
+    people!(@"name"!("Jack") | @"age"!(50) | @"eyes"!("grey") | @"seq"!(0))
+
+Then we can think of the name `people` as a table in a database and query it.  A rough translation of the SQL statement `SELECT age, name FROM people WHERE age > 35` in the context of the data above would be
+
+     1 new people in {
+     2   people!(@"name"!("Joe") | @"age"!(20) | @"eyes"!("blue") | @"seq"!(0)) |
+     3   people!(@"name"!("Julie") | @"age"!(30) | @"eyes"!("brown") | @"seq"!(0)) |
+     4   people!(@"name"!("Jane") | @"age"!(40) | @"eyes"!("green") | @"seq"!(0)) |
+     5   people!(@"name"!("Jack") | @"age"!(50) | @"eyes"!("grey") | @"seq"!(0))|
+     6   for (@{@"seq"!(0) | {row /\ {@"name"!(name) | @"age"!(age) | _}}} <= people) {
+     7     if (age > 35) {
+     8       @"stdout"!([name, age])
+     9     } |
+    10     people!(row | @"seq"!(1))
+    11   }
+    12 }
+
+6) The `for` production uses a double arrow `<=`, so it reads repeatedly from the table `people`.  It uses a pattern to match the structure of the processes sent on the channel `people`.  The pattern starts with an at sign `@`, because anything to the left of an arrow in a `for` is a name, i.e. a serialized process.
+
+The pattern continues with `@"seq"!0`.  This bit of data prevents the `for` loop from reading the same row multiple times: once a row has been read, it's put back into the database on line 10, but the sequence number gets incremented to 1.  Since the `for` only wants rows with sequence number 0, each row only gets read once.
+
+Next in the pattern comes `row /\ ...`.  The process variable `row` gets bound to everything in the process other than `@"seq"!0`.  The operator `/\` is the logical connective "AND", which will also try to match the next pattern to the data.
+
+Finally in the pattern is the subpattern `{@"age"!age | @"name"!name | _}`, which binds the process variables `age` and `name`.  The underscore wildcard binds to the send on `@"eyes"` and discards it.
+
+7) This is the translation of the `WHERE` clause.
+
+8) Here we merely print out the name and age, but we could do arbitrary processing.  We expect to see
+
+    @{["Jane", 40]}
+    @{["Jack", 50]}
+    
+in either order.
+
+10) As noted above, this line updates the sequence number so that rows are not read twice.  If we have multiple readers of the database, each will be assigned a sequence number.  As soon as a row is read, it is put back into the database for the next reader; any processing is done in parallel with the write, so even though this pattern sequentializes the readers, the access is still very fast.
 
 
-2) Contracts take at least one parameter, but we can throw it away by binding it to the wildcard `_`.
+### Patterns in a `match`
 
-3) We create a new channel `chan`.
+Patterns can also be used in a `match` production.
 
-4) We send the string process `"Hello again, world!"` over the new channel.
+     1 new sumProd in {
+     2   contract sumProd(@arr, ret) = {
+     3     new fold, sum, prod in {
+     4       contract fold(@init, op, @arr, ret) = {
+     5         match arr {
+     6           [h ...t] => {
+     7             new tailCh in {
+     8               fold!(init, *op, t, *tailCh) |
+     9               for (@folded <- tailCh) {
+    10                 op!(h, folded, *ret)
+    11               }
+    12             }
+    13           }
+    14           [] => ret!(init)
+    15         }
+    16       } |
+    17       contract sum(@arr, ret) = {
+    18         new add in {
+    19           contract add(@a, @b, ret) = {
+    20             ret!(a + b)
+    21           } |
+    22           fold!(0, *add, arr, *ret)
+    23         }
+    24       } |
+    25       contract prod(@arr, ret) = {
+    26         new mult in {
+    27           contract mult(@a, @b, ret) = {
+    28             ret!(a * b)
+    29           } |
+    30           fold!(1, *mult, arr, *ret)
+    31         }
+    32       } |
+    33       new sumCh, prodCh in {
+    34         sum!(arr, *sumCh) |
+    35         prod!(arr, *prodCh) |
+    36         for (@s <- sumCh; @p <- prodCh) {
+    37           ret!([s, p])
+    38         }
+    39       }
+    40     }
+    41   } |
+    42   sumProd!([4,5,6], "stdout")
+    43 }
 
-5) We listen on the new channel for a single message.  The `for` operation blocks until there's a message available on the channel `chan`. In Rholang you can only receive names on channels (note that this differs from sending!). The binding on the left side of the `<-` in the `for` is actually a name pattern. In this example the pattern is `@text`, which means the name being received is a quoted process and we want to bind that process to the free variable `text`. The `for` operation is just like a contract except that it only reads one message and then becomes its body instead of forking a copy of its body for each message. In this case we choose to do nothing in the `for` body by simply making it the stopped process `Nil`, however in principle we would want to proceed with some further processing of the `text` contained in `chan`. 
+This example shows how to implement a fold over a list, then uses it to compute the sum and product of a list.
 
-7) We trigger the contract.
+4) The `fold` contract expects a process `init`, a name `op`, a process `arr`, and a name `ret`.
+
+5) It begins by looking at the structure of the `arr` process.
+
+6) This line begins with a process pattern `[h ...t]` that binds the process variable `h` to the head of the list and the process variable `t` to the tail of the list.  If the pattern matches `arr`---that is, if `arr` has at least one element---then the process to the right of the arrow `=>` executes.
+
+7) A new channel is declared for sending the intermediate result on.
+
+8-9) Line 8 is the recursive call in the fold; it provides the intermediate result channel here and listens for the intermediate result on line 9.
+
+10) This combines the head with the intermediate result and sends the final result over the given return channel `ret`.
+
+17) The `sum` contract expects a process `arr` and a name `ret`.
+
+19-21) To sum up an array, we have to add together the elements, so we define a contract that takes two things, adds them together, and sends the result on the given channel.
+
+22) The sum of an empty array is 0.
+
+25-32) Identical to `sum` except for using multiplication and 1 instead of addition and 0.
+
+34-35) Invoke the `sum` and `prod` contracts simultaneously.
+
+36) Wait until both have returned and bind process variables to the results.
+
+37) Send a two-element list back containing the results.
+
+42) Invoke the main contract on an example list.
+
 
 ## Mutable state
 
@@ -113,34 +335,34 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 Note the deep layers of callback. Rholang was designed to make concurrent computations natural to express; as a consequence, data dependencies implicit in sequencing in other languages must be made explicit.
 
-## Iteration and matching
+## Iteration
 
 In the code below, we show an example of iterating through a list.
 
-     1	new iterate in {
-     2	  contract iterate(@list, process, done) = {
-     3	    match list {
-     4	      [hd, ...tl] => {
-     5	        new ack in {
-     6	          process!(hd, *ack) |
-     7	          for (_ <- ack) { iterate!(tl, *process, *done) }
-     8	        }
-     9	      }
-    10	      _ => done!(Nil)
-    11	    }
-    12	  } |
-    13	  new process, done in {
-    14	    iterate!([4,5,6], *process, *done) |
-    15	    contract process(@item, ack) = {
-    16	      /* handle processing of item */
-    17	      ack!(Nil)
-    18	    } |
-    19	    for (_ <- done) {
-    20	      /* done! */
-    21	      Nil
-    22	    }
-    23	  }
-    24	}
+     1 new iterate in {
+     2   contract iterate(@list, process, done) = {
+     3     match list {
+     4       [hd, ...tl] => {
+     5         new ack in {
+     6           process!(hd, *ack) |
+     7           for (_ <- ack) { iterate!(tl, *process, *done) }
+     8         }
+     9       }
+    10       _ => done!(Nil)
+    11     }
+    12   } |
+    13   new process, done in {
+    14     iterate!([4,5,6], *process, *done) |
+    15     contract process(@item, ack) = {
+    16       /* handle processing of item */
+    17       ack!(Nil)
+    18     } |
+    19     for (_ <- done) {
+    20       /* done! */
+    21       Nil
+    22     }
+    23   }
+    24 }
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 
@@ -158,9 +380,9 @@ In the code below, we show an example of iterating through a list.
 
 15-18) This `contract` gets invoked for each item in the list.  On line 17, we tell the iterator that we're done with this item.
 
-19) This `for` contains the code that should be executed when the interation is complete.
+19) This `for` contains the code that should be executed when the interaction is complete.
 
-## Maps
+## Coat check
 
      1 new MakeCoatCheck in {
      2   contract MakeCoatCheck(ret) = {
@@ -284,9 +506,9 @@ new x,y in {
             @"keccak256Hash"!(r.toByteArray(), *y) // hash the program from (1)
         } |
         for (@h <- y) {
-            // The h here is hash of the rholang term we sent to the hash channel.
-            // We can do anything we want with it but we choose to just print it.
-            // Although `h` is byte array when it's being printed rholang will print its hexadecimal representation.
+            // The h here is the hash of the rholang term we sent to the hash channel.
+            // We can do anything we want with it, but we choose to just print it.
+            // Rholang prints byte arrays in hexadecimal.
             @"stdout"!(h)  // print out the keccak256 hash
         }
 }
@@ -295,74 +517,76 @@ new x,y in {
 
 ### Verify
 
-1.  Let's hash a rholang program and print out it in base16. In rholang:
-```rholang
-new x,y in { 
-   x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
-   for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
-   for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
-}
-```
+1. Let's hash a rholang program and print out it in base16. In rholang:
 
-This will print the hash of our program `(1)` : 
-`a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e`
+  ```rholang
+  new x,y in { 
+     x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
+     for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
+     for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
+  }
+  ```
 
-2.  We need pair of keys; let's generate some with `Ed25519`, available in the project. In scala console:
+  This will print the hash of our program `(1)` : 
+  `a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e`
 
-```scala
-import coop.rchain.crypto.signatures._
-import coop.rchain.crypto.codec._
+2. We need a pair of keys; let's generate some with `Ed25519`, available in the project. In the scala console, we enter the following:
 
-val keyPair = Ed25519.newKeyPair
-val secKey = Base16.encode(keyPair._1)
-// secKey: String = f6664a95992958bbfeb7e6f50bbca2aa7bfd015aec79820caf362a3c874e9247
-val pubKey = Base16.encode(keyPair._2)
-// pubKey: String = 288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219
-```
+  ```scala
+  import coop.rchain.crypto.signatures._
+  import coop.rchain.crypto.codec._
 
-3.  Now we need to sign the hash we obtained in first step. Because we printed out the base16 representation of underlying byte arrays, for hashes we need to decode those strings.
-```
-val signature = Ed25519.sign(Base16.decode("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e"), Base16.decode(secKey))
-val base16Repr = Base16.encode(signature)
-// d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b
-```
+  val keyPair = Ed25519.newKeyPair
+  val secKey = Base16.encode(keyPair._1)
+  // secKey: String = f6664a95992958bbfeb7e6f50bbca2aa7bfd015aec79820caf362a3c874e9247
+  val pubKey = Base16.encode(keyPair._2)
+  // pubKey: String = 288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219
+  ```
+
+3.  Now we need to sign the hash we obtained in first step. First we convert the hexadecimal strings we printed earlier back into byte arrays, then sign the result:
+
+  ```
+  val signature = Ed25519.sign(Base16.decode("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e"), Base16.decode(secKey))
+  val base16Repr = Base16.encode(signature)
+  // d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b
+  ```
 
 4.  Now we can pass the signature and public key to our rholang program to verify it using the available crypto functions. 
 
-The `ed25519Verify` channel expects four arguments as follows:
+  The `ed25519Verify` channel expects four arguments as follows:
 
-- data to verify. In our case, this will be the keccak256 hash of our rholang program. The hash is represented in base16, so we need to call `hexToBytes` on it to turn the string into byte array
-- signature. Again, we have hexadecimal string, so we need to turn it into a byte array with `hexToBytes`.
-- public key. This is the public key corresponding to the private one used to issue the signature. 
-- channel on which the result of verification will be returned.
+  - data to verify. In our case, this will be the keccak256 hash of our rholang program. The hash is represented in base16, so we need to call `hexToBytes` on it to turn the string into byte array
+  - signature. Again, we have hexadecimal string, so we need to turn it into a byte array with `hexToBytes`.
+  - public key. This is the public key corresponding to the private one used to issue the signature. 
+  - channel on which the result of verification will be returned.
 
-So, in rholang:
-```
-new x in { 
-  @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-  for (@v <- x) { @"stdout"!(v) } 
-} 
+  So, in rholang we run:
+  ```
+  new x in { 
+    @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
+    for (@v <- x) { @"stdout"!(v) } 
+  } 
 
-```
-and we should see: 
-```
-@{true}
-```
+  ```
+  and we should see: 
+  ```
+  @{true}
+  ```
 
-which means that our hash and signature match with public key.
+  which means that our signed hash is verified.
 
-If we for example pass in a corrupted hash (the change is emphasized with ** - 71 changed to 61):
-```
-new x in { 
-   @"ed25519Verify"!("a6da46a1dc7ed**61**5d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-   for (@v <- x) { @"stdout"!(v) } 
-} 
-```
+  If we, for example, pass in a corrupted hash, changing the initial 'a' to a 'b':
+  ```
+  new x in { 
+     @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
+     for (@v <- x) { @"stdout"!(v) } 
+  } 
+  ```
 
-we will get:
-```
-@{false}
-```
+  we will get:
+  ```
+  @{false}
+  ```
 
 ## Secure design patterns
 

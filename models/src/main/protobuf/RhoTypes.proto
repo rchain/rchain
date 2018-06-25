@@ -6,12 +6,13 @@ option java_package = "coop.rchain.models";
 
 option (scalapb.options) = {
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
+  import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
+  import: "coop.rchain.models.ParMapTypeMapper.parMapEMapTypeMapper"
 };
 
 message Par {
     repeated Send sends = 1;
     repeated Receive receives = 2;
-    repeated Eval evals = 3;
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
@@ -54,7 +55,7 @@ message Var {
 }
 
 message Bundle {
-    Par body = 1;
+    Par body = 1 [(scalapb.field).no_box = true];
     bool writeFlag = 2; // flag indicating whether bundle is writeable
     bool readFlag = 3; // flag indicating whether bundle is readable
 //     if both flags are set to false bundle allows only for equivalance check
@@ -63,7 +64,7 @@ message Bundle {
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
 message Send {
-    Channel chan = 1;
+    Channel chan = 1 [(scalapb.field).no_box = true];
     repeated Par data = 2;
     bool persistent = 3;
     bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
@@ -72,7 +73,7 @@ message Send {
 
 message ReceiveBind {
     repeated Channel patterns = 1;
-    Channel source = 2;
+    Channel source = 2 [(scalapb.field).no_box = true];
     Var remainder = 3;
     int32 freeCount = 4;
 }
@@ -92,15 +93,11 @@ message ListBindPatterns {
 // Don't currently support conditional receive
 message Receive {
     repeated ReceiveBind binds = 1;
-    Par body = 2;
+    Par body = 2 [(scalapb.field).no_box = true];
     bool persistent = 3;
     int32 bindCount = 4;
     bytes locallyFree = 6 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 7;
-}
-
-message Eval {
-    Channel channel = 1;
 }
 
 // Number of variables bound in the new statement.
@@ -109,18 +106,18 @@ message Eval {
 // up to level+count for the last used variable.
 message New {
     sint32 bindCount = 1;
-    Par p = 2;
+    Par p = 2 [(scalapb.field).no_box = true];
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message MatchCase {
-    Par pattern = 1;
-    Par source = 2;
+    Par pattern = 1 [(scalapb.field).no_box = true];
+    Par source = 2 [(scalapb.field).no_box = true];
     int32 freeCount = 3;
 }
 
 message Match {
-    Par target = 1;
+    Par target = 1 [(scalapb.field).no_box = true];
     repeated MatchCase cases = 2;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 5;
@@ -154,9 +151,10 @@ message Expr {
 
         EList e_list_body = 20;
         ETuple e_tuple_body = 21;
-        ESet e_set_body = 22;
-        EMap e_map_body = 23;
+        ESet e_set_body = 22 [(scalapb.field).type = "coop.rchain.models.ParSet"];
+        EMap e_map_body = 23 [(scalapb.field).type = "coop.rchain.models.ParMap"];
         EMethod e_method_body = 24;
+        Channel e_eval_body = 26;
     }
 }
 
@@ -187,15 +185,15 @@ message EMap {
 
 message EMethod {
     string methodName = 1;
-    Par target = 2;
+    Par target = 2 [(scalapb.field).no_box = true];
     repeated Par arguments = 3;
     bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 6;
 }
 
 message KeyValuePair {
-    Par key = 1;
-    Par value = 2;
+    Par key = 1 [(scalapb.field).no_box = true];
+    Par value = 2 [(scalapb.field).no_box = true];
 }
 
 // A variable used as a var should be bound in a process context, not a name
@@ -203,75 +201,75 @@ message KeyValuePair {
 // for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
 // for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
 message EVar {
-    Var v = 1;
+    Var v = 1 [(scalapb.field).no_box = true];
 }
 
 message ENot {
-    Par p = 1;
+    Par p = 1 [(scalapb.field).no_box = true];
 }
 
 message ENeg {
-    Par p = 1;
+    Par p = 1 [(scalapb.field).no_box = true];
 }
 
 message EMult {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EDiv {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EPlus {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EMinus {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message ELt {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message ELte {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EGt {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EGte {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EEq {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message ENeq {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EAnd {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message EOr {
-    Par p1 = 1;
-    Par p2 = 2;
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
 message Connective {
@@ -279,7 +277,13 @@ message Connective {
     ConnectiveBody conn_and_body = 1;
     ConnectiveBody conn_or_body = 2;
     Par conn_not_body = 3;
+    VarRef var_ref_body = 4;
   }
+}
+
+message VarRef {
+  sint32 index = 1;
+  sint32 depth = 2;
 }
 
 message ConnectiveBody {

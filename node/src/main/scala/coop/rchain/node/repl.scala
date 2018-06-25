@@ -3,6 +3,7 @@ package coop.rchain.node
 import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski.kp
+import coop.rchain.node.effects.{ConsoleIO, ReplClient}
 
 class ReplRuntime(conf: Conf) {
 
@@ -13,14 +14,14 @@ class ReplRuntime(conf: Conf) {
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """.red
 
-  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplService]: F[Boolean] = {
+  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
     val rep: F[Boolean] = for {
       line <- ConsoleIO[F].readLine.map(Option.apply)
       res <- line.map(_.trim) match {
               case Some("")   => ConsoleIO[F].println("").as(true)
               case Some(":q") => false.pure[F]
               case Some(program) =>
-                (ReplService[F].run(program) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
+                (ReplClient[F].run(program) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
               case _ => false.pure[F]
             }
     } yield res
@@ -33,10 +34,10 @@ class ReplRuntime(conf: Conf) {
     ConsoleIO[F].println(logo) >>= kp(repl)
   }
 
-  def evalProgram[F[_]: Monad: ReplService: ConsoleIO](fileName: String): F[Unit] =
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileNames: List[String]): F[Unit] =
     for {
-      _   <- ConsoleIO[F].println(s"Evaluating from $fileName")
-      res <- ReplService[F].eval(fileName)
+      _   <- ConsoleIO[F].println(s"Evaluating from $fileNames")
+      res <- ReplClient[F].eval(fileNames)
       _   <- ConsoleIO[F].println(res)
       _   <- ConsoleIO[F].close
     } yield ()

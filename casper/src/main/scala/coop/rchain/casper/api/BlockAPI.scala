@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter}
+import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter, SafetyOracle}
 import coop.rchain.crypto.codec.Base16
 
 import scala.annotation.tailrec
@@ -18,30 +18,20 @@ object BlockAPI {
   def addBlock[F[_]: Monad: MultiParentCasper](b: BlockMessage): F[Empty] =
     MultiParentCasper[F].addBlock(b).map(_ => Empty())
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
+  def getBlocksResponse[F[_]: Monad: MultiParentCasper: SafetyOracle]: F[BlocksResponse] =
     for {
-      estimates                           <- MultiParentCasper[F].estimator
-      dag                                 <- MultiParentCasper[F].blockDag
-      tip                                 = estimates.head
-      mainChain: IndexedSeq[BlockMessage] = getMainChain(tip, dag, IndexedSeq.empty[BlockMessage])
-      blockInfos                          <- mainChain.toList.traverse(getBlockInfo[F])
+      estimates <- MultiParentCasper[F].estimator
+      dag       <- MultiParentCasper[F].blockDag
+      tip       = estimates.head
+      mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(dag,
+                                                                   tip,
+                                                                   IndexedSeq.empty[BlockMessage])
+      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
     } yield
       BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
-  @tailrec
-  private def getMainChain(estimate: BlockMessage,
-                           dag: BlockDag,
-                           acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
-    val parentsHashes       = ProtoUtil.parents(estimate)
-    val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash.flatMap(dag.blockLookup.get) match {
-      case Some(newEstimate) =>
-        getMainChain(newEstimate, dag, acc :+ estimate)
-      case None => acc :+ estimate
-    }
-  }
-
-  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockQueryResponse] =
+  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      q: BlockQuery): F[BlockQueryResponse] =
     for {
       dag        <- MultiParentCasper[F].blockDag
       maybeBlock = getBlock[F](q, dag)
@@ -59,8 +49,8 @@ object BlockAPI {
                            }
     } yield blockQueryResponse
 
-  // TODO: Add fault tolerance
-  private def getBlockInfo[F[_]: Monad: MultiParentCasper](block: BlockMessage): F[BlockInfo] =
+  private def getBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
+      block: BlockMessage): F[BlockInfo] =
     for {
       header      <- block.header.getOrElse(Header.defaultInstance).pure[F]
       version     <- header.version.pure[F]
@@ -69,21 +59,13 @@ object BlockAPI {
         val ps = block.body.flatMap(_.postState)
         ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
       }
-      tsDesc <- MultiParentCasper[F]
-                 .tsCheckpoint(tsHash)
-                 .map(maybeCheckPoint => {
-                   maybeCheckPoint
-                     .map(checkpoint => {
-                       val ts     = checkpoint.toTuplespace
-                       val result = ts.storageRepr
-                       ts.delete()
-                       result
-                     })
-                     .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
-                 })
-      timestamp       <- header.timestamp.pure[F]
-      mainParent      <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
-      parentsHashList <- header.parentsHashList.pure[F]
+      tsDesc                   <- MultiParentCasper[F].storageContents(tsHash)
+      timestamp                <- header.timestamp.pure[F]
+      mainParent               <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
+      parentsHashList          <- header.parentsHashList.pure[F]
+      dag                      <- MultiParentCasper[F].blockDag
+      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
+      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
     } yield {
       BlockInfo(
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -94,6 +76,7 @@ object BlockAPI {
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
         timestamp = timestamp,
+        faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit)
       )

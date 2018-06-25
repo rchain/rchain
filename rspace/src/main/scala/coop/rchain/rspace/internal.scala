@@ -1,94 +1,122 @@
 package coop.rchain.rspace
 
-import coop.rchain.shared.AttemptOps._
-import scodec.{Attempt, Codec, DecodeResult, SizeBound}
-import scodec.bits.BitVector
+import com.google.common.collect.{HashMultiset, Multiset}
+import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.scodec.codecs.seqOfN
+import scodec.Codec
+import scodec.bits.ByteVector
+import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
 
 import scala.collection.immutable.Seq
+import scala.collection.mutable
 
 object internal {
 
-  final case class Datum[A](a: A, persist: Boolean)
+  final case class Datum[A](a: A, persist: Boolean, source: Produce)
+
+  object Datum {
+    def create[C, A](channel: C, a: A, persist: Boolean)(implicit
+                                                         serializeC: Serialize[C],
+                                                         serializeA: Serialize[A]): Datum[A] =
+      Datum(a, persist, Produce.create(channel, a, persist))
+  }
 
   final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
 
-  final case class WaitingContinuation[P, K](patterns: Seq[P], continuation: K, persist: Boolean)
+  final case class WaitingContinuation[P, K](patterns: Seq[P],
+                                             continuation: K,
+                                             persist: Boolean,
+                                             source: Consume)
+
+  object WaitingContinuation {
+    def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+        implicit
+        serializeC: Serialize[C],
+        serializeP: Serialize[P],
+        serializeK: Serialize[K]): WaitingContinuation[P, K] =
+      WaitingContinuation(patterns,
+                          continuation,
+                          persist,
+                          Consume.create(channels, patterns, continuation, persist))
+  }
 
   final case class ProduceCandidate[C, P, A, K](channels: Seq[C],
                                                 continuation: WaitingContinuation[P, K],
                                                 continuationIndex: Int,
                                                 dataCandidates: Seq[DataCandidate[C, A]])
 
-  case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
+  final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
   /** [[GNAT]] is not a `Tuple3`
     */
-  case class GNAT[C, P, A, K](
+  final case class GNAT[C, P, A, K](
       channels: Seq[C],
       data: Seq[Datum[A]],
       wks: Seq[WaitingContinuation[P, K]]
   )
 
-  private[rspace] object scodecs {
+  sealed trait Operation extends Product with Serializable
+  case object Insert     extends Operation
+  case object Delete     extends Operation
 
-    import scodec.{Attempt, Codec, DecodeResult}
-    import scodec.bits.{BitVector, ByteVector}
-    import scodec.codecs.{bool, bytes, int32, variableSizeBytes}
-    import coop.rchain.rspace.SeqCodec.seqOfN
+  final case class TrieUpdate[C, P, A, K](count: Long,
+                                          operation: Operation,
+                                          channelsHash: Blake2b256Hash,
+                                          gnat: GNAT[C, P, A, K])
 
-    private[rspace] case class WaitingContinuationBytes(patterns: Seq[ByteVector],
-                                                        kvalue: ByteVector,
-                                                        persist: Boolean)
+  implicit val codecByteVector: Codec[ByteVector] =
+    variableSizeBytesLong(int64, bytes)
 
-    private[rspace] case class DatumBytes(datumBytes: ByteVector, persist: Boolean)
+  implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
+    seqOfN(int32, codecA)
 
-    lazy val byteVectorCodec: Codec[ByteVector] =
-      variableSizeBytes(int32, bytes.xmap(x => x, x => x))
+  implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
+    (codecA :: bool :: Codec[Produce]).as[Datum[A]]
 
-    lazy val byteVectorsCodec: Codec[Seq[ByteVector]] =
-      seqOfN(int32, byteVectorCodec).as[Seq[ByteVector]]
+  implicit def codecWaitingContinuation[P, K](implicit
+                                              codecP: Codec[P],
+                                              codecK: Codec[K]): Codec[WaitingContinuation[P, K]] =
+    (codecSeq(codecP) :: codecK :: bool :: Codec[Consume]).as[WaitingContinuation[P, K]]
 
-    lazy val datumBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
+  implicit def codecGNAT[C, P, A, K](implicit
+                                     codecC: Codec[C],
+                                     codecP: Codec[P],
+                                     codecA: Codec[A],
+                                     codecK: Codec[K]): Codec[GNAT[C, P, A, K]] =
+    (codecSeq(codecC) ::
+      codecSeq(codecDatum(codecA)) ::
+      codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
 
-    lazy val datumBytesesCodec: Codec[Seq[DatumBytes]] =
-      seqOfN(int32, datumBytesCodec).as[Seq[DatumBytes]]
+  type MultisetMultiMap[K, V] = mutable.HashMap[K, Multiset[V]]
 
-    lazy val waitingContinuationBytesCodec: Codec[WaitingContinuationBytes] =
-      (byteVectorsCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
+  object MultisetMultiMap {
+    def empty[K, V]: MultisetMultiMap[K, V] = new mutable.HashMap[K, Multiset[V]]()
+  }
 
-    lazy val waitingContinuationsSeqCodec: Codec[Seq[WaitingContinuationBytes]] =
-      seqOfN(int32, waitingContinuationBytesCodec).as[Seq[WaitingContinuationBytes]]
+  implicit class RichMultisetMultiMap[K, V](val value: MultisetMultiMap[K, V]) extends AnyVal {
 
-    private def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
-      attempt.get.value
-
-    def toBitVector[T](value: T, codec: Codec[T]): BitVector =
-      codec.encode(value).toEither match {
-        case Right(res) => res
-        case Left(err)  => throw new Exception(err.toString)
+    def addBinding(k: K, v: V): MultisetMultiMap[K, V] =
+      value.get(k) match {
+        case Some(current) =>
+          current.add(v)
+          value
+        case None =>
+          val ms = HashMultiset.create[V]()
+          ms.add(v)
+          value.put(k, ms)
+          value
       }
 
-    def fromBitVector[T](vector: BitVector, codec: Codec[T]): T =
-      fromAttempt(codec.decode(vector))
-
-    /* A new approach */
-
-    implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
-      (codecA :: bool).as[Datum[A]]
-
-    implicit def codecWaitingContinuation[P, K](
-        implicit
-        codecP: Codec[P],
-        codecK: Codec[K]): Codec[WaitingContinuation[P, K]] =
-      (seqOfN(int32, codecP) :: codecK :: bool).as[WaitingContinuation[P, K]]
-
-    implicit def codecGNAT[C, P, A, K](implicit
-                                       codecC: Codec[C],
-                                       codecP: Codec[P],
-                                       codecA: Codec[A],
-                                       codecK: Codec[K]): Codec[GNAT[C, P, A, K]] =
-      (seqOfN(int32, codecC) ::
-        seqOfN(int32, codecDatum(codecA)) ::
-        seqOfN(int32, codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
+    def removeBinding(k: K, v: V): MultisetMultiMap[K, V] =
+      value.get(k) match {
+        case Some(current) =>
+          current.remove(v)
+          if (current.isEmpty) {
+            value.remove(k)
+          }
+          value
+        case None =>
+          value
+      }
   }
 }

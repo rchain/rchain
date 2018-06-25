@@ -5,9 +5,10 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.rholang.interpreter.PrettyPrinter
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.IStore
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.rspace.trace.{Consume, Produce}
 
 object StoragePrinter {
   def prettyPrint(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): String = {
@@ -15,9 +16,12 @@ object StoragePrinter {
       case ((channels: Seq[Channel], row: Row[BindPattern, Seq[Channel], TaggedContinuation])) => {
         def toSends(data: Seq[Datum[Seq[Channel]]]): Par = {
           val sends: Seq[Send] = data.flatMap {
-            case Datum(as: Seq[Channel], persist: Boolean) =>
+            case Datum(as: Seq[Channel], persist: Boolean, _: Produce) =>
               channels.map { channel =>
-                Send(Some(channel), as.map { case Channel(Quote(p)) => p }, persist)
+                Send(channel, as.map {
+                  case Channel(Quote(p)) => p
+                  case Channel(_)        => Par() // Should never happen
+                }, persist)
               }
           }
           sends.foldLeft(Par()) { (acc: Par, send: Send) =>
@@ -29,14 +33,15 @@ object StoragePrinter {
           val receives: Seq[Receive] = wks.map {
             case WaitingContinuation(patterns: Seq[BindPattern],
                                      continuation: TaggedContinuation,
-                                     persist: Boolean) =>
+                                     persist: Boolean,
+                                     _: Consume) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
                 case (channel, pattern) =>
-                  ReceiveBind(pattern.patterns, Some(channel), pattern.remainder)
+                  ReceiveBind(pattern.patterns, channel, pattern.remainder, pattern.freeCount)
               }
               continuation.taggedCont match {
-                case ParBody(p) => Receive(receiveBinds, Some(p), persist)
-                case _          => Receive(receiveBinds, Some(Par.defaultInstance), persist)
+                case ParBody(p) => Receive(receiveBinds, p, persist, patterns.map(_.freeCount).sum)
+                case _          => Receive(receiveBinds, Par.defaultInstance, persist)
               }
           }
           receives.foldLeft(Par()) { (acc: Par, receive: Receive) =>

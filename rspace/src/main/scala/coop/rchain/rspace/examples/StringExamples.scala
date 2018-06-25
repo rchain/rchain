@@ -2,8 +2,9 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
-import coop.rchain.rspace.util._
+import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
+import scodec.bits.ByteVector
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -54,11 +55,11 @@ object StringExamples {
 
     implicit object stringSerialize extends Serialize[String] {
 
-      def encode(a: String): Array[Byte] =
-        a.getBytes(StandardCharsets.UTF_8)
+      def encode(a: String): ByteVector =
+        ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
 
-      def decode(bytes: Array[Byte]): Either[Throwable, String] =
-        Right(new String(bytes, StandardCharsets.UTF_8))
+      def decode(bytes: ByteVector): Either[Throwable, String] =
+        Right(new String(bytes.toArray, StandardCharsets.UTF_8))
     }
 
     implicit val stringClosureSerialize: Serialize[StringsCaptor] =

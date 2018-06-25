@@ -20,14 +20,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
   type StateWithChain[A] = State[BlockDag, A]
 
-  val initState =
-    BlockDag(
-      HashMap.empty[Int, BlockMessage],
-      HashMap.empty[BlockHash, BlockMessage],
-      HashMap.empty[BlockHash, HashSet[BlockHash]],
-      HashMap.empty[Validator, BlockHash],
-      0
-    )
+  val initState = BlockDag()
 
   "isInMainChain" should "classify appropriately" in {
     def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =

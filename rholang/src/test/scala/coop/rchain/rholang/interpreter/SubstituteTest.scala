@@ -1,19 +1,20 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
-import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
+import coop.rchain.models.Connective.ConnectiveInstance._
+import coop.rchain.models.Expr.ExprInstance.{EEvalBody, EVarBody, GString}
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
 class VarSubSpec extends FlatSpec with Matchers {
-
+  implicit val depth: Int = 0
   "FreeVar" should "throw an error" in {
     val source: Par            = GPrivate()
     implicit val env: Env[Par] = Env.makeEnv(source)
@@ -43,6 +44,7 @@ class VarSubSpec extends FlatSpec with Matchers {
 }
 
 class ChannelSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
   "ChanVar" should "be left unchanged" in {
     implicit val env            = Env.makeEnv(GPrivate(): Par, GPrivate(): Par).shift(1)
     val result                  = substituteChannel[Coeval].substitute(ChanVar(BoundVar(0))).value
@@ -70,6 +72,7 @@ class ChannelSubSpec extends FlatSpec with Matchers {
 }
 
 class SendSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
   "Send" should "leave variables not in evironment alone." in {
 
     implicit val env = Env.makeEnv(GPrivate(): Par, GPrivate(): Par).shift(1)
@@ -140,6 +143,7 @@ class SendSubSpec extends FlatSpec with Matchers {
 }
 
 class NewSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
   "New" should "only substitute body of expression" in {
     val source: Par  = GPrivate()
     implicit val env = Env.makeEnv(source)
@@ -173,9 +177,10 @@ class NewSubSpec extends FlatSpec with Matchers {
 }
 
 class EvalSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
   "Eval" should "remove Eval/Quote pairs." in {
     implicit val env: Env[Par] = Env.makeEnv(GPrivate("one"), GPrivate("zero"))
-    val target: Par            = Eval(ChanVar(BoundVar(1)))
+    val target: Par            = EEvalBody(ChanVar(BoundVar(1)))
     val result                 = substitutePar[Coeval].substitute(target).value
     val expected: Par          = GPrivate("one")
 
@@ -184,6 +189,7 @@ class EvalSubSpec extends FlatSpec with Matchers {
 }
 
 class BundleSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
   "Bundle" should "substitute within the body of the bundle." in {
     val source: Par  = GPrivate()
     implicit val env = Env.makeEnv(source)
@@ -220,6 +226,46 @@ class BundleSubSpec extends FlatSpec with Matchers {
     val bundle: Par         = Bundle(Expr(EVarBody(EVar(BoundVar(0)))), writeFlag = false, readFlag = true)
     val result              = substitutePar[Coeval].substitute(bundle).value
     val expectedResult: Par = Bundle(Expr(GString("stdout")), writeFlag = false, readFlag = false)
+
+    result should be(expectedResult)
+  }
+}
+
+class VarRefSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 1
+  "VarRef" should "be replaced at correct depth" in {
+    val source: Par         = GPrivate()
+    implicit val env        = Env.makeEnv(source)
+    val target: Par         = Connective(VarRefBody(VarRef(index = 0, depth = 1)))
+    val result              = substitutePar[Coeval].substitute(target).value
+    val expectedResult: Par = source
+
+    result should be(expectedResult)
+  }
+
+  it should "not be replaced at an different depth" in {
+    val source: Par         = GPrivate()
+    implicit val env        = Env.makeEnv(source)
+    val target: Par         = Connective(VarRefBody(VarRef(index = 0, depth = 2)))
+    val result              = substitutePar[Coeval].substitute(target).value
+    val expectedResult: Par = target
+
+    result should be(expectedResult)
+  }
+
+  it should "be replaced at a higher depth inside a pattern" in {
+    val source: Par  = GPrivate()
+    implicit val env = Env.makeEnv(source).shift(1)
+    val target: Par =
+      Match(target = EVar(BoundVar(0)),
+            cases = Seq(
+              MatchCase(pattern = Connective(VarRefBody(VarRef(index = 1, depth = 2))),
+                        source = Par(),
+                        freeCount = 0)))
+    val result = substitutePar[Coeval].substitute(target).value
+    val expectedResult: Par =
+      Match(target = EVar(BoundVar(0)),
+            cases = Seq(MatchCase(pattern = source, source = Par(), freeCount = 0)))
 
     result should be(expectedResult)
   }

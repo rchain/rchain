@@ -23,7 +23,7 @@ parser.add_argument("-b", "--boot",
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="--port 30304 --standalone",
+                    default="run --port 30304 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
@@ -55,7 +55,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
@@ -111,8 +111,7 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-*.jar'
-
+RNODE_CMD = '/opt/docker/bin/rnode'
 
 
 def main():
@@ -208,21 +207,23 @@ def run_tests():
 
 
 def deploy_demo():
-    cmd = f"{RNODE_CMD} --deploy-demo"
+    cmd = f"{RNODE_CMD} deploy-demo"
     for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
         try:
-            r = container.exec_run(cmd=cmd, detach=True)
+            r = container.exec_run(cmd=cmd, user='root', detach=True)
+            if r.exit_code:
+                raise Exception(f"ERROR: There was an issue executing --deploy-demo command on {container.name}")
         except Exception as e:
             print(e)
 
 
 def test_node_eval_of_rholang_files(container):
     print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
-    cmd = f"ls /usr/share/rnode/examples/*.rho"
+    cmd = f"ls /opt/docker/examples/*.rho"
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
-        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'])
+        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
         for line in eval_r.output.decode('utf-8').splitlines():
             if 'ERROR' in line.upper():
                 print(line)
@@ -305,19 +306,22 @@ def create_bootstrap_node():
     # Create key/cert pem files to be loaded into rnode volume
     bootstrap_node_demo_key=(
         "-----BEGIN PRIVATE KEY-----\n"
-        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+\n"
-        "g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf\n"
-        "qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q\n"
+        "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgYcybGU15SCs2x+5I\n"
+        "JHrzzBHZ0c7k2WwokG6yU754XKKgCgYIKoZIzj0DAQehRANCAAR/MkqpcKUE+NtM\n"
+        "d8q7/IPih2vO6oMjm2ltSA2nSrueNd+jpLvxDQpRYScJBDyeylfB1VkPdpw9oqFQ\n"
+        "Y5huc38x\n"
         "-----END PRIVATE KEY-----\n"
     )
     bootstrap_node_demo_cert=(
         "-----BEGIN CERTIFICATE-----\n"
-        "MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs\n"
-        "MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j\n"
-        "YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq\n"
-        "5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG\n"
-        "CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J\n"
-        "NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=\n"
+        "MIIBXzCCAQKgAwIBAgIIU0qinJbBW5MwDAYIKoZIzj0EAwIFADAzMTEwLwYDVQQD\n"
+        "EyhjYjc0YmEwNDA4NTU3NGU5ZjAxMDJjYzEzZDM5ZjBjNzIyMTljNWJiMB4XDTE4\n"
+        "MDYxMjEzMzEyM1oXDTE5MDYxMjEzMzEyM1owMzExMC8GA1UEAxMoY2I3NGJhMDQw\n"
+        "ODU1NzRlOWYwMTAyY2MxM2QzOWYwYzcyMjE5YzViYjBZMBMGByqGSM49AgEGCCqG\n"
+        "SM49AwEHA0IABH8ySqlwpQT420x3yrv8g+KHa87qgyObaW1IDadKu54136Oku/EN\n"
+        "ClFhJwkEPJ7KV8HVWQ92nD2ioVBjmG5zfzEwDAYIKoZIzj0EAwIFAANJADBGAiEA\n"
+        "62Po1SVQyJB/2UeG5B9O1oTTlhYrLvLTWH24YiH4U4kCIQDrPa3Qop3yq83Egdq0\n"
+        "VkEqI2rycmgp03DXsStJ7IGdBQ==\n"
         "-----END CERTIFICATE-----\n"
     )
     tmp_file_key = '/tmp/node.key.pem'
@@ -334,6 +338,7 @@ def create_bootstrap_node():
     print(f"creating {bootstrap_node['name']}")
     container = client.containers.run(args.image, \
         name=bootstrap_node['name'], \
+        user='root', \
         detach=True, \
         cpuset_cpus=args.cpuset_cpus, \
         mem_limit=args.memory, \
@@ -343,12 +348,12 @@ def create_bootstrap_node():
                 tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
                 bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
         }, \
-        command=args.bootstrap_command, \
+        command=f"{args.bootstrap_command} --host {bootstrap_node['name']}", \
         hostname=bootstrap_node['name'])
     print("Installing additonal packages on container.")
-    r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-    r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-    r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
+    r = container.exec_run(cmd='apt-get update', user='root').output.decode("utf-8")
+    r = container.exec_run(cmd='apt-get -yq install curl', user='root').output.decode("utf-8")
+    r = container.exec_run(cmd='apt-get -yq install nmap', user='root').output.decode("utf-8")
     return 0
 
 
@@ -363,18 +368,19 @@ def create_peer_nodes():
         print(f"creating {peer_node[i]['name']}")
         container = client.containers.run(args.image, \
             name=peer_node[i]['name'], \
+            user='root', \
             detach=True, \
             cpuset_cpus=args.cpuset_cpus, \
             mem_limit=args.memory, \
             network=args.network, \
             volumes=[f"{peer_node[i]['volume'].name}:{args.rnode_directory}"], \
-            command=args.peer_command, \
+            command=f"{args.peer_command} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")
-        r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-        r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-        r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
+        r = container.exec_run(cmd='apt-get update', user='root').output.decode("utf-8")
+        r = container.exec_run(cmd='apt-get -yq install curl', user='root').output.decode("utf-8")
+        r = container.exec_run(cmd='apt-get -yq install nmap', user='root').output.decode("utf-8")
     return 0
       
 
@@ -382,7 +388,7 @@ def test_network_sockets(container):
     print(f"Test metrics api socket for {container.name}")
     try:
         cmd = f"nmap -sS -n -p T:9095 -oG - {container.name}"
-        r = container.exec_run(cmd=cmd).output.decode("utf-8")
+        r = container.exec_run(cmd=cmd, user='root').output.decode("utf-8")
         if "9095/open/tcp" in r:
             return 0 
         else:
@@ -408,10 +414,10 @@ def test_repl_load(container):
             repl_node[i]['name'] = f"repl{i}.{args.network}"
             repl_node[i]['volume'] = client.volumes.create()
 
-            cmd = (f"sudo docker run --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
+            cmd = (f"sudo docker run -u root --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
                    f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
                    f"--network {args.network} {args.image} "
-                   f"--grpc-host {container.name} -r")
+                   f"--grpc-host {container.name} repl")
             print(f"docker repl cmd: {cmd}")
             repl_cmds = args.repl_cmds
             conn = replwrap.REPLWrapper(cmd, args.prompt, None)

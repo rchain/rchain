@@ -4,7 +4,8 @@ import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import coop.rchain.rspace.util.ignore
+import coop.rchain.rspace.history.{Branch, ITrieStore, Leaf, Node, Skip, Trie}
+import coop.rchain.shared.Language.ignore
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
 
@@ -44,4 +45,33 @@ package object test {
 
   def roundTripCodec[T](t: T)(implicit codec: Codec[T]): Attempt[DecodeResult[T]] =
     codec.encode(t).flatMap((vector: BitVector) => codec.decode(vector))
+
+  def offset(d: Int) = ("   " * d)
+
+  def printTree[T, K, V](store: ITrieStore[T, K, V], branch: Branch = Branch.MASTER): Unit =
+    store.withTxn(store.createTxnRead()) { txn =>
+      def printBranch(d: Int, t: Trie[K, V]): Unit =
+        t match {
+          case Leaf(key, value) => println(offset(d), "Leaf", key, value)
+          case Node(pointerBlock) =>
+            println(offset(d), "node")
+            pointerBlock.childrenWithIndex.foreach {
+              case (p, i) =>
+                val n = store.get(txn, p.hash).get
+                println(offset(d), i, "#", p.hash)
+                printBranch(d + 1, n)
+            }
+          case Skip(affix, p) =>
+            val n = store.get(txn, p.hash).get
+            println(offset(d), "skip", affix, "#", p.hash)
+            printBranch(d + 1, n)
+        }
+      val root = store.getRoot(txn, branch)
+      println("---------------------")
+      println("root#", root)
+      val rootNode = store.get(txn, root.get).get
+      printBranch(0, rootNode)
+      println("---------------------")
+    }
+
 }

@@ -1,10 +1,9 @@
 package coop.rchain.roscala
 
-import coop.rchain.roscala.ob.Ob
+import coop.rchain.roscala.ob.{Ob, TblObject}
 
-import scala.collection.mutable
+class GlobalEnv extends TblObject {
+  def values(n: Int): Ob = extension.slot(n).get
 
-class GlobalEnv {
-  val keys   = mutable.ArrayBuffer[Ob]()
-  val values = mutable.ArrayBuffer[Ob]()
+  override def numberOfSlots: Int = extension.slot.size
 }

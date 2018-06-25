@@ -535,9 +535,10 @@ class Base {
     static char** classNames;
     static uint32_t* obCounts;
     static int nClasses;
-    IdType id;
+    IdType objectId;
 
-    Base() : id(nextId++) {
+    Base() : objectId(nextId++) {
+//fprintf(stderr, "%s: id=%llu\n", __PRETTY_FUNCTION__, objectId);
     }
 
     virtual char* typestring();

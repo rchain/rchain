@@ -13,15 +13,10 @@ import scala.util.{Failure, Success, Try}
 
 object DeployRuntime {
 
-  //Propose a block, sign using given secret key with Ed25519.
-  //Note that this is just an example thin-client making use of the
-  //gRPC functionalities that are exposed. A node operator could easily
-  //write their own (e.g. in Python) if they wish to handle signing differently.
-  def propose[F[_]: DeployService: Monad](sk: Array[Byte]): F[Unit] =
+  def propose[F[_]: DeployService: Monad](): F[Unit] =
     DeployService[F].createBlock().flatMap {
       case Some(block) =>
-        val signedBlock = ProtoUtil.signBlock(block, sk)
-        DeployService[F].addBlock(signedBlock)
+        DeployService[F].addBlock(block)
 
       case None =>
         ().pure[F]
@@ -29,6 +24,9 @@ object DeployRuntime {
 
   def showBlock[F[_]: Functor: DeployService](hash: String): F[Unit] =
     DeployService[F].showBlock(BlockQuery(hash)).map(println(_))
+
+  def showBlocks[F[_]: Functor: DeployService](): F[Unit] =
+    DeployService[F].showBlocks.map(println(_))
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Capture: DeployService](file: String): F[Unit] =

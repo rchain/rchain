@@ -1,17 +1,24 @@
 package coop.rchain.rspace
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicReference
+import scala.collection.JavaConverters._
+
 import scala.annotation.tailrec
+
+case class StoreCount(count: Long, avgMilliseconds: Double, peakRate: Int, currentRate: Int)
 
 case class StoreCounters(sizeOnDisk: Long,
                          dataEntries: Long,
-                         consumesCount: Long,
-                         consumeAvgMilliseconds: Double,
-                         producesCount: Long,
-                         produceAvgMilliseconds: Double)
+                         consumesCount: StoreCount,
+                         producesCount: StoreCount,
+                         consumesCommCount: StoreCount,
+                         producesCommCount: StoreCount,
+                         installCommCount: StoreCount)
 
 /**
   * Conters rspace produce and consume calls.
-  * Returns counted number of cycles and avg times
+  * Returns counted number of cycles, avg times,
+  * peak and current rate of events
   * Uses BigIntegers to accumulate total times
   * w/o rounding errors
   *
@@ -20,86 +27,163 @@ case class StoreCounters(sizeOnDisk: Long,
   * For percentiles here is an algorithm that will not drain
   * memory: http://www.cs.wustl.edu/~jain/papers/ftp/psqr.pdf,
   */
-private[rspace] class StoreEventsCounter {
-  private[this] val producesCount   = new AtomicLong
-  private[this] val producesSumTime = new AtomicReference[BigInt](BigInt(0))
+private[rspace] class StoreEventsCounter(
+    registrationIntervalNanoseconds: Long = 1L * 1000L * 1000000L) {
 
-  private[this] val consumesCount   = new AtomicLong
-  private[this] val consumesSumTime = new AtomicReference[BigInt](BigInt(0))
+  private[this] case class SumCounter(sumTimeNanoseconds: BigInt, peakRate: Int, count: Long) {
+    def add(diff: BigInt, rate: Int): SumCounter =
+      SumCounter(sumTimeNanoseconds + diff, math.max(rate, peakRate), count + 1)
 
-  private[rspace] def reset(): Unit = {
-    producesCount.set(0)
-    producesSumTime.set(0)
+    def add(rate: Int): SumCounter =
+      SumCounter(sumTimeNanoseconds, math.max(rate, peakRate), count + 1)
 
-    consumesCount.set(0)
-    consumesSumTime.set(0)
+    def avgTimeMilliseconds: Double =
+      if (count > 0)
+        (BigDecimal(sumTimeNanoseconds) / (count * 1000000)).toDouble
+      else
+        0
   }
 
-  private[rspace] def getConsumesCount: Long = consumesCount.get
+  final class Counter {
+    private[this] val sumCounter: AtomicReference[SumCounter] =
+      new AtomicReference[SumCounter](SumCounter(0, 0, 0))
 
-  private[rspace] def getProducesCount: Long = producesCount.get
+    private[this] val eventsQueue: ConcurrentLinkedQueue[Long] = new ConcurrentLinkedQueue[Long]()
+
+    def reset(): Unit = {
+      sumCounter.set(SumCounter(0, 0, 0))
+      eventsQueue.clear()
+    }
+
+    def add(start: Long, diff: BigInt): Unit = {
+      addEventTime(start)
+      addAtomic(diff, eventsQueue.size)
+    }
+
+    def add(eventTime: Long): Unit = {
+      addEventTime(eventTime)
+      addAtomic(eventsQueue.size)
+    }
+
+    /**
+      * when this function finished size of queue == current rate
+      */
+    def addEventTime(eventTime: Long): Unit = {
+      eventsQueue.add(eventTime)
+      //no need to check for isEmpty, since: queue(0) - start === 0
+      //speed over precision: due to possibility of out of order add,
+      //we may sometime mistakenly include few events into current
+      //second.
+      while (eventTime - eventsQueue.peek > registrationIntervalNanoseconds) {
+        //remove head events outside of our interval
+        eventsQueue.poll
+      }
+    }
+
+    def count: Long = sumCounter.get.count
+
+    def toStoreCount(comm: Boolean = false): StoreCount = {
+      val exSum       = sumCounter.get
+      val now         = nanoTime
+      val currentRate = eventsQueue.asScala.count(x => now - x <= registrationIntervalNanoseconds)
+      val avgTimeMilliseconds = if (comm) {
+        0.0
+      } else {
+        exSum.avgTimeMilliseconds
+      }
+      StoreCount(exSum.count, avgTimeMilliseconds, exSum.peakRate, currentRate)
+    }
+
+    @tailrec
+    private[this] def addAtomic(diff: BigInt, rate: Int): Unit = {
+      val exSum = sumCounter.get
+      if (!sumCounter.compareAndSet(exSum, exSum.add(diff, rate)))
+        addAtomic(diff, rate)
+    }
+
+    @tailrec
+    private[this] def addAtomic(rate: Int): Unit = {
+      val exSum = sumCounter.get
+      if (!sumCounter.compareAndSet(exSum, exSum.add(rate)))
+        addAtomic(rate)
+    }
+  }
+
+  protected def nanoTime: Long = System.nanoTime
+
+  //produces
+  private[this] val producesCounter = new Counter()
+
+  def registerProduce[T](f: => T): T =
+    register(producesCounter, f)
+
+  private[rspace] def getProducesCount: Long = producesCounter.count
+
+  //consumes
+  private[this] val consumesCounter = new Counter()
+
+  def registerConsume[T](f: => T): T =
+    register(consumesCounter, f)
+
+  private[rspace] def getConsumesCount: Long = consumesCounter.count
+
+  //consumes Comm
+  private[this] val consumesCommCounter = new Counter()
+
+  def registerConsumeCommEvent(): Unit =
+    registerComm(consumesCommCounter)
+
+  private[rspace] def getConsumesCommCount: Long = consumesCommCounter.count
+
+  //produces Comm
+  private[this] val producesCommCounter = new Counter()
+
+  def registerProduceCommEvent(): Unit =
+    registerComm(producesCommCounter)
+
+  private[rspace] def getProducesCommCount: Long = producesCommCounter.count
+
+  //install Comm
+
+  private[this] val installCommCounter = new Counter()
+
+  def registerInstallCommEvent(): Unit =
+    registerComm(installCommCounter)
+
+  private[rspace] def getInstallCommCount: Long = installCommCounter.count
+
+  private[rspace] def reset(): Unit = {
+    consumesCounter.reset
+    producesCounter.reset
+    consumesCommCounter.reset
+    producesCommCounter.reset
+    installCommCounter.reset
+  }
 
   // for nano-time pitfalls please read
   // https://shipilev.net/blog/2014/nanotrusting-nanotime/
-  def registerProduce[T](f: => T): T = {
-    val start = System.nanoTime()
+  def register[T](counter: Counter, f: => T): T = {
+    val start = nanoTime
     try {
       f
     } finally {
-      val end  = System.nanoTime()
+      val end  = nanoTime
       val diff = Math.max(end - start, 0)
-      //addAtomic can is times slower than incrementAndGet
-      //run it first to minimize possible avg error
-      addAtomic(producesSumTime, diff)
-      producesCount.getAndIncrement()
+      counter.add(start, diff)
     }
   }
 
-  def registerConsume[T](f: => T): T = {
-    val start = System.nanoTime()
-    try {
-      f
-    } finally {
-      val end  = System.nanoTime()
-      val diff = Math.max(end - start, 0)
-      //addAtomic can is times slower than incrementAndGet
-      //run it first to minimize possible avg error
-      addAtomic(consumesSumTime, diff)
-      consumesCount.getAndIncrement()
-    }
-  }
+  def registerComm(counter: Counter): Unit =
+    counter.add(nanoTime)
 
-  @tailrec
-  private[this] def addAtomic(value: AtomicReference[BigInt], add: BigInt): Unit = {
-    val exInt = value.get
-    if (!value.compareAndSet(exInt, exInt + add))
-      addAtomic(value, add)
-  }
-
-  def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters = {
-    //since producesCount and producesSumTime updated separately
-    //we may have average a bit non-precise (lower) sometimes,
-    //anyway that's better then waste speed on synchronization or locking
-    val producesTotal = producesCount.get
-    val produceAvgTime =
-      if (producesTotal > 0)
-        (BigDecimal(producesSumTime.get) / (producesTotal * 1000000)).toDouble
-      else
-        0
-
-    val consumesTotal = consumesCount.get
-    val consumeAvgTime =
-      if (consumesTotal > 0)
-        (BigDecimal(consumesSumTime.get) / (consumesTotal * 1000000)).toDouble
-      else
-        0
-
-    StoreCounters(sizeOnDisk,
-                  dataEntries,
-                  consumesTotal,
-                  consumeAvgTime,
-                  producesTotal,
-                  produceAvgTime)
-  }
-
+  def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters =
+    StoreCounters(
+      sizeOnDisk,
+      dataEntries,
+      consumesCounter.toStoreCount(),
+      producesCounter.toStoreCount(),
+      consumesCommCounter.toStoreCount(true),
+      producesCommCounter.toStoreCount(true),
+      installCommCounter.toStoreCount(true)
+    )
 }
