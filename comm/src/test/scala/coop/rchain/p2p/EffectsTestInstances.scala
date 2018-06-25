@@ -94,16 +94,16 @@ object EffectsTestInstances {
       warns = List.empty[String]
       errors = List.empty[String]
     }
-    def debug(msg: String): F[Unit] = ().pure[F]
-    def info(msg: String): F[Unit] = {
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
+    def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
       ().pure[F]
     }
-    def warn(msg: String): F[Unit] = {
+    def warn(msg: String)(implicit ev: LogSource): F[Unit] = {
       warns = warns :+ msg
       ().pure[F]
     }
-    def error(msg: String): F[Unit] = {
+    def error(msg: String)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
       ().pure[F]
     }

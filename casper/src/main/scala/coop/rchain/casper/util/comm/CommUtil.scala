@@ -19,6 +19,8 @@ import scala.util.Try
 
 object CommUtil {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
