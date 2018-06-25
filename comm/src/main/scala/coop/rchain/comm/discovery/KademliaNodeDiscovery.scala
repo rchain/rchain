@@ -118,7 +118,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
       req = LookupMessage(ProtocolMessage.lookup(src, key), System.currentTimeMillis)
       r <- TransportLayer[F]
-            .roundTrip(req, remoteNode, 500.milliseconds)
+            .roundTrip(remoteNode, req, 500.milliseconds)
             .map(_.toOption
               .map {
                 case LookupResponseMessage(proto, _) =>

@@ -102,8 +102,8 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       })
 
   // TODO: Rename to send
-  def roundTrip(msg: ProtocolMessage,
-                peer: PeerNode,
+  def roundTrip(peer: PeerNode,
+                msg: ProtocolMessage,
                 timeout: FiniteDuration): Task[CommErr[ProtocolMessage]] =
     for {
       tlResponseErr <- sendRequest(TLRequest(msg.proto.some), peer, timeout)

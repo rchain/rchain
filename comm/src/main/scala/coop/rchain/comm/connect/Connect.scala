@@ -74,7 +74,7 @@ object Connect {
         _       <- Log[F].info(s"Initialize protocol handshake to $peer")
         local   <- TransportLayer[F].local
         ph      = ProtocolHandshakeMessage(protocolHandshake(local))
-        phsresp <- TransportLayer[F].roundTrip(ph, peer, timeout) >>= errorHandler[F].fromEither
+        phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
         _       <- NodeDiscovery[F].addNode(peer)
       } yield ()

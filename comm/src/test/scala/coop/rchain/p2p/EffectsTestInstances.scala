@@ -62,12 +62,12 @@ object EffectsTestInstances {
     }
 
     def roundTrip(
+        peer: PeerNode,
         msg: ProtocolMessage,
-        remote: PeerNode,
         timeout: FiniteDuration = FiniteDuration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
       Capture[F].capture {
         requests = requests :+ msg
-        reqresp.get.apply(remote).apply(msg)
+        reqresp.get.apply(peer).apply(msg)
       }
 
     def local: F[PeerNode] = src.pure[F]

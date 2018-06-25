@@ -16,8 +16,8 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
     val msgQueues: collection.Map[PeerNode, mutable.Queue[ProtocolMessage]])
     extends TransportLayer[F] {
 
-  def roundTrip(msg: ProtocolMessage,
-                remote: PeerNode,
+  def roundTrip(peer: PeerNode,
+                msg: ProtocolMessage,
                 timeout: FiniteDuration): F[CommErr[ProtocolMessage]] = ???
 
   def local: F[PeerNode] = identity.pure[F]

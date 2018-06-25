@@ -41,7 +41,7 @@ package object effects {
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
-          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+          res <- TransportLayer[F].roundTrip(node, req, 500.milliseconds).map(_.toOption)
         } yield res.isDefined
     }
 
