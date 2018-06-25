@@ -6,11 +6,8 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.metrics.Metrics
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.FiniteDuration
 import scala.collection.mutable
 import coop.rchain.comm.transport._
 
@@ -21,18 +18,18 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
 
   def roundTrip(msg: ProtocolMessage,
                 remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]] = ???
+                timeout: FiniteDuration): F[CommErr[ProtocolMessage]] = ???
 
   def local: F[PeerNode] = identity.pure[F]
 
-  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = Capture[F].capture {
+  def send(peer: PeerNode, msg: ProtocolMessage): F[CommErr[Unit]] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)
 
     maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q =>
       ProtocolMessage.toProtocolMessage(msg.proto).map(q.enqueue(_)))
   }
 
-  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
+  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
@@ -41,7 +38,7 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
 }
 
 object TransportLayerTestImpl {
-  def handleQueue[F[_]: Monad: Capture](dispatch: (ProtocolMessage) => F[CommunicationResponse],
+  def handleQueue[F[_]: Monad: Capture](dispatch: ProtocolMessage => F[CommunicationResponse],
                                         q: mutable.Queue[ProtocolMessage]): F[Unit] =
     if (q.nonEmpty) for {
       msg <- Capture[F].capture { q.dequeue() }

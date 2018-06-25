@@ -15,6 +15,7 @@ import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.genesis.Genesis.fromBondsFile
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
@@ -135,13 +136,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val pingEffect: Ping[Task]                          = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]        = new TLNodeDiscovery[Task](src)
   implicit val turanOracleEffect: SafetyOracle[Effect]         = SafetyOracle.turanOracle[Effect]
-  implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    storagePath.resolve("casper"),
-    storageSize,
-    fromBondsFile[Task](conf.run.bondsFile.toOption,
-                        conf.run.numValidators(),
-                        conf.run.data_dir().resolve("validators")).unsafeRunSync
-  )
+  implicit val casperEffect: MultiParentCasper[Effect] =
+    MultiParentCasper.fromConfig[Effect](conf.casperConf)
   implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )

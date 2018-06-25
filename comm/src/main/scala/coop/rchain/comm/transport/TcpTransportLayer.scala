@@ -4,7 +4,6 @@ import java.io.File
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.metrics.Metrics
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._

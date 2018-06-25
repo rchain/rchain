@@ -218,12 +218,22 @@ object ProtoUtil {
       .withBody(body)
       .withJustifications(justifications)
 
-  def signBlock(block: BlockMessage, sk: Array[Byte]): BlockMessage = {
+  def signBlock(block: BlockMessage,
+                dag: BlockDag,
+                pk: Array[Byte],
+                sk: Array[Byte],
+                sigAlgorithm: String,
+                signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
     val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
     val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
-    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
-    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
-    val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+    val sender            = ByteString.copyFrom(pk)
+    val sig               = ByteString.copyFrom(signFunction(sigData, sk))
+    val currSeqNum        = dag.currentSeqNum.getOrElse(sender, -1)
+    val signedBlock = block
+      .withSender(sender)
+      .withSig(sig)
+      .withSeqNum(currSeqNum + 1)
+      .withSigAlgorithm(sigAlgorithm)
 
     signedBlock
   }

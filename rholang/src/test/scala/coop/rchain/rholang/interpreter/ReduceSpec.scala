@@ -745,7 +745,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                        false,
                        1,
                        BitSet())
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
@@ -799,7 +799,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val testString                = "testing testing"
     val base16Repr                = Base16.encode(testString.getBytes)
     val proc: Par                 = GString(base16Repr)
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>

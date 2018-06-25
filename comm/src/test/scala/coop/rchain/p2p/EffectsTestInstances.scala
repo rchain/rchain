@@ -1,7 +1,6 @@
 package coop.rchain.p2p
 
-import java.net.SocketAddress
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 import cats._
 import cats.implicits._
@@ -9,7 +8,6 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.p2p.effects._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
@@ -51,7 +49,7 @@ object EffectsTestInstances {
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
-    type Responses = PeerNode => (ProtocolMessage => CommErr[ProtocolMessage])
+    type Responses = PeerNode => ProtocolMessage => CommErr[ProtocolMessage]
     var reqresp: Option[Responses]      = None
     var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
 
@@ -63,21 +61,22 @@ object EffectsTestInstances {
       requests = List.empty[ProtocolMessage]
     }
 
-    def roundTrip(msg: ProtocolMessage,
-                  remote: PeerNode,
-                  timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
+    def roundTrip(
+        msg: ProtocolMessage,
+        remote: PeerNode,
+        timeout: FiniteDuration = FiniteDuration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
       Capture[F].capture {
         requests = requests :+ msg
         reqresp.get.apply(remote).apply(msg)
       }
 
     def local: F[PeerNode] = src.pure[F]
-    def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+    def send(peer: PeerNode, msg: ProtocolMessage): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
+    def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
 
