@@ -34,12 +34,6 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
-  @deprecated("Use `history.initalize(branch)` instead.", "0.4.2")
-  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
-                                                                      codecK: Codec[K],
-                                                                      codecV: Codec[V]): Unit =
-    initialize(branch)(store, codecK, codecV)
-
   def initialize[T, K, V](branch: Branch)(implicit
                                           store: ITrieStore[T, K, V],
                                           codecK: Codec[K],
@@ -97,10 +91,6 @@ package object history {
       } yield res
     }
   }
-
-  @deprecated("Use `history.lookup(branch, key)` instead.", "0.4.2")
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
-      implicit codecK: Codec[K]): Option[V] = lookup(branch, key)(store, codecK)
 
   def lookup[T, K, V](branch: Branch, keys: immutable.Seq[K])(
       implicit store: ITrieStore[T, K, V],
@@ -168,12 +158,6 @@ package object history {
         val node = s.copy(pointer = NodePointer(lastHash))
         (Trie.hash[K, V](node), node)
     }
-
-  @deprecated("Use `history.insert(branch, key, value)` instead.", "0.4.2")
-  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
-      implicit
-      codecK: Codec[K],
-      codecV: Codec[V]): Unit = insert(branch, key, value)(store, codecK, codecV)
 
   def insert[T, K, V](branch: Branch, key: K, value: V)(implicit
                                                         store: ITrieStore[T, K, V],
@@ -466,13 +450,6 @@ package object history {
           }
       }
     }
-
-  @deprecated("Use `history.delete(branch, key, value)` instead.", "0.4.2")
-  def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
-      implicit
-      codecK: Codec[K],
-      codecV: Codec[V]): Boolean =
-    delete(branch, key, value)(store, codecK, codecV)
 
   import scodec.Codec
   import scodec.codecs._
