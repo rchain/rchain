@@ -12,6 +12,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
+import java.io.File
 
 package object effects {
 
@@ -48,12 +49,12 @@ package object effects {
     }
 
   def tcpTranposrtLayer[
-      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](conf: Conf)(
-      src: PeerNode)(implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.run.fetchHost,
-                             conf.run.port(),
-                             conf.run.certificatePath.toFile,
-                             conf.run.keyPath.toFile)(src)
+      F[_]: Monad: Capture: Metrics: Futurable: TcpTransportLayer.ConnectionsState](
+      host: String,
+      port: Int,
+      cert: File,
+      key: File)(src: PeerNode)(implicit executionContext: ExecutionContext) =
+    new TcpTransportLayer[F](host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
