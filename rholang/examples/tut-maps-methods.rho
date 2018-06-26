@@ -14,4 +14,4 @@
 // returns new map which is a result of subtracting elements of second map from the base map
 @"stdout"!({"one" : 1, "two" : 2, "three" : 3}.diff({"one" : 1, "four": 4})) |
 // merges two maps -- returns @{{"four" : 4, "one" : 1, "three" : 3, "two" : 2}}
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.union({"one" : 1, "four": 4})) |
+@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.union({"one" : 1, "four": 4}))
