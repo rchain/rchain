@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
+import coop.rchain.shared.AttemptOps._
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
@@ -32,8 +33,13 @@ import java.nio.file.Path
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.rspace.{trace, Checkpoint}
+import coop.rchain.rspace.trace.{COMM, Event}
+import coop.rchain.rspace.trace.Event.codecLog
 import monix.eval.Task
 import monix.execution.Scheduler
+import scodec.Codec
+import scodec.bits.BitVector
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -196,8 +202,8 @@ sealed abstract class MultiParentCasperInstances {
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
           now <- Time[F].currentMillis
-          Right((computedStateHash, _)) = knownStateHashesContainer
-            .mapAndUpdate[(StateHash, Set[StateHash])](
+          Right((computedCheckpoint, _)) = knownStateHashesContainer
+            .mapAndUpdate[(Checkpoint, Set[StateHash])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
@@ -206,6 +212,11 @@ sealed abstract class MultiParentCasperInstances {
                                                        _,
                                                        runtimeManager.computeState),
               _._2)
+          computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
+          serializedLog = implicitly[Codec[immutable.Seq[Event]]]
+            .encode(computedCheckpoint.log)
+            .map(_.toByteArray)
+            .get
           postState = RChainState()
             .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
@@ -213,6 +224,7 @@ sealed abstract class MultiParentCasperInstances {
           body = Body()
             .withPostState(postState)
             .withNewCode(r)
+          // TODO: Add .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)
         } yield Some(block)

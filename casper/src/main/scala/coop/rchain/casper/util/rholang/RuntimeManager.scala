@@ -5,7 +5,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.{trace, Blake2b256Hash}
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
 import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
@@ -17,7 +17,7 @@ import monix.eval.Task
 class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
 
   def replayComputeState(log: trace.Log)(
-      implicit scheduler: Scheduler): (StateHash, List[Par]) => Either[Throwable, StateHash] = {
+      implicit scheduler: Scheduler): (StateHash, List[Par]) => Either[Throwable, Checkpoint] = {
     (hash: StateHash, terms: List[Par]) =>
       {
         val runtime   = runtimeContainer.take()
@@ -29,21 +29,21 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
             throw ex
         }
         val error = eval(terms, riggedRuntime.replayReducer)
-        val newHash = error.fold[Either[Throwable, ByteString]](Right(
-          ByteString.copyFrom(riggedRuntime.space.createCheckpoint().root.bytes.toArray)))(Left(_))
+        val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+          Right(riggedRuntime.space.createCheckpoint()))(Left(_))
         runtimeContainer.put(riggedRuntime)
-        newHash
+        newCheckpoint
       }
   }
 
   def computeState(hash: StateHash, terms: List[Par])(
-      implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
+      implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
     val resetRuntime: Runtime = getResetRuntime(hash)
     val error                 = eval(terms, resetRuntime.reducer)
-    val newHash = error.fold[Either[Throwable, StateHash]](
-      Right(ByteString.copyFrom(resetRuntime.space.createCheckpoint().root.bytes.toArray)))(Left(_))
+    val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+      Right(resetRuntime.space.createCheckpoint()))(Left(_))
     runtimeContainer.put(resetRuntime)
-    newHash
+    newCheckpoint
   }
 
   def storageRepr(hash: StateHash): String = {

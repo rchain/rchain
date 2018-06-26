@@ -165,43 +165,4 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
   }
-
-  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
-    val deploys     = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val invalidHash = ByteString.EMPTY
-
-    val chain =
-      createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = invalidHash)
-        .runS(initState)
-        .value
-    val block = chain.idToBlocks(0)
-
-    val (stateHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
-
-    stateHash should be(None)
-  }
-
-  "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
-    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val (computedTsHash, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               initStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
-
-    val chain: BlockDag =
-      createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = computedTsHash)
-        .runS(initState)
-        .value
-    val block = chain.idToBlocks(0)
-
-    val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
-
-    tsHash should be(Some(computedTsHash))
-  }
 }

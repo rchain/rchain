@@ -34,11 +34,12 @@ object Event {
       .subcaseP(2) {
         case (consume: Consume) => consume
       }(Codec[Consume])
+  implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 }
 
 case class COMM(consume: Consume, produces: Seq[Produce]) extends Event
 object COMM {
-  implicit val codecCOMM: Codec[COMM] = (Codec[Consume]::Codec[Seq[Produce]]).as[COMM]
+  implicit val codecCOMM: Codec[COMM] = (Codec[Consume] :: Codec[Seq[Produce]]).as[COMM]
 }
 
 sealed trait IOEvent extends Event
