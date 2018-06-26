@@ -71,12 +71,12 @@ object EffectsTestInstances {
       }
 
     def local: F[PeerNode] = src.pure[F]
-    def send(peer: PeerNode, msg: ProtocolMessage): F[CommErr[Unit]] =
+    def send(peer: PeerNode, msg: ProtocolMessage): F[Unit] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+    def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Unit] = ???
 
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
 

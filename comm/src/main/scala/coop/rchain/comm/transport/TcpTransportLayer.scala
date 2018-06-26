@@ -120,14 +120,14 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     } yield pmErr
 
   // TODO: rename to sendAndForget
-  def send(peer: PeerNode, msg: ProtocolMessage): Task[CommErr[Unit]] =
+  def send(peer: PeerNode, msg: ProtocolMessage): Task[Unit] =
     Task
       .racePair(innerSend(peer, TLRequest(msg.proto.some)), Task.unit)
       .attempt
-      .map(_.bimap(protocolException, _ => ()))
+      .void
 
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
-    Task.gatherUnordered(peers.map(send(_, msg)))
+  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): Task[Unit] =
+    Task.gatherUnordered(peers.map(send(_, msg))).void
 
   def receive(dispatch: ProtocolMessage => Task[CommunicationResponse]): Task[Unit] =
     Capture[Task].capture {

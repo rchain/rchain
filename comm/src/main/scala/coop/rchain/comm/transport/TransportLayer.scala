@@ -14,8 +14,8 @@ trait TransportLayer[F[_]] {
                 msg: ProtocolMessage,
                 timeout: FiniteDuration): F[CommErr[ProtocolMessage]]
   // TODO remove ProtocolMessage, use raw messages from protocol
-  def send(peer: PeerNode, msg: ProtocolMessage): F[CommErr[Unit]]
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
+  def send(peer: PeerNode, msg: ProtocolMessage): F[Unit]
+  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Unit]
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
 }
@@ -43,10 +43,10 @@ sealed abstract class TransportLayerInstances {
                     timeout: FiniteDuration): EitherT[F, E, CommErr[ProtocolMessage]] =
         EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
-      def send(peer: PeerNode, msg: ProtocolMessage): EitherT[F, E, CommErr[Unit]] =
+      def send(peer: PeerNode, msg: ProtocolMessage): EitherT[F, E, Unit] =
         EitherT.liftF(evF.send(peer, msg))
 
-      def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): EitherT[F, E, Seq[CommErr[Unit]]] =
+      def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): EitherT[F, E, Unit] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
       def receive(dispatch: ProtocolMessage => EitherT[F, E, CommunicationResponse])

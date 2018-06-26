@@ -69,6 +69,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val logMessages = List(
       "CASPER: Received Deploy",
       "CASPER: Beginning send of Block #1",
+      "CASPER: Sent",
       "CASPER: Added",
       "CASPER: New fork-choice tip is block"
     )

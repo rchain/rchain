@@ -22,14 +22,15 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
 
   def local: F[PeerNode] = identity.pure[F]
 
-  def send(peer: PeerNode, msg: ProtocolMessage): F[CommErr[Unit]] = Capture[F].capture {
+  def send(peer: PeerNode, msg: ProtocolMessage): F[Unit] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)
 
     maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q =>
       ProtocolMessage.toProtocolMessage(msg.proto).map(q.enqueue(_)))
   }
 
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Unit] =
+    Capture[F].capture(peers.map(send(_, msg)))
 
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
