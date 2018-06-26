@@ -80,14 +80,19 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                                        chain,
                                                        initStateHash,
                                                        knownStateHashes,
-                                                       runtimeManager)
+                                                       runtimeManager.computeState)
     val genPostState = runtimeManager.storageRepr(postGenStateHash)
 
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
 
     val (postB1StateHash, _) =
-      computeBlockCheckpoint(b1, genesis, chain, initStateHash, knownStateHashes, runtimeManager)
+      computeBlockCheckpoint(b1,
+                             genesis,
+                             chain,
+                             initStateHash,
+                             knownStateHashes,
+                             runtimeManager.computeState)
     val b1PostState = runtimeManager.storageRepr(postB1StateHash)
     b1PostState.contains("@{1}!(1)") should be(true)
     b1PostState.contains("@{123}!(5)") should be(true)
@@ -96,7 +101,12 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     //note skipping of b2 to force a test of the recursive aspect of computeBlockCheckpoint
 
     val (postb3StateHash, _) =
-      computeBlockCheckpoint(b3, genesis, chain, initStateHash, knownStateHashes, runtimeManager)
+      computeBlockCheckpoint(b3,
+                             genesis,
+                             chain,
+                             initStateHash,
+                             knownStateHashes,
+                             runtimeManager.computeState)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
     b3PostState.contains("@{1}!(1)") should be(true)
     b3PostState.contains("@{1}!(15)") should be(true)
@@ -144,7 +154,12 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     val b3 = chain.idToBlocks(3)
     val (postb3StateHash, _) =
-      computeBlockCheckpoint(b3, genesis, chain, initStateHash, knownStateHashes, runtimeManager)
+      computeBlockCheckpoint(b3,
+                             genesis,
+                             chain,
+                             initStateHash,
+                             knownStateHashes,
+                             runtimeManager.computeState)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
@@ -176,7 +191,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                initState,
                                initStateHash,
                                knownStateHashes,
-                               runtimeManager)
+                               runtimeManager.computeState)
 
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = computedTsHash)

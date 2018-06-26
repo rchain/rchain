@@ -204,7 +204,7 @@ sealed abstract class MultiParentCasperInstances {
                                                        _blockDag.get,
                                                        initStateHash,
                                                        _,
-                                                       runtimeManager),
+                                                       runtimeManager.computeState),
               _._2)
           postState = RChainState()
             .withTuplespace(computedStateHash)

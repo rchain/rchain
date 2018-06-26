@@ -8,20 +8,25 @@ import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
 
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.rspace.trace
+import coop.rchain.rspace.trace.Event
 import monix.execution.Scheduler
+
+import scala.collection.immutable
 
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
     Interpreter.buildNormalizedTerm(new StringReader(s)).runAttempt
 
-  def computeDeploysCheckpoint(parents: Seq[BlockMessage],
-                               deploys: Seq[Deploy],
-                               genesis: BlockMessage,
-                               dag: BlockDag,
-                               defaultStateHash: StateHash,
-                               knownStateHashes: Set[StateHash],
-                               runtimeManager: RuntimeManager)(
+  def computeDeploysCheckpoint(
+      parents: Seq[BlockMessage],
+      deploys: Seq[Deploy],
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, List[Par]) => Either[Throwable, StateHash])(
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents,
@@ -29,32 +34,10 @@ object InterpreterUtil {
                               dag,
                               defaultStateHash,
                               knownStateHashes,
-                              runtimeManager)
+                              computeState)
 
-    val Right(postDeploysStateHash) =
-      runtimeManager.computeState(postStateHash, deploys.flatMap(_.term).toList)
+    val Right(postDeploysStateHash) = computeState(postStateHash, deploys.flatMap(_.term).toList)
     (postDeploysStateHash, updatedStateHashes + postDeploysStateHash)
-  }
-
-  def computeBlockCheckpoint(b: BlockMessage,
-                             genesis: BlockMessage,
-                             dag: BlockDag,
-                             defaultStateHash: StateHash,
-                             knownStateHashes: Set[StateHash],
-                             runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
-
-    val blockStateHash = ProtoUtil.tuplespace(b).get
-    if (knownStateHashes.contains(blockStateHash)) {
-      (blockStateHash, knownStateHashes)
-    } else {
-      computeBlockCheckpointFromDeploys(b,
-                                        genesis,
-                                        dag,
-                                        defaultStateHash,
-                                        knownStateHashes,
-                                        runtimeManager)
-    }
   }
 
   //Returns (None, checkpoints) if the block's tuplespace hash
@@ -68,14 +51,14 @@ object InterpreterUtil {
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
 
     val tsHash = ProtoUtil.tuplespace(b)
-
+    val log    = immutable.Seq.empty[Event] // TODO: Replace with b.body.get.commReductions
     val (computedStateHash, updatedStateHashes) =
       computeBlockCheckpointFromDeploys(b,
                                         genesis,
                                         dag,
                                         defaultStateHash,
                                         knownStateHashes,
-                                        runtimeManager)
+                                        runtimeManager.replayComputeState(log))
 
     if (tsHash.contains(computedStateHash)) {
       // state hash in block matches computed hash!
@@ -87,12 +70,35 @@ object InterpreterUtil {
     }
   }
 
-  private def computeParentsPostState(parents: Seq[BlockMessage],
-                                      genesis: BlockMessage,
-                                      dag: BlockDag,
-                                      defaultStateHash: StateHash,
-                                      knownStateHashes: Set[StateHash],
-                                      runtimeManager: RuntimeManager)(
+  private[casper] def computeBlockCheckpoint(
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, List[Par]) => Either[Throwable, StateHash])(
+      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+
+    val blockStateHash = ProtoUtil.tuplespace(b).get
+    if (knownStateHashes.contains(blockStateHash)) {
+      (blockStateHash, knownStateHashes)
+    } else {
+      computeBlockCheckpointFromDeploys(b,
+                                        genesis,
+                                        dag,
+                                        defaultStateHash,
+                                        knownStateHashes,
+                                        computeState)
+    }
+  }
+
+  private def computeParentsPostState(
+      parents: Seq[BlockMessage],
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, List[Par]) => Either[Throwable, StateHash])(
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -110,7 +116,7 @@ object InterpreterUtil {
                                dag,
                                defaultStateHash,
                                knownStateHashes,
-                               runtimeManager)
+                               computeState)
       }
     } else {
       //In the case of multiple parents we need
@@ -133,7 +139,7 @@ object InterpreterUtil {
                                  dag,
                                  defaultStateHash,
                                  knownStateHashes,
-                                 runtimeManager)
+                                 computeState)
         }
 
       val deploys = DagOperations
@@ -146,17 +152,18 @@ object InterpreterUtil {
 
       //TODO: figure out what casper should do with errors in deploys
       val Right(resultStateHash) =
-        runtimeManager.computeState(computedGcaStateHash, deploys.flatMap(_.term).toList)
+        computeState(computedGcaStateHash, deploys.flatMap(_.term).toList)
       (resultStateHash, knownStateHashes + resultStateHash)
     }
   }
 
-  private def computeBlockCheckpointFromDeploys(b: BlockMessage,
-                                                genesis: BlockMessage,
-                                                dag: BlockDag,
-                                                defaultStateHash: StateHash,
-                                                knownStateHashes: Set[StateHash],
-                                                runtimeManager: RuntimeManager)(
+  private def computeBlockCheckpointFromDeploys(
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, List[Par]) => Either[Throwable, StateHash])(
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
@@ -171,7 +178,7 @@ object InterpreterUtil {
       dag,
       defaultStateHash,
       knownStateHashes,
-      runtimeManager
+      computeState
     )
   }
 }
