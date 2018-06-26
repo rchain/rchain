@@ -123,6 +123,7 @@ package object sort {
     final val EMETHOD  = 115
     final val EBYTEARR = 116
     final val EEVAL    = 117
+    final val EMATCHES = 118
 
     // Other
     final val QUOTE    = 203

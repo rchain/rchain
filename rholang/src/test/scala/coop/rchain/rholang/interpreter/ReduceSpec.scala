@@ -894,4 +894,50 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
   }
+
+
+  "1 matches 1" should "return true" in {
+    implicit val errorLog = new Runtime.ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask =  reducer.evalExpr(EMatches(GInt(1), GInt(1)))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result.exprs should be (Seq(Expr(GBool(true))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "1 matches 0" should "return false" in {
+    implicit val errorLog = new Runtime.ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask =  reducer.evalExpr(EMatches(GInt(1), GInt(0)))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result.exprs should be (Seq(Expr(GBool(false))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "1 matches _" should "return true" in {
+    implicit val errorLog = new Runtime.ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask =  reducer.evalExpr(EMatches(GInt(1), EVar(Wildcard(Var.WildcardMsg()))))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result.exprs should be (Seq(Expr(GBool(true))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
 }

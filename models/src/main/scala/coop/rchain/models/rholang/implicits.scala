@@ -114,6 +114,10 @@ object implicits {
     new Expr(exprInstance = EMethodBody(e))
   implicit def fromEMethod(e: EMethod): Expr = apply(e)
 
+  def apply(e: EMatches): Expr =
+    new Expr(exprInstance = EMatchesBody(e))
+  implicit def fromEMatches(e: EMatches): Expr = apply(e)
+
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
@@ -316,6 +320,8 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
+        case EMatchesBody(EMatches(process, pattern)) =>
+          process.get.connectiveUsed || pattern.get.connectiveUsed
       }
 
     def locallyFree(e: Expr) =
@@ -346,6 +352,9 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
         case EMethodBody(e)             => e.locallyFree
+        case EMatchesBody(EMatches(target, pattern)) =>
+          target.get.locallyFree | pattern.get.locallyFree
+
       }
   }
 
