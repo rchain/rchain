@@ -40,18 +40,9 @@ lazy val shared = (project in file("shared"))
     )
   )
 
-val rholangSource = settingKey[File]("Default Rholang source directory.")
-
-lazy val rholangProtoBuildTask = Def.task(
-  constructArtifacts(
-    (rholangProtoBuild/Compile/incrementalAssembly).value,
-    (rholangSource in Compile).value,
-    (sourceManaged in Compile).value
-  )
-)
-  
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
+  .settings(rholangSettings: _*)
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
@@ -59,8 +50,7 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix
     ),
-    rholangSource in Compile := (sourceDirectory in Compile).value / "rholang",
-    sourceGenerators in Compile += rholangProtoBuildTask.taskValue
+    rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
   .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
