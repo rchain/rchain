@@ -55,7 +55,12 @@ trait Reduce[M[_]] {
 object Reduce {
 
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
-      tupleSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
+      tupleSpace: PureRSpace[M,
+                             Channel,
+                             BindPattern,
+                             Seq[Channel],
+                             Seq[Channel],
+                             TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F],
       fTell: FunctorTell[M, InterpreterError])

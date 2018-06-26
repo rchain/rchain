@@ -13,9 +13,10 @@ import scala.collection.immutable.Seq
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
   * @tparam A a type representing an arbitrary piece of data
+  * @tparam A a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait ISpace[C, P, A, K] {
+trait ISpace[C, P, A, R, K] {
 
   /**
     * A store which statisfies the [[IStore]] interface.
@@ -37,7 +38,7 @@ trait ISpace[C, P, A, K] {
       data: Seq[(Datum[A], Int)],
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
-  )(implicit m: Match[P, A]): Option[(DataCandidate[C, A], Seq[(Datum[A], Int)])] =
+  )(implicit m: Match[P, A, R]): Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])] =
     data match {
       case Nil => None
       case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) :: remaining =>
@@ -74,13 +75,13 @@ trait ISpace[C, P, A, K] {
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Option[DataCandidate[C, A]]])(
-      implicit m: Match[P, A]): Seq[Option[DataCandidate[C, A]]] =
+      acc: Seq[Option[DataCandidate[C, R]]])(
+      implicit m: Match[P, A, R]): Seq[Option[DataCandidate[C, R]]] =
     channelPatternPairs match {
       case Nil =>
         acc.reverse
       case (channel, pattern) :: tail =>
-        val maybeTuple: Option[(DataCandidate[C, A], Seq[(Datum[A], Int)])] =
+        val maybeTuple: Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])] =
           for {
             indexedData <- channelToIndexedData.get(channel)
             result      <- findMatchingDataCandidate(channel, indexedData, pattern, Nil)
@@ -120,10 +121,10 @@ trait ISpace[C, P, A, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])]
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])]
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])]
 
   /* Produce */
 
@@ -132,12 +133,12 @@ trait ISpace[C, P, A, K] {
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
-      implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
+      implicit m: Match[P, A, R]): Option[ProduceCandidate[C, P, R, K]] =
     matchCandidates match {
       case Nil =>
         None
       case (p @ WaitingContinuation(patterns, _, _, _), index) :: remaining =>
-        val maybeDataCandidates: Option[Seq[DataCandidate[C, A]]] =
+        val maybeDataCandidates: Option[Seq[DataCandidate[C, R]]] =
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
         maybeDataCandidates match {
           case None =>
@@ -170,7 +171,8 @@ trait ISpace[C, P, A, K] {
     * @param data A piece of data
     * @param persist Whether or not to attempt to persist the data
     */
-  def produce(channel: C, data: A, persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])]
+  def produce(channel: C, data: A, persist: Boolean)(
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])]
 
   /** Creates a checkpoint.
     *
