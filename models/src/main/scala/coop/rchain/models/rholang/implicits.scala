@@ -404,8 +404,7 @@ object implicits {
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
-        ChannelLocallyFree.connectiveUsed(rb.source.get) || rb.patterns.exists(
-          ChannelLocallyFree.connectiveUsed(_))
+        ChannelLocallyFree.connectiveUsed(rb.source.get)
 
       def locallyFree(rb: ReceiveBind) =
         ChannelLocallyFree.locallyFree(rb.source.get)
