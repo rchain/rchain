@@ -18,3 +18,4 @@ case object InvalidParents          extends RejectableBlock with Slashable
 case object InvalidSequenceNumber   extends RejectableBlock with Slashable
 case object JustificationRegression extends RejectableBlock with Slashable
 case object NeglectedEquivocation   extends RejectableBlock with Slashable
+case object InvalidTransaction      extends RejectableBlock with Slashable
