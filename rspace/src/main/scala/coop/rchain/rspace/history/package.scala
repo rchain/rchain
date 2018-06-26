@@ -34,10 +34,11 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
-  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
-                                                                      codecK: Codec[K],
-                                                                      codecV: Codec[V]): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
+  def initialize[T, K, V](branch: Branch)(implicit
+                                          store: ITrieStore[T, K, V],
+                                          codecK: Codec[K],
+                                          codecV: Codec[V]): Unit =
+    store.withTxn(store.createTxnWrite()) { implicit txn =>
       store.getRoot(txn, branch) match {
         case None =>
           val root     = Trie.create[K, V]()
@@ -50,16 +51,17 @@ package object history {
       }
     }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
-      implicit codecK: Codec[K]): Option[V] = {
+  def lookup[T, K, V](branch: Branch, key: K)(implicit
+                                              store: ITrieStore[T, K, V],
+                                              codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
-    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
+    def loop(depth: Int, curr: Trie[K, V])(implicit txn: T): Option[V] =
       curr match {
         case Skip(affix, pointer) =>
           store.get(txn, pointer.hash) match {
-            case Some(next) => loop(txn, depth + affix.length.toInt, next)
+            case Some(next) => loop(depth + affix.length.toInt, next)
             case None       => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
@@ -72,7 +74,7 @@ package object history {
               None
             case pointer: NonEmptyPointer =>
               store.get(txn, pointer.hash) match {
-                case Some(next) => loop(txn, depth + 1, next)
+                case Some(next) => loop(depth + 1, next)
                 case None       => throw new LookupException(s"No node at ${pointer.hash}")
               }
           }
@@ -82,23 +84,25 @@ package object history {
           None
       }
 
-    store.withTxn(store.createTxnRead()) { (txn: T) =>
+    store.withTxn(store.createTxnRead()) { implicit txn: T =>
       for {
         currentRootHash <- store.getRoot(txn, branch)
         currentRoot     <- store.get(txn, currentRootHash)
-        res             <- loop(txn, 0, currentRoot)
+        res             <- loop(0, currentRoot)
       } yield res
     }
   }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
-      implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    keys.traverse[Option, V]((k: K) => lookup(store, branch, k))
+  def lookup[T, K, V](branch: Branch, keys: immutable.Seq[K])(
+      implicit
+      store: ITrieStore[T, K, V],
+      codecK: Codec[K]): Option[immutable.Seq[V]] =
+    keys.traverse[Option, V]((k: K) => lookup(branch, k))
 
-  private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
-                                        txn: T,
-                                        path: Seq[Byte],
-                                        curr: Trie[K, V]): (Trie[K, V], Parents[K, V]) = {
+  private[this] def getParents[T, K, V](path: Seq[Byte], curr: Trie[K, V])(
+      implicit
+      store: ITrieStore[T, K, V],
+      txn: T): (Trie[K, V], Parents[K, V]) = {
 
     @tailrec
     def parents(depth: Int, curr: Trie[K, V], acc: Parents[K, V]): (Trie[K, V], Parents[K, V]) =
@@ -154,11 +158,11 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
-  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
-      implicit
-      codecK: Codec[K],
-      codecV: Codec[V]): Unit =
-    store.withTxn(store.createTxnWrite()) { (txn: T) =>
+  def insert[T, K, V](branch: Branch, key: K, value: V)(implicit
+                                                        store: ITrieStore[T, K, V],
+                                                        codecK: Codec[K],
+                                                        codecV: Codec[V]): Unit =
+    store.withTxn(store.createTxnWrite()) { implicit txn: T =>
       // Get the current root hash
       val currentRootHash: Blake2b256Hash =
         store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
@@ -175,7 +179,7 @@ package object history {
           val newLeafHash = Trie.hash(newLeaf)
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
-          val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
+          val (tip, parents) = getParents(encodedKeyNew, currentRoot)
           val maybeNewNodes: Option[Seq[(Blake2b256Hash, Trie[K, V])]] = tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
@@ -210,7 +214,7 @@ package object history {
           }
           maybeNewNodes match {
             case Some(nodes) =>
-              val newRootHash = insertTries(store, txn, nodes).get
+              val newRootHash = insertTries(nodes).get
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
             case None =>
@@ -343,10 +347,10 @@ package object history {
       (ptr, Seq.empty)
     }
 
-  private[this] def insertTries[T, K, V](
+  private[this] def insertTries[T, K, V](rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])])(
+      implicit
       store: ITrieStore[T, K, V],
-      txn: T,
-      rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
+      txn: T): Option[Blake2b256Hash] =
     rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
       case (_, (hash, trie)) =>
         store.put(txn, hash, trie)
@@ -354,8 +358,10 @@ package object history {
     }
 
   @tailrec
-  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
+  private[this] def deleteLeaf[T, K, V](parents: Parents[K, V])(
       implicit
+      store: ITrieStore[T, K, V],
+      txn: T,
       codecK: Codec[K],
       codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
@@ -365,7 +371,7 @@ package object history {
         (Node(pointerBlock.updated((index, EmptyPointer))), Seq.empty[(Int, Node)], Seq.empty)
       // A skip pointing at a leaf needs to be collapsed
       case (_, Skip(_, LeafPointer(_))) +: tail =>
-        deleteLeaf(store, txn, tail)
+        deleteLeaf(tail)
       // Otherwise a Node needs to be handled
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -377,7 +383,7 @@ package object history {
           // delete, and we can go ahead and move up the trie.
           // post skip node: a Node with one child should be already collapsed to skip -> leaf
           case Vector(_) =>
-            deleteLeaf(store, txn, tail)
+            deleteLeaf(tail)
           // If there are two children, then we know that one of them points down to the thing
           // we are trying to delete.  We then decide how to handle the other child based on
           // whether or not it is a Node or a Leaf
@@ -406,11 +412,11 @@ package object history {
         }
     }
 
-  def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
-      implicit
-      codecK: Codec[K],
-      codecV: Codec[V]): Boolean =
-    store.withTxn(store.createTxnWrite()) { (txn: T) =>
+  def delete[T, K, V](branch: Branch, key: K, value: V)(implicit
+                                                        store: ITrieStore[T, K, V],
+                                                        codecK: Codec[K],
+                                                        codecV: Codec[V]): Boolean =
+    store.withTxn(store.createTxnWrite()) { implicit txn: T =>
       // We take the current root hash, preventing other threads from operating on the Trie
       val currentRootHash: Blake2b256Hash =
         store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
@@ -422,7 +428,7 @@ package object history {
           // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
           val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
           // Using this path, get the parents of the given leaf.
-          val (tip, parents) = getParents(store, txn, encodedKey, currentRoot)
+          val (tip, parents) = getParents(encodedKey, currentRoot)
           tip match {
             // If the "tip" is a node, a leaf with a given key and value does not exist
             // so we put the current root hash back and return false.
@@ -432,10 +438,10 @@ package object history {
             // If the "tip" is equal to a leaf containing the given key and value, commence
             // with the deletion process.
             case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (hd, nodesToRehash, newNodes) = deleteLeaf(store, txn, parents)
+              val (hd, nodesToRehash, newNodes) = deleteLeaf(parents)
               val rehashedNodes                 = rehash[K, V](hd, nodesToRehash)
               val nodesToInsert                 = newNodes ++ rehashedNodes
-              val newRootHash                   = insertTries[T, K, V](store, txn, nodesToInsert).get
+              val newRootHash                   = insertTries[T, K, V](nodesToInsert).get
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true

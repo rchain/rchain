@@ -298,11 +298,12 @@ class LMDBStore[C, P, A, K] private (
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
+    implicit val store = trieStore
     collapse(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        history.insert(trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+        history.delete(trieBranch, channelsHash, canonicalize(gnat))
     }
     withTxn(createTxnRead()) { txn =>
       trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
@@ -373,7 +374,8 @@ object LMDBStore {
     val env    = Context.create[C, P, A, K](path, mapSize, flags)
     val branch = Branch.MASTER
 
-    initialize(env.trieStore, branch)
+    implicit val store = env.trieStore
+    initialize(branch)
 
     create(env, branch)
   }

@@ -311,8 +311,9 @@ object ReplayRSpace {
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
+    implicit val trieStore        = context.trieStore
 
-    history.initialize(context.trieStore, branch)
+    history.initialize(branch)
 
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
 

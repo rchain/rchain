@@ -65,4 +65,6 @@ trait WithTestStore[T, K, V] {
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
   def withTestTrieStore[R](f: (ITrieStore[T, K, V], Branch) => R): R
+
+  def withTestTrieStore[R](f: ITrieStore[T, K, V] => Branch => R): R
 }
