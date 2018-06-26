@@ -193,9 +193,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.validatorSigAlgorithm(),
     run.bondsFile.toOption,
     run.numValidators(),
-    run.data_dir().resolve("validators"),
-    run.data_dir().resolve("rspace").resolve("casper"),
-    run.map_size()
+    run.data_dir().resolve("validators")
   )
 
   verify()

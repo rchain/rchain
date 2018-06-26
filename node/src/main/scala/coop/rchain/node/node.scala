@@ -134,6 +134,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val address                  = s"rnode://$name@$host:$port"
   private val src                      = PeerNode.parse(address).right.get
   private val storagePath              = conf.run.data_dir().resolve("rspace")
+  private val casperStoragePath        = storagePath.resolve("casper")
   private val storageSize              = conf.run.map_size()
   private val defaultTimeout: Duration = Duration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
@@ -161,21 +162,21 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
-  implicit val casperEffect: MultiParentCasper[Effect] =
-    MultiParentCasper.fromConfig[Effect](conf.casperConf)
-  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
-    casperPacketHandler[Effect]
-  )
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
-                       runtime: Runtime)
+                       runtime: Runtime,
+                       casperRuntime: Runtime,
+                       casperEffect: MultiParentCasper[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
+      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      casperEffect  <- MultiParentCasper.fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
       grpcServer <- {
+        implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
         implicit val storeMetrics =
           diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
         GrpcServer
@@ -183,9 +184,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer, runtime)
+    } yield Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperEffect)
 
- def startResources(resources: Resources): Effect[Unit] =
+  def startResources(resources: Resources): Effect[Unit] =
     for {
       _ <- resources.httpServer.start.toEffect
       _ <- resources.metricsServer.start.toEffect
@@ -212,6 +213,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
     resources.runtime.close()
+    println("Shutting down Casper runtime ...")
+    resources.casperRuntime.close()
 
     println("Goodbye.")
   }
@@ -235,12 +238,19 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
-    pm =>
+  def handleCommunications(
+      resources: Resources): ProtocolMessage => Effect[CommunicationResponse] = {
+    implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
+    implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
+      casperPacketHandler[Effect]
+    )
+
+    (pm: ProtocolMessage) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
         case NotHandled => Connect.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
-    }
+      }
+  }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
@@ -250,7 +260,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
       _         <- startReportStoreMetrics(resources).toEffect
-      _         <- TransportLayer[Effect].receive(handleCommunications)
+      _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
@@ -264,7 +274,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                          defaultTimeout = defaultTimeout)))
       _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
           else ().pure[Effect]
-      _ <- casperEffect.close()
       _ <- exit0.toEffect
     } yield ()
 
