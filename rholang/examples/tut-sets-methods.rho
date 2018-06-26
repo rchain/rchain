@@ -25,3 +25,4 @@ new x in {
 } |
 // prints true
 new x in { x!(10) | for(X <- x) { @"stdout"!(Set(X!(7)).add(*X).contains(10)) }}
+  
