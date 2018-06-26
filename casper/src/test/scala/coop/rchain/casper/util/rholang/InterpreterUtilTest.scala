@@ -16,8 +16,13 @@ import cats.mtl.implicits._
 import java.nio.file.Files
 
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.rspace.trace.Event
+import coop.rchain.rspace.trace.Event._
+import coop.rchain.shared.AttemptOps._
 import monix.execution.Scheduler.Implicits.global
+import scodec.Codec
 
+import scala.collection.immutable
 import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
@@ -164,5 +169,66 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
+  }
+
+  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
+    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog = implicitly[Codec[immutable.Seq[Event]]]
+      .encode(computedTsCheckpoint.log)
+      .map(_.toByteArray)
+      .get
+    val invalidHash = ByteString.EMPTY
+
+    val chain =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = invalidHash,
+                                  tsLog = ByteString.copyFrom(computedTsLog))
+        .runS(initState)
+        .value
+    val block = chain.idToBlocks(0)
+
+    val (stateHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    stateHash should be(None)
+  }
+
+  "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
+    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog = implicitly[Codec[immutable.Seq[Event]]]
+      .encode(computedTsCheckpoint.log)
+      .map(_.toByteArray)
+      .get
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = ByteString.copyFrom(computedTsLog))
+        .runS(initState)
+        .value
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
   }
 }

@@ -204,7 +204,7 @@ object ProtoUtil {
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
       .withNewCodeHash(protoSeqHash(body.newCode))
-      .withCommReductionsHash(protoSeqHash(body.commReductions))
+      .withCommReductionsHash(ByteString.copyFrom(Blake2b256.hash(body.commReductions.toByteArray))) // NB (Kent): protoHash gives error
       .withDeployCount(body.newCode.length)
       .withVersion(version)
       .withTimestamp(timestamp)

@@ -33,9 +33,8 @@ object InterpreterUtil {
                               knownStateHashes: Set[StateHash],
                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
-
     val tsHash        = ProtoUtil.tuplespace(b)
-    val serializedLog = ByteString.EMPTY // TODO: Replace with b.body.get.commReductions
+    val serializedLog = b.body.get.commReductions
     val log = implicitly[Codec[immutable.Seq[Event]]]
       .decode(BitVector(serializedLog.toByteArray))
       .map(_.value)

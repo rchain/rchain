@@ -224,7 +224,7 @@ sealed abstract class MultiParentCasperInstances {
           body = Body()
             .withPostState(postState)
             .withNewCode(r)
-          // TODO: Add .withCommReductions(serializedLog)
+            .withCommReductions(ByteString.copyFrom(serializedLog))
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)
         } yield Some(block)
