@@ -49,6 +49,8 @@ abstract class Ob {
       result
   }
 
+  def matches(msg: Ctxt): Boolean = false
+
   def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
     var p = this
 
