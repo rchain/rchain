@@ -10,7 +10,7 @@ lazy val projectSettings = Seq(
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
-    Resolver.sonatypeRepo("snapshots")), //Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots")
+    Resolver.sonatypeRepo("snapshots")),
   scalafmtOnCompile := true
 )
 
