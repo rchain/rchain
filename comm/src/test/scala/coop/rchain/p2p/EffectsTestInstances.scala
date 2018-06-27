@@ -1,7 +1,6 @@
 package coop.rchain.p2p
 
-import java.net.SocketAddress
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 import cats._
 import cats.implicits._
@@ -9,7 +8,6 @@ import cats.implicits._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.p2p.effects._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
@@ -64,23 +62,23 @@ object EffectsTestInstances {
       requests = List.empty[Protocol]
     }
 
-    def roundTrip(msg: Protocol,
-                  remote: PeerNode,
-                  timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[Protocol]] =
+    def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] =
       Capture[F].capture {
         requests = requests :+ msg
-        reqresp.get.apply(remote).apply(msg)
+        reqresp.get.apply(peer).apply(msg)
       }
 
     def local: F[PeerNode] = src.pure[F]
-    def send(msg: Protocol, peer: PeerNode): F[CommErr[Unit]] =
+    def send(peer: PeerNode, msg: Protocol): F[Unit] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(msg: Protocol, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
+    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = ???
 
     def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
+
+    def disconnect(peer: PeerNode): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {
@@ -94,16 +92,16 @@ object EffectsTestInstances {
       warns = List.empty[String]
       errors = List.empty[String]
     }
-    def debug(msg: String): F[Unit] = ().pure[F]
-    def info(msg: String): F[Unit] = {
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
+    def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
       ().pure[F]
     }
-    def warn(msg: String): F[Unit] = {
+    def warn(msg: String)(implicit ev: LogSource): F[Unit] = {
       warns = warns :+ msg
       ().pure[F]
     }
-    def error(msg: String): F[Unit] = {
+    def error(msg: String)(implicit ev: LogSource): F[Unit] = {
       errors = errors :+ msg
       ().pure[F]
     }

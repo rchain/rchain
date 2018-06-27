@@ -55,8 +55,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
         (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
-      case EListBody(EList(s, _, _, _)) =>
-        "[" + buildSeq(s) + "]"
+      case EListBody(EList(s, _, _, remainderO)) =>
+        "[" + buildSeq(s) ++ remainderO.fold("")(v => "..." + buildString(v)) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case ESetBody(ParSet(pars, _, _)) =>

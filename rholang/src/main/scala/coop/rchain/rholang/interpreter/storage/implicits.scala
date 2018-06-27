@@ -8,6 +8,7 @@ import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
+import scodec.bits.ByteVector
 
 //noinspection ConvertExpressionToSAM
 object implicits {
@@ -57,11 +58,11 @@ object implicits {
   implicit val serializeChannels: Serialize[Seq[Channel]] =
     new Serialize[Seq[Channel]] {
 
-      override def encode(a: Seq[Channel]): Array[Byte] =
-        ListChannel.toByteArray(ListChannel(a))
+      override def encode(a: Seq[Channel]): ByteVector =
+        ByteVector.view(ListChannel.toByteArray(ListChannel(a)))
 
-      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
-        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+      override def decode(bytes: ByteVector): Either[Throwable, Seq[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes.toArray).channels.toList)
     }
 
   implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =

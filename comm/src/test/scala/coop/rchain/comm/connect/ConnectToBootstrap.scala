@@ -10,12 +10,15 @@ import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.p2p.EffectsTestInstances._
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectToBootstrapSpec
     extends FunSpec
     with Matchers
     with BeforeAndAfterEach
     with AppendedClues {
+
+  val timeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -39,7 +42,7 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(failEverything))
       // when
-      val _ = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val _ = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
       // then
       logEff.warns should equal(
         List(
@@ -55,7 +58,8 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(failEverything))
       // when
-      val result = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result =
+        Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
       // then
       logEff.errors should equal(List("Failed to connect to bootstrap node, exiting..."))
       result.value should equal(Left(couldNotConnectToBootstrap))
@@ -65,7 +69,8 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(alwaysSuccess))
       // when
-      val result = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result =
+        Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
       // then
       logEff.infos should contain(s"Bootstrapping from $remote.")
       logEff.infos should contain(s"Connected $remote.")

@@ -11,7 +11,7 @@ import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, LogSource}
 
 import java.io.{File, PrintWriter}
 import java.nio.file.Path
@@ -20,6 +20,8 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 object Genesis {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def fromBondsFile[F[_]: Monad: Capture: Log](maybePath: Option[String],
                                                numValidators: Int,
