@@ -14,6 +14,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.comm.connect.Connect.dispatch
 import coop.rchain.comm.transport._
+import coop.rchain.rholang.interpreter.Runtime
 
 import java.nio.file.Files
 
@@ -41,13 +42,9 @@ class HashSetCasperTestNode(name: String,
   implicit val errorHandlerEff   = errorHandler
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
+  val activeRuntime = Runtime.create(storageDirectory, storageSize)
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](storageDirectory,
-                                        storageSize,
-                                        Ed25519.toPublic(sk),
-                                        sk,
-                                        "ed25519",
-                                        genesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Ed25519.toPublic(sk), sk, "ed25519", genesis)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]

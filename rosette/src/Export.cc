@@ -177,7 +177,74 @@ void stdExtensionObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodeP
 void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::ExpandedLocation *exlocob = lvob->mutable_expanded_location();
     ExpandedLocation *el = (ExpandedLocation *)ob;
-    exlocob->set_value( BASE(el)->asCstring() );
+    Location loc;
+    loc.atom = el;
+    exlocob->set_value((uint32_t)loc.locfields);
+    exlocob->set_text( BASE(el)->asCstring() );
+
+    ObjectCodePB::ExpandedLocation_PBLocationType type = (ObjectCodePB::ExpandedLocation_PBLocationType)GET_GENERIC_TYPE(loc);
+    exlocob->set_type( type );
+    switch(type) {
+    case LT_CtxtRegister: {
+        ObjectCodePB::ExpandedLocation::LocCtxt * pbloc = exlocob->mutable_ctxt();
+        pbloc->set_reg( (ObjectCodePB::ExpandedLocation_LocCtxt_PBLocationCtxt)GET_CTXTREG_INDEX(loc) );
+        break;
+    }
+
+    case LT_ArgRegister: {
+        ObjectCodePB::ExpandedLocation::LocArg * pbloc = exlocob->mutable_arg();
+        pbloc->set_arg( GET_ARGREG_INDEX(loc) );
+        break;
+    }
+
+    case LT_LexVariable: {
+        ObjectCodePB::ExpandedLocation::LocLexVar * pbloc = exlocob->mutable_lexvar();
+        pbloc->set_indirect( GET_LEXVAR_IND(loc) );
+        pbloc->set_level( GET_LEXVAR_LEVEL(loc) );
+        pbloc->set_offset( GET_LEXVAR_OFFSET(loc) );
+        break;
+    }
+
+    case LT_AddrVariable: {
+        ObjectCodePB::ExpandedLocation::LocAddrVar * pbloc = exlocob->mutable_addrvar();
+        pbloc->set_indirect( GET_ADDRVAR_IND(loc) );
+        pbloc->set_level( GET_ADDRVAR_LEVEL(loc) );
+        pbloc->set_offset( GET_ADDRVAR_OFFSET(loc) );
+        break;
+    }
+
+    case LT_GlobalVariable: {
+        ObjectCodePB::ExpandedLocation::LocGlobalVar * pbloc = exlocob->mutable_globalvar();
+        pbloc->set_offset( GET_GLOBALVAR_OFFSET(loc) );
+        break;
+    }
+
+    case LT_BitField: {
+        ObjectCodePB::ExpandedLocation::LocBitField * pbloc = exlocob->mutable_bitfield();
+        pbloc->set_indirect( GET_BITFIELD_IND(loc) );
+        pbloc->set_signed_( GET_BITFIELD_SIGN(loc) );
+        pbloc->set_level( GET_BITFIELD_LEVEL(loc) );
+        pbloc->set_span( GET_BITFIELD_SPAN(loc) );
+        break;
+    }
+
+    case LT_BitField00: {
+        ObjectCodePB::ExpandedLocation::LocBitField00 * pbloc = exlocob->mutable_bitfield00();
+        pbloc->set_signed_( GET_BITFIELD00_SIGN(loc) );
+        pbloc->set_offset( GET_BITFIELD00_OFFSET(loc) );
+        pbloc->set_span( GET_BITFIELD00_SPAN(loc) );
+        break;
+    }
+
+    case LT_Limbo: {
+        ObjectCodePB::ExpandedLocation::LocLimbo * pbloc = exlocob->mutable_limbo();
+        break;
+    }
+
+    default: {
+        warning("Unknown Location Type during export.");
+    }
+    }
 }
 
 void freeExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -322,10 +389,6 @@ void quoteExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::
     populateObjectByType(qe->expr, expr);
 }
 
-void rblAtomExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-    ObjectCodePB::RBLAtom *raob = lvob->mutable_rbl_atom();
-}
-
 void reflectiveMethodExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::ReflectiveMethodExpr *rmeob = lvob->mutable_reflective_method_expr();
     ReflectiveMethodExpr * rme = (ReflectiveMethodExpr *)ob;
@@ -421,17 +484,12 @@ void templateObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::O
     populateObjectByType(t->keymeta, keymeta);
 }
 
-void compoundPatternObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-    ObjectCodePB::CompoundPattern *cpob = lvob->mutable_compound_pattern();
-    CompoundPattern * cp = (CompoundPattern *)ob;
-
-    ObjectCodePB::Object *expr = cpob->mutable_expr();
-    populateObjectByType(cp->expr, expr);
-}
-
 void complexPatternObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::ComplexPattern *cpob = lvob->mutable_complex_pattern();
     ComplexPattern * cp = (ComplexPattern *)ob;
+
+    ObjectCodePB::Object *expr = cpob->mutable_expr();
+    populateObjectByType(cp->expr, expr);
 
     ObjectCodePB::Object *patvec = cpob->mutable_patvec();
     populateObjectByType(cp->patvec, patvec);
@@ -521,7 +579,6 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"BlockExpr",           {blockExprObjectHandler, ObjectCodePB::OT_BLOCK_EXPR} },
     {"Char",                {charObjectHandler,      ObjectCodePB::OT_CHAR} },
     {"Code",                {codeObjectHandler,      ObjectCodePB::OT_CODE} },
-    {"CompoundPattern",     {compoundPatternObjectHandler, ObjectCodePB::OT_COMPOUND_PATTERN} },
     {"ComplexPattern",      {complexPatternObjectHandler, ObjectCodePB::OT_COMPLEX_PATTERN} },
     {"ConstPattern",        {constPatternObjectHandler, ObjectCodePB::OT_CONST_PATTERN} },
     {"ExpandedLocation",    {expandedLocationObjectHandler, ObjectCodePB::OT_EXPANDED_LOCATION} },
@@ -543,7 +600,6 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"Proc",                {procObjectHandler,      ObjectCodePB::OT_PROC} },
     {"ProcExpr",            {procExprObjectHandler,  ObjectCodePB::OT_PROC_EXPR} },
     {"QuoteExpr",           {quoteExprObjectHandler, ObjectCodePB::OT_QUOTE_EXPR} },
-    {"RblAtom",             {rblAtomExprObjectHandler, ObjectCodePB::OT_RBL_ATOM} },
     {"RblBool",             {rblboolObjectHandler,   ObjectCodePB::OT_RBL_BOOL} },
     {"RBLstring",           {rblstringObjectHandler, ObjectCodePB::OT_RBL_STRING} },
     {"RblTable",            {rblTableObjectHandler,  ObjectCodePB::OT_RBL_TABLE} },
@@ -603,7 +659,7 @@ void collectExportCode(Code *code) {
 
     // Save the binary opCodes from the codevec
     const char * code_binary = (char *)codevec->absolutize(0);
-    size_t code_size = codevec->numberOfWords() * sizeof(uint32_t);
+    size_t code_size = codevec->numberOfWords() * sizeof(Instr);
     ObjectCodePB::CodeVec * cv = cb->mutable_codevec();
     cv->set_opcodes( std::string(code_binary, code_size) );
 
@@ -628,7 +684,10 @@ void writeExportCode() {
     if (VerboseFlag) {
         std::string s;
         google::protobuf::TextFormat::PrintToString( objectCode, &s );
-        fprintf(stderr, "ObjectCode = \n%s\n", s.c_str());
+
+        fprintf(stderr, "*** Exported ObjectCode = \n%s\n", s.c_str());
+        fprintf(stderr, "object count = %d\n", objectCode.objects_size());
+        fprintf(stderr, "code count = %d\n", objectCode.code_block_size());
     }
 
     // Write the object code to disk.

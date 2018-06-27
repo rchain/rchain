@@ -72,7 +72,6 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
         ).pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
-      def close(): F[Unit]                                               = ().pure[F]
     }
   implicit val casperEffect                        = testCasper[Id]
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]

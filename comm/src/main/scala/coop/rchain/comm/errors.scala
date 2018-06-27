@@ -20,6 +20,7 @@ final case class PeerNodeNotFound(peer: PeerNode)        extends CommError
 final case class MalformedMessage(pm: ProtocolMessage)   extends CommError
 final case object CouldNotConnectToBootstrap             extends CommError
 final case class InternalCommunicationError(msg: String) extends CommError
+final case object TimeOut                                extends CommError
 // TODO add Show instance
 
 object CommError {
