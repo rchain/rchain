@@ -30,7 +30,7 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
     maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q => Right(q.enqueue(msg)))
   }
 
-  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
+  def broadcast(msg: Protocol, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))

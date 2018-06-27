@@ -17,7 +17,7 @@ trait TransportLayer[F[_]] {
   // TODO local should be avaialble via ApplicativeAsk, not be part of TransportLayer
   def local: F[PeerNode]
   def send(msg: Protocol, peer: PeerNode): F[CommErr[Unit]]
-  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
+  def broadcast(msg: Protocol, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
 }
 
@@ -43,7 +43,7 @@ sealed abstract class TransportLayerInstances {
       def send(msg: Protocol, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
         EitherT.liftF(evF.send(msg, p))
 
-      def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =
+      def broadcast(msg: Protocol, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(msg, peers))
       def receive(
           dispatch: Protocol => EitherT[F, E, CommunicationResponse]): EitherT[F, E, Unit] = {
