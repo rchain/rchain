@@ -5,14 +5,17 @@ import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 
 import scala.concurrent.Future
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
@@ -32,8 +35,10 @@ import coop.rchain.shared._
 
 object GrpcServer {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
+      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable: SafetyOracle](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

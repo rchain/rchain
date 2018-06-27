@@ -370,6 +370,60 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
+    // for(@[...a] <- @"channel") { … } | @"channel"!([7,8,9])
+    implicit val errorLog = new Runtime.ErrorLog()
+    val send =
+      Send(Quote(GString("channel")), List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7), GInt(8), GInt(9)))))))), false, BitSet())
+    val receive = Receive(
+      Seq(
+        ReceiveBind(Seq(Quote(Par(exprs = Seq(EListBody(EList(connectiveUsed = true, remainder = Some(FreeVar(0)))))))),
+          Quote(GString("channel")),
+          freeCount = 1)),
+      Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
+      false,
+      1,
+      BitSet()
+    )
+    val sendFirstResult = withTestSpace { space =>
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      implicit val env = Env[Par]()
+      val inspectTaskSendFirst = for {
+        _ <- reducer.eval(send)
+        _ <- reducer.eval(receive)
+      } yield space.store.toMap
+      Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
+    }
+
+    val channel = Channel(Quote(GString("result")))
+
+    sendFirstResult should be(
+      HashMap(
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
+      )
+    )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+
+    val receiveFirstResult = withTestSpace { space =>
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      implicit val env = Env[Par]()
+      val inspectTaskReceiveFirst = for {
+        _ <- reducer.eval(receive)
+        _ <- reducer.eval(send)
+      } yield space.store.toMap
+      Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
+    }
+
+    receiveFirstResult should be(
+      HashMap(
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("Success"))), false)), List())
+      )
+    )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
     implicit val errorLog = new Runtime.ErrorLog()
     val send =
@@ -745,7 +799,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                        false,
                        1,
                        BitSet())
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
@@ -799,7 +853,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val testString                = "testing testing"
     val base16Repr                = Base16.encode(testString.getBytes)
     val proc: Par                 = GString(base16Repr)
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>

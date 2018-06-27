@@ -3,30 +3,27 @@ package coop.rchain.comm.connect
 import coop.rchain.p2p.effects._
 
 import coop.rchain.comm.discovery._
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
 
-import scala.util.control.NonFatal
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
-import com.google.protobuf.ByteString
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
 import coop.rchain.shared._
 import coop.rchain.comm.CommError.ErrorHandler
 
 object Connect {
 
-  val defaultTimeout: Duration = Duration(500, MILLISECONDS)
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler]
-    : Int => F[Int] =
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
+      defaultTimeout: FiniteDuration): Int => F[Int] =
     (lastCount: Int) =>
       for {
         _         <- IOUtil.sleep[F](5000L)
@@ -39,9 +36,10 @@ object Connect {
   def connectToBootstrap[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       bootstrapAddrStr: String,
-      maxNumOfAttempts: Int = 5): F[Unit] = {
+      maxNumOfAttempts: Int = 5,
+      defaultTimeout: FiniteDuration): F[Unit] = {
 
-    def connectAttempt(attempt: Int, timeout: Duration, bootstrapAddr: PeerNode): F[Unit] =
+    def connectAttempt(attempt: Int, timeout: FiniteDuration, bootstrapAddr: PeerNode): F[Unit] =
       if (attempt > maxNumOfAttempts) for {
         _ <- Log[F].error("Failed to connect to bootstrap node, exiting...")
         _ <- errorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
@@ -70,14 +68,14 @@ object Connect {
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       peer: PeerNode,
-      timeout: Duration): F[Unit] = {
+      timeout: FiniteDuration): F[Unit] = {
 
     def initProtocolHandshake: F[Unit] =
       for {
         _       <- Log[F].info(s"Initialize protocol handshake to $peer")
         local   <- TransportLayer[F].local
         ph      = ProtocolHandshakeMessage(protocolHandshake(local))
-        phsresp <- TransportLayer[F].roundTrip(ph, peer, timeout) >>= errorHandler[F].fromEither
+        phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
         _       <- NodeDiscovery[F].addNode(peer)
       } yield ()

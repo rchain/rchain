@@ -218,33 +218,24 @@ object ProtoUtil {
       .withBody(body)
       .withJustifications(justifications)
 
-  def signBlock(block: BlockMessage, sk: Array[Byte]): BlockMessage = {
+  def signBlock(block: BlockMessage,
+                dag: BlockDag,
+                pk: Array[Byte],
+                sk: Array[Byte],
+                sigAlgorithm: String,
+                signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
     val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
     val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
-    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
-    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
-    val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+    val sender            = ByteString.copyFrom(pk)
+    val sig               = ByteString.copyFrom(signFunction(sigData, sk))
+    val currSeqNum        = dag.currentSeqNum.getOrElse(sender, -1)
+    val signedBlock = block
+      .withSender(sender)
+      .withSig(sig)
+      .withSeqNum(currSeqNum + 1)
+      .withSigAlgorithm(sigAlgorithm)
 
     signedBlock
-  }
-
-  // TODO: Extract hard-coded version and timestamp
-  def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    import Sorting.byteArrayOrdering
-    //sort to have deterministic order (to get reproducible hash)
-    val bondsProto = bonds.toIndexedSeq.sorted.map {
-      case (pk, stake) =>
-        val validator = ByteString.copyFrom(pk)
-        Bond(validator, stake)
-    }
-    val state = RChainState()
-      .withBlockNumber(0)
-      .withBonds(bondsProto)
-    val body = Body()
-      .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString], 0L, 0L)
-
-    unsignedBlockProto(body, header, List.empty[Justification])
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
@@ -253,12 +244,12 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
-    val nonce = scala.util.Random.nextInt(10000)
-    val term  = s"@${id}!($id)"
+    val timestamp = System.currentTimeMillis()
+    val term      = s"@${id}!($id)"
 
     DeployString()
       .withUser(ByteString.EMPTY)
-      .withNonce(nonce)
+      .withTimestamp(timestamp)
       .withTerm(term)
   }
 
@@ -266,20 +257,14 @@ object ProtoUtil {
     val d    = basicDeployString(id)
     val term = InterpreterUtil.mkTerm(d.term).right.get
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = Some(d)
     )
   }
 
-  def termDeploy(term: Par): Deploy = {
-    val d = basicDeployString(0)
+  def termDeploy(term: Par): Deploy =
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = None
     )
-  }
 }

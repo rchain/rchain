@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.casper.genesis.contracts
+//scalapackage coop.rchain.rholang.collection
 
 contract @["LinkedList", "head"](@list, return) = {
   match list {
@@ -151,11 +151,10 @@ contract @["LinkedList", "zip"](@list1, @list2, return) = {
 contract @["LinkedList", "range"](@start, @end, return) = {
   new loop in {
     contract loop(@i, @list) = {
-      match i < start {
-        true => { return!(list) } 
-        _ => {
-          loop!(i - 1, [i, list])
-        }
+      if(i < start) {
+        return!(list)
+      } else {
+        loop!(i - 1, [i, list])
       }
     } | loop!(end - 1, [])
   }
