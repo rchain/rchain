@@ -217,7 +217,6 @@ int ParseCommandLine(int argc, char** argv) {
         case 'c':
         {
             strncpy(ImportFile, optarg, MAXPATHLEN);    // Save the filename
-            readImportCode();   // temp debug
             break;
         }
 
