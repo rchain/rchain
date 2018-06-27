@@ -12,7 +12,7 @@ import com.google.protobuf.ByteString
 /**
   * Utility functions for working with protocol buffers.
   */
-object ProtocolMessage {
+object ProtocolHelper {
 
   def sender(proto: Protocol): Option[PeerNode] =
     for {

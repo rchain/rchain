@@ -71,7 +71,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def handleCommunications: Protocol => F[CommunicationResponse] =
     protocol =>
-      ProtocolMessage.sender(protocol).fold(notHandled.pure[F]) { sender =>
+      ProtocolHelper.sender(protocol).fold(notHandled.pure[F]) { sender =>
         updateLastSeen(sender) >>= kp(protocol match {
           case Protocol(_, Protocol.Message.Ping(_))        => handlePing
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
@@ -82,7 +82,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
     }
 
   private def handlePing: F[CommunicationResponse] =
-    Metrics[F].incrementCounter("ping-recv-count").as(handledWithMessage(ProtocolMessage.pong(src)))
+    Metrics[F].incrementCounter("ping-recv-count").as(handledWithMessage(ProtocolHelper.pong(src)))
 
   /**
     * Validate incoming LOOKUP message and return an answering
@@ -93,7 +93,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
     for {
       peers          <- Capture[F].capture(table.lookup(id))
-      lookupResponse = ProtocolMessage.lookupResponse(src, peers)
+      lookupResponse = ProtocolHelper.lookupResponse(src, peers)
       _              <- Metrics[F].incrementCounter("lookup-recv-count")
     } yield handledWithMessage(lookupResponse)
   }
@@ -112,13 +112,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
     for {
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = ProtocolMessage.lookup(src, key)
+      req = ProtocolHelper.lookup(src, key)
       r <- TransportLayer[F]
             .roundTrip(req, remoteNode, 500.milliseconds)
             .map(_.toOption
               .map {
                 case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                  lr.nodes.map(ProtocolMessage.toPeerNode)
+                  lr.nodes.map(ProtocolHelper.toPeerNode)
                 case _ => Seq()
               }
               .getOrElse(Seq()))

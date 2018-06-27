@@ -79,7 +79,7 @@ object Connect {
         ph      = protocolHandshake(local)
         phsresp <- TransportLayer[F].roundTrip(ph, peer, timeout) >>= errorHandler[F].fromEither
         _ <- Log[F].debug(
-              s"Received protocol handshake response from ${ProtocolMessage.sender(phsresp).get}.")
+              s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp).get}.")
         _ <- NodeDiscovery[F].addNode(peer)
       } yield ()
 
@@ -108,7 +108,7 @@ object Connect {
         local               <- TransportLayer[F].local
         maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
         maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-          ProtocolMessage.upstreamMessage(local, AnyProto.pack(pr)))
+          ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
       } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))
   }
 
@@ -145,7 +145,7 @@ object Connect {
           }
         }
 
-    ProtocolMessage
+    ProtocolHelper
       .sender(protocol)
       .fold(Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled)) { sender =>
         dispatchForUpstream(protocol, sender)

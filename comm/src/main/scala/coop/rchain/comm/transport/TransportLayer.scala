@@ -8,7 +8,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
-import coop.rchain.comm.{PeerNode, ProtocolMessage}
+import coop.rchain.comm.{PeerNode, ProtocolHelper}
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 

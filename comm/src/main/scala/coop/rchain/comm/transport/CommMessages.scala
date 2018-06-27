@@ -13,7 +13,7 @@ object CommMessages {
 
   def protocolHandshake(src: PeerNode): routing.Protocol = {
     val ph = ProtocolHandshake()
-    ProtocolMessage.upstreamMessage(src, AnyProto.pack(ph))
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(ph))
   }
 
   def toProtocolHandshake(proto: routing.Protocol): CommErr[ProtocolHandshake] =
@@ -24,7 +24,7 @@ object CommMessages {
 
   def protocolHandshakeResponse(src: PeerNode): routing.Protocol = {
     val phr = ProtocolHandshakeResponse()
-    ProtocolMessage.upstreamMessage(src, AnyProto.pack(phr))
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr))
   }
 
   def packet(src: PeerNode, content: Array[Byte]): routing.Protocol =
@@ -32,7 +32,7 @@ object CommMessages {
 
   def packet(src: PeerNode, content: ByteString): routing.Protocol = {
     val p = Packet(content)
-    ProtocolMessage.upstreamMessage(src, AnyProto.pack(p))
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(p))
   }
 
   def toPacket(proto: routing.Protocol): CommErr[Packet] = proto.message match {

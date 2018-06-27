@@ -173,7 +173,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     (for {
       peers <- nodeDiscoveryEffect.peers
       loc   <- transportLayerEffect.local
-      _     <- transportLayerEffect.broadcast(ProtocolMessage.disconnect(loc), peers)
+      _     <- transportLayerEffect.broadcast(ProtocolHelper.disconnect(loc), peers)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
