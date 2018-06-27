@@ -7,6 +7,7 @@ import coop.rchain.comm.protocol.routing._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import coop.rchain.shared.{Log, LogSource}
 
 import scala.concurrent.duration._
 import scala.util._
@@ -20,8 +21,11 @@ import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
     implicit scheduler: Scheduler,
-    connections: ConnectionsState)
+    connections: ConnectionsState,
+    log: Log[Task])
     extends TransportLayer[Task] {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   val local: Task[PeerNode] = src.pure[Task]
 
@@ -71,9 +75,10 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
   def disconnect(peer: PeerNode): Task[Unit] =
     for {
       cs <- connections.get
-      _ = cs
-        .get(peer.id)
-        .foreach(c => Try(c.shutdown()))
+      _ <- cs.get(peer.id) match {
+            case Some(c) => Task.delay(c.shutdown()).attempt.void
+            case _       => log.warn(s"Can't disconnect from peer ${peer.id}. Connection not found.")
+          }
       _ <- connections.modify(_ - peer.id)
     } yield ()
 
@@ -89,6 +94,10 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
 
   private def innerSend(peer: PeerNode, request: TLRequest): Task[TLResponse] =
     withClient(peer)(stub => Task.fromFuture(stub.send(request)))
+      .doOnFinish {
+        case None    => Task.unit
+        case Some(e) => log.warn(s"Failed to send a message to peer ${peer.id}: ${e.getMessage}")
+      }
 
   private def sendRequest(request: TLRequest,
                           peer: PeerNode,

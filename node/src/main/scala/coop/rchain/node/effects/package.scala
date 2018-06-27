@@ -52,7 +52,8 @@ package object effects {
 
   def tcpTranposrtLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.ConnectionsState) =
+      connections: TcpTransportLayer.ConnectionsState,
+      log: Log[Task]) =
     new TcpTransportLayer(host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
