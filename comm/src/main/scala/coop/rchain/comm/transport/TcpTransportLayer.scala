@@ -95,7 +95,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(peer => send(msg.proto, peer)).map(_.toSeq)
 
-  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
+  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
@@ -109,20 +109,16 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
 }
 
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
-    dispatch: ProtocolMessage => F[CommunicationResponse])
+    dispatch: Protocol => F[CommunicationResponse])
     extends TransportLayerGrpc.TransportLayer {
 
   def send(request: TLRequest): Future[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[F]) { protocol =>
-        ProtocolMessage.toProtocolMessage(protocol) match {
-          case Left(error) => internalServerError(error.toString).pure[F]
-          case Right(pm) =>
-            dispatch(pm) >>= {
-              case NotHandled                   => internalServerError(s"Message $pm was not handled!").pure[F]
-              case HandledWitoutMessage         => noResponse.pure[F]
-              case HandledWithMessage(response) => returnProtocol(response.proto).pure[F]
-            }
+        dispatch(protocol) >>= {
+          case NotHandled                   => internalServerError(s"Message ${protocol} was not handled!").pure[F]
+          case HandledWitoutMessage         => noResponse.pure[F]
+          case HandledWithMessage(response) => returnProtocol(response).pure[F]
         }
       }
       .toFuture

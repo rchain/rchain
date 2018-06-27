@@ -47,8 +47,8 @@ object EffectsTestInstances {
       nodes
     }
 
-    def findMorePeers(limit: Int): F[Seq[PeerNode]]                       = ???
-    def handleCommunications: ProtocolMessage => F[CommunicationResponse] = ???
+    def findMorePeers(limit: Int): F[Seq[PeerNode]]                = ???
+    def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
@@ -80,7 +80,7 @@ object EffectsTestInstances {
       }
     def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
-    def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
+    def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {

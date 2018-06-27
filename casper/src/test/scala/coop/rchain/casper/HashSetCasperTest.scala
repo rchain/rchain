@@ -275,14 +275,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).transportLayerEff
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
-    val signedInvalidBlockPacketMessage =
-      PacketMessage(packet(nodes(1).local, signedInvalidBlock.toByteString))
+    val signedInvalidBlockPacketMessage = packet(nodes(1).local, signedInvalidBlock.toByteString)
     nodes(0).transportLayerEff.send(signedInvalidBlockPacketMessage, nodes(1).local)
     nodes(1).receive() // receives signedBlockThatPointsToInvalidBlock; attempts to add both blocks
 
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Ignoring block ") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
   }
+
 }
 
 object HashSetCasperTest {

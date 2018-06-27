@@ -23,43 +23,9 @@ trait ProtocolMessage {
 }
 
 /**
-  * A ping is a simple are-you-there? message.
-  */
-final case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def response(src: PeerNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield PongMessage(ProtocolMessage.pong(src), System.currentTimeMillis)
-}
-
-/**
-  * A pong is the response to a ping.
-  */
-final case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-
-/**
-  * A lookup message asks for a list of peers from the local Kademlia
-  * table that are closest to a given key.
-  */
-final case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def lookupId: Option[Seq[Byte]] = proto.message.lookup.map(_.id.toByteArray)
-
-  def response(src: PeerNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
-    header.map { h =>
-      LookupResponseMessage(ProtocolMessage.lookupResponse(src, nodes), System.currentTimeMillis)
-    }
-}
-
-/**
   * A disconnect causes the receiver to forget about this peer.
   */
 final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-
-/**
-  * The response to a lookup message. It holds the list of peers
-  * closest to the queried key.
-  */
-final case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
 final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
@@ -135,24 +101,4 @@ object ProtocolMessage {
       .withHeader(header(src))
       .withUpstream(upstream)
 
-  def toProtocolMessage(proto: Protocol): Either[CommError, ProtocolMessage] = proto match {
-    case msg: Protocol =>
-      msg.message match {
-        case Protocol.Message.Ping(_)   => Right(PingMessage(msg, System.currentTimeMillis))
-        case Protocol.Message.Pong(_)   => Right(PongMessage(msg, System.currentTimeMillis))
-        case Protocol.Message.Lookup(_) => Right(LookupMessage(msg, System.currentTimeMillis))
-        case Protocol.Message.LookupResponse(_) =>
-          Right(LookupResponseMessage(msg, System.currentTimeMillis))
-        case Protocol.Message.Disconnect(_) =>
-          Right(DisconnectMessage(msg, System.currentTimeMillis))
-        case Protocol.Message.Upstream(_) => Right(UpstreamMessage(msg, System.currentTimeMillis))
-        case _                            => Left(UnknownProtocolError("unable to unmarshal protocol buffer"))
-      }
-  }
-  def parse(bytes: Seq[Byte]): Either[CommError, ProtocolMessage] =
-    try {
-      toProtocolMessage(Protocol.parseFrom(bytes.toArray))
-    } catch {
-      case NonFatal(ex: Exception) => Left(ProtocolException(ex))
-    }
 }

@@ -18,7 +18,7 @@ trait TransportLayer[F[_]] {
   def local: F[PeerNode]
   def send(msg: Protocol, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
-  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit]
+  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
 }
 
 object TransportLayer extends TransportLayerInstances {
@@ -45,9 +45,9 @@ sealed abstract class TransportLayerInstances {
 
       def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(msg, peers))
-      def receive(dispatch: ProtocolMessage => EitherT[F, E, CommunicationResponse])
-        : EitherT[F, E, Unit] = {
-        val dis: ProtocolMessage => F[CommunicationResponse] = msg =>
+      def receive(
+          dispatch: Protocol => EitherT[F, E, CommunicationResponse]): EitherT[F, E, Unit] = {
+        val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap(_ match {
             case Left(err) =>
               Log[F].error(s"Error while handling message. Error: $err") *> notHandled.pure[F]

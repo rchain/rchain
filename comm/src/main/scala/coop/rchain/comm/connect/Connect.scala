@@ -108,7 +108,7 @@ object Connect {
         local               <- TransportLayer[F].local
         maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
         maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-          PacketMessage(ProtocolMessage.upstreamMessage(local, AnyProto.pack(pr))))
+          ProtocolMessage.upstreamMessage(local, AnyProto.pack(pr)))
       } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))
   }
 
@@ -119,14 +119,14 @@ object Connect {
     for {
       local <- TransportLayer[F].local
       _     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      phr   = ProtocolHandshakeResponseMessage(protocolHandshakeResponse(local))
+      phr   = protocolHandshakeResponse(local)
       _     <- NodeDiscovery[F].addNode(remote)
       _     <- Log[F].info(s"Responded to protocol handshake request from $remote")
     } yield handledWithMessage(phr)
 
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
-      msg: ProtocolMessage): F[CommunicationResponse] = {
+      protocol: RoutingProtocol): F[CommunicationResponse] = {
 
     def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[CommunicationResponse] =
       proto.message.upstream
@@ -145,15 +145,11 @@ object Connect {
           }
         }
 
-    msg match {
-      case UpstreamMessage(proto, _) =>
-        ProtocolMessage
-          .sender(msg.proto)
-          .fold(Log[F].error(s"Sender not present, DROPPING msg $msg").as(notHandled)) { sender =>
-            dispatchForUpstream(proto, sender)
-          }
-      case _ => Log[F].error(s"Unrecognized msg $msg") *> notHandled.pure[F]
-    }
+    ProtocolMessage
+      .sender(protocol)
+      .fold(Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled)) { sender =>
+        dispatchForUpstream(protocol, sender)
+      }
   }
 
   private def getOrError[F[_]: Applicative: ErrorHandler, A](oa: Option[A],

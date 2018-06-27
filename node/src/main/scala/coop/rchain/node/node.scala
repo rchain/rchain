@@ -24,11 +24,11 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
+import coop.rchain.comm.discovery.{Ping => NDPing, _}
 import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
-
+import coop.rchain.comm.protocol.routing._
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -126,7 +126,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
-  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
+  implicit val pingEffect: NDPing[Task]                 = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
   implicit val turanOracleEffect: SafetyOracle[Effect]  = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
@@ -206,7 +206,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
+  def handleCommunications: Protocol => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
         case NotHandled => Connect.dispatch[Effect](pm)
