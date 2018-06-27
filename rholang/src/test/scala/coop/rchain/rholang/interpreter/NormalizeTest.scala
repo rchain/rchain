@@ -875,6 +875,9 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PVarRef" should "do a deep lookup in a match case" in {
+    // assuming `x` is bound
+    // example: @7!(10) | for (*x <- @7) { … }
+    // match x { =x => Nil }
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
     val listCases   = new ListCase()
     listCases.add(new CaseImpl(new PVarRef(new VarRefKindProc(), "x"), new PNil()))
@@ -894,6 +897,9 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   it should "do a deep lookup in a receive case" in {
+    // assuming `x` is bound:
+    // example : new x in { … }
+    // for(@{=*x} <- @Nil) { Nil }
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
     val listBindings = new ListName()
     listBindings.add(new NameQuote(new PVarRef(new VarRefKindName(), "x")))
