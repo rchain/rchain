@@ -306,7 +306,7 @@ class LMDBStore[C, P, A, K] private (
     }
     withTxn(createTxnWrite()) { txn =>
       trieStore
-        .persistCheckpointAndGetRoot(txn, trieBranch)
+        .persistAndGetRoot(txn, trieBranch)
         .getOrElse(throw new Exception("Could not get root hash"))
     }
   }
