@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.p2p.EffectsTestInstances._
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectToBootstrapSpec
     extends FunSpec
@@ -17,7 +17,7 @@ class ConnectToBootstrapSpec
     with BeforeAndAfterEach
     with AppendedClues {
 
-  val timeout: Duration = Duration(1, MILLISECONDS)
+  val timeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
 
   type Effect[A] = CommErrT[Id, A]
 

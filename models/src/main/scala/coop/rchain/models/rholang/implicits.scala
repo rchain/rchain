@@ -414,6 +414,7 @@ object implicits {
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
         ChannelLocallyFree.connectiveUsed(rb.source.get)
+
       def locallyFree(rb: ReceiveBind) =
         ChannelLocallyFree.locallyFree(rb.source.get)
     }
