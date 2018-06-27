@@ -34,7 +34,7 @@ import coop.rchain.comm.connect.Connect
 import coop.rchain.crypto.codec.Base16
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
@@ -127,16 +127,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host                     = conf.run.fetchHost(upnp)
-  private val port                     = conf.run.port()
-  private val certificateFile          = conf.run.certificatePath.toFile
-  private val keyFile                  = conf.run.keyPath.toFile
-  private val address                  = s"rnode://$name@$host:$port"
-  private val src                      = PeerNode.parse(address).right.get
-  private val storagePath              = conf.run.data_dir().resolve("rspace")
-  private val casperStoragePath        = storagePath.resolve("casper")
-  private val storageSize              = conf.run.map_size()
-  private val defaultTimeout: Duration = Duration(conf.run.defaultTimeout().toLong, MILLISECONDS)
+  private val host              = conf.run.fetchHost(upnp)
+  private val port              = conf.run.port()
+  private val certificateFile   = conf.run.certificatePath.toFile
+  private val keyFile           = conf.run.keyPath.toFile
+  private val address           = s"rnode://$name@$host:$port"
+  private val src               = PeerNode.parse(address).right.get
+  private val storagePath       = conf.run.data_dir().resolve("rspace")
+  private val casperStoragePath = storagePath.resolve("casper")
+  private val storageSize       = conf.run.map_size()
+  private val defaultTimeout    = FiniteDuration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -157,7 +157,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](host, port, certificateFile, keyFile)(src)
+    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
@@ -203,7 +203,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       loc   <- transportLayerEffect.local
       ts    <- timeEffect.currentMillis
       msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
-      _     <- transportLayerEffect.broadcast(msg, peers)
+      _     <- transportLayerEffect.broadcast(peers, msg)
       // TODO remove that once broadcast and send reuse roundTrip
       _ <- IOUtil.sleep[Task](5000L)
     } yield ()).unsafeRunSync
