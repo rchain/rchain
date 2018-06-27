@@ -14,12 +14,12 @@ import scodec.bits.BitVector
 import scala.collection.immutable.Seq
 import scala.collection.JavaConverters._
 
-class LMDBTrieStore[K, V] private(val env: Env[ByteBuffer],
-                                  _dbTrie: Dbi[ByteBuffer],
-                                  _dbRoot: Dbi[ByteBuffer],
-                                  _dbPastRoots: Dbi[ByteBuffer])(implicit
-                                                                 codecK: Codec[K],
-                                                                 codecV: Codec[V])
+class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
+                                   _dbTrie: Dbi[ByteBuffer],
+                                   _dbRoot: Dbi[ByteBuffer],
+                                   _dbPastRoots: Dbi[ByteBuffer])(implicit
+                                                                  codecK: Codec[K],
+                                                                  codecV: Codec[V])
     extends ITrieStore[Txn[ByteBuffer], K, V] {
 
   private[rspace] def createTxnRead(): Txn[ByteBuffer] = env.txnRead
@@ -94,8 +94,8 @@ class LMDBTrieStore[K, V] private(val env: Env[ByteBuffer],
       }
       .map {
         case (currentRoot, updatedPastRoots) =>
-          val encodedBranch          = Codec[Branch].encode(branch).get
-          val encodedBranchBuff      = encodedBranch.bytes.toDirectByteBuffer
+          val encodedBranch        = Codec[Branch].encode(branch).get
+          val encodedBranchBuff    = encodedBranch.bytes.toDirectByteBuffer
           val encodedPastRoots     = Codec[Seq[Blake2b256Hash]].encode(updatedPastRoots).get
           val encodedPastRootsBuff = encodedPastRoots.bytes.toDirectByteBuffer
           _dbPastRoots.put(txn, encodedBranchBuff, encodedPastRootsBuff)
@@ -120,7 +120,7 @@ class LMDBTrieStore[K, V] private(val env: Env[ByteBuffer],
     }
 
   private[this] def getPastRootsInBranch(txn: Txn[ByteBuffer],
-                                           branch: Branch): Seq[Blake2b256Hash] = {
+                                         branch: Branch): Seq[Blake2b256Hash] = {
     val encodedBranch     = Codec[Branch].encode(branch).get
     val encodedBranchBuff = encodedBranch.bytes.toDirectByteBuffer
     Option(_dbPastRoots.get(txn, encodedBranchBuff))
@@ -159,8 +159,8 @@ object LMDBTrieStore {
   def create[K, V](env: Env[ByteBuffer])(implicit
                                          codecK: Codec[K],
                                          codecV: Codec[V]): LMDBTrieStore[K, V] = {
-    val dbTrie: Dbi[ByteBuffer]        = env.openDbi("Trie", MDB_CREATE)
-    val dbRoots: Dbi[ByteBuffer]       = env.openDbi("Roots", MDB_CREATE)
+    val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
+    val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
     new LMDBTrieStore[K, V](env, dbTrie, dbRoots, dbPastRoots)
   }

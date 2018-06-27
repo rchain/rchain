@@ -274,7 +274,7 @@ trait HistoryActionsTests
         Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
       the[Exception] thrownBy {
         space.reset(unknownHash)
-      } should have message "Unknown checkpoint."
+      } should have message "Unknown root."
     }
 
   "createCheckpoint, consume, createCheckpoint, reset to first checkpoint, reset to second checkpoint" should

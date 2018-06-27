@@ -15,9 +15,7 @@ class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
   private[rspace] def putRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit = ???
 
-  private[rspace] def validateAndPutRoot(txn: T,
-                                         branch: Branch,
-                                         hash: Blake2b256Hash): Unit = ???
+  private[rspace] def validateAndPutRoot(txn: T, branch: Branch, hash: Blake2b256Hash): Unit = ???
 
   private[rspace] def persistAndGetRoot(txn: T, branch: Branch): Option[Blake2b256Hash] =
     ???
