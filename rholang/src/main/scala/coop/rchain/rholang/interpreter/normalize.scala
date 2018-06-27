@@ -424,10 +424,20 @@ object ProcNormalizeMatcher {
       case p: PEq  => binaryExp(p.proc_1, p.proc_2, input, EEq.apply)
       case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeq.apply)
 
-      case p: PAnd     => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
-      case p: POr      => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
-      case p: PMatches => binaryExp(p.proc_1, p.proc_2, input, EMatches.apply)
-
+      case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
+      case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
+      case p: PMatches =>
+        for {
+          leftResult <- normalizeMatch[M](p.proc_1, input.copy(par = VectorPar()))
+          rightResult <- normalizeMatch[M](p.proc_2,
+                                           ProcVisitInputs(VectorPar(),
+                                                           input.env.pushDown(),
+                                                           DebruijnLevelMap[VarSort]()))
+        } yield
+          ProcVisitOutputs(
+            input.par.prepend(EMatches(leftResult.par, rightResult.par)),
+            leftResult.knownFree
+          )
       case p: PExprs =>
         normalizeMatch[M](p.proc_, input)
 
