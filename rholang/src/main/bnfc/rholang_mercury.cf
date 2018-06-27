@@ -43,7 +43,7 @@ PLt.          Proc7  ::= Proc7 "<" Proc8 ;
 PLte.         Proc7  ::= Proc7 "<=" Proc8 ;
 PGt.          Proc7  ::= Proc7 ">" Proc8 ;
 PGte.         Proc7  ::= Proc7 ">=" Proc8 ;
-PMatches.     Proc6  ::= Proc7 "matches" ProcVar ;
+PMatches.     Proc6  ::= Proc7 "matches" Proc7 ;
 PEq.          Proc6  ::= Proc6 "==" Proc7 ;
 PNeq.         Proc6  ::= Proc6 "!=" Proc7 ;
 PAnd.         Proc5  ::= Proc5 "and" Proc6 ;
