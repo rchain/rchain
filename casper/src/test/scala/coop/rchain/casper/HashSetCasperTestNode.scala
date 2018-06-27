@@ -43,8 +43,10 @@ class HashSetCasperTestNode(name: String,
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   val activeRuntime = Runtime.create(storageDirectory, storageSize)
+  val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](activeRuntime, Ed25519.toPublic(sk), sk, "ed25519", genesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
+  implicit val constructor = MultiParentCasperConstructor.successCasperConstructor[Id](casperEff)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]

@@ -240,6 +240,21 @@ object ProtoUtil {
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
+  /**
+    * Interprets the byte array as a large positive number, adds the
+    * given integer by usual addition, then turns the result back into
+    * a byte array.
+    * @param n Byte array to interpret as large positive number
+    * @param m Integer to add to `n`
+    * @return Result of the addition, changes back to a byte array.
+    */
+  def add(n: Array[Byte], m: Int): Array[Byte] = {
+    val num = BigInt(Base16.encode(n), 16)
+    val sum = num + m
+
+    Base16.decode(sum.toString(16))
+  }
+
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 

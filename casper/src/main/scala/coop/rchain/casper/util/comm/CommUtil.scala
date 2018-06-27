@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.casper.{MultiParentCasper, PrettyPrinter, Validate}
+import coop.rchain.casper.{MultiParentCasper, MultiParentCasperConstructor, PrettyPrinter, Validate}
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.rchain.Packet
@@ -52,41 +52,67 @@ object CommUtil {
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
-  def casperPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
-      peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
+  def casperPacketHandler[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      peer: PeerNode)(implicit constructorEv: MultiParentCasperConstructor[F, ApprovedBlock])
+    : PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
-        (p: Packet) => { packetToBlockRequest(p) orElse packetToBlockMessage(p) }
+        (p: Packet) => {
+          packetToBlockRequest(p) orElse packetToApprovedBlock(p) orElse packetToBlockMessage(p)
+        }
       )
       .andThen {
-        case b: BlockMessage =>
-          for {
-            isOldBlock <- MultiParentCasper[F].contains(b)
-            _ <- if (isOldBlock) {
-                  Log[F].info(
-                    s"CASPER: Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
-                } else {
-                  handleNewBlock[F](b)
-                }
-          } yield none[Packet]
+        case b @ (_: BlockMessage | _: BlockRequest) =>
+          MultiParentCasperConstructor[F, ApprovedBlock].casperInstance match {
+            case Left(ex) =>
+              Log[F]
+                .warn(
+                  "CASPER: a Casper message was received, " +
+                    "however could not be processed due to the following error. " +
+                    ex.getMessage
+                )
+                .map(_ => none[Packet])
 
-        case r: BlockRequest =>
-          for {
-            dag   <- MultiParentCasper[F].blockDag
-            local <- TransportLayer[F].local
-            block = dag.blockLookup.get(r.hash).map(_.toByteString)
-            maybeMsg = block.map(serializedMessage =>
-              PacketMessage(packet(local, serializedMessage)))
-            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
-            hash     = PrettyPrinter.buildString(r.hash)
-            logIntro = s"Received request for block $hash from $peer. "
-            _ <- send match {
-                  case None    => Log[F].info(logIntro + "No response given since block not found.")
-                  case Some(_) => Log[F].info(logIntro + "Response sent.")
-                }
-          } yield none[Packet]
+            case Right(casper) =>
+              implicit val casperEvidence = casper
+              blockPacketHandler[F](peer, b)
+          }
+
+        case a: ApprovedBlock =>
+          MultiParentCasperConstructor[F, ApprovedBlock].receive(a).map(_ => none[Packet])
       }
+
+  def blockPacketHandler[
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      peer: PeerNode,
+      msg: Any): F[Option[Packet]] =
+    msg match {
+      case b: BlockMessage =>
+        for {
+          isOldBlock <- MultiParentCasper[F].contains(b)
+          _ <- if (isOldBlock) {
+                Log[F].info(
+                  s"CASPER: Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+              } else {
+                handleNewBlock[F](b)
+              }
+        } yield none[Packet]
+
+      case r: BlockRequest =>
+        for {
+          dag      <- MultiParentCasper[F].blockDag
+          local    <- TransportLayer[F].local
+          block    = dag.blockLookup.get(r.hash).map(_.toByteString)
+          maybeMsg = block.map(serializedMessage => PacketMessage(packet(local, serializedMessage)))
+          send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
+          hash     = PrettyPrinter.buildString(r.hash)
+          logIntro = s"Received request for block $hash from $peer. "
+          _ <- send match {
+                case None    => Log[F].info(logIntro + "No response given since block not found.")
+                case Some(_) => Log[F].info(logIntro + "Response sent.")
+              }
+        } yield none[Packet]
+    }
 
   private def handleNewBlock[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
@@ -98,6 +124,10 @@ object CommUtil {
 
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
     Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
+
+  private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
+    Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
+      .filter(_.block.nonEmpty)
 
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
