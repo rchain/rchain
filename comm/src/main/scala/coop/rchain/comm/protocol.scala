@@ -10,26 +10,6 @@ import Catscontrib._
 import com.google.protobuf.ByteString
 
 /**
-  * `ProtocolMessage` insulates protocol handlers from protocol buffer
-  * clutter.
-  */
-trait ProtocolMessage {
-  val proto: Protocol
-
-  def header: Option[Header] = proto.header
-
-  def toByteSeq: Seq[Byte] =
-    proto.toByteArray
-}
-
-/**
-  * A disconnect causes the receiver to forget about this peer.
-  */
-final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-
-final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-
-/**
   * Utility functions for working with protocol buffers.
   */
 object ProtocolMessage {

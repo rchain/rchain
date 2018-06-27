@@ -11,10 +11,6 @@ import coop.rchain.catscontrib._, Catscontrib._
 
 object CommMessages {
 
-  final case class PacketMessage(proto: routing.Protocol)                    extends ProtocolMessage
-  final case class ProtocolHandshakeMessage(proto: routing.Protocol)         extends ProtocolMessage
-  final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol) extends ProtocolMessage
-
   def protocolHandshake(src: PeerNode): routing.Protocol = {
     val ph = ProtocolHandshake()
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(ph))
