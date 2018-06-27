@@ -51,5 +51,5 @@ object Blake2b256Hash {
   implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 
-  implicit def codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(codecBlake2b256Hash)
+  implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(codecBlake2b256Hash)
 }
