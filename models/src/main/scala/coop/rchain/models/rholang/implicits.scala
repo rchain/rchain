@@ -321,7 +321,7 @@ object implicits {
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
         case EMatchesBody(EMatches(process, pattern)) =>
-          process.get.connectiveUsed || pattern.get.connectiveUsed
+          process.connectiveUsed || pattern.connectiveUsed
       }
 
     def locallyFree(e: Expr) =
@@ -353,7 +353,7 @@ object implicits {
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
         case EMethodBody(e)             => e.locallyFree
         case EMatchesBody(EMatches(target, pattern)) =>
-          target.get.locallyFree | pattern.get.locallyFree
+          target.locallyFree | pattern.locallyFree
 
       }
   }

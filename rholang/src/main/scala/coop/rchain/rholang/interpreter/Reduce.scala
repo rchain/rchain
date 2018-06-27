@@ -491,9 +491,9 @@ object Reduce {
 
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
-            evaledTarget <- evalExpr(target.get)
+            evaledTarget <- evalExpr(target)
             substTarget  <- substitutePar[M].substitute(evaledTarget)(0, env)
-            substPattern <- substitutePar[M].substitute(pattern.get)(1, env)
+            substPattern <- substitutePar[M].substitute(pattern)(1, env)
           } yield
             (GBool(
               SpatialMatcher
