@@ -436,7 +436,7 @@ object ProcNormalizeMatcher {
       case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
       case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
       case p: PMatches =>
-        // I|n case of 'matches' expression the free variables from the pattern are thrown away
+        // In case of 'matches' expression the free variables from the pattern are thrown away
         // and only the ones from the target are used.
         // This is because the "target matches pattern" should have the same semantics as
         // "match target { pattern => true ; _ => false}
