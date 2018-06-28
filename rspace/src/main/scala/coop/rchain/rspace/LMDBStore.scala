@@ -304,8 +304,10 @@ class LMDBStore[C, P, A, K] private (
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
-    withTxn(createTxnRead()) { txn =>
-      trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
+    withTxn(createTxnWrite()) { txn =>
+      trieStore
+        .persistAndGetRoot(txn, trieBranch)
+        .getOrElse(throw new Exception("Could not get root hash"))
     }
   }
 
