@@ -3,7 +3,7 @@ Description=RChain Node
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/rnode
+ExecStart=/usr/bin/rnode run
 User=rnode
 
 [Install]

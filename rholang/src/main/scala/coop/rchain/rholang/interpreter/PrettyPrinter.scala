@@ -62,8 +62,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
         (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
-      case EListBody(EList(s, _, _, _)) =>
-        "[" + buildSeq(s) + "]"
+      case EListBody(EList(s, _, _, remainderO)) =>
+        "[" + buildSeq(s) ++ remainderO.fold("")(v => "..." + buildString(v)) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case ESetBody(ParSet(pars, _, _)) =>
@@ -95,8 +95,8 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level)  => s"$freeId${freeShift + level}"
-      case BoundVar(level) => s"$boundId${boundShift - level - 1}"
+      case FreeVar(level)    => s"$freeId${freeShift + level}"
+      case BoundVar(level)   => s"$boundId${boundShift - level - 1}"
       case Wildcard(_)       => "_"
       case VarInstance.Empty => "@Nil"
     }
@@ -202,16 +202,12 @@ case class PrettyPrinter(freeShift: Int,
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type.")
     }
 
-  private def incChar(charId: Char): Char = ((charId + 1 - 97) % 26 + 97).toChar
-  private def decChar(charId: Char): Char = ((charId - 1 - 97) % 26 + 97).toChar
+  def increment(id: String): String = {
+    def incChar(charId: Char): Char = ((charId + 1 - 97) % 26 + 97).toChar
 
-  def increment(id: String) = adjustVariableNames(id)(incChar)
-  def decrement(id: String) = adjustVariableNames(id)(decChar)
-
-  private def adjustVariableNames(id: String)(op: Char => Char): String = {
-    val newId = op(id.last).toString
+    val newId = incChar(id.last).toString
     if (newId equals "a")
-      if (id.length > 1) adjustVariableNames(id.dropRight(1))(op) + newId
+      if (id.length > 1) increment(id.dropRight(1)) + newId
       else "aa"
     else id.dropRight(1) + newId
   }

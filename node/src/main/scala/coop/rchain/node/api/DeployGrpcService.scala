@@ -39,10 +39,8 @@ private[api] class DeployGrpcService[F[_]: Monad: MultiParentCasper: Futurable: 
     InterpreterUtil.mkTerm(d.term) match {
       case Right(term) =>
         val deploy = Deploy(
-          user = d.user,
-          nonce = d.nonce,
           term = Some(term),
-          sig = d.sig
+          raw = Some(d)
         )
         val f = for {
           _ <- MultiParentCasper[F].deploy(deploy)

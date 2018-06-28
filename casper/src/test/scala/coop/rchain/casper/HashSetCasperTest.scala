@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.comm.transport.CommMessages.{packet, PacketMessage}
+import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import monix.execution.Scheduler.Implicits.global
@@ -69,6 +69,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val logMessages = List(
       "CASPER: Received Deploy",
       "CASPER: Beginning send of Block #1",
+      "CASPER: Sent",
       "CASPER: Added",
       "CASPER: New fork-choice tip is block"
     )
@@ -268,14 +269,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).transportLayerEff
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
-    val signedInvalidBlockPacketMessage =
-      PacketMessage(packet(nodes(1).local, signedInvalidBlock.toByteString))
-    nodes(0).transportLayerEff.send(signedInvalidBlockPacketMessage, nodes(1).local)
+    val signedInvalidBlockPacketMessage = packet(nodes(1).local, signedInvalidBlock.toByteString)
+    nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedBlockThatPointsToInvalidBlock; attempts to add both blocks
 
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Ignoring block ") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
   }
+
 }
 
 object HashSetCasperTest {

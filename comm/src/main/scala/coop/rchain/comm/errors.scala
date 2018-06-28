@@ -1,5 +1,6 @@
 package coop.rchain.comm
 
+import coop.rchain.comm.protocol.routing._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
@@ -17,9 +18,10 @@ final case class ParseError(msg: String)                 extends CommError
 final case object EncryptionHandshakeIncorrectlySigned   extends CommError
 final case object BootstrapNotProvided                   extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)        extends CommError
-final case class MalformedMessage(pm: ProtocolMessage)   extends CommError
+final case class MalformedMessage(pm: Protocol)          extends CommError
 final case object CouldNotConnectToBootstrap             extends CommError
 final case class InternalCommunicationError(msg: String) extends CommError
+final case object TimeOut                                extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -38,5 +40,5 @@ object CommError {
   def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
-  def malformedMessage(pm: ProtocolMessage): CommError   = MalformedMessage(pm)
+  def malformedMessage(pm: Protocol): CommError          = MalformedMessage(pm)
 }

@@ -40,6 +40,21 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       space.produce(channelCreator(i), datumCreator(i), persist)
     }
 
+  "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
+    (space, replaySpace) =>
+      val root0 = replaySpace.createCheckpoint().root
+      replaySpace.store.isEmpty shouldBe true
+
+      space.produce("ch1", "datum1", false)
+      val root1 = space.createCheckpoint().root
+
+      replaySpace.reset(root1)
+      replaySpace.store.isEmpty shouldBe false
+
+      space.reset(root0)
+      space.store.isEmpty shouldBe true
+  }
+
   "Creating a COMM Event that is not contained in the trace log" should "throw a ReplayException" in
     withTestSpaces { (space, replaySpace) =>
       val ch1 = "ch1"
