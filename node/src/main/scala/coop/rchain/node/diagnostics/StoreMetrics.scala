@@ -41,22 +41,22 @@ object StoreMetrics extends StoreMetricsInstances {
         _ <- m.setGauge(name + "-avg-ms", value.map(_.avgMilliseconds.toLong).getOrElse(0))
       } yield ()
 
+    def spaceUsage(rspaceName: String, space: Option[RSpaceUsage]) =
+      List(
+        pc(s"$rspaceName-consumes", space.flatMap(_.consumes)),
+        pc(s"$rspaceName-produces", space.flatMap(_.produces)),
+        cm(s"$rspaceName-consumes-COMM", space.flatMap(_.consumesComm)),
+        cm(s"$rspaceName-produces-COMM", space.flatMap(_.producesComm)),
+        cm(s"$rspaceName-install-COMM", space.flatMap(_.installComm))
+      )
+
     def reportStoreSize(storeUsage: StoreUsage): List[F[Unit]] =
       List(
         g("total-size-on-disk", storeUsage.totalSizeOnDisk),
         g("rspace-size-on-disk", storeUsage.rspaceSizeOnDisk),
         g("rspace-data-entries", storeUsage.rspaceDataEntries),
-        pc("rspace-consumes", storeUsage.rspace.flatMap(_.consumes)),
-        pc("rspace-produces", storeUsage.rspace.flatMap(_.produces)),
-        cm("rspace-consumes-COMM", storeUsage.rspace.flatMap(_.consumesComm)),
-        cm("rspace-produces-COMM", storeUsage.rspace.flatMap(_.producesComm)),
-        cm("rspace-install-COMM", storeUsage.rspace.flatMap(_.installComm)),
-        pc("replayrspace-consumes", storeUsage.replayRSpace.flatMap(_.consumes)),
-        pc("replayrspace-produces", storeUsage.replayRSpace.flatMap(_.produces)),
-        cm("replayrspace-consumes-COMM", storeUsage.replayRSpace.flatMap(_.consumesComm)),
-        cm("replayrspace-produces-COMM", storeUsage.replayRSpace.flatMap(_.producesComm)),
-        cm("replayrspace-install-COMM", storeUsage.replayRSpace.flatMap(_.installComm))
-      )
+      ) ::: spaceUsage("rspace", storeUsage.rspace) ::: spaceUsage("replayrspace",
+                                                                   storeUsage.replayRSpace)
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =
       tasks.toList.flatten.sequence
