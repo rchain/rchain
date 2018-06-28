@@ -50,7 +50,12 @@ object StoreMetrics extends StoreMetricsInstances {
         pc("rspace-produces", storeSize.rspace.flatMap(_.produces)),
         cm("rspace-consumes-COMM", storeSize.rspace.flatMap(_.consumesComm)),
         cm("rspace-produces-COMM", storeSize.rspace.flatMap(_.producesComm)),
-        cm("rspace-install-COMM", storeSize.rspace.flatMap(_.installComm))
+        cm("rspace-install-COMM", storeSize.rspace.flatMap(_.installComm)),
+        pc("replayrspace-consumes", storeSize.replayRSpace.flatMap(_.consumes)),
+        pc("replayrspace-produces", storeSize.replayRSpace.flatMap(_.produces)),
+        cm("replayrspace-consumes-COMM", storeSize.replayRSpace.flatMap(_.consumesComm)),
+        cm("replayrspace-produces-COMM", storeSize.replayRSpace.flatMap(_.producesComm)),
+        cm("replayrspace-install-COMM", storeSize.replayRSpace.flatMap(_.installComm))
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =

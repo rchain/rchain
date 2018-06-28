@@ -160,15 +160,18 @@ package object diagnostics {
         }
     }
 
-  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] = {
+  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _],
+                                  replayStore: IStore[_, _, _, _],
+                                  data_dir: Path): StoreMetrics[F] = {
     def convert(c: coop.rchain.rspace.StoreCount): Option[RSpaceUsageMetric] =
       Some(RSpaceUsageMetric(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
 
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =
         Capture[F].capture {
-          val storeCounters = store.getStoreCounters
-          val totalSize     = data_dir.folderSize
+          val storeCounters       = store.getStoreCounters
+          val replayStoreCounters = replayStore.getStoreCounters
+          val totalSize           = data_dir.folderSize
           StoreUsage(
             totalSizeOnDisk = totalSize,
             rspaceSizeOnDisk = storeCounters.sizeOnDisk,
@@ -181,7 +184,14 @@ package object diagnostics {
                 producesComm = convert(storeCounters.producesCommCount),
                 installComm = convert(storeCounters.installCommCount)
               )),
-            replayRSpace = None
+            replayRSpace = Some(
+              RSpaceUsage(
+                consumes = convert(replayStoreCounters.consumesCount),
+                produces = convert(replayStoreCounters.producesCount),
+                consumesComm = convert(replayStoreCounters.consumesCommCount),
+                producesComm = convert(replayStoreCounters.producesCommCount),
+              )
+            )
           )
         }
     }
