@@ -81,6 +81,8 @@ object EffectsTestInstances {
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???
+
+    def shutdown(msg: ProtocolMessage): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {
