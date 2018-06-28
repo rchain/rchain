@@ -185,7 +185,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
+                                           casperRuntime.replaySpace.store,
+                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -235,7 +237,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
+                                       resources.casperRuntime.replaySpace.store,
+                                       conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
