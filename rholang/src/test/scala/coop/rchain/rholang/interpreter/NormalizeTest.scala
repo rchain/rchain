@@ -948,6 +948,28 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
+
+  "1 matches _" should "normalize correctly" in {
+    val pMatches = new PMatches(new PGround(new GroundInt(1)), new PVar(new ProcVarWildcard()))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
+
+    val expectedResult = inputs.par.prepend(EMatches(GInt(1), EVar(Wildcard(WildcardMsg()))))
+
+    result.par shouldBe expectedResult
+    result.knownFree.count should be(0)
+  }
+
+  "1 matches 2" should "normalize correctly" in {
+    val pMatches = new PMatches(new PGround(new GroundInt(1)), new PGround(new GroundInt(2)))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
+
+    val expectedResult = inputs.par.prepend(EMatches(GInt(1), GInt(2)))
+
+    result.par shouldBe expectedResult
+    result.knownFree.count should be(0)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {

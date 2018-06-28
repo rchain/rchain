@@ -433,8 +433,8 @@ object ProcNormalizeMatcher {
       case p: PEq  => binaryExp(p.proc_1, p.proc_2, input, EEq.apply)
       case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeq.apply)
 
-      case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
-      case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
+      case p: PAnd     => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
+      case p: POr      => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
       case p: PMatches =>
         // In case of 'matches' expression the free variables from the pattern are thrown away
         // and only the ones from the target are used.
