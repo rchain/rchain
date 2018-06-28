@@ -134,15 +134,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
-  def runAndRethrowBoxedErrors[A](task: Task[A], timeout: Duration = 3.seconds): A =
-    try {
-      Await.result(task.runAsync, timeout)
-    } catch {
-      case boxedError: ExecutionException =>
-        throw boxedError.getCause
-    }
-
   it should "throw an error if names are used against their polarity" in {
     implicit val errorLog = new Runtime.ErrorLog()
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
@@ -853,7 +844,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val testString                = "testing testing"
     val base16Repr                = Base16.encode(testString.getBytes)
     val proc: Par                 = GString(base16Repr)
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
@@ -880,6 +870,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "variable references" should "be substituted before being used." in {
+    implicit val errorLog = new Runtime.ErrorLog()
+
     val proc = New(
       bindCount = 1,
       p = Par(
@@ -917,8 +909,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
+
   it should "be substituted before being used in a match." in {
+    implicit val errorLog = new Runtime.ErrorLog()
+
     val proc = New(
       bindCount = 1,
       p = Match(
@@ -947,5 +944,51 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  it should "reference a variable that comes from a match in tuplespace" in {
+    implicit val errorLog = new Runtime.ErrorLog()
+    val proc = Par(
+      sends = List(Send(chan = Quote(GInt(7)), data= List(GInt(10)))),
+      receives = List(
+        Receive(
+          binds = List(ReceiveBind(
+            patterns = List(Channel(ChanVar(FreeVar(0)))),
+            source = Channel(Quote(GInt(7))),
+            freeCount = 1
+          )),
+          body = Match(
+            GInt(10),
+            List(MatchCase(
+              pattern = Connective(VarRefBody(VarRef(0, 1))),
+              source = Send(chan = Quote(GString("result")), data = List(GString("true")))
+            ))
+          )
+        )
+      )
+    )
+
+    val result = withTestSpace { space =>
+      implicit val errorLog = new Runtime.ErrorLog()
+      val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env               = Env[Par]()
+      val task              = reducer.eval(proc)(env)
+      val inspectTask       = for { _ <- task } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel = Channel(Quote(GString("result")))
+
+    result should be(
+      HashMap(
+        List(channel) ->
+          Row(List(Datum.create(channel, Seq[Channel](Quote(GString("true"))), persist = false)),
+            List())
+      )
+    )
+
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 }

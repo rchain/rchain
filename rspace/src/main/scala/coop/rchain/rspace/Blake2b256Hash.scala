@@ -3,9 +3,12 @@ package coop.rchain.rspace
 import scala.collection.immutable.Seq
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.rspace.internal.codecSeq
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
+
+import scala.collection.immutable.Seq
 
 /**
   * Represents a Blake2b256 Hash
@@ -59,4 +62,6 @@ object Blake2b256Hash {
 
   implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
+
+  implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(codecBlake2b256Hash)
 }

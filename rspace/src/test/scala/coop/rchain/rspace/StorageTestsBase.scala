@@ -8,6 +8,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.test._
+import org.lmdbjava.EnvFlags
 import org.scalatest._
 import scodec.Codec
 
@@ -53,13 +54,17 @@ class LMDBStoreTestsBase
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
-    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    val testSpace = new RSpace(testStore, Branch("test"))
+    val testBranch = Branch("test")
+    val env = Context.create[String, Pattern, String, StringsCaptor](dbDir,
+                                                                     mapSize,
+                                                                     List(EnvFlags.MDB_NOTLS))
+    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+    val testSpace = new RSpace(testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)
     }
-    history.initialize(testStore.trieStore, testStore.trieBranch)
+    history.initialize(testStore.trieStore, testBranch)
     try {
       f(testSpace)
     } finally {

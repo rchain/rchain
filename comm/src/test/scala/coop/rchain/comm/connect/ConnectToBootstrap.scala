@@ -1,6 +1,7 @@
 package coop.rchain.comm.connect
 
 import org.scalatest._
+import coop.rchain.comm.protocol.routing._
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
@@ -78,10 +79,10 @@ class ConnectToBootstrapSpec
   }
 
   // TODO extract common trait for comm tests
-  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
-    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
+  def alwaysSuccess: Protocol => CommErr[Protocol] =
+    kp(Right(protocolHandshake(src)))
 
-  private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
+  private val failEverything = kp(Left[CommError, Protocol](unknownProtocol("unknown")))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
