@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.implicits._
 import cats.{Applicative, Monad}
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -77,7 +78,7 @@ object Substitute {
       env.get(term.index) match {
         case Some(par) => Applicative[M].pure(Right(par))
         case None =>
-          interpreterErrorM[M].raiseError(SubstituteError(s"Illegal VarRef [$term]"))
+          Applicative[M].pure(Left(term))
       }
 
   implicit def substituteQuote[M[_]: InterpreterErrorsM]: Substitute[M, Quote] =
@@ -370,6 +371,7 @@ object Substitute {
               .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
           case ConnNotBody(p) =>
             substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
+          case ConnectiveInstance.Empty => term.pure[M]
         }
       override def substitute(term: Connective)(implicit depth: Int, env: Env[Par]): M[Connective] =
         substituteNoSort(term).map(con => ConnectiveSortMatcher.sortMatch(con).term)
