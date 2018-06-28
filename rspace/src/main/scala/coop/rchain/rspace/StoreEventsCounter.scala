@@ -16,7 +16,7 @@ case class StoreCounters(sizeOnDisk: Long,
                          installCommCount: StoreCount)
 
 /**
-  * Conters rspace produce and consume calls.
+  * Counts rspace produce and consume calls.
   * Returns counted number of cycles, avg times,
   * peak and current rate of events
   * Uses BigIntegers to accumulate total times

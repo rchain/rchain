@@ -174,8 +174,8 @@ package object diagnostics {
           val totalSize           = data_dir.folderSize
           StoreUsage(
             totalSizeOnDisk = totalSize,
-            rspaceSizeOnDisk = storeCounters.sizeOnDisk,
-            rspaceDataEntries = storeCounters.dataEntries,
+            rspaceSizeOnDisk = storeCounters.sizeOnDisk, // + replayStoreCounters.sizeOnDisk,
+            rspaceDataEntries = storeCounters.dataEntries, // + replayStoreCounters.dataEntries,
             rspace = Some(
               RSpaceUsage(
                 consumes = convert(storeCounters.consumesCount),
