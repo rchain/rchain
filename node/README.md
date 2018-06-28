@@ -147,10 +147,10 @@ Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see
 Node needs to have read and write access to a folder called data directory. By default that folder is `$HOME/.rnode`. User can control that value by providing `--data_dir` flag. 
 Regardless of which path on the file system you choose for the data directory, please remember that node needs to have read and write access to that folder.
 
-Below is an example of creating folder for default location and giving it ownership to the current user.
+Below is an example of creating folder for default location. This should not be necessary as the server will try to create the `data_dir`.
 
 ```
-sudo mkdir -p ~/.rnode
+mkdir ~/.rnode
 ```
 
 #### 2.1.2 Running the Node

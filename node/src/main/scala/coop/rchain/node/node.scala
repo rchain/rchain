@@ -41,12 +41,24 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  val dataDirFile = conf.run.data_dir().toFile
+
+  if (!dataDirFile.exists()) {
+    if (!dataDirFile.mkdir()) {
+      println(
+        s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+      System.exit(-1)
+    }
+  }
+
   // Check if data_dir has read/write access
-  if (!conf.run.data_dir().toFile.canRead
-      || !conf.run.data_dir().toFile.canWrite) {
-    println(s"The data dir must have read and write permissions:\n${conf.run.data_dir()}")
+  if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
+    println(
+      s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
     System.exit(-1)
   }
+
+  println(s"Using data_dir: ${conf.run.data_dir()}")
 
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
