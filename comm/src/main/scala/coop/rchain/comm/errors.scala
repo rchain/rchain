@@ -22,6 +22,10 @@ final case class MalformedMessage(pm: Protocol)          extends CommError
 final case object CouldNotConnectToBootstrap             extends CommError
 final case class InternalCommunicationError(msg: String) extends CommError
 final case object TimeOut                                extends CommError
+final case object NoResponseForRequest                   extends CommError
+final case object UpstreamNotAvailable                   extends CommError
+final case class UnexpectedMessage(msgStr: String)       extends CommError
+final case object SenderNotAvailable                     extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -41,4 +45,8 @@ object CommError {
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
   def malformedMessage(pm: Protocol): CommError          = MalformedMessage(pm)
+  def noResponseForRequest: CommError                    = NoResponseForRequest
+  def upstreamNotAvailable: CommError                    = UpstreamNotAvailable
+  def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
+  def senderNotAvailable: CommError                      = SenderNotAvailable
 }

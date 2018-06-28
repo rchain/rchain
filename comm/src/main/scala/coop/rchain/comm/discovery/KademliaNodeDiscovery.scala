@@ -75,13 +75,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def handleCommunications: Protocol => F[CommunicationResponse] =
     protocol =>
-      ProtocolHelper.sender(protocol).fold(notHandled.pure[F]) { sender =>
+      ProtocolHelper.sender(protocol).fold(notHandled(senderNotAvailable).pure[F]) { sender =>
         updateLastSeen(sender) >>= kp(protocol match {
           case Protocol(_, Protocol.Message.Ping(_))        => handlePing
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
           case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
             handleDisconnect(sender, disconnect)
-          case _ => notHandled.pure[F]
+          case _ => notHandled(unexpectedMessage(protocol.toString)).pure[F]
         })
     }
 

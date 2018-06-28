@@ -97,17 +97,21 @@ object Connect {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
     def handleNone: F[CommunicationResponse] =
       for {
-        _ <- Log[F].error(errorMsg)
-        _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
-      } yield notHandled
+        _     <- Log[F].error(errorMsg)
+        error = unknownCommError(errorMsg)
+        _     <- errorHandler[F].raiseError[Unit](error)
+      } yield notHandled(error)
 
-    maybePacket.fold(handleNone)(p =>
-      for {
-        local               <- TransportLayer[F].local
-        maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
-        maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-          ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
-      } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))
+    maybePacket.fold(handleNone)(
+      p =>
+        for {
+          local               <- TransportLayer[F].local
+          maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
+          maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
+            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
+        } yield
+          maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
+            handledWithMessage(m)))
   }
 
   private def handleProtocolHandshake[
@@ -128,24 +132,29 @@ object Connect {
 
     def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[CommunicationResponse] =
       proto.message.upstream
-        .fold(Log[F].error("Upstream not available").as(notHandled)) { usmsg =>
-          usmsg.typeUrl match {
-            // TODO interpolate this string to check if class exists
+        .fold(Log[F].error("Upstream not available").as(notHandled(upstreamNotAvailable))) {
+          usmsg =>
+            usmsg.typeUrl match {
+              // TODO interpolate this string to check if class exists
 
-            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
-              handlePacket[F](sender, toPacket(proto).toOption)
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
+                handlePacket[F](sender, toPacket(proto).toOption)
 
-            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-              handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption)
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
+                handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption)
 
-            case _ =>
-              Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled.pure[F]
-          }
+              case _ =>
+                Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
+                  unexpectedMessage(usmsg.typeUrl)).pure[F]
+            }
         }
 
     ProtocolHelper
       .sender(protocol)
-      .fold(Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled)) { sender =>
+      .fold(
+        Log[F]
+          .error(s"Sender not present, DROPPING $protocol")
+          .as(notHandled(senderNotAvailable))) { sender =>
         dispatchForUpstream(protocol, sender)
       }
   }
