@@ -64,7 +64,7 @@ class Produce private (val hash: Blake2b256Hash) extends IOEvent {
 
 object Produce {
 
-  def apply(hash: Blake2b256Hash): Produce = Produce(hash)
+  def apply(hash: Blake2b256Hash): Produce = new Produce(hash)
 
   def unapply(arg: Produce): Option[Blake2b256Hash] = Some(arg.hash)
 
@@ -105,7 +105,7 @@ object Consume {
 
   val length: Int = 32
 
-  def apply(hash: Blake2b256Hash): Consume = Consume(hash)
+  def apply(hash: Blake2b256Hash): Consume = new Consume(hash)
 
   def unapply(arg: Consume): Option[Blake2b256Hash] = Some(arg.hash)
 
