@@ -12,18 +12,6 @@ Currently we have a working interpreter for the language. It should be considere
 1. Clone the repository
 2. Configure/fetch dependencies
     * [sbt](http://www.scala-sbt.org/0.13/docs/Installing-sbt-on-Linux.html)
-    * [CUP](http://www2.cs.tum.edu/projects/cup/install.php) - cannot be installed using apt.
-        * Must be cup 0.11b-2014-06-11 or later. Cup does not generate a shell script on install.
-        * Use something like the following (for me it lives in $HOME/.local/bin):
-			```
-			#! /bin/sh
-
-			CLASSPATH="$CLASSPATH:$HOME/.local/share/java/java-cup-11b.jar"
-			CLASSPATH="$CLASSPATH:$HOME/.local/share/java/java-cup-11b-runtime.jar"
-			export CLASSPATH
-
-			exec /usr/bin/java java_cup.Main "$@"
-			```
     * JFlex - install using apt 
     * BNFC - MUST be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later. If you use `cabal install` you will need to add your BNFC binary to the PATH.
     * [libsodium](https://github.com/jedisct1/libsodium) - You can use the scripts/install_sodium.sh helper script
