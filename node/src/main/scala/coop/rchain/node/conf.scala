@@ -63,6 +63,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
         "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
     )
+    val knownValidators = opt[String](
+      default = None,
+      descr = "Plain text file listing the public keys of validators known to the user (one per line). " +
+        "Signatures from these validators are required in order to accept a block which starts the local" +
+        "node's view of the blockDAG."
+    )
 
     val bootstrap =
       opt[String](default =
@@ -192,6 +198,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.validatorPrivateKey.toOption,
     run.validatorSigAlgorithm(),
     run.bondsFile.toOption,
+    run.knownValidators.toOption,
     run.numValidators(),
     run.data_dir().resolve("validators")
   )

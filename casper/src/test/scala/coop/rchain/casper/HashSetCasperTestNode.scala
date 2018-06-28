@@ -113,6 +113,7 @@ object HashSetCasperTestNode {
         case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
         case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
         case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
+        case TimeOut                              => "TimeOut"
       }
 
       throw new Exception(errString)

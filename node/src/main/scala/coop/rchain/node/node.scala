@@ -11,7 +11,7 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
 import TaskContrib._
-import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
+import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.genesis.Genesis.fromBondsFile
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
@@ -175,15 +175,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime,
                        casperRuntime: Runtime,
-                       casperEffect: MultiParentCasper[Effect])
+                       casperConstructor: MultiParentCasperConstructor[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
       runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
-      casperEffect  <- MultiParentCasper.fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+      casperConstructor <- MultiParentCasperConstructor
+                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
       grpcServer <- {
-        implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
+        implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         implicit val storeMetrics =
           diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
         GrpcServer
@@ -191,7 +192,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperEffect)
+    } yield
+      Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperConstructor)
 
   def startResources(resources: Resources): Effect[Unit] =
     for {
@@ -247,7 +249,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def handleCommunications(
       resources: Resources): ProtocolMessage => Effect[CommunicationResponse] = {
-    implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
+    implicit val casperEvidence: MultiParentCasperConstructor[Effect] = resources.casperConstructor
     implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
       casperPacketHandler[Effect]
     )

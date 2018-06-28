@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
 import coop.rchain.catscontrib.Catscontrib
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -80,7 +81,10 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
-  implicit val casperEffect                        = testCasper[Id]
+  implicit val casperEffect = testCasper[Id]
+  implicit val logEff       = new LogStub[Id]
+  implicit val constructorEffect =
+    MultiParentCasperConstructor.successCasperConstructor[Id](casperEffect)
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   "getBlocksResponse" should "return only blocks in the main chain" in {

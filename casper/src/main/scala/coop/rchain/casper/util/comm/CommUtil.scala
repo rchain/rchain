@@ -52,9 +52,9 @@ object CommUtil {
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
-  def casperPacketHandler[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
-      peer: PeerNode)(implicit constructorEv: MultiParentCasperConstructor[F, ApprovedBlock])
-    : PartialFunction[Packet, F[Option[Packet]]] =
+  def casperPacketHandler[
+      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
         (p: Packet) => {
@@ -63,7 +63,7 @@ object CommUtil {
       )
       .andThen {
         case b @ (_: BlockMessage | _: BlockRequest) =>
-          MultiParentCasperConstructor[F, ApprovedBlock].casperInstance match {
+          MultiParentCasperConstructor[F].casperInstance match {
             case Left(ex) =>
               Log[F]
                 .warn(
@@ -79,7 +79,7 @@ object CommUtil {
           }
 
         case a: ApprovedBlock =>
-          MultiParentCasperConstructor[F, ApprovedBlock].receive(a).map(_ => none[Packet])
+          MultiParentCasperConstructor[F].receive(a).map(_ => none[Packet])
       }
 
   def blockPacketHandler[
