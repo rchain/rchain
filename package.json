@@ -10,10 +10,10 @@
   "dependencies": {
     "babel-cli": "^6.26.0",
     "ramda": "^0.25.0",
-    "web3": "^1.0.0-beta.34",
-    "yargs": "^11.0.0"
+    "web3": "^1.0.0-beta.34"
   },
   "scripts": {
-    "keys": "babel-node keys.js"
+    "keys": "babel-node keys.js",
+    "balances": "babel-node balances.js"
   }
 }

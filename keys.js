@@ -14,21 +14,29 @@ const rangeStep = (start, step, stop) => R.map(
   R.range(0, (1 + (stop - start) / step) >>> 0)
 );
 
-const pairs     = R.aperture(2);
-const blocks    = pairs(rangeStep(fromBlock, batch, toBlock));
+const pairs  = R.aperture(2);
+const blocks = pairs(rangeStep(fromBlock, batch, toBlock));
 
 const writeStream = fs.createWriteStream('keys.txt');
 
+// Get all transfer events between a pair of blocks
 const getTransfers = (pair) => {
   return rhoc.getPastEvents('Transfer', { fromBlock: pair[0], toBlock: pair[1] })
     .then(transfers => transfers.forEach(t => append(t)))
     .catch(e => console.log(e));
 }
 
+// Append keys from a transfer event to file
 const append = (transfer) => {
-  const keys = transfer.returnValues.from+"\n"+transfer.returnValues.to
-  writeStream.write(keys);
-  console.log(keys);
+  writeStream.write(transfer.returnValues.from+'\n');
+  writeStream.write(transfer.returnValues.to+'\n');
 }
 
-R.forEach(getTransfers, blocks);
+// Batch the retrieval of transfer events in order to
+// be able to run against infura.io
+require('bluebird').map(blocks, (pair) => {
+  console.log('Block range:', pair, 'Keys:', writeStream.bytesWritten, 'bytes');
+  return getTransfers(pair);
+}, {concurrency: 5})
+.then(() => console.log('Completed'))
+.finally(() => writeStream.end());
