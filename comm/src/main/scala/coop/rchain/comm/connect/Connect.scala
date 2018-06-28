@@ -27,8 +27,13 @@ object Connect {
     (lastCount: Int) =>
       for {
         _         <- IOUtil.sleep[F](5000L)
-        peers     <- NodeDiscovery[F].findMorePeers(10)
-        _         <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
+        peers     <- NodeDiscovery[F].findMorePeers(10).map(_.toList)
+        responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
+        _ <- peers.zip(responses).traverse {
+              case (peer, Left(error)) =>
+                Log[F].error(s"Failed to connect to $peer. Reason: $error")
+              case (_, Right(_)) => ().pure[F]
+            }
         thisCount <- NodeDiscovery[F].peers.map(_.size)
         _         <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount
@@ -48,8 +53,9 @@ object Connect {
         for {
           res <- connect[F](bootstrapAddr, timeout).attempt
           _ <- res match {
-                case Left(_) =>
-                  val msg = s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts)"
+                case Left(error) =>
+                  val msg =
+                    s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts). Reason: $error"
                   Log[F].warn(msg) *> connectAttempt(attempt + 1,
                                                      timeout + defaultTimeout,
                                                      bootstrapAddr)
@@ -79,7 +85,11 @@ object Connect {
       phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-      _   <- NodeDiscovery[F].addNode(peer)
+      addedErr <- NodeDiscovery[F].addNode(peer)
+      _ <- addedErr.fold(
+            error => Log[F].error(s"Could not add $peer, reason: $error"),
+            _ => ().pure[F]
+          )
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
@@ -109,15 +119,22 @@ object Connect {
 
   private def handleProtocolHandshake[
       F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler](
-      remote: PeerNode,
+      peer: PeerNode,
       maybePh: Option[ProtocolHandshake]): F[CommunicationResponse] =
     for {
-      local <- TransportLayer[F].local
-      _     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      phr   = protocolHandshakeResponse(local)
-      _     <- NodeDiscovery[F].addNode(remote)
-      _     <- Log[F].info(s"Responded to protocol handshake request from $remote")
-    } yield handledWithMessage(phr)
+      local    <- TransportLayer[F].local
+      _        <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      phr      = protocolHandshakeResponse(local)
+      addedErr <- NodeDiscovery[F].addNode(peer)
+      commResponse <- addedErr.fold(
+                       error =>
+                         Log[F].error(s"Could not add $peer, reason: $error").as(notHandled(error)),
+                       _ =>
+                         Log[F]
+                           .info(s"Responded to protocol handshake request from $peer")
+                           .as(handledWithMessage(phr))
+                     )
+    } yield commResponse
 
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](

@@ -26,6 +26,7 @@ final case object NoResponseForRequest                   extends CommError
 final case object UpstreamNotAvailable                   extends CommError
 final case class UnexpectedMessage(msgStr: String)       extends CommError
 final case object SenderNotAvailable                     extends CommError
+final case class PongNotReceivedForPing(peer: PeerNode)  extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -49,4 +50,5 @@ object CommError {
   def upstreamNotAvailable: CommError                    = UpstreamNotAvailable
   def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
   def senderNotAvailable: CommError                      = SenderNotAvailable
+  def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
 }

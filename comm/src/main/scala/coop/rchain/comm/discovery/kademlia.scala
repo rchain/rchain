@@ -1,10 +1,10 @@
 package coop.rchain.comm.discovery
 
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{CommError, PeerNode}, CommError._
 import scala.collection.mutable
 import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.shared._
 
 trait Keyed {
@@ -122,7 +122,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
     * If `peer` is already in the table, it becomes the most recently
     * seen entry at its distance.
     */
-  def observe[F[_]: Monad: Capture: Ping](peer: A): F[Unit] = {
+  def observe[F[_]: Monad: Capture: Ping](peer: A): F[CommErr[Unit]] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
       Capture[F].capture(distance(home.key, peer.key).filter(_ < 8 * width).map(table.apply))
@@ -153,7 +153,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
         }
       }
 
-    def ping(ps: mutable.ListBuffer[Entry], older: Entry): F[Unit] =
+    def pingAndUpdate(ps: mutable.ListBuffer[Entry], older: Entry): F[Unit] =
       Ping[F].ping(older.entry).map { response =>
         val winner = if (response) older else new Entry(peer, _.key)
         ps synchronized {
@@ -163,13 +163,19 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
         }
       }
 
-    val result = for {
-      ps    <- OptionT(bucket)
-      older <- OptionT(addUpdateOrPickOldPeer(ps))
-      _     <- OptionT.liftF(ping(ps, older))
-    } yield ()
+    def upsert: OptionT[F, Unit] =
+      for {
+        ps    <- OptionT(bucket)
+        older <- OptionT(addUpdateOrPickOldPeer(ps))
+        _     <- OptionT.liftF(pingAndUpdate(ps, older))
+      } yield ()
 
-    result.value.void
+    for {
+      pingResponded <- Ping[F].ping(peer)
+      res <- if (pingResponded) upsert.value.as(Right(()))
+            else Left(pongNotReceivedForPing(peer)).pure[F]
+    } yield res
+
   }
 
   /**
