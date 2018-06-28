@@ -25,7 +25,7 @@ pip install -r requirements.txt
 solution:
 
 ```
-sudo mkdir -p ~/.rnode
+mkdir ~/.rnode
 ```
 
 ### problem: UnsatisfiedLinkError when starting the server
