@@ -14,13 +14,13 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
+class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, K] {
+) extends ISpace[C, P, A, R, K] {
 
   private val logger: Logger = Logger[this.type]
 
@@ -31,7 +31,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
   }
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])] =
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
     store.eventsCounter.registerConsume {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
@@ -58,7 +58,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
           c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
         }.toMap
 
-        val options: Option[Seq[DataCandidate[C, A]]] =
+        val options: Option[Seq[DataCandidate[C, R]]] =
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
 
         options match {
@@ -93,7 +93,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
     }
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])] = {
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -119,7 +119,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
         c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
       }.toMap
 
-      val options: Option[Seq[DataCandidate[C, A]]] =
+      val options: Option[Seq[DataCandidate[C, R]]] =
         extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
 
       options match {
@@ -152,7 +152,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
     }
   }
 
-  def produce(channel: C, data: A, persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])] =
+  def produce(channel: C, data: A, persist: Boolean)(
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
     store.eventsCounter.registerProduce {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
@@ -170,7 +171,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
         @tailrec
         def extractProduceCandidate(groupedChannels: Seq[Seq[C]],
                                     batChannel: C,
-                                    data: Datum[A]): Option[ProduceCandidate[C, P, A, K]] =
+                                    data: Datum[A]): Option[ProduceCandidate[C, P, R, K]] =
           groupedChannels match {
             case Nil => None
             case channels :: remaining =>
@@ -241,12 +242,12 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)(
 
 object RSpace {
 
-  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[C, P, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): RSpace[C, P, A, K] = {
+      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -257,6 +258,6 @@ object RSpace {
 
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
 
-    new RSpace[C, P, A, K](mainStore, branch)
+    new RSpace[C, P, A, R, K](mainStore, branch)
   }
 }

@@ -30,12 +30,14 @@ import scala.concurrent.{Await, ExecutionException}
 
 trait PersistentStoreTester {
   def withTestSpace[R](
-      f: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation] => R): R = {
+      f: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
     val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] =
       LMDBStore.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dbDir,
                                                                                1024 * 1024 * 1024)
-    val space = new RSpace(store, Branch("test"))
+    val space = new RSpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation](
+      store,
+      Branch("test"))
     try {
       f(space)
     } finally {
