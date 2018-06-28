@@ -19,14 +19,16 @@ import scala.util.Try
 
 object CommUtil {
 
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     val hashString      = PrettyPrinter.buildString(b.blockHash)
     for {
-      _               <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
-      successfulPeers <- sendToPeers[F](serializedBlock)
-      _               <- successfulPeers.traverse(peer => Log[F].info(s"CASPER: Sent $hashString to $peer"))
+      _ <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
+      _ <- sendToPeers[F](serializedBlock)
+      _ <- Log[F].info(s"CASPER: Sent $hashString to peers")
     } yield ()
   }
 
@@ -35,29 +37,20 @@ object CommUtil {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
     for {
-      _               <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
-      successfulPeers <- sendToPeers[F](serialized)
-      _ <- successfulPeers.traverse(peer =>
-            Log[F].info(s"CASPER: Requested $hashString from $peer"))
+      _ <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
+      _ <- sendToPeers[F](serialized)
+      _ <- Log[F].info(s"CASPER: Requested $hashString from peers")
     } yield ()
   }
 
   def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
-      serializedMessage: ByteString): F[List[PeerNode]] =
+      serializedMessage: ByteString): F[Unit] =
     for {
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
-      sends <- peers.toList.traverse { peer =>
-                val msg = PacketMessage(packet(local, serializedMessage))
-                TransportLayer[F].send(msg, peer).map(res => (res, peer))
-              }
-      successes <- sends.traverse {
-                    case (Left(err), _) =>
-                      Log[F].error(s"$err") *> List.empty[PeerNode].pure[F]
-                    case (Right(_), peer) =>
-                      List(peer).pure[F]
-                  }
-    } yield successes.flatten
+      msg   = packet(local, serializedMessage)
+      _     <- TransportLayer[F].broadcast(peers, msg)
+    } yield ()
 
   def casperPacketHandler[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
@@ -80,20 +73,16 @@ object CommUtil {
 
         case r: BlockRequest =>
           for {
-            dag   <- MultiParentCasper[F].blockDag
-            local <- TransportLayer[F].local
-            block = dag.blockLookup.get(r.hash).map(_.toByteString)
-            maybeMsg = block.map(serializedMessage =>
-              PacketMessage(packet(local, serializedMessage)))
-            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(msg, peer))
+            dag      <- MultiParentCasper[F].blockDag
+            local    <- TransportLayer[F].local
+            block    = dag.blockLookup.get(r.hash).map(_.toByteString)
+            maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
+            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
             hash     = PrettyPrinter.buildString(r.hash)
             logIntro = s"Received request for block $hash from $peer. "
             _ <- send match {
-                  case None => Log[F].info(logIntro + "No response given since block not found.")
-                  case Some(Left(err)) =>
-                    Log[F].info(logIntro) *> Log[F].error(
-                      s"Error sending block $hash to $peer: $err")
-                  case Some(Right(_)) => Log[F].info(logIntro + "Response sent.")
+                  case None    => Log[F].info(logIntro + "No response given since block not found.")
+                  case Some(_) => Log[F].info(logIntro + "Response sent.")
                 }
           } yield none[Packet]
       }

@@ -1,7 +1,8 @@
 package coop.rchain.comm.connect
 
 import org.scalatest._
-import coop.rchain.comm.protocol.rchain._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
@@ -9,15 +10,15 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
-import coop.rchain.comm.discovery._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
-import Connect.defaultTimeout
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  val src: PeerNode    = peerNode("src", 30300)
-  val remote: PeerNode = peerNode("remote", 30301)
+  val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
+  val src: PeerNode                  = peerNode("src", 30300)
+  val remote: PeerNode               = peerNode("remote", 30301)
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -42,7 +43,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val ProtocolHandshakeMessage(_) = transportLayerEff.requests(0)
+        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0)
+        upstream.unpack(ProtocolHandshake)
       }
       it("should then add remote node to communication layer") {
         // given
@@ -63,8 +65,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
 
   }
 
-  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
-    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
+  def alwaysSuccess: Protocol => CommErr[Protocol] =
+    kp(Right(protocolHandshake(src)))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

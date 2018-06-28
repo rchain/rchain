@@ -3,6 +3,13 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Connective.ConnectiveInstance
+import coop.rchain.models.Connective.ConnectiveInstance.{
+  ConnAndBody,
+  ConnNotBody,
+  ConnOrBody,
+  VarRefBody
+}
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
@@ -55,8 +62,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
         (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
-      case EListBody(EList(s, _, _, _)) =>
-        "[" + buildSeq(s) + "]"
+      case EListBody(EList(s, _, _, remainderO)) =>
+        "[" + buildSeq(s) ++ remainderO.fold("")(v => "..." + buildString(v)) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case ESetBody(ParSet(pars, _, _)) =>
@@ -88,18 +95,16 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level)  => s"$freeId${freeShift + level}"
-      case BoundVar(level) => s"$boundId${boundShift - level - 1}"
-      case Wildcard(_)     => "_"
-      // TODO: Figure out if we can prevent ScalaPB from generating
+      case FreeVar(level)    => s"$freeId${freeShift + level}"
+      case BoundVar(level)   => s"$boundId${boundShift - level - 1}"
+      case Wildcard(_)       => "_"
       case VarInstance.Empty => "@Nil"
     }
 
   def buildString(c: Channel): String =
     c.channelInstance match {
-      case Quote(p)    => "@{" + buildString(p) + "}"
-      case ChanVar(cv) => buildString(cv)
-      // TODO: Figure out if we can prevent ScalaPB from generating
+      case Quote(p)              => "@{" + buildString(p) + "}"
+      case ChanVar(cv)           => buildString(cv)
       case ChannelInstance.Empty => "@Nil"
     }
 
@@ -159,12 +164,28 @@ case class PrettyPrinter(freeShift: Int,
           } + " }"
 
       case g: GPrivate => g.id
+      case c: Connective =>
+        c.connectiveInstance match {
+          case ConnectiveInstance.Empty => ""
+          case ConnAndBody(value)       => value.ps.map(buildString).mkString("{", " /\\ ", "}")
+          case ConnOrBody(value)        => value.ps.map(buildString).mkString("{", " \\/ ", "}")
+          case ConnNotBody(value)       => "~{" ++ buildString(value) ++ "}"
+          case VarRefBody(value) =>
+            "=" + buildString(Var(FreeVar(value.index)))
+        }
 
       case par: Par =>
         if (isEmpty(par)) "Nil"
         else {
           val list =
-            List(par.bundles, par.sends, par.receives, par.news, par.exprs, par.matches, par.ids)
+            List(par.bundles,
+                 par.sends,
+                 par.receives,
+                 par.news,
+                 par.exprs,
+                 par.matches,
+                 par.ids,
+                 par.connectives)
           ((false, "") /: list) {
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
@@ -239,5 +260,6 @@ case class PrettyPrinter(freeShift: Int,
       p.exprs.isEmpty &
       p.matches.isEmpty &
       p.ids.isEmpty &
-      p.bundles.isEmpty
+      p.bundles.isEmpty &
+      p.connectives.isEmpty
 }

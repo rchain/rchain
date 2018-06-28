@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
 
 import scala.collection.immutable.{BitSet, Vector}
+import scala.collection.convert.ImplicitConversionsToScala._
 import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
 
@@ -101,9 +102,10 @@ object CollectionNormalizeMatcher {
                acc._4 || result.par.connectiveUsed)
             }
         }
-        .map { folded =>
-          val resultKnownFree = folded._2
-          CollectVisitOutputs(constructor(folded._1.reverse, folded._3, folded._4), resultKnownFree)
+        .map {
+          case (ps, resultKnownFree, locallyFree, connectiveUsed) =>
+            CollectVisitOutputs(constructor(ps.reverse, locallyFree, connectiveUsed),
+                                resultKnownFree)
         }
     }
 
@@ -137,24 +139,31 @@ object CollectionNormalizeMatcher {
       case cl: CollectList =>
         RemainderNormalizeMatcher
           .normalizeMatchProc[M](cl.remainder_, input.knownFree)
-          .flatMap(remainderResult =>
-            foldMatch(remainderResult._2,
-                      cl.listproc_.asScala.toList,
-                      (ps, lf, wc) =>
-                        EList.apply(ps, lf, wc).update(_.optionalRemainder := remainderResult._1)))
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              val constructor: Option[Var] => (Seq[Par], BitSet, Boolean) => EList =
+                optionalRemainder =>
+                  (ps, lf, cu) => {
+                    val tmpEList = EList(ps, lf, cu, optionalRemainder)
+                    tmpEList.withConnectiveUsed(
+                      tmpEList.connectiveUsed || optionalRemainder.isDefined)
+                }
+
+              foldMatch(knownFree, cl.listproc_.toList, constructor(optionalRemainder))
+          }
 
       case ct: CollectTuple =>
         val ps = ct.tuple_ match {
           case ts: TupleSingle   => Seq(ts.proc_)
-          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.asScala.toList
+          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
       case cs: CollectSet =>
         val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
           (pars, locallyFree, connectiveUsed) =>
             ParSet(SortedParHashSet(pars), connectiveUsed, Coeval.delay(locallyFree))
-        foldMatch(input.knownFree, cs.listproc_.asScala.toList, constructor)
-      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
+        foldMatch(input.knownFree, cs.listproc_.toList, constructor)
+      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
     }
   }
 }
@@ -234,7 +243,8 @@ object ProcNormalizeMatcher {
 
     def normalizeIfElse(valueProc: Proc,
                         trueBodyProc: Proc,
-                        falseBodyProc: Proc): M[ProcVisitOutputs] =
+                        falseBodyProc: Proc,
+                        input: ProcVisitInputs): M[ProcVisitOutputs] =
       for {
         targetResult <- normalizeMatch[M](valueProc, input)
         trueCaseBody <- normalizeMatch[M](
@@ -385,7 +395,7 @@ object ProcNormalizeMatcher {
                      ProcVisitInputs(Par(), input.env, targetResult.knownFree),
                      BitSet(),
                      false)
-          argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {
+          argResults <- p.listproc_.toList.reverse.foldM(initAcc)((acc, e) => {
                          normalizeMatch[M](e, acc._2).map(
                            procMatchResult =>
                              (procMatchResult.par :: acc._1,
@@ -439,7 +449,7 @@ object ProcNormalizeMatcher {
                      ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
                      BitSet(),
                      false)
-          dataResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)(
+          dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
                           (acc, e) =>
                             normalizeMatch[M](e, acc._2).map(
                               procMatchResult =>
@@ -478,7 +488,7 @@ object ProcNormalizeMatcher {
           // Note that we go over these in the order they were given and reverse
           // down below. This is because it makes more sense to number the free
           // variables in the order given, rather than in reverse.
-          formalsResults <- p.listname_.asScala.toList.foldM(initAcc)(
+          formalsResults <- p.listname_.toList.foldM(initAcc)(
                              (acc, n: Name) => {
                                NameNormalizeMatcher
                                  .normalizeMatch[M](n,
@@ -517,20 +527,19 @@ object ProcNormalizeMatcher {
       }
 
       case p: PInput => {
-        import scala.collection.JavaConverters._
         // To handle the most common case where we can sort the binds because
         // they're from different sources, Each channel's list of patterns starts its free variables at 0.
         // We check for overlap at the end after sorting. We could check before, but it'd be an extra step.
 
         // We split this into parts. First we process all the sources, then we process all the bindings.
-        def processSources(bindings: List[(List[Name], Name, NameRemainder)])
+        def processSources(sources: List[(List[Name], Name, NameRemainder)])
           : M[(Vector[(List[Name], Channel, NameRemainder)],
                DebruijnLevelMap[VarSort],
                BitSet,
                Boolean)] = {
           val initAcc =
             (Vector[(List[Name], Channel, NameRemainder)](), input.knownFree, BitSet(), false)
-          bindings
+          sources
             .foldM(initAcc)((acc, e) => {
               NameNormalizeMatcher
                 .normalizeMatch[M](e._2, NameVisitInputs(input.env, acc._2))
@@ -543,6 +552,7 @@ object ProcNormalizeMatcher {
             })
             .map(foldResult => (foldResult._1.reverse, foldResult._2, foldResult._3, foldResult._4))
         }
+
         def processBindings(bindings: Vector[(List[Name], Channel, NameRemainder)])
           : M[Vector[(Vector[Channel], Channel, Option[Var], DebruijnLevelMap[VarSort])]] =
           bindings.traverse {
@@ -554,59 +564,47 @@ object ProcNormalizeMatcher {
                     .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
                     .map(result => (result.chan +: acc._1, result.knownFree))
                 })
-                .flatMap(formalsResults =>
-                  RemainderNormalizeMatcher
-                    .normalizeMatchName[M](nr, formalsResults._2)
-                    .map(remainderResult =>
-                      (formalsResults._1.reverse, chan, remainderResult._1, remainderResult._2)))
+                .flatMap {
+                  case (patterns, knownFree) =>
+                    RemainderNormalizeMatcher
+                      .normalizeMatchName[M](nr, knownFree)
+                      .map(remainderResult =>
+                        (patterns.reverse, chan, remainderResult._1, remainderResult._2))
+                }
             }
           }
+
         val resM = p.receipt_ match {
           case rl: ReceiptLinear =>
-            def bindingsReceiptLinear(
-                receipt: ReceiptLinearImpl): M[List[(List[Name], Name, NameRemainder)]] =
-              receipt match {
-                case ls: LinearSimple =>
-                  ls.listlinearbind_.asScala.toList.traverse {
+            rl.receiptlinearimpl_ match {
+              case ls: LinearSimple =>
+                ls.listlinearbind_.toList
+                  .traverse {
                     case lbi: LinearBindImpl =>
-                      (lbi.listname_.asScala.toList, lbi.name_, lbi.nameremainder_).pure[M]
-                    case _ =>
-                      err.raiseError(
-                        UnrecognizedNormalizerError("Unexpected LinearBind production."))
+                      (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
                   }
-                case _ =>
-                  err.raiseError(
-                    UnrecognizedNormalizerError("Unexpected LinearReceipt production."))
-              }
-            bindingsReceiptLinear(rl.receiptlinearimpl_).map(x => (x, false))
+                  .map(x => (x, false))
+            }
           case rl: ReceiptRepeated =>
-            def bindingsRepeatedReceipt(
-                receipt: ReceiptRepeatedImpl): M[List[(List[Name], Name, NameRemainder)]] =
-              receipt match {
-                case ls: RepeatedSimple =>
-                  ls.listrepeatedbind_.asScala.toList
-                    .traverse {
-                      case lbi: RepeatedBindImpl =>
-                        (lbi.listname_.asScala.toList, lbi.name_, lbi.nameremainder_).pure[M]
-                      case _ =>
-                        err.raiseError(
-                          UnrecognizedNormalizerError("Unexpected RepeatedBind production."))
-                    }
-                case _ =>
-                  err.raiseError(
-                    UnrecognizedNormalizerError("Unexpected RepeatedReceipt production."))
-              }
-            bindingsRepeatedReceipt(rl.receiptrepeatedimpl_).map(x => (x, true))
+            rl.receiptrepeatedimpl_ match {
+              case ls: RepeatedSimple =>
+                ls.listrepeatedbind_.toList
+                  .traverse {
+                    case lbi: RepeatedBindImpl =>
+                      (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
+                  }
+                  .map(x => (x, true))
+            }
         }
 
         for {
           res                                                              <- resM
-          (bindings, persistent)                                           = res
-          sourcesP                                                         <- processSources(bindings)
+          (bindingsRaw, persistent)                                        = res
+          sourcesP                                                         <- processSources(bindingsRaw)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
-          bindingsSources                                                  <- processBindings(sources)
+          bindingsProcessed                                                <- processBindings(sources)
           receipts = ReceiveBindsSortMatcher
-            .preSortBinds[M, VarSort](bindingsSources)
+            .preSortBinds[M, VarSort](bindingsProcessed)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {
@@ -621,12 +619,15 @@ object ProcNormalizeMatcher {
                                                                  line,
                                                                  col))
                         })
-          bindCount  = mergedFrees.countNoWildcards
-          binds      = receipts.map(receipt => receipt._1)
+          bindCount = mergedFrees.countNoWildcards
+          binds     = receipts.map(receipt => receipt._1)
+          bindingsConnectiveUsed = binds
+            .flatMap(_.patterns)
+            .exists(c => ChannelLocallyFree.connectiveUsed(c))
           updatedEnv = input.env.absorbFree(mergedFrees)._1
           bodyResult <- normalizeMatch[M](p.proc_,
                                           ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
-          connective = sourcesConnectives || bodyResult.par.connectiveUsed
+          connective = sourcesConnectives || bodyResult.par.connectiveUsed || bindingsConnectiveUsed
         } yield
           ProcVisitOutputs(
             input.par.prepend(
@@ -653,7 +654,7 @@ object ProcNormalizeMatcher {
       case p: PNew => {
         import scala.collection.JavaConverters._
         // TODO: bindings within a single new shouldn't have overlapping names.
-        val newBindings = p.listnamedecl_.asScala.toList.map {
+        val newBindings = p.listnamedecl_.toList.map {
           case n: NameDeclSimpl => (n.var_, NameSort, n.line_num, n.col_num)
         }
         val newEnv   = input.env.newBindings(newBindings)
@@ -723,7 +724,7 @@ object ProcNormalizeMatcher {
 
         for {
           targetResult <- normalizeMatch[M](p.proc_, input.copy(par = VectorPar()))
-          cases        <- p.listcase_.asScala.toList.traverse(liftCase)
+          cases        <- p.listcase_.toList.traverse(liftCase)
 
           initAcc = (Vector[MatchCase](), targetResult.knownFree, BitSet(), false)
           casesResult <- cases.foldM(initAcc)((acc, caseImpl) =>
@@ -762,8 +763,12 @@ object ProcNormalizeMatcher {
           )
       }
 
-      case p: PIf     => normalizeIfElse(p.proc_1, p.proc_2, new PNil())
-      case p: PIfElse => normalizeIfElse(p.proc_1, p.proc_2, p.proc_3)
+      case p: PIf =>
+        normalizeIfElse(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
+          .map(n => n.copy(par = n.par ++ input.par))
+      case p: PIfElse =>
+        normalizeIfElse(p.proc_1, p.proc_2, p.proc_3, input.copy(par = VectorPar()))
+          .map(n => n.copy(par = n.par ++ input.par))
 
       case _ =>
         err.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))

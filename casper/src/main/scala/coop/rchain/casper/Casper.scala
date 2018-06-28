@@ -3,6 +3,8 @@ package coop.rchain.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
@@ -10,22 +12,27 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.{AtomicSyncVar, Log, Time}
+import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
+import scala.io.Source
+import scala.util.Try
 import java.nio.file.Path
 
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import monix.eval.Task
 import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
@@ -43,7 +50,6 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
   def storageContents(hash: ByteString): F[String]
-  def close(): F[Unit]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -51,6 +57,9 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 sealed abstract class MultiParentCasperInstances {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
   def noOpsCasper[F[_]: Applicative]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
@@ -62,13 +71,14 @@ sealed abstract class MultiParentCasperInstances {
       def blockDag: F[BlockDag]                                          = BlockDag().pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: ByteString): F[String]                   = "".pure[F]
-      def close(): F[Unit]                                               = ().pure[F]
     }
 
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      storageLocation: Path,
-      storageSize: Long,
+      activeRuntime: Runtime,
+      publicKey: Array[Byte],
+      privateKey: Array[Byte],
+      sigAlgorithm: String,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -77,13 +87,19 @@ sealed abstract class MultiParentCasperInstances {
       //TODO: Extract hardcoded version
       private val version = 0L
 
+      //TODO: accept other signature algorithms
+      private val signFunction = sigAlgorithm match {
+        case "ed25519" => Ed25519.sign _
+        case _         => throw new Exception(s"Unknown signature algorithm $sigAlgorithm")
+      }
+
       private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
 
       private val runtime = new SyncVar[Runtime]()
-      runtime.put(Runtime.create(storageLocation, storageSize))
+      runtime.put(activeRuntime)
       private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
 
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
@@ -162,7 +178,7 @@ sealed abstract class MultiParentCasperInstances {
                      } else {
                        none[BlockMessage].pure[F]
                      }
-        } yield proposal
+        } yield proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, signFunction))
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         Capture[F].capture {
@@ -209,11 +225,6 @@ sealed abstract class MultiParentCasperInstances {
         } else {
           s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
         }
-      }
-
-      def close(): F[Unit] = Capture[F].capture {
-        val _runtime = runtime.take()
-        _runtime.close()
       }
 
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
@@ -512,6 +523,8 @@ sealed abstract class MultiParentCasperInstances {
                 acc.updated(p, currChildren + hash)
             }
 
+            val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
+
             bd.copy(
               blockLookup = bd.blockLookup.updated(hash, block),
               //Assume that a non-equivocating validator must include
@@ -524,7 +537,8 @@ sealed abstract class MultiParentCasperInstances {
               latestMessagesOfLatestMessages =
                 bd.latestMessagesOfLatestMessages.updated(block.sender,
                                                           toLatestMessages(block.justifications)),
-              childMap = newChildMap
+              childMap = newChildMap,
+              currentSeqNum = newSeqNum
             )
           })
         }
@@ -554,4 +568,45 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
       }
     }
+
+  def fromConfig[
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
+      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
+    Genesis
+      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
+      .map(genesis => {
+        val privateKey = conf.privateKey
+          .orElse(defaultPrivateKey(conf, genesis))
+          .getOrElse(throw new Exception("Private key must be specified!"))
+        val publicKey = conf.sigAlgorithm match {
+          case "ed25519" =>
+            Ed25519.toPublic(privateKey)
+
+          case _ =>
+            conf.publicKey.getOrElse(throw new Exception(
+              "Public key must be specified, cannot infer from private key with given signature algorithm."))
+        }
+        if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
+          throw new Exception("Public key not compatible with given private key!")
+        }
+        hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
+      })
+
+  private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
+    val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {
+      case (currMax @ (_, maxBond), Bond(validator, stake)) =>
+        if (maxBond < stake) Some(Base16.encode(validator.toByteArray)) -> stake
+        else currMax
+    }
+
+    val privateKey = maxValidator.flatMap(publicKey => {
+      val file = conf.validatorsPath.resolve(s"$publicKey.sk").toFile
+      Try(
+        Source.fromFile(file).mkString.trim
+      ).toOption
+    })
+
+    privateKey.map(Base16.decode)
+  }
 }
