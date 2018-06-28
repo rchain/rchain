@@ -57,10 +57,7 @@ class InMemoryStore[C, P, A, K](
   private[this] type StateType = State[C, P, A, K]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    Blake2b256Hash.create(
-      channels
-        .map(c => codecC.encode(c).get.bytes)
-        .sorted(util.ordByteVector))
+    StableHashProvider.hash(channels)
 
   private[rspace] def createTxnRead(): T = new Transaction[StateType] {
 

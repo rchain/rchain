@@ -45,16 +45,11 @@ package object util {
     }
   }
 
-  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] = {
-
-    implicit val ordArrayByte: Ordering[Array[Byte]] = (x: Array[Byte], y: Array[Byte]) =>
-      memcmp(x, y)
-
+  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] =
     gnat.copy(
-      wks = gnat.wks.sortBy(_.source.hash.bytes.toArray),
-      data = gnat.data.sortBy(_.source.hash.bytes.toArray)
+      wks = gnat.wks.sortBy(_.source.hash.bytes)(ordByteVector),
+      data = gnat.data.sortBy(_.source.hash.bytes)(ordByteVector)
     )
-  }
 
   def veccmp(a: ByteVector, b: ByteVector): Int = {
     val c = a.length - b.length
@@ -74,5 +69,14 @@ package object util {
     }
   }
 
+  val ordArrayByte: Ordering[Array[Byte]] = (x: Array[Byte], y: Array[Byte]) => memcmp(x, y)
+
   val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
+
+  val ordByteVectorPair: Ordering[(ByteVector, ByteVector)] =
+    (a: (ByteVector, ByteVector), b: (ByteVector, ByteVector)) =>
+      veccmp(a._1, b._1) match {
+        case 0 => veccmp(a._2, b._2)
+        case c => c
+    }
 }

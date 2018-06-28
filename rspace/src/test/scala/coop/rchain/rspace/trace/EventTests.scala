@@ -9,32 +9,25 @@ import coop.rchain.rspace.{Blake2b256Hash, Serialize}
 import coop.rchain.shared.AttemptOps._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import scodec.bits.BitVector
+import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs.{ignore => cignore, _}
 import scodec.interop.cats._
 import scodec.{Attempt, Codec}
+import coop.rchain.rspace.util
 
 import scala.collection.immutable.Seq
 
 class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
-
-  implicit val codecString: Codec[String]        = implicitly[Serialize[String]].toCodec
-  implicit val codecPattern: Codec[Pattern]      = implicitly[Serialize[Pattern]].toCodec
-  implicit val codecCaptor: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
   "A Produce" should "contain the expected hash" in {
     forAll { (channel: String, data: String, persist: Boolean) =>
       val actual = Produce.create(channel, data, persist)
 
       val expectedHash =
-        List(Codec[String].encode(channel),
-             Codec[String].encode(data),
-             (cignore(7) ~> bool).encode(persist))
-          .sequence[Attempt, BitVector]
-          .map { (vectors: List[BitVector]) =>
-            Blake2b256Hash.create(vectors.toArray.flatMap(_.toByteArray))
-          }
-          .get
+        Blake2b256Hash.create(
+          List(Serialize[String].encode(channel),
+               Serialize[String].encode(data),
+               (cignore(7) ~> bool).encode(persist).get.toByteVector))
 
       actual.hash shouldBe expectedHash
     }
@@ -48,18 +41,34 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
 
       val actual = Consume.create(channels, patterns, continuation, persist)
 
-      val expectedHash =
-        List(Codec[Seq[String]].encode(channels),
-             Codec[Seq[Pattern]].encode(patterns),
-             Codec[StringsCaptor].encode(continuation),
-             (cignore(7) ~> bool).encode(persist))
-          .sequence[Attempt, BitVector]
-          .map { (vectors: List[BitVector]) =>
-            Blake2b256Hash.create(vectors.toArray.flatMap(_.toByteArray))
+      val (channelsSeq, patternsSeq) =
+        channelPatterns
+          .map {
+            case (channel, pattern) =>
+              (Serialize[String].encode(channel), Serialize[Pattern].encode(pattern))
           }
-          .get
+          .sorted(util.ordByteVectorPair)
+          .unzip
+
+      val expectedHash =
+        Blake2b256Hash.create(
+          channelsSeq ++ patternsSeq
+            :+ Serialize[StringsCaptor].encode(continuation)
+            :+ (cignore(7) ~> bool).encode(persist).get.toByteVector)
 
       actual.hash shouldBe expectedHash
+    }
+  }
+
+  "A Consume hash" should "be same for reordered (channel, pattern) pairs" in {
+    forAll { (channelPatterns: List[(String, Pattern)], persist: Boolean) =>
+      val (channels, patterns) = channelPatterns.unzip
+      val continuation         = new StringsCaptor
+
+      val actual   = Consume.create(channels, patterns, continuation, persist)
+      val reversed = Consume.create(channels.reverse, patterns.reverse, continuation, persist)
+
+      reversed.hash shouldBe actual.hash
     }
   }
 }
