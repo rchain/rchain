@@ -41,7 +41,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  val dataDirFile = conf.run.data_dir().toFile
+  private val dataDirFile = conf.run.data_dir().toFile
 
   if (!dataDirFile.exists()) {
     if (!dataDirFile.mkdir()) {
