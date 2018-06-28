@@ -8,8 +8,8 @@ import coop.rchain.metrics.Metrics
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
-import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+import coop.rchain.comm.protocol.routing.{Ping => ProtocolPing, _}
 
 class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
     src: PeerNode,
@@ -73,42 +73,39 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def peers: F[Seq[PeerNode]] = Capture[F].capture(table.peers)
 
-  def handleCommunications: ProtocolMessage => F[CommunicationResponse] =
-    pm =>
-      pm.sender.fold(notHandled.pure[F]) { sender =>
-        updateLastSeen(sender) >>= kp(pm match {
-          case ping @ PingMessage(_, _)             => handlePing(sender, ping)
-          case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
-          case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
-          case _                                    => notHandled.pure[F]
+  def handleCommunications: Protocol => F[CommunicationResponse] =
+    protocol =>
+      ProtocolHelper.sender(protocol).fold(notHandled.pure[F]) { sender =>
+        updateLastSeen(sender) >>= kp(protocol match {
+          case Protocol(_, Protocol.Message.Ping(_))        => handlePing
+          case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
+          case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
+            handleDisconnect(sender, disconnect)
+          case _ => notHandled.pure[F]
         })
     }
 
-  private def handlePing(sender: PeerNode, ping: PingMessage): F[CommunicationResponse] =
-    ping
-      .response(src)
-      .traverse { pong =>
-        Metrics[F].incrementCounter("ping-recv-count").as(pong)
-      }
-      .map(_.fold(notHandled)(m => handledWithMessage(m)))
+  private def handlePing: F[CommunicationResponse] =
+    Metrics[F].incrementCounter("ping-recv-count").as(handledWithMessage(ProtocolHelper.pong(src)))
 
   /**
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage): F[CommunicationResponse] =
-    (for {
-      id   <- lookup.lookupId
-      resp <- lookup.response(src, table.lookup(id))
-    } yield {
-      Metrics[F].incrementCounter("lookup-recv-count").as(resp)
-    }).sequence.map(_.fold(notHandled)(m => handledWithMessage(m)))
+  private def handleLookup(sender: PeerNode, lookup: Lookup): F[CommunicationResponse] = {
+    val id = lookup.id.toByteArray
+
+    for {
+      peers          <- Capture[F].capture(table.lookup(id))
+      lookupResponse = ProtocolHelper.lookupResponse(src, peers)
+      _              <- Metrics[F].incrementCounter("lookup-recv-count")
+    } yield handledWithMessage(lookupResponse)
+  }
 
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect(sender: PeerNode,
-                               disconnect: DisconnectMessage): F[CommunicationResponse] =
+  private def handleDisconnect(sender: PeerNode, disconnect: Disconnect): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- TransportLayer[F].disconnect(sender)
@@ -120,15 +117,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
     for {
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = LookupMessage(ProtocolMessage.lookup(src, key), System.currentTimeMillis)
+      req = ProtocolHelper.lookup(src, key)
       r <- TransportLayer[F]
             .roundTrip(remoteNode, req, timeout)
             .map(_.toOption
               .map {
-                case LookupResponseMessage(proto, _) =>
-                  proto.message.lookupResponse
-                    .map(_.nodes.map(ProtocolMessage.toPeerNode))
-                    .getOrElse(Seq())
+                case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
+                  lr.nodes.map(ProtocolHelper.toPeerNode)
                 case _ => Seq()
               }
               .getOrElse(Seq()))

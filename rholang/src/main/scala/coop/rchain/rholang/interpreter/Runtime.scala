@@ -128,9 +128,8 @@ object Runtime {
       4L -> SystemProcesses.ed25519Verify(space, dispatcher),
       5L -> SystemProcesses.sha256Hash(space, dispatcher),
       6L -> SystemProcesses.keccak256Hash(space, dispatcher),
-      7L -> SystemProcesses.blake2b256Hash(space, dispatcher)
-      //TODO: once we have secp256k1 packaged as jar
-//      9L -> SystemProcesses.secp256k1Verify(store, dispatcher)
+      7L -> SystemProcesses.blake2b256Hash(space, dispatcher),
+      9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
@@ -141,9 +140,8 @@ object Runtime {
       ("ed25519Verify", 4, None, 4L),
       ("sha256Hash", 2, None, 5L),
       ("keccak256Hash", 2, None, 6L),
-      ("blake2b256Hash", 2, None, 7L)
-      //TODO: once we have secp256k1 packaged as jar
-//      ("secp256k1Verify", 4, None, 9L)
+      ("blake2b256Hash", 2, None, 7L),
+      ("secp256k1Verify", 4, None, 9L)
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
