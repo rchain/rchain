@@ -9,26 +9,28 @@ import coop.rchain.casper.protocol._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.effects._
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.shared._
 
 import scala.util.Try
+import scala.concurrent.duration._
 
 object CommUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  private val defaultTimeout = 1000.milliseconds
 
   def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     val hashString      = PrettyPrinter.buildString(b.blockHash)
     for {
-      _ <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
-      _ <- sendToPeers[F](serializedBlock)
-      _ <- Log[F].info(s"CASPER: Sent $hashString to peers")
+      _               <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
+      successfulPeers <- sendToPeers[F](serializedBlock)
+      _               <- successfulPeers.traverse(peer => Log[F].info(s"CASPER: Sent $hashString to $peer"))
     } yield ()
   }
 
@@ -37,20 +39,29 @@ object CommUtil {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
     for {
-      _ <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
-      _ <- sendToPeers[F](serialized)
-      _ <- Log[F].info(s"CASPER: Requested $hashString from peers")
+      _               <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
+      successfulPeers <- sendToPeers[F](serialized)
+      _ <- successfulPeers.traverse(peer =>
+            Log[F].info(s"CASPER: Requested $hashString from $peer"))
     } yield ()
   }
 
   def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
-      serializedMessage: ByteString): F[Unit] =
+      serializedMessage: ByteString): F[List[PeerNode]] =
     for {
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
       msg   = packet(local, serializedMessage)
-      _     <- TransportLayer[F].broadcast(peers, msg)
-    } yield ()
+      sends <- TransportLayer[F].safeBroadcast(peers, msg, defaultTimeout)
+      successes <- sends.toList.traverse {
+                    case (peer, Some(err)) =>
+                      Log[F].error(s"Send to peer ${peer.id} failed: $err") *> List
+                        .empty[PeerNode]
+                        .pure[F]
+                    case (peer, None) =>
+                      List(peer).pure[F]
+                  }
+    } yield successes.flatten
 
   def casperPacketHandler[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
@@ -77,12 +88,15 @@ object CommUtil {
             local    <- TransportLayer[F].local
             block    = dag.blockLookup.get(r.hash).map(_.toByteString)
             maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
-            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
+            send     <- maybeMsg.traverse(msg => TransportLayer[F].roundTrip(peer, msg, defaultTimeout))
             hash     = PrettyPrinter.buildString(r.hash)
             logIntro = s"Received request for block $hash from $peer. "
             _ <- send match {
-                  case None    => Log[F].info(logIntro + "No response given since block not found.")
-                  case Some(_) => Log[F].info(logIntro + "Response sent.")
+                  case None => Log[F].info(logIntro + "No response given since block not found.")
+                  case Some(Left(err)) =>
+                    Log[F].info(logIntro) *> Log[F].error(
+                      s"Error sending block $hash to $peer: $err")
+                  case Some(Right(_)) => Log[F].info(logIntro + "Response sent.")
                 }
           } yield none[Packet]
       }

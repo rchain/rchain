@@ -99,8 +99,8 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
         case Some(e) => log.warn(s"Failed to send a message to peer ${peer.id}: ${e.getMessage}")
       }
 
-  private def sendRequest(request: TLRequest,
-                          peer: PeerNode,
+  private def sendRequest(peer: PeerNode,
+                          request: TLRequest,
                           timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
     innerSend(peer, request)
       .timeout(timeout)
@@ -113,7 +113,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
   // TODO: Rename to send
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
     for {
-      tlResponseErr <- sendRequest(TLRequest(msg.some), peer, timeout)
+      tlResponseErr <- sendRequest(peer, TLRequest(msg.some), timeout)
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
@@ -127,14 +127,22 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     } yield pmErr
 
   // TODO: rename to sendAndForget
-  def send(peer: PeerNode, msg: Protocol): Task[Unit] =
+  def send(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[Unit] =
     Task
-      .racePair(innerSend(peer, TLRequest(msg.some)), Task.unit)
+      .racePair(sendRequest(peer, TLRequest(msg.some), timeout), Task.unit)
       .attempt
       .void
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
-    Task.gatherUnordered(peers.map(send(_, msg))).void
+  def broadcast(peers: Seq[PeerNode], msg: Protocol, timeout: FiniteDuration): Task[Unit] =
+    Task.gatherUnordered(peers.map(send(_, msg, timeout))).void
+
+  def safeBroadcast(peers: Seq[PeerNode],
+                    msg: Protocol,
+                    timeout: FiniteDuration): Task[Map[PeerNode, Option[CommError]]] =
+    Task
+      .gatherUnordered(
+        peers.map(p => sendRequest(p, TLRequest(msg.some), timeout).map(p -> _.swap.toOption)))
+      .map(_.toMap)
 
   def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
     Capture[Task].capture {
