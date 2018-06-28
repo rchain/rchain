@@ -159,7 +159,8 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         }
 
         ExpandedLocation * el = ExpandedLocation::create();
-        retval = valWrt(loc, el);;
+// TODO: This isn't correct. Figure out the correct way to turn a loc into a ExpandedLocation Object
+//        retval = valWrt(loc, el);
         break;
     }
 
@@ -303,8 +304,8 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
     case ObjectCodePB::OT_TEMPLATE: {
         ObjectCodePB::Template * pbob = ob->mutable_template_();
         retval = Template::create( (Tuple *)createRosetteObject(pbob->mutable_keytuple()),
-                                    createRosetteObject(pbob->mutable_pat()),
-                                    (CompoundPattern *)createRosetteObject(pbob->mutable_keymeta()) );
+                                    createRosetteObject(pbob->mutable_keymeta()),
+                                    (CompoundPattern *)createRosetteObject(pbob->mutable_pat()) );
         break;
     }
 
