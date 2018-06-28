@@ -41,21 +41,21 @@ object StoreMetrics extends StoreMetricsInstances {
         _ <- m.setGauge(name + "-avg-ms", value.map(_.avgMilliseconds.toLong).getOrElse(0))
       } yield ()
 
-    def reportStoreSize(storeSize: StoreUsage): List[F[Unit]] =
+    def reportStoreSize(storeUsage: StoreUsage): List[F[Unit]] =
       List(
-        g("total-size-on-disk", storeSize.totalSizeOnDisk),
-        g("rspace-size-on-disk", storeSize.rspaceSizeOnDisk),
-        g("rspace-data-entries", storeSize.rspaceDataEntries),
-        pc("rspace-consumes", storeSize.rspace.flatMap(_.consumes)),
-        pc("rspace-produces", storeSize.rspace.flatMap(_.produces)),
-        cm("rspace-consumes-COMM", storeSize.rspace.flatMap(_.consumesComm)),
-        cm("rspace-produces-COMM", storeSize.rspace.flatMap(_.producesComm)),
-        cm("rspace-install-COMM", storeSize.rspace.flatMap(_.installComm)),
-        pc("replayrspace-consumes", storeSize.replayRSpace.flatMap(_.consumes)),
-        pc("replayrspace-produces", storeSize.replayRSpace.flatMap(_.produces)),
-        cm("replayrspace-consumes-COMM", storeSize.replayRSpace.flatMap(_.consumesComm)),
-        cm("replayrspace-produces-COMM", storeSize.replayRSpace.flatMap(_.producesComm)),
-        cm("replayrspace-install-COMM", storeSize.replayRSpace.flatMap(_.installComm))
+        g("total-size-on-disk", storeUsage.totalSizeOnDisk),
+        g("rspace-size-on-disk", storeUsage.rspaceSizeOnDisk),
+        g("rspace-data-entries", storeUsage.rspaceDataEntries),
+        pc("rspace-consumes", storeUsage.rspace.flatMap(_.consumes)),
+        pc("rspace-produces", storeUsage.rspace.flatMap(_.produces)),
+        cm("rspace-consumes-COMM", storeUsage.rspace.flatMap(_.consumesComm)),
+        cm("rspace-produces-COMM", storeUsage.rspace.flatMap(_.producesComm)),
+        cm("rspace-install-COMM", storeUsage.rspace.flatMap(_.installComm)),
+        pc("replayrspace-consumes", storeUsage.replayRSpace.flatMap(_.consumes)),
+        pc("replayrspace-produces", storeUsage.replayRSpace.flatMap(_.produces)),
+        cm("replayrspace-consumes-COMM", storeUsage.replayRSpace.flatMap(_.consumesComm)),
+        cm("replayrspace-produces-COMM", storeUsage.replayRSpace.flatMap(_.producesComm)),
+        cm("replayrspace-install-COMM", storeUsage.replayRSpace.flatMap(_.installComm))
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =
