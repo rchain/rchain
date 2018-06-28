@@ -713,6 +713,19 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       mm.get(pr) shouldBe None
   }
+
+  "producing" should "return same, stable checkpoint root hashes" in {
+    def process(indices: Seq[Int]): Checkpoint = withTestSpaces { (space, replaySpace) =>
+      for (i <- indices) {
+        replaySpace.produce("ch1", s"datum$i", false)
+      }
+      space.createCheckpoint()
+    }
+
+    val cp1 = process(0 to 10)
+    val cp2 = process(10 to 0 by -1)
+    cp1.root shouldBe cp2.root
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]
