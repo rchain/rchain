@@ -127,7 +127,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](1).runS(initState)
     val block = chain.idToBlocks(0)
 
-    val modifiedTimestampHeader = block.header.get.withTimestamp(999)
+    val modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
     Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
       Left(InvalidUnslashableBlock))
     Validate.timestamp[Id](block, chain) should be(Right(Valid))

@@ -13,6 +13,8 @@ import coop.rchain.shared.{Log, Time}
 import scala.util.Try
 
 object Validate {
+  val DRIFT = 15000 // 15 seconds
+
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
@@ -96,7 +98,7 @@ object Validate {
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
-      beforeFuture = currentTime >= timestamp
+      beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp = ProtoUtil
         .parents(b)
         .foldLeft(0L) {
