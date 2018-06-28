@@ -28,14 +28,14 @@ object StoreMetrics extends StoreMetricsInstances {
     def g(name: String, value: Long): F[Unit] =
       m.setGauge(name, value)
 
-    def cm(name: String, value: Option[StoreUsageMetric]): F[Unit] =
+    def cm(name: String, value: Option[RSpaceUsageMetric]): F[Unit] =
       for {
         _ <- m.setGauge(name + "-count", value.map(_.count).getOrElse(0))
         _ <- m.setGauge(name + "-peak-rate", value.map(_.peakRate.toLong).getOrElse(0))
         _ <- m.setGauge(name + "-current-rate", value.map(_.currentRate.toLong).getOrElse(0))
       } yield ()
 
-    def pc(name: String, value: Option[StoreUsageMetric]): F[Unit] =
+    def pc(name: String, value: Option[RSpaceUsageMetric]): F[Unit] =
       for {
         _ <- cm(name, value)
         _ <- m.setGauge(name + "-avg-ms", value.map(_.avgMilliseconds.toLong).getOrElse(0))
@@ -46,11 +46,11 @@ object StoreMetrics extends StoreMetricsInstances {
         g("total-size-on-disk", storeSize.totalSizeOnDisk),
         g("rspace-size-on-disk", storeSize.rspaceSizeOnDisk),
         g("rspace-data-entries", storeSize.rspaceDataEntries),
-        pc("rspace-consumes", storeSize.rspace.flatMap(_.rspaceConsumesCount)),
-        pc("rspace-produces", storeSize.rspace.flatMap(_.rspaceProducesCount)),
-        cm("rspace-consumes-COMM", storeSize.rspace.flatMap(_.rspaceConsumesCommCount)),
-        cm("rspace-produces-COMM", storeSize.rspace.flatMap(_.rspaceProducesCommCount)),
-        cm("rspace-install-COMM", storeSize.rspace.flatMap(_.rspaceInstallCommCount))
+        pc("rspace-consumes", storeSize.rspace.flatMap(_.consumes)),
+        pc("rspace-produces", storeSize.rspace.flatMap(_.produces)),
+        cm("rspace-consumes-COMM", storeSize.rspace.flatMap(_.consumesComm)),
+        cm("rspace-produces-COMM", storeSize.rspace.flatMap(_.producesComm)),
+        cm("rspace-install-COMM", storeSize.rspace.flatMap(_.installComm))
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =
