@@ -8,7 +8,9 @@ lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.4",
   version := "0.1.0-SNAPSHOT",
-  resolvers += Resolver.sonatypeRepo("releases"),
+  resolvers ++= Seq(
+    Resolver.sonatypeRepo("releases"),
+    Resolver.sonatypeRepo("snapshots")),
   scalafmtOnCompile := true
 )
 
@@ -84,11 +86,8 @@ lazy val crypto = (project in file("crypto"))
       bouncyCastle,
       kalium,
       jaxb,
-      scodecBits
-    ),
+      secp256k1Java,      scodecBits    ),
     fork := true,
-    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
-    javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
