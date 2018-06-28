@@ -364,6 +364,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
     // for(@[...a] <- @"channel") { … } | @"channel"!([7,8,9])
     implicit val errorLog = new Runtime.ErrorLog()
+    // format: off
     val send =
       Send(Quote(GString("channel")), List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7), GInt(8), GInt(9)))))))), false, BitSet())
     val receive = Receive(
@@ -376,6 +377,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       1,
       BitSet()
     )
+    // format: on
     val sendFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -790,7 +792,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                        false,
                        1,
                        BitSet())
-    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
+    val serializedProcess =
+      com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc).toArray)
     val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
@@ -856,6 +859,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel = Channel(Quote(GString("result")))
 
+    // format: off
     result should be(
       HashMap(
         List(channel) ->
@@ -866,6 +870,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+    // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -951,20 +956,22 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   it should "reference a variable that comes from a match in tuplespace" in {
     implicit val errorLog = new Runtime.ErrorLog()
     val proc = Par(
-      sends = List(Send(chan = Quote(GInt(7)), data= List(GInt(10)))),
+      sends = List(Send(chan = Quote(GInt(7)), data = List(GInt(10)))),
       receives = List(
         Receive(
-          binds = List(ReceiveBind(
-            patterns = List(Channel(ChanVar(FreeVar(0)))),
-            source = Channel(Quote(GInt(7))),
-            freeCount = 1
-          )),
+          binds = List(
+            ReceiveBind(
+              patterns = List(Channel(ChanVar(FreeVar(0)))),
+              source = Channel(Quote(GInt(7))),
+              freeCount = 1
+            )),
           body = Match(
             GInt(10),
-            List(MatchCase(
-              pattern = Connective(VarRefBody(VarRef(0, 1))),
-              source = Send(chan = Quote(GString("result")), data = List(GString("true")))
-            ))
+            List(
+              MatchCase(
+                pattern = Connective(VarRefBody(VarRef(0, 1))),
+                source = Send(chan = Quote(GString("result")), data = List(GString("true")))
+              ))
           )
         )
       )
@@ -985,7 +992,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       HashMap(
         List(channel) ->
           Row(List(Datum.create(channel, Seq[Channel](Quote(GString("true"))), persist = false)),
-            List())
+              List())
       )
     )
 
