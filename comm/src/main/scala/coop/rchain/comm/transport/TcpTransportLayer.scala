@@ -162,10 +162,10 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
   def send(request: TLRequest): Future[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-        dispatch(protocol) >>= {
-          case NotHandled                   => internalServerError(s"Message ${protocol} was not handled!").pure[Task]
-          case HandledWitoutMessage         => noResponse.pure[Task]
-          case HandledWithMessage(response) => returnProtocol(response).pure[Task]
+        dispatch(protocol) map {
+          case NotHandled                   => internalServerError(s"Message ${protocol} was not handled!")
+          case HandledWitoutMessage         => noResponse
+          case HandledWithMessage(response) => returnProtocol(response)
         }
       }
       .runAsync
