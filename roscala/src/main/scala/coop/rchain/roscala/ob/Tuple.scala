@@ -15,18 +15,9 @@ class Tuple(val value: Array[Ob]) extends Ob {
 
   def update(arg: Int, ob: Ob): Unit = value.update(arg, ob)
 
-  def accepts(msg: Ctxt): Boolean =
-    if (this == Nil) {
-      true
-    } else {
-      this.value.exists(_.matches(msg))
-    }
+  def accepts(msg: Ctxt): Boolean = this.value.exists(_.matches(msg))
 
-  def makeSlice(offset: Int, n: Int): Tuple =
-    this match {
-      case Nil => Nil
-      case _   => Tuple(n, this, offset, n)
-    }
+  def makeSlice(offset: Int, n: Int): Tuple = Tuple(n, this, offset, n)
 
   def makeTail(entriesToSkip: Int): Tuple = {
     val size = numberOfElements() - entriesToSkip
@@ -36,7 +27,7 @@ class Tuple(val value: Array[Ob]) extends Ob {
   override def matches(msg: Ctxt): Boolean = {
     val n = numberOfElements()
 
-    if (n > 0 && n <= msg.argvec.value.length) {
+    if (n > 0 && n <= msg.nargs) {
       if (this.value.head != msg.trgt) {
         false
       } else {
@@ -54,7 +45,7 @@ class Tuple(val value: Array[Ob]) extends Ob {
 
         this.value
           .drop(1)
-          .zip(msg.argvec.value)
+          .zip(msg.argvec.value.drop(1))
           .forall {
             case (e, arg) => e == arg
           }
@@ -64,33 +55,30 @@ class Tuple(val value: Array[Ob]) extends Ob {
     }
   }
 
-  def matches(msg: Tuple): Boolean =
-    if (this == Nil) {
-      true
-    } else {
-      val n = this.value.length
+  def matches(msg: Tuple): Boolean = {
+    val n = this.value.length
 
-      if (n > 0 && n <= msg.value.length) {
+    if (n > 0 && n <= msg.value.length) {
 
-        this.value
-          .zip(msg.value)
-          .forall {
-            case (e, msgElem) =>
-              if (e != msgElem && e != Niv) {
-                if (e.meta.isInstanceOf[Tuple]
-                    && msgElem.meta.isInstanceOf[Tuple]
-                    && e.isInstanceOf[Tuple]
-                    && msgElem.isInstanceOf[Tuple]) {
-                  if (e.asInstanceOf[Tuple]
-                        .matches(msgElem.asInstanceOf[Tuple])) {
-                    true
-                  } else false
+      this.value
+        .zip(msg.value)
+        .forall {
+          case (e, msgElem) =>
+            if (e != msgElem && e != Niv) {
+              if (e.meta.isInstanceOf[Tuple]
+                  && msgElem.meta.isInstanceOf[Tuple]
+                  && e.isInstanceOf[Tuple]
+                  && msgElem.isInstanceOf[Tuple]) {
+                if (e.asInstanceOf[Tuple]
+                      .matches(msgElem.asInstanceOf[Tuple])) {
+                  true
                 } else false
-              } else true
-          }
+              } else false
+            } else true
+        }
 
-      } else false
-    }
+    } else false
+  }
 
   def nth(n: Int): Ob = this.value(n)
 
@@ -153,4 +141,10 @@ object Tuple {
   def concat(t1: Tuple, t2: Tuple): Tuple = apply(t1, t2)
 }
 
-object Nil extends Tuple(Array.empty[Ob])
+object Nil extends Tuple(Array.empty[Ob]) {
+  override def accepts(msg: Ctxt): Boolean = true
+
+  override def makeSlice(offset: Int, n: Int): Tuple = Nil
+
+  override def matches(msg: Tuple): Boolean = true
+}
