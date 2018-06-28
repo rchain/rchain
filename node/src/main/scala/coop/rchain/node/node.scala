@@ -26,11 +26,11 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-import ThrowableOps._
+import coop.rchain.comm.discovery.{Ping => NDPing, _}
+import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -165,7 +165,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
-  implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
+  implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
@@ -208,8 +208,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     (for {
       peers <- nodeDiscoveryEffect.peers
       loc   <- transportLayerEffect.local
-      ts    <- timeEffect.currentMillis
-      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      msg   = ProtocolHelper.disconnect(loc)
       _     <- transportLayerEffect.broadcast(peers, msg)
       // TODO remove that once broadcast and send reuse roundTrip
       _ <- IOUtil.sleep[Task](5000L)
@@ -245,14 +244,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(
-      resources: Resources): ProtocolMessage => Effect[CommunicationResponse] = {
+  def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
     implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
     implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
       casperPacketHandler[Effect]
     )
 
-    (pm: ProtocolMessage) =>
+    (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
         case NotHandled => Connect.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
