@@ -68,6 +68,7 @@ object Substitute {
           case Left(v)    => Left(Expr(EEvalBody(ChanVar(v))))
           case Right(par) => Right(par)
         }
+      case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
     }
 
   def maybeSubstitute[M[_]: InterpreterErrorsM](
@@ -120,6 +121,7 @@ object Substitute {
                                case Left(_v) => ChanVar(_v)
                                case Right(p) => Quote(p)
                              }
+                           case ChannelInstance.Empty => term.channelInstance.pure[M]
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =

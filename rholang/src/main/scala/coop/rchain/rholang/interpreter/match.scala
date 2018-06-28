@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.{Eval => _}
 import cats.Foldable
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -195,6 +196,9 @@ object SpatialMatcher {
           (pMinMax.foldLeft(ParCount.max)(_ min _._1), pMinMax.foldLeft(ParCount())(_ max _._2))
         case ConnNotBody(_) =>
           (ParCount(), ParCount.max)
+        case ConnectiveInstance.Empty =>
+          (ParCount(), ParCount())
+        case VarRefBody(varRef) =>
       }
   }
 
@@ -743,6 +747,8 @@ object SpatialMatcher {
               case Some((_, _)) => None
             }
           })
+        case ConnectiveInstance.Empty =>
+          StateT.liftF(None)
       }
     }
 }

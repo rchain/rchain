@@ -5,6 +5,7 @@ import coop.rchain.models.Connective.ConnectiveInstance.{
   ConnAndBody,
   ConnNotBody,
   ConnOrBody,
+  Empty,
   VarRefBody
 }
 import coop.rchain.models.VarRef
@@ -28,5 +29,7 @@ object ConnectiveSortMatcher {
                    Node(Score.CONNECTIVE_NOT, scoredPar.score))
       case v @ VarRefBody(VarRef(index, depth)) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth))
+      case Empty =>
+        ScoredTerm(Connective(Empty), Leaf(Score.ABSENT))
     }
 }
