@@ -41,12 +41,24 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private val dataDirFile = conf.run.data_dir().toFile
+
+  if (!dataDirFile.exists()) {
+    if (!dataDirFile.mkdir()) {
+      println(
+        s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+      System.exit(-1)
+    }
+  }
+
   // Check if data_dir has read/write access
-  if (!conf.run.data_dir().toFile.canRead
-      || !conf.run.data_dir().toFile.canWrite) {
-    println(s"The data dir must have read and write permissions:\n${conf.run.data_dir()}")
+  if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
+    println(
+      s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
     System.exit(-1)
   }
+
+  println(s"Using data_dir: ${conf.run.data_dir()}")
 
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
@@ -185,7 +197,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
+                                           casperRuntime.replaySpace.store,
+                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -235,7 +249,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
+                                       resources.casperRuntime.replaySpace.store,
+                                       conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
