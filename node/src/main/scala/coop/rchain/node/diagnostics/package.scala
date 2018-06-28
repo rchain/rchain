@@ -161,8 +161,8 @@ package object diagnostics {
     }
 
   def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] = {
-    def convert(c: coop.rchain.rspace.StoreCount): Option[StoreUsageCount] =
-      Some(StoreUsageCount(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
+    def convert(c: coop.rchain.rspace.StoreCount): Option[StoreUsageMetric] =
+      Some(StoreUsageMetric(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
 
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =
@@ -173,11 +173,15 @@ package object diagnostics {
             totalSizeOnDisk = totalSize,
             rspaceSizeOnDisk = storeCounters.sizeOnDisk,
             rspaceDataEntries = storeCounters.dataEntries,
-            rspaceConsumesCount = convert(storeCounters.consumesCount),
-            rspaceProducesCount = convert(storeCounters.producesCount),
-            rspaceConsumesCommCount = convert(storeCounters.consumesCommCount),
-            rspaceProducesCommCount = convert(storeCounters.producesCommCount),
-            rspaceInstallCommCount = convert(storeCounters.installCommCount)
+            rspace = Some(
+              StoreUsageCount(
+                rspaceConsumesCount = convert(storeCounters.consumesCount),
+                rspaceProducesCount = convert(storeCounters.producesCount),
+                rspaceConsumesCommCount = convert(storeCounters.consumesCommCount),
+                rspaceProducesCommCount = convert(storeCounters.producesCommCount),
+                rspaceInstallCommCount = convert(storeCounters.installCommCount)
+              )),
+            replayRspace = None
           )
         }
     }

@@ -77,23 +77,30 @@ message NodeCoreMetrics {
   int64 peers = 7;
 }
 
-message StoreUsageCount {
+message StoreUsageMetric {
   int64 count = 1;
   double avgMilliseconds = 2;
   int32 peakRate = 3;
   int32 currentRate = 4;
 }
 
+// TODO: rename to StoreUsage
+message StoreUsageCount {
+  StoreUsageMetric rspaceConsumesCount = 1;
+  StoreUsageMetric rspaceProducesCount = 2;
+  StoreUsageMetric rspaceConsumesCommCount = 3;
+  StoreUsageMetric rspaceProducesCommCount = 4;
+  StoreUsageMetric rspaceInstallCommCount = 5;
+}
+
+// TODO: rename to OverallStoreUsage
 message StoreUsage {
   int64 totalSizeOnDisk = 1;
   int64 rspaceSizeOnDisk = 2;
   int64 rspaceDataEntries = 3;
 
-  StoreUsageCount rspaceConsumesCount = 4;
-  StoreUsageCount rspaceProducesCount = 5;
-  StoreUsageCount rspaceConsumesCommCount = 6;
-  StoreUsageCount rspaceProducesCommCount = 7;
-  StoreUsageCount rspaceInstallCommCount = 8;
+  StoreUsageCount rspace = 4;
+  StoreUsageCount replayRspace = 5;
 }
 
 service Diagnostics {

@@ -115,7 +115,7 @@ object Runtime {
        |""".stripMargin
 
   def showStoreUsage(storeUsage: StoreUsage): String = {
-    def writeCounts(name: String, value: Option[StoreUsageCount]): String =
+    def writeCounts(name: String, value: Option[StoreUsageMetric]): String =
       s"""
          |  + RSpace $name
          |    - Total Count: ${value.map(_.count).getOrElse(0)}
@@ -124,7 +124,7 @@ object Runtime {
          |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
           """
 
-    def writeCommCounts(name: String, value: Option[StoreUsageCount]): String =
+    def writeCommCounts(name: String, value: Option[StoreUsageMetric]): String =
       s"""
          |  + RSpace $name
          |    - Total Count: ${value.map(_.count).getOrElse(0)}
@@ -136,11 +136,11 @@ object Runtime {
        |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
        |  - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
        |  - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
-       |  ${writeCounts("Consumes", storeUsage.rspaceConsumesCount)}
-       |  ${writeCounts("Produces", storeUsage.rspaceProducesCount)}
-       |  ${writeCommCounts("Consumes COMM", storeUsage.rspaceConsumesCommCount)}
-       |  ${writeCommCounts("Produces COMM", storeUsage.rspaceProducesCommCount)}
-       |  ${writeCommCounts("Install COMM", storeUsage.rspaceInstallCommCount)}
+       |  ${writeCounts("Consumes", storeUsage.rspace.flatMap(_.rspaceConsumesCount))}
+       |  ${writeCounts("Produces", storeUsage.rspace.flatMap(_.rspaceProducesCount))}
+       |  ${writeCommCounts("Consumes COMM", storeUsage.rspace.flatMap(_.rspaceConsumesCommCount))}
+       |  ${writeCommCounts("Produces COMM", storeUsage.rspace.flatMap(_.rspaceProducesCommCount))}
+       |  ${writeCommCounts("Install COMM", storeUsage.rspace.flatMap(_.rspaceInstallCommCount))}
        |""".stripMargin
   }
 }
