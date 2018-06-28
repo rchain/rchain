@@ -4,13 +4,12 @@ import cats._
 import cats.data.StateT
 import cats.implicits._
 import cats.mtl.MonadState
+import coop.rchain.catscontrib._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.BlockGenerator.BlockDagState
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -19,10 +18,6 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit def idCapture: Capture[Id] = new Capture[Id] {
-    def capture[A](a: => A): Id[A]       = a
-    def unsafeUncapture[A](fa: Id[A]): A = fa
-  }
   implicit val timeEff = new LogicalTime[Id]
 
   type StateWithChain[A] = StateT[Id, BlockDag, A]
