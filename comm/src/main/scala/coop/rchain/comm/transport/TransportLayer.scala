@@ -4,20 +4,20 @@ import scala.concurrent.duration.FiniteDuration
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.comm.CommError.CommErr
-import coop.rchain.comm.{PeerNode, ProtocolMessage}
+import coop.rchain.comm.{PeerNode, ProtocolHelper}
 import coop.rchain.shared._
+import coop.rchain.comm.protocol.routing._
 
 trait TransportLayer[F[_]] {
   // TODO return PeerNode, do we still neeed it?
   def local: F[PeerNode]
-  def roundTrip(peer: PeerNode,
-                msg: ProtocolMessage,
-                timeout: FiniteDuration): F[CommErr[ProtocolMessage]]
+  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
   // TODO remove ProtocolMessage, use raw messages from protocol
-  def send(peer: PeerNode, msg: ProtocolMessage): F[Unit]
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Unit]
-  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit]
+  def send(peer: PeerNode, msg: Protocol): F[Unit]
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit]
+  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
+
 }
 
 object TransportLayer extends TransportLayerInstances {
@@ -39,19 +39,19 @@ sealed abstract class TransportLayerInstances {
         EitherT.liftF(evF.local)
 
       def roundTrip(peer: PeerNode,
-                    msg: ProtocolMessage,
-                    timeout: FiniteDuration): EitherT[F, E, CommErr[ProtocolMessage]] =
+                    msg: Protocol,
+                    timeout: FiniteDuration): EitherT[F, E, CommErr[Protocol]] =
         EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
-      def send(peer: PeerNode, msg: ProtocolMessage): EitherT[F, E, Unit] =
+      def send(peer: PeerNode, msg: Protocol): EitherT[F, E, Unit] =
         EitherT.liftF(evF.send(peer, msg))
 
-      def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): EitherT[F, E, Unit] =
+      def broadcast(peers: Seq[PeerNode], msg: Protocol): EitherT[F, E, Unit] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
-      def receive(dispatch: ProtocolMessage => EitherT[F, E, CommunicationResponse])
-        : EitherT[F, E, Unit] = {
-        val dis: ProtocolMessage => F[CommunicationResponse] = msg =>
+      def receive(
+          dispatch: Protocol => EitherT[F, E, CommunicationResponse]): EitherT[F, E, Unit] = {
+        val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap {
             case Left(err) =>
               Log[F].error(s"Error while handling message. Error: $err") *> notHandled.pure[F]

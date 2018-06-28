@@ -48,7 +48,7 @@ object CommUtil {
     for {
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
-      msg   = PacketMessage(packet(local, serializedMessage))
+      msg   = packet(local, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
@@ -73,11 +73,10 @@ object CommUtil {
 
         case r: BlockRequest =>
           for {
-            dag   <- MultiParentCasper[F].blockDag
-            local <- TransportLayer[F].local
-            block = dag.blockLookup.get(r.hash).map(_.toByteString)
-            maybeMsg = block.map(serializedMessage =>
-              PacketMessage(packet(local, serializedMessage)))
+            dag      <- MultiParentCasper[F].blockDag
+            local    <- TransportLayer[F].local
+            block    = dag.blockLookup.get(r.hash).map(_.toByteString)
+            maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
             send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
             hash     = PrettyPrinter.buildString(r.hash)
             logIntro = s"Received request for block $hash from $peer. "

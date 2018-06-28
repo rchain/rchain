@@ -14,8 +14,8 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.comm.connect.Connect.dispatch
 import coop.rchain.comm.transport._
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
-
 import java.nio.file.Files
 
 import monix.execution.Scheduler
@@ -60,7 +60,7 @@ object HashSetCasperTestNode {
     val name     = "standalone"
     val identity = peerNode(name, 30300)
     val tle =
-      new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[ProtocolMessage]])
+      new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
 
     new HashSetCasperTestNode(name, identity, tle, genesis, sk)
   }
@@ -70,7 +70,7 @@ object HashSetCasperTestNode {
     val n         = sks.length
     val names     = (1 to n).map(i => s"node-$i")
     val peers     = names.map(peerNode(_, 30300))
-    val msgQueues = peers.map(_ -> new mutable.Queue[ProtocolMessage]()).toMap
+    val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
 
     val nodes =
       names.zip(peers).zip(sks).map {
