@@ -85,17 +85,6 @@ object SpatialMatcher {
   type OptionalFreeMap[A] = StateT[Option, FreeMap, A]
   type NonDetFreeMap[A]   = StateT[Stream, FreeMap, A]
 
-  @tailrec
-  def possiblyFind[T, R](prop: T => Option[R], haystack: Seq[T]): Option[R] =
-    haystack match {
-      case Nil => None
-      case head +: rest =>
-        prop(head) match {
-          case None  => possiblyFind(prop, rest)
-          case found => found
-        }
-    }
-
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
   case class ParCount(sends: Int = 0,
@@ -128,7 +117,7 @@ object SpatialMatcher {
   private[this] def noFrees(exprs: Seq[Expr]): Seq[Expr] =
     exprs.filter({ (expr) =>
       expr.exprInstance match {
-        case EVarBody(EVar((v))) =>
+        case EVarBody(EVar(v)) =>
           v.varInstance match {
             case FreeVar(_)  => false
             case Wildcard(_) => false
@@ -198,7 +187,10 @@ object SpatialMatcher {
           (ParCount(), ParCount.max)
         case ConnectiveInstance.Empty =>
           (ParCount(), ParCount())
-        case VarRefBody(varRef) =>
+        case _: VarRefBody =>
+          // Variable references should be substituted before going into the matcher.
+          // This should never happen.
+          (ParCount(), ParCount())
       }
   }
 
@@ -328,19 +320,20 @@ object SpatialMatcher {
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
-  // This function finds a single matching from a list of patterns and a list of
-  // targets.
-  // Any remaining terms are either grouped with the free variable varLevel or
-  // thrown away with the wildcard. If both are provided, we prefer to capture
-  // terms that can be captured.
-  // tlist is the target list
-  // plist is the pattern list
-  // matcher is a function that does a spatial match between T's
-  // merger is a function that adds a captured T to a par. Used for updating the
-  //   state map.
-  // varLevel: if non-empty, the free variable level where to put the remaining
-  //   T's
-  // wildcard: if true, there is a wildcard in parallel with the pattern list.
+  /** This function finds a single matching from a list of patterns and a list of targets.
+    * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
+    * If both are provided, we prefer to capture terms that can be captured.
+    *
+    * @param tlist  the target list
+    * @param plist  the pattern list
+    * @param merger a function that adds a captured T to a par. Used for updating the state map.
+    * @param varLevel if non-empty, the free variable level where to put the remaining T's
+    * @param wildcard if true, there is a wildcard in parallel with the pattern list.
+    * @param lf
+    * @param sm a function that does a spatial match between T's
+    * @tparam T
+    * @return
+    */
   private[this] def listMatchSingleNonDet[T](tlist: Seq[T],
                                              plist: Seq[T],
                                              merger: (Par, T) => Par,
@@ -483,6 +476,18 @@ object SpatialMatcher {
           StateT.liftF(Stream.Empty)
         }
       } else {
+
+        @tailrec
+        def possiblyFind[T, R](prop: T => Option[R], haystack: Seq[T]): Option[R] =
+          haystack match {
+            case Nil => None
+            case head +: rest =>
+              prop(head) match {
+                case None  => possiblyFind(prop, rest)
+                case found => found
+              }
+          }
+
         val varLevel: Option[Int] = possiblyFind[Expr, Int](
           {
             case expr =>
@@ -509,7 +514,7 @@ object SpatialMatcher {
           }
         }
 
-        val filteredPattern  = pattern.withExprs(noFrees(pattern.exprs))
+        val filteredPattern  = noFrees(pattern)
         val pc               = ParCount(filteredPattern)
         val minRem           = pc
         val maxRem           = if (wildcard || !varLevel.isEmpty) ParCount.max else pc
@@ -534,8 +539,7 @@ object SpatialMatcher {
           } yield sp._2
         }
         for {
-          remainder <- Foldable[List].foldM(connectivesWithBounds, target)(
-                        matchConnectiveWithBounds)
+          remainder <- connectivesWithBounds.foldM(target)(matchConnectiveWithBounds)
           _ <- listMatchSingleNonDet[Send](remainder.sends,
                                            pattern.sends,
                                            (p, s) => p.withSends(s +: p.sends),
@@ -747,6 +751,10 @@ object SpatialMatcher {
               case Some((_, _)) => None
             }
           })
+        case _: VarRefBody =>
+          // this should never happen because variable references should be substituted
+          StateT.liftF(None)
+
         case ConnectiveInstance.Empty =>
           StateT.liftF(None)
       }
