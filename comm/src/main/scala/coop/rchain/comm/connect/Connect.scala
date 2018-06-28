@@ -68,28 +68,21 @@ object Connect {
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       peer: PeerNode,
-      timeout: FiniteDuration): F[Unit] = {
-
-    def initProtocolHandshake: F[Unit] =
-      for {
-        _       <- Log[F].info(s"Initialize protocol handshake to $peer")
-        local   <- TransportLayer[F].local
-        ph      = protocolHandshake(local)
-        phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
-        _ <- Log[F].debug(
-              s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-        _ <- NodeDiscovery[F].addNode(peer)
-      } yield ()
-
+      timeout: FiniteDuration): F[Unit] =
     for {
-      tss <- Time[F].currentMillis
-      _   <- Log[F].debug(s"Connecting to $peer")
-      _   <- Metrics[F].incrementCounter("connects")
-      _   <- initProtocolHandshake
+      tss     <- Time[F].currentMillis
+      _       <- Log[F].debug(s"Connecting to $peer")
+      _       <- Metrics[F].incrementCounter("connects")
+      _       <- Log[F].info(s"Initialize protocol handshake to $peer")
+      local   <- TransportLayer[F].local
+      ph      = protocolHandshake(local)
+      phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
+      _ <- Log[F].debug(
+            s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
+      _   <- NodeDiscovery[F].addNode(peer)
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
-  }
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler](
       remote: PeerNode,
