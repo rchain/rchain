@@ -23,7 +23,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[Deploy] = Seq.empty[Deploy],
       tsHash: ByteString = ByteString.EMPTY,
-      tsLog: ByteString = ByteString.EMPTY): F[BlockMessage] =
+      tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       nextId            = chain.currentId + 1

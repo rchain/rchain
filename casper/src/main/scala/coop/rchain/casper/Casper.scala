@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.{DagOperations, EventConverter}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -213,10 +213,7 @@ sealed abstract class MultiParentCasperInstances {
                                                        runtimeManager.computeState),
               _._2)
           computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog = implicitly[Codec[immutable.Seq[Event]]]
-            .encode(computedCheckpoint.log)
-            .map(_.toByteArray)
-            .get
+          serializedLog     = computedCheckpoint.log.map(EventConverter.toCasperEvent)
           postState = RChainState()
             .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
@@ -224,7 +221,7 @@ sealed abstract class MultiParentCasperInstances {
           body = Body()
             .withPostState(postState)
             .withNewCode(r)
-            .withCommReductions(ByteString.copyFrom(serializedLog))
+            .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)
         } yield Some(block)
