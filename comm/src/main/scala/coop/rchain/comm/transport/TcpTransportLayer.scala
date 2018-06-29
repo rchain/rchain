@@ -107,7 +107,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                              timeout: FiniteDuration,
                              enforce: Boolean): Task[Either[CommError, TLResponse]] =
     sendRequest(peer, request, enforce)
-      .timeout(timeout)
+      .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
