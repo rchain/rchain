@@ -200,7 +200,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.bondsFile.toOption,
     run.knownValidators.toOption,
     run.numValidators(),
-    run.data_dir().resolve("validators")
+    run.data_dir().resolve("validators"),
+    run.standalone()
   )
 
   verify()

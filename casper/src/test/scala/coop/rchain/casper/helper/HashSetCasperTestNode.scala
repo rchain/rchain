@@ -6,7 +6,12 @@ import cats._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
+import coop.rchain.casper.{
+  MultiParentCasper,
+  MultiParentCasperConstructor,
+  SafetyOracle,
+  ValidatorIdentity
+}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
 import coop.rchain.comm.connect.Connect.dispatch
@@ -48,7 +53,8 @@ class HashSetCasperTestNode(name: String,
   val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
   implicit val casperEff =
     MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
-  implicit val constructor = MultiParentCasperConstructor.successCasperConstructor[Id](casperEff)
+  implicit val constructor = MultiParentCasperConstructor
+    .successCasperConstructor[Id](ApprovedBlock(block = Some(genesis)), casperEff)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]
@@ -116,6 +122,7 @@ object HashSetCasperTestNode {
         case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
         case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
         case TimeOut                              => "TimeOut"
+        case _                                    => e.toString
       }
 
       throw new Exception(errString)

@@ -13,7 +13,7 @@ import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.genesis.Genesis.fromBondsFile
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -187,7 +187,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime,
                        casperRuntime: Runtime,
-                       casperConstructor: MultiParentCasperConstructor[Effect])
+                       casperConstructor: MultiParentCasperConstructor[Effect],
+                       packetHandler: PacketHandler[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
@@ -206,8 +207,19 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield
-      Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperConstructor)
+    } yield {
+      implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
+      val packetHandlerEffect = PacketHandler.pf[Effect](
+        casperPacketHandler[Effect]
+      )
+      Resources(grpcServer,
+                metricsServer,
+                httpServer,
+                runtime,
+                casperRuntime,
+                casperConstructor,
+                packetHandlerEffect)
+    }
 
   def startResources(resources: Resources): Effect[Unit] =
     for {
@@ -263,10 +275,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
-    implicit val casperEvidence: MultiParentCasperConstructor[Effect] = resources.casperConstructor
-    implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
-      casperPacketHandler[Effect]
-    )
+    implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
@@ -297,6 +306,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                          defaultTimeout = defaultTimeout)))
       _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
           else ().pure[Effect]
+      _ <- if (res.isRight && !conf.run.standalone()) {
+            implicit val casperEvidence      = resources.casperConstructor
+            implicit val packetHandlerEffect = resources.packetHandler
+            requestApprovedBlock[Effect]
+          } else ().pure[Effect]
       _ <- exit0.toEffect
     } yield ()
 

@@ -22,7 +22,8 @@ case class CasperConf(
     bondsFile: Option[String],
     knownValidatorsFile: Option[String],
     numValidators: Int,
-    validatorsPath: Path
+    validatorsPath: Path,
+    createGenesis: Boolean
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
   val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)
@@ -34,6 +35,7 @@ object CasperConf {
   def parseValidatorsFile[F[_]: Monad: Capture: Log](
       knownValidatorsFile: Option[String]): F[Set[ByteString]] =
     knownValidatorsFile match {
+      //TODO: Add default set? Throw error?
       case None => Set.empty[ByteString].pure[F]
 
       case Some(file) =>

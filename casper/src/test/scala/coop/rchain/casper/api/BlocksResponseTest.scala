@@ -85,7 +85,8 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
   implicit val casperEffect = testCasper[Id]
   implicit val logEff       = new LogStub[Id]
   implicit val constructorEffect =
-    MultiParentCasperConstructor.successCasperConstructor[Id](casperEffect)
+    MultiParentCasperConstructor
+      .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   "getBlocksResponse" should "return only blocks in the main chain" in {

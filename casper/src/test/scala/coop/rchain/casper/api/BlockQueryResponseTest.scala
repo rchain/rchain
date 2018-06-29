@@ -77,7 +77,8 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   implicit val casperEffect = testCasper[Id]
   implicit val logEff       = new LogStub[Id]
   implicit val constructorEffect =
-    MultiParentCasperConstructor.successCasperConstructor[Id](casperEffect)
+    MultiParentCasperConstructor
+      .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   // TODO: Test tsCheckpoint:

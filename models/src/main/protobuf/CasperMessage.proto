@@ -96,6 +96,10 @@ message ApprovedBlock  {
   repeated Signature sigs         = 3;
 }
 
+message ApprovedBlockRequest {
+  string identifier = 1;
+}
+
 // ------- End Signing Protocol --------
 
 // --------- Core Protocol  --------
