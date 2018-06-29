@@ -89,13 +89,13 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield (result)
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[Throwable]] =
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
     } yield errors
 
-  private def mkErrorMsg(errors: Vector[InterpreterError]) =
+  private def mkErrorMsg(errors: Vector[Throwable]) =
     errors
       .map(_.toString())
       .mkString("Errors received during evaluation:\n", "\n", "\n")

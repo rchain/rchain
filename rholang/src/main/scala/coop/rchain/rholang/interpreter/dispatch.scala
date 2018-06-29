@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
-import cats.Parallel
+import cats.{effect, ApplicativeError, Parallel}
+import cats.effect.Sync
 import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.Quote
@@ -27,7 +28,7 @@ object Dispatch {
     }): _*)
 }
 
-class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit captureM: Capture[M])
+class RholangOnlyDispatcher[M[_]: Sync] private (_reducer: => Reduce[M])
     extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -38,21 +39,19 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit capt
         val env = Dispatch.buildEnv(dataList)
         reducer.eval(par)(env)
       case ScalaBodyRef(_) =>
-        captureM.apply(())
+        Sync[M].unit
       case Empty =>
-        captureM.apply(())
+        Sync[M].unit
     }
 }
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](
+  def create[M[_]: Sync, F[_]](
       tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation])(
       implicit
-      intepreterErrorsM: InterpreterErrorsM[M],
-      captureM: Capture[M],
       parallel: Parallel[M, F],
-      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      ft: FunctorTell[M, Throwable]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace
       : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)
@@ -64,10 +63,9 @@ object RholangOnlyDispatcher {
   }
 }
 
-class RholangAndScalaDispatcher[M[_]] private (
+class RholangAndScalaDispatcher[M[_]: effect.Sync] private (
     _reducer: => Reduce[M],
-    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
-    implicit captureM: Capture[M])
+    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])
     extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -80,23 +78,21 @@ class RholangAndScalaDispatcher[M[_]] private (
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
-          case None    => captureM.fail(new Exception(s"dispatch: no function for $ref"))
+          case None    => Sync[M].raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
-        captureM.apply(())
+        Sync[M].unit
     }
 }
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_], F[_]](
+  def create[M[_]: Sync, F[_]](
       tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
       dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
       implicit
-      intepreterErrorsM: InterpreterErrorsM[M],
-      captureM: Capture[M],
       parallel: Parallel[M, F],
-      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      ft: FunctorTell[M, Throwable]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace
       : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)

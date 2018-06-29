@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import cats.Functor
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
@@ -30,8 +31,8 @@ class Runtime private (
                                   Seq[Channel],
                                   TaggedContinuation],
     var errorLog: Runtime.ErrorLog) {
-  def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
-  def close(): Unit                                       = space.close()
+  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
+  def close(): Unit                                = space.close()
 }
 
 object Runtime {
@@ -57,17 +58,17 @@ object Runtime {
         )
     }
 
-  class ErrorLog extends FunctorTell[Task, InterpreterError] {
-    private var errorVector: Vector[InterpreterError] = Vector.empty
-    val functor                                       = implicitly[Functor[Task]]
-    override def tell(e: InterpreterError): Task[Unit] =
+  class ErrorLog extends FunctorTell[Task, Throwable] {
+    private var errorVector: Vector[Throwable] = Vector.empty
+    val functor                                = implicitly[Functor[Task]]
+    override def tell(e: Throwable): Task[Unit] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ e
         }
       }
 
-    override def writer[A](a: A, e: InterpreterError): Task[A] =
+    override def writer[A](a: A, e: Throwable): Task[A] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ e
@@ -75,7 +76,7 @@ object Runtime {
         a
       }
 
-    override def tuple[A](ta: (InterpreterError, A)): Task[A] =
+    override def tuple[A](ta: (Throwable, A)): Task[A] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ ta._1
@@ -83,7 +84,7 @@ object Runtime {
         ta._2
       }
 
-    def readAndClearErrorVector(): Vector[InterpreterError] =
+    def readAndClearErrorVector(): Vector[Throwable] =
       this.synchronized {
         val ret = errorVector
         errorVector = Vector.empty
@@ -91,7 +92,7 @@ object Runtime {
       }
   }
 
-  def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
+  def create(dataDir: Path, mapSize: Long)(implicit syncTask: Sync[Task]): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
@@ -109,8 +110,8 @@ object Runtime {
         context,
         Branch.REPLAY)
 
-    val errorLog                                         = new ErrorLog()
-    implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
+    val errorLog                                  = new ErrorLog()
+    implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       RholangAndScalaDispatcher

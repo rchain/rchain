@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import cats.mtl.implicits._
-import cats.mtl.FunctorTell
+import cats.mtl.{FunctorTell, MonadState}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
@@ -54,7 +55,7 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
-  class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
+  class DebruijnInterpreter[M[_]: Sync, F[_]](
       tupleSpace: PureRSpace[M,
                              Channel,
                              BindPattern,
@@ -63,7 +64,7 @@ object Reduce {
                              TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F],
-      fTell: FunctorTell[M, InterpreterError])
+      fTell: FunctorTell[M, Throwable])
       extends Reduce[M] {
 
     type Cont[Data, Body] = (Body, Env[Data])
@@ -90,7 +91,7 @@ object Reduce {
               dispatcher.dispatch(continuation, dataList)
             }
           case None =>
-            Applicative[M].pure(())
+            Sync[M].unit
         }
 
       for {
@@ -115,7 +116,7 @@ object Reduce {
     override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par]): M[Unit] =
       binds match {
-        case Nil => interpreterErrorM[M].raiseError(ReduceError("Error: empty binds"))
+        case Nil => Sync[M].raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
           tupleSpace
@@ -149,10 +150,9 @@ object Reduce {
       * @return
       */
     override def eval(par: Par)(implicit env: Env[Par]): M[Unit] = {
-      def handle[A](eval: (A => M[Unit]))(a: A): M[Unit] =
-        eval(a).handleError((e: InterpreterError) => {
-          fTell.tell(e)
-        })
+      def handle[A](eval: A => M[Unit])(a: A): M[Unit] =
+        eval(a).handleError(fTell.tell)
+
       List(
         Parallel.parTraverse(par.sends.toList)(handle(eval)),
         Parallel.parTraverse(par.receives.toList)(handle(eval)),
@@ -172,17 +172,17 @@ object Reduce {
               (for {
                 varref <- eval(v.get)
                 _      <- eval(varref)
-              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
+              } yield ()).handleError(fTell.tell)
             case e: EEvalBody =>
               (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
+              } yield ()).handleError(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
+              } yield ()).handleError(fTell.tell)
             case _ => Applicative[M].pure(())
         })
       ).parSequence.map(_ => ())
@@ -221,10 +221,10 @@ object Reduce {
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
-                          interpreterErrorM[M].raiseError(
+                          Sync[M].raiseError(
                             ReduceError("Trying to send on non-writeable channel."))
                         } else {
-                          interpreterErrorM[M].pure(Quote(value.body.get))
+                          Sync[M].pure(Quote(value.body.get))
                         }
                       case None => Applicative[M].pure(subChan)
                     }
@@ -260,19 +260,16 @@ object Reduce {
       valproc.varInstance match {
         case BoundVar(level) =>
           env.get(level) match {
-            case Some(par) => interpreterErrorM[M].pure(par)
+            case Some(par) => Sync[M].pure(par)
             case None =>
-              interpreterErrorM[M].raiseError(
-                ReduceError("Unbound variable: " + level + " in " + env.envMap))
+              Sync[M].raiseError(ReduceError("Unbound variable: " + level + " in " + env.envMap))
           }
         case Wildcard(_) =>
-          interpreterErrorM[M].raiseError(
-            ReduceError("Unbound variable: attempting to evaluate a pattern"))
+          Sync[M].raiseError(ReduceError("Unbound variable: attempting to evaluate a pattern"))
         case FreeVar(_) =>
-          interpreterErrorM[M].raiseError(
-            ReduceError("Unbound variable: attempting to evaluate a pattern"))
+          Sync[M].raiseError(ReduceError("Unbound variable: attempting to evaluate a pattern"))
         case VarInstance.Empty =>
-          interpreterErrorM[M].raiseError(ReduceError("Impossible var instance EMPTY"))
+          Sync[M].raiseError(ReduceError("Impossible var instance EMPTY"))
       }
 
     /**
@@ -299,7 +296,7 @@ object Reduce {
             evaled <- evalExpr(par)
           } yield Quote(evaled)
         case ChannelInstance.Empty =>
-          interpreterErrorM[M].raiseError(ReduceError("Impossible channel instance EMPTY"))
+          Sync[M].raiseError(ReduceError("Impossible channel instance EMPTY"))
       }
 
     def eval(mat: Match)(implicit env: Env[Par]): M[Unit] = {
@@ -373,13 +370,12 @@ object Reduce {
         unbndl <- subst.quote.get.singleBundle() match {
                    case Some(value) =>
                      if (!value.readFlag) {
-                       interpreterErrorM[M].raiseError(
-                         ReduceError("Trying to read from non-readable channel."))
+                       Sync[M].raiseError(ReduceError("Trying to read from non-readable channel."))
                      } else {
-                       interpreterErrorM[M].pure(Quote(value.body.get))
+                       Sync[M].pure(Quote(value.body.get))
                      }
                    case None =>
-                     interpreterErrorM[M].pure(subst)
+                     Sync[M].pure(subst)
                  }
       } yield unbndl
 
@@ -400,8 +396,7 @@ object Reduce {
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
-                            interpreterErrorM[M].raiseError(
-                              ReduceError("Unimplemented method: " + method))
+                            Sync[M].raiseError(ReduceError("Unimplemented method: " + method))
                           case Some(f) => f(target.get, evaledArgs)(env)
                         }
           } yield resultPar
@@ -424,8 +419,7 @@ object Reduce {
                      case (GInt(i1), GInt(i2))       => Applicative[M].pure(GBool(relopi(i1, i2)))
                      case (GString(s1), GString(s2)) => Applicative[M].pure(GBool(relops(s1, s2)))
                      case _ =>
-                       interpreterErrorM[M].raiseError(
-                         ReduceError("Unexpected compare: " + v1 + " vs. " + v2))
+                       Sync[M].raiseError(ReduceError("Unexpected compare: " + v1 + " vs. " + v2))
                    }
         } yield result
 
@@ -533,8 +527,7 @@ object Reduce {
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
-                            interpreterErrorM[M].raiseError(
-                              ReduceError("Unimplemented method: " + method))
+                            Sync[M].raiseError(ReduceError("Unimplemented method: " + method))
                           case Some(f) => f(target.get, evaledArgs)(env)
                         }
             resultExpr <- evalSingleExpr(resultPar)
@@ -545,7 +538,7 @@ object Reduce {
             q      <- eval(chan)
             result <- evalSingleExpr(q.value)
           } yield result
-        case _ => interpreterErrorM[M].raiseError(ReduceError("Unimplemented expression: " + expr))
+        case _ => Sync[M].raiseError(ReduceError("Unimplemented expression: " + expr))
       }
     }
 
@@ -562,18 +555,18 @@ object Reduce {
       (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
         {
           if (args.length != 1) {
-            interpreterErrorM[M].raiseError(ReduceError("Error: nth expects 1 argument"))
+            Sync[M].raiseError(ReduceError("Error: nth expects 1 argument"))
           } else {
             for {
               nth <- evalToInt(args(0))(env)
               v   <- evalSingleExpr(p)(env)
               result <- v.exprInstance match {
                          case EListBody(EList(ps, _, _, _)) =>
-                           interpreterErrorM[M].fromEither(localNth(ps, nth))
+                           Sync[M].fromEither(localNth(ps, nth))
                          case ETupleBody(ETuple(ps, _, _)) =>
-                           interpreterErrorM[M].fromEither(localNth(ps, nth))
+                           Sync[M].fromEither(localNth(ps, nth))
                          case _ =>
-                           interpreterErrorM[M].raiseError(
+                           Sync[M].raiseError(
                              ReduceError(
                                "Error: nth applied to something that wasn't a list or tuple."))
                        }
@@ -592,12 +585,11 @@ object Reduce {
       (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
         {
           if (args.nonEmpty) {
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: toByteArray does not take arguments"))
+            Sync[M].raiseError(ReduceError("Error: toByteArray does not take arguments"))
           } else {
             evalExpr(p)(env)
               .map(serialize(_))
-              .flatMap(interpreterErrorM[M].fromEither)
+              .flatMap(Sync[M].fromEither)
               .map(b => Expr(GByteArray(ByteString.copyFrom(b))))
           }
         }
@@ -606,7 +598,7 @@ object Reduce {
     private[this] def hexToBytes: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       {
         if (args.nonEmpty) {
-          interpreterErrorM[M].raiseError(ReduceError("Error: hexToBytes does not take arguments"))
+          Sync[M].raiseError(ReduceError("Error: hexToBytes does not take arguments"))
         } else {
           p.singleExpr() match {
             case Some(Expr(GString(encoded))) =>
@@ -614,10 +606,9 @@ object Reduce {
                 ReduceError(
                   s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}")
               Try(Expr(GByteArray(ByteString.copyFrom(Base16.decode(encoded)))))
-                .fold(th => interpreterErrorM[M].raiseError[Par](decodingError(th)),
-                      x => interpreterErrorM[M].pure[Par](x))
+                .fold(th => Sync[M].raiseError[Par](decodingError(th)), x => Sync[M].pure[Par](x))
             case _ =>
-              interpreterErrorM[M].raiseError(
+              Sync[M].raiseError(
                 ReduceError("Error: hexToBytes can be called only on single strings."))
           }
         }
@@ -627,7 +618,7 @@ object Reduce {
     private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
         thunk: => M[Par]): M[Par] =
       if (args.length != expectedArgsLength) {
-        interpreterErrorM[M].raiseError(
+        Sync[M].raiseError(
           ReduceError(s"Error: $methodName expects $expectedArgsLength Par argument(s)"))
       } else {
         thunk
@@ -653,7 +644,7 @@ object Reduce {
               )
             )
           case _ =>
-            interpreterErrorM[M].raiseError(
+            Sync[M].raiseError(
               ReduceError(
                 "Error: union applied to something that wasn't a set or a map"
               ))
@@ -686,8 +677,7 @@ object Reduce {
               EMapBody(ParMap(newMap))
             )
           case _ =>
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: diff applied to something that wasn't a Set"))
+            Sync[M].raiseError(ReduceError("Error: diff applied to something that wasn't a Set"))
         }
       method("diff", 1, args) {
         for {
@@ -709,7 +699,7 @@ object Reduce {
                        base.locallyFree.map(b => b | par.locallyFree))))
 
           case _ =>
-            interpreterErrorM[M].raiseError(
+            Sync[M].raiseError(
               ReduceError("Error: add can be called only with one Par as argument."))
         }
 
@@ -738,8 +728,7 @@ object Reduce {
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree))))
           case _ =>
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: add can be called only on Map and Set."))
+            Sync[M].raiseError(ReduceError("Error: add can be called only on Map and Set."))
         }
 
       method("delete", 1, args) {
@@ -759,8 +748,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: add can be called only on Map and Set."))
+            Sync[M].raiseError(ReduceError("Error: add can be called only on Map and Set."))
         }
 
       method("contains", 1, args) {
@@ -778,8 +766,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
           case _ =>
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: get can be called only on Maps as argument."))
+            Sync[M].raiseError(ReduceError("Error: get can be called only on Maps as argument."))
         }
 
       method("get", 1, args) {
@@ -807,18 +794,18 @@ object Reduce {
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-        interpreterErrorM[M].raiseError(
+        Sync[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
         p.exprs match {
           case (e: Expr) +: Nil => evalExprToExpr(e)
           case _ =>
-            interpreterErrorM[M].raiseError(ReduceError("Error: Multiple expressions given."))
+            Sync[M].raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
     def evalToInt(p: Par)(implicit env: Env[Par]): M[Int] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-        interpreterErrorM[M].raiseError(
+        Sync[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
         p.exprs match {
@@ -834,18 +821,17 @@ object Reduce {
               result <- evaled.exprInstance match {
                          case GInt(v) => Applicative[M].pure(v)
                          case _ =>
-                           interpreterErrorM[M].raiseError(
+                           Sync[M].raiseError(
                              ReduceError("Error: expression didn't evaluate to integer."))
                        }
             } yield result
           case _ =>
-            interpreterErrorM[M].raiseError(
-              ReduceError("Error: Integer expected, or unimplemented expression."))
+            Sync[M].raiseError(ReduceError("Error: Integer expected, or unimplemented expression."))
         }
 
     def evalToBool(p: Par)(implicit env: Env[Par]): M[Boolean] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-        interpreterErrorM[M].raiseError(
+        Sync[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
         p.exprs match {
@@ -861,12 +847,12 @@ object Reduce {
               result <- evaled.exprInstance match {
                          case GBool(b) => Applicative[M].pure(b)
                          case _ =>
-                           interpreterErrorM[M].raiseError(
+                           Sync[M].raiseError(
                              ReduceError("Error: expression didn't evaluate to boolean."))
                        }
             } yield result
           case _ =>
-            interpreterErrorM[M].raiseError(ReduceError("Error: Multiple expressions given."))
+            Sync[M].raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
     def updateLocallyFree(par: Par): Par = {
