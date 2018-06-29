@@ -6,13 +6,14 @@ import cats.Monad
 import cats.data.EitherT
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.{MonadTrans, _}
-import coop.rchain.comm.{PeerNode, ProtocolMessage}
+import coop.rchain.comm.{CommError, PeerNode, ProtocolHelper}, CommError.CommErr
+import coop.rchain.comm.protocol.routing._
 
 trait NodeDiscovery[F[_]] {
-  def addNode(node: PeerNode): F[Unit]
+  def addNode(node: PeerNode): F[CommErr[Unit]]
   def findMorePeers(limit: Int): F[Seq[PeerNode]]
   def peers: F[Seq[PeerNode]]
-  def handleCommunications: ProtocolMessage => F[CommunicationResponse]
+  def handleCommunications: Protocol => F[CommunicationResponse]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -21,10 +22,10 @@ object NodeDiscovery extends NodeDiscoveryInstances {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: NodeDiscovery[F]): NodeDiscovery[T[F, ?]] =
     new NodeDiscovery[T[F, ?]] {
-      def addNode(node: PeerNode): T[F, Unit]            = C.addNode(node).liftM[T]
+      def addNode(node: PeerNode): T[F, CommErr[Unit]]   = C.addNode(node).liftM[T]
       def findMorePeers(limit: Int): T[F, Seq[PeerNode]] = C.findMorePeers(limit).liftM[T]
       def peers: T[F, Seq[PeerNode]]                     = C.peers.liftM[T]
-      def handleCommunications: ProtocolMessage => T[F, CommunicationResponse] =
+      def handleCommunications: Protocol => T[F, CommunicationResponse] =
         pm => C.handleCommunications(pm).liftM[T]
     }
 }

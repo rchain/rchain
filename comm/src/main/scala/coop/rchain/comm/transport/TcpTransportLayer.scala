@@ -103,7 +103,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                           peer: PeerNode,
                           timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
     innerSend(peer, request)
-      .timeout(timeout)
+      .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
@@ -111,34 +111,32 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       })
 
   // TODO: Rename to send
-  def roundTrip(peer: PeerNode,
-                msg: ProtocolMessage,
-                timeout: FiniteDuration): Task[CommErr[ProtocolMessage]] =
+  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
     for {
-      tlResponseErr <- sendRequest(TLRequest(msg.proto.some), peer, timeout)
+      tlResponseErr <- sendRequest(TLRequest(msg.some), peer, timeout)
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
-                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                    case p if p.isProtocol => Right(tlr.getProtocol)
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case p if p.isInternalServerError =>
-                      Left(internalCommunicationError("crap"))
+                    case TLResponse.Payload.InternalServerError(ise) =>
+                      Left(internalCommunicationError(ise.error.toStringUtf8))
                 })
                 .pure[Task]
     } yield pmErr
 
   // TODO: rename to sendAndForget
-  def send(peer: PeerNode, msg: ProtocolMessage): Task[Unit] =
+  def send(peer: PeerNode, msg: Protocol): Task[Unit] =
     Task
-      .racePair(innerSend(peer, TLRequest(msg.proto.some)), Task.unit)
+      .racePair(innerSend(peer, TLRequest(msg.some)), Task.unit)
       .attempt
       .void
 
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): Task[Unit] =
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  def receive(dispatch: ProtocolMessage => Task[CommunicationResponse]): Task[Unit] =
+  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
     Capture[Task].capture {
       NettyServerBuilder
         .forPort(port)
@@ -157,21 +155,17 @@ object TcpTransportLayer {
   type ConnectionsState = MonadState[Task, Connections]
 }
 
-class TransportLayerImpl(dispatch: ProtocolMessage => Task[CommunicationResponse])(
+class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     implicit scheduler: Scheduler)
     extends TransportLayerGrpc.TransportLayer {
 
   def send(request: TLRequest): Future[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-        ProtocolMessage.toProtocolMessage(protocol) match {
-          case Left(error) => internalServerError(error.toString).pure[Task]
-          case Right(pm) =>
-            dispatch(pm).map {
-              case NotHandled                   => internalServerError(s"Message $pm was not handled!")
-              case HandledWitoutMessage         => noResponse
-              case HandledWithMessage(response) => returnProtocol(response.proto)
-            }
+        dispatch(protocol) map {
+          case NotHandled(error)            => internalServerError(s"$error")
+          case HandledWitoutMessage         => noResponse
+          case HandledWithMessage(response) => returnProtocol(response)
         }
       }
       .runAsync
@@ -181,7 +175,9 @@ class TransportLayerImpl(dispatch: ProtocolMessage => Task[CommunicationResponse
 
   // TODO InternalServerError should take msg in constructor
   private def internalServerError(msg: String): TLResponse =
-    TLResponse(TLResponse.Payload.InternalServerError(InternalServerError()))
+    TLResponse(
+      TLResponse.Payload.InternalServerError(
+        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
 
   private def noResponse: TLResponse =
     TLResponse(TLResponse.Payload.NoResponse(NoResponse()))

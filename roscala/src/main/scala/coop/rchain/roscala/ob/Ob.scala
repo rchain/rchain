@@ -74,6 +74,8 @@ abstract class Ob {
   }
 
   def numberOfSlots: Int = slot.size
+
+  def matches(ctxt: Ctxt): Boolean = false
 }
 
 object Ob {
