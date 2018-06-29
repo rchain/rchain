@@ -39,4 +39,7 @@ require('bluebird').map(blocks, (pair) => {
   return getTransfers(pair);
 }, {concurrency: 5})
 .then(() => console.log('Completed'))
-.finally(() => writeStream.end());
+.finally(() => {
+  writeStream.end();
+  process.exit();
+});
