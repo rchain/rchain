@@ -64,8 +64,9 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
-                      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+  def secp256k1Verify(
+      space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
       Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
