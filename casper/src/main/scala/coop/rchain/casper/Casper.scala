@@ -583,7 +583,7 @@ sealed abstract class MultiParentCasperInstances {
       G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
     for {
-      genesis <- Genesis.fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)  //Genesis.fromGenesisContracts[G](activeRuntime)
+      genesis <- Genesis.fromGenesisContracts[G](activeRuntime)
       privateKey <- Capture[G].capture {
                      conf.privateKey
                        .orElse(defaultPrivateKey(conf, genesis))
