@@ -104,7 +104,7 @@ parser.add_argument("-t", "--tests",
                     action='store_true',
                     help="only run tests")
 parser.add_argument("-T", "--tests-to-run",
-                    dest='tests',
+                    dest='tests_to_run',
                     type=str,
                     nargs='+',
                     default=['network_sockets', 'count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
@@ -138,10 +138,6 @@ def main():
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
                 check_network_convergence(container)
-        #deploy_demo()
-        if args.tests:
-            run_tests()
-            return
     if args.run_tests == True:
         run_tests()
         return
@@ -154,7 +150,7 @@ def run_tests():
     if not client.containers.list(all=True, filters={"name":f".{args.network}"}): # return if empty
         return 
 
-    for test in args.tests:
+    for test in args.tests_to_run:
         if test == "network_sockets":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_network_sockets(container) == 0:
@@ -201,6 +197,8 @@ def run_tests():
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
 
     print("=======================SHOW LOGS===========================")
+    print("Dumping logs from nodes in 3 seconds.")
+    time.sleep(3)
     show_logs()
     print("====================END OF SHOW LOGS=======================")
     print("===========================================================")
@@ -243,6 +241,7 @@ def test_node_eval_of_rholang_files(container):
                 return 1 
     return 0 
 
+
 def test_propose(container):
     retval = 0
     print(f"Running propose tests after deploy using /usr/share/rnode/validators/*.sk on container {container.name}.")
@@ -260,14 +259,17 @@ def test_propose(container):
         for line in r.output.decode('utf-8').splitlines():
             print(line)
 
-        #Check logs for warnings(WARN) on CASPER    
+        #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
         time.sleep(20) # Allow for logs to fill out
         for line in container.logs().decode('utf-8').splitlines():
             if "WARN" in line and "CASPER" in line:
                 print(f"{container.name}: {line}")
                 retval = 1
+            if "ERROR" in line and "CASPER" in line:
+                print(f"{container.name}: {line}")
+                retval = 1
 
-    return retval 
+    return retval
 
 
 def show_logs():
@@ -323,6 +325,9 @@ def check_network_convergence(container):
         count += 10
     print("Timeout of {timeout} seconds reached ... exiting network convergence pre tests probe.")
     return 1 
+
+def test_performance():
+    pass
 
 
 def remove_resources_by_network(args_network):
