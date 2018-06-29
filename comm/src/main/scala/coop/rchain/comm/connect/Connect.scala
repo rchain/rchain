@@ -27,8 +27,13 @@ object Connect {
     (lastCount: Int) =>
       for {
         _         <- IOUtil.sleep[F](5000L)
-        peers     <- NodeDiscovery[F].findMorePeers(10)
-        _         <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
+        peers     <- NodeDiscovery[F].findMorePeers(10).map(_.toList)
+        responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
+        _ <- peers.zip(responses).traverse {
+              case (peer, Left(error)) =>
+                Log[F].error(s"Failed to connect to $peer. Reason: $error")
+              case (_, Right(_)) => ().pure[F]
+            }
         thisCount <- NodeDiscovery[F].peers.map(_.size)
         _         <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount
@@ -48,8 +53,9 @@ object Connect {
         for {
           res <- connect[F](bootstrapAddr, timeout).attempt
           _ <- res match {
-                case Left(_) =>
-                  val msg = s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts)"
+                case Left(error) =>
+                  val msg =
+                    s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts). Reason: $error"
                   Log[F].warn(msg) *> connectAttempt(attempt + 1,
                                                      timeout + defaultTimeout,
                                                      bootstrapAddr)
@@ -68,28 +74,25 @@ object Connect {
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
       peer: PeerNode,
-      timeout: FiniteDuration): F[Unit] = {
-
-    def initProtocolHandshake: F[Unit] =
-      for {
-        _       <- Log[F].info(s"Initialize protocol handshake to $peer")
-        local   <- TransportLayer[F].local
-        ph      = protocolHandshake(local)
-        phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
-        _ <- Log[F].debug(
-              s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-        _ <- NodeDiscovery[F].addNode(peer)
-      } yield ()
-
+      timeout: FiniteDuration): F[Unit] =
     for {
-      tss <- Time[F].currentMillis
-      _   <- Log[F].debug(s"Connecting to $peer")
-      _   <- Metrics[F].incrementCounter("connects")
-      _   <- initProtocolHandshake
+      tss     <- Time[F].currentMillis
+      _       <- Log[F].debug(s"Connecting to $peer")
+      _       <- Metrics[F].incrementCounter("connects")
+      _       <- Log[F].info(s"Initialize protocol handshake to $peer")
+      local   <- TransportLayer[F].local
+      ph      = protocolHandshake(local)
+      phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
+      _ <- Log[F].debug(
+            s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
+      addedErr <- NodeDiscovery[F].addNode(peer)
+      _ <- addedErr.fold(
+            error => Log[F].error(s"Could not add $peer, reason: $error"),
+            _ => ().pure[F]
+          )
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
-  }
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler](
       remote: PeerNode,
@@ -97,30 +100,41 @@ object Connect {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
     def handleNone: F[CommunicationResponse] =
       for {
-        _ <- Log[F].error(errorMsg)
-        _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
-      } yield notHandled
+        _     <- Log[F].error(errorMsg)
+        error = unknownCommError(errorMsg)
+        _     <- errorHandler[F].raiseError[Unit](error)
+      } yield notHandled(error)
 
-    maybePacket.fold(handleNone)(p =>
-      for {
-        local               <- TransportLayer[F].local
-        maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
-        maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-          ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
-      } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))
+    maybePacket.fold(handleNone)(
+      p =>
+        for {
+          local               <- TransportLayer[F].local
+          maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
+          maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
+            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
+        } yield
+          maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
+            handledWithMessage(m)))
   }
 
   private def handleProtocolHandshake[
       F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler](
-      remote: PeerNode,
+      peer: PeerNode,
       maybePh: Option[ProtocolHandshake]): F[CommunicationResponse] =
     for {
-      local <- TransportLayer[F].local
-      _     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      phr   = protocolHandshakeResponse(local)
-      _     <- NodeDiscovery[F].addNode(remote)
-      _     <- Log[F].info(s"Responded to protocol handshake request from $remote")
-    } yield handledWithMessage(phr)
+      local    <- TransportLayer[F].local
+      _        <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      phr      = protocolHandshakeResponse(local)
+      addedErr <- NodeDiscovery[F].addNode(peer)
+      commResponse <- addedErr.fold(
+                       error =>
+                         Log[F].error(s"Could not add $peer, reason: $error").as(notHandled(error)),
+                       _ =>
+                         Log[F]
+                           .info(s"Responded to protocol handshake request from $peer")
+                           .as(handledWithMessage(phr))
+                     )
+    } yield commResponse
 
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
@@ -128,24 +142,29 @@ object Connect {
 
     def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[CommunicationResponse] =
       proto.message.upstream
-        .fold(Log[F].error("Upstream not available").as(notHandled)) { usmsg =>
-          usmsg.typeUrl match {
-            // TODO interpolate this string to check if class exists
+        .fold(Log[F].error("Upstream not available").as(notHandled(upstreamNotAvailable))) {
+          usmsg =>
+            usmsg.typeUrl match {
+              // TODO interpolate this string to check if class exists
 
-            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
-              handlePacket[F](sender, toPacket(proto).toOption)
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
+                handlePacket[F](sender, toPacket(proto).toOption)
 
-            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-              handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption)
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
+                handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption)
 
-            case _ =>
-              Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled.pure[F]
-          }
+              case _ =>
+                Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
+                  unexpectedMessage(usmsg.typeUrl)).pure[F]
+            }
         }
 
     ProtocolHelper
       .sender(protocol)
-      .fold(Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled)) { sender =>
+      .fold(
+        Log[F]
+          .error(s"Sender not present, DROPPING $protocol")
+          .as(notHandled(senderNotAvailable))) { sender =>
         dispatchForUpstream(protocol, sender)
       }
   }

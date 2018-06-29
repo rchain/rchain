@@ -103,7 +103,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                           peer: PeerNode,
                           timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
     innerSend(peer, request)
-      .timeout(timeout)
+      .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
@@ -120,8 +120,8 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                     case p if p.isProtocol => Right(tlr.getProtocol)
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case p if p.isInternalServerError =>
-                      Left(internalCommunicationError("crap"))
+                    case TLResponse.Payload.InternalServerError(ise) =>
+                      Left(internalCommunicationError(ise.error.toStringUtf8))
                 })
                 .pure[Task]
     } yield pmErr
@@ -163,7 +163,7 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
-          case NotHandled                   => internalServerError(s"Message ${protocol} was not handled!")
+          case NotHandled(error)            => internalServerError(s"$error")
           case HandledWitoutMessage         => noResponse
           case HandledWithMessage(response) => returnProtocol(response)
         }
@@ -175,7 +175,9 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
 
   // TODO InternalServerError should take msg in constructor
   private def internalServerError(msg: String): TLResponse =
-    TLResponse(TLResponse.Payload.InternalServerError(InternalServerError()))
+    TLResponse(
+      TLResponse.Payload.InternalServerError(
+        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
 
   private def noResponse: TLResponse =
     TLResponse(TLResponse.Payload.NoResponse(NoResponse()))

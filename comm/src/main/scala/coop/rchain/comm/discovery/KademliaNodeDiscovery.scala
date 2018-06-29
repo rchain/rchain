@@ -18,18 +18,18 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   private val table = PeerTable(src)
 
-  private def updateLastSeen(peer: PeerNode): F[Unit] =
+  private def updateLastSeen(peer: PeerNode): F[CommErr[Unit]] =
     table.observe[F](peer)
 
   private val id: NodeIdentifier = src.id
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def addNode(peer: PeerNode): F[Unit] =
+  def addNode(peer: PeerNode): F[CommErr[Unit]] =
     for {
-      _ <- updateLastSeen(peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
-    } yield ()
+      res <- updateLastSeen(peer)
+      _   <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+    } yield res
 
   /**
     * Return up to `limit` candidate peers.
@@ -75,14 +75,15 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def handleCommunications: Protocol => F[CommunicationResponse] =
     protocol =>
-      ProtocolHelper.sender(protocol).fold(notHandled.pure[F]) { sender =>
-        updateLastSeen(sender) >>= kp(protocol match {
-          case Protocol(_, Protocol.Message.Ping(_))        => handlePing
-          case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
+      ProtocolHelper.sender(protocol).fold(notHandled(senderNotAvailable).pure[F]) { sender =>
+        protocol match {
+          case Protocol(_, Protocol.Message.Ping(_)) => handlePing
+          case Protocol(_, Protocol.Message.Lookup(lookup)) =>
+            updateLastSeen(sender) >>= kp(handleLookup(sender, lookup))
           case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
             handleDisconnect(sender, disconnect)
-          case _ => notHandled.pure[F]
-        })
+          case _ => notHandled(unexpectedMessage(protocol.toString)).pure[F]
+        }
     }
 
   private def handlePing: F[CommunicationResponse] =

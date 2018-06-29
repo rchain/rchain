@@ -28,6 +28,8 @@ object EffectsTestInstances {
       this.clock = clock + 1
       clock
     }
+
+    def reset(): Unit = this.clock = 0
   }
 
   class NodeDiscoveryStub[F[_]: Capture]() extends NodeDiscovery[F] {
@@ -37,8 +39,9 @@ object EffectsTestInstances {
     def reset(): Unit =
       nodes = List.empty[PeerNode]
 
-    def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
+    def addNode(node: PeerNode): F[CommErr[Unit]] = Capture[F].capture {
       nodes = node :: nodes
+      Right(())
     }
 
     def peers: F[Seq[PeerNode]] = Capture[F].capture {

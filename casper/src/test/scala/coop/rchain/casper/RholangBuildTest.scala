@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.Id
 import cats.implicits._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil

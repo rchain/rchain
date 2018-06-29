@@ -91,9 +91,9 @@ Here is the definition of the `Serialize` type class:
   */
 trait Serialize[A] {
 
-  def encode(a: A): Array[Byte]
+  def encode(a: A): ByteVector
 
-  def decode(bytes: Array[Byte]): Either[Throwable, A]
+  def decode(bytes: ByteVector): Either[Throwable, A]
 }
 ```
 
@@ -103,26 +103,29 @@ First we will need to import some more stuff.
 ```scala
 scala> import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+
+scala> import scodec.bits.ByteVector
+import scodec.bits.ByteVector
 ```
 
 Now we define an instance of `Serialize`.
 ```scala
 scala> implicit object serializeChannel extends Serialize[Channel] {
      | 
-     |   def encode(channel: Channel): Array[Byte] = {
+     |   def encode(channel: Channel): ByteVector = {
      |     val baos = new ByteArrayOutputStream()
      |     try {
      |       val oos = new ObjectOutputStream(baos)
      |       try { oos.writeObject(channel) } finally { oos.close() }
-     |       baos.toByteArray
+     |       ByteVector.view(baos.toByteArray)
      |     } finally {
      |       baos.close()
      |     }
      |   }
      | 
-     |   def decode(bytes: Array[Byte]): Either[Throwable, Channel] = {
+     |   def decode(bytes: ByteVector): Either[Throwable, Channel] = {
      |     try {
-     |       val bais = new ByteArrayInputStream(bytes)
+     |       val bais = new ByteArrayInputStream(bytes.toArray)
      |       try {
      |         val ois = new ObjectInputStream(bais)
      |         try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
@@ -158,13 +161,13 @@ import coop.rchain.rspace.examples._
 Let's go ahead use that to make instances for our other types.
 ```scala
 scala> implicit val serializeEntry: Serialize[Entry] = makeSerializeFromSerializable[Entry]
-serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@51419980
+serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@164c1b92
 
 scala> implicit val serializePattern: Serialize[Pattern] = makeSerializeFromSerializable[Pattern]
-serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@7a1e8d49
+serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@1bb40cf4
 
 scala> implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
-serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@31bc7156
+serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@4d3d21ba
 ```
 
 Now we will define some example `Entry`s.
@@ -205,16 +208,17 @@ Here is the definition of the `Match` type class.
   *
   * @tparam P A type representing patterns
   * @tparam A A type representing data
+  * @tparam R A type representing a match result
   */
-trait Match[P, A] {
+trait Match[P, A, R] {
 
-  def get(p: P, a: A): Option[A]
+  def get(p: P, a: A): Option[R]
 }
 ```
 
 Let's try defining an instance of `Match` for `Pattern` and `Entry`.
 ```scala
-scala> implicit object matchPatternEntry extends Match[Pattern, Entry] {
+scala> implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
      |   def get(p: Pattern, a: Entry): Option[Entry] =
      |     p match {
      |       case NameMatch(last) if a.name.last == last        => Some(a)
@@ -243,18 +247,18 @@ scala> import java.nio.file.{Files, Path}
 import java.nio.file.{Files, Path}
 
 scala> val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-storePath: java.nio.file.Path = /tmp/rspace-address-book-example-4271580086213123368
+storePath: java.nio.file.Path = /tmp/rspace-address-book-example-9015879627606601768
 ```
 
 Next we create an instance of `LMDBStore` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```scala
 scala> val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
-store: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@551b5d20
+store: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@18207f9f
 ```
 Now we can create an RSpace using the created store
 ```scala
-scala> val space = new RSpace[Channel, Pattern, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
-space: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@8aefd94
+scala> val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
+space: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@34e5fdaf
 ```
 
 ### Producing and Consuming
@@ -574,13 +578,13 @@ space.reset(checkpointHash)
 Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
 ```scala
 scala> val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-rollbackExampleStorePath: java.nio.file.Path = /tmp/rspace-address-book-example-4012482659888486988
+rollbackExampleStorePath: java.nio.file.Path = /tmp/rspace-address-book-example-5720191043032943103
 
 scala> val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath, 1024L * 1024L * 100L)
-rollbackExampleStore: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@62c3284e
+rollbackExampleStore: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@55627974
 
-scala> val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
-rollbackExampleSpace: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@44296c39
+scala> val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
+rollbackExampleSpace: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@4cfcd3c1
 
 scala> val cres =
      |   rollbackExampleSpace.consume(List(Channel("friends")),

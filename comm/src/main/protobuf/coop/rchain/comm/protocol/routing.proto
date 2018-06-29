@@ -62,6 +62,7 @@ message TLRequest {
 }
 
 message InternalServerError {
+  bytes error = 1;
 }
 
 message NoResponse {

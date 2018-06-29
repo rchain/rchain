@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.implicits._
 import cats.{Applicative, Monad}
+import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -39,14 +40,14 @@ object Substitute {
   def maybeSubstitute[M[+ _]: InterpreterErrorsM](term: Var)(implicit depth: Int,
                                                              env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0)
-      Applicative[M].pure(Left[Var, Par](term)) //scalac is not helping here
+      Applicative[M].pure(Left(term))
     else
       term.varInstance match {
         case BoundVar(index) =>
           env.get(index) match {
             case Some(par) => Applicative[M].pure(Right(par))
             case None =>
-              Applicative[M].pure(Left[Var, Par](BoundVar(index))) //scalac is not helping here
+              Applicative[M].pure(Left(term))
           }
         case _ =>
           interpreterErrorM[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
@@ -54,7 +55,7 @@ object Substitute {
 
   def maybeSubstitute[M[_]: InterpreterErrorsM](term: EVar)(implicit depth: Int,
                                                             env: Env[Par]): M[Either[EVar, Par]] =
-    maybeSubstitute[M](term.v.get).map {
+    maybeSubstitute[M](term.v).map {
       case Left(v)    => Left(EVar(v))
       case Right(par) => Right(par)
     }
@@ -68,6 +69,7 @@ object Substitute {
           case Left(v)    => Left(Expr(EEvalBody(ChanVar(v))))
           case Right(par) => Right(par)
         }
+      case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
     }
 
   def maybeSubstitute[M[_]: InterpreterErrorsM](
@@ -120,6 +122,7 @@ object Substitute {
                                case Left(_v) => ChanVar(_v)
                                case Right(p) => Quote(p)
                              }
+                           case ChannelInstance.Empty => term.channelInstance.pure[M]
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
@@ -153,7 +156,17 @@ object Substitute {
                 case Left(_)       => par.prepend(conn)
                 case Right(newPar) => newPar ++ par
               }
-            case _ => substituteConnective[M].substituteNoSort(conn).map(par.prepend(_))
+            case ConnectiveInstance.Empty => par.pure[M]
+            case ConnAndBody(ConnectiveBody(ps)) =>
+              ps.toVector
+                .traverse(substitutePar[M].substituteNoSort(_))
+                .map(ps => Connective(ConnAndBody(ConnectiveBody(ps))))
+            case ConnOrBody(ConnectiveBody(ps)) =>
+              ps.toVector
+                .traverse(substitutePar[M].substituteNoSort(_))
+                .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
+            case ConnNotBody(p) =>
+              substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
           }
         }
 
@@ -354,26 +367,5 @@ object Substitute {
         substituteDelegate(term,
                            substitutePar[M].substituteNoSort,
                            substituteNoSort2[M, Par, Par, Expr])
-    }
-
-  implicit def substituteConnective[M[_]: InterpreterErrorsM]: Substitute[M, Connective] =
-    new Substitute[M, Connective] {
-      override def substituteNoSort(term: Connective)(implicit depth: Int,
-                                                      env: Env[Par]): M[Connective] =
-        term.connectiveInstance match {
-          case ConnAndBody(ConnectiveBody(ps)) =>
-            ps.toVector
-              .traverse(substitutePar[M].substituteNoSort(_))
-              .map(ps => Connective(ConnAndBody(ConnectiveBody(ps))))
-          case ConnOrBody(ConnectiveBody(ps)) =>
-            ps.toVector
-              .traverse(substitutePar[M].substituteNoSort(_))
-              .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
-          case ConnNotBody(p) =>
-            substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
-          case ConnectiveInstance.Empty => term.pure[M]
-        }
-      override def substitute(term: Connective)(implicit depth: Int, env: Env[Par]): M[Connective] =
-        substituteNoSort(term).map(con => ConnectiveSortMatcher.sortMatch(con).term)
     }
 }

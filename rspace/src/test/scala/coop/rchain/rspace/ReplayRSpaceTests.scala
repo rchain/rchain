@@ -17,25 +17,25 @@ import scala.util.Random
 //noinspection ZeroIndexToHead,NameBooleanParameters
 class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
-  def consumeMany[C, P, A, K](
-      space: ISpace[C, P, A, K],
+  def consumeMany[C, P, A, R, K](
+      space: ISpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean)(implicit matcher: Match[P, A]): List[Option[(K, Seq[A])]] =
+      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.consume(channelsCreator(i), patterns, continuationCreator(i), persist)
     }
 
-  def produceMany[C, P, A, K](
-      space: ISpace[C, P, A, K],
+  def produceMany[C, P, A, R, K](
+      space: ISpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelCreator: Int => C,
       datumCreator: Int => A,
-      persist: Boolean)(implicit matcher: Match[P, A]): List[Option[(K, immutable.Seq[A])]] =
+      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, immutable.Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.produce(channelCreator(i), datumCreator(i), persist)
     }
@@ -741,17 +741,17 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
     super.withFixture(test)
   }
 
-  def withTestSpaces[R](f: (RSpace[C, P, A, K], ReplayRSpace[C, P, A, K]) => R)(
+  def withTestSpaces[S](f: (RSpace[C, P, A, A, K], ReplayRSpace[C, P, A, A, K]) => S)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): R = {
+      sk: Serialize[K]): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create(context, Branch.MASTER)
-    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
+    val space       = RSpace.create[C, P, A, A, K](context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create[C, P, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
