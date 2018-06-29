@@ -30,16 +30,17 @@ object EventConverter {
 
   def toRspaceEvent(event: Event): RspaceEvent = event match {
     case Event(Produce(ProduceEvent(produce))) =>
-      RspaceProduce(Blake2b256Hash.fromByteArray(produce.toByteArray))
+      RspaceProduce.fromHash(Blake2b256Hash.fromByteArray(produce.toByteArray))
     case Event(Consume(ConsumeEvent(consume))) =>
-      RspaceConsume(Blake2b256Hash.fromByteArray(consume.toByteArray))
+      RspaceConsume.fromHash(Blake2b256Hash.fromByteArray(consume.toByteArray))
     case Event(Comm(CommEvent(Some(ConsumeEvent(consume)), produces))) =>
       val rspaceProduces: Seq[RspaceProduce] = produces.map {
         case ProduceEvent(produce) =>
           val rspaceProduce: RspaceProduce =
-            RspaceProduce(Blake2b256Hash.fromByteArray(produce.toByteArray))
+            RspaceProduce.fromHash(Blake2b256Hash.fromByteArray(produce.toByteArray))
           rspaceProduce
       }.toList
-      RspaceComm(RspaceConsume(Blake2b256Hash.fromByteArray(consume.toByteArray)), rspaceProduces)
+      RspaceComm(RspaceConsume.fromHash(Blake2b256Hash.fromByteArray(consume.toByteArray)),
+                 rspaceProduces)
   }
 }

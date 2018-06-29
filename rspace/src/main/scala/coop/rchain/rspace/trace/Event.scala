@@ -64,8 +64,6 @@ class Produce private (val hash: Blake2b256Hash) extends IOEvent {
 
 object Produce {
 
-  def apply(hash: Blake2b256Hash): Produce = new Produce(hash)
-
   def unapply(arg: Produce): Option[Blake2b256Hash] = Some(arg.hash)
 
   val length: Int = 32
@@ -84,6 +82,8 @@ object Produce {
 
     new Produce(hash)
   }
+
+  def fromHash(hash: Blake2b256Hash): Produce = new Produce(hash)
 
   implicit val codecProduce: Codec[Produce] =
     Codec[Blake2b256Hash].as[Produce]
@@ -104,8 +104,6 @@ class Consume private (val hash: Blake2b256Hash) extends IOEvent {
 object Consume {
 
   val length: Int = 32
-
-  def apply(hash: Blake2b256Hash): Consume = new Consume(hash)
 
   def unapply(arg: Consume): Option[Blake2b256Hash] = Some(arg.hash)
 
@@ -129,6 +127,8 @@ object Consume {
 
     new Consume(hash)
   }
+
+  def fromHash(hash: Blake2b256Hash): Consume = new Consume(hash)
 
   implicit val codecConsume: Codec[Consume] =
     Codec[Blake2b256Hash].as[Consume]
