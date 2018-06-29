@@ -1,15 +1,42 @@
+## rrc
+
+Generate a balance report for the RHOC REV conversion. Outputs a list of all
+keys along with RHOC balance (in wei) and a 0|1 flag to indicate whether or not
+there is a contract at that address.
+
+### Setup
+
+Clone the repo and run npm install from the project root:
+
+```bash
+$ git clone https://github.com/desaperados/rrc.git
+$ cd rrc
+$ npm install
 ```
-# Setup
-npm install
 
-# Generate a rhoc balance report
-rm balances.csv
-npm run balances
+### Generate a RHOC balance report
 
-# Options:
-BLOCK=<blockheight>
-ETH_WS=<websockets provider> (defaults to infura)
+If you're not running the report for the first time you'll need to remove the
+previous version.
 
-# Example
-BLOCK=5866762 npm run balances
+```bash
+$ rm balances.csv
 ```
+
+Then run the balances script. Specify options by setting shell variables:
+
+```bash
+BLOCK=<block height>
+ETH_WS=<websockets provider>
+```
+
+Eth provider defaults to Infura so running a local node is optional.
+
+```bash
+$ BLOCK=5866762 npm run balances
+```
+
+### Improvements
+
+* Timestamp balances.csv output so that it can be included in version control.
+* Don't report zero balances?
