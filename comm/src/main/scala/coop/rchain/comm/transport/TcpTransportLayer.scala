@@ -103,7 +103,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                           peer: PeerNode,
                           timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
     innerSend(peer, request)
-      .timeout(timeout)
+      .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
