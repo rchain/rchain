@@ -3,9 +3,10 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad}
 import cats.implicits._
 
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
-import coop.rchain.comm.{PeerNode, ProtocolMessage}
+import coop.rchain.comm.PeerNode
 
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.mutable
@@ -13,26 +14,23 @@ import coop.rchain.comm.transport._
 
 class TransportLayerTestImpl[F[_]: Monad: Capture](
     identity: PeerNode,
-    val msgQueues: collection.Map[PeerNode, mutable.Queue[ProtocolMessage]])
+    val msgQueues: collection.Map[PeerNode, mutable.Queue[Protocol]])
     extends TransportLayer[F] {
 
-  def roundTrip(peer: PeerNode,
-                msg: ProtocolMessage,
-                timeout: FiniteDuration): F[CommErr[ProtocolMessage]] = ???
+  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
   def local: F[PeerNode] = identity.pure[F]
 
-  def send(peer: PeerNode, msg: ProtocolMessage): F[Unit] = Capture[F].capture {
+  def send(peer: PeerNode, msg: Protocol): F[Unit] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)
 
-    maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q =>
-      ProtocolMessage.toProtocolMessage(msg.proto).map(q.enqueue(_)))
+    maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q => Right(q.enqueue(msg)))
   }
 
-  def broadcast(peers: Seq[PeerNode], msg: ProtocolMessage): F[Unit] =
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] =
     Capture[F].capture(peers.map(send(_, msg)))
 
-  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
+  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
   def disconnect(peer: PeerNode): F[Unit] = ???
@@ -41,12 +39,12 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
 }
 
 object TransportLayerTestImpl {
-  def handleQueue[F[_]: Monad: Capture](dispatch: ProtocolMessage => F[CommunicationResponse],
-                                        q: mutable.Queue[ProtocolMessage]): F[Unit] =
+  def handleQueue[F[_]: Monad: Capture](dispatch: Protocol => F[CommunicationResponse],
+                                        q: mutable.Queue[Protocol]): F[Unit] =
     if (q.nonEmpty) for {
-      msg <- Capture[F].capture { q.dequeue() }
-      _   <- dispatch(msg)
-      _   <- handleQueue(dispatch, q)
+      proto <- Capture[F].capture { q.dequeue() }
+      _     <- dispatch(proto)
+      _     <- handleQueue(dispatch, q)
     } yield ()
     else ().pure[F]
 }

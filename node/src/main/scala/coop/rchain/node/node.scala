@@ -26,11 +26,11 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-import ThrowableOps._
+import coop.rchain.comm.discovery.{Ping => NDPing, _}
+import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -40,6 +40,25 @@ import coop.rchain.comm.transport.TcpTransportLayer.Connections
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  private val dataDirFile = conf.run.data_dir().toFile
+
+  if (!dataDirFile.exists()) {
+    if (!dataDirFile.mkdir()) {
+      println(
+        s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+      System.exit(-1)
+    }
+  }
+
+  // Check if data_dir has read/write access
+  if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
+    println(
+      s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+    System.exit(-1)
+  }
+
+  println(s"Using data_dir: ${conf.run.data_dir()}")
 
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
@@ -158,7 +177,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
-  implicit val pingEffect: Ping[Task] = effects.ping(src, defaultTimeout)
+  implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
@@ -178,7 +197,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
+                                           casperRuntime.replaySpace.store,
+                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -201,7 +222,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     (for {
       loc <- transportLayerEffect.local
       ts  <- timeEffect.currentMillis
-      msg = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transportLayerEffect.shutdown(msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
@@ -226,7 +247,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
+                                       resources.casperRuntime.replaySpace.store,
+                                       conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
@@ -235,17 +258,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(
-      resources: Resources): ProtocolMessage => Effect[CommunicationResponse] = {
+  def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
     implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
     implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
       casperPacketHandler[Effect]
     )
 
-    (pm: ProtocolMessage) =>
+    (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => Connect.dispatch[Effect](pm)
-        case handled    => handled.pure[Effect]
+        case NotHandled(_) => Connect.dispatch[Effect](pm)
+        case handled       => handled.pure[Effect]
       }
   }
 

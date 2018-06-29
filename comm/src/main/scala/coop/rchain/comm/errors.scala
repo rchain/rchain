@@ -1,5 +1,6 @@
 package coop.rchain.comm
 
+import coop.rchain.comm.protocol.routing._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
@@ -17,10 +18,15 @@ final case class ParseError(msg: String)                 extends CommError
 final case object EncryptionHandshakeIncorrectlySigned   extends CommError
 final case object BootstrapNotProvided                   extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)        extends CommError
-final case class MalformedMessage(pm: ProtocolMessage)   extends CommError
+final case class MalformedMessage(pm: Protocol)          extends CommError
 final case object CouldNotConnectToBootstrap             extends CommError
 final case class InternalCommunicationError(msg: String) extends CommError
 final case object TimeOut                                extends CommError
+final case object NoResponseForRequest                   extends CommError
+final case object UpstreamNotAvailable                   extends CommError
+final case class UnexpectedMessage(msgStr: String)       extends CommError
+final case object SenderNotAvailable                     extends CommError
+final case class PongNotReceivedForPing(peer: PeerNode)  extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -39,5 +45,10 @@ object CommError {
   def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
-  def malformedMessage(pm: ProtocolMessage): CommError   = MalformedMessage(pm)
+  def malformedMessage(pm: Protocol): CommError          = MalformedMessage(pm)
+  def noResponseForRequest: CommError                    = NoResponseForRequest
+  def upstreamNotAvailable: CommError                    = UpstreamNotAvailable
+  def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
+  def senderNotAvailable: CommError                      = SenderNotAvailable
+  def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
 }
