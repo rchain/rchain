@@ -39,11 +39,11 @@ deploy:deploy-rnode-artifacts:
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
     - set -eo pipefail
     - artifacts_dir=$(mktemp -d /tmp/artifacts_out.XXXXXXXX)
-    - cp node/target/rnode_*_all.deb ${artifacts_dir}/rnode.deb
-    - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm ${artifacts_dir}/rnode.rpm
-    - cp rosette/build.out/rosette-*.deb ${artifacts_dir}/rosette.deb
+    - cp node/target/rnode_*_all.deb ${artifacts_dir}/
+    - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm ${artifacts_dir}/
+    - cp rosette/build.out/rosette-*.deb ${artifacts_dir}/
+    - cp node/target/universal/*.tgz ${artifacts_dir}/
     # deploy artifacts to dispatcher 
-    - apt update && apt -y install openssh-client rsync
     - mkdir -p ~/.ssh
     - echo "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
