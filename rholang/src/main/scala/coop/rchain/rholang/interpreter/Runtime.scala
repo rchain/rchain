@@ -92,7 +92,7 @@ object Runtime {
       }
   }
 
-  def create(dataDir: Path, mapSize: Long)(implicit syncTask: Sync[Task]): Runtime = {
+  def create(dataDir: Path, mapSize: Long): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 

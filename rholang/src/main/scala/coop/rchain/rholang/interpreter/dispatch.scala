@@ -28,7 +28,7 @@ object Dispatch {
     }): _*)
 }
 
-class RholangOnlyDispatcher[M[_]: Sync] private (_reducer: => Reduce[M])
+class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: Sync[M])
     extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -39,18 +39,19 @@ class RholangOnlyDispatcher[M[_]: Sync] private (_reducer: => Reduce[M])
         val env = Dispatch.buildEnv(dataList)
         reducer.eval(par)(env)
       case ScalaBodyRef(_) =>
-        Sync[M].unit
+        s.unit
       case Empty =>
-        Sync[M].unit
+        s.unit
     }
 }
 
 object RholangOnlyDispatcher {
 
-  def create[M[_]: Sync, F[_]](
+  def create[M[_], F[_]](
       tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation])(
       implicit
       parallel: Parallel[M, F],
+      s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace
       : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
@@ -63,9 +64,9 @@ object RholangOnlyDispatcher {
   }
 }
 
-class RholangAndScalaDispatcher[M[_]: effect.Sync] private (
+class RholangAndScalaDispatcher[M[_]] private (
     _reducer: => Reduce[M],
-    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])
+    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(implicit s: Sync[M])
     extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -78,20 +79,21 @@ class RholangAndScalaDispatcher[M[_]: effect.Sync] private (
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
-          case None    => Sync[M].raiseError(new Exception(s"dispatch: no function for $ref"))
+          case None    => s.raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
-        Sync[M].unit
+        s.unit
     }
 }
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_]: Sync, F[_]](
+  def create[M[_], F[_]](
       tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
       dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
       implicit
       parallel: Parallel[M, F],
+      s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace
       : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
