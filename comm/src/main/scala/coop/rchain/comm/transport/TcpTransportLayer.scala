@@ -70,8 +70,10 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       _ <- if (s.shutdown && !enforce)
             Task.raiseError(new RuntimeException("The transport layer has been shut down"))
           else Task.unit
-      c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-      _ <- state.modify(s => s.copy(connections = s.connections + (peer -> c)))
+      c    <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
+      _    <- state.modify(s => s.copy(connections = s.connections + (peer -> c)))
+      cons <- state.inspect(_.connections.keys)
+      _    <- log.info(s"Current open connections: ${cons.size}")
     } yield c
 
   def disconnect(peer: PeerNode): Task[Unit] =
@@ -81,7 +83,9 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
             case Some(c) => Task.delay(c.shutdown()).attempt.void
             case _       => log.warn(s"Can't disconnect from peer ${peer.id}. Connection not found.")
           }
-      _ <- state.modify(s => s.copy(connections = s.connections - peer))
+      _    <- state.modify(s => s.copy(connections = s.connections - peer))
+      cons <- state.inspect(_.connections.keys)
+      _    <- log.info(s"Current open connections: ${cons.size}")
     } yield ()
 
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
