@@ -28,6 +28,8 @@ object EffectsTestInstances {
       this.clock = clock + 1
       clock
     }
+
+    def reset(): Unit = this.clock = 0
   }
 
   class NodeDiscoveryStub[F[_]: Capture]() extends NodeDiscovery[F] {

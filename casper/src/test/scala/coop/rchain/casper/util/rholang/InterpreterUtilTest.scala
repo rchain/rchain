@@ -3,8 +3,7 @@ package coop.rchain.casper.util.rholang
 import com.google.protobuf.ByteString
 import InterpreterUtil._
 import coop.rchain.catscontrib.Capture._
-import coop.rchain.casper.{BlockDag, BlockGenerator}
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
@@ -15,7 +14,10 @@ import cats.implicits._
 import cats.mtl.implicits._
 import java.nio.file.Files
 
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.shared.Time
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
 import coop.rchain.shared.AttemptOps._
@@ -27,8 +29,6 @@ import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
 class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
-
-  type StateWithChain[A] = State[BlockDag, A]
   val initState        = BlockDag().copy(currentId = -1)
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
@@ -67,14 +67,14 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploys)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1Deploys)
         b2      <- createBlock[F](Seq(b1.blockHash), deploys = b2Deploys)
         b3      <- createBlock[F](Seq(b2.blockHash), deploys = b3Deploys)
       } yield b3
-    val chain   = createChain[StateWithChain].runS(initState).value
+    val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
     val b1 = chain.idToBlocks(1)
@@ -147,14 +147,14 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
      *         \    /
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploys)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1Deploys)
         b2      <- createBlock[F](Seq(genesis.blockHash), deploys = b2Deploys)
         b3      <- createBlock[F](Seq(b1.blockHash, b2.blockHash), deploys = b3Deploys)
       } yield b3
-    val chain   = createChain[StateWithChain].runS(initState).value
+    val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
     val b3 = chain.idToBlocks(3)
@@ -190,7 +190,6 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                   tsHash = invalidHash,
                                   tsLog = computedTsLog)
         .runS(initState)
-        .value
     val block = chain.idToBlocks(0)
 
     val (stateHash, _) =
@@ -217,7 +216,6 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                   tsHash = computedTsHash,
                                   tsLog = computedTsLog)
         .runS(initState)
-        .value
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
