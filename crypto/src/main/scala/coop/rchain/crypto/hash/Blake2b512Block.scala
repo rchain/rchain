@@ -11,33 +11,83 @@ import scalapb.TypeMapper
 /**
 Block oriented Blake2b512 class.
 
-Only supports hashes of data that is a positive number of whole blocks.
+We're using some of the tree hashing parameters to achieve online tree hashing,
+where the structure of the tree is provided by the application. This precludes
+using the depth counters. Also, because we are online, we can't know before-hand
+that a node is the last in a level, or is offset. When we hash the root, we know
+that it is the root, but since we are only publishing the root hash, and not the
+sub-tree, this is sufficient protection against extension.
+
+I've checked that we should be fine against the criteria here.
+See: "Sufficient conditions for sound tree and sequential hashing modes" by
+Guido Bertoni, Joan Daemen, Michaël Peeters, and Gilles Van Assche
+
+    We also have data at every level, so we're using the fanout parameter to
+distinguish child-hashes from data. To make it convenient for block-orientation,
+we will null-pad an odd number of child hashes. This means that the fanout varies per-node
+rather than being set for the whole instance. Where applicable, we are setting
+the other tree-parameters accordingly. Namely, max-depth to 255 (unlimited) and
+inner hash length to 64.
 
 This class is an abbreviated version of Blake2bDigest.java from BouncyCastle
 https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/crypto/digests/Blake2bDigest.java
   */
 class Blake2b512Block {
   import Blake2b512Block._
-  val chainValue: Array[Long] = new Array[Long](CHAIN_VALUE_LENGTH)
-  private var t0: Long        = 0
-  private var t1: Long        = 0
+  private val chainValue: Array[Long] = new Array[Long](CHAIN_VALUE_LENGTH)
+  private var t0: Long                = 0
+  private var t1: Long                = 0
 
   // block must be 128 bytes long
   def update(block: Array[Byte], offset: Int): Unit =
-    compress(block, offset, chainValue, false)
+    compress(block, offset, chainValue, false, false, false)
 
   // gives the output as if block were the last block processed, but does not
   // invalidate or modify internal state
-  def peekFinal(block: Array[Byte], inOffset: Int, output: Array[Byte], outOffset: Int): Unit = {
+  def peekFinalRoot(block: Array[Byte],
+                    inOffset: Int,
+                    output: Array[Byte],
+                    outOffset: Int): Unit = {
     val tempChainValue: Array[Long] = new Array[Long](8)
-    compress(block, inOffset, tempChainValue, true)
+    compress(block, inOffset, tempChainValue, true, true, true)
     Pack.longToLittleEndian(tempChainValue, output, outOffset)
+  }
+
+  def finalizeInternal(block: Array[Byte],
+                       inOffset: Int,
+                       output: Array[Byte],
+                       outOffset: Int): Unit = {
+    val tempChainValue: Array[Long] = new Array[Long](8)
+    compress(block, inOffset, tempChainValue, true, true, false)
+    Pack.longToLittleEndian(tempChainValue, output, outOffset)
+  }
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Blake2b512Block =>
+        Arrays.equals(chainValue, that.chainValue) && t0 == that.t0 && t1 == that.t1
+      case _ => false
+    }
+
+  override def hashCode(): Int = {
+    val collapsedCV =
+      (chainValue(0) ^ (chainValue(0) >>> 32)).toInt ^
+        (chainValue(1) ^ (chainValue(1) >>> 32)).toInt ^
+        (chainValue(2) ^ (chainValue(2) >>> 32)).toInt ^
+        (chainValue(3) ^ (chainValue(3) >>> 32)).toInt ^
+        (chainValue(4) ^ (chainValue(4) >>> 32)).toInt ^
+        (chainValue(5) ^ (chainValue(5) >>> 32)).toInt ^
+        (chainValue(6) ^ (chainValue(6) >>> 32)).toInt ^
+        (chainValue(7) ^ (chainValue(7) >>> 32)).toInt
+    (collapsedCV * 31 + (t0 ^ (t0 >>> 32)).toInt) * 31 + (t1 ^ (t1 >>> 32)).toInt
   }
 
   private[this] def compress(msg: Array[Byte],
                              offset: Int,
                              newChainValue: Array[Long],
-                             peek: Boolean): Unit = {
+                             peek: Boolean,
+                             finalize: Boolean,
+                             rootFinalize: Boolean): Unit = {
     val internalState: Array[Long] = new Array[Long](BLOCK_LENGTH_LONGS)
     def g(m1: Long, m2: Long, posA: Int, posB: Int, posC: Int, posD: Int): Unit = {
       def rotr64(x: Long, rot: Int): Long =
@@ -58,11 +108,12 @@ class Blake2b512Block {
     def init(): Unit = {
       Array.copy(chainValue, 0, internalState, 0, CHAIN_VALUE_LENGTH)
       Array.copy(IV, 0, internalState, CHAIN_VALUE_LENGTH, 4)
-      val f0 = if (peek) 0xffffffffffffffffL else 0x0L
+      val f0 = if (finalize) 0xffffffffffffffffL else 0x0L
+      val f1 = if (rootFinalize) 0xffffffffffffffffL else 0x0L
       internalState(12) = newT0 ^ IV(4)
       internalState(13) = newT1 ^ IV(5)
       internalState(14) = f0 ^ IV(6)
-      internalState(15) = IV(7)
+      internalState(15) = f1 ^ IV(7)
     }
     init()
 
@@ -86,18 +137,33 @@ class Blake2b512Block {
     if (!peek) {
       t0 = newT0
       t1 = newT1
-    }
-    for (i <- 0 until CHAIN_VALUE_LENGTH) {
-      newChainValue(i) = chainValue(i) ^ internalState(i) ^ internalState(i + 8)
+      for (i <- 0 until CHAIN_VALUE_LENGTH) {
+        chainValue(i) = chainValue(i) ^ internalState(i) ^ internalState(i + 8)
+      }
+    } else {
+      for (i <- 0 until CHAIN_VALUE_LENGTH) {
+        newChainValue(i) = chainValue(i) ^ internalState(i) ^ internalState(i + 8)
+      }
     }
   }
 }
 
 object Blake2b512Block {
+  /*
   def apply(): Blake2b512Block = {
     val result = new Blake2b512Block
     Array.copy(IV, 0, result.chainValue, 0, CHAIN_VALUE_LENGTH)
     result.chainValue(0) ^= PARAM_VALUE
+    result
+  }
+   */
+
+  def apply(fanout: Byte): Blake2b512Block = {
+    val param0WithFanout = PARAM_VALUE_0 | ((fanout.toLong & 0xff) << 16)
+    val result           = new Blake2b512Block
+    Array.copy(IV, 0, result.chainValue, 0, CHAIN_VALUE_LENGTH)
+    result.chainValue(0) ^= param0WithFanout
+    result.chainValue(2) ^= PARAM_VALUE_2
     result
   }
 
@@ -159,8 +225,10 @@ object Blake2b512Block {
   val BLOCK_LENGTH_BYTES: Int  = 128
   val BLOCK_LENGTH_LONGS: Int  = 16
   val DIGEST_LENGTH_BYTES: Int = 64
-  // Depth = 1, Fanout = 1, Keylength = 0, Digest length = 64 bytes
-  val PARAM_VALUE: Long = 0x01010040L
+  // Depth = 255, Fanout = ??, Keylength = 0, Digest length = 64 bytes
+  val PARAM_VALUE_0: Long = 0xff000040L
+  // Inner length = 64 bytes
+  val PARAM_VALUE_2: Long = 0x4000L
 
   // This will give invalid results and is for testing only.
   def tweakT0(src: Blake2b512Block): Unit =
@@ -177,9 +245,6 @@ object Blake2b512Block {
     result.t1 = t1
     result
   })
-
-  def same(b1: Blake2b512Block, b2: Blake2b512Block): Boolean =
-    Arrays.equals(b1.chainValue, b2.chainValue) && b1.t0 == b2.t0 && b1.t1 == b2.t1
 
   def debugStr(b: Blake2b512Block): String =
     s"chainValue: ${b.chainValue.mkString(", ")}\n" +

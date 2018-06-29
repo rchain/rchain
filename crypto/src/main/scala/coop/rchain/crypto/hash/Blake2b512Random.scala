@@ -8,6 +8,8 @@ import org.bouncycastle.util.Pack
 import org.scalacheck.{Arbitrary, Gen}
 import scalapb.TypeMapper
 
+import scala.annotation.tailrec
+
 class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: ByteBuffer) {
   val pathView: ByteBuffer = lastBlock.duplicate()
   pathView.limit(112)
@@ -40,7 +42,7 @@ class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: Byte
   }
 
   def hash(): Unit = {
-    digest.peekFinal(lastBlock.array(), 0, hashArray, 0)
+    digest.peekFinalRoot(lastBlock.array(), 0, hashArray, 0)
     val low = countView.get(0)
     if (low == -1) {
       val high = countView.get(1)
@@ -77,11 +79,30 @@ class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: Byte
   }
 
   def peek: ByteBuffer = lastBlock.asReadOnlyBuffer()
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: Blake2b512Random =>
+        digest == that.digest &&
+          pathView.position() == that.pathView.position() &&
+          position == that.position &&
+          lastBlock.equals(that.lastBlock) && {
+          if (position == 0)
+            true
+          else
+            ByteBuffer
+              .wrap(hashArray, position, 64 - position)
+              .equals(ByteBuffer.wrap(that.hashArray, position, 64 - position))
+        }
+    }
+
+  override def hashCode(): Int =
+    ((digest.hashCode * 31 + pathView.position) * 31 + position) * 31 + lastBlock.hashCode
 }
 
 object Blake2b512Random {
   def apply(init: Array[Byte], offset: Int, length: Int): Blake2b512Random = {
-    val result = new Blake2b512Random(Blake2b512Block(), ByteBuffer.allocate(128))
+    val result = new Blake2b512Random(Blake2b512Block(0.toByte), ByteBuffer.allocate(128))
     val range  = Range(offset, offset + length - 127, 128)
     range.foreach { base =>
       result.digest.update(init, base)
@@ -100,8 +121,41 @@ object Blake2b512Random {
     }
     result
   }
+
   def apply(init: Array[Byte]): Blake2b512Random =
     apply(init, 0, init.length)
+
+  def merge(children: Seq[Blake2b512Random]) = {
+    @tailrec
+    def internalMerge(children: Vector[Blake2b512Random]): Blake2b512Random = {
+      val squashedBuilder = Vector.newBuilder[Blake2b512Random]
+      val chainBlock      = new Array[Byte](128)
+      children.grouped(255).foreach { slice =>
+        val result =
+          new Blake2b512Random(Blake2b512Block(slice.size.toByte), ByteBuffer.allocate(128))
+        squashedBuilder += result
+        slice.grouped(2).foreach { pair =>
+          pair(0).digest.finalizeInternal(pair(0).lastBlock.array(), 0, chainBlock, 0)
+          if (pair.size > 1) {
+            pair(1).digest.finalizeInternal(pair(1).lastBlock.array(), 0, chainBlock, 64)
+          } else {
+            BLANK_HASH.asReadOnlyBuffer().get(chainBlock, 64, 64)
+          }
+          result.digest.update(chainBlock, 0)
+        }
+      }
+
+      val result = squashedBuilder.result
+      if (result.size == 1)
+        result(0)
+      else
+        internalMerge(result)
+    }
+    if (children.size == 0)
+      new Blake2b512Random(Blake2b512Block(0.toByte), ByteBuffer.allocate(128))
+    else
+      internalMerge(children.toVector)
+  }
 
   implicit val typeMapper = TypeMapper((byteStr: ByteString) => {
     if (byteStr.isEmpty)
@@ -158,6 +212,7 @@ object Blake2b512Random {
   })
 
   val BLANK_BLOCK = ByteBuffer.allocateDirect(128).asReadOnlyBuffer()
+  val BLANK_HASH  = ByteBuffer.allocateDirect(64).asReadOnlyBuffer()
 
   // For testing only, will result in incorrect results otherwise
   def tweakLength0(rand: Blake2b512Random): Unit =
@@ -182,19 +237,6 @@ object Blake2b512Random {
     result.position = position
     result
   })
-
-  def same(rand1: Blake2b512Random, rand2: Blake2b512Random): Boolean =
-    Blake2b512Block.same(rand1.digest, rand2.digest) &&
-      rand1.lastBlock.equals(rand2.lastBlock) &&
-      rand1.pathView.position() == rand2.pathView.position() &&
-      rand1.position == rand2.position && {
-      if (rand1.position == 0)
-        true
-      else
-        ByteBuffer
-          .wrap(rand1.hashArray, rand1.position, 64 - rand1.position)
-          .equals(ByteBuffer.wrap(rand2.hashArray, rand2.position, 64 - rand2.position))
-    }
 
   def debugStr(rand: Blake2b512Random): String = {
     val rotPosition = ((rand.position - 1) & 0x3f) + 1
