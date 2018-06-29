@@ -14,7 +14,7 @@ import scodec.Codec
 
 trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = ISpace[C, P, A, K]
+  type T = ISpace[C, P, A, A, K]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -25,14 +25,15 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestSpace[R](f: T => R): R
+  def withTestSpace[S](f: T => S): S
 }
 
 class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
-  override def withTestSpace[R](f: T => R): R = {
+  override def withTestSpace[S](f: T => S): S = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
-    val testSpace = new RSpace(testStore, Branch("test"))
+    val testSpace =
+      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("test"))
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
@@ -49,7 +50,7 @@ class LMDBStoreTestsBase
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  override def withTestSpace[R](f: T => R): R = {
+  override def withTestSpace[S](f: T => S): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -59,7 +60,8 @@ class LMDBStoreTestsBase
                                                                      mapSize,
                                                                      List(EnvFlags.MDB_NOTLS))
     val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
-    val testSpace = new RSpace(testStore, testBranch)
+    val testSpace =
+      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)

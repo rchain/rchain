@@ -35,7 +35,8 @@ trait BlockGenerator {
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[Deploy] = Seq.empty[Deploy],
-      tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
+      tsHash: ByteString = ByteString.EMPTY,
+      tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -51,7 +52,7 @@ trait BlockGenerator {
         .withParentsHashList(parentsHashList)
         .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
-      body      = Body().withPostState(postState).withNewCode(deploys)
+      body      = Body().withPostState(postState).withNewCode(deploys).withCommReductions(tsLog)
       serializedJustifications = justifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)

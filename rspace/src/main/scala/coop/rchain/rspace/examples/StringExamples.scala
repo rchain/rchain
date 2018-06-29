@@ -49,7 +49,7 @@ object StringExamples {
 
   object implicits {
 
-    implicit object stringMatch extends Match[Pattern, String] {
+    implicit object stringMatch extends Match[Pattern, String, String] {
       def get(p: Pattern, a: String): Option[String] = Some(a).filter(p.isMatch)
     }
 

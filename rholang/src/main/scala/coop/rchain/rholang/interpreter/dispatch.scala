@@ -47,13 +47,14 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit capt
 object RholangOnlyDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation])(
+      tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation])(
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
       parallel: Parallel[M, F],
       ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
-    val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+    val pureSpace
+      : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
@@ -88,14 +89,16 @@ class RholangAndScalaDispatcher[M[_]] private (
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_], F[_]](tuplespace: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                         dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
+  def create[M[_], F[_]](
+      tuplespace: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
       parallel: Parallel[M, F],
       ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
-    val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+    val pureSpace
+      : PureRSpace[M, Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)

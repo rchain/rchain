@@ -42,7 +42,7 @@ trait HistoryActionsTests
       joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, StringsCaptor],
+  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
