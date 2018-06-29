@@ -5,14 +5,17 @@ import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 
 import scala.concurrent.Future
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.{MultiParentCasper}
+import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
@@ -30,7 +33,10 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter._, Interpreter._, storage.StoragePrinter
+import coop.rchain.rholang.interpreter._
+import Interpreter._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
+import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Scheduler)
     extends ReplGrpc.Repl {
@@ -47,7 +53,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
         case Right(term) =>
           runEvaluate(runtime, term).attempt.map {
             case Left(ex) => s"Caught boxed exception: $ex"
-            case Right(errors) => {
+            case Right((cost, errors)) => {
               val errorStr =
                 if (errors.isEmpty)
                   ""
@@ -55,6 +61,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
                   errors
                     .map(_.toString())
                     .mkString("Errors received during evaluation:\n", "\n", "\n")
+              s"Deployment cost: $cost\n" +
               s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
             }
           }
@@ -69,7 +76,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
   def eval(request: EvalRequest): Future[ReplResponse] =
     exec(new StringReader(request.program))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[Vector[errors.InterpreterError]] =
+  def runEvaluate(runtime: Runtime, term: Par): Task[(CostAccount, Vector[Throwable])] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
       result <- evaluate(runtime, term)

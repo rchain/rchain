@@ -6,6 +6,7 @@ import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.IStore
@@ -76,7 +77,10 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  private def printErrors(errors: Vector[InterpreterError]) =
+  private def printCost(cost: CostAccount): Unit =
+    Console.println(s"Estimated deploy cost: $cost")
+
+  private def printErrors(errors: Vector[Throwable]) =
     if (!errors.isEmpty) {
       Console.println("Errors received during evaluation:")
       for {
@@ -120,12 +124,14 @@ object RholangCLI {
   }
 
   @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[InterpreterError]]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[(CostAccount, Vector[Throwable])]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(errors)) => printErrors(errors)
-        case Some(Failure(e))      => throw e
-        case None                  => throw new Exception("Future claimed to be ready, but value was None")
+        case Some(Success((cost, errors))) =>
+          printCost(cost)
+          printErrors(errors)
+        case Some(Failure(e)) => throw e
+        case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
       case _: TimeoutException =>
@@ -157,7 +163,7 @@ object RholangCLI {
       for {
         _      <- Task.now(printNormalizedTerm(par))
         result <- Interpreter.evaluate(runtime, par)
-      } yield (result)
+      } yield result
 
     waitForSuccess(evaluatorTask.runAsync)
     printStorageContents(runtime.space.store)

@@ -7,6 +7,7 @@ import cats.implicits._
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.ParSortMatcher
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import monix.eval.{Coeval, Task}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
@@ -82,20 +83,21 @@ object Interpreter {
   def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
     for {
       term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
-      errors <- evaluate(runtime, term).attempt.raiseOnLeft
+      errors <- evaluate(runtime, term).map(_._2).attempt.raiseOnLeft
       result <- if (errors.isEmpty)
                  Task.now(runtime)
                else
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
-    } yield (result)
+    } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[(CostAccount, Vector[Throwable])] =
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
-    } yield errors
+      cost   <- runtime.getCost()
+    } yield (cost, errors)
 
-  private def mkErrorMsg(errors: Vector[InterpreterError]) =
+  private def mkErrorMsg(errors: Vector[Throwable]) =
     errors
       .map(_.toString())
       .mkString("Errors received during evaluation:\n", "\n", "\n")

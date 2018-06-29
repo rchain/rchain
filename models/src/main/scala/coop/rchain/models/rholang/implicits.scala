@@ -410,10 +410,10 @@ object implicits {
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
-        ChannelLocallyFree.connectiveUsed(rb.source.get)
+        ChannelLocallyFree.connectiveUsed(rb.source)
 
       def locallyFree(rb: ReceiveBind) =
-        ChannelLocallyFree.locallyFree(rb.source.get)
+        ChannelLocallyFree.locallyFree(rb.source)
     }
 
   implicit val MatchLocallyFree: HasLocallyFree[Match] =
@@ -424,8 +424,8 @@ object implicits {
 
   implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
     new HasLocallyFree[MatchCase] {
-      def connectiveUsed(mc: MatchCase) = mc.source.get.connectiveUsed
-      def locallyFree(mc: MatchCase)    = mc.source.get.locallyFree
+      def connectiveUsed(mc: MatchCase) = mc.source.connectiveUsed
+      def locallyFree(mc: MatchCase)    = mc.source.locallyFree
     }
 
   implicit val ConnectiveLocallyFree: HasLocallyFree[Connective] =
