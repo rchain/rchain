@@ -156,7 +156,6 @@ lazy val node = (project in file("node"))
         Cmd("USER", daemon),
         ExecCmd("ENTRYPOINT", "bin/rnode"),
         ExecCmd("CMD", "run", "--data_dir=/var/lib/rnode")
-
       )
     },
     mappings in Docker ++= {
