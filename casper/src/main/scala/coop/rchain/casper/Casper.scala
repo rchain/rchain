@@ -582,25 +582,28 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
       G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    Genesis
-      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
-      .map(genesis => {
-        val privateKey = conf.privateKey
-          .orElse(defaultPrivateKey(conf, genesis))
-          .getOrElse(throw new Exception("Private key must be specified!"))
-        val publicKey = conf.sigAlgorithm match {
-          case "ed25519" =>
-            Ed25519.toPublic(privateKey)
-
-          case _ =>
-            conf.publicKey.getOrElse(throw new Exception(
-              "Public key must be specified, cannot infer from private key with given signature algorithm."))
-        }
-        if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
-          throw new Exception("Public key not compatible with given private key!")
-        }
-        hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
-      })
+    for {
+      genesis <- Genesis.fromGenesisContracts[G](activeRuntime)
+      privateKey <- Capture[G].capture {
+                     conf.privateKey
+                       .orElse(defaultPrivateKey(conf, genesis))
+                       .getOrElse(throw new Exception("Private key must be specified!"))
+                   }
+      publicKey <- Capture[G].capture {
+                    conf.sigAlgorithm match {
+                      case "ed25519" =>
+                        Ed25519.toPublic(privateKey)
+                      case _ =>
+                        conf.publicKey.getOrElse(throw new Exception(
+                          "Public key must be specified, cannot infer from private key with given signature algorithm."))
+                    }
+                  }
+      _ <- Capture[G].capture {
+            if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
+              throw new Exception("Public key not compatible with given private key!")
+            }
+          }
+    } yield hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
 
   private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
     val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {

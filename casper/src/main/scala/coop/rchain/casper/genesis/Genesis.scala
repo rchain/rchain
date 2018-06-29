@@ -2,19 +2,23 @@ package coop.rchain.casper.genesis
 
 import cats.{Applicative, Foldable, Monad}
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
-import coop.rchain.catscontrib.Capture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
-import coop.rchain.casper.util.Sorting
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, blockNumber, bonds, unsignedBlockProto}
+import coop.rchain.casper.util.{EventConverter, ProtoUtil, Sorting}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{Log, LogSource}
-
 import java.io.{File, PrintWriter}
 import java.nio.file.Path
+
+import monix.eval.Task
+import monix.execution.Scheduler
+
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.mint.MakeMint
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -22,6 +26,43 @@ import scala.util.{Failure, Success, Try}
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def fromGenesisContracts[F[_]: Monad: Capture: Log](runtime: Runtime)(
+      implicit scheduler: Scheduler): F[BlockMessage] = {
+    val initialTerm         = MakeMint.term // TODO: Replace with ProofOfStake.term
+    val initalTermString    = "Relax no one is in control"
+    val initialDeployString = DeployString().copy(term = initalTermString)
+    val initalDeploys       = Seq(Deploy(Some(initialTerm), Some(initialDeployString)))
+    for {
+      block <- Capture[F].capture {
+                runtime.reducer.inj(initialTerm).unsafeRunSync
+                val checkpoint    = runtime.space.createCheckpoint()
+                val stateHash     = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+                val serializedLog = checkpoint.log.map(EventConverter.toCasperEvent)
+                // TODO: Extract bonds from runtime.space.getData("proofOfStake")
+                val postState = RChainState()
+                  .withTuplespace(stateHash)
+                  .withBlockNumber(0)
+                //.withBonds(bonds(p.head))
+                val body = Body()
+                  .withPostState(postState)
+                  .withNewCode(initalDeploys)
+                  .withCommReductions(serializedLog)
+                val header = Header().copy(
+                  postStateHash = ProtoUtil.protoHash(postState),
+                  newCodeHash = ProtoUtil.protoSeqHash(initalDeploys),
+                  commReductionsHash = ProtoUtil.protoSeqHash(serializedLog),
+                  timestamp = 0L,
+                  version = 0L,
+                  deployCount = 1
+                )
+                BlockMessage()
+                  .withBody(body)
+                  .withHeader(header)
+                  .withBlockHash(ProtoUtil.protoHash(header))
+              }
+    } yield block
+  }
 
   def fromBondsFile[F[_]: Monad: Capture: Log](maybePath: Option[String],
                                                numValidators: Int,
