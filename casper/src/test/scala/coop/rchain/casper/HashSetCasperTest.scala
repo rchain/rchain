@@ -14,6 +14,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import scala.concurrent.duration._
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
@@ -70,7 +71,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val logMessages = List(
       "CASPER: Received Deploy",
       "CASPER: Beginning send of Block #1",
-      "CASPER: Sent",
       "CASPER: Added",
       "CASPER: New fork-choice tip is block"
     )
@@ -271,7 +271,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
     val signedInvalidBlockPacketMessage = packet(nodes(1).local, signedInvalidBlock.toByteString)
-    nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
+    nodes(0).transportLayerEff
+      .send(nodes(1).local, signedInvalidBlockPacketMessage, 1000.milliseconds)
     nodes(1).receive() // receives signedBlockThatPointsToInvalidBlock; attempts to add both blocks
 
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Ignoring block ") should be(1)

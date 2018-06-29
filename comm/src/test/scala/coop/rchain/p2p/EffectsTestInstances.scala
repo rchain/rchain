@@ -71,12 +71,18 @@ object EffectsTestInstances {
       }
 
     def local: F[PeerNode] = src.pure[F]
-    def send(peer: PeerNode, msg: Protocol): F[Unit] =
+
+    def send(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[Unit] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = ???
+
+    def broadcast(peers: Seq[PeerNode], msg: Protocol, timeout: FiniteDuration): F[Unit] = ???
+
+    def safeBroadcast(peers: Seq[PeerNode],
+                      msg: Protocol,
+                      timeout: FiniteDuration): F[Map[PeerNode, Option[CommError]]] = ???
 
     def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
 

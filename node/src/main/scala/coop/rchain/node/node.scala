@@ -34,7 +34,7 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
@@ -223,7 +223,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       peers <- nodeDiscoveryEffect.peers
       loc   <- transportLayerEffect.local
       msg   = ProtocolHelper.disconnect(loc)
-      _     <- transportLayerEffect.broadcast(peers, msg)
+      _     <- transportLayerEffect.broadcast(peers, msg, 500.milliseconds)
       // TODO remove that once broadcast and send reuse roundTrip
       _ <- IOUtil.sleep[Task](5000L)
     } yield ()).unsafeRunSync
@@ -241,7 +241,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def startReportJvmMetrics: Task[Unit] =
     Task.delay {
-      import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
