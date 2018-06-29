@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
@@ -35,10 +35,7 @@ object InterpreterUtil {
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
     val tsHash        = ProtoUtil.tuplespace(b)
     val serializedLog = b.body.get.commReductions
-    val log = implicitly[Codec[immutable.Seq[Event]]]
-      .decode(BitVector(serializedLog.toByteArray))
-      .map(_.value)
-      .get
+    val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
     val (computedCheckpoint, updatedStateHashes) =
       computeBlockCheckpointFromDeploys(b,
                                         genesis,

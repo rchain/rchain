@@ -204,7 +204,7 @@ object ProtoUtil {
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
       .withNewCodeHash(protoSeqHash(body.newCode))
-      .withCommReductionsHash(ByteString.copyFrom(Blake2b256.hash(body.commReductions.toByteArray))) // NB (Kent): protoHash gives error
+      .withCommReductionsHash(protoSeqHash(body.commReductions))
       .withDeployCount(body.newCode.length)
       .withVersion(version)
       .withTimestamp(timestamp)
@@ -244,12 +244,12 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
-    val nonce = scala.util.Random.nextInt(10000)
-    val term  = s"@${id}!($id)"
+    val timestamp = System.currentTimeMillis()
+    val term      = s"@${id}!($id)"
 
     DeployString()
       .withUser(ByteString.EMPTY)
-      .withNonce(nonce)
+      .withTimestamp(timestamp)
       .withTerm(term)
   }
 
@@ -257,20 +257,14 @@ object ProtoUtil {
     val d    = basicDeployString(id)
     val term = InterpreterUtil.mkTerm(d.term).right.get
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = Some(d)
     )
   }
 
-  def termDeploy(term: Par): Deploy = {
-    val d = basicDeployString(0)
+  def termDeploy(term: Par): Deploy =
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = None
     )
-  }
 }

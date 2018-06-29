@@ -33,10 +33,9 @@ object DeployRuntime {
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         for {
-          //TODO: have the client track the nonce
-          nonce <- Capture[F].capture { scala.util.Random.nextInt(10000) }
+          timestamp <- Capture[F].capture { System.currentTimeMillis() }
           //TODO: allow user to specify their public key
-          d        = DeployString().withNonce(nonce).withTerm(code)
+          d        = DeployString().withTimestamp(timestamp).withTerm(code)
           response <- DeployService[F].deploy(d)
           _ <- Capture[F].capture {
                 println(s"Response: ${response._2}")

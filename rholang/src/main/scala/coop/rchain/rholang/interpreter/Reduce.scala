@@ -55,7 +55,12 @@ trait Reduce[M[_]] {
 object Reduce {
 
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
-      tupleSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
+      tupleSpace: PureRSpace[M,
+                             Channel,
+                             BindPattern,
+                             Seq[Channel],
+                             Seq[Channel],
+                             TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F],
       fTell: FunctorTell[M, InterpreterError])
@@ -675,7 +680,7 @@ object Reduce {
                 ParSet(basePs.diff(otherPs.sortedPars.toSet),
                        base.connectiveUsed || other.connectiveUsed,
                        locallyFreeUnion(base.locallyFree, other.locallyFree))))
-          case (EMapBody(base @ ParMap(basePs, _, _)), EMapBody(other @ ParMap(otherPs, _, _))) =>
+          case (EMapBody(ParMap(basePs, _, _)), EMapBody(ParMap(otherPs, _, _))) =>
             val newMap = basePs -- otherPs.keys
             Applicative[M].pure[Expr](
               EMapBody(ParMap(newMap))
@@ -749,9 +754,9 @@ object Reduce {
     private[this] def contains: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def contains(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(base @ ParSet(basePs, _, _)) =>
+          case ESetBody(ParSet(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
-          case EMapBody(base @ ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
             interpreterErrorM[M].raiseError(
@@ -770,7 +775,7 @@ object Reduce {
     private[this] def get: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def get(baseExpr: Expr, key: Par): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(map @ ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
           case _ =>
             interpreterErrorM[M].raiseError(

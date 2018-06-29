@@ -51,7 +51,7 @@ object PrettyPrinter {
     par.map(p => limit(rpp.buildString(p), 25)).getOrElse("")
 
   private def buildString(d: Deploy): String =
-    s"Deploy #${d.nonce} -- ${buildString(d.term)}"
+    s"Deploy #${d.raw.fold(0L)(_.timestamp)} -- ${buildString(d.term)}"
 
   private def buildString(r: RChainState): String =
     buildString(r.tuplespace)

@@ -20,10 +20,11 @@ service DeployService {
 }
 
 message DeployString {
-  bytes  user  = 1; //public key
-  int32  nonce = 2; //for uniqueness
-  string term  = 3; //rholang source code to deploy (will be parsed into `Par`)
-  bytes  sig   = 4; //signature of (hash(resource) + nonce) using private key
+  bytes  user         = 1; //public key
+  string term         = 2; //rholang source code to deploy (will be parsed into `Par`)
+  int64  timestamp    = 3; //millisecond timestamp
+  bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
+  string sigAlgorithm = 5; // name of the algorithm used to sign
 }
 
 message BlockRequest {
@@ -102,7 +103,7 @@ message Header {
 message Body {
   RChainState     postState = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
   repeated Deploy newCode   = 2; //new rholang code that was added to the state before processing
-  bytes commReductions      = 3; //the comm. rule reductions that occurred to obtain the post-state
+  repeated Event commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
   bytes extraBytes = 4;
 }
 
@@ -121,10 +122,29 @@ message RChainState {
 }
 
 message Deploy {
-  bytes user  = 1; //public key
-  int32 nonce = 2; //for uniqueness
-  Par   term  = 3; //rholang term to deploy
-  bytes sig   = 4; //signature of (hash(resource) + nonce) using private key
+  Par          term  = 1; //rholang term to deploy
+  DeployString raw   = 2; //raw deploy, before parsing the rholang
+}
+
+message Event {
+  oneof event_instance {
+    ProduceEvent produce = 1;
+    ConsumeEvent consume = 2;
+    CommEvent comm = 3;
+  }
+}
+
+message ProduceEvent {
+  bytes hash = 1;
+}
+
+message ConsumeEvent {
+  bytes hash = 1;
+}
+
+message CommEvent {
+  ConsumeEvent consume = 1;
+  repeated ProduceEvent produces = 2;
 }
 
 message Bond {

@@ -8,7 +8,9 @@ lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.4",
   version := "0.1.0-SNAPSHOT",
-  resolvers += Resolver.sonatypeRepo("releases"),
+  resolvers ++= Seq(
+    Resolver.sonatypeRepo("releases"),
+    Resolver.sonatypeRepo("snapshots")),
   scalafmtOnCompile := true
 )
 
@@ -40,16 +42,9 @@ lazy val shared = (project in file("shared"))
     )
   )
 
-lazy val rholangProtoBuildTask = Def.task(
-  constructArtifacts(
-    (rholangProtoBuild/Compile/incrementalAssembly).value,
-    (baseDirectory in Compile).value,
-    (sourceManaged in Compile).value
-  )
-)
-  
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
+  .settings(rholangSettings: _*)
   .settings(
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
@@ -57,7 +52,7 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix
     ),
-    sourceGenerators in Compile += rholangProtoBuildTask.taskValue
+    rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
   .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
@@ -90,11 +85,10 @@ lazy val crypto = (project in file("crypto"))
       guava,
       bouncyCastle,
       kalium,
-      jaxb
+      jaxb,
+      secp256k1Java
     ),
     fork := true,
-    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
-    javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
@@ -161,7 +155,7 @@ lazy val node = (project in file("node"))
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", daemon),
         ExecCmd("ENTRYPOINT", "bin/rnode"),
-        ExecCmd("CMD")
+        ExecCmd("CMD", "run", "--data_dir=/var/lib/rnode")
       )
     },
     mappings in Docker ++= {

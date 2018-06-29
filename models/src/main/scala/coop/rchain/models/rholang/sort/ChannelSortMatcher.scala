@@ -1,7 +1,7 @@
 package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.Channel
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Empty, Quote}
 import coop.rchain.models.rholang.implicits._
 
 object ChannelSortMatcher {
@@ -13,5 +13,8 @@ object ChannelSortMatcher {
       case ChanVar(par) =>
         val sortedVar = VarSortMatcher.sortMatch(par)
         ScoredTerm(ChanVar(sortedVar.term), Node(Score.CHAN_VAR, sortedVar.score))
+      case Empty =>
+        ScoredTerm(Empty, Leaf(Score.ABSENT))
+
     }
 }

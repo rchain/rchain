@@ -115,32 +115,36 @@ object Runtime {
        |""".stripMargin
 
   def showStoreUsage(storeUsage: StoreUsage): String = {
-    def writeCounts(name: String, value: Option[StoreUsageCount]): String =
+    def writeCounts(rspaceName: String)(name: String, value: Option[RSpaceUsageMetric]): String =
       s"""
-         |  + RSpace $name
+         |  + $rspaceName $name
          |    - Total Count: ${value.map(_.count).getOrElse(0)}
          |    - Average (ms): ${value.map(_.avgMilliseconds.formatted("%.2f")).getOrElse("-")}
          |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
          |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
           """
 
-    def writeCommCounts(name: String, value: Option[StoreUsageCount]): String =
+    def writeCommCounts(rspaceName: String)(name: String,
+                                            value: Option[RSpaceUsageMetric]): String =
       s"""
-         |  + RSpace $name
+         |  + $rspaceName $name
          |    - Total Count: ${value.map(_.count).getOrElse(0)}
          |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
          |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
           """
+    def writeRSpaceMetrics(rspaceName: String)(maybeRSpaceUsage: Option[RSpaceUsage]) =
+      s"""
+       |  ${writeCounts(rspaceName)("Consumes", maybeRSpaceUsage.flatMap(_.consumes))}
+       |  ${writeCounts(rspaceName)("Produces", maybeRSpaceUsage.flatMap(_.produces))}
+       |  ${writeCommCounts(rspaceName)("Consumes COMM", maybeRSpaceUsage.flatMap(_.consumesComm))}
+       |  ${writeCommCounts(rspaceName)("Produces COMM", maybeRSpaceUsage.flatMap(_.producesComm))}
+       |  ${writeCommCounts(rspaceName)("Install COMM", maybeRSpaceUsage.flatMap(_.installComm))}
+      """.stripMargin
 
     s"""Store metrics:
        |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
-       |  - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
-       |  - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
-       |  ${writeCounts("Consumes", storeUsage.rspaceConsumesCount)}
-       |  ${writeCounts("Produces", storeUsage.rspaceProducesCount)}
-       |  ${writeCommCounts("Consumes COMM", storeUsage.rspaceConsumesCommCount)}
-       |  ${writeCommCounts("Produces COMM", storeUsage.rspaceProducesCommCount)}
-       |  ${writeCommCounts("Install COMM", storeUsage.rspaceInstallCommCount)}
-       |""".stripMargin
+       |  - RSpace & ReplayRSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
+       |  - RSpace & ReplayRSpace Data Entries: ${storeUsage.rspaceDataEntries}""".stripMargin + writeRSpaceMetrics(
+      "RSpace")(storeUsage.rspace) + writeRSpaceMetrics("ReplayRSpace")(storeUsage.replayRSpace)
   }
 }

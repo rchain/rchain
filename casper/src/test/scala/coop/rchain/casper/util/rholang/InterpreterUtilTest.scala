@@ -6,7 +6,7 @@ import coop.rchain.catscontrib.Capture._
 import coop.rchain.casper.{BlockDag, BlockGenerator}
 import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
 import cats.Monad
@@ -181,17 +181,14 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                initStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
-    val computedTsLog = implicitly[Codec[immutable.Seq[Event]]]
-      .encode(computedTsCheckpoint.log)
-      .map(_.toByteArray)
-      .get
-    val invalidHash = ByteString.EMPTY
+    val computedTsLog = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val invalidHash   = ByteString.EMPTY
 
     val chain =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = deploys,
                                   tsHash = invalidHash,
-                                  tsLog = ByteString.copyFrom(computedTsLog))
+                                  tsLog = computedTsLog)
         .runS(initState)
         .value
     val block = chain.idToBlocks(0)
@@ -212,16 +209,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                initStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
-    val computedTsLog = implicitly[Codec[immutable.Seq[Event]]]
-      .encode(computedTsCheckpoint.log)
-      .map(_.toByteArray)
-      .get
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = deploys,
                                   tsHash = computedTsHash,
-                                  tsLog = ByteString.copyFrom(computedTsLog))
+                                  tsLog = computedTsLog)
         .runS(initState)
         .value
     val block = chain.idToBlocks(0)
