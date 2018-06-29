@@ -42,7 +42,7 @@ trait HistoryActionsTests
       joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, StringsCaptor],
+  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
@@ -266,6 +266,15 @@ trait HistoryActionsTests
       space.reset(root0)
 
       space.store.isEmpty shouldBe true
+    }
+
+  "reset to an unknown checkpoint" should "result in an exception" in
+    withTestSpace { space =>
+      val unknownHash =
+        Blake2b256Hash.fromHex("ff3c5e70a028b7956791a6b3d8db00000f469e0088db22dd3afbc86997fe86a0")
+      the[Exception] thrownBy {
+        space.reset(unknownHash)
+      } should have message "Unknown root."
     }
 
   "createCheckpoint, consume, createCheckpoint, reset to first checkpoint, reset to second checkpoint" should

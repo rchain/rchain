@@ -123,9 +123,9 @@ message Header {
 }
 
 message Body {
-  RChainState     postState      = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
-  repeated Deploy newCode        = 2; //new rholang code that was added to the state before processing
-  repeated Diff   commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
+  RChainState     postState = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
+  repeated Deploy newCode   = 2; //new rholang code that was added to the state before processing
+  repeated Event commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
   bytes extraBytes = 4;
 }
 
@@ -147,34 +147,32 @@ message Deploy {
   Par          term  = 1; //rholang term to deploy
   DeployString raw   = 2; //raw deploy, before parsing the rholang
 }
-// --------- End Core Protocol  --------
 
-// --------- Diff Related  --------
-// Just a stub until we can do everything in rholang
-message Diff {
-  oneof diffClass {
-    NewTerm    tdiff = 1;
-    BondDiff   bdiff = 2;
-    UnbondDiff udiff = 3;
+message Event {
+  oneof event_instance {
+    ProduceEvent produce = 1;
+    ConsumeEvent consume = 2;
+    CommEvent comm = 3;
   }
 }
 
-message NewTerm {
-  Par term = 1;
+message ProduceEvent {
+  bytes hash = 1;
 }
 
-message BondDiff {
-  Bond added = 1;
+message ConsumeEvent {
+  bytes hash = 1;
 }
 
-message UnbondDiff {
-  bytes validatorRemoved = 1;
+message CommEvent {
+  ConsumeEvent consume = 1;
+  repeated ProduceEvent produces = 2;
 }
 
 message Bond {
   bytes validator = 1;
   int32 stake     = 2;
 }
-//------------------------------------
+// --------- End Core Protocol  --------
 
 

@@ -316,6 +316,7 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
+        case ExprInstance.Empty         => false
       }
 
     def locallyFree(e: Expr) =
@@ -346,6 +347,7 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
         case EMethodBody(e)             => e.locallyFree
+        case ExprInstance.Empty         => BitSet()
       }
   }
 
@@ -357,14 +359,16 @@ object implicits {
   implicit val ChannelLocallyFree: HasLocallyFree[Channel] = new HasLocallyFree[Channel] {
     def connectiveUsed(c: Channel) =
       c.channelInstance match {
-        case Quote(p)   => p.connectiveUsed
-        case ChanVar(v) => VarLocallyFree.connectiveUsed(v)
+        case Quote(p)              => p.connectiveUsed
+        case ChanVar(v)            => VarLocallyFree.connectiveUsed(v)
+        case ChannelInstance.Empty => false
       }
 
     def locallyFree(c: Channel) =
       c.channelInstance match {
-        case Quote(p)   => p.locallyFree
-        case ChanVar(v) => VarLocallyFree.locallyFree(v)
+        case Quote(p)              => p.locallyFree
+        case ChanVar(v)            => VarLocallyFree.locallyFree(v)
+        case ChannelInstance.Empty => BitSet()
       }
   }
 
@@ -377,16 +381,18 @@ object implicits {
     new HasLocallyFree[VarInstance] {
       def connectiveUsed(v: VarInstance) =
         v match {
-          case BoundVar(_) => false
-          case FreeVar(_)  => true
-          case Wildcard(_) => true
+          case BoundVar(_)       => false
+          case FreeVar(_)        => true
+          case Wildcard(_)       => true
+          case VarInstance.Empty => false
         }
 
       def locallyFree(v: VarInstance) =
         v match {
-          case BoundVar(level) => BitSet(level)
-          case FreeVar(_)      => BitSet()
-          case Wildcard(_)     => BitSet()
+          case BoundVar(level)   => BitSet(level)
+          case FreeVar(_)        => BitSet()
+          case Wildcard(_)       => BitSet()
+          case VarInstance.Empty => BitSet()
         }
     }
 
@@ -426,10 +432,11 @@ object implicits {
     new HasLocallyFree[Connective] {
       def connectiveUsed(conn: Connective) =
         conn.connectiveInstance match {
-          case ConnAndBody(_) => true
-          case ConnOrBody(_)  => true
-          case ConnNotBody(_) => true
-          case VarRefBody(_)  => false
+          case ConnAndBody(_)           => true
+          case ConnOrBody(_)            => true
+          case ConnNotBody(_)           => true
+          case VarRefBody(_)            => false
+          case ConnectiveInstance.Empty => false
         }
       // Because connectives can only be used in patterns, we don't need to
       // calculate what is locally free inside

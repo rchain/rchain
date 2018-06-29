@@ -9,6 +9,8 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.Catscontrib
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
@@ -17,7 +19,6 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
-  type StateWithChain[A] = State[BlockDag, A]
   val initState = BlockDag()
 
   val v1     = ByteString.copyFromUtf8("Validator One")
@@ -67,7 +68,7 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
     } yield b8
 
-  val chain: BlockDag = createChain.runS(initState).value
+  val chain: BlockDag = createChain.runS(initState)
   val genesis         = chain.idToBlocks(1)
 
   def testCasper[F[_]: Applicative]: MultiParentCasper[F] =

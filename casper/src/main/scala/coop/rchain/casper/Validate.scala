@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Log, LogSource, Time}
 
 import scala.util.{Success, Try}
 
@@ -17,6 +17,7 @@ object Validate {
   type Data      = Array[Byte]
   type Signature = Array[Byte]
 
+  val DRIFT                                 = 15000 // 15 seconds
   private implicit val logSource: LogSource = LogSource(this.getClass)
   val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
     Map(
@@ -92,16 +93,18 @@ object Validate {
 
   /*
    * TODO: Double check ordering of validity checks
+   * TODO: Add check for missing fields
    * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
-  def validateBlockSummary[F[_]: Monad: Log](
+  def validateBlockSummary[F[_]: Monad: Log: Time](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
-      blockNumberStatus  <- missingBlockStatus.traverse(_ => Validate.blockNumber[F](block, dag))
+      timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
+      blockNumberStatus  <- timestampStatus.traverse(_ => Validate.blockNumber[F](block, dag))
       parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
@@ -123,6 +126,40 @@ object Validate {
       } yield Left(MissingBlocks)
     }
   }
+
+  // This is not a slashable offence
+  def timestamp[F[_]: Monad: Log: Time](
+      b: BlockMessage,
+      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+    for {
+      currentTime  <- Time[F].currentMillis
+      timestamp    = b.header.get.timestamp
+      beforeFuture = currentTime + DRIFT >= timestamp
+      latestParentTimestamp = ProtoUtil
+        .parents(b)
+        .foldLeft(0L) {
+          case (latestTimestamp, parentHash) =>
+            val parent    = dag.blockLookup(parentHash)
+            val timestamp = parent.header.get.timestamp
+            if (latestTimestamp > timestamp) {
+              latestTimestamp
+            } else {
+              timestamp
+            }
+        }
+      afterLatestParent = timestamp >= latestParentTimestamp
+      result <- if (beforeFuture && afterLatestParent) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           b,
+                           s"block timestamp $timestamp is not between latest parent block time and current time.")
+                       )
+                 } yield Left(InvalidUnslashableBlock)
+               }
+    } yield result
 
   def blockNumber[F[_]: Applicative: Log](
       b: BlockMessage,

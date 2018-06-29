@@ -83,8 +83,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
     val data_dir = opt[Path](required = false,
-                             descr = "Path to data directory. Defaults to /var/lib/rnode",
-                             default = Some(Paths.get("/var/lib/rnode")))
+                             descr = "Path to data directory. Defaults to $HOME/.rnode",
+                             default = Some(Paths.get(sys.props("user.home"), ".rnode")))
 
     val map_size = opt[Long](required = false,
                              descr = "Map size (in bytes)",
