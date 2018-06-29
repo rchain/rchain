@@ -310,7 +310,7 @@ object Substitute {
           case EOrBody(EOr(par1, par2)) =>
             s2(par1.get, par2.get)(EOr(_, _))
           case EMatchesBody(EMatches(target, pattern)) =>
-            s2(target.get, pattern.get)(EMatches(_, _))
+            s2(target, pattern)(EMatches(_, _))
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
             for {
               pss <- ps.toVector
