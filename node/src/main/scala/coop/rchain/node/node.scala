@@ -26,19 +26,39 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-import ThrowableOps._
+import coop.rchain.comm.discovery.{Ping => NDPing, _}
+import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
-
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import coop.rchain.comm.transport.TcpTransportLayer.Connections
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  private val dataDirFile = conf.run.data_dir().toFile
+
+  if (!dataDirFile.exists()) {
+    if (!dataDirFile.mkdir()) {
+      println(
+        s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+      System.exit(-1)
+    }
+  }
+
+  // Check if data_dir has read/write access
+  if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
+    println(
+      s"The data dir must be a directory and have read and write permissions:\n${conf.run.data_dir()}")
+    System.exit(-1)
+  }
+
+  println(s"Using data_dir: ${conf.run.data_dir()}")
 
   // Generate certificate if not provided as option or in the data dir
   if (conf.run.certificate.toOption.isEmpty
@@ -105,14 +125,37 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     publicKeyHash.get
   }
 
+  /**
+    TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
+    This needs to be moved to node program! Part of execution. Effectful!
+    */
+  val upnpErrorMsg =
+    s"ERROR - Could not open the port via uPnP. Please open it manaually on your router!"
+  val upnp = new UPnP
+  if (!conf.run.noUpnp()) {
+    println("INFO - trying to open port using uPnP....")
+    upnp.addPort(conf.run.port()) match {
+      case Left(UnknownCommError("no gateway")) =>
+        println(s"INFO - [OK] no gateway found, no need to open any port.")
+      case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
+      case Right(false) => println(s"$upnpErrorMsg")
+      case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
+    }
+  }
+
   import ApplicativeError_._
 
   /** Configuration */
-  private val host        = conf.run.localhost
-  private val address     = s"rnode://$name@$host:${conf.run.port()}"
-  private val src         = PeerNode.parse(address).right.get
-  private val storagePath = conf.run.data_dir().resolve("rspace")
-  private val storageSize = conf.run.map_size()
+  private val host              = conf.run.fetchHost(upnp)
+  private val port              = conf.run.port()
+  private val certificateFile   = conf.run.certificatePath.toFile
+  private val keyFile           = conf.run.keyPath.toFile
+  private val address           = s"rnode://$name@$host:$port"
+  private val src               = PeerNode.parse(address).right.get
+  private val storagePath       = conf.run.data_dir().resolve("rspace")
+  private val casperStoragePath = storagePath.resolve("casper")
+  private val storageSize       = conf.run.map_size()
+  private val defaultTimeout    = FiniteDuration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -126,40 +169,43 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                            = effects.log
-  implicit val timeEffect: Time[Task]                          = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]              = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
-  implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
+  implicit val logEffect: Log[Task]                               = effects.log
+  implicit val timeEffect: Time[Task]                             = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](conf)(src)
-  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
-  implicit val turanOracleEffect: SafetyOracle[Effect]  = SafetyOracle.turanOracle[Effect]
-  implicit val casperEffect: MultiParentCasper[Effect] =
-    MultiParentCasper.fromConfig[Effect](conf.casperConf)
-  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
-    casperPacketHandler[Effect]
-  )
+    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
+  implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
+    new TLNodeDiscovery[Task](src, defaultTimeout)
+  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
-                       runtime: Runtime)
+                       runtime: Runtime,
+                       casperRuntime: Runtime,
+                       casperEffect: MultiParentCasper[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
+      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      casperEffect  <- MultiParentCasper.fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
       grpcServer <- {
+        implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
+                                           casperRuntime.replaySpace.store,
+                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer, runtime)
+    } yield Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperEffect)
 
   def startResources(resources: Resources): Effect[Unit] =
     for {
@@ -174,11 +220,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down transport layer, broadcasting DISCONNECT")
 
     (for {
-      peers <- nodeDiscoveryEffect.peers
-      loc   <- transportLayerEffect.local
-      ts    <- timeEffect.currentMillis
-      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
-      _     <- transportLayerEffect.broadcast(msg, peers)
+      loc <- transportLayerEffect.local
+      ts  <- timeEffect.currentMillis
+      msg = ProtocolHelper.disconnect(loc)
+      _   <- transportLayerEffect.shutdown(msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
@@ -186,6 +231,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
     resources.runtime.close()
+    println("Shutting down Casper runtime ...")
+    resources.casperRuntime.close()
 
     println("Goodbye.")
   }
@@ -200,7 +247,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
+                                       resources.casperRuntime.replaySpace.store,
+                                       conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
@@ -209,12 +258,18 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
-    pm =>
+  def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
+    implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
+    implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
+      casperPacketHandler[Effect]
+    )
+
+    (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => Connect.dispatch[Effect](pm)
-        case handled    => handled.pure[Effect]
-    }
+        case NotHandled(_) => Connect.dispatch[Effect](pm)
+        case handled       => handled.pure[Effect]
+      }
+  }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
@@ -224,17 +279,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
       _         <- startReportStoreMetrics(resources).toEffect
-      _         <- TransportLayer[Effect].receive(handleCommunications)
+      _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                  .toEffect >>= (addr => Connect.connectToBootstrap[Effect](addr)))
-      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect], 0)
+                  .toEffect >>= (
+                    addr =>
+                      Connect.connectToBootstrap[Effect](addr,
+                                                         maxNumOfAttempts = 5,
+                                                         defaultTimeout = defaultTimeout)))
+      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
           else ().pure[Effect]
-      _ <- casperEffect.close()
       _ <- exit0.toEffect
     } yield ()
 

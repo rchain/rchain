@@ -672,4 +672,70 @@ class VmSpec extends FlatSpec with Matchers {
     rtnCtxt.rslt shouldBe Niv
   }
 
+  "(+ (+ 1 2) (+ 3 4) (+ 5 6))" should "return 21" in {
+
+    /**
+      * litvec:
+      *    0:   {RequestExpr}
+      *  codevec:
+      *    0:   alloc 3
+      *    1:   xfer global[+],trgt
+      *    3:   outstanding 25,3
+      *    5:   push/alloc 2
+      *    6:   lit 5,arg[0]
+      *    7:   lit 6,arg[1]
+      *    8:   xfer global[+],trgt
+      *   10:   xmit 2,arg[2]
+      *   11:   pop
+      *   12:   push/alloc 2
+      *   13:   lit 3,arg[0]
+      *   14:   lit 4,arg[1]
+      *   15:   xfer global[+],trgt
+      *   17:   xmit 2,arg[1]
+      *   18:   pop
+      *   19:   push/alloc 2
+      *   20:   lit 1,arg[0]
+      *   21:   lit 2,arg[1]
+      *   22:   xfer global[+],trgt
+      *   24:   xmit/nxt 2,arg[0]
+      *   25:   xmit/nxt 3
+      *
+      *   Notice: In Roscala opcode positions are not influenced by
+      *   the size of an opcode. Every opcode just counts `1`.
+      *   Therefore we have to adjust the `outstanding` from `pc = 25`
+      *   to `pc = 20`.
+      */
+    val codevec = Seq(
+      OpAlloc(3),
+      OpXferGlobalToReg(global = 0, reg = trgt),
+      OpOutstanding(pc = 20, n = 3),
+      OpPushAlloc(2),
+      OpImmediateLitToArg(literal = `5`, arg = 0),
+      OpImmediateLitToArg(literal = `6`, arg = 1),
+      OpXferGlobalToReg(global = 0, reg = trgt),
+      OpXmitArg(unwind = false, next = false, nargs = 2, arg = 2),
+      OpPop,
+      OpPushAlloc(2),
+      OpImmediateLitToArg(literal = `3`, arg = 0),
+      OpImmediateLitToArg(literal = `4`, arg = 1),
+      OpXferGlobalToReg(global = 0, reg = trgt),
+      OpXmitArg(unwind = false, next = false, nargs = 2, arg = 1),
+      OpPop,
+      OpPushAlloc(2),
+      OpImmediateLitToArg(literal = `1`, arg = 0),
+      OpImmediateLitToArg(literal = `2`, arg = 1),
+      OpXferGlobalToReg(global = 0, reg = trgt),
+      OpXmitArg(unwind = false, next = true, nargs = 2, arg = 0),
+      OpXmit(unwind = false, next = true, nargs = 3)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe Fixnum(21)
+  }
 }

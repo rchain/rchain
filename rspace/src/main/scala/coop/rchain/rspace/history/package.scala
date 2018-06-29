@@ -297,10 +297,9 @@ package object history {
     rehashedNodes
   }
 
-  @tailrec
-  private[this] def propagateTrieUpward[T, K, V](ptr: NonEmptyPointer,
-                                                 incomingAffix: ByteVector,
-                                                 parents: Parents[K, V])(
+  private[this] def collapseAndUpdatePointerBlock[T, K, V](ptr: NonEmptyPointer,
+                                                           incomingAffix: ByteVector,
+                                                           parents: Parents[K, V])(
       implicit codecK: Codec[K],
       codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
@@ -322,7 +321,9 @@ package object history {
           // If there are is only one child, then we know that it is the thing we are trying to
           // propagate upwards, and we can go ahead and do that.
           // post skip node: this case got swallowed in deleteLeaf
-          case Vector(_) => propagateTrieUpward(ptr, ByteVector(byte), tail)
+          case Vector(_) =>
+            throw new DeleteException(
+              "PointerBlock with one child on propagation signifies a malformed trie.")
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the propagated node.
           case _ =>
@@ -389,15 +390,15 @@ package object history {
               case NodePointer(hash) =>
                 store.get(txn, hash) match {
                   case Some(Node(_)) =>
-                    propagateTrieUpward(otherPtr, ByteVector(otherByte), tail)
+                    collapseAndUpdatePointerBlock(otherPtr, ByteVector(otherByte), tail)
                   case Some(Skip(affix, ptr)) =>
-                    propagateTrieUpward(ptr, ByteVector(otherByte) ++ affix, tail)
+                    collapseAndUpdatePointerBlock(ptr, ByteVector(otherByte) ++ affix, tail)
                   case _ =>
                     throw new DeleteException("Given pointer could not be processed in delete.")
                 }
               // If the other child is a Leaf, then we must propagate it up the trie.
               case lp: LeafPointer =>
-                propagateTrieUpward(lp, ByteVector(otherByte), tail)
+                collapseAndUpdatePointerBlock(lp, ByteVector(otherByte), tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `EmptyPointer`.

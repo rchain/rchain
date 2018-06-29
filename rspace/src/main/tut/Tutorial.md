@@ -191,16 +191,17 @@ Here is the definition of the `Match` type class.
   *
   * @tparam P A type representing patterns
   * @tparam A A type representing data
+  * @tparam R A type representing a match result
   */
-trait Match[P, A] {
+trait Match[P, A, R] {
 
-  def get(p: P, a: A): Option[A]
+  def get(p: P, a: A): Option[R]
 }
 ```
 
 Let's try defining an instance of `Match` for `Pattern` and `Entry`.
 ```tut
-implicit object matchPatternEntry extends Match[Pattern, Entry] {
+implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
   def get(p: Pattern, a: Entry): Option[Entry] =
     p match {
       case NameMatch(last) if a.name.last == last        => Some(a)
@@ -232,7 +233,7 @@ val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channe
 ```
 Now we can create an RSpace using the created store
 ```tut
-val space = new RSpace[Channel, Pattern, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
+val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
 ```
 
 ### Producing and Consuming
@@ -426,7 +427,7 @@ Let's see how this works in practice. We'll start by creating a new, untouched R
 ```tut
 val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath, 1024L * 1024L * 100L)
-val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
+val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
 val cres =
   rollbackExampleSpace.consume(List(Channel("friends")),
                 List(CityMatch(city = "Crystal Lake")),

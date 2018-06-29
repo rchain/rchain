@@ -20,16 +20,17 @@ object TypeMismatchMacro {
 
     val result =
       annottees.map(_.tree).toList match {
-        case q"$mods def fn(ctxt: Ctxt, globalEnv: GlobalEnv): $returnType = { ..$body }" :: Nil =>
-          q"""$mods def fn(ctxt: Ctxt, globalEnv: GlobalEnv): $returnType =  {
+        case q"$mods def fnSimple(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
+          q"""$mods def fnSimple(ctxt: Ctxt): $returnType =  {
               mismatchType[$typeParam](ctxt) match {
-                case Some(typeMismatch) => typeMismatch
+                case Some(typeMismatch) => Left(typeMismatch)
                 case None => {..$body}
               }
           }"""
 
         case _ =>
-          c.abort(c.enclosingPosition, "Annotation @checkTypeMismatch can only be used on Prim.fn")
+          c.abort(c.enclosingPosition,
+                  "Annotation @checkTypeMismatch can only be used on Prim.fnSimple")
       }
 
     c.Expr[Any](result)
