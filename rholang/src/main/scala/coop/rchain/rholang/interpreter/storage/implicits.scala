@@ -23,8 +23,8 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel]] =
-    new StorageMatch[BindPattern, Seq[Channel]] {
+  implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel], Seq[Channel]] =
+    new StorageMatch[BindPattern, Seq[Channel], Seq[Channel]] {
 
       def get(pattern: BindPattern, data: Seq[Channel]): Option[Seq[Channel]] =
         foldMatch(data, pattern.patterns, pattern.remainder)

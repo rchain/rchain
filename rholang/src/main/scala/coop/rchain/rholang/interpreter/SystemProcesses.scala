@@ -23,7 +23,7 @@ object SystemProcesses {
       Task(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  def stdoutAck(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+  def stdoutAck(space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>
@@ -39,7 +39,7 @@ object SystemProcesses {
       Task(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+  def stderrAck(space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>
@@ -64,7 +64,7 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+  def secp256k1Verify(space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
                       dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
@@ -75,8 +75,9 @@ object SystemProcesses {
       }
   }
 
-  def ed25519Verify(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                    dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+  def ed25519Verify(
+      space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
       Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
@@ -89,8 +90,9 @@ object SystemProcesses {
         "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
   }
 
-  def sha256Hash(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+  def sha256Hash(
+      space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
@@ -102,8 +104,9 @@ object SystemProcesses {
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
-  def keccak256Hash(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                    dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+  def keccak256Hash(
+      space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
@@ -115,8 +118,9 @@ object SystemProcesses {
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
-  def blake2b256Hash(space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                     dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+  def blake2b256Hash(
+      space: ISpace[Channel, BindPattern, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>

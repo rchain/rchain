@@ -280,7 +280,8 @@ class InMemoryStoreStorageExamplesTestsBase
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    val testSpace = new RSpace[Channel, Pattern, Entry, EntriesCaptor](testStore, Branch.MASTER)
+    val testSpace =
+      new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
@@ -305,7 +306,8 @@ class LMDBStoreStorageExamplesTestBase
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
-    val testSpace = new RSpace(testStore, Branch.MASTER)
+    val testSpace =
+      new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)
