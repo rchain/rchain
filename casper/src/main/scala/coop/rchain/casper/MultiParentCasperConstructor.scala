@@ -75,8 +75,11 @@ sealed abstract class MultiParentCasperConstructorInstances {
         else
           for {
             isVaid <- Validate.approvedBlock[F](a, validators)
-            _ <- if (isVaid) Capture[F].capture { genesis.success(a) }.void
-                else ().pure[F]
+            _ <- if (isVaid)
+                  Log[F].info("CASPER: Valid ApprovedBlock received!") *> Capture[F].capture {
+                    genesis.success(a)
+                  }.void
+                else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
           } yield isVaid
 
       override def casperInstance: Either[Throwable, MultiParentCasper[F]] =

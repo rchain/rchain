@@ -304,13 +304,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                       Connect.connectToBootstrap[Effect](addr,
                                                          maxNumOfAttempts = 5,
                                                          defaultTimeout = defaultTimeout)))
-      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
-          else ().pure[Effect]
-      _ <- if (res.isRight && !conf.run.standalone()) {
-            implicit val casperEvidence      = resources.casperConstructor
-            implicit val packetHandlerEffect = resources.packetHandler
-            requestApprovedBlock[Effect]
-          } else ().pure[Effect]
+      _ <- {
+        implicit val casperEvidence      = resources.casperConstructor
+        implicit val packetHandlerEffect = resources.packetHandler
+        if (res.isRight)
+          MonadOps.forever((i: Int) =>
+                             Connect
+                               .findAndConnect[Effect](defaultTimeout)
+                               .apply(i) <* requestApprovedBlock[Effect],
+                           0)
+        else ().pure[Effect]
+      }
       _ <- exit0.toEffect
     } yield ()
 

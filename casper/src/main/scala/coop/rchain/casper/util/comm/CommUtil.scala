@@ -63,27 +63,37 @@ object CommUtil {
 
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
-        TransportLayer[F].roundTrip(peer, packet(local, request), 5.seconds).flatMap {
-          case Right(response) =>
-            Connect
-              .dispatch[F](response)
-              .flatMap(_ => {
-                MultiParentCasperConstructor[F].lastApprovedBlock.map {
-                  case Some(_) => () //got one!
-                  case None    => askPeers(rest, local)
-                }
-              })
+        for {
+          _    <- Log[F].info(s"Sending request for ApprovedBlock to $peer")
+          send <- TransportLayer[F].roundTrip(peer, packet(local, request), 5.seconds)
+          _ <- send match {
+                case Left(err) =>
+                  Log[F].info(s"Failed to get response from $peer because: $err") *>
+                    askPeers(rest, local)
 
-          case Left(_) => askPeers(rest, local)
-        }
+                case Right(response) =>
+                  Log[F].info(s"Received response from $peer! Dispatching...")
+                  Connect
+                    .dispatch[F](response)
+                    .flatMap(_ => {
+                      MultiParentCasperConstructor[F].lastApprovedBlock.map {
+                        case Some(_) => () //got one!
+                        case None    => askPeers(rest, local)
+                      }
+                    })
 
-      case Nil => requestApprovedBlock[F]
+              }
+        } yield ()
+
+      case Nil => ().pure[F]
     }
 
     for {
+      a     <- MultiParentCasperConstructor[F].lastApprovedBlock
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
-      _     <- askPeers(peers.toList, local)
+      _ <- if (a.isEmpty) askPeers(peers.toList, local)
+          else ().pure[F]
     } yield ()
   }
 
@@ -115,10 +125,12 @@ object CommUtil {
           }
 
         case a: ApprovedBlock =>
-          MultiParentCasperConstructor[F].receive(a).map(_ => none[Packet])
+          Log[F].info("CASPER: Received ApprovedBlock. Processing...") *>
+            MultiParentCasperConstructor[F].receive(a).map(_ => none[Packet])
 
         case _: ApprovedBlockRequest =>
           for {
+            _ <- Log[F].info(s"CASPER: Received ApprovedBlockRequest from $peer")
             a <- MultiParentCasperConstructor[F].lastApprovedBlock
           } yield a.map(b => Packet(b.toByteString))
       }
@@ -147,7 +159,7 @@ object CommUtil {
           maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
           send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
           hash     = PrettyPrinter.buildString(r.hash)
-          logIntro = s"Received request for block $hash from $peer. "
+          logIntro = s"CASPER: Received request for block $hash from $peer. "
           _ <- send match {
                 case None    => Log[F].info(logIntro + "No response given since block not found.")
                 case Some(_) => Log[F].info(logIntro + "Response sent.")
