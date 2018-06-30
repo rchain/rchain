@@ -61,7 +61,7 @@ object InterpreterUtil {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, List[Par]) => Either[Throwable, Checkpoint])(
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
       implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents,
@@ -71,7 +71,7 @@ object InterpreterUtil {
                               knownStateHashes,
                               computeState)
 
-    val Right(postDeploysCheckpoint) = computeState(postStateHash, deploys.flatMap(_.term).toList)
+    val Right(postDeploysCheckpoint) = computeState(postStateHash, deploys)
     val postDeploysStateHash         = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
     (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash)
   }
@@ -82,7 +82,7 @@ object InterpreterUtil {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, List[Par]) => Either[Throwable, Checkpoint])(
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
 
     val blockStateHash = ProtoUtil.tuplespace(b).get
@@ -107,7 +107,7 @@ object InterpreterUtil {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, List[Par]) => Either[Throwable, Checkpoint])(
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -161,7 +161,7 @@ object InterpreterUtil {
 
       //TODO: figure out what casper should do with errors in deploys
       val Right(resultStateCheckpoint) =
-        computeState(computedGcaStateHash, deploys.flatMap(_.term).toList)
+        computeState(computedGcaStateHash, deploys)
       val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
       (resultStateHash, knownStateHashes + resultStateHash)
     }
@@ -173,7 +173,7 @@ object InterpreterUtil {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, List[Par]) => Either[Throwable, Checkpoint])(
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
       implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
