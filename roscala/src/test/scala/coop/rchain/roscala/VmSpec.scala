@@ -661,7 +661,7 @@ class VmSpec extends FlatSpec with Matchers {
     val requestExpr = new RequestExpr(Seq.empty[Ob])
 
     // we need RBLtopenv to end the recurse `lookup`
-    requestExpr.parent = new RBLtopenv
+    requestExpr.parent = RBLtopenv()
     requestExpr.meta = Meta.empty
     ctxt.selfEnv = requestExpr
     ctxt.env = new Extension()
@@ -784,7 +784,7 @@ class VmSpec extends FlatSpec with Matchers {
     val requestExpr = new RequestExpr(Seq.empty[Ob])
 
     // we need RBLtopenv to end the recurse `lookup`
-    requestExpr.parent = new RBLtopenv
+    requestExpr.parent = RBLtopenv()
     requestExpr.meta = Meta.empty
     ctxt.selfEnv = requestExpr
     ctxt.env = new Extension()
