@@ -293,5 +293,5 @@ message ConnectiveBody {
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 message GPrivate {
-    string id = 1;
+    bytes id = 1;
 }
