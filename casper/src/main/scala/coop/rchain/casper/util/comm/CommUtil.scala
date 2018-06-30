@@ -59,7 +59,7 @@ object CommUtil {
   def requestApprovedBlock[
       F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler]
     : F[Unit] = {
-    val request = ApprovedBlockRequest("Please send me an approved block :)").toByteString
+    val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
 
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
@@ -172,7 +172,7 @@ object CommUtil {
 
   private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
     Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
-      .filter(_.identifier.nonEmpty)
+      .filter(r => r.identifier.nonEmpty && r.identifier.forall(_.isLetterOrDigit))
 
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
