@@ -20,16 +20,16 @@ object StableHashProvider {
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeK: Serialize[K]) = {
-    val (channelsSeq, patternsSeq) = channels
+    val (encodedChannels, encodedPatterns) = channels
       .zip(patterns)
       .map { case (channel, pattern) => (serializeC.encode(channel), serializeP.encode(pattern)) }
       .sorted(util.ordByteVectorPair)
       .unzip
 
     Blake2b256Hash.create(
-      channelsSeq ++ patternsSeq
-        :+ serializeK.encode(continuation)
-        :+ (ignore(7) ~> bool).encode(persist).get.toByteVector)
+      encodedChannels ++ encodedPatterns
+        ++ List(serializeK.encode(continuation),
+                (ignore(7) ~> bool).encode(persist).map(_.bytes).get))
   }
 
   def hash[C, A](channel: C, datum: A, persist: Boolean)(implicit
@@ -38,5 +38,5 @@ object StableHashProvider {
     Blake2b256Hash.create(
       Seq(serializeC.encode(channel),
           serializeA.encode(datum),
-          (ignore(7) ~> bool).encode(persist).get.toByteVector))
+          (ignore(7) ~> bool).encode(persist).map(_.bytes).get))
 }
