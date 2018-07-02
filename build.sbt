@@ -87,8 +87,8 @@ lazy val crypto = (project in file("crypto"))
       scalacheckNoTest,
       kalium,
       jaxb,
-      secp256k1Java
-    ),
+      secp256k1Java,
+      scodecBits),
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
