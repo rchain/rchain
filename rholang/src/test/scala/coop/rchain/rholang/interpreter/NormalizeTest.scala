@@ -971,10 +971,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
 
-    val expectedResult = inputs.par.prepend(EMatches(GInt(1), EVar(Wildcard(WildcardMsg()))))
+    val expectedPar = inputs.par.prepend(EMatches(GInt(1), EVar(Wildcard(WildcardMsg()))))
 
-    result.par shouldBe expectedResult
-    result.knownFree.count should be(0)
+    result.par shouldBe expectedPar
+    result.par.connectiveUsed should be(false)
   }
 
   "1 matches 2" should "normalize correctly" in {
@@ -982,10 +982,32 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
 
-    val expectedResult = inputs.par.prepend(EMatches(GInt(1), GInt(2)))
+    val expectedPar = inputs.par.prepend(EMatches(GInt(1), GInt(2)))
 
-    result.par shouldBe expectedResult
-    result.knownFree.count should be(0)
+    result.par shouldBe expectedPar
+    result.par.connectiveUsed should be(false)
+  }
+
+  "1 matches ~1" should "normalize with connectiveUsed=false" in {
+    val pMatches =
+      new PMatches(new PGround(new GroundInt(1)), new PNegation(new PGround(new GroundInt(1))))
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
+
+    val expectedPar = inputs.par.prepend(EMatches(GInt(1), Connective(ConnNotBody(GInt(1)))))
+
+    result.par shouldBe expectedPar
+    result.par.connectiveUsed should be(false)
+  }
+
+  "~1 matches 1" should "normalize with connectiveUsed=true" in {
+    val pMatches =
+      new PMatches(new PNegation(new PGround(new GroundInt(1))), new PGround(new GroundInt(1)))
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value
+
+    val expectedPar = inputs.par.prepend(EMatches(Connective(ConnNotBody(GInt(1))), GInt(1)))
+
+    result.par shouldBe expectedPar
+    result.par.connectiveUsed should be(true)
   }
 }
 
