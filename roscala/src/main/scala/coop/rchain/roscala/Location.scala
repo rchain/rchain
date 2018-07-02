@@ -16,6 +16,10 @@ object Location {
 
   def store(loc: Location, ctxt: Ctxt, value: Ob): Boolean =
     loc match {
+      case CtxtRegister(reg) =>
+        ctxt.setReg(reg, value)
+        false
+
       case LocRslt =>
         ctxt.rslt = value
         false
