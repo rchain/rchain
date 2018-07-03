@@ -71,7 +71,6 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
       implicit scheduler: Scheduler): Option[Throwable] =
     terms match {
       case deploy +: rest =>
-        val deployBytes = DeployString.toByteArray(deploy.raw.get)
         implicit val rand: Blake2b512Random = Blake2b512Random(
           DeployString.toByteArray(deploy.raw.get))
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
