@@ -1,7 +1,10 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.Deploy
+import coop.rchain.casper.protocol.DeployString
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -17,8 +20,8 @@ import monix.eval.Task
 class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
 
   def replayComputeState(log: trace.Log)(
-      implicit scheduler: Scheduler): (StateHash, List[Par]) => Either[Throwable, Checkpoint] = {
-    (hash: StateHash, terms: List[Par]) =>
+      implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
+    (hash: StateHash, terms: Seq[Deploy]) =>
       {
         val runtime   = runtimeContainer.take()
         val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
@@ -36,7 +39,7 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
       }
   }
 
-  def computeState(hash: StateHash, terms: List[Par])(
+  def computeState(hash: StateHash, terms: Seq[Deploy])(
       implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
     val resetRuntime: Runtime = getResetRuntime(hash)
     val error                 = eval(terms, resetRuntime.reducer)
@@ -64,11 +67,13 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
     }
   }
 
-  private def eval(terms: List[Par], reducer: Reduce[Task])(
+  private def eval(terms: Seq[Deploy], reducer: Reduce[Task])(
       implicit scheduler: Scheduler): Option[Throwable] =
     terms match {
-      case term :: rest =>
-        Try(reducer.inj(term).unsafeRunSync) match {
+      case deploy +: rest =>
+        implicit val rand: Blake2b512Random = Blake2b512Random(
+          DeployString.toByteArray(deploy.raw.get))
+        Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
           case Success(_)  => eval(rest, reducer)
           case Failure(ex) => Some(ex)
         }

@@ -4,6 +4,7 @@ import java.io.Reader
 
 import cats.MonadError
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.ParSortMatcher
@@ -89,11 +90,13 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield (result)
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] = {
+    implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
     } yield errors
+  }
 
   private def mkErrorMsg(errors: Vector[InterpreterError]) =
     errors

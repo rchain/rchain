@@ -1,5 +1,8 @@
 package coop.rchain.models.rholang.sort
 
+import com.google.protobuf.ByteString
+import com.google.protobuf.ByteString.ByteIterator
+
 /**
   * Sorts the insides of the Par and ESet/EMap of the rholangADT
   *
@@ -22,25 +25,55 @@ trait ScoreTree {
 
   case class Node[T](children: Seq[Tree[T]]) extends Tree[T]
 
-  case class ScoreAtom(value: Either[Int, String]) {
-    def compare(that: ScoreAtom): Int = (this.value, that.value) match {
-      case (Left(i1), Left(i2))   => i1.compare(i2)
-      case (Left(_), Right(_))    => -1
-      case (Right(_), Left(_))    => 1
-      case (Right(s1), Right(s2)) => s1.compare(s2)
+  sealed trait TaggedAtom
+  case class IntAtom(i: Int)          extends TaggedAtom
+  case class StringAtom(s: String)    extends TaggedAtom
+  case class BytesAtom(b: ByteString) extends TaggedAtom
+
+  case class ScoreAtom(value: TaggedAtom) {
+    def bsCompare(b1: ByteString, b2: ByteString) = {
+      def loop(it1: ByteIterator, it2: ByteIterator): Int =
+        if (it1.hasNext) {
+          if (it2.hasNext) {
+            val comp = it1.next.byteValue.compareTo(it2.next.byteValue)
+            if (comp == 0)
+              loop(it1, it2)
+            else
+              comp
+          } else {
+            1
+          }
+        } else {
+          if (it2.hasNext) {
+            -1
+          } else {
+            0
+          }
+        }
+      loop(b1.iterator, b2.iterator)
     }
+    def compare(that: ScoreAtom): Int =
+      (this.value, that.value) match {
+        case (IntAtom(i1), IntAtom(i2))       => i1.compare(i2)
+        case (IntAtom(_), _)                  => -1
+        case (_, IntAtom(_))                  => 1
+        case (StringAtom(s1), StringAtom(s2)) => s1.compare(s2)
+        case (StringAtom(_), _)               => -1
+        case (_, StringAtom(_))               => 1
+        case (BytesAtom(b1), BytesAtom(b2))   => bsCompare(b1, b2)
+      }
   }
 
   object ScoreAtom {
-    def apply(value: Int): ScoreAtom = new ScoreAtom(Left(value))
-
-    def apply(value: String): ScoreAtom = new ScoreAtom(Right(value))
+    def apply(value: Int): ScoreAtom        = new ScoreAtom(IntAtom(value))
+    def apply(value: String): ScoreAtom     = new ScoreAtom(StringAtom(value))
+    def apply(value: ByteString): ScoreAtom = new ScoreAtom(BytesAtom(value))
   }
 
   object Leaf {
-    def apply(item: Int) = new Leaf(ScoreAtom(item))
-
-    def apply(item: String) = new Leaf(ScoreAtom(item))
+    def apply(item: Int)        = new Leaf(ScoreAtom(item))
+    def apply(item: String)     = new Leaf(ScoreAtom(item))
+    def apply(item: ByteString) = new Leaf(ScoreAtom(item))
   }
 
   object Leaves {
