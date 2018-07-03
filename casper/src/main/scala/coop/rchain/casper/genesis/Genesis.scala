@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.casper.genesis.contracts.{Rev, Wallet}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
-import coop.rchain.casper.util.Sorting
+import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
@@ -49,6 +49,7 @@ object Genesis {
 
     val Right(checkpoint) = runtimeManager.computeState(startHash, blessedTerms)
     val stateHash         = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val reductionLog      = checkpoint.log.map(EventConverter.toCasperEvent)
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -57,8 +58,9 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    //TODO: add comm reductions
-    val body   = Body(postState = stateWithContracts, newCode = blessedTerms.map(termDeploy))
+    val body = Body(postState = stateWithContracts,
+                    newCode = blessedTerms.map(termDeploy),
+                    commReductions = reductionLog)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification])
