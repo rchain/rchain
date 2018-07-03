@@ -89,9 +89,9 @@ Here is the definition of the `Serialize` type class:
   */
 trait Serialize[A] {
 
-  def encode(a: A): Array[Byte]
+  def encode(a: A): ByteVector
 
-  def decode(bytes: Array[Byte]): Either[Throwable, A]
+  def decode(bytes: ByteVector): Either[Throwable, A]
 }
 ```
 
@@ -100,26 +100,27 @@ Let's try defining an instance of `Serialize` for `Channel` using Java serializa
 First we will need to import some more stuff.
 ```tut
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import scodec.bits.ByteVector
 ```
 
 Now we define an instance of `Serialize`.
 ```tut
 implicit object serializeChannel extends Serialize[Channel] {
 
-  def encode(channel: Channel): Array[Byte] = {
+  def encode(channel: Channel): ByteVector = {
     val baos = new ByteArrayOutputStream()
     try {
       val oos = new ObjectOutputStream(baos)
       try { oos.writeObject(channel) } finally { oos.close() }
-      baos.toByteArray
+      ByteVector.view(baos.toByteArray)
     } finally {
       baos.close()
     }
   }
 
-  def decode(bytes: Array[Byte]): Either[Throwable, Channel] = {
+  def decode(bytes: ByteVector): Either[Throwable, Channel] = {
     try {
-      val bais = new ByteArrayInputStream(bytes)
+      val bais = new ByteArrayInputStream(bytes.toArray)
       try {
         val ois = new ObjectInputStream(bais)
         try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
@@ -190,16 +191,17 @@ Here is the definition of the `Match` type class.
   *
   * @tparam P A type representing patterns
   * @tparam A A type representing data
+  * @tparam R A type representing a match result
   */
-trait Match[P, A] {
+trait Match[P, A, R] {
 
-  def get(p: P, a: A): Option[A]
+  def get(p: P, a: A): Option[R]
 }
 ```
 
 Let's try defining an instance of `Match` for `Pattern` and `Entry`.
 ```tut
-implicit object matchPatternEntry extends Match[Pattern, Entry] {
+implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
   def get(p: Pattern, a: Entry): Option[Entry] =
     p match {
       case NameMatch(last) if a.name.last == last        => Some(a)
@@ -231,7 +233,7 @@ val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channe
 ```
 Now we can create an RSpace using the created store
 ```tut
-val space = new RSpace[Channel, Pattern, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
+val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
 ```
 
 ### Producing and Consuming
@@ -408,9 +410,67 @@ val pres14 = space.produce(Channel("friends"), erin, persist = true)
 println(space.store.toMap)
 ```
 
+### History & rollback
+
+It is possible to save the current state of RSpace in the form of a `Checkpoint`. A `Checkpoint` value contains the root hash of a Merkle Patricia Trie built from the contents of RSpace.
+```scala
+val checkpoint = space.createCheckpoint()
+val checkpointHash = checkpoint.root
+```
+
+To rollback the state of the RSpace to a given `Checkpoint` one simply calls the `reset` method with the hash of the root of the `Checkpoint` provided as parameter.
+```scala
+space.reset(checkpointHash)
+```
+
+Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
+```tut
+val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath, 1024L * 1024L * 100L)
+val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
+val cres =
+  rollbackExampleSpace.consume(List(Channel("friends")),
+                List(CityMatch(city = "Crystal Lake")),
+                new Printer,
+                persist = false)
+cres.isEmpty
+```
+
+We can now create a checkpoint and store it's root.
+```tut
+val checkpointHash = rollbackExampleSpace.createCheckpoint.root
+```
+
+The first `produceAlice` operation should be able to find data stored by the consume.
+```tut
+def produceAlice(): Option[(Printer, Seq[Entry])] = rollbackExampleSpace.produce(Channel("friends"), alice, persist = false)
+produceAlice.isDefined
+```
+
+Running the same operation again shouldn't return anything, as data hasn't been persisted.
+```tut
+produceAlice.isEmpty
+```
+Every following repetition of the operation above should yield an empty result.
+```tut
+produceAlice.isEmpty
+```
+
+After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
+```tut
+rollbackExampleSpace.reset(checkpointHash)
+produceAlice.isDefined
+```
+And again, every following operation should yield an empty result
+Every following repetition of the operation above should yield an empty result.
+```tut
+produceAlice.isEmpty
+```
+
 ### Finishing Up
 
-When we are finished using the space, we close it.
+When we are finished using the spaces, we close them.
 ```tut
 space.close()
+rollbackExampleSpace.close()
 ```

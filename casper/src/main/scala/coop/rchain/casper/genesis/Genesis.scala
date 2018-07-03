@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.BasicWallet
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Log, LogSource, Time}
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, Path}
@@ -31,6 +31,8 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 object Genesis {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def withContracts(initial: BlockMessage,
                     wallets: Seq[Wallet],
@@ -45,7 +47,8 @@ object Genesis {
       (new Rev(wallets)).term
     )
 
-    val Right(stateHash) = runtimeManager.computeState(startHash, blessedTerms)
+    val Right(checkpoint) = runtimeManager.computeState(startHash, blessedTerms)
+    val stateHash         = ByteString.copyFrom(checkpoint.root.bytes.toArray)
 
     val stateWithContracts = for {
       bd <- initial.body

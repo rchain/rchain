@@ -4,9 +4,10 @@ import java.nio.file.Files
 
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
@@ -40,7 +41,7 @@ class CryptoChannelsSpec
   implicit val serializeChannel: Serialize[Channel]       = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[Seq[Channel]] = storage.implicits.serializeChannels
 
-  val serialize: Par => Array[Byte]                    = Serialize[Par].encode _
+  val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
   val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
   val byteArrayToExpr                                  = byteArrayToByteString andThen byteStringToExpr
@@ -126,38 +127,38 @@ class CryptoChannelsSpec
 
   "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      pending
-    //TODO: once we have secp256k1 packaged as jar
-//      val (reduce, store) = fixture
-//
-//      val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
-//
-//      val (secKey, pubKey) = Secp256k1.newKeyPair
-//
-//      val ackChannel                                    = GString("x")
-//      implicit val emptyEnv                             = Env[Par]()
-//      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
-//
-//      forAll { (par: Par) =>
-//        val parByteArray: Array[Byte] = serialize(par)
-//
-//        val signature = Secp256k1.sign(parByteArray, secKey)
-//
-//        val serializedPar = byteArrayToExpr(parByteArray)
-//        val signaturePar  = byteArrayToExpr(signature)
-//        val pubKeyPar     = byteArrayToExpr(pubKey)
-//
-//        val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
-//        assert(refVerify === true)
-//
-//        val send = Send(secp256k1VerifyhashChannel,
-//                        List(serializedPar, signaturePar, pubKeyPar, ackChannel),
-//                        persistent = false,
-//                        BitSet())
-//        Await.result(reduce.eval(send).runAsync, 3.seconds)
-//        storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
-//        clearStore(store, reduce, ackChannel)
-//      }
+      val (reduce, store) = fixture
+
+      val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
+
+      val pubKey = Base16.decode(
+        "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6")
+      val secKey = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+
+      val ackChannel                                    = GString("x")
+      implicit val emptyEnv                             = Env[Par]()
+      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+
+      forAll { (par: Par) =>
+        val parByteArray: Array[Byte] = Keccak256.hash(serialize(par))
+
+        val signature = Secp256k1.sign(parByteArray, secKey)
+
+        val serializedPar = byteArrayToExpr(parByteArray)
+        val signaturePar  = byteArrayToExpr(signature)
+        val pubKeyPar     = byteArrayToExpr(pubKey)
+
+        val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
+        assert(refVerify === true)
+
+        val send = Send(secp256k1VerifyhashChannel,
+                        List(serializedPar, signaturePar, pubKeyPar, ackChannel),
+                        persistent = false,
+                        BitSet())
+        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
+        clearStore(store, reduce, ackChannel)
+      }
   }
 
   "ed25519Verify channel" should "verify integrity of the data and send result on ack channel" in {

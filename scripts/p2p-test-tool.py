@@ -23,7 +23,7 @@ parser.add_argument("-b", "--boot",
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="run --port 30304 --standalone",
+                    default="run --data_dir=/var/lib/rnode --port 30304 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
@@ -55,7 +55,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
+                    default="run --data_dir=/var/lib/rnode --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
@@ -348,7 +348,7 @@ def create_bootstrap_node():
                 tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
                 bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
         }, \
-        command=args.bootstrap_command, \
+        command=f"{args.bootstrap_command} --host {bootstrap_node['name']}", \
         hostname=bootstrap_node['name'])
     print("Installing additonal packages on container.")
     r = container.exec_run(cmd='apt-get update', user='root').output.decode("utf-8")
@@ -374,7 +374,7 @@ def create_peer_nodes():
             mem_limit=args.memory, \
             network=args.network, \
             volumes=[f"{peer_node[i]['volume'].name}:{args.rnode_directory}"], \
-            command=args.peer_command, \
+            command=f"{args.peer_command} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")

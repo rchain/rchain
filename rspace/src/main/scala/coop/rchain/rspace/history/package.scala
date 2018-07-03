@@ -22,12 +22,12 @@ package object history {
 
   private[this] implicit class ParentsOps[K, V](val parents: Parents[K, V]) extends AnyVal {
 
-    def countPathLength =
+    def countPathLength: Long =
       parents
-        .foldLeft(0)((acc, el) =>
+        .foldLeft(0L)((acc, el) =>
           el match {
-            case (_, s: Skip) => acc + s.affix.size.toInt
-            case _            => acc + 1
+            case (_, s: Skip) => acc + s.affix.size
+            case _            => acc + 1L
         })
 
   }
@@ -117,7 +117,7 @@ package object history {
               }
           }
         case s @ Skip(affix, pointer) =>
-          val subPath = ByteVector(path.splitAt(depth)._2.take(affix.size.toInt))
+          val subPath = ByteVector(path).slice(depth.toLong, depth.toLong + affix.size)
           if (subPath === affix) {
             store.get(txn, pointer.hash) match {
               case None =>
@@ -145,8 +145,8 @@ package object history {
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // node with children, just rehash
-      case ((lastHash, _), (offset, Node(pb))) =>
-        val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
+      case ((lastHash, _), (offset, Node(pointerBlock))) =>
+        val node = Node(pointerBlock.updated((offset, NodePointer(lastHash))))
         (Trie.hash[K, V](node), node)
       //point at node from skip
       case ((lastHash, _: Node), (_, s: Skip)) =>
@@ -168,18 +168,20 @@ package object history {
           throw new LookupException(s"No node at $currentRootHash")
         case Some(currentRoot) =>
           // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
-          val encodedKeyNew = codecK.encode(key).map(_.bytes.toSeq).get
+          val encodedKeyNew        = codecK.encode(key).map(_.bytes.toSeq).get
+          val encodedKeyByteVector = ByteVector(encodedKeyNew)
           // Create the new leaf and put it into the store
           val newLeaf     = Leaf(key, value)
           val newLeafHash = Trie.hash(newLeaf)
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
-          tip match {
+          val maybeNewNodes: Option[Seq[(Blake2b256Hash, Trie[K, V])]] = tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
             case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
               logger.debug(s"workingRootHash: $currentRootHash")
+              None
             // If the "tip" is an existing leaf with a different key than the new leaf, then
             // we are in a situation where the new leaf shares some common prefix with the
             // existing leaf.
@@ -193,127 +195,122 @@ package object history {
             case Leaf(ek, ev) if key == ek && value != ev =>
               // Update the pointer block of the immediate parent at the given index
               // to point to the new leaf instead of the existing leaf
-              val (hd, tl) = parents match {
-                case (idx, Node(pointerBlock)) +: remaining =>
-                  (Node(pointerBlock.updated(List((idx, LeafPointer(newLeafHash))))), remaining)
-                case (_, Skip(affix, _)) +: remaining =>
-                  (Skip(affix, LeafPointer(newLeafHash)), remaining)
-                case Seq() =>
-                  throw new InsertException("A leaf had no parents")
-              }
-              val rehashedNodes = rehash[K, V](hd, tl)
-              val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, branch, newRootHash)
-              logger.debug(s"workingRootHash: $newRootHash")
+              Some(updateLeaf(newLeafHash, parents))
             // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
             // pointer block and rehash.
             case Node(pb) =>
-              val pathLength      = parents.countPathLength
-              val wholePathLength = encodedKeyNew.size
-              val pathRemaining   = wholePathLength - pathLength
-              val newLeafIndex    = JByte.toUnsignedInt(encodedKeyNew(pathLength))
-              logger.debug(
-                s"Node state, current:$pathLength, remaining: $pathRemaining, whole: $wholePathLength")
-              val ptr = if (pathRemaining > 1) {
-                val skip = Skip(ByteVector(encodedKeyNew.splitAt(pathLength + 1)._2),
-                                LeafPointer(newLeafHash))
-                val skipHash = Trie.hash(skip)(codecK, codecV)
-                store.put(txn, skipHash, skip)
-                NodePointer(skipHash)
-              } else {
-                LeafPointer(newLeafHash)
-              }
-              val hd            = Node(pb.updated(List((newLeafIndex, ptr))))
-              val rehashedNodes = rehash[K, V](hd, parents)
-              val newRootHash   = insertTries(store, txn, rehashedNodes).get
-              store.putRoot(txn, branch, newRootHash)
-              logger.debug(s"workingRootHash: $newRootHash")
+              Some(insertLeafAsNodeChild(encodedKeyByteVector, newLeafHash, parents, pb))
             // If the tip is a skip node -> there is no Node in the Trie for this Leaf.
             // need to:
             // - shorten (a new skip that holds the common path)
             // - remove (no new skip, just the new trie)
             // and rectify the structure
             case Skip(affix, ptr) =>
-              val pathLength = parents.countPathLength
-              val subPath    = ByteVector(encodedKeyNew.splitAt(pathLength)._2.take(affix.size.toInt))
-              val pathRemaining =
-                ByteVector(encodedKeyNew.splitAt(pathLength + affix.size.toInt)._2)
-              val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
-              val sharedSubPathLength = sharedPrefix.length.toLong
-              val oldSuffix           = affix.splitAt(sharedSubPathLength)._2
-              val newSuffix           = subPath.splitAt(sharedSubPathLength)._2
-
-              val pn = (oldSuffix.size, newSuffix.size) match {
-                case (0, 0) => throw new InsertException("Found empty affixes")
-                case (ol, nl) if ol != nl =>
-                  throw new InsertException("Affixes have different lengths")
-                case (len, _) if len == 1 =>
-                  val oldNodeIndex = JByte.toUnsignedInt(oldSuffix(0))
-                  val newNodeIndex = JByte.toUnsignedInt(newSuffix(0))
-                  val newPtr = if (pathRemaining.size > 0) {
-                    setupSkipNode(store, txn, LeafPointer(newLeafHash), pathRemaining)
-                  } else {
-                    LeafPointer(newLeafHash)
-                  }
-                  Node(
-                    PointerBlock
-                      .create()
-                      .updated(List((oldNodeIndex, ptr), (newNodeIndex, newPtr))))
-                case (len, _) if len > 1 =>
-                  val oldNodeIndex = JByte.toUnsignedInt(oldSuffix(0))
-                  val newNodeIndex = JByte.toUnsignedInt(newSuffix(0))
-                  val newSkip = setupSkipNode(store,
-                                              txn,
-                                              LeafPointer(newLeafHash),
-                                              newSuffix.drop(1) ++ pathRemaining)
-                  val oldSkip = setupSkipNode(store, txn, ptr, oldSuffix.drop(1))
-                  Node(
-                    PointerBlock
-                      .create()
-                      .updated(List((oldNodeIndex, oldSkip), (newNodeIndex, newSkip))))
-
-              }
-
-              val add = if (sharedSubPathLength > 0) {
-                val pnHash = Trie.hash(pn)(codecK, codecV)
-                store.put(txn, pnHash, pn)
-                Skip(ByteVector(sharedPrefix), NodePointer(pnHash))
-              } else {
-                pn
-              }
-              //analyze:
-              val rehashedNodes = rehash[K, V](add, parents)
-              val newRootHash   = insertTries(store, txn, rehashedNodes).get
+              Some(insertLeafOntoSkipNode(encodedKeyByteVector, newLeafHash, parents, affix, ptr))
+          }
+          maybeNewNodes match {
+            case Some(nodes) =>
+              val newRootHash = insertTries(store, txn, nodes).get
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
+            case None =>
+              logger.debug(s"insert did not change the trie")
           }
       }
     }
 
-  @tailrec
-  private[this] def propagateTrieUpward[T, K, V](store: ITrieStore[T, K, V],
-                                                 txn: T,
-                                                 ptr: NonEmptyPointer,
-                                                 incomingAffix: ByteVector,
-                                                 parents: Parents[K, V])(
+  private[this] def insertLeafOntoSkipNode[V, K, T](
+      encodedKeyByteVector: ByteVector,
+      newLeafHash: Blake2b256Hash,
+      parents: Parents[K, V],
+      affix: ByteVector,
+      ptr: NonEmptyPointer)(implicit codecK: Codec[K], codecV: Codec[V]) = {
+    val pathLength = parents.countPathLength
+    val subPath    = encodedKeyByteVector.slice(pathLength, pathLength + affix.size)
+    val pathRemaining =
+      encodedKeyByteVector.slice(pathLength + affix.size, encodedKeyByteVector.length)
+    val sharedPrefix        = commonPrefix(affix.toSeq, subPath.toSeq)
+    val sharedSubPathLength = sharedPrefix.length.toLong
+    val oldSuffix           = affix.splitAt(sharedSubPathLength)._2
+    val newSuffix           = subPath.splitAt(sharedSubPathLength)._2
+
+    val (existingPtr, newPtr, newParents) = (oldSuffix.size, newSuffix.size) match {
+      case (0, 0)               => throw new InsertException("Found empty affixes")
+      case (ol, nl) if ol != nl => throw new InsertException("Affixes have different lengths")
+      case (len, _) if len == 1 =>
+        val (newPtr, newParents) =
+          setupSkipNode(LeafPointer(newLeafHash), pathRemaining)(codecK, codecV)
+        (ptr, newPtr, newParents)
+      case (len, _) if len > 1 =>
+        val (newSkip, newParents) =
+          setupSkipNode(LeafPointer(newLeafHash), newSuffix.drop(1) ++ pathRemaining)(codecK,
+                                                                                      codecV)
+        val (oldSkip, oldParents) =
+          setupSkipNode(ptr, oldSuffix.drop(1))(codecK, codecV)
+        (oldSkip, newSkip, newParents ++ oldParents)
+      case _ => throw new InsertException("Affix corrupt in skip node")
+    }
+
+    val oldNodeIndex = JByte.toUnsignedInt(oldSuffix(0))
+    val newNodeIndex = JByte.toUnsignedInt(newSuffix(0))
+    val newCombinedNode = Node(
+      PointerBlock.create((oldNodeIndex, existingPtr), (newNodeIndex, newPtr)))
+
+    val (toBeAdded, skips) = if (sharedSubPathLength > 0) {
+      val combinedHash = Trie.hash(newCombinedNode)(codecK, codecV)
+      (Skip(ByteVector(sharedPrefix), NodePointer(combinedHash)),
+       Seq((combinedHash, newCombinedNode)))
+    } else {
+      (newCombinedNode, Seq.empty)
+    }
+    val rehashedNodes = rehash[K, V](toBeAdded, parents)
+    skips ++ newParents ++ rehashedNodes
+  }
+
+  private[this] def insertLeafAsNodeChild[V, K, T](
+      encodedKeyByteVector: ByteVector,
+      newLeafHash: Blake2b256Hash,
+      parents: Parents[K, V],
+      pb: PointerBlock)(implicit codecK: Codec[K], codecV: Codec[V]) = {
+    val pathLength    = parents.countPathLength
+    val newLeafIndex  = JByte.toUnsignedInt(encodedKeyByteVector(pathLength))
+    val remainingPath = encodedKeyByteVector.splitAt(pathLength + 1)._2
+    val (ptr, newParents) =
+      setupSkipNode(LeafPointer(newLeafHash), remainingPath)(codecK, codecV)
+    val hd            = Node(pb.updated(List((newLeafIndex, ptr))))
+    val rehashedNodes = rehash[K, V](hd, parents)
+    newParents ++ rehashedNodes
+  }
+
+  private[this] def updateLeaf[V, K, T](newLeafHash: Blake2b256Hash, parents: Parents[K, V])(
       implicit codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Parents[K, V]) =
+      codecV: Codec[V]) = {
+    val (hd, tl) = parents match {
+      case (idx, Node(pointerBlock)) +: remaining =>
+        (Node(pointerBlock.updated((idx, LeafPointer(newLeafHash)))), remaining)
+      case (_, Skip(affix, _)) +: remaining =>
+        (Skip(affix, LeafPointer(newLeafHash)), remaining)
+      case Seq() =>
+        throw new InsertException("A leaf had no parents")
+    }
+    val rehashedNodes = rehash[K, V](hd, tl)
+    rehashedNodes
+  }
+
+  private[this] def collapseAndUpdatePointerBlock[T, K, V](ptr: NonEmptyPointer,
+                                                           incomingAffix: ByteVector,
+                                                           parents: Parents[K, V])(
+      implicit codecK: Codec[K],
+      codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the node.
       case Seq((byte, Node(pointerBlock))) =>
-        ptr match {
-          case _: LeafPointer =>
-            val nodePtr = setupSkipNode(store, txn, ptr, incomingAffix)
-            (Node(pointerBlock.updated(List((byte, nodePtr)))), Seq.empty[(Int, Node)])
-          case _: NodePointer =>
-            // collapsing a bridging node into a skip node
-            val setPtr = setupSkipNode(store, txn, ptr, incomingAffix)
-            (Node(pointerBlock.updated(List((byte, setPtr)))), Seq.empty[(Int, Node)])
-        }
+        val (newPtr, newParents) = setupSkipNode(ptr, incomingAffix)(codecK, codecV)
+        (Node(pointerBlock.updated((byte, newPtr))), Seq.empty[(Int, Node)], newParents)
       // if the node is a Skip it can append the collapsed affix
       case (_, Skip(affix, _)) +: tail =>
-        (Skip(affix ++ incomingAffix, ptr), tail)
+        (Skip(affix ++ incomingAffix, ptr), tail, Seq.empty)
       // otherwise it has to be a Node
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -325,27 +322,25 @@ package object history {
           // propagate upwards, and we can go ahead and do that.
           // post skip node: this case got swallowed in deleteLeaf
           case Vector(_) =>
-            propagateTrieUpward(store, txn, ptr, ByteVector(byte), tail)
+            throw new DeleteException(
+              "PointerBlock with one child on propagation signifies a malformed trie.")
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the propagated node.
           case _ =>
-            val setPtr = setupSkipNode(store, txn, ptr, incomingAffix)
-            (Node(pointerBlock.updated(List((byte, setPtr)))), tail)
+            val (newPtr, newParents) = setupSkipNode(ptr, incomingAffix)(codecK, codecV)
+            (Node(pointerBlock.updated((byte, newPtr))), tail, newParents)
         }
     }
 
-  private[this] def setupSkipNode[V, K, T](
-      store: ITrieStore[T, K, V],
-      txn: T,
-      ptr: NonEmptyPointer,
-      incomingAffix: ByteVector)(implicit codecK: Codec[K], codecV: Codec[V]) =
+  private[this] def setupSkipNode[V, K, T](ptr: NonEmptyPointer, incomingAffix: ByteVector)(
+      implicit codecK: Codec[K],
+      codecV: Codec[V]) =
     if (incomingAffix.size > 0) {
       val skip     = Skip(incomingAffix, ptr)
       val skipHash = Trie.hash(skip)(codecK, codecV)
-      store.put(txn, skipHash, skip)
-      NodePointer(skipHash)
+      (NodePointer(skipHash), Seq((skipHash, skip)))
     } else {
-      ptr
+      (ptr, Seq.empty)
     }
 
   private[this] def insertTries[T, K, V](
@@ -362,23 +357,22 @@ package object history {
   private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Parents[K, V]) =
+      codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `EmptyPointer`
       case Seq((index, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((index, EmptyPointer)))), Seq.empty[(Int, Node)])
-      // Otherwise,
+        (Node(pointerBlock.updated((index, EmptyPointer))), Seq.empty[(Int, Node)], Seq.empty)
+      // A skip pointing at a leaf needs to be collapsed
       case (_, Skip(_, LeafPointer(_))) +: tail =>
         deleteLeaf(store, txn, tail)
+      // Otherwise a Node needs to be handled
       case (byte, Node(pointerBlock)) +: tail =>
-        val updated = (Node(pointerBlock.updated(List((byte, EmptyPointer)))), tail)
         // Get the children of the immediate parent
         pointerBlock.childrenWithIndex match {
           // If there are no children, then something is wrong, because one of the children
           // should point down to the thing we are trying to delete.
-          case Vector() =>
-            throw new DeleteException("PointerBlock has no children")
+          case Vector() => throw new DeleteException("PointerBlock has no children")
           // If there are is only one child, then we know that it is the thing we are trying to
           // delete, and we can go ahead and move up the trie.
           // post skip node: a Node with one child should be already collapsed to skip -> leaf
@@ -388,27 +382,27 @@ package object history {
           // we are trying to delete.  We then decide how to handle the other child based on
           // whether or not it is a Node or a Leaf
           case c @ Vector(_, _) =>
-            val (otherPointer, otherByte) = c.collect {
+            val (otherPtr, otherByte) = c.collect {
               case (child, childByte) if childByte != byte => (child, childByte)
             }.head
-            otherPointer match {
+            otherPtr match {
               // If the other child is a Node we propagate the structure as it should get collapsed
               case NodePointer(hash) =>
                 store.get(txn, hash) match {
                   case Some(Node(_)) =>
-                    propagateTrieUpward(store, txn, otherPointer, ByteVector(otherByte), tail)
+                    collapseAndUpdatePointerBlock(otherPtr, ByteVector(otherByte), tail)
                   case Some(Skip(affix, ptr)) =>
-                    propagateTrieUpward(store, txn, ptr, ByteVector(otherByte) ++ affix, tail)
-                  case _ => throw new DeleteException("corrupt tree")
+                    collapseAndUpdatePointerBlock(ptr, ByteVector(otherByte) ++ affix, tail)
+                  case _ =>
+                    throw new DeleteException("Given pointer could not be processed in delete.")
                 }
               // If the other child is a Leaf, then we must propagate it up the trie.
               case lp: LeafPointer =>
-                propagateTrieUpward(store, txn, lp, ByteVector(otherByte), tail)
+                collapseAndUpdatePointerBlock(lp, ByteVector(otherByte), tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `EmptyPointer`.
-          case _ =>
-            updated
+          case _ => (Node(pointerBlock.updated((byte, EmptyPointer))), tail, Seq.empty)
         }
     }
 
@@ -438,14 +432,17 @@ package object history {
             // If the "tip" is equal to a leaf containing the given key and value, commence
             // with the deletion process.
             case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
-              val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
-              val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
+              val (hd, nodesToRehash, newNodes) = deleteLeaf(store, txn, parents)
+              val rehashedNodes                 = rehash[K, V](hd, nodesToRehash)
+              val nodesToInsert                 = newNodes ++ rehashedNodes
+              val newRootHash                   = insertTries[T, K, V](store, txn, nodesToInsert).get
               store.putRoot(txn, branch, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true
             // The entry is not in the trie
-            case Leaf(_, _) => false
+            case Leaf(_, _) =>
+              logger.debug(s"workingRootHash: $currentRootHash")
+              false
           }
       }
     }

@@ -8,6 +8,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.util.runKs
+import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
@@ -80,20 +81,20 @@ object AddressBookExample {
       */
     implicit val serializeChannel: Serialize[Channel] = new Serialize[Channel] {
 
-      def encode(channel: Channel): Array[Byte] = {
+      def encode(channel: Channel): ByteVector = {
         val baos = new ByteArrayOutputStream()
         try {
           val oos = new ObjectOutputStream(baos)
           try { oos.writeObject(channel) } finally { oos.close() }
-          baos.toByteArray
+          ByteVector.view(baos.toByteArray)
         } finally {
           baos.close()
         }
       }
 
-      def decode(bytes: Array[Byte]): Either[Throwable, Channel] =
+      def decode(bytes: ByteVector): Either[Throwable, Channel] =
         try {
-          val bais = new ByteArrayInputStream(bytes)
+          val bais = new ByteArrayInputStream(bytes.toArray)
           try {
             val ois = new ObjectInputStream(bais)
             try { Right(ois.readObject.asInstanceOf[Channel]) } finally { ois.close() }
@@ -131,7 +132,7 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Entry] {
+    implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
       def get(p: Pattern, a: Entry): Option[Entry] =
         p match {
           case NameMatch(last) if a.name.last == last        => Some(a)
@@ -170,7 +171,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -204,7 +205,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -236,4 +237,53 @@ object AddressBookExample {
 
     store.close()
   }
+
+  def rollbackExample(): Unit = withSpace { space =>
+    println("Rollback example: Let's consume...")
+
+    val cres =
+      space.consume(Seq(Channel("friends")),
+                    Seq(CityMatch(city = "Crystal Lake")),
+                    new Printer,
+                    persist = false)
+
+    assert(cres.isEmpty)
+
+    println("Rollback example: And create a checkpoint...")
+    val checkpointHash = space.createCheckpoint.root
+
+    def produceAlice(): Option[(Printer, Seq[Entry])] =
+      space.produce(Channel("friends"), alice, persist = false)
+
+    println("Rollback example: First produce result should return some data")
+    assert(produceAlice.isDefined)
+
+    println("Rollback example: Second produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    println("Rollback example: Every following produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    println(
+      "Rollback example: Let's reset RSpace to the state from before running the produce operations")
+    space.reset(checkpointHash)
+
+    println("Rollback example: Again, first produce result should return some data")
+    assert(produceAlice.isDefined)
+
+    println("Rollback example: And again second produce result should be empty")
+    assert(produceAlice.isEmpty)
+
+    space.store.close()
+  }
+
+  private[this] def withSpace(f: RSpace[Channel, Pattern, Entry, Entry, Printer] => Unit) = {
+    // Here we define a temporary place to put the store's files
+    val storePath = Files.createTempDirectory("rspace-address-book-example-")
+    // Let's define our store
+    val store = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+
+    f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
+  }
+
 }

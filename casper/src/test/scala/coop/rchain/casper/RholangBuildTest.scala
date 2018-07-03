@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.Id
 import cats.implicits._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -20,7 +21,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "Our build system" should "allow import of rholang sources into scala code" in {
-    val node = HashSetCasperTestNode.standalone(genesis)
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
     val llDeploy = ProtoUtil.termDeploy(LinkedList.term)
@@ -30,9 +31,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
       "for(@primes <- @\"primes\"){ @\"primes\"!(primes) | @[\"LinkedList\", \"map\"]!(primes, \"double\", \"dprimes\") }"
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
 
-    val Some(block) = MultiParentCasper[Id].deploy(llDeploy) *> deploys.traverse(
+    val Some(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *> deploys.traverse(
       MultiParentCasper[Id].deploy) *> MultiParentCasper[Id].createBlock
-    val signedBlock = ProtoUtil.signBlock(block, validatorKeys.last)
     MultiParentCasper[Id].addBlock(signedBlock)
 
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)

@@ -13,15 +13,10 @@ import scala.util.{Failure, Success, Try}
 
 object DeployRuntime {
 
-  //Propose a block, sign using given secret key with Ed25519.
-  //Note that this is just an example thin-client making use of the
-  //gRPC functionalities that are exposed. A node operator could easily
-  //write their own (e.g. in Python) if they wish to handle signing differently.
-  def propose[F[_]: DeployService: Monad](sk: Array[Byte]): F[Unit] =
+  def propose[F[_]: DeployService: Monad](): F[Unit] =
     DeployService[F].createBlock().flatMap {
       case Some(block) =>
-        val signedBlock = ProtoUtil.signBlock(block, sk)
-        DeployService[F].addBlock(signedBlock)
+        DeployService[F].addBlock(block)
 
       case None =>
         ().pure[F]
@@ -38,10 +33,9 @@ object DeployRuntime {
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         for {
-          //TODO: have the client track the nonce
-          nonce <- Capture[F].capture { scala.util.Random.nextInt(10000) }
+          timestamp <- Capture[F].capture { System.currentTimeMillis() }
           //TODO: allow user to specify their public key
-          d        = DeployString().withNonce(nonce).withTerm(code)
+          d        = DeployString().withTimestamp(timestamp).withTerm(code)
           response <- DeployService[F].deploy(d)
           _ <- Capture[F].capture {
                 println(s"Response: ${response._2}")

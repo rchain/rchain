@@ -1,19 +1,23 @@
-package coop.rchain.casper
+package coop.rchain.casper.helper
+
+import java.nio.file.Files
 
 import cats._
-import cats.implicits._
-
-import coop.rchain.catscontrib._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.TransportLayerTestImpl
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.util.comm.TransportLayerTestImpl
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
+import coop.rchain.catscontrib._
 import coop.rchain.comm._
+import coop.rchain.comm.connect.Connect.dispatch
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
-import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.comm.connect.Connect.dispatch
 import coop.rchain.comm.transport._
-
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import monix.execution.Scheduler
@@ -25,9 +29,10 @@ class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
                             genesis: BlockMessage,
+                            sk: Array[Byte],
                             storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 
-  import HashSetCasperTestNode.{errorHandler, peerNode, randomBytes}
+  import HashSetCasperTestNode.errorHandler
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
@@ -39,8 +44,9 @@ class HashSetCasperTestNode(name: String,
   implicit val errorHandlerEff   = errorHandler
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
+  val activeRuntime = Runtime.create(storageDirectory, storageSize)
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Ed25519.toPublic(sk), sk, "ed25519", genesis)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]
@@ -51,26 +57,28 @@ class HashSetCasperTestNode(name: String,
 }
 
 object HashSetCasperTestNode {
-  def standalone(genesis: BlockMessage)(implicit scheduler: Scheduler): HashSetCasperTestNode = {
+  def standalone(genesis: BlockMessage, sk: Array[Byte])(
+      implicit scheduler: Scheduler): HashSetCasperTestNode = {
     val name     = "standalone"
     val identity = peerNode(name, 30300)
     val tle =
-      new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[ProtocolMessage]])
+      new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
 
-    new HashSetCasperTestNode(name, identity, tle, genesis)
+    new HashSetCasperTestNode(name, identity, tle, genesis, sk)
   }
 
-  def network(n: Int, genesis: BlockMessage)(
+  def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
+    val n         = sks.length
     val names     = (1 to n).map(i => s"node-$i")
     val peers     = names.map(peerNode(_, 30300))
-    val msgQueues = peers.map(_ -> new mutable.Queue[ProtocolMessage]()).toMap
+    val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
 
     val nodes =
-      names.zip(peers).map {
-        case (n, p) =>
+      names.zip(peers).zip(sks).map {
+        case ((n, p), sk) =>
           val tle = new TransportLayerTestImpl[Id](p, msgQueues)
-          new HashSetCasperTestNode(n, p, tle, genesis)
+          new HashSetCasperTestNode(n, p, tle, genesis, sk)
       }
 
     //make sure all nodes know about each other

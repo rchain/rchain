@@ -3,10 +3,12 @@ package coop.rchain.comm
 import java.net.InetSocketAddress
 import com.netaporter.uri.Uri
 import scala.util.control.NonFatal
+import coop.rchain.crypto.codec.Base16
 
 // TODO: Add Show instance
 final case class NodeIdentifier(key: Seq[Byte]) {
-  override def toString: String = key.map("%02x".format(_)).mkString
+  private val keyString         = Base16.encode(key.toArray)
+  override def toString: String = keyString
 }
 
 object NodeIdentifier {

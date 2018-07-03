@@ -3,17 +3,19 @@ package coop.rchain.models.serialization
 import cats.implicits._
 import coop.rchain.models._
 import coop.rchain.rspace.Serialize
+import scodec.bits.ByteVector
+
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 object implicits {
   def mkProtobufInstance[T <: GeneratedMessage with Message[T]](
       comp: GeneratedMessageCompanion[T]) = new Serialize[T] {
 
-    override def encode(a: T): Array[Byte] =
-      comp.toByteArray(a)
+    override def encode(a: T): ByteVector =
+      ByteVector.view(comp.toByteArray(a))
 
-    override def decode(bytes: Array[Byte]): Either[Throwable, T] =
-      Either.catchNonFatal(comp.parseFrom(bytes))
+    override def decode(bytes: ByteVector): Either[Throwable, T] =
+      Either.catchNonFatal(comp.parseFrom(bytes.toArray))
   }
 
   implicit val serializePar: Serialize[Par]         = mkProtobufInstance(Par)

@@ -13,9 +13,9 @@ import cats.implicits._
   */
 trait Serialize[A] {
 
-  def encode(a: A): Array[Byte]
+  def encode(a: A): ByteVector
 
-  def decode(bytes: Array[Byte]): Either[Throwable, A]
+  def decode(bytes: ByteVector): Either[Throwable, A]
 }
 
 object Serialize {
@@ -31,15 +31,16 @@ object Serialize {
       def sizeBound: SizeBound = sizeCodec.sizeBound + bytes.sizeBound
 
       def encode(value: A): Attempt[BitVector] =
-        codec.encode(ByteVector(instance.encode(value)))
+        codec.encode(instance.encode(value))
 
       def decode(bits: BitVector): Attempt[DecodeResult[A]] =
         codec
           .decode(bits)
           .flatMap { (value: DecodeResult[ByteVector]) =>
-            Attempt.fromEither(value
-              .traverse[Either[Throwable, ?], A]((vec: ByteVector) => instance.decode(vec.toArray))
-              .leftMap((thw: Throwable) => Err(thw.getMessage)))
+            Attempt.fromEither(
+              value
+                .traverse[Either[Throwable, ?], A]((vec: ByteVector) => instance.decode(vec))
+                .leftMap((thw: Throwable) => Err(thw.getMessage)))
           }
     }
   }

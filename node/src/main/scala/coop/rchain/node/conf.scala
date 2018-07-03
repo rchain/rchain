@@ -5,8 +5,9 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
+import coop.rchain.casper.CasperConf
 import org.rogach.scallop._
-
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 import scala.collection.JavaConverters._
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -25,6 +26,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   addSubcommand(diagnostics)
 
   val run = new Subcommand("run") {
+
+    val noUpnp = opt[Boolean](default = Some(false), descr = "Use this flag to disable UpNp.")
+
+    val defaultTimeout =
+      opt[Int](default = Some(1000),
+               descr = "Default timeout for roundtrip connections. Default 1 second.")
 
     val certificate =
       opt[Path](required = false,
@@ -70,12 +77,27 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
     val data_dir = opt[Path](required = false,
-                             descr = "Path to data directory. Defaults to /var/lib/rnode",
-                             default = Some(Paths.get("/var/lib/rnode")))
+                             descr = "Path to data directory. Defaults to $HOME/.rnode",
+                             default = Some(Paths.get(sys.props("user.home"), ".rnode")))
 
     val map_size = opt[Long](required = false,
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
+
+    val validatorPublicKey = opt[String](
+      default = None,
+      descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
+        "Can be inferred from the private key for some signature algorithms."
+    )
+
+    val validatorPrivateKey = opt[String](
+      default = None,
+      descr = "Base16 encoding of the private key to use for signing a proposed blocks.")
+
+    val validatorSigAlgorithm = opt[String](
+      default = Some("ed25519"),
+      descr = "Name of the algorithm to use for signing proposed blocks. " +
+        "Currently supported values: ed25519")
 
     def certificatePath: Path =
       certificate.toOption
@@ -85,16 +107,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       key.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
-    def fetchHost(): String =
+    def fetchHost(upnp: UPnP): String =
       host.toOption match {
         case Some(host) => host
-        case None       => whoami(port()).fold("localhost")(_.getHostAddress)
-      }
-
-    lazy val localhost: String =
-      host.toOption match {
-        case Some(host) => host
-        case None       => whoami(port()).fold("localhost")(_.getHostAddress)
+        case None       => whoami(port(), upnp)
       }
   }
   addSubcommand(run)
@@ -144,46 +160,41 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val propose = new Subcommand("propose") {
     descr(
-      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys. " +
-        "Requires a value of --secret-key to be set.")
-
-    val secretKey = opt[String](
-      default = None,
-      descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
   }
   addSubcommand(propose)
 
-  private def whoami(port: Int): Option[InetAddress] = {
+  private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
+    Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-    val logger = Logger("conf")
-    val upnp   = new UPnP(port)
-
-    logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
-
-    upnp.localAddress match {
-      case Some(addy) => Some(addy)
-      case None => {
-        val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
-        val addresses = ifaces
-          .flatMap(_.asScala)
-          .map(_.getAddress)
-          .toList
-          .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-        if (addresses.contains(false)) {
-          Some(addresses(false).head)
-        } else {
-          val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (locals.contains(false)) {
-            Some(locals(false).head)
-          } else if (locals.contains(true)) {
-            Some(locals(true).head)
-          } else {
-            None
-          }
-        }
+  private def checkAll: (String, String) = {
+    val func: PartialFunction[Unit, (String, String)] =
+      check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse {
+        case _ => ("failed to guess", "localhost")
       }
-    }
+
+    func.apply(())
   }
+
+  private def whoami(port: Int, upnp: UPnP): String = {
+    println("INFO - flag --host was not provided, guessing your external IP address")
+
+    val (source, ip) = upnp.externalAddress
+      .map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress))
+      .getOrElse(checkAll)
+    println(s"INFO - guessed $ip from source: $source")
+    ip
+  }
+
+  def casperConf: CasperConf = CasperConf(
+    run.validatorPublicKey.toOption,
+    run.validatorPrivateKey.toOption,
+    run.validatorSigAlgorithm(),
+    run.bondsFile.toOption,
+    run.numValidators(),
+    run.data_dir().resolve("validators")
+  )
 
   verify()
 }

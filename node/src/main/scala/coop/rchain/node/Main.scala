@@ -54,14 +54,7 @@ object Main {
         DeployRuntime.deployFileProgram[Task](conf.deploy.location.toOption.get)
 
       case Some(conf.deployDemo) => DeployRuntime.deployDemoProgram[Task]
-      case Some(conf.propose) =>
-        conf.propose.secretKey.toOption match {
-          case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
-          case None =>
-            Task.delay {
-              println("Error: value of --secret-key must be specified to propose a block")
-            }
-        }
+      case Some(conf.propose)    => DeployRuntime.propose[Task]()
       case Some(conf.showBlock) =>
         DeployRuntime.showBlock[Task](conf.showBlock.hash.toOption.get)
       case Some(conf.showBlocks) =>

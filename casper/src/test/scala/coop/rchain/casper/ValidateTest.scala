@@ -1,35 +1,36 @@
 package coop.rchain.casper
 
 import cats.{Id, Monad}
-import cats.data.State
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.shared.Time
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
 class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with BlockGenerator {
-
-  type StateWithChain[A] = State[BlockDag, A]
   implicit val log = new LogStub[Id]
   val initState    = BlockDag().copy(currentId = -1)
   val ed25519      = "ed25519"
 
-  override def beforeEach(): Unit =
+  override def beforeEach(): Unit = {
     log.reset()
+    timeEff.reset()
+  }
 
-  def createChain[F[_]: Monad: BlockDagState](length: Int,
-                                              bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage] =
+  def createChain[F[_]: Monad: BlockDagState: Time](
+      length: Int,
+      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage] =
     (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
@@ -38,7 +39,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         } yield bnext
     }
 
-  def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState](
+  def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState: Time](
       length: Int,
       validatorLength: Int): F[BlockMessage] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
@@ -66,7 +67,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
-    ProtoUtil.signBlock(block, sk)
+    val pk    = Ed25519.toPublic(sk)
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _)
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
@@ -79,7 +81,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   }
 
   "Block signature validation" should "return false on unknown algorithms" in {
-    val chain            = createChain[StateWithChain](2).runS(initState).value
+    val chain            = createChain[StateWithChain](2).runS(initState)
     val unknownAlgorithm = "unknownAlgorithm"
     val rsa              = "RSA"
     val block0           = chain.idToBlocks(0).withSigAlgorithm(unknownAlgorithm)
@@ -94,7 +96,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
   it should "return false on invalid ed25519 signatures" in {
 
-    implicit val chain   = createChain[StateWithChain](6).runS(initState).value
+    implicit val chain   = createChain[StateWithChain](6).runS(initState)
     implicit val (sk, _) = Ed25519.newKeyPair
     val (_, wrongPk)     = Ed25519.newKeyPair
     val empty            = ByteString.EMPTY
@@ -115,15 +117,40 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
   it should "return true on valid ed25519 signatures" in {
     val n                = 6
-    implicit val chain   = createChain[StateWithChain](n).runS(initState).value
+    implicit val chain   = createChain[StateWithChain](n).runS(initState)
     implicit val (sk, _) = Ed25519.newKeyPair
 
     (0 until n).forall(i => Validate.blockSignature[Id](signedBlock(i))) should be(true)
     log.warns should be(Nil)
   }
 
+  "Timestamp validation" should "not accept blocks with future time" in {
+    val chain = createChain[StateWithChain](1).runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
+    Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.timestamp[Id](block, chain) should be(Right(Valid))
+
+    log.warns.size should be(1)
+    log.warns.head.contains("block timestamp") should be(true)
+  }
+
+  it should "not accept blocks that were published before parent time" in {
+    val chain = createChain[StateWithChain](2).runS(initState)
+    val block = chain.idToBlocks(1)
+
+    val modifiedTimestampHeader = block.header.get.withTimestamp(-1)
+    Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.timestamp[Id](block, chain) should be(Right(Valid))
+    log.warns.size should be(1)
+    log.warns.head.contains("block timestamp") should be(true)
+  }
+
   "Block number validation" should "only accept 0 as the number for a block with no parents" in {
-    val chain = createChain[StateWithChain](1).runS(initState).value
+    val chain = createChain[StateWithChain](1).runS(initState)
     val block = chain.idToBlocks(0)
 
     Validate.blockNumber[Id](block.withBlockNumber(1), chain) should be(Left(InvalidBlockNumber))
@@ -133,7 +160,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   }
 
   it should "return false for non-sequential numbering" in {
-    val chain = createChain[StateWithChain](2).runS(initState).value
+    val chain = createChain[StateWithChain](2).runS(initState)
     val block = chain.idToBlocks(1)
 
     Validate.blockNumber[Id](block.withBlockNumber(17), chain) should be(Left(InvalidBlockNumber))
@@ -144,7 +171,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
   it should "return true for sequential numbering" in {
     val n     = 6
-    val chain = createChain[StateWithChain](n).runS(initState).value
+    val chain = createChain[StateWithChain](n).runS(initState)
 
     (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
       true)
@@ -152,7 +179,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in {
-    val chain = createChain[StateWithChain](1).runS(initState).value
+    val chain = createChain[StateWithChain](1).runS(initState)
     val block = chain.idToBlocks(0)
 
     Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(Left(InvalidSequenceNumber))
@@ -161,7 +188,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   }
 
   it should "return false for non-sequential numbering" in {
-    val chain = createChain[StateWithChain](2).runS(initState).value
+    val chain = createChain[StateWithChain](2).runS(initState)
     val block = chain.idToBlocks(1)
 
     Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(Left(InvalidSequenceNumber))
@@ -172,7 +199,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val n              = 20
     val validatorCount = 3
     val chain =
-      createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState).value
+      createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState)
 
     (0 until n).forall(i => Validate.sequenceNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
       true)
@@ -182,7 +209,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in {
     val validator    = ByteString.copyFromUtf8("Validator")
     val impostor     = ByteString.copyFromUtf8("Impostor")
-    val chain        = createChain[StateWithChain](3, List(Bond(validator, 1))).runS(initState).value
+    val chain        = createChain[StateWithChain](3, List(Bond(validator, 1))).runS(initState)
     val genesis      = chain.idToBlocks(0)
     val validBlock   = chain.idToBlocks(1).withSender(validator)
     val invalidBlock = chain.idToBlocks(2).withSender(impostor)
@@ -205,9 +232,9 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
       messages.map(b => b.sender -> b.blockHash).toMap
 
-    def createValidatorBlock[F[_]: Monad: BlockDagState](parents: Seq[BlockMessage],
-                                                         justifications: Seq[BlockMessage],
-                                                         validator: Int): F[BlockMessage] =
+    def createValidatorBlock[F[_]: Monad: BlockDagState: Time](parents: Seq[BlockMessage],
+                                                               justifications: Seq[BlockMessage],
+                                                               validator: Int): F[BlockMessage] =
       createBlock[F](
         parents.map(_.blockHash),
         creator = validators(validator),
@@ -216,7 +243,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         justifications = latestMessages(justifications)
       )
 
-    def createChainWithValidators[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+    def createChainWithValidators[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
       for {
         b0 <- createBlock[F](Seq.empty, bonds = bonds)
         b1 <- createValidatorBlock[F](Seq(b0), Seq.empty, 0)
@@ -230,7 +257,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         b9 <- createValidatorBlock[F](Seq(b6), Seq.empty, 0) //empty justification
       } yield b9
 
-    val chain = createChainWithValidators[StateWithChain].runS(initState).value
+    val chain = createChainWithValidators[StateWithChain].runS(initState)
     val b0    = chain.idToBlocks(0)
 
     (0 to 6).forall(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
@@ -248,7 +275,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
   // Creates a block with an invalid block number and sequence number
   "Block summary validation" should "short circuit after first invalidity" in {
-    val chain = createChain[StateWithChain](2).runS(initState).value
+    val chain = createChain[StateWithChain](2).runS(initState)
     val block = chain.idToBlocks(1)
 
     Validate.validateBlockSummary[Id](block.withBlockNumber(17).withSeqNum(1),
@@ -269,9 +296,9 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
       messages.map(b => b.sender -> b.blockHash).toMap
 
-    def createValidatorBlock[F[_]: Monad: BlockDagState](parents: Seq[BlockMessage],
-                                                         justifications: Seq[BlockMessage],
-                                                         validator: Int): F[BlockMessage] =
+    def createValidatorBlock[F[_]: Monad: BlockDagState: Time](parents: Seq[BlockMessage],
+                                                               justifications: Seq[BlockMessage],
+                                                               validator: Int): F[BlockMessage] =
       createBlock[F](
         parents.map(_.blockHash),
         creator = validators(validator),
@@ -280,7 +307,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         justifications = latestMessages(justifications)
       )
 
-    def createChainWithValidators[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+    def createChainWithValidators[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
       for {
         b0 <- createBlock[F](Seq.empty, bonds = bonds)
         b1 <- createValidatorBlock[F](Seq(b0), Seq(b0, b0), 0)
@@ -289,7 +316,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         b4 <- createValidatorBlock[F](Seq(b3), Seq(b2, b3), 1)
       } yield b4
 
-    val chain = createChainWithValidators[StateWithChain].runS(initState).value
+    val chain = createChainWithValidators[StateWithChain].runS(initState)
     val b0    = chain.idToBlocks(0)
 
     (0 to 4).forall(

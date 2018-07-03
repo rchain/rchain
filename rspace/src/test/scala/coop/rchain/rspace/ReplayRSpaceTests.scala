@@ -17,28 +17,43 @@ import scala.util.Random
 //noinspection ZeroIndexToHead,NameBooleanParameters
 class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
-  def consumeMany[C, P, A, K](
-      space: ISpace[C, P, A, K],
+  def consumeMany[C, P, A, R, K](
+      space: ISpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean)(implicit matcher: Match[P, A]): List[Option[(K, Seq[A])]] =
+      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.consume(channelsCreator(i), patterns, continuationCreator(i), persist)
     }
 
-  def produceMany[C, P, A, K](
-      space: ISpace[C, P, A, K],
+  def produceMany[C, P, A, R, K](
+      space: ISpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelCreator: Int => C,
       datumCreator: Int => A,
-      persist: Boolean)(implicit matcher: Match[P, A]): List[Option[(K, immutable.Seq[A])]] =
+      persist: Boolean)(implicit matcher: Match[P, A, R]): List[Option[(K, immutable.Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.produce(channelCreator(i), datumCreator(i), persist)
     }
+
+  "reset to a checkpoint from a different branch" should "work" in withTestSpaces {
+    (space, replaySpace) =>
+      val root0 = replaySpace.createCheckpoint().root
+      replaySpace.store.isEmpty shouldBe true
+
+      space.produce("ch1", "datum1", false)
+      val root1 = space.createCheckpoint().root
+
+      replaySpace.reset(root1)
+      replaySpace.store.isEmpty shouldBe false
+
+      space.reset(root0)
+      space.store.isEmpty shouldBe true
+  }
 
   "Creating a COMM Event that is not contained in the trace log" should "throw a ReplayException" in
     withTestSpaces { (space, replaySpace) =>
@@ -698,6 +713,19 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       mm.get(pr) shouldBe None
   }
+
+  "producing" should "return same, stable checkpoint root hashes" in {
+    def process(indices: Seq[Int]): Checkpoint = withTestSpaces { (space, replaySpace) =>
+      for (i <- indices) {
+        replaySpace.produce("ch1", s"datum$i", false)
+      }
+      space.createCheckpoint()
+    }
+
+    val cp1 = process(0 to 10)
+    val cp2 = process(10 to 0 by -1)
+    cp1.root shouldBe cp2.root
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]
@@ -713,17 +741,17 @@ trait ReplayRSpaceTestsBase[C, P, A, K]
     super.withFixture(test)
   }
 
-  def withTestSpaces[R](f: (RSpace[C, P, A, K], ReplayRSpace[C, P, A, K]) => R)(
+  def withTestSpaces[S](f: (RSpace[C, P, A, A, K], ReplayRSpace[C, P, A, A, K]) => S)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): R = {
+      sk: Serialize[K]): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create(context, Branch.MASTER)
-    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
+    val space       = RSpace.create[C, P, A, A, K](context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create[C, P, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)

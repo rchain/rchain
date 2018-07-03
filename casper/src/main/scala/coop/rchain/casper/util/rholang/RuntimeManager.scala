@@ -1,59 +1,77 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.Blake2b256Hash
-
+import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
 import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.StateHash
+import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class RuntimeManager private (runtime: SyncVar[Runtime]) {
+class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
+
+  def replayComputeState(log: trace.Log)(
+      implicit scheduler: Scheduler): (StateHash, List[Par]) => Either[Throwable, Checkpoint] = {
+    (hash: StateHash, terms: List[Par]) =>
+      {
+        val runtime   = runtimeContainer.take()
+        val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+        val riggedRuntime = Try(runtime.replaySpace.rig(blakeHash, log)) match {
+          case Success(_) => runtime
+          case Failure(ex) =>
+            runtimeContainer.put(runtime)
+            throw ex
+        }
+        val error = eval(terms, riggedRuntime.replayReducer)
+        val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+          Right(riggedRuntime.space.createCheckpoint()))(Left(_))
+        runtimeContainer.put(riggedRuntime)
+        newCheckpoint
+      }
+  }
 
   def computeState(hash: StateHash, terms: List[Par])(
-      implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
-    val active = getActive(hash)
-    val error  = eval(terms, active)
-    val newHash = error.fold[Either[Throwable, ByteString]](
-      Right(ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)))(Left(_))
-    runtime.put(active)
-    newHash
+      implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
+    val resetRuntime: Runtime = getResetRuntime(hash)
+    val error                 = eval(terms, resetRuntime.reducer)
+    val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+      Right(resetRuntime.space.createCheckpoint()))(Left(_))
+    runtimeContainer.put(resetRuntime)
+    newCheckpoint
   }
 
   def storageRepr(hash: StateHash): String = {
-    val active = getActive(hash)
-    val result = StoragePrinter.prettyPrint(active.space.store)
-    runtime.put(active)
+    val resetRuntime = getResetRuntime(hash)
+    val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
+    runtimeContainer.put(resetRuntime)
     result
   }
 
-  private def getActive(hash: StateHash): Runtime = {
-    val active    = runtime.take()
+  private def getResetRuntime(hash: StateHash) = {
+    val runtime   = runtimeContainer.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(active.space.reset(blakeHash)) match {
-      case Success(_) => active
+    Try(runtime.space.reset(blakeHash)) match {
+      case Success(_) => runtime
       case Failure(ex) =>
-        runtime.put(active)
+        runtimeContainer.put(runtime)
         throw ex
     }
   }
 
-  private def eval(terms: List[Par], active: Runtime)(
+  private def eval(terms: List[Par], reducer: Reduce[Task])(
       implicit scheduler: Scheduler): Option[Throwable] =
     terms match {
       case term :: rest =>
-        Try(active.reducer.inj(term).unsafeRunSync) match {
-          case Success(_)  => eval(rest, active)
+        Try(reducer.inj(term).unsafeRunSync) match {
+          case Success(_)  => eval(rest, reducer)
           case Failure(ex) => Some(ex)
         }
-
       case Nil => None
     }
 }
