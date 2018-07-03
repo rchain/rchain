@@ -45,7 +45,7 @@ object Genesis {
       MakeMint.term,
       BasicWallet.term,
       (new Rev(wallets)).term
-    )
+    ).map(termDeploy)
 
     val Right(checkpoint) = runtimeManager.computeState(startHash, blessedTerms)
     val stateHash         = ByteString.copyFrom(checkpoint.root.bytes.toArray)
@@ -58,9 +58,8 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val body = Body(postState = stateWithContracts,
-                    newCode = blessedTerms.map(termDeploy),
-                    commReductions = reductionLog)
+    val body =
+      Body(postState = stateWithContracts, newCode = blessedTerms, commReductions = reductionLog)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification])
