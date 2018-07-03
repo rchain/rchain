@@ -169,12 +169,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                            = effects.log
-  implicit val timeEffect: Time[Task]                          = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]              = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
-  implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
+  implicit val logEffect: Log[Task]                               = effects.log
+  implicit val timeEffect: Time[Task]                             = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
@@ -220,12 +220,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down transport layer, broadcasting DISCONNECT")
 
     (for {
-      peers <- nodeDiscoveryEffect.peers
-      loc   <- transportLayerEffect.local
-      msg   = ProtocolHelper.disconnect(loc)
-      _     <- transportLayerEffect.broadcast(peers, msg)
-      // TODO remove that once broadcast and send reuse roundTrip
-      _ <- IOUtil.sleep[Task](5000L)
+      loc <- transportLayerEffect.local
+      ts  <- timeEffect.currentMillis
+      msg = ProtocolHelper.disconnect(loc)
+      _   <- transportLayerEffect.shutdown(msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
@@ -268,8 +266,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled => Connect.dispatch[Effect](pm)
-        case handled    => handled.pure[Effect]
+        case NotHandled(_) => Connect.dispatch[Effect](pm)
+        case handled       => handled.pure[Effect]
       }
   }
 

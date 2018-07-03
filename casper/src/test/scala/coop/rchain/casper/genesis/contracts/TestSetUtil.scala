@@ -3,12 +3,14 @@ package coop.rchain.casper.genesis.contracts
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.Capture.taskCapture
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.unittest.TestSet
 
 import java.nio.file.Files
+import java.security.SecureRandom
 
 import monix.execution.Scheduler
 
@@ -22,10 +24,12 @@ object TestSetUtil {
     Runtime.create(storageLocation, size)(taskCapture)
   }
 
-  def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler): Unit =
+  def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler,
+                                             rand: Blake2b512Random): Unit =
     runtime.reducer.inj(term).unsafeRunSync
 
-  def eval(code: String, runtime: Runtime)(implicit scheduler: Scheduler): Unit =
+  def eval(code: String, runtime: Runtime)(implicit scheduler: Scheduler,
+                                           rand: Blake2b512Random): Unit =
     mkTerm(code) match {
       case Right(term) => eval_term(term, runtime)
       case Left(ex)    => throw ex
@@ -34,13 +38,18 @@ object TestSetUtil {
   def runTests(tests: Par, otherLibs: Seq[Par], runtime: Runtime)(
       implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
-    eval_term(LinkedList.term, runtime)
-    eval_term(TestSet.term, runtime)
+    val bytes = new Array[Byte](128)
+    new SecureRandom().nextBytes(bytes)
+    val rand = Blake2b512Random(bytes)
+    eval_term(LinkedList.term, runtime)(implicitly, rand.splitShort(0))
+    eval_term(TestSet.term, runtime)(implicitly, rand.splitShort(1))
 
     //load "libraries" required for this particular set of tests
-    otherLibs.foreach(lib => eval_term(lib, runtime))
+    otherLibs.zipWithIndex.foreach {
+      case (lib, idx) => eval_term(lib, runtime)(implicitly, rand.splitShort((idx + 2).toShort))
+    }
 
-    eval_term(tests, runtime)
+    eval_term(tests, runtime)(implicitly, rand.splitShort((otherLibs.length + 2).toShort))
   }
 
   /**

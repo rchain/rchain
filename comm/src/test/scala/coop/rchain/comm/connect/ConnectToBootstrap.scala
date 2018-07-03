@@ -46,11 +46,11 @@ class ConnectToBootstrapSpec
       // then
       logEff.warns should equal(
         List(
-          "Failed to connect to bootstrap (attempt 1 / 5)",
-          "Failed to connect to bootstrap (attempt 2 / 5)",
-          "Failed to connect to bootstrap (attempt 3 / 5)",
-          "Failed to connect to bootstrap (attempt 4 / 5)",
-          "Failed to connect to bootstrap (attempt 5 / 5)"
+          "Failed to connect to bootstrap (attempt 1 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 2 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 3 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 4 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 5 / 5). Reason: UnknownProtocolError(unknown)"
         ))
     }
 

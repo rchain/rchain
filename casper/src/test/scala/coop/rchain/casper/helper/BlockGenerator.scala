@@ -1,22 +1,35 @@
-package coop.rchain.casper
+package coop.rchain.casper.helper
 
+import cats._
+import cats.data.StateT
+import cats.implicits._
+import cats.mtl.MonadState
+import coop.rchain.catscontrib._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.BlockDag
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Time
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
-import coop.rchain.catscontrib._
-import Catscontrib._
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol._
+
+object BlockGenerator {
+  implicit val timeEff = new LogicalTime[Id]
+
+  type StateWithChain[A] = StateT[Id, BlockDag, A]
+
+  type BlockDagState[F[_]] = MonadState[F, BlockDag]
+  def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, BlockDag]
+}
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: BlockDagState](
+  import BlockGenerator._
+
+  def createBlock[F[_]: Monad: BlockDagState: Time](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -26,6 +39,7 @@ trait BlockGenerator {
       tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
+      now               <- Time[F].currentMillis
       nextId            = chain.currentId + 1
       nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, -1) + 1
       postState = RChainState()
@@ -36,6 +50,7 @@ trait BlockGenerator {
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
+        .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withPostState(postState).withNewCode(deploys).withCommReductions(tsLog)
       serializedJustifications = justifications.toList.map {

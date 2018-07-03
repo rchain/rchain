@@ -1,9 +1,11 @@
 package coop.rchain.rholang.interpreter
 
 import java.io.Reader
+import java.security.SecureRandom
 
 import cats.MonadError
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.ParSortMatcher
@@ -89,11 +91,15 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield (result)
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] = {
+    val bytes = new Array[Byte](128)
+    new SecureRandom().nextBytes(bytes)
+    implicit val rand = Blake2b512Random(bytes)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
     } yield errors
+  }
 
   private def mkErrorMsg(errors: Vector[InterpreterError]) =
     errors

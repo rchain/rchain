@@ -46,20 +46,20 @@ package object effects {
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = ProtocolHelper.ping(src)
-          res <- TransportLayer[F].roundTrip(node, req, timeout).map(_.toOption)
-        } yield res.isDefined
+          res <- TransportLayer[F].roundTrip(node, req, timeout)
+        } yield res.toOption.isDefined
     }
 
   def tcpTranposrtLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.ConnectionsState,
+      connections: TcpTransportLayer.State,
       log: Log[Task]) =
     new TcpTransportLayer(host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TcpTransportLayer.Connections] = {
-    val state = AtomicAny[TcpTransportLayer.Connections](Map.empty)
-    new AtomicMonadState[F, TcpTransportLayer.Connections](state)
+  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TransportState] = {
+    val state = AtomicAny(TransportState())
+    new AtomicMonadState[F, TransportState](state)
   }
 }

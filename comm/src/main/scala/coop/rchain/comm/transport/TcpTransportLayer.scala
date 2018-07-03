@@ -15,13 +15,12 @@ import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
-import coop.rchain.comm.transport.TcpTransportLayer._
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
     implicit scheduler: Scheduler,
-    connections: ConnectionsState,
+    state: TcpTransportLayer.State,
     log: Log[Task])
     extends TransportLayer[Task] {
 
@@ -65,26 +64,34 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
         .build()
     }
 
-  private def connection(peer: PeerNode): Task[ManagedChannel] =
+  private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
     for {
-      cs <- connections.get
-      c  <- cs.get(peer.id).fold(clientChannel(peer))(_.pure[Task])
-      _  <- connections.modify(_ + (peer.id -> c))
+      s <- state.get
+      _ <- if (s.shutdown && !enforce)
+            Task.raiseError(new RuntimeException("The transport layer has been shut down"))
+          else Task.unit
+      c    <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
+      _    <- state.modify(s => s.copy(connections = s.connections + (peer -> c)))
+      cons <- state.inspect(_.connections.keys)
+      _    <- log.info(s"Current open connections: ${cons.size}")
     } yield c
 
   def disconnect(peer: PeerNode): Task[Unit] =
     for {
-      cs <- connections.get
-      _ <- cs.get(peer.id) match {
+      s <- state.get
+      _ <- s.connections.get(peer) match {
             case Some(c) => Task.delay(c.shutdown()).attempt.void
             case _       => log.warn(s"Can't disconnect from peer ${peer.id}. Connection not found.")
           }
-      _ <- connections.modify(_ - peer.id)
+      _    <- state.modify(s => s.copy(connections = s.connections - peer))
+      cons <- state.inspect(_.connections.keys)
+      _    <- log.info(s"Current open connections: ${cons.size}")
     } yield ()
 
-  private def withClient[A](peer: PeerNode)(f: TransportLayerStub => Task[A]): Task[A] =
+  private def withClient[A](peer: PeerNode, enforce: Boolean)(
+      f: TransportLayerStub => Task[A]): Task[A] =
     for {
-      channel <- connection(peer)
+      channel <- connection(peer, enforce)
       stub    <- Task.delay(TransportLayerGrpc.stub(channel))
       result <- f(stub).doOnFinish {
                  case None    => Task.unit
@@ -92,18 +99,19 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                }
     } yield result
 
-  private def innerSend(peer: PeerNode, request: TLRequest): Task[TLResponse] =
-    withClient(peer)(stub => Task.fromFuture(stub.send(request)))
+  private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
+    withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
       .doOnFinish {
         case None    => Task.unit
         case Some(e) => log.warn(s"Failed to send a message to peer ${peer.id}: ${e.getMessage}")
       }
 
-  private def sendRequest(request: TLRequest,
-                          peer: PeerNode,
-                          timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
-    innerSend(peer, request)
-      .timeout(timeout)
+  private def innerRoundTrip(peer: PeerNode,
+                             request: TLRequest,
+                             timeout: FiniteDuration,
+                             enforce: Boolean): Task[Either[CommError, TLResponse]] =
+    sendRequest(peer, request, enforce)
+      .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
@@ -113,15 +121,15 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
   // TODO: Rename to send
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
     for {
-      tlResponseErr <- sendRequest(TLRequest(msg.some), peer, timeout)
+      tlResponseErr <- innerRoundTrip(peer, TLRequest(msg.some), timeout, enforce = false)
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
                     case p if p.isProtocol => Right(tlr.getProtocol)
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case p if p.isInternalServerError =>
-                      Left(internalCommunicationError("crap"))
+                    case TLResponse.Payload.InternalServerError(ise) =>
+                      Left(internalCommunicationError(ise.error.toStringUtf8))
                 })
                 .pure[Task]
     } yield pmErr
@@ -129,31 +137,69 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
   // TODO: rename to sendAndForget
   def send(peer: PeerNode, msg: Protocol): Task[Unit] =
     Task
-      .racePair(innerSend(peer, TLRequest(msg.some)), Task.unit)
+      .racePair(sendRequest(peer, TLRequest(msg.some), enforce = false), Task.unit)
       .attempt
       .void
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
-    Capture[Task].capture {
+  private def buildServer(transportLayer: TransportLayerGrpc.TransportLayer): Task[Server] =
+    Task.delay {
       NettyServerBuilder
         .forPort(port)
         .sslContext(serverSslContext)
-        .addService(TransportLayerGrpc.bindService(new TransportLayerImpl(dispatch), scheduler))
+        .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
     }
+
+  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
+    for {
+      s <- state.get
+      server <- s.server match {
+                 case Some(_) =>
+                   Task.raiseError(new RuntimeException("TransportLayer server is already started"))
+                 case _ => buildServer(new TransportLayerImpl(dispatch))
+               }
+      _ <- state.modify(_.copy(server = Some(server)))
+    } yield ()
+
+  def shutdown(msg: Protocol): Task[Unit] =
+    for {
+      s     <- state.get
+      _     <- log.info("Shutting down server")
+      _     <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
+      _     <- state.modify(_.copy(server = None, shutdown = true))
+      peers = s.connections.keys.toSeq
+      _     <- log.info("Sending shutdown message to all peers")
+      _     <- sendShutdownMessage(peers, msg)
+      _     <- log.info("Disconnecting from all peers")
+      _     <- Task.gatherUnordered(peers.map(disconnect))
+    } yield ()
+
+  private def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
+    Task
+      .gatherUnordered(
+        peers.map(innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true))
+      )
+      .void
+
 }
 
 object TcpTransportLayer {
   import cats.mtl.MonadState
-  type Connection       = ManagedChannel
-  type Connections      = Map[NodeIdentifier, Connection]
-  type ConnectionsState = MonadState[Task, Connections]
+  type Connection  = ManagedChannel
+  type Connections = Map[PeerNode, Connection]
+  type State       = MonadState[Task, TransportState]
 }
+
+case class TransportState(
+    connections: TcpTransportLayer.Connections = Map.empty,
+    server: Option[Server] = None,
+    shutdown: Boolean = false
+)
 
 class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     implicit scheduler: Scheduler)
@@ -163,7 +209,7 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
-          case NotHandled                   => internalServerError(s"Message ${protocol} was not handled!")
+          case NotHandled(error)            => internalServerError(s"$error")
           case HandledWitoutMessage         => noResponse
           case HandledWithMessage(response) => returnProtocol(response)
         }
@@ -175,7 +221,9 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
 
   // TODO InternalServerError should take msg in constructor
   private def internalServerError(msg: String): TLResponse =
-    TLResponse(TLResponse.Payload.InternalServerError(InternalServerError()))
+    TLResponse(
+      TLResponse.Payload.InternalServerError(
+        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
 
   private def noResponse: TLResponse =
     TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
