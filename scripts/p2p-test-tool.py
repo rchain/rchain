@@ -182,7 +182,7 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: Peers count incorrect in node logs.")
         if test == "propose":
-            for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
+            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
                 if test_propose(container) == 0:
                     notices['pass'].append(f"{container.name}: Proposal of blocks for deployed contracts worked.")
                 else:
@@ -199,6 +199,7 @@ def run_tests():
                     notices['pass'].append(f"{container.name}: REPL loader success!")
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
+            time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
 
     print("=======================SHOW LOGS===========================")
     print("Dumping logs from nodes in 3 seconds.")
@@ -249,27 +250,25 @@ def test_node_eval_of_rholang_files(container):
 def test_propose(container):
     retval = 0
     print(f"Running propose tests after deploy using on container {container.name}.")
-    for container in client.containers.list(all=False, filters={"name":f".{args.network}"}):
-        for i in range(1, args.propose_loop_amount+1):
-            print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+    for i in range(1, args.propose_loop_amount+1):
+        print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
-            # Deploy example contracts using 3 random example files
-            cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
-            r = container.exec_run(['sh', '-c', cmd])
-            for line in r.output.decode('utf-8').splitlines():
-                print(line)
+        # Deploy example contracts using 3 random example files
+        cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
 
-            # Propose blocks from example contracts
-            cmd = "/opt/docker/bin/rnode propose"
-            print("Propose to blockchain previously deployed smart contracts.")
+        # Propose blocks from example contracts
+        cmd = "/opt/docker/bin/rnode propose"
+        print("Propose to blockchain previously deployed smart contracts.")
 
-            r = container.exec_run(['sh', '-c', cmd])
-            for line in r.output.decode('utf-8').splitlines():
-                print(line)
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
 
-    print("Check logs for casper WARN or ERROR messages")
+    print("Check all peer logs for casper WARN or ERROR messages")
     time.sleep(5) # Allow for logs to fill out from last propose if needed
-
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
@@ -563,6 +562,11 @@ def test_repl_load(container):
                     result = conn.run_command(repl_cmd)
                     print(f"repetition: {i} output: {result}")
                 i += 1 
+
+            # Remove repl container after use as we don't want it running 
+            for repl_container in client.containers.list(all=True, filters={"name":f"repl\d.{args.network}"}):
+                print(f"removing {repl_container.name}")
+                repl_container.remove(force=True, v=True)
 
             return 0 
         except Exception as e:
