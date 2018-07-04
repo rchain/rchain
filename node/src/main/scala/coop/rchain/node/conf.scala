@@ -10,8 +10,26 @@ import org.rogach.scallop._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import scala.collection.JavaConverters._
 
+// TODO replace with default config file when CORE-512 is resolved
+case class Profile(name: String, dataDir: (() => Path, String))
+
+object Profile {
+  val docker =
+    Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
+  val default =
+    Profile("default",
+            dataDir =
+              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+
+  val profiles =
+    Map(default.name -> default, docker.name -> docker)
+}
+
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
+
+  val profile = opt[String](default = Some("default"), name = "profile")
+    .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
     opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
@@ -78,7 +96,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val data_dir = opt[Path](required = false,
                              descr = "Path to data directory. Defaults to $HOME/.rnode",
-                             default = Some(Paths.get(sys.props("user.home"), ".rnode")))
+                             default = profile.toOption.map(_.dataDir._1.apply()))
 
     val map_size = opt[Long](required = false,
                              descr = "Map size (in bytes)",
