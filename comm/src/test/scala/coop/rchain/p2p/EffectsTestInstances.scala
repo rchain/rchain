@@ -53,7 +53,7 @@ object EffectsTestInstances {
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
-    type Responses = PeerNode => (Protocol => CommErr[Protocol])
+    type Responses = PeerNode => Protocol => CommErr[Protocol]
     var reqresp: Option[Responses] = None
     var requests: List[Protocol]   = List.empty[Protocol]
 
@@ -82,6 +82,8 @@ object EffectsTestInstances {
     def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???
+
+    def shutdown(msg: Protocol): F[Unit] = ???
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {

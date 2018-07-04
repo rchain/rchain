@@ -277,9 +277,12 @@ object ProtoUtil {
     )
   }
 
-  def termDeploy(term: Par): Deploy =
+  def termDeploy(term: Par): Deploy = {
+    val timestamp = System.currentTimeMillis()
     Deploy(
       term = Some(term),
-      raw = None
+      raw = Some(
+        DeployString(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
+  }
 }

@@ -47,7 +47,7 @@ lazy val casper = (project in file("casper"))
   .settings(rholangSettings: _*)
   .settings(
     name := "casper",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
       monix
@@ -81,13 +81,14 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
+      scalacheckNoTest,
       kalium,
       jaxb,
-      secp256k1Java
-    ),
+      secp256k1Java,
+      scodecBits),
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )

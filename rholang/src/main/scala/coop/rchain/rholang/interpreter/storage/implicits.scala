@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -8,7 +9,6 @@ import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
-import scodec.bits.ByteVector
 
 //noinspection ConvertExpressionToSAM
 object implicits {
@@ -23,11 +23,12 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel], Seq[Channel]] =
-    new StorageMatch[BindPattern, Seq[Channel], Seq[Channel]] {
+  implicit val matchListQuote
+    : StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] =
+    new StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] {
 
-      def get(pattern: BindPattern, data: Seq[Channel]): Option[Seq[Channel]] =
-        foldMatch(data, pattern.patterns, pattern.remainder)
+      def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] =
+        foldMatch(data.channels, pattern.patterns, pattern.remainder)
           .run(emptyMap)
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
@@ -43,7 +44,7 @@ object implicits {
                   freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
                 case _ => freeMap
               }
-              toChannels(remainderMap, pattern.freeCount)
+              ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount), data.randomState)
           }
     }
 
@@ -55,15 +56,8 @@ object implicits {
   implicit val serializeChannel: Serialize[Channel] =
     mkProtobufInstance(Channel)
 
-  implicit val serializeChannels: Serialize[Seq[Channel]] =
-    new Serialize[Seq[Channel]] {
-
-      override def encode(a: Seq[Channel]): ByteVector =
-        ByteVector.view(ListChannel.toByteArray(ListChannel(a)))
-
-      override def decode(bytes: ByteVector): Either[Throwable, Seq[Channel]] =
-        Either.catchNonFatal(ListChannel.parseFrom(bytes.toArray).channels.toList)
-    }
+  implicit val serializeChannels: Serialize[ListChannelWithRandom] =
+    mkProtobufInstance(ListChannelWithRandom)
 
   implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
     mkProtobufInstance(TaggedContinuation)
