@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.{Branch, Leaf}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 import coop.rchain.shared.SyncVarOps._
@@ -100,17 +100,10 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
       }
     }
 
-  override def reset(root: Blake2b256Hash): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.validateAndPutRoot(txn, branch, root)
-      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, root)
-      store.clear(txn)
-      val inst = installs.get
-      inst.foreach {
-        case (k, v) =>
-          install(txn, k, v._1, v._2)(v._3)
-      }
-      store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+  override protected[this] def restoreInstalls(txn: store.T): Unit =
+    installs.get.foreach {
+      case (k, v) =>
+        install(txn, k, v._1, v._2)(v._3)
     }
 
   private[this] def install(txn: store.T, channels: Seq[C], patterns: Seq[P], continuation: K)(
@@ -124,7 +117,6 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
-    //eventLog.update(consumeRef +: _)
     installs.update(_.updated(channels, (patterns, continuation, m)))
 
     /*
