@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.{Log, LogSource}
 
 import java.nio.file.Path
@@ -66,6 +66,9 @@ object CasperConf {
       case "ed25519" =>
         Try(Ed25519.toPublic(privateKey)).toOption
 
+      case "secp256k1" =>
+        Try(Secp256k1.toPublic(privateKey)).toOption
+
       case _ => None
     }
 
@@ -76,6 +79,8 @@ object CasperConf {
 
       case (Some(k1), None) => k1
 
+      //TODO: Should this case be an error?
+      //Will all supported algorithms be able to infer the public key from private?
       case (None, Some(k2)) => k2
 
       case (None, None) =>

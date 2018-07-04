@@ -12,7 +12,6 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
