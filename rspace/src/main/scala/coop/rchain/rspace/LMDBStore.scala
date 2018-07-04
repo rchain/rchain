@@ -2,9 +2,8 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.AttemptOps._
@@ -19,7 +18,6 @@ import scodec.bits._
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
 
 /**
   * The main store class.
@@ -31,8 +29,6 @@ class LMDBStore[C, P, A, K] private (
     databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
     _dbJoins: Dbi[ByteBuffer],
-    _trieUpdateCount: AtomicLong,
-    _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(implicit
@@ -45,7 +41,10 @@ class LMDBStore[C, P, A, K] private (
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private[rspace] type T = Txn[ByteBuffer]
+  private[rspace] type T  = Txn[ByteBuffer]
+  private[rspace] type TT = T
+
+  def withTrieTxn[R](txn: T)(f: TT => R): R = f(txn)
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
@@ -80,9 +79,7 @@ class LMDBStore[C, P, A, K] private (
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
     if (_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
-      val count   = _trieUpdateCount.getAndIncrement()
-      val currLog = _trieUpdates.take()
-      _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, channelsHash, gnat))
+      trieInsert(channelsHash, gnat)
     } else {
       throw new Exception(s"could not persist: $gnat")
     }
@@ -93,9 +90,7 @@ class LMDBStore[C, P, A, K] private (
                          gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     if (_dbGNATs.delete(txn, channelsHashBuff)) {
-      val count   = _trieUpdateCount.getAndIncrement()
-      val currLog = _trieUpdates.take()
-      _trieUpdates.put(currLog :+ TrieUpdate(count, Delete, channelsHash, gnat))
+      trieDelete(channelsHash, gnat)
     } else {
       throw new Exception(s"could not delete: $channelsHash")
     }
@@ -291,21 +286,12 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def createCheckpoint(): Blake2b256Hash = {
-    val trieUpdates = _trieUpdates.take
-    _trieUpdates.put(Seq.empty)
-    _trieUpdateCount.set(0L)
-    collapse(trieUpdates).foreach {
-      case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-      case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-    }
-    withTxn(createTxnWrite()) { txn =>
-      trieStore
-        .persistAndGetRoot(txn, trieBranch)
-        .getOrElse(throw new Exception("Could not get root hash"))
-    }
+  //TODO(dz) figure out if this can go to IStore
+  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit] = {
+    case TrieUpdate(_, Insert, channelsHash, gnat) =>
+      history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+    case TrieUpdate(_, Delete, channelsHash, gnat) =>
+      history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
   }
 
   // TODO: Does using a cursor improve performance for bulk operations?
@@ -339,16 +325,10 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    val trieUpdateCount = new AtomicLong(0L)
-    val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
-    trieUpdates.put(Seq.empty)
-
     new LMDBStore[C, P, A, K](context.env,
                               context.path,
                               dbGnats,
                               dbJoins,
-                              trieUpdateCount,
-                              trieUpdates,
                               context.trieStore,
                               branch)
   }

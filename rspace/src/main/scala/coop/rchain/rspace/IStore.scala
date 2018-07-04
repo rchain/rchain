@@ -1,9 +1,13 @@
 package coop.rchain.rspace
 
+import java.util.concurrent.atomic.AtomicLong
+
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
+import coop.rchain.shared.SyncVarOps
 
 import scala.collection.immutable.Seq
+import scala.concurrent.SyncVar
 
 /** The interface for the underlying store
   *
@@ -18,6 +22,8 @@ trait IStore[C, P, A, K] {
     * The type of transactions
     */
   private[rspace] type T
+
+  private[rspace] type TT // trie transaction
 
   private[rspace] def createTxnRead(): T
 
@@ -62,13 +68,44 @@ trait IStore[C, P, A, K] {
 
   def getStoreCounters: StoreCounters
 
-  private[rspace] val eventsCounter: StoreEventsCounter
-
-  def createCheckpoint(): Blake2b256Hash
-
-  val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+  val trieStore: ITrieStore[TT, Blake2b256Hash, GNAT[C, P, A, K]]
 
   val trieBranch: Branch
+
+  def withTrieTxn[R](txn: T)(f: TT => R): R
+
+  private[rspace] val eventsCounter: StoreEventsCounter
+
+  protected val _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]] =
+    SyncVarOps.create(Seq.empty)
+
+  def trieDelete(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]) = {
+    val count   = _trieUpdateCount.getAndIncrement()
+    val currLog = _trieUpdates.take()
+    _trieUpdates.put(currLog :+ TrieUpdate(count, Delete, key, gnat))
+  }
+
+  def trieInsert(key: Blake2b256Hash, gnat: GNAT[C, P, A, K]) = {
+    val count   = _trieUpdateCount.getAndIncrement()
+    val currLog = _trieUpdates.take()
+    _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, key, gnat))
+  }
+
+  protected val _trieUpdateCount: AtomicLong = new AtomicLong(0L)
+
+  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit]
+
+  def createCheckpoint(): Blake2b256Hash = {
+    val trieUpdates = _trieUpdates.take
+    _trieUpdates.put(Seq.empty)
+    _trieUpdateCount.set(0L)
+    collapse(trieUpdates).foreach(processTrieUpdate)
+    trieStore.withTxn(trieStore.createTxnWrite()) { txn => // huh
+      trieStore
+        .persistAndGetRoot(txn, trieBranch)
+        .getOrElse(throw new Exception("Could not get root hash"))
+    }
+  }
 
   private[rspace] def collapse(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)

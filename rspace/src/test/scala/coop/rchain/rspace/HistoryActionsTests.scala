@@ -5,7 +5,7 @@ import java.lang.{Byte => JByte}
 import cats.implicits._
 import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
+import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, GNAT, Row, WaitingContinuation}
 import coop.rchain.rspace.test.ArbitraryInstances._
@@ -13,8 +13,8 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
@@ -439,3 +439,5 @@ trait HistoryActionsTests
 }
 
 class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryActionsTests
+
+class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests

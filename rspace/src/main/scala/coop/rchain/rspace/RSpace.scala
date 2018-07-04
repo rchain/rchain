@@ -1,12 +1,15 @@
 package coop.rchain.rspace
 
+import java.nio.ByteBuffer
+
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 import coop.rchain.shared.SyncVarOps._
+import org.lmdbjava.Txn
 import scodec.Codec
 
 import scala.annotation.tailrec

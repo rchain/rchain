@@ -1,11 +1,15 @@
 package coop.rchain.rspace.test
 
+import java.nio.ByteBuffer
+
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.history.{Branch, ITrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, Leaf}
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import coop.rchain.shared.AttemptOps._
+import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.BitVector
 
@@ -14,9 +18,13 @@ import scala.concurrent.SyncVar
 
 trait Transaction[S] {
   def commit(): Unit
+
   def abort(): Unit
+
   def close(): Unit
+
   def readState[R](f: S => R): R
+
   def writeState[R](f: S => (S, R)): R
 
   def name: String
@@ -38,12 +46,16 @@ object State {
 }
 
 class InMemoryStore[C, P, A, K](
-    val trieStore: ITrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
+    val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit sc: Serialize[C], sk: Serialize[K])
+)(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
     extends IStore[C, P, A, K] {
 
+  private implicit val codecK: Codec[K] = sk.toCodec
   private implicit val codecC: Codec[C] = sc.toCodec
+  private implicit val codecP: Codec[P] = sp.toCodec
+  private implicit val codecA: Codec[A] = sa.toCodec
+
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[this] val stateRef: SyncVar[State[C, P, A, K]] = {
@@ -52,7 +64,8 @@ class InMemoryStore[C, P, A, K](
     sv
   }
 
-  private[rspace] type T = Transaction[StateType]
+  private[rspace] type T  = Transaction[StateType]
+  private[rspace] type TT = Txn[ByteBuffer]
 
   private[this] type StateType = State[C, P, A, K]
 
@@ -66,8 +79,10 @@ class InMemoryStore[C, P, A, K](
     private[this] val state = stateRef.get
 
     override def commit(): Unit = {}
-    override def abort(): Unit  = {}
-    override def close(): Unit  = {}
+
+    override def abort(): Unit = {}
+
+    override def close(): Unit = {}
 
     override def readState[R](f: StateType => R): R = f(state)
 
@@ -109,6 +124,11 @@ class InMemoryStore[C, P, A, K](
         throw ex
     } finally {
       txn.close()
+    }
+
+  override def withTrieTxn[R](txn: Transaction[StateType])(f: Txn[ByteBuffer] => R): R =
+    trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
+      f(ttxn)
     }
 
   private[rspace] def getChannels(txn: T, key: Blake2b256Hash): Seq[C] =
@@ -169,8 +189,15 @@ class InMemoryStore[C, P, A, K](
   private[this] def handleGNATChange(
       state: StateType,
       key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {
-    case Some(gnat) if !isOrphaned(gnat) => state.copy(dbGNATs = state.dbGNATs + (key -> gnat))
-    case _                               => state.copy(dbGNATs = state.dbGNATs - key)
+    case Some(gnat) if !isOrphaned(gnat) =>
+      val updated = state.copy(dbGNATs = state.dbGNATs + (key -> gnat))
+      trieInsert(key, gnat)
+      updated
+    case _ =>
+      val gnat    = state.dbGNATs(key)
+      val updated = state.copy(dbGNATs = state.dbGNATs - key)
+      trieDelete(key, gnat)
+      updated
   }
 
   private[this] def handleJoinChange(state: StateType,
@@ -196,11 +223,11 @@ class InMemoryStore[C, P, A, K](
     }
 
   private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit =
-    withJoin(txn, channel) { joinOpt =>
-      joinOpt
-        .filter(!_.exists(_.equals(channels)))
-        .map(channels +: _)
-        .orElse(Seq(channels).some)
+    withJoin(txn, channel) {
+      _.collect {
+        case joins if !joins.contains(channels) => channels +: joins
+        case joins                              => joins
+      }.orElse(Seq(channels).some)
     }
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
@@ -236,9 +263,8 @@ class InMemoryStore[C, P, A, K](
 
   private[rspace] def clear(txn: T): Unit =
     txn.writeState(_ => {
-      val ns: StateType = State.empty
       eventsCounter.reset()
-      (ns, ())
+      (State.empty, ())
     })
 
   def getStoreCounters: StoreCounters =
@@ -255,11 +281,26 @@ class InMemoryStore[C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  def createCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit] = {
+    case TrieUpdate(_, Insert, channelsHash, gnat) =>
+      history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+    case TrieUpdate(_, Delete, channelsHash, gnat) =>
+      history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+  }
 
-  private[rspace] def bulkInsert(txn: Transaction[StateType],
-                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
-    ???
+  private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    gnats.foreach {
+      case (hash, gnat @ GNAT(channels, _, wks)) =>
+        withGNAT(txn, hash) { _ =>
+          Some(gnat)
+        }
+        for {
+          wk      <- wks
+          channel <- channels
+        } {
+          addJoin(txn, channel, channels)
+        }
+    }
 }
 
 object InMemoryStore {
@@ -270,9 +311,16 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
-    new InMemoryStore[C, P, A, K](
-      new DummyTrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
-      Branch("dummy")
-    )
+  def create[C, P, A, K](trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
+                         branch: Branch)(implicit sc: Serialize[C],
+                                         sp: Serialize[P],
+                                         sa: Serialize[A],
+                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] = {
+    implicit val codecK: Codec[K] = sk.toCodec
+    implicit val codecC: Codec[C] = sc.toCodec
+    implicit val codecP: Codec[P] = sp.toCodec
+    implicit val codecA: Codec[A] = sa.toCodec
+    initialize(trieStore, branch)
+    new InMemoryStore[C, P, A, K](trieStore, branch)
+  }
 }

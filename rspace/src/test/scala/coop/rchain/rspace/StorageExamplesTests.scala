@@ -1,13 +1,18 @@
 package coop.rchain.rspace
 
+import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.internal.GNAT
+import coop.rchain.rspace.internal.codecGNAT
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test.InMemoryStore
+import org.lmdbjava.{Env, EnvFlags, Txn}
 import org.scalatest.BeforeAndAfterAll
+import scodec.Codec
 
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
@@ -276,18 +281,48 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 }
 
 class InMemoryStoreStorageExamplesTestsBase
-    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
+    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor]
+    with BeforeAndAfterAll {
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 1024L
 
   override def withTestSpace[R](f: T => R): R = {
-    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
+    val env: Env[ByteBuffer] =
+      Env
+        .create()
+        .setMapSize(mapSize)
+        .setMaxDbs(8)
+        .setMaxReaders(126)
+        .open(dbDir.toFile, List(EnvFlags.MDB_NOTLS): _*)
+
+    implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
+      implicits.serializeChannel.toCodec,
+      implicits.serializePattern.toCodec,
+      implicits.serializeInfo.toCodec,
+      implicits.serializeEntriesCaptor.toCodec)
+
+    val branch = Branch("inmem")
+
+    val trieStore
+      : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]] =
+      LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env)
+
+    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
     val testSpace =
       new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+    trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
+    initialize(trieStore, branch)
     try {
       f(testSpace)
     } finally {
       testStore.close()
     }
+  }
+
+  override def afterAll(): Unit = {
+    test.recursivelyDeletePath(dbDir)
+    super.afterAll()
   }
 }
 

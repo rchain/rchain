@@ -1,14 +1,15 @@
 package coop.rchain.rspace
 
+import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
 import coop.rchain.rspace.test._
-import org.lmdbjava.EnvFlags
+import org.lmdbjava.{Env, EnvFlags, Txn}
 import org.scalatest._
 import scodec.Codec
 
@@ -28,18 +29,47 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
   def withTestSpace[S](f: T => S): S
 }
 
-class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
+class InMemoryStoreTestsBase
+    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withTestSpace[S](f: T => S): S = {
-    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
+    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
+    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+    val env: Env[ByteBuffer] =
+      Env
+        .create()
+        .setMapSize(mapSize)
+        .setMaxDbs(8)
+        .setMaxReaders(126)
+        .open(dbDir.toFile, List(EnvFlags.MDB_NOTLS): _*)
+
+    val branch = Branch("inmem")
+
+    val trieStore
+      : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
+      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env)
+
+    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
     val testSpace =
-      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("test"))
+      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
+    trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
+    initialize(trieStore, branch)
     try {
       f(testSpace)
     } finally {
       testStore.close()
     }
+  }
+
+  override def afterAll(): Unit = {
+    test.recursivelyDeletePath(dbDir)
+    super.afterAll()
   }
 }
 
