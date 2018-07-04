@@ -278,9 +278,9 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](2).runS(initState)
     val block = chain.idToBlocks(1)
 
-    Validate.validateBlockSummary[Id](block.withBlockNumber(17).withSeqNum(1),
-                                      BlockMessage(),
-                                      chain) should be(Left(InvalidBlockNumber))
+    Validate
+      .blockSummary[Id](block.withBlockNumber(17).withSeqNum(1), BlockMessage(), chain) should be(
+      Left(InvalidBlockNumber))
     log.warns.size should be(1)
   }
 

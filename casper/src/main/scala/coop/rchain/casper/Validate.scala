@@ -66,7 +66,7 @@ object Validate {
    * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
-  def validateBlockSummary[F[_]: Monad: Log: Time](
+  def blockSummary[F[_]: Monad: Log: Time](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
