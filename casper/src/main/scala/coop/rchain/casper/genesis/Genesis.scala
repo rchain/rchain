@@ -87,7 +87,6 @@ object Genesis {
   }
 
   //TODO: Decide on version number
-  //TODO: Include wallets input file
   def fromInputFiles[F[_]: Monad: Capture: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
