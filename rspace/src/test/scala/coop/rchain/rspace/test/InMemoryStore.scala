@@ -260,6 +260,12 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def bulkInsert(txn: Transaction[StateType],
                                  gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
     ???
+
+  private[rspace] def installWaitingContinuation(txn: T,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit =
+    ???
+
 }
 
 object InMemoryStore {

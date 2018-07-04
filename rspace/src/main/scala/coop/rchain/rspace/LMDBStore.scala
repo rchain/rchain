@@ -74,18 +74,22 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
+  private[this] def installGNAT(txn: T,
+                                channelsHash: Blake2b256Hash,
+                                gnat: GNAT[C, P, A, K]): Unit = {
+    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
+    val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
+    if (!_dbGNATs.put(txn, channelsHashBuff, gnatBuff))
+      throw new Exception(s"could not persist: $gnat")
+  }
+
   private[this] def insertGNAT(txn: T,
                                channelsHash: Blake2b256Hash,
                                gnat: GNAT[C, P, A, K]): Unit = {
-    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
-    val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
-    if (_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
-      val count   = _trieUpdateCount.getAndIncrement()
-      val currLog = _trieUpdates.take()
-      _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, channelsHash, gnat))
-    } else {
-      throw new Exception(s"could not persist: $gnat")
-    }
+    installGNAT(txn, channelsHash, gnat)
+    val count   = _trieUpdateCount.getAndIncrement()
+    val currLog = _trieUpdates.take()
+    _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, channelsHash, gnat))
   }
 
   private def deleteGNAT(txn: Txn[ByteBuffer],
@@ -165,6 +169,18 @@ class LMDBStore[C, P, A, K] private (
     removeDatum(txn, Seq(channel), index)
 
   /* Continuations */
+
+  private[rspace] def installWaitingContinuation(txn: T,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit = {
+    val channelsHash = hashChannels(channels)
+    fetchGNAT(txn, channelsHash) match {
+      case Some(gnat @ GNAT(_, _, currContinuations)) =>
+        installGNAT(txn, channelsHash, gnat.copy(wks = continuation +: currContinuations))
+      case None =>
+        installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
+    }
+  }
 
   private[rspace] def putWaitingContinuation(txn: T,
                                              channels: Seq[C],

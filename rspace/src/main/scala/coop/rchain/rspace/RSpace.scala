@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 import coop.rchain.shared.SyncVarOps._
@@ -28,6 +28,14 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     val log = new SyncVar[Log]()
     log.put(Seq.empty)
     log
+  }
+
+  type Installs = Map[Seq[C], (Seq[P], K, Match[P, A, R])]
+
+  private[this] val installs: SyncVar[Installs] = {
+    val _installs = new SyncVar[Installs]()
+    _installs.put(Map.empty)
+    _installs
   }
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
@@ -92,65 +100,72 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
       }
     }
 
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
+  override def reset(root: Blake2b256Hash): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.trieStore.validateAndPutRoot(txn, branch, root)
+      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, root)
+      store.clear(txn)
+      val inst = installs.get
+      inst.foreach {
+        case (k, v) =>
+          install(txn, k, v._1, v._2)(v._3)
+      }
+      store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+    }
+
+  private[this] def install(txn: store.T, channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
       throw new IllegalArgumentException(msg)
     }
-    store.withTxn(store.createTxnWrite()) { txn =>
-      logger.debug(s"""|install: searching for data matching <patterns: $patterns>
+    logger.debug(s"""|install: searching for data matching <patterns: $patterns>
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-      val consumeRef = Consume.create(channels, patterns, continuation, true)
-      eventLog.update(consumeRef +: _)
+    val consumeRef = Consume.create(channels, patterns, continuation, true)
+    //eventLog.update(consumeRef +: _)
+    installs.update(_.updated(channels, (patterns, continuation, m)))
 
-      /*
-       * Here, we create a cache of the data at each channel as `channelToIndexedData`
-       * which is used for finding matches.  When a speculative match is found, we can
-       * remove the matching datum from the remaining data candidates in the cache.
-       *
-       * Put another way, this allows us to speculatively remove matching data without
-       * affecting the actual store contents.
-       */
+    /*
+     * Here, we create a cache of the data at each channel as `channelToIndexedData`
+     * which is used for finding matches.  When a speculative match is found, we can
+     * remove the matching datum from the remaining data candidates in the cache.
+     *
+     * Put another way, this allows us to speculatively remove matching data without
+     * affecting the actual store contents.
+     */
 
-      val channelToIndexedData = channels.map { (c: C) =>
-        c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-      }.toMap
+    val channelToIndexedData = channels.map { (c: C) =>
+      c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+    }.toMap
 
-      val options: Option[Seq[DataCandidate[C, R]]] =
-        extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+    val options: Option[Seq[DataCandidate[C, R]]] =
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
 
-      options match {
-        case None =>
-          store.removeAll(txn, channels)
-          store.putWaitingContinuation(
-            txn,
-            channels,
-            WaitingContinuation(patterns, continuation, persist = true, consumeRef))
-          for (channel <- channels) store.addJoin(txn, channel, channels)
-          logger.debug(s"""|consume: no data found,
+    options match {
+      case None =>
+        store.removeAll(txn, channels)
+        store.installWaitingContinuation(
+          txn,
+          channels,
+          WaitingContinuation(patterns, continuation, persist = true, consumeRef))
+        for (channel <- channels) store.addJoin(txn, channel, channels)
+        logger.debug(s"""|consume: no data found,
                            |storing <(patterns, continuation): ($patterns, $continuation)>
                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-          None
-        case Some(dataCandidates) =>
-          store.eventsCounter.registerInstallCommEvent()
-
-          eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
-
-          dataCandidates.foreach {
-            case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
-                if !persistData =>
-              store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-            case _ =>
-              ()
-          }
-          logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-          Some((continuation, dataCandidates.map(_.datum.a)))
-      }
+        None
+      case Some(_) =>
+        throw new RuntimeException("Installing can be done only on startup")
     }
+
   }
+
+  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
+      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      install(txn, channels, patterns, continuation)
+    }
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
