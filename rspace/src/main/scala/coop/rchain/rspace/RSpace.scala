@@ -30,12 +30,8 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     log
   }
 
-  case class Install(patterns: Seq[P], continuation: K, _match: Match[P, A, R])
-
-  type Installs = Map[Seq[C], Install]
-
-  private[this] val installs: SyncVar[Installs] = {
-    val _installs = new SyncVar[Installs]()
+  private[this] val installs: SyncVar[Installs[C, K, R, A, P]] = {
+    val _installs = new SyncVar[Installs[C, K, R, A, P]]()
     _installs.put(Map.empty)
     _installs
   }
