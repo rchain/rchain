@@ -33,6 +33,11 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     "6bf1b2753501d02d386789506a6d93681d2299c6edfd4455f596b97bc5725968"
   ).zipWithIndex
 
+  val walletAddresses = Seq(
+    "c0dcab7f3a2d485071c5b8b3e95b21bd0ae491978566c3fd653d1e65cd9e67e9",
+    "ed5f090de933a726d24fe98a77d4864f6e59f67e1217f1db82eb3eab13afe806"
+  ).zipWithIndex
+
   def printBonds(bondsFile: String): Unit = {
     val pw = new PrintWriter(bondsFile)
     pw.println(
@@ -48,7 +53,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   def printWallets(walletsFile: String): Unit = {
     val pw = new PrintWriter(walletsFile)
     pw.println(
-      validators
+      walletAddresses
         .map {
           case (v, i) => s"ed25519 $v $i"
         }
@@ -65,9 +70,8 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val _       = Genesis.fromInputFiles[Id](None, numValidators, genesisPath, None, runtime)
     runtime.close()
 
-    log.warns.isEmpty should be(true)
-    log.infos.length should be(numValidators)
-    log.infos.forall(_.contains("Created validator")) should be(true)
+    log.warns.find(_.contains("bonds")) should be(None)
+    log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file does not exist" in {
@@ -76,11 +80,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
       Genesis.fromInputFiles[Id](Some("not/a/real/file"), numValidators, genesisPath, None, runtime)
     runtime.close()
 
-    log.warns.length should be(1)
-    log.warns.head
-      .contains("does not exist. Falling back on generating random validators.") should be(true)
-    log.infos.length should be(numValidators)
-    log.infos.forall(_.contains("Created validator")) should be(true)
+    log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
+      1)
+    log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "generate random validators, with a warning, when bonds file cannot be parsed" in {
@@ -95,11 +97,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val _       = Genesis.fromInputFiles[Id](Some(badBondsFile), numValidators, path, None, runtime)
     runtime.close()
 
-    log.warns.length should be(1)
-    log.warns.head
-      .contains("cannot be parsed. Falling back on generating random validators.") should be(true)
-    log.infos.length should be(numValidators)
-    log.infos.forall(_.contains("Created validator")) should be(true)
+    log.warns.count(_.contains("cannot be parsed. Falling back on generating random validators.")) should be(
+      1)
+    log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in {
@@ -152,8 +152,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
     runtime.close()
 
-    log.infos.length should be(2)
-    validators.forall(storageContents contains _) should be(true)
+    walletAddresses.forall(storageContents contains _._1) should be(true)
   }
 
 }
