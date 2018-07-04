@@ -58,7 +58,7 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
 
     check(propRoundTripTypeMapper)
 
-    val zeroPositionRand = Arbitrary.arbitrary[Blake2b512Random] suchThat (_.position == 0)
+    val zeroPositionRand = Arbitrary.arbitrary[Blake2b512Random] suchThat (_.getPosition == 0)
     val propNextNotSame: Prop = Prop.forAll(zeroPositionRand) { (rand: Blake2b512Random) =>
       val tm       = Blake2b512Random.typeMapper
       val randCopy = rand.copy()

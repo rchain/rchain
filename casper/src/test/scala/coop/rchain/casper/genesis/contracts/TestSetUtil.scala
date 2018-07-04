@@ -10,7 +10,6 @@ import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.unittest.TestSet
 
 import java.nio.file.Files
-import java.security.SecureRandom
 
 import monix.execution.Scheduler
 
@@ -38,9 +37,7 @@ object TestSetUtil {
   def runTests(tests: Par, otherLibs: Seq[Par], runtime: Runtime)(
       implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
-    val bytes = new Array[Byte](128)
-    new SecureRandom().nextBytes(bytes)
-    val rand = Blake2b512Random(bytes)
+    val rand = Blake2b512Random(128)
     eval_term(LinkedList.term, runtime)(implicitly, rand.splitShort(0))
     eval_term(TestSet.term, runtime)(implicitly, rand.splitShort(1))
 

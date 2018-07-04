@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import java.io.Reader
-import java.security.SecureRandom
 
 import cats.MonadError
 import cats.implicits._
@@ -92,9 +91,7 @@ object Interpreter {
     } yield (result)
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] = {
-    val bytes = new Array[Byte](128)
-    new SecureRandom().nextBytes(bytes)
-    implicit val rand = Blake2b512Random(bytes)
+    implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
