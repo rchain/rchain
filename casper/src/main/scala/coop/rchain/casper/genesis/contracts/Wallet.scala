@@ -1,5 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
+import scala.util.{Failure, Success, Try}
+
 case class Wallet(algorithm: String, pk: String, initRevBalance: Int)
 
 object Wallet {
@@ -25,4 +27,15 @@ object Wallet {
     |    }
     |  }
     |}""".stripMargin
+
+  def fromLine(line: String): Either[String, Wallet] = line.split(" ").filter(_.nonEmpty) match {
+    case Array(algorithm, pk, initRevBalanceStr) =>
+      Try(initRevBalanceStr.toInt) match {
+        case Success(initRevBalance) => Right(Wallet(algorithm, pk, initRevBalance))
+        case Failure(_) =>
+          Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
+      }
+
+    case _ => Left(s"Invalid wallet specification:\n$line")
+  }
 }
