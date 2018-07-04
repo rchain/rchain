@@ -21,7 +21,7 @@ object Wallet {
     |    @"BasicWallet"!(purse, "${w.algorithm}", "${w.pk}", *walletCh) |
     |    for(@maybeWallet <- walletCh) {
     |      match maybeWallet {
-    |        [wallet] => { ${rhoPublicName(w)}!(wallet) }
+    |        [wallet] => { ${rhoPublicName(w)}!!(wallet) }
     |        _        => { ${rhoPublicName(w)}!("Error in wallet creation!") }
     |      }
     |    }
