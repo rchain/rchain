@@ -3,6 +3,7 @@ package coop.rchain.roscala.prim
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
+import coop.rchain.roscala.prim.actor.actorUpdateBang
 import coop.rchain.roscala.prim.fixnum.fxPlus
 import coop.rchain.roscala.prim.rblfloat.flPlus
 import coop.rchain.roscala.util.misc.{numberSuffix, properPrep}
@@ -24,18 +25,20 @@ abstract class Prim extends Ob {
   val name: String
   val minArgs: Int
   val maxArgs: Int
-  def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob =
+
+  def fn(ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob =
     fnSimple(ctxt) match {
       case Right(m)              => m
       case Left(e: TypeMismatch) => Prim.mismatch(ctxt, e.argNum, e.typeName)
       case Left(e)               => Prim.runtimeError(ctxt, e.toString)
     }
+
   def fnSimple(ctxt: Ctxt): Either[PrimError, Ob]
 
   def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
     val n = state.ctxt.nargs
     if (minArgs <= n && n <= maxArgs)
-      fn(state.ctxt, globalEnv)
+      fn(state.ctxt)(state, globalEnv)
     else
       Prim.mismatchArgs(state, minArgs, maxArgs)
   }
@@ -389,7 +392,7 @@ object Prim {
     * 326	update!
     * 327	actor-new
     */
-  val map = Map(202 -> flPlus, 232 -> fxPlus)
+  val map = Map(202 -> flPlus, 232 -> fxPlus, 326 -> actorUpdateBang)
 
   def mismatchArgs(state: State, minArgs: Int, maxArgs: Int): Ob = {
     val msg = if (maxArgs == MaxArgs) {
@@ -403,12 +406,13 @@ object Prim {
     } else {
       s"expected between $minArgs and $maxArgs arguments"
     }
-    return runtimeError(state.ctxt, msg)
+
+    runtimeError(state.ctxt, msg)
   }
 
   def runtimeError(ctxt: Ctxt, msg: String, xs: Any*): Ob =
     //todo implement this
-    return Deadthread;
+    Deadthread
 
   def mismatch(ctxt: Ctxt, argNum: Int, typeName: String): Ob =
     runtimeError(ctxt,
@@ -416,7 +420,7 @@ object Prim {
                  argNum + 1,
                  numberSuffix(argNum + 1),
                  properPrep(typeName),
-                 typeName);
+                 typeName)
 
   def nthPrim(n: Int): Prim = map(n)
 

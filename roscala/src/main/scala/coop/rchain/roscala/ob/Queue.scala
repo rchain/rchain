@@ -2,10 +2,10 @@ package coop.rchain.roscala.ob
 
 import scala.collection.mutable
 
-class Queue(elems: mutable.Queue[Ob]) extends Ob {
-  def enqueue(value: Ob): Unit = elems.enqueue(value)
+class Queue(val queue: mutable.Queue[Ob]) extends Ob {
+  def enqueue(value: Ob): Unit = queue.enqueue(value)
 
-  def dequeue(): Ob = elems.dequeue()
+  def dequeue(): Ob = queue.dequeue()
 }
 
 object Queue {

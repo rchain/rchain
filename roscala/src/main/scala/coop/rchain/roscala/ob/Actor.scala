@@ -25,8 +25,32 @@ class Actor extends MboxOb {
     * is removed from an actor's mailbox.
     */
   override def schedule(task: Ctxt, state: State, globalEnv: GlobalEnv): Unit = {
-    logger.debug("Schedule task on actor")
+    logger.debug(s"Schedule task on $this")
     super.lookupAndInvoke(task, state, globalEnv)
+  }
+
+  /** Updates an actor
+    *
+    * Example:
+    * If the actor has a slot `i` (i.e. defined by `(slots& i 0)`)
+    * which we want to update to 5, then the `ctxt` would look like
+    * this:
+    * `ctxt.argvec(0) == Symbol(i)`
+    * `ctxt.argvec(1) == Fixnum(5)`
+    */
+  override def update(enabledSetProvided: Boolean, ctxt: Ctxt)(state: State,
+                                                               globalEnv: GlobalEnv): Ob = {
+    logger.debug(s"Update $this")
+
+    val keyStart   = if (enabledSetProvided) 1 else 0
+    var result: Ob = this
+
+    if (ctxt.nargs > keyStart)
+      result = super.update(enabledSetProvided, ctxt)(state, globalEnv)
+
+    mbox.nextMsg(this, if (enabledSetProvided) ctxt.argvec(0) else Nil, state, globalEnv)
+
+    result
   }
 }
 
