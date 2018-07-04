@@ -17,14 +17,16 @@ object Vm {
     * `code` usually equals to `ctxt.code` and `pc` is initially
     * set to `ctxt.pc`.
     */
-  final case class State(strandPool: mutable.Buffer[Ctxt] = mutable.Buffer(),
-                         var code: Code = null,
+  final case class State(var code: Code = null,
                          var ctxt: Ctxt = null,
                          var doNextThreadFlag: Boolean = false,
                          var exitFlag: Boolean = false,
                          var nextOpFlag: Boolean = false,
                          var pc: Int = 0,
-                         var vmErrorFlag: Boolean = false)
+                         var vmErrorFlag: Boolean = false,
+                         globalEnv: GlobalEnv) {
+    val strandPool = new StrandPool
+  }
 
   /**
     * Install a `Ctxt` and runs `Ctxt.code`
@@ -33,7 +35,7 @@ object Vm {
     * Runs until `doExitFlag` is set or there are no more opcodes.
     * Also tries to fetch new work from `state.strandPool`
     */
-  def run(ctxt: Ctxt, globalEnv: GlobalEnv, state: State): Unit = {
+  def run(ctxt: Ctxt, state: State): Unit = {
     // Install `ctxt`
     state.ctxt = ctxt
     state.code = ctxt.code
@@ -41,13 +43,19 @@ object Vm {
 
     while (state.pc < state.code.codevec.size && !state.exitFlag) {
       val opcode = state.code.codevec(state.pc)
-      logger.debug(opcode.toString)
+      logger.debug(s"${state.pc}:${opcode.toString}")
       state.pc += 1
 
       // execute `opcode`
-      execute(opcode, globalEnv, state)
-      executeFlags(globalEnv, state)
+      execute(opcode, state.globalEnv, state)
+      executeFlags(state)
     }
+
+    logger.debug("finishAndJoin on strandPool")
+
+    state.strandPool.finishAndJoin()
+
+    logger.debug("Exiting run method")
   }
 
   /**
@@ -169,7 +177,7 @@ object Vm {
       case OpFork(pc) =>
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
-        state.strandPool.prepend(newCtxt)
+        state.strandPool.enqueue((newCtxt, globalEnv))
         state.nextOpFlag = true
 
       /**
@@ -419,7 +427,7 @@ object Vm {
         */
       case OpLookupToArg(lit, arg) =>
         val key   = state.code.litvec(lit)
-        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
+        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key, globalEnv)
 
         if (value == Upcall) {
           state.ctxt.pc = state.pc
@@ -439,7 +447,7 @@ object Vm {
         */
       case OpLookupToReg(lit, reg) =>
         val key   = state.code.litvec(lit)
-        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
+        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key, globalEnv)
 
         if (value == Upcall) {
           state.ctxt.pc = state.pc
@@ -605,7 +613,7 @@ object Vm {
         state.nextOpFlag = true
     }
 
-  def executeFlags(env: GlobalEnv, state: Vm.State): Unit =
+  def executeFlags(state: Vm.State): Unit =
     if (state.doNextThreadFlag) {
       if (getNextStrand(state))
         state.exitFlag = true
@@ -617,12 +625,14 @@ object Vm {
 
   def getNextStrand(state: State): Boolean =
     if (state.strandPool.isEmpty) {
-      logger.debug("Empty strandPool - exiting VM")
+      logger.debug("Empty strandPool")
       true
     } else {
-      logger.debug("Install ctxt")
+      logger.debug(s"Waiting for a Ctxt to complete")
 
-      val ctxt = state.strandPool.remove(state.strandPool.size - 1)
+      val ctxt = state.strandPool.dequeue
+
+      logger.debug("Ctxt completed. Install ctxt")
 
       // Install `ctxt`
       state.ctxt = ctxt

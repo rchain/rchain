@@ -52,7 +52,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(1)
   }
@@ -84,7 +84,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(2)
   }
@@ -103,7 +103,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(3)
   }
@@ -145,7 +145,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt should (be(Fixnum(3)) or be(Fixnum(7)))
   }
@@ -185,7 +185,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(6)
   }
@@ -235,7 +235,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(10)
   }
@@ -288,7 +288,7 @@ class VmSpec extends FlatSpec with Matchers {
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
     ctxt.env = new Extension()
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(3)
 
@@ -348,7 +348,7 @@ class VmSpec extends FlatSpec with Matchers {
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
     ctxt.env = new Extension()
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(5)
   }
@@ -407,7 +407,7 @@ class VmSpec extends FlatSpec with Matchers {
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
     ctxt.env = new Extension()
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe RblFalse
   }
@@ -439,7 +439,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq(Niv, RblFloat(1.2), RblFloat(2.3)), codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe RblFloat(3.5)
   }
@@ -473,7 +473,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(6)
   }
@@ -497,7 +497,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq(Fixnum(100)), codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(100)
   }
@@ -550,7 +550,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(7)
   }
@@ -613,7 +613,7 @@ class VmSpec extends FlatSpec with Matchers {
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
     ctxt.env = new Extension()
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(12)
   }
@@ -666,7 +666,7 @@ class VmSpec extends FlatSpec with Matchers {
     ctxt.selfEnv = requestExpr
     ctxt.env = new Extension()
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     // todo when `handleMissingBinding` is implemented , there should be a runTimeError to catch
     rtnCtxt.rslt shouldBe Niv
@@ -734,7 +734,7 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(21)
   }

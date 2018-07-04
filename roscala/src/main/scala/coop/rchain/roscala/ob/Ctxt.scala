@@ -72,7 +72,7 @@ class Ctxt(var tag: Location,
   }
 
   def scheduleStrand(state: State): Unit =
-    state.strandPool += this
+    state.strandPool.enqueue((this, state.globalEnv))
 
   def reg(reg: Int): Ob =
     reg match {
@@ -123,7 +123,7 @@ object Ctxt {
       self2 = Niv,
       selfEnv = Niv,
       rcvr = Niv,
-      monitor = null
+      monitor = null,
     )
 
   def apply(tuple: Tuple, continuation: Ctxt): Ctxt =
@@ -141,7 +141,7 @@ object Ctxt {
       self2 = continuation.self2,
       selfEnv = continuation.selfEnv,
       rcvr = continuation.rcvr,
-      monitor = continuation.monitor
+      monitor = continuation.monitor,
     )
 
   def apply(continuation: Ctxt): Ctxt =
@@ -159,7 +159,7 @@ object Ctxt {
       self2 = continuation.self2,
       selfEnv = continuation.selfEnv,
       rcvr = continuation.rcvr,
-      monitor = continuation.monitor
+      monitor = continuation.monitor,
     )
 
   /**
@@ -179,7 +179,7 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null
+    monitor = null,
   )
 
   /**
@@ -199,7 +199,7 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null
+    monitor = null,
   )
 
   /**
@@ -219,6 +219,6 @@ object Ctxt {
     self2 = Niv,
     selfEnv = Niv,
     rcvr = Niv,
-    monitor = null
+    monitor = null,
   )
 }

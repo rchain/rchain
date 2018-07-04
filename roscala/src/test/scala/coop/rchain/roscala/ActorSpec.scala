@@ -6,6 +6,7 @@ import coop.rchain.roscala.CtxtRegName._
 import coop.rchain.roscala.VmLiteralName._
 import coop.rchain.roscala.ob.expr.TupleExpr
 import coop.rchain.roscala.ob.MboxOb.LockedMbox
+import coop.rchain.roscala.prim.fixnum.fxPlus
 
 class ActorSpec extends FlatSpec with Matchers {
 
@@ -23,6 +24,8 @@ class ActorSpec extends FlatSpec with Matchers {
         */
       val returnOneOprn = new Oprn
       val foo           = new Actor
+      val foo1          = new Actor
+      val foo2          = new Actor
 
       /**
         * litvec:
@@ -61,9 +64,16 @@ class ActorSpec extends FlatSpec with Matchers {
         * Create global environment with `foo` in the first position
         * and the `return-one` operation in the second position.
         */
+      val addOprn = new Oprn
+      Fixnum.fixnumSbo.meta.add(Fixnum.fixnumSbo, addOprn, fxPlus, ctxt = null)(globalEnv)
+
       val globalEnv = new GlobalEnv()
+
       globalEnv.addSlot(Symbol("foo"), foo)
       globalEnv.addSlot(Symbol("return-one"), returnOneOprn)
+      globalEnv.addSlot(Symbol("+"), addOprn)
+      globalEnv.addSlot(Symbol("foo1"), foo1)
+      globalEnv.addSlot(Symbol("foo2"), foo2)
 
       /**
         * Add key-value pair to `foo` actor instance that maps the
@@ -71,6 +81,12 @@ class ActorSpec extends FlatSpec with Matchers {
         */
       foo.meta.add(foo, returnOneOprn, returnOneMthd, ctxt = null)(globalEnv)
       foo.mbox = new EmptyMbox
+
+      foo1.meta.add(foo1, returnOneOprn, returnOneMthd, ctxt = null)(globalEnv)
+      foo1.mbox = new EmptyMbox
+
+      foo2.meta.add(foo2, returnOneOprn, returnOneMthd, ctxt = null)(globalEnv)
+      foo2.mbox = new EmptyMbox
     }
 
   "Failing to unlock" should "turn an EmptyMbox into a LockedMbox" in {
@@ -104,7 +120,7 @@ class ActorSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, Ctxt.empty, LocRslt)
 
-    Vm.run(ctxt, fixture.globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = fixture.globalEnv))
 
     fixture.foo.mbox shouldBe LockedMbox
   }
@@ -167,8 +183,73 @@ class ActorSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, fixture.globalEnv, Vm.State())
+    Vm.run(ctxt, Vm.State(globalEnv = fixture.globalEnv))
 
     rtnCtxt.rslt shouldBe Fixnum(1)
+  }
+
+  "(+ (return-one foo1) (return-one foo2))" should "return 2" in {
+
+    /**
+      * The two defined actors:
+      *
+      * (defActor Foo1
+      *   (method (return-one) 1))
+      * (defActor Foo2
+      *   (method (return-one) 1))
+      *
+      * Should invoke methods on dispatching message:
+      *
+      * (defOprn return-one)
+      *
+      *
+      * litvec:
+      *   0:   {RequestExpr}
+      * codevec:
+      *   0:   alloc 2
+      *   1:   xfer global[+],trgt
+      *   3:   outstanding 18,2
+      *   5:   push/alloc 1
+      *   6:   xfer global[foo2],arg[0]
+      *   8:   xfer global[return-one],trgt
+      *  10:   xmit 1,arg[1]
+      *  11:   pop
+      *  12:   push/alloc 1
+      *  13:   xfer global[foo1],arg[0]
+      *  15:   xfer global[return-one],trgt
+      *  17:   xmit/nxt 1,arg[0]
+      *  18:   xmit/nxt 2
+      */
+    val fixture = defineActorWithoutUnlock
+
+    val returnOne = 1
+    val plus      = 2
+    val foo1      = 3
+    val foo2      = 4
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpXferGlobalToReg(plus, trgt),
+      OpOutstanding(pc = 12, n = 2),
+      OpPushAlloc(1),
+      OpXferGlobalToArg(global = foo2, arg = 0),
+      OpXferGlobalToReg(global = returnOne, reg = trgt),
+      OpXmitArg(unwind = false, next = false, nargs = 1, arg = 1),
+      OpPop,
+      OpPushAlloc(1),
+      OpXferGlobalToArg(foo1, 0),
+      OpXferGlobalToReg(returnOne, trgt),
+      OpXmitArg(unwind = false, next = true, nargs = 1, arg = 0),
+      OpXmit(unwind = false, next = true, nargs = 2)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, Vm.State(globalEnv = fixture.globalEnv))
+
+    rtnCtxt.rslt shouldBe Fixnum(2)
   }
 }

@@ -1,5 +1,7 @@
 package coop.rchain.roscala.prim
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.prim.rblfloat._
@@ -10,7 +12,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
   val ctxt = new Ctxt(
     tag = null,
     nargs = 1,
-    outstanding = 0,
+    outstanding = 0, //new AtomicInteger(0),
     pc = 0,
     rslt = null,
     trgt = null,

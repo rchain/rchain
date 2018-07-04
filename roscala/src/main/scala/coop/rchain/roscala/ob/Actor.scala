@@ -12,10 +12,10 @@ class Actor extends MboxOb {
   def addSlot(value: Ob): Int =
     extension.slot += value
 
-  override def lookupAndInvoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
+  override def lookupAndInvoke(ctxt: Ctxt, state: State): Ob = {
     logger.debug(s"$this receives message")
     // TODO: Add handling of synchronous target
-    receive(ctxt, state, globalEnv)
+    receive(ctxt, state)
     Suspended
   }
 
@@ -23,9 +23,9 @@ class Actor extends MboxOb {
     * This is the code that is invoked when a message (the task formal)
     * is removed from an actor's mailbox.
     */
-  override def schedule(task: Ctxt, state: State, globalEnv: GlobalEnv): Unit = {
+  override def schedule(task: Ctxt, state: State): Unit = {
     logger.debug("Schedule task on actor")
-    super.lookupAndInvoke(task, state, globalEnv)
+    super.lookupAndInvoke(task, state)
   }
 }
 
