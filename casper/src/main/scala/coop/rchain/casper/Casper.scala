@@ -255,9 +255,9 @@ sealed abstract class MultiParentCasperInstances {
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
           postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
-          // TODO: postTransactionsCheckStatus <- postValidationStatus.traverse(_ => validateTransactions(b, dag))
-          // And change line below to postTransactionsCheckStatus.traverse
-          postedNeglectedEquivocationCheckStatus <- postValidationStatus.traverse(
+          postTransactionsCheckStatus <- postValidationStatus.traverse(_ =>
+                                          validateTransactions(b, dag))
+          postedNeglectedEquivocationCheckStatus <- postTransactionsCheckStatus.traverse(
                                                      _ =>
                                                        neglectedEquivocationsCheckWithRecordUpdate(
                                                          b,
