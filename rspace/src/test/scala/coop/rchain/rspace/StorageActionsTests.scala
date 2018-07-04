@@ -1084,20 +1084,7 @@ class LMDBStoreActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll {
 
-  "install" should "not be peristed to the history trie" in withTestSpace { space =>
-    val key      = List("ch1")
-    val patterns = List(Wildcard)
-
-    val emptyCheckpoint = space.createCheckpoint()
-    space.install(key, patterns, new StringsCaptor)
-
-    val checkpoint = space.createCheckpoint()
-
-    checkpoint.log shouldBe empty
-    emptyCheckpoint.root shouldBe checkpoint.root
-  }
-
-  it should "not allow installing after a produce operation" in withTestSpace { space =>
+  "install" should "not allow installing after a produce operation" in withTestSpace { space =>
     val channel  = "ch1"
     val datum    = "datum1"
     val key      = List(channel)
@@ -1110,26 +1097,4 @@ class LMDBStoreActionsTests
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
 
-  it should "be available after resetting to a checkpoint" in withTestSpace { space =>
-    val channel      = "ch1"
-    val datum        = "datum1"
-    val key          = List(channel)
-    val patterns     = List(Wildcard)
-    val continuation = new StringsCaptor
-
-    space.install(key, patterns, continuation)
-
-    val afterInstall = space.createCheckpoint()
-    space.reset(afterInstall.root)
-
-    // Produce should produce a COMM event, because install was invoked)
-    space.produce(channel, datum, persist = false)
-
-    val afterProduce = space.createCheckpoint()
-    val produceEvent = Produce.create(channel, datum, false)
-    afterProduce.log should contain theSameElementsAs (Seq(
-      COMM(Consume.create[String, Pattern, StringsCaptor](key, patterns, continuation, true),
-           List(produceEvent)),
-      produceEvent))
-  }
 }
