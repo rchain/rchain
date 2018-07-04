@@ -30,7 +30,9 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     log
   }
 
-  type Installs = Map[Seq[C], (Seq[P], K, Match[P, A, R])]
+  case class Install(patterns: Seq[P], continuation: K, _match: Match[P, A, R])
+
+  type Installs = Map[Seq[C], Install]
 
   private[this] val installs: SyncVar[Installs] = {
     val _installs = new SyncVar[Installs]()
@@ -102,8 +104,8 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
 
   override protected[this] def restoreInstalls(txn: store.T): Unit =
     installs.get.foreach {
-      case (k, v) =>
-        install(txn, k, v._1, v._2)(v._3)
+      case (channels, Install(patterns, continuation, _match)) =>
+        install(txn, channels, patterns, continuation)(_match)
     }
 
   private[this] def install(txn: store.T, channels: Seq[C], patterns: Seq[P], continuation: K)(
@@ -117,7 +119,7 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
-    installs.update(_.updated(channels, (patterns, continuation, m)))
+    installs.update(_.updated(channels, Install(patterns, continuation, m)))
 
     /*
      * Here, we create a cache of the data at each channel as `channelToIndexedData`
