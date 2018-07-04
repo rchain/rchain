@@ -31,9 +31,9 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
   }
 
   private[this] val installs: SyncVar[Installs[C, K, R, A, P]] = {
-    val _installs = new SyncVar[Installs[C, K, R, A, P]]()
-    _installs.put(Map.empty)
-    _installs
+    val installs = new SyncVar[Installs[C, K, R, A, P]]()
+    installs.put(Map.empty)
+    installs
   }
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
