@@ -255,8 +255,14 @@ sealed abstract class MultiParentCasperInstances {
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
           postValidationStatus <- Validate.validateBlockSummary[F](b, genesis, dag)
-          postTransactionsCheckStatus <- postValidationStatus.traverse(_ =>
-                                          validateTransactions(b, dag))
+          postTransactionsCheckStatus <- postValidationStatus.traverse(
+                                          _ =>
+                                            Validate.transactions[F](b,
+                                                                     genesis,
+                                                                     dag,
+                                                                     initStateHash,
+                                                                     runtimeManager,
+                                                                     knownStateHashesContainer))
           postedNeglectedEquivocationCheckStatus <- postTransactionsCheckStatus.traverse(
                                                      _ =>
                                                        neglectedEquivocationsCheckWithRecordUpdate(
@@ -267,33 +273,6 @@ sealed abstract class MultiParentCasperInstances {
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
-
-      private def validateTransactions(
-          block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
-        for {
-          maybeCheckPoint <- Capture[F].capture {
-                              val Right((maybeCheckPoint, _)) =
-                                knownStateHashesContainer
-                                  .mapAndUpdate[(Option[StateHash], Set[StateHash])](
-                                    //invalid blocks return None and don't update the checkpoints
-                                    InterpreterUtil.validateBlockCheckpoint(
-                                      block,
-                                      genesis,
-                                      dag,
-                                      initStateHash,
-                                      _,
-                                      runtimeManager
-                                    ),
-                                    _._2
-                                  )
-                              maybeCheckPoint
-                            }
-        } yield
-          maybeCheckPoint match {
-            case Some(_) => Right(Valid)
-            case None    => Left(InvalidTransaction)
-          }
 
       private def equivocationsCheck(
           block: BlockMessage,
