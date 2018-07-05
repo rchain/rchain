@@ -7,7 +7,7 @@ import cats.implicits._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.casper.{MultiParentCasper, MultiParentCasperConstructor, PrettyPrinter, Validate}
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{PeerNode, ProtocolHelper}
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
@@ -64,21 +64,31 @@ object CommUtil {
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
         for {
-          _    <- Log[F].info(s"Sending request for ApprovedBlock to $peer")
+          _    <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
           send <- TransportLayer[F].roundTrip(peer, packet(local, request), 5.seconds)
           _ <- send match {
                 case Left(err) =>
-                  Log[F].info(s"Failed to get response from $peer because: $err") *>
+                  Log[F].info(s"CASPER: Failed to get response from $peer because: $err") *>
                     askPeers(rest, local)
 
                 case Right(response) =>
-                  Log[F].info(s"Received response from $peer! Dispatching...")
-                  Connect
-                    .dispatch[F](response)
+                  Log[F]
+                    .info(s"CASPER: Received response from $peer! Processing...")
                     .flatMap(_ => {
-                      MultiParentCasperConstructor[F].lastApprovedBlock.map {
-                        case Some(_) => () //got one!
-                        case None    => askPeers(rest, local)
+                      val maybeSender = ProtocolHelper.sender(response)
+                      val maybePacket = toPacket(response).toOption
+
+                      (maybeSender, maybePacket) match {
+                        case (Some(sender), Some(_)) =>
+                          Connect
+                            .handlePacket[F](sender, maybePacket)
+                            .flatMap(_ => {
+                              MultiParentCasperConstructor[F].lastApprovedBlock.flatMap {
+                                case Some(_) => ().pure[F] //valid ApprovedBlock received
+                                case None    => askPeers(rest, local)
+                              }
+                            })
+                        case _ => Log[F].info(s"CASPER: Response invalid.") *> askPeers(rest, local)
                       }
                     })
 
