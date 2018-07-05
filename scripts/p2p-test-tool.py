@@ -103,7 +103,7 @@ parser.add_argument("-s", "--skip-convergence-test",
 parser.add_argument("--test-performance",
                     dest='test_performance',
                     action='store_true',
-                    help="WIP - This will test node network performance by loading resources and measure metrics.")
+                    help="WIP - Right now this just loads network. Eventually, this will test node network performance by loading resources and measure metrics.")
 parser.add_argument("-t", "--tests",
                     dest='run_tests',
                     action='store_true',
