@@ -88,7 +88,16 @@ object CommUtil {
                                 case None    => askPeers(rest, local)
                               }
                             })
-                        case _ => Log[F].info(s"CASPER: Response invalid.") *> askPeers(rest, local)
+                        case (None, _) =>
+                          Log[F].error(
+                            s"CASPER: Response from $peer invalid. The sender of the message could not be determined.") *> askPeers(
+                            rest,
+                            local)
+                        case (Some(_), None) =>
+                          Log[F].error(
+                            s"CASPER: Response from $peer invalid. A packet was expected, but received ${response.message}.") *> askPeers(
+                            rest,
+                            local)
                       }
                     })
 
@@ -102,8 +111,7 @@ object CommUtil {
       a     <- MultiParentCasperConstructor[F].lastApprovedBlock
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
-      _ <- if (a.isEmpty) askPeers(peers.toList, local)
-          else ().pure[F]
+      _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
     } yield ()
   }
 
