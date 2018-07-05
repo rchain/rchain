@@ -74,7 +74,8 @@ object Validate {
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
-      blockNumberStatus  <- timestampStatus.traverse(_ => Validate.blockNumber[F](block, dag))
+      blockNumberStatus <- timestampStatus.joinRight.traverse(_ =>
+                            Validate.blockNumber[F](block, dag))
       parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
