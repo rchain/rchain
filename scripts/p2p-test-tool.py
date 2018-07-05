@@ -100,6 +100,10 @@ parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
+parser.add_argument("--test-performance",
+                    dest='test_performance',
+                    action='store_true',
+                    help="WIP - This will test node network performance by loading resources and measure metrics.")
 parser.add_argument("-t", "--tests",
                     dest='run_tests',
                     action='store_true',
@@ -129,6 +133,9 @@ def main():
     """Main program"""
     if args.logs == True:
         show_logs()
+        return
+    if args.test_performance == True:
+        test_performance()
         return
     if args.remove == True:
         remove_resources_by_network(args.network)
@@ -349,7 +356,24 @@ def check_network_convergence(container):
 
 
 def test_performance():
-    pass
+    for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
+        #for i in range(1, args.propose_loop_amount+1):
+        for i in range(1, 100+1):
+            print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+
+            # Deploy example contracts using 3 random example files
+            cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+            r = container.exec_run(['sh', '-c', cmd])
+            for line in r.output.decode('utf-8').splitlines():
+                print(line)
+
+            # Propose blocks from example contracts
+            cmd = "/opt/docker/bin/rnode propose"
+            print("Propose to blockchain previously deployed smart contracts.")
+
+            r = container.exec_run(['sh', '-c', cmd])
+            for line in r.output.decode('utf-8').splitlines():
+                print(line)
 
 
 def remove_resources_by_network(args_network):
