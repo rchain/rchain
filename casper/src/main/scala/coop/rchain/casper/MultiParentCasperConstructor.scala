@@ -94,11 +94,15 @@ sealed abstract class MultiParentCasperConstructorInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasperConstructor[F]] =
     if (conf.createGenesis) {
       for {
-        genesis     <- Genesis.fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
+        genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
+                                             conf.numValidators,
+                                             conf.genesisPath,
+                                             conf.walletsFile,
+                                             activeRuntime)
         approved    = ApprovedBlock(block = Some(genesis)) //TODO: do actual approval protocol
         validatorId <- ValidatorIdentity.fromConfig[G](conf)
         casper      = MultiParentCasper.hashSetCasper[F](activeRuntime, validatorId, genesis)

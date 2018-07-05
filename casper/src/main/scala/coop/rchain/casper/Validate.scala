@@ -6,9 +6,13 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
+import monix.execution.Scheduler
 
 import scala.util.{Success, Try}
 
@@ -97,7 +101,7 @@ object Validate {
    * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
-  def validateBlockSummary[F[_]: Monad: Log: Time](
+  def blockSummary[F[_]: Monad: Log: Time](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
@@ -279,4 +283,35 @@ object Validate {
     }
   }
 
+  def transactions[F[_]: Applicative: Log: Capture](
+      block: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      initStateHash: StateHash,
+      runtimeManager: RuntimeManager,
+      knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
+      implicit scheduler: Scheduler): F[Either[RejectableBlock, IncludeableBlock]] =
+    for {
+      maybeCheckPoint <- Capture[F].capture {
+                          val Right((maybeCheckPoint, _)) =
+                            knownStateHashesContainer
+                              .mapAndUpdate[(Option[StateHash], Set[StateHash])](
+                                //invalid blocks return None and don't update the checkpoints
+                                InterpreterUtil.validateBlockCheckpoint(
+                                  block,
+                                  genesis,
+                                  dag,
+                                  initStateHash,
+                                  _,
+                                  runtimeManager
+                                ),
+                                _._2
+                              )
+                          maybeCheckPoint
+                        }
+    } yield
+      maybeCheckPoint match {
+        case Some(_) => Right(Valid)
+        case None    => Left(InvalidTransaction)
+      }
 }

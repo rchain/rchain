@@ -5,7 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.roscala.CtxtRegName._
 import coop.rchain.roscala.VmLiteralName._
 import coop.rchain.roscala.ob.expr.TupleExpr
-import coop.rchain.roscala.ob.MboxOb.LockedMbox
+import coop.rchain.roscala.ob.mbox.{EmptyMbox, MboxOb, QueueMbox}
 
 class ActorSpec extends FlatSpec with Matchers {
 
@@ -106,7 +106,55 @@ class ActorSpec extends FlatSpec with Matchers {
 
     Vm.run(ctxt, fixture.globalEnv, Vm.State())
 
-    fixture.foo.mbox shouldBe LockedMbox
+    fixture.foo.mbox shouldBe MboxOb.LockedMbox
+  }
+
+  "Failing to unlock" should "turn a LockedMbox into a QueueMbox and enqueue the message" in {
+
+    /**
+      * Sending a messages to an `Actor` that does not unlock itself
+      * and has a `LockedMbox`, should turn the Actor's mailbox into a
+      * `QueueMbox`.
+      *
+      * (defOprn return-one)
+      * (defActor Foo
+      *   (method (return-one)
+      *     1
+      *   )
+      * )
+      * (define foo (new Foo))
+      *
+      * `mbox` gets locked and `return-one` method gets invoked when
+      * message is received.
+      * (return-one foo)
+      *
+      * `mbox` becomes a `QueueMbox`, message gets enqueued and
+      * nothing gets invoked.
+      * (return-one foo)
+      *
+      */
+    val fixture = defineActorWithoutUnlock
+
+    /** Bytecode for `(return-one foo)` */
+    val codevec = Seq(
+      OpAlloc(1),
+      OpXferGlobalToArg(global = 0, arg = 0),
+      OpXferGlobalToReg(global = 1, reg = trgt),
+      OpXmit(unwind = false, next = true, nargs = 1)
+    )
+
+    val code  = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt0 = Ctxt(code, Ctxt.empty, LocRslt)
+    val ctxt1 = ctxt0.clone()
+
+    Vm.run(ctxt0, fixture.globalEnv, Vm.State())
+    Vm.run(ctxt1, fixture.globalEnv, Vm.State())
+
+    fixture.foo.mbox shouldBe an[QueueMbox]
+
+    val message = fixture.foo.mbox.asInstanceOf[QueueMbox].queue.dequeue()
+    message shouldBe ctxt1
+    message.asInstanceOf[Ctxt].argvec.elem(0) shouldBe fixture.foo
   }
 
   "Dispatching a message" should "invoke a method" in {

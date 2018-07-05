@@ -16,7 +16,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = Genesis.fromBonds(bonds)
+  val genesis                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

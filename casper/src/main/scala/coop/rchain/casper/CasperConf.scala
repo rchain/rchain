@@ -22,7 +22,8 @@ case class CasperConf(
     bondsFile: Option[String],
     knownValidatorsFile: Option[String],
     numValidators: Int,
-    validatorsPath: Path,
+    genesisPath: Path,
+    walletsFile: Option[String],
     createGenesis: Boolean
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)

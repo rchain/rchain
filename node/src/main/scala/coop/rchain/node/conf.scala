@@ -10,8 +10,26 @@ import org.rogach.scallop._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import scala.collection.JavaConverters._
 
+// TODO replace with default config file when CORE-512 is resolved
+case class Profile(name: String, dataDir: (() => Path, String))
+
+object Profile {
+  val docker =
+    Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
+  val default =
+    Profile("default",
+            dataDir =
+              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+
+  val profiles =
+    Map(default.name -> default, docker.name -> docker)
+}
+
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
+
+  val profile = opt[String](default = Some("default"), name = "profile")
+    .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
     opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
@@ -69,6 +87,14 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "Signatures from these validators are required in order to accept a block which starts the local" +
         "node's view of the blockDAG."
     )
+    val walletsFile = opt[String](
+      default = None,
+      descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
+        "which defines the Rev wallets that exist at genesis. " +
+        "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
+        "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+        "is the amount of Rev in the wallet."
+    )
 
     val bootstrap =
       opt[String](default =
@@ -84,7 +110,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val data_dir = opt[Path](required = false,
                              descr = "Path to data directory. Defaults to $HOME/.rnode",
-                             default = Some(Paths.get(sys.props("user.home"), ".rnode")))
+                             default = profile.toOption.map(_.dataDir._1.apply()))
 
     val map_size = opt[Long](required = false,
                              descr = "Map size (in bytes)",
@@ -200,7 +226,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.bondsFile.toOption,
     run.knownValidators.toOption,
     run.numValidators(),
-    run.data_dir().resolve("validators"),
+    run.data_dir().resolve("genesis"),
+    run.walletsFile.toOption,
     run.standalone()
   )
 
