@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.LongBuffer
+import java.security.SecureRandom
 import org.bouncycastle.util.Pack
 import org.scalacheck.{Arbitrary, Gen}
 import scalapb.TypeMapper
@@ -17,17 +18,19 @@ import scala.annotation.tailrec
   * Blake2b512.merge uses online tree hashing to merge two random generator
   * states.
   */
-class Blake2b512Random private (val digest: Blake2b512Block, val lastBlock: ByteBuffer) {
-  val pathView: ByteBuffer = lastBlock.duplicate()
+class Blake2b512Random private (private val digest: Blake2b512Block,
+                                private val lastBlock: ByteBuffer) {
+  private val pathView: ByteBuffer = lastBlock.duplicate()
   pathView.limit(112)
-  val countView: LongBuffer = {
+  private val countView: LongBuffer = {
     val lastDuplicate = lastBlock.duplicate()
     lastDuplicate.position(112)
     lastDuplicate.slice().order(ByteOrder.LITTLE_ENDIAN).asLongBuffer()
   }
 
-  val hashArray: Array[Byte] = new Array[Byte](64)
-  var position: Int          = 0
+  private val hashArray: Array[Byte] = new Array[Byte](64)
+  private var position: Int          = 0
+  def getPosition: Int               = position
 
   private def addByte(index: Byte): Unit = {
     if (pathView.position() == pathView.limit()) {
@@ -127,6 +130,12 @@ object Blake2b512Random {
       result.digest.update(padded, 0)
     }
     result
+  }
+
+  def apply(length: Int): Blake2b512Random = {
+    val bytes = new Array[Byte](length)
+    new SecureRandom().nextBytes(bytes)
+    apply(bytes)
   }
 
   def apply(init: Array[Byte]): Blake2b512Random =

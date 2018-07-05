@@ -48,9 +48,11 @@ contract @"getNonce"(@wallet, return) = {
 @"MakeMint"!("mint") | for(@mint <- @"mint") {
   @[mint, "makePurse"]!(100, "purse") |
   @[mint, "makePurse"]!(30, "otherPurse") |
+  @[mint, "makePurse"]!(74, "ethereumPurse") |
   for(
     @purse <- @"purse"; 
     @otherPurse <- @"otherPurse"; 
+    @ethereumPurse <- @"ethereumPurse"; 
     @pk <- @"pk";
     @sig0 <- @"sig0";
     @sig1 <- @"sig1";
@@ -74,6 +76,18 @@ contract @"getNonce"(@wallet, return) = {
       ]
     ) |
   
+    @"BasicWallet"!(ethereumPurse, "secp256k1", "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6", "ethWallet") |  
+    for(@[ethWallet] <- @"ethWallet") {
+      @"ethWallet"!([ethWallet]) |
+      @"getBalance"!(ethWallet, "ethWalletBalance") |
+      @"TestSet"!(
+        "Wallets should accept Secp256k1 keys.",
+        [
+          ["ethWalletBalance", 74]
+        ]
+      )      
+    } |
+
     @"BasicWallet"!(purse, "ed25519", pk, "wallet") |
     for(@[wallet] <- @"wallet") {
         @"wallet"!([wallet]) |

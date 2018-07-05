@@ -6,48 +6,72 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter, SafetyOracle}
+import coop.rchain.casper.{
+  BlockDag,
+  MultiParentCasper,
+  MultiParentCasperConstructor,
+  PrettyPrinter,
+  SafetyOracle
+}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Log
 
 import scala.annotation.tailrec
 
 object BlockAPI {
-  def createBlock[F[_]: Monad: MultiParentCasper]: F[MaybeBlockMessage] =
-    MultiParentCasper[F].createBlock.map(MaybeBlockMessage.apply)
+  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[MaybeBlockMessage] =
+    MultiParentCasperConstructor.withCasper[F, MaybeBlockMessage](
+      _.createBlock.map(MaybeBlockMessage.apply),
+      MaybeBlockMessage.defaultInstance)
 
-  def addBlock[F[_]: Monad: MultiParentCasper](b: BlockMessage): F[Empty] =
-    MultiParentCasper[F].addBlock(b).map(_ => Empty())
+  def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](b: BlockMessage): F[Empty] =
+    MultiParentCasperConstructor
+      .withCasper[F, Empty](_.addBlock(b).map(_ => Empty.defaultInstance), Empty.defaultInstance)
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasper: SafetyOracle]: F[BlocksResponse] =
-    for {
-      estimates <- MultiParentCasper[F].estimator
-      dag       <- MultiParentCasper[F].blockDag
-      tip       = estimates.head
-      mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(dag,
-                                                                   tip,
-                                                                   IndexedSeq.empty[BlockMessage])
-      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
-    } yield
-      BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
+  def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle]
+    : F[BlocksResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      for {
+        estimates <- MultiParentCasper[F].estimator
+        dag       <- MultiParentCasper[F].blockDag
+        tip       = estimates.head
+        mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(dag,
+                                                                     tip,
+                                                                     IndexedSeq.empty[BlockMessage])
+        blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
+      } yield
+        BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
-  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper: SafetyOracle](
-      q: BlockQuery): F[BlockQueryResponse] =
-    for {
-      dag        <- MultiParentCasper[F].blockDag
-      maybeBlock = getBlock[F](q, dag)
-      blockQueryResponse <- maybeBlock match {
-                             case Some(block) => {
-                               for {
-                                 blockInfo <- getBlockInfo[F](block)
-                               } yield
-                                 BlockQueryResponse(status = "Success", blockInfo = Some(blockInfo))
+    MultiParentCasperConstructor.withCasper[F, BlocksResponse](
+      casperResponse(_),
+      BlocksResponse(status = "Error: Casper instance not available"))
+  }
+
+  def getBlockQueryResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle](
+      q: BlockQuery): F[BlockQueryResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      for {
+        dag        <- MultiParentCasper[F].blockDag
+        maybeBlock = getBlock[F](q, dag)
+        blockQueryResponse <- maybeBlock match {
+                               case Some(block) => {
+                                 for {
+                                   blockInfo <- getBlockInfo[F](block)
+                                 } yield
+                                   BlockQueryResponse(status = "Success",
+                                                      blockInfo = Some(blockInfo))
+                               }
+                               case None =>
+                                 BlockQueryResponse(
+                                   status = s"Error: Failure to find block with hash ${q.hash}")
+                                   .pure[F]
                              }
-                             case None =>
-                               BlockQueryResponse(
-                                 status = s"Error: Failure to find block with hash ${q.hash}")
-                                 .pure[F]
-                           }
-    } yield blockQueryResponse
+      } yield blockQueryResponse
+
+    MultiParentCasperConstructor.withCasper[F, BlockQueryResponse](
+      casperResponse(_),
+      BlockQueryResponse(status = "Error: Casper instance not available"))
+  }
 
   private def getBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle](
       block: BlockMessage): F[BlockInfo] =
