@@ -10,7 +10,8 @@ case class CasperConf(
     sigAlgorithm: String,
     bondsFile: Option[String],
     numValidators: Int,
-    validatorsPath: Path
+    genesisPath: Path,
+    walletsFile: Option[String]
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
   val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)

@@ -571,10 +571,14 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
     Genesis
-      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
+      .fromInputFiles[G](conf.bondsFile,
+                         conf.numValidators,
+                         conf.genesisPath,
+                         conf.walletsFile,
+                         activeRuntime)
       .map(genesis => {
         val privateKey = conf.privateKey
           .orElse(defaultPrivateKey(conf, genesis))
@@ -601,7 +605,7 @@ sealed abstract class MultiParentCasperInstances {
     }
 
     val privateKey = maxValidator.flatMap(publicKey => {
-      val file = conf.validatorsPath.resolve(s"$publicKey.sk").toFile
+      val file = conf.genesisPath.resolve(s"$publicKey.sk").toFile
       Try(
         Source.fromFile(file).mkString.trim
       ).toOption

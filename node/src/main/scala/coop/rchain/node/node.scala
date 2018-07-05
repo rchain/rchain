@@ -12,7 +12,6 @@ import Catscontrib._
 import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
-import coop.rchain.casper.genesis.Genesis.fromBondsFile
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
