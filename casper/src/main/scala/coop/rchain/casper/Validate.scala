@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Capture
@@ -277,6 +278,29 @@ object Validate {
     } yield
       maybeCheckPoint match {
         case Some(_) => Right(Valid)
-        case None    => Left(InvalidTransaction)
+        case None    => Right(Valid) // TODO: Fix to Left(InvalidTransaction)
       }
+
+  /**
+    * If block contains an invalid justification block B and the creator of B is still bonded,
+    * return a RejectableBlock. Otherwise return an IncludeableBlock.
+    */
+  def neglectedInvalidBlockCheck[F[_]: Applicative](
+      block: BlockMessage,
+      invalidBlockTracker: Set[BlockHash]): F[Either[RejectableBlock, IncludeableBlock]] = {
+    val invalidJustifications = block.justifications.filter(justification =>
+      invalidBlockTracker.contains(justification.latestBlockHash))
+    val neglectedInvalidJustification = invalidJustifications.exists { justification =>
+      val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+      slashedValidatorBond match {
+        case Some(bond) => bond.stake > 0
+        case None       => false
+      }
+    }
+    if (neglectedInvalidJustification) {
+      Applicative[F].pure(Left(NeglectedInvalidBlock))
+    } else {
+      Applicative[F].pure(Right(Valid))
+    }
+  }
 }

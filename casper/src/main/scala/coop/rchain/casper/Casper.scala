@@ -124,6 +124,8 @@ sealed abstract class MultiParentCasperInstances {
       // each EquivocationRecord.
       private val equivocationsTracker: mutable.Set[EquivocationRecord] =
         new mutable.HashSet[EquivocationRecord]()
+      private val invalidBlockTracker: mutable.HashSet[BlockHash] =
+        new mutable.HashSet[BlockHash]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -134,9 +136,10 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case Valid                  => reAttemptBuffer
-                case AdmissibleEquivocation => reAttemptBuffer
-                case _                      => ().pure[F]
+                case MissingBlocks         => ().pure[F]
+                case IgnorableEquivocation => ().pure[F]
+                case _ =>
+                  reAttemptBuffer // reAttempt for any status that resulted in the  adding of the block into the view
               }
           estimates <- estimator
           tip       = estimates.head
@@ -263,12 +266,18 @@ sealed abstract class MultiParentCasperInstances {
                                                                      initStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
-          postedNeglectedEquivocationCheckStatus <- postTransactionsCheckStatus.traverse(
+          postNeglectedInvalidBlockStatus <- postTransactionsCheckStatus.joinRight.traverse(
+                                              _ =>
+                                                Validate.neglectedInvalidBlockCheck[F](
+                                                  b,
+                                                  invalidBlockTracker.toSet))
+          postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
+                                                   .traverse(
                                                      _ =>
                                                        neglectedEquivocationsCheckWithRecordUpdate(
                                                          b,
                                                          dag))
-          postEquivocationCheckStatus <- postedNeglectedEquivocationCheckStatus.joinRight.traverse(
+          postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ => equivocationsCheck(b, dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
@@ -338,6 +347,7 @@ sealed abstract class MultiParentCasperInstances {
                                    dag,
                                    equivocationRecord,
                                    equivocationChild)) {
+          // TODO: Fix to use bonded validators
           if (latestMessages.contains(equivocatingValidator)) {
             EquivocationNeglected
           } else {
@@ -483,6 +493,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidSequenceNumber =>
             handleInvalidBlockEffect(status, block)
+          case NeglectedInvalidBlock =>
+            handleInvalidBlockEffect(status, block)
           case NeglectedEquivocation =>
             handleInvalidBlockEffect(status, block)
           case InvalidTransaction =>
@@ -492,15 +504,10 @@ sealed abstract class MultiParentCasperInstances {
 
       private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
         for {
-          _ <- Log[F].info(s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(
+          _ <- Log[F].warn(s"CASPER: Recording invalid block ${PrettyPrinter.buildString(
                 block.blockHash)} for ${status.toString}.")
-          // TODO: Slash block.blockHash for status except InvalidUnslashableBlock
-          blocksToSlash = allChildren[BlockHash](awaitingJustificationToChild, block.blockHash) - block.blockHash
-          _ <- Log[F].warn(s"""CASPER: About to slash the following blocks ${blocksToSlash
-                .map(PrettyPrinter.buildString)
-                .mkString("", ",", "")} for neglecting an invalid block""")
-          // TODO: Slash blocksToSlash for neglecting an invalid block
-          _ <- Capture[F].capture { blocksToSlash.foreach(awaitingJustificationToChild.remove) }
+          // TODO: Slash block for status except InvalidUnslashableBlock
+          _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
 
       private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
