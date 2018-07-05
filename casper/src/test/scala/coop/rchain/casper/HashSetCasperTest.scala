@@ -165,7 +165,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).logEff.infos
       .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
     nodes(1).logEff.infos.count(s =>
-      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
+      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
+      1)
   }
 
   it should "ignore adding equivocation blocks" in {

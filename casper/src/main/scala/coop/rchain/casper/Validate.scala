@@ -4,7 +4,7 @@ import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -14,31 +14,66 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
-import scala.util.Try
+import scala.util.{Success, Try}
 
 object Validate {
+  type PublicKey = Array[Byte]
+  type Data      = Array[Byte]
+  type Signature = Array[Byte]
+
   val DRIFT                                 = 15000 // 15 seconds
   private implicit val logSource: LogSource = LogSource(this.getClass)
+  val signatureVerifiers: Map[String, (Data, Signature, PublicKey) => Boolean] =
+    Map(
+      "ed25519" -> Ed25519.verify
+    )
 
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
-  def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
-    if (b.sigAlgorithm == "ed25519") {
-      val justificationHash = ProtoUtil.protoSeqHash(b.justifications)
-      val sigData =
-        Blake2b256.hash(justificationHash.toByteArray ++ b.blockHash.toByteArray)
-      val isValid =
-        Try(Ed25519.verify(sigData, b.sig.toByteArray, b.sender.toByteArray)).getOrElse(false)
+  def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
+                                            requiredValidators: Set[ByteString]): F[Boolean] = {
+    val maybeSigData = a.block.map(b => ProtoUtil.add(b.blockHash.toByteArray, a.requiredSigs))
 
-      if (isValid) {
-        true.pure[F]
-      } else {
-        for {
-          _ <- Log[F].warn(ignore(b, "signature is invalid."))
-        } yield false
-      }
-    } else {
+    maybeSigData match {
+      case Some(sigData) =>
+        val validatedSigs =
+          (for {
+            s      <- a.sigs
+            verify <- signatureVerifiers.get(s.algorithm)
+            pk     = s.publicKey
+            if verify(sigData, s.sig.toByteArray, pk.toByteArray)
+          } yield pk).toSet
+
+        if (validatedSigs.size >= a.requiredSigs && requiredValidators.forall(
+              validatedSigs.contains))
+          true.pure[F]
+        else
+          Log[F]
+            .warn(
+              "CASPER: Received invalid ApprovedBlock message not containing enough valid signatures.")
+            .map(_ => false)
+
+      case None =>
+        Log[F]
+          .warn("CASPER: Received invalid ApprovedBlock message not containing any block.")
+          .map(_ => false)
+    }
+  }
+
+  def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
+    signatureVerifiers
+      .get(b.sigAlgorithm)
+      .map(verify => {
+        val justificationHash = ProtoUtil.protoSeqHash(b.justifications)
+        val sigData =
+          Blake2b256.hash(justificationHash.toByteArray ++ b.blockHash.toByteArray)
+
+        Try(verify(sigData, b.sig.toByteArray, b.sender.toByteArray)) match {
+          case Success(true) => true.pure[F]
+          case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
+        }
+      }) getOrElse {
       for {
         _ <- Log[F].warn(ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported."))
       } yield false

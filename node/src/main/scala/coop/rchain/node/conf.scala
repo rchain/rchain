@@ -81,6 +81,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
         "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
     )
+    val knownValidators = opt[String](
+      default = None,
+      descr = "Plain text file listing the public keys of validators known to the user (one per line). " +
+        "Signatures from these validators are required in order to accept a block which starts the local" +
+        "node's view of the blockDAG."
+    )
     val walletsFile = opt[String](
       default = None,
       descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
@@ -89,7 +95,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
         "is the amount of Rev in the wallet."
     )
-
 
     val bootstrap =
       opt[String](default =
@@ -219,9 +224,11 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.validatorPrivateKey.toOption,
     run.validatorSigAlgorithm(),
     run.bondsFile.toOption,
+    run.knownValidators.toOption,
     run.numValidators(),
     run.data_dir().resolve("genesis"),
-    run.walletsFile.toOption
+    run.walletsFile.toOption,
+    run.standalone()
   )
 
   verify()
