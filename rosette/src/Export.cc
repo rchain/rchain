@@ -317,6 +317,14 @@ void tupleExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::
         rest->set_object_id(BASE(te->rest)->objectId);
         rest->set_looped(true);
     }
+
+    // A tupleExpr has a list of objects.  Retrieve and call the handler for each of them.
+    for (int i = 0; i < te->numberOfElements(); i++) {
+        pOb el = te->nth(i);
+        ObjectCodePB::Object *elOb = teob->add_elements();
+        populateObjectByType(el, elOb);
+    }
+
 }
 
 void letRecExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -567,9 +575,6 @@ void rblTableObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::O
     populateObjectByType(rt->tbl, tbl);
 }
 
-
-
-
 // The handler table that defines which objects are supported, and how they are handled.
 // The string type names here MUST match those implemented in Rosette. And yes, there
 // is some inconsistency (e.g. RBL vs Rbl).
@@ -631,8 +636,6 @@ IdType createObjectId(Code * code) {
     return BASE(code)->objectId;
 }
 
-
-
 // The collection routine that processes individual Code objects as they are compiled.
 void collectExportCode(Code *code) {
     if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
@@ -657,11 +660,12 @@ void collectExportCode(Code *code) {
     CodeVec * codevec = code->codevec;
     Tuple * litvec = code->litvec;
 
-    // Save the binary opCodes from the codevec
-    const char * code_binary = (char *)codevec->absolutize(0);
-    size_t code_size = codevec->numberOfWords() * sizeof(Instr);
+    // Export the opCodes from the codevec
+    size_t codesize = codevec->numberOfWords();
     ObjectCodePB::CodeVec * cv = cb->mutable_codevec();
-    cv->set_opcodes( std::string(code_binary, code_size) );
+    for(size_t i=0; i<codesize; i++) {
+        cv->add_opcodes( codevec->instr(i) );
+    }
 
     // Create the export litvec
     ObjectCodePB::LitVec * lv = cb->mutable_litvec();
