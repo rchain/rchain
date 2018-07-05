@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.catscontrib.Capture._
-import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.IStore
@@ -71,7 +71,7 @@ object RholangCLI {
   }
 
   private def printStorageContents(
-      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit = {
+      store: IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }

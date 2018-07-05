@@ -120,10 +120,7 @@ class LMDBStore[C, P, A, K] private (
   }
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    Codec[Seq[C]]
-      .encode(channels)
-      .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
-      .get
+    StableHashProvider.hash(channels)
 
   /* Channels */
 
@@ -304,8 +301,10 @@ class LMDBStore[C, P, A, K] private (
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
-    withTxn(createTxnRead()) { txn =>
-      trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
+    withTxn(createTxnWrite()) { txn =>
+      trieStore
+        .persistAndGetRoot(txn, trieBranch)
+        .getOrElse(throw new Exception("Could not get root hash"))
     }
   }
 

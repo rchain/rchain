@@ -10,7 +10,7 @@ import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
+import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, TaggedContinuation, Var}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -20,12 +20,19 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (
-    val reducer: Reduce[Task],
-    val replayReducer: Reduce[Task],
-    val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-    val replaySpace: ReplayRSpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-    var errorLog: Runtime.ErrorLog) {
+class Runtime private (val reducer: Reduce[Task],
+                       val replayReducer: Reduce[Task],
+                       val space: ISpace[Channel,
+                                         BindPattern,
+                                         ListChannelWithRandom,
+                                         ListChannelWithRandom,
+                                         TaggedContinuation],
+                       val replaySpace: ReplayRSpace[Channel,
+                                                     BindPattern,
+                                                     ListChannelWithRandom,
+                                                     ListChannelWithRandom,
+                                                     TaggedContinuation],
+                       var errorLog: Runtime.ErrorLog) {
   def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
   def close(): Unit                                       = space.close()
 }
@@ -37,10 +44,13 @@ object Runtime {
   type Remainder = Option[Var]
   type Ref       = Long
 
-  private def introduceSystemProcesses(
-      space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-      processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
-    : Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
+  private def introduceSystemProcesses(space: ISpace[Channel,
+                                                     BindPattern,
+                                                     ListChannelWithRandom,
+                                                     ListChannelWithRandom,
+                                                     TaggedContinuation],
+                                       processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
+    : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.map {
       case (name, arity, remainder, ref) =>
         space.install(
@@ -91,25 +101,33 @@ object Runtime {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
-    val context = Context.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](
+    val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
       dataDir,
       mapSize
     )
 
-    val space = RSpace.create(context, Branch.MASTER)
+    val space = RSpace.create[Channel,
+                              BindPattern,
+                              ListChannelWithRandom,
+                              ListChannelWithRandom,
+                              TaggedContinuation](context, Branch.MASTER)
 
-    val replaySpace = ReplayRSpace.create(context, Branch.REPLAY)
+    val replaySpace = ReplayRSpace.create[Channel,
+                                          BindPattern,
+                                          ListChannelWithRandom,
+                                          ListChannelWithRandom,
+                                          TaggedContinuation](context, Branch.REPLAY)
 
     val errorLog                                         = new ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 
-    lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
+    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
       RholangAndScalaDispatcher.create(space, dispatchTable)
 
-    lazy val replayDispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
+    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
       RholangAndScalaDispatcher.create(replaySpace, dispatchTable)
 
-    lazy val dispatchTable: Map[Ref, Seq[Seq[Channel]] => Task[Unit]] = Map(
+    lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
       2L -> SystemProcesses.stderr,
@@ -117,9 +135,8 @@ object Runtime {
       4L -> SystemProcesses.ed25519Verify(space, dispatcher),
       5L -> SystemProcesses.sha256Hash(space, dispatcher),
       6L -> SystemProcesses.keccak256Hash(space, dispatcher),
-      7L -> SystemProcesses.blake2b256Hash(space, dispatcher)
-      //TODO: once we have secp256k1 packaged as jar
-//      9L -> SystemProcesses.secp256k1Verify(store, dispatcher)
+      7L -> SystemProcesses.blake2b256Hash(space, dispatcher),
+      9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
@@ -130,12 +147,11 @@ object Runtime {
       ("ed25519Verify", 4, None, 4L),
       ("sha256Hash", 2, None, 5L),
       ("keccak256Hash", 2, None, 6L),
-      ("blake2b256Hash", 2, None, 7L)
-      //TODO: once we have secp256k1 packaged as jar
-//      ("secp256k1Verify", 4, None, 9L)
+      ("blake2b256Hash", 2, None, 7L),
+      ("secp256k1Verify", 4, None, 9L)
     )
 
-    val res: Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
+    val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
       introduceSystemProcesses(space, procDefs)
 
     assert(res.forall(_.isEmpty))
