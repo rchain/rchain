@@ -1,6 +1,5 @@
 package coop.rchain.roscala
 
-import coop.rchain.roscala
 import coop.rchain.roscala.CtxtRegName._
 import coop.rchain.roscala.VmLiteralName._
 import coop.rchain.roscala.ob._
