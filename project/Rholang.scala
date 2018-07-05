@@ -15,16 +15,16 @@ object Rholang {
     (!jar.exists()) || (jar.lastModified() < latestSource.lastModified())
   }
 
-  def constructArtifacts(jar: File, rhoSourceDir: File, outputDir: File): Seq[File] = {
+  def constructArtifacts(jar: File, rhoSourceDir: File, srcManaged: File, resources: File): Seq[File] = {
     import scala.sys.process._
 
     val command = 
-      s"java -jar ${jar.getAbsolutePath()} ${rhoSourceDir.getAbsolutePath()} ${outputDir.getAbsolutePath()}"
+      s"java -jar ${jar.getAbsolutePath()} ${rhoSourceDir.getAbsolutePath()} ${srcManaged.getAbsolutePath()} ${resources.getAbsolutePath()}"
       
     val status = command.!
     
     if (status == 0) {
-      (outputDir ** "*.scala").get
+      (srcManaged ** "*.scala").get
     } else {
       throw new Exception(s"Non-zero exit status during rholang artifact creation: $status")
     }
@@ -43,14 +43,16 @@ object Rholang {
       constructArtifacts(
         rholangProtoBuildAssembly.value,
         (rholangSource in Compile).value,
-        (sourceManaged in Compile).value
+        (sourceManaged in Compile).value,
+        (resourceDirectory in Compile).value
       )
     },
     rholangScalaProto in Test := {
       constructArtifacts(
         rholangProtoBuildAssembly.value,
         (rholangSource in Test).value,
-        (sourceManaged in Test).value
+        (sourceManaged in Test).value,
+        (resourceDirectory in Test).value
       )
     }
 

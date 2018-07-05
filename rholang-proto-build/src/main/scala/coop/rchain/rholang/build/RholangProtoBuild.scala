@@ -38,7 +38,8 @@ object RholangProtoBuild {
     ).map(i => s"import $i")
     val definition = s"final case object $name extends CompiledRholangSource"
     val body =
-      s"override val term: Par = CompiledRholangSource.fromProtoFile(${escape(proto.toFile.getAbsolutePath())})"
+      s"val resource = getClass.getResource(${escape(proto.toFile.getName())})\n" +
+        "override val term: Par = CompiledRholangSource.fromProtoFile(resource.getPath)"
 
     s"""$pkgDeclaration
      |
@@ -50,13 +51,13 @@ object RholangProtoBuild {
      |""".stripMargin
   }
 
-  def rhoArtifacts(inputBase: Path, outputBase: Path): Seq[Path] = {
+  def rhoArtifacts(inputBase: Path, srcManaged: Path, resources: Path): Seq[Path] = {
     val sources = rhoFiles(inputBase)
 
     val artifactsDetails = sources.map(source => {
       val name      = source.toFile.getName().replace(".rho", "")
       val pkg       = getPackageComment(source)
-      val protoFile = outputBase.resolve(s"$name.proto")
+      val protoFile = resources.resolve(s"$name.proto")
 
       createProtoArtifact(source, protoFile)
 
@@ -65,7 +66,7 @@ object RholangProtoBuild {
 
     val outputs = artifactsDetails.map {
       case (pkg, name, source) =>
-        val output   = outputBase.resolve(s"$name.scala")
+        val output   = srcManaged.resolve(s"$name.scala")
         val artifact = createScalaArtifact(pkg, name, source)
 
         Files.write(output, artifact)
@@ -76,21 +77,22 @@ object RholangProtoBuild {
 
   def cliUsage: String =
     """Usage:
-    |  java -jar RholangProtoBuild.jar <baseDirectory> <sourceManaged>
+    |  java -jar RholangProtoBuild.jar <baseDirectory> <sourceManaged> <resources>
     |  
     |  <baseDirectory> - directory to search (recursively) for rholang sources
-    |  <sourceManaged> - directory to write generated artifacts to
+    |  <sourceManaged> - directory to write generated scala code to
+    |  <resources>     - directory to write protobuf outputs to
     |""".stripMargin
 
   def main(args: Array[String]): Unit =
-    if (args.length != 2) {
+    if (args.length != 3) {
       println(cliUsage)
       throw new Exception("Bad arguments! See usage above.")
     } else {
-      val Array(baseDirectory, sourceManaged) = args.map(Paths.get(_))
-      val sourceManagedFile                   = sourceManaged.toFile
+      val Array(baseDirectory, sourceManaged, resources) = args.map(Paths.get(_))
+      val sourceManagedFile                              = sourceManaged.toFile
       if (!sourceManagedFile.exists) sourceManagedFile.mkdirs
 
-      rhoArtifacts(baseDirectory, sourceManaged)
+      rhoArtifacts(baseDirectory, sourceManaged, resources)
     }
 }
