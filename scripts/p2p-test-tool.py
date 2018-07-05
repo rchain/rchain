@@ -103,7 +103,7 @@ parser.add_argument("-s", "--skip-convergence-test",
 parser.add_argument("--test-performance",
                     dest='test_performance',
                     action='store_true',
-                    help="WIP - Right now this just loads network. Eventually, this will test node network performance by loading resources and measure metrics.")
+                    help="Runs infite loops of load generating node functions so you can test performance by looking at metrics.")
 parser.add_argument("-t", "--tests",
                     dest='run_tests',
                     action='store_true',
@@ -356,24 +356,42 @@ def check_network_convergence(container):
 
 
 def test_performance():
-    for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
-        #for i in range(1, args.propose_loop_amount+1):
-        for i in range(1, 100+1):
-            print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+    # Infinite loop for performance testing via metrics.
+    # Only run parent script "-p 1" so it runs only on one peer, peer0.rchain.coop.
+    print("=====================================================================================")
+    print("Preparing to run infinite deploy/propose loop for stress/performance testing and metric collection.")
+    print("You will have to cancel or Ctrl-C to exit script.")
+    print("=====================================================================================")
+    print('Run parent script with "-p 1" if you only want deploy/propose to run from a single node to network nodes')
+    print("=====================================================================================")
+    print("Grab metrics on peer0 container via:")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095'")
+    print("sudo docker exec -it peer0.rchain.coop bash -c './bin/rnode diagnostics'")
+    print("=====================================================================================")
+    print("Quick and dirty comparative script. Shows metric lines changed and the values.")
+    print("Run last command to see changes from start /tmp/1")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/1")
+    print("""sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
+    print("=====================================================================================")
+    time.sleep(10)
+    while True:
+        for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
+            for i in range(1, args.propose_loop_amount+1):
+                print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
-            # Deploy example contracts using 3 random example files
-            cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
-            r = container.exec_run(['sh', '-c', cmd])
-            for line in r.output.decode('utf-8').splitlines():
-                print(line)
+                # Deploy example contracts using 3 random example files
+                cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+                r = container.exec_run(['sh', '-c', cmd])
+                for line in r.output.decode('utf-8').splitlines():
+                    print(line)
 
-            # Propose blocks from example contracts
-            cmd = "/opt/docker/bin/rnode propose"
-            print("Propose to blockchain previously deployed smart contracts.")
+                # Propose blocks from example contracts
+                cmd = "/opt/docker/bin/rnode propose"
+                print("Propose to blockchain previously deployed smart contracts.")
 
-            r = container.exec_run(['sh', '-c', cmd])
-            for line in r.output.decode('utf-8').splitlines():
-                print(line)
+                r = container.exec_run(['sh', '-c', cmd])
+                for line in r.output.decode('utf-8').splitlines():
+                    print(line)
 
 
 def remove_resources_by_network(args_network):
