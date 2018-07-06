@@ -107,7 +107,7 @@ class Blake2b512Random private (private val digest: Blake2b512Block,
     }
 
   override def hashCode(): Int =
-    ((digest.hashCode * 31 + pathView.position) * 31 + position) * 31 + lastBlock.hashCode
+    ((digest.hashCode * 31 + pathView.position()) * 31 + position) * 31 + lastBlock.hashCode
 }
 
 object Blake2b512Random {
@@ -215,7 +215,7 @@ object Blake2b512Random {
     result.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().put(rand.countView.asReadOnlyBuffer())
     result.position(16)
     Blake2b512Block.fillByteBuffer(rand.digest, result)
-    result.put(rand.pathView.position.toByte)
+    result.put(rand.pathView.position().toByte)
     result.put(rand.position.toByte)
     val pathCopy = rand.pathView.duplicate
     pathCopy.flip()
@@ -258,7 +258,7 @@ object Blake2b512Random {
     val rotPosition = ((rand.position - 1) & 0x3f) + 1
     s"digest: ${Blake2b512Block.debugStr(rand.digest)}\n" +
       s"lastBlock: ${rand.lastBlock.array().mkString(", ")}\n" +
-      s"pathPosition: ${rand.pathView.position}\n" +
+      s"pathPosition: ${rand.pathView.position()}\n" +
       s"position: ${rand.position}\n" +
       s"rotPosition: ${rotPosition}\n" +
       s"remainder: ${rand.hashArray.slice(rotPosition, 64).mkString(", ")}\n"

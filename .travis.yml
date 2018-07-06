@@ -10,14 +10,12 @@ matrix:
     scala: 2.12.4
     sbt_args: -no-colors
     install:
+      - ./scripts/install_sbt.sh
       - ./scripts/install_sodium.sh
       - ./scripts/install.sh
     addons:
       apt:
-        sources:
-          - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
         packages:
-          - sbt
           - jflex
           - haskell-platform
           - rpm

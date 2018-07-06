@@ -76,6 +76,32 @@ message BlockInfo {
 
 // --------- End DeployService  --------
 
+// ---------- Signing Protocol ---------
+message UnapprovedBlock {
+  BlockMessage candidate    = 1;
+  int32        requiredSigs = 2;
+  int64        timestamp    = 3;
+  int64        duration     = 4;
+}
+
+message Signature {
+  bytes  publicKey = 1;
+  string algorithm = 2;
+  bytes  sig       = 3;
+}
+
+message ApprovedBlock  {
+  BlockMessage       block        = 1;
+  int32              requiredSigs = 2;
+  repeated Signature sigs         = 3;
+}
+
+message ApprovedBlockRequest {
+  string identifier = 1;
+}
+
+// ------- End Signing Protocol --------
+
 // --------- Core Protocol  --------
 message BlockMessage {
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
