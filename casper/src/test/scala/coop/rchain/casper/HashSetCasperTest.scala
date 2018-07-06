@@ -245,6 +245,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.contains(signedBlock4) should be(true) // However, in invalidBlockTracker
 
+    nodes(1).logEff.infos.count(_ startsWith "CASPER: Added admissible equivocation") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(1)
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(

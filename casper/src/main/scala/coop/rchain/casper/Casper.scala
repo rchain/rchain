@@ -342,11 +342,18 @@ sealed abstract class MultiParentCasperInstances {
                                    dag,
                                    equivocationRecord,
                                    equivocationChild)) {
-          // TODO: Fix to use bonded validators
-          if (latestMessages.contains(equivocatingValidator)) {
-            EquivocationNeglected
-          } else {
-            EquivocationDetected
+          val maybeEquivocatingValidatorBond =
+            bonds(block).find(_.validator == equivocatingValidator)
+          maybeEquivocatingValidatorBond match {
+            case Some(Bond(_, stake)) =>
+              if (stake > 0) {
+                EquivocationNeglected
+              } else {
+                // TODO: Eliminate by having a validity check that says no stake can be 0
+                EquivocationDetected
+              }
+            case None =>
+              EquivocationDetected
           }
         } else {
           // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
