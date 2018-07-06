@@ -279,7 +279,7 @@ object Validate {
     } yield
       maybeCheckPoint match {
         case Some(_) => Right(Valid)
-        case None    => Right(Valid) // TODO: Fix to Left(InvalidTransaction)
+        case None    => Left(InvalidTransaction)
       }
 
   /**

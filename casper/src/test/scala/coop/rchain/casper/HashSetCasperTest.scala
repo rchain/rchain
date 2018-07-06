@@ -143,6 +143,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     received should be(true)
   }
 
+  it should "add a valid block from peer" in {
+    val nodes  = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val deploy = ProtoUtil.basicDeploy(1)
+
+    val Some(signedBlock1Prime) = nodes(0).casperEff
+      .deploy(deploy) *> nodes(0).casperEff.createBlock
+
+    nodes(0).casperEff.addBlock(signedBlock1Prime)
+    nodes(1).receive()
+
+    nodes(1).logEff.infos.count(_ startsWith "CASPER: Added") should be(1)
+    nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
+  }
+
   it should "ask peers for blocks it is missing" in {
     val nodes   = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
     val deploys = (0 until 3).map(i => ProtoUtil.basicDeploy(i))
