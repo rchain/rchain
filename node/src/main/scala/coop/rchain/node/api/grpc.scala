@@ -9,7 +9,7 @@ import cats._
 import cats.data._
 import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.{MultiParentCasper, PrettyPrinter, SafetyOracle}
+import coop.rchain.casper.{MultiParentCasperConstructor, PrettyPrinter, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
@@ -38,7 +38,7 @@ object GrpcServer {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable: SafetyOracle](
+      F[_]: Capture: Monad: MultiParentCasperConstructor: Log: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable: SafetyOracle](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

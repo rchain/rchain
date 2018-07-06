@@ -22,7 +22,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = Genesis.fromBonds(bonds)
+  val genesis                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -165,7 +165,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).logEff.infos
       .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
     nodes(1).logEff.infos.count(s =>
-      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
+      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
+      1)
   }
 
   it should "ignore adding equivocation blocks" in {

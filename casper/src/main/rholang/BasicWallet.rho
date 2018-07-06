@@ -7,6 +7,9 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
       "ed25519" => {
         cryptoVerifyCh!(["ed25519Verify"])
       }
+      "secp256k1" => {
+        cryptoVerifyCh!(["secp256k1Verify"])
+      }
       _ => {
         cryptoVerifyCh!([])
       }

@@ -155,8 +155,8 @@ lazy val node = (project in file("node"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", daemon),
-        ExecCmd("ENTRYPOINT", "bin/rnode"),
-        ExecCmd("CMD", "run", "--data_dir=/var/lib/rnode")
+        ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker"),
+        ExecCmd("CMD", "run")
       )
     },
     mappings in Docker ++= {

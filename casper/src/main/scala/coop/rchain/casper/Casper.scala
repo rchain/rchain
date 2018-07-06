@@ -12,7 +12,6 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
@@ -82,9 +81,7 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
       activeRuntime: Runtime,
-      publicKey: Array[Byte],
-      privateKey: Array[Byte],
-      sigAlgorithm: String,
+      validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -92,12 +89,6 @@ sealed abstract class MultiParentCasperInstances {
 
       //TODO: Extract hardcoded version
       private val version = 0L
-
-      //TODO: accept other signature algorithms
-      private val signFunction = sigAlgorithm match {
-        case "ed25519" => Ed25519.sign _
-        case _         => throw new Exception(s"Unknown signature algorithm $sigAlgorithm")
-      }
 
       private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
@@ -172,19 +163,24 @@ sealed abstract class MultiParentCasperInstances {
        *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
        *  -Else None
        */
-      def createBlock: F[Option[BlockMessage]] =
-        for {
-          orderedHeads   <- estimator
-          dag            <- blockDag
-          p              = chooseNonConflicting(orderedHeads, genesis, dag)
-          r              <- remDeploys(dag, p)
-          justifications = toJustification(dag.latestMessages)
-          proposal <- if (r.nonEmpty || p.length > 1) {
-                       createProposal(p, r, justifications)
-                     } else {
-                       none[BlockMessage].pure[F]
-                     }
-        } yield proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, signFunction))
+      def createBlock: F[Option[BlockMessage]] = validatorId match {
+        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+          for {
+            orderedHeads   <- estimator
+            dag            <- blockDag
+            p              = chooseNonConflicting(orderedHeads, genesis, dag)
+            r              <- remDeploys(dag, p)
+            justifications = toJustification(dag.latestMessages)
+            proposal <- if (r.nonEmpty || p.length > 1) {
+                         createProposal(p, r, justifications)
+                       } else {
+                         none[BlockMessage].pure[F]
+                       }
+          } yield
+            proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction))
+
+        case None => none[BlockMessage].pure[F]
+      }
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         Capture[F].capture {
@@ -571,42 +567,14 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    Genesis
-      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
-      .map(genesis => {
-        val privateKey = conf.privateKey
-          .orElse(defaultPrivateKey(conf, genesis))
-          .getOrElse(throw new Exception("Private key must be specified!"))
-        val publicKey = conf.sigAlgorithm match {
-          case "ed25519" =>
-            Ed25519.toPublic(privateKey)
-
-          case _ =>
-            conf.publicKey.getOrElse(throw new Exception(
-              "Public key must be specified, cannot infer from private key with given signature algorithm."))
-        }
-        if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
-          throw new Exception("Public key not compatible with given private key!")
-        }
-        hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
-      })
-
-  private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
-    val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {
-      case (currMax @ (_, maxBond), Bond(validator, stake)) =>
-        if (maxBond < stake) Some(Base16.encode(validator.toByteArray)) -> stake
-        else currMax
-    }
-
-    val privateKey = maxValidator.flatMap(publicKey => {
-      val file = conf.validatorsPath.resolve(s"$publicKey.sk").toFile
-      Try(
-        Source.fromFile(file).mkString.trim
-      ).toOption
-    })
-
-    privateKey.map(Base16.decode)
-  }
+    for {
+      genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
+                                           conf.numValidators,
+                                           conf.genesisPath,
+                                           conf.walletsFile,
+                                           activeRuntime)
+      validatorId <- ValidatorIdentity.fromConfig[G](conf)
+    } yield hashSetCasper[F](activeRuntime, validatorId, genesis)
 }
