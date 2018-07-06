@@ -38,9 +38,12 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
   private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
 
+  private[this] val consumeSpan = Kamon.buildSpan("replayrspace.consume")
+  private[this] val produceSpan = Kamon.buildSpan("replayrspace.produce")
+
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    Kamon.withSpan(Kamon.buildSpan("replayrspace.consumes").start(), finishSpan = true) {
+    Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
@@ -148,7 +151,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    Kamon.withSpan(Kamon.buildSpan("replayrspace.produces").start(), finishSpan = true) {
+    Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         @tailrec
         def runMatcher(maybeComm: Option[COMM],
