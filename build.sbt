@@ -141,7 +141,7 @@ lazy val node = (project in file("node"))
         oldStrategy(x)
     },
     /* Dockerization */
-    dockerUsername := Some(organization.value),
+    dockerUsername := Some("rchain"),
     dockerUpdateLatest := true,
     dockerBaseImage := "openjdk:8u171-jre-slim-stretch",
     dockerCommands := {
@@ -154,7 +154,7 @@ lazy val node = (project in file("node"))
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
-        Cmd("USER", daemon),
+        Cmd("USER", "root"),
         ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker"),
         ExecCmd("CMD", "run")
       )
@@ -231,7 +231,7 @@ lazy val rholangProtoBuildJar = Def.task(
 lazy val _incrementalAssembly = Def.taskDyn(
   if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
     (assembly)
-  else 
+  else
     rholangProtoBuildJar
 )
 lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
@@ -250,7 +250,7 @@ lazy val roscala_macros = (project in file("roscala/macros"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value
     )
   )
-  
+
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
   .settings(
@@ -268,7 +268,7 @@ lazy val rspace = (project in file("rspace"))
   .settings(
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
-    libraryDependencies ++= commonDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
       scodecCore,
