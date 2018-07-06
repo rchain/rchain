@@ -39,8 +39,8 @@ object RholangProtoBuild {
     val definition = s"final case object $name extends CompiledRholangSource"
     val protoName  = "/" + proto.toFile.getName()
     val body =
-      s"val resource = getClass.getResourceAsStream(${escape(protoName)})\n" +
-        "  override val term: Par = Par.parseFrom(resource)"
+      s"""val resource = getClass.getResourceAsStream(${escape(protoName)})
+          |  override val term: Par = Par.parseFrom(resource)""".stripMargin
 
     s"""$pkgDeclaration
      |
@@ -78,11 +78,11 @@ object RholangProtoBuild {
 
   def cliUsage: String =
     """Usage:
-    |  java -jar RholangProtoBuild.jar <baseDirectory> <sourceManaged> <resources>
+    |  java -jar RholangProtoBuild.jar <baseDirectory> <sourceManaged> <resourceManaged>
     |  
     |  <baseDirectory> - directory to search (recursively) for rholang sources
     |  <sourceManaged> - directory to write generated scala code to
-    |  <resources>     - directory to write protobuf outputs to
+    |  <resourceManaged>     - directory to write protobuf outputs to
     |""".stripMargin
 
   def main(args: Array[String]): Unit =
