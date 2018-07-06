@@ -199,7 +199,17 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   }
 
   "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
-    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val deploys =
+      Vector("@1!(1)",
+             "@2!(1)",
+             "@2!(2)",
+             "@2!(3)",
+             "@2!(4)",
+             "@2!(5)",
+             "for (@x <- @1) { @2!(x) }",
+             "for (@x <- @2) { @3!(x) }")
+        .flatMap(mkTerm(_).toOption)
+        .map(ProtoUtil.termDeploy)
     val (computedTsCheckpoint, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
