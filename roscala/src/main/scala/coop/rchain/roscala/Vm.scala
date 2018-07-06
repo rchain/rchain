@@ -51,10 +51,6 @@ object Vm {
       executeFlags(state)
     }
 
-    logger.debug("finishAndJoin on strandPool")
-
-    state.strandPool.finishAndJoin()
-
     logger.debug("Exiting run method")
   }
 

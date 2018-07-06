@@ -36,23 +36,13 @@ object Executor {
 
         //check for available task
         if (task != null) {
-          try {
-            val (ctxt, globalEnv) = task
-            val state             = State(ctxt = ctxt, globalEnv = globalEnv)
+          val (ctxt, globalEnv) = task
+          val state             = State(ctxt = ctxt, globalEnv = globalEnv)
 
-            Vm.run(ctxt, state)
+          Vm.run(ctxt, state)
 
-            //Note that state.pc and state.ctxt.pc could be different
-            strandPool.completed.put(state.ctxt)
-          } finally {
-            strandPool.notCompleted.decrementAndGet()
-
-            strandPool.finishLock.readLock().withLock {
-              if (strandPool.isFinished) {
-                strandPool.cdl.countDown()
-              }
-            }
-          }
+          //Note that state.pc and state.ctxt.pc could be different
+          strandPool.completed.put(state.ctxt)
         }
       }
     }
@@ -64,23 +54,10 @@ class StrandPool {
   val completed = new LinkedBlockingQueue[Ctxt]()
 
   /**
-    * Used to lock on `cdl` while finishing
-    */
-  val finishLock = new ReentrantReadWriteLock(true)
-
-  /**
     * This variable is used to indicate if there are some tasks
     * that are currently in progress or ready to be pulled
     */
   private val scheduledCount = new AtomicInteger(0)
-  private val finished       = new AtomicBoolean(false)
-
-  /**
-    * Number of queued/in progress tasks
-    */
-  val notCompleted = new AtomicInteger(0)
-
-  @volatile var cdl: CountDownLatch = null
 
   /**
     * Add self to the Executor's queue
@@ -89,30 +66,13 @@ class StrandPool {
 
   def isEmpty = scheduledCount.get() == 0
 
-  def isFinished = finished.get()
-
   def enqueue(task: (Ctxt, GlobalEnv)): Unit = {
     scheduledCount.incrementAndGet()
-    notCompleted.incrementAndGet()
     scheduled.add(task)
   }
 
   def dequeue: Ctxt = {
     scheduledCount.decrementAndGet()
     completed.take()
-  }
-
-  def finish() =
-    finishLock.writeLock().withLock {
-      finished.set(true)
-      cdl = new CountDownLatch(notCompleted.get())
-    }
-
-  def join() =
-    cdl.await()
-
-  def finishAndJoin() = {
-    finish()
-    join()
   }
 }
