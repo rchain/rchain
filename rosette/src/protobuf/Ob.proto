@@ -23,7 +23,7 @@ message CodeBlock {
 // This message contains the actual executable opCodes
 message CodeVec {
     // Opcodes are serialized in binary
-    bytes opcodes = 1;
+    repeated uint32 opcodes = 1;
 }
 
 message LitVec {
@@ -272,6 +272,7 @@ message Tuple {
 }
 message TupleExpr {
     Object rest = 1;
+    repeated Object elements = 2;
 }
 
 // The OT_ prefix avoids conflicts with various Rosette #define macros

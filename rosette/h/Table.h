@@ -85,6 +85,7 @@ class RblTable : public BinaryOb {
 
     static RblTable* create(RblTableHitFn, int = DefaultTableSize);
     static RblTable* create(int = DefaultTableSize);
+    static RblTable* create(Tuple*);
 
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
