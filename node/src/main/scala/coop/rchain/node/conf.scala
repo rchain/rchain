@@ -98,7 +98,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val bootstrap =
       opt[String](default =
-                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@216.83.154.106:30304"),
+                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:30304"),
                   short = 'b',
                   descr = "Bootstrap rnode address for initial seed.")
 
