@@ -1,5 +1,6 @@
 import sbt._
 import Keys._
+import sbt.io.Path.relativeTo
 
 /*
  * There doesn't seem to be a good way to have a plugin defined in 
@@ -35,6 +36,7 @@ object Rholang {
   val rholangScalaProto = taskKey[Seq[File]]("Generates managed Scala sources and proto from Rholang.")
 
   lazy val rholangSettings = Seq(
+    exportJars := true,
     rholangSource in Compile := (sourceDirectory in Compile).value / "rholang",
     rholangSource in Test := (sourceDirectory in Test).value / "rholang",
     sourceGenerators in Compile += (rholangScalaProto in Compile).taskValue,
@@ -44,7 +46,7 @@ object Rholang {
         rholangProtoBuildAssembly.value,
         (rholangSource in Compile).value,
         (sourceManaged in Compile).value,
-        (resourceDirectory in Compile).value
+        (resourceManaged in Compile).value
       )
     },
     rholangScalaProto in Test := {
@@ -52,9 +54,16 @@ object Rholang {
         rholangProtoBuildAssembly.value,
         (rholangSource in Test).value,
         (sourceManaged in Test).value,
-        (resourceDirectory in Test).value
+        (resourceManaged in Test).value
       )
+    },
+    mappings in (Compile, packageBin) ++= {
+      val generatedProtos = (resourceManaged in Compile).value ** "*.proto"
+      generatedProtos pair relativeTo((resourceManaged in Compile).value)
+    },
+    mappings in (Test, packageBin) ++= {
+      val generatedProtos = (resourceManaged in Test).value ** "*.proto"
+      generatedProtos pair relativeTo((resourceManaged in Test).value)
     }
-
   )
 }
