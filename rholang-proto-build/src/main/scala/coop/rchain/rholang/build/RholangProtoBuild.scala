@@ -37,9 +37,10 @@ object RholangProtoBuild {
       "coop.rchain.models.Par"
     ).map(i => s"import $i")
     val definition = s"final case object $name extends CompiledRholangSource"
+    val protoName  = "/" + proto.toFile.getName()
     val body =
-      s"val resource = getClass.getResource(${escape(proto.toFile.getName())})\n" +
-        "override val term: Par = CompiledRholangSource.fromProtoFile(resource.getPath)"
+      s"val resource = getClass.getResourceAsStream(${escape(protoName)})\n" +
+        "  override val term: Par = Par.parseFrom(resource)"
 
     s"""$pkgDeclaration
      |
