@@ -92,7 +92,9 @@ object RholangProtoBuild {
     } else {
       val Array(baseDirectory, sourceManaged, resources) = args.map(Paths.get(_))
       val sourceManagedFile                              = sourceManaged.toFile
+      val resourcesFile                                  = resources.toFile
       if (!sourceManagedFile.exists) sourceManagedFile.mkdirs
+      if (!resourcesFile.exists) resourcesFile.mkdirs
 
       rhoArtifacts(baseDirectory, sourceManaged, resources)
     }
