@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.casper.genesis.contracts
+//scalapackage coop.rchain.rholang.math
 
 //requires NonNegativeNumber, TestSet
 new value, add, sub in {

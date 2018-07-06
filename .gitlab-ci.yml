@@ -10,7 +10,7 @@ test:integration-test-for-p2p-network:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
-    - sudo ./scripts/p2p-test-tool.py -b -p 1
+    - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 1024m
 
 test:integration-test-for-artifact-creation:
   stage: test 
@@ -20,17 +20,26 @@ test:integration-test-for-artifact-creation:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
 
+deploy:deploy-rnode-to-dockerhub:
+  stage: deploy 
+  tags:
+    - preloaded-ubuntu1804 
+  script:
+    - ./scripts/install_bnfc.sh
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
+    - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
+    - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
+    - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
+  only:
+    - master
+    - dev
+
 deploy:deploy-rnode-artifacts:
   stage: deploy 
   tags:
     - preloaded-ubuntu1804 
   script:
     - ./scripts/install_bnfc.sh
-    # docker image to docker hub
-    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
-    - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
-    - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
-    - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME}
     # build rosette 
     - cd rosette
     - ./build.sh

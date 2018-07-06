@@ -25,9 +25,14 @@ message Par {
 
 message TaggedContinuation {
     oneof tagged_cont {
-        Par par_body = 1;
+        ParWithRandom par_body = 1;
         int64 scala_body_ref = 2;
     }
+}
+
+message ParWithRandom {
+    Par body = 1 [(scalapb.field).no_box = true];
+    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
 message Channel {
@@ -37,8 +42,9 @@ message Channel {
     }
 }
 
-message ListChannel {
+message ListChannelWithRandom {
     repeated Channel channels = 1;
+    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -300,5 +306,5 @@ message ConnectiveBody {
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 message GPrivate {
-    string id = 1;
+    bytes id = 1;
 }

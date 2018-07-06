@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.internal.{Datum, GNAT, WaitingContinuation}
+import coop.rchain.rspace.internal.GNAT
+import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq
 
@@ -28,31 +29,54 @@ package object util {
     * Based on:
     * [[https://github.com/OpenTSDB/asynchbase/blob/f6a8ccb7e55ed9bc0aad265345da4c679e750055/src/Bytes.java#L549-L572]]
     */
-  @SuppressWarnings(Array("org.wartremover.warts.Equals", "org.wartremover.warts.Return"))
   def memcmp(a: Array[Byte], b: Array[Byte]): Int = {
-    val length = Math.min(a.length, b.length)
-    if (java.util.Arrays.equals(a, b)) {
-      0
+    val c = a.length - b.length
+    if (c != 0) {
+      c
     } else {
-      for (i <- 0 to length) {
+      for (i <- 0 until a.length) {
         val ai = a(i)
         val bi = b(i)
         if (ai != bi) {
           return (ai & 0xFF) - (bi & 0xFF)
         }
       }
-      a.length - b.length
+      0
     }
   }
 
-  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] = {
-
-    implicit val ordArrayByte: Ordering[Array[Byte]] = (x: Array[Byte], y: Array[Byte]) =>
-      memcmp(x, y)
-
+  def canonicalize[C, P, A, K](gnat: GNAT[C, P, A, K]): GNAT[C, P, A, K] =
     gnat.copy(
-      wks = gnat.wks.sortBy(_.source.hash.bytes.toArray),
-      data = gnat.data.sortBy(_.source.hash.bytes.toArray)
+      wks = gnat.wks.sortBy(_.source.hash.bytes)(ordByteVector),
+      data = gnat.data.sortBy(_.source.hash.bytes)(ordByteVector)
     )
+
+  def veccmp(a: ByteVector, b: ByteVector): Int = {
+    val c = a.length - b.length
+    if (c != 0) {
+      c.toInt
+    } else {
+      for (i <- 0L until a.length) {
+        //indexed access of two ByteVectors can be not fast enough,
+        //however it is used by ByteVector creators (see === implementation)
+        val ai = a(i)
+        val bi = b(i)
+        if (ai != bi) {
+          return (ai & 0xFF) - (bi & 0xFF)
+        }
+      }
+      0
+    }
   }
+
+  val ordArrayByte: Ordering[Array[Byte]] = (x: Array[Byte], y: Array[Byte]) => memcmp(x, y)
+
+  val ordByteVector: Ordering[ByteVector] = (a: ByteVector, b: ByteVector) => veccmp(a, b)
+
+  val ordByteVectorPair: Ordering[(ByteVector, ByteVector)] =
+    (a: (ByteVector, ByteVector), b: (ByteVector, ByteVector)) =>
+      veccmp(a._1, b._1) match {
+        case 0 => veccmp(a._2, b._2)
+        case c => c
+    }
 }

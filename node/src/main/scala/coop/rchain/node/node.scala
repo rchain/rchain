@@ -11,9 +11,8 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
 import TaskContrib._
-import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
-import coop.rchain.casper.genesis.Genesis.fromBondsFile
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
+import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -169,12 +168,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                            = effects.log
-  implicit val timeEffect: Time[Task]                          = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]              = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                    = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]        = diagnostics.nodeCoreMetrics
-  implicit val connectionsState: MonadState[Task, Connections] = effects.connectionsState[Task]
+  implicit val logEffect: Log[Task]                               = effects.log
+  implicit val timeEffect: Time[Task]                             = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
+  implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
@@ -187,15 +186,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime,
                        casperRuntime: Runtime,
-                       casperEffect: MultiParentCasper[Effect])
+                       casperConstructor: MultiParentCasperConstructor[Effect],
+                       packetHandler: PacketHandler[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
       runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
-      casperEffect  <- MultiParentCasper.fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+      casperConstructor <- MultiParentCasperConstructor
+                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
       grpcServer <- {
-        implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
+        implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         implicit val storeMetrics =
           diagnostics.storeMetrics[Effect](casperRuntime.space.store,
                                            casperRuntime.replaySpace.store,
@@ -205,7 +206,19 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperEffect)
+    } yield {
+      implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
+      val packetHandlerEffect = PacketHandler.pf[Effect](
+        casperPacketHandler[Effect]
+      )
+      Resources(grpcServer,
+                metricsServer,
+                httpServer,
+                runtime,
+                casperRuntime,
+                casperConstructor,
+                packetHandlerEffect)
+    }
 
   def startResources(resources: Resources): Effect[Unit] =
     for {
@@ -220,12 +233,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down transport layer, broadcasting DISCONNECT")
 
     (for {
-      peers <- nodeDiscoveryEffect.peers
-      loc   <- transportLayerEffect.local
-      msg   = ProtocolHelper.disconnect(loc)
-      _     <- transportLayerEffect.broadcast(peers, msg)
-      // TODO remove that once broadcast and send reuse roundTrip
-      _ <- IOUtil.sleep[Task](5000L)
+      loc <- transportLayerEffect.local
+      ts  <- timeEffect.currentMillis
+      msg = ProtocolHelper.disconnect(loc)
+      _   <- transportLayerEffect.shutdown(msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
@@ -261,10 +272,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
-    implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
-    implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
-      casperPacketHandler[Effect]
-    )
+    implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
@@ -293,8 +301,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                       Connect.connectToBootstrap[Effect](addr,
                                                          maxNumOfAttempts = 5,
                                                          defaultTimeout = defaultTimeout)))
-      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
-          else ().pure[Effect]
+      _ <- {
+        implicit val casperEvidence      = resources.casperConstructor
+        implicit val packetHandlerEffect = resources.packetHandler
+        if (res.isRight)
+          MonadOps.forever((i: Int) =>
+                             Connect
+                               .findAndConnect[Effect](defaultTimeout)
+                               .apply(i) <* requestApprovedBlock[Effect],
+                           0)
+        else ().pure[Effect]
+      }
       _ <- exit0.toEffect
     } yield ()
 

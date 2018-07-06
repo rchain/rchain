@@ -47,7 +47,7 @@ lazy val casper = (project in file("casper"))
   .settings(rholangSettings: _*)
   .settings(
     name := "casper",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
       monix
@@ -81,13 +81,14 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
+      scalacheckNoTest,
       kalium,
       jaxb,
-      secp256k1Java
-    ),
+      secp256k1Java,
+      scodecBits),
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
@@ -154,8 +155,8 @@ lazy val node = (project in file("node"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", daemon),
-        ExecCmd("ENTRYPOINT", "bin/rnode"),
-        ExecCmd("CMD", "run", "--data_dir=/var/lib/rnode")
+        ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker"),
+        ExecCmd("CMD", "run")
       )
     },
     mappings in Docker ++= {

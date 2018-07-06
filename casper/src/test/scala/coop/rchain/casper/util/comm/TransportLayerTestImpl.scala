@@ -34,6 +34,8 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
   def disconnect(peer: PeerNode): F[Unit] = ???
+
+  def shutdown(msg: Protocol): F[Unit] = ???
 }
 
 object TransportLayerTestImpl {

@@ -99,7 +99,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       ids = Seq(GPrivate("4"), GPrivate("5"))
     )
     val result = PrettyPrinter().buildString(source)
-    val target = "0 | true | \"2\" | `www.3cheese.com` | 4 | 5"
+    val target = "0 | true | \"2\" | `www.3cheese.com` | Unforgeable(0x34) | Unforgeable(0x35)"
     result shouldBe target
   }
 
