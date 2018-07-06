@@ -1,5 +1,7 @@
 package coop.rchain.roscala.ob
 
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.{LocLimbo, LocRslt, Location}
 import coop.rchain.roscala.Location._
@@ -8,10 +10,8 @@ import Ctxt.logger
 
 class Ctxt(var tag: Location,
            var nargs: Int,
-           var outstanding: Int,
+           val outstanding: AtomicInteger = new AtomicInteger(0),
            var pc: Int,
-           var rslt: Ob,
-           var trgt: Ob,
            var argvec: Tuple,
            var env: Ob,
            var code: Code,
@@ -22,20 +22,27 @@ class Ctxt(var tag: Location,
            var monitor: Monitor)
     extends Ob {
 
+  private val _rslt = new AtomicReference[Ob](Niv)
+  private val _trgt = new AtomicReference[Ob](Niv)
+
+  @inline def rslt: Ob            = _rslt.get()
+  @inline def rslt_=(v: Ob): Unit = _rslt.set(v)
+
+  @inline def trgt: Ob            = _trgt.get()
+  @inline def trgt_=(v: Ob): Unit = _trgt.set(v)
+
   def applyK(result: Ob, loc: Location, state: State): Boolean =
     // Make continuation receive `result` at `tag`
     ctxt.get.rcv(result, loc, state)
 
   def arg(n: Int): Ob = this.argvec.value(n)
 
-  override def clone(): Ctxt =
-    new Ctxt(
+  override def clone(): Ctxt = {
+    val res = new Ctxt(
       tag = this.tag,
       nargs = this.nargs,
-      outstanding = this.outstanding,
+      outstanding = new AtomicInteger(this.outstanding.get()),
       pc = this.pc,
-      rslt = this.rslt,
-      trgt = this.trgt,
       argvec = Tuple(this.argvec.value.clone()),
       env = this.env,
       code = this.code,
@@ -46,13 +53,18 @@ class Ctxt(var tag: Location,
       monitor = this.monitor
     )
 
+    res.rslt = this.rslt
+    res.trgt = this.trgt
+
+    res
+  }
+
   def rcv(result: Ob, loc: Location, state: State): Boolean =
     if (store(loc, this, result)) {
       logger.debug("Store failure in Ctxt.rcv")
       true
     } else {
-      outstanding -= 1
-      if (outstanding == 0) {
+      if (outstanding.decrementAndGet() == 0) {
         logger.debug("Scheduling continuation")
         scheduleStrand(state)
       } else {
@@ -112,10 +124,8 @@ object Ctxt {
     new Ctxt(
       tag = tag,
       nargs = 0,
-      outstanding = 1,
+      outstanding = new AtomicInteger(1),
       pc = 0,
-      rslt = Niv,
-      trgt = Niv,
       argvec = Tuple(new Array[Ob](0)),
       env = Niv,
       code = code,
@@ -130,10 +140,7 @@ object Ctxt {
     new Ctxt(
       tag = LocRslt,
       nargs = tuple.value.length,
-      outstanding = 0,
       pc = 0,
-      rslt = Niv,
-      trgt = Niv,
       argvec = tuple,
       env = continuation.env,
       ctxt = Some(continuation),
@@ -148,10 +155,7 @@ object Ctxt {
     new Ctxt(
       tag = LocRslt,
       nargs = 0,
-      outstanding = 0,
       pc = 0,
-      rslt = Niv,
-      trgt = Niv,
       argvec = Nil,
       env = continuation.env,
       ctxt = Some(continuation),
@@ -168,10 +172,7 @@ object Ctxt {
   def argvec(i: Int): Ctxt = new Ctxt(
     tag = LocLimbo,
     nargs = 0,
-    outstanding = 0,
     pc = 0,
-    rslt = Niv,
-    trgt = Niv,
     argvec = Tuple(new Array[Ob](i)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
@@ -188,10 +189,7 @@ object Ctxt {
   def empty: Ctxt = new Ctxt(
     tag = LocLimbo,
     nargs = 0,
-    outstanding = 0,
     pc = 0,
-    rslt = Niv,
-    trgt = Niv,
     argvec = Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
@@ -208,10 +206,8 @@ object Ctxt {
   def outstanding(i: Int): Ctxt = new Ctxt(
     tag = LocLimbo,
     nargs = 0,
-    outstanding = i,
+    outstanding = new AtomicInteger(i),
     pc = 0,
-    rslt = Niv,
-    trgt = Niv,
     argvec = Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),

@@ -12,10 +12,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
   val ctxt = new Ctxt(
     tag = null,
     nargs = 1,
-    outstanding = 0, //new AtomicInteger(0),
     pc = 0,
-    rslt = null,
-    trgt = null,
     argvec = Tuple(Fixnum(1)),
     env = null,
     code = null,
@@ -25,6 +22,9 @@ class RblFloatSpec extends FlatSpec with Matchers {
     rcvr = null,
     monitor = null,
   )
+
+  ctxt.trgt = null
+  ctxt.rslt = null
 
   def reAssignCtxtArgs(ctxt: Ctxt, nargs: Int, args: Tuple): Ctxt = {
     val newCtxt = ctxt.clone()

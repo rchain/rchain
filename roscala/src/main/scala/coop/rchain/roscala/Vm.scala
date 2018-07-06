@@ -166,7 +166,7 @@ object Vm {
         */
       case OpOutstanding(pc, n) =>
         state.ctxt.pc = pc
-        state.ctxt.outstanding = n
+        state.ctxt.outstanding.set(n)
         state.nextOpFlag = true
 
       /**

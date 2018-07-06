@@ -2,10 +2,12 @@ package coop.rchain.roscala
 
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.Ctxt
+import coop.rchain.roscala.util.syntax._
 
 object Executor {
   private val numThreads = Runtime.getRuntime.availableProcessors()
@@ -45,8 +47,10 @@ object Executor {
           } finally {
             strandPool.notCompleted.decrementAndGet()
 
-            if (strandPool.isFinished) {
-              strandPool.cdl.countDown()
+            strandPool.finishLock.readLock().withLock {
+              if (strandPool.isFinished) {
+                strandPool.cdl.countDown()
+              }
             }
           }
         }
@@ -58,6 +62,11 @@ object Executor {
 class StrandPool {
   val scheduled = new ConcurrentLinkedQueue[(Ctxt, GlobalEnv)]()
   val completed = new LinkedBlockingQueue[Ctxt]()
+
+  /**
+    * Used to lock on `cdl` while finishing
+    */
+  val finishLock = new ReentrantReadWriteLock(true)
 
   /**
     * This variable is used to indicate if there are some tasks
@@ -93,10 +102,11 @@ class StrandPool {
     completed.take()
   }
 
-  def finish() = {
-    finished.set(true)
-    cdl = new CountDownLatch(notCompleted.get())
-  }
+  def finish() =
+    finishLock.writeLock().withLock {
+      finished.set(true)
+      cdl = new CountDownLatch(notCompleted.get())
+    }
 
   def join() =
     cdl.await()
