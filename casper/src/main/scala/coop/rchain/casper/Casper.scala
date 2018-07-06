@@ -279,9 +279,8 @@ sealed abstract class MultiParentCasperInstances {
           _      <- addEffects(status, b)
         } yield status
 
-      private def equivocationsCheck(
-          block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+      private def equivocationsCheck(block: BlockMessage,
+                                     dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
         val justificationOfCreator = block.justifications
           .find {
             case Justification(validator: Validator, _) => validator == block.sender
@@ -293,7 +292,7 @@ sealed abstract class MultiParentCasperInstances {
         if (isNotEquivocation) {
           Applicative[F].pure(Right(Valid))
         } else if (awaitingJustificationToChild.contains(block.blockHash)) {
-          Applicative[F].pure(Right(AdmissibleEquivocation))
+          Applicative[F].pure(Left(AdmissibleEquivocation))
         } else {
           Applicative[F].pure(Left(IgnorableEquivocation))
         }
@@ -302,7 +301,7 @@ sealed abstract class MultiParentCasperInstances {
       // See EquivocationRecord.scala for summary of algorithm.
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
         Capture[F].capture {
           val neglectedEquivocationDetected =
             equivocationsTracker.foldLeft(false) {

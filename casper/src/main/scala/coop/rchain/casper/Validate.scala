@@ -102,10 +102,9 @@ object Validate {
    * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
-  def blockSummary[F[_]: Monad: Log: Time](
-      block: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+  def blockSummary[F[_]: Monad: Log: Time](block: BlockMessage,
+                                           genesis: BlockMessage,
+                                           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
@@ -117,9 +116,8 @@ object Validate {
                                Validate.sequenceNumber[F](block, dag))
     } yield sequenceNumberStatus.joinRight
 
-  def missingBlocks[F[_]: Applicative: Log](
-      block: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage,
+                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
     val justificationsPresent =
       block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
@@ -134,9 +132,8 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+  def timestamp[F[_]: Monad: Log: Time](b: BlockMessage,
+                                        dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
@@ -167,9 +164,8 @@ object Validate {
                }
     } yield result
 
-  def blockNumber[F[_]: Applicative: Log](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def blockNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val parentNumber = ProtoUtil
       .parents(b)
       .headOption
@@ -195,9 +191,8 @@ object Validate {
     }
   }
 
-  def sequenceNumber[F[_]: Applicative: Log](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                             dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val creatorJustificationSeqNumber = b.justifications
       .find {
         case Justification(validator, _) => validator == b.sender
@@ -219,10 +214,9 @@ object Validate {
     }
   }
 
-  def parents[F[_]: Applicative: Log](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def parents[F[_]: Applicative: Log](b: BlockMessage,
+                                      genesis: BlockMessage,
+                                      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
     if (b.justifications.isEmpty) {
@@ -259,7 +253,7 @@ object Validate {
   def justificationRegressions[F[_]: Applicative: Log](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val latestMessagesOfBlock = ProtoUtil.toLatestMessages(b.justifications)
     val latestMessagesOfLatestMessagesForSender =
       dag.latestMessagesOfLatestMessages.getOrElse(b.sender, latestMessagesOfBlock)
@@ -292,7 +286,7 @@ object Validate {
       initStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
-      implicit scheduler: Scheduler): F[Either[RejectableBlock, IncludeableBlock]] =
+      implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
       maybeCheckPoint <- Capture[F].capture {
                           val Right((maybeCheckPoint, _)) =
@@ -323,7 +317,7 @@ object Validate {
     */
   def neglectedInvalidBlockCheck[F[_]: Applicative](
       block: BlockMessage,
-      invalidBlockTracker: Set[BlockHash]): F[Either[RejectableBlock, IncludeableBlock]] = {
+      invalidBlockTracker: Set[BlockHash]): F[Either[InvalidBlock, ValidBlock]] = {
     val invalidJustifications = block.justifications.filter(justification =>
       invalidBlockTracker.contains(justification.latestBlockHash))
     val neglectedInvalidJustification = invalidJustifications.exists { justification =>
