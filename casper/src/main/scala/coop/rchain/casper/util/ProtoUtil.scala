@@ -240,16 +240,31 @@ object ProtoUtil {
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
+  /**
+    * Interprets the byte array as a large positive number, adds the
+    * given integer by usual addition, then turns the result back into
+    * a byte array.
+    * @param n Byte array to interpret as large positive number
+    * @param m Integer to add to `n`
+    * @return Result of the addition, changes back to a byte array.
+    */
+  def add(n: Array[Byte], m: Int): Array[Byte] = {
+    val num = BigInt(Base16.encode(n), 16)
+    val sum = num + m
+
+    Base16.decode(sum.toString(16))
+  }
+
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
-    val nonce = scala.util.Random.nextInt(10000)
-    val term  = s"@${id}!($id)"
+    val timestamp = System.currentTimeMillis()
+    val term      = s"@${id}!($id)"
 
     DeployString()
       .withUser(ByteString.EMPTY)
-      .withNonce(nonce)
+      .withTimestamp(timestamp)
       .withTerm(term)
   }
 
@@ -257,20 +272,17 @@ object ProtoUtil {
     val d    = basicDeployString(id)
     val term = InterpreterUtil.mkTerm(d.term).right.get
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = Some(d)
     )
   }
 
   def termDeploy(term: Par): Deploy = {
-    val d = basicDeployString(0)
+    val timestamp = System.currentTimeMillis()
     Deploy(
-      user = d.user,
-      nonce = d.nonce,
       term = Some(term),
-      sig = d.sig
+      raw = Some(
+        DeployString(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
   }
 }

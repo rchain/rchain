@@ -23,7 +23,7 @@ message CodeBlock {
 // This message contains the actual executable opCodes
 message CodeVec {
     // Opcodes are serialized in binary
-    bytes opcodes = 1;
+    repeated uint32 opcodes = 1;
 }
 
 message LitVec {
@@ -56,15 +56,84 @@ message Code {
 message ComplexPattern {
     Object patvec = 1;
     Object offsetvec = 2;
-}
-message CompoundPattern {
-    Object expr = 1;
+    Object expr = 3;
 }
 message ConstPattern {
     Object val = 1;
 }
 message ExpandedLocation {
-    string value = 1;
+    string text = 1;
+    uint32 value = 2;
+
+    enum PBLocationType {
+        LT_CtxtRegister = 0;
+        LT_ArgRegister = 1;
+        LT_LexVariable = 2;
+        LT_GlobalVariable = 3;
+        LT_BitField = 4;
+        LT_Limbo = 5;
+        LT_BitField00 = 6;
+        LT_AddrVariable = 7;
+    }
+
+    PBLocationType type = 3;
+
+    message LocCtxt {
+        enum PBLocationCtxt {
+            LCT_RSLT = 0;
+            LCT_TRGT = 1;
+            LCT_ARGVEC = 2;
+            LCT_ENV = 3;
+            LCT_CODE = 4;
+            LCT_CTXT = 5;
+            LCT_SELF = 6;
+            LCT_SELFENV = 7;
+            LCT_RCVR = 8;
+            LCT_MONITOR = 9;
+        }
+        PBLocationCtxt reg = 1;
+    }
+    message LocArg {
+        uint32 arg = 1;
+    }
+    message LocLexVar {
+        bool indirect = 1;
+        uint32 level = 2;
+        uint32 offset = 3;
+    }
+    message LocAddrVar {
+        bool indirect = 1;
+        uint32 level = 2;
+        uint32 offset = 3;
+    }
+    message LocGlobalVar {
+        uint32 offset = 1;
+    }
+    message LocBitField {
+        bool indirect = 1;
+        bool signed = 2;
+        uint32 level = 3;
+        uint32 offset = 4;
+        uint32 span = 5;
+    }
+    message LocBitField00 {
+        bool signed = 1;
+        uint32 offset = 2;
+        uint32 span = 3;
+    }
+    message LocLimbo {
+    }
+
+    oneof loc {
+        LocCtxt ctxt = 4;
+        LocArg arg = 5;
+        LocLexVar lexvar = 6;
+        LocAddrVar addrvar = 7;
+        LocGlobalVar globalvar = 8;
+        LocBitField bitfield = 9;
+        LocBitField00 bitfield00 = 10;
+        LocLimbo limbo = 11;
+    }
 }
 message Fixnum {
     int32 value = 1;
@@ -135,8 +204,6 @@ message ProcExpr {
 message QuoteExpr {
     Object expr = 1;
 }
-message RBLAtom {
-}
 message RBLBool {
     bool value = 1;
 }
@@ -205,55 +272,56 @@ message Tuple {
 }
 message TupleExpr {
     Object rest = 1;
+    repeated Object elements = 2;
 }
 
 // The OT_ prefix avoids conflicts with various Rosette #define macros
 enum ObType {
     OT_NOT_SET = 0;
-    OT_BLOCK_EXPR = 1;
-    OT_CHAR = 2;
-    OT_CODE = 3;
-    OT_EXPANDED_LOCATION = 4;
-    OT_FIXNUM = 5;
-    OT_FLOAT = 6;
-    OT_FREE_EXPR = 7;
-    OT_GOTO_EXPR = 8;
-    OT_IF_EXPR = 9;
-    OT_LABEL_EXPR = 10;
-    OT_LET_EXPR = 11;
-    OT_LET_REC_EXPR = 12;
-    OT_METHOD_EXPR = 13;
-    OT_PROC = 14;
-    OT_PROC_EXPR = 15;
-    OT_QUOTE_EXPR = 16;
-    OT_RBL_STRING = 17;
-    OT_REFLECTIVE_METHOD_EXPR = 18;
-    OT_REQUEST_EXPR = 19;
-    OT_SEND_EXPR = 20;
-    OT_SEQ_EXPR = 21;
-    OT_SET_EXPR = 22;
-    OT_STD_METHOD = 23;
-    OT_SYMBOL = 24;
-    OT_TBL_OBJECT = 25;
-    OT_TEMPLATE = 26;
-    OT_TUPLE = 27;
-    OT_TUPLE_EXPR = 28;
-    OT_RBL_BOOL = 29;
-    OT_NIV = 30;
-    OT_STD_EXTENSION = 31;
-    OT_RBL_ATOM = 32;
-    OT_NULL_EXPR = 33;
-    OT_COMPOUND_PATTERN = 34;
-    OT_COMPLEX_PATTERN = 35;
-    OT_STD_META = 36;
-    OT_ID_VEC_PATTERN = 37;
-    OT_ID_AMPR_REST_PATTERN = 38;
-    OT_ID_PATTERN = 39;
-    OT_PRIM = 40;
-    OT_SYSVAL = 41;
-    OT_CONST_PATTERN = 42;
-    OT_RBL_TABLE = 43;
-    OT_ACTOR = 44;
+
+    OT_ACTOR = 1;
+    OT_BLOCK_EXPR = 2;
+    OT_CHAR = 3;
+    OT_CODE = 4;
+    OT_COMPLEX_PATTERN = 5;
+    OT_CONST_PATTERN = 6;
+    OT_EXPANDED_LOCATION = 7;
+    OT_FIXNUM = 8;
+    OT_FLOAT = 9;
+    OT_FREE_EXPR = 10;
+    OT_GOTO_EXPR = 11;
+    OT_ID_AMPR_REST_PATTERN = 12;
+    OT_ID_PATTERN = 13;
+    OT_ID_VEC_PATTERN = 14;
+    OT_IF_EXPR = 15;
+    OT_LABEL_EXPR = 16;
+    OT_LET_EXPR = 17;
+    OT_LET_REC_EXPR = 18;
+    OT_METHOD_EXPR = 19;
+    OT_NIV = 20;
+    OT_NULL_EXPR = 21;
+    OT_PRIM = 22;
+    OT_PROC = 23;
+    OT_PROC_EXPR = 24;
+    OT_QUOTE_EXPR = 25;
+    OT_RBL_BOOL = 26;
+    OT_RBL_STRING = 27;
+    OT_RBL_TABLE = 28;
+    OT_REFLECTIVE_METHOD_EXPR = 29;
+    OT_REQUEST_EXPR = 30;
+    OT_SEND_EXPR = 31;
+    OT_SEQ_EXPR = 32;
+    OT_SET_EXPR = 33;
+    OT_STD_EXTENSION = 34;
+    OT_STD_META = 35;
+    OT_STD_METHOD = 36;
+    OT_SYMBOL = 37;
+    OT_SYSVAL = 38;
+    OT_TBL_OBJECT = 39;
+    OT_TEMPLATE = 40;
+    OT_TUPLE = 41;
+    OT_TUPLE_EXPR = 42;
+
     OT_UNKNOWN = 999;
 }
 
@@ -272,45 +340,43 @@ message Object {
         BlockExpr block_expr = 11;
         Char char = 12;
         Code code = 13;
-        ExpandedLocation expanded_location = 14;
-        Fixnum fixnum = 15;
-        Float float = 16;
-        FreeExpr free_expr = 17;
-        GotoExpr goto_expr = 18;
-        IfExpr if_expr = 19;
-        LabelExpr label_expr = 20;
-        LetExpr let_expr = 21;
-        LetrecExpr let_rec_expr = 22;
-        MethodExpr method_expr = 23;
-        Niv niv = 24;
-        NullExpr null_expr = 25;
-        Proc proc = 26;
-        ProcExpr proc_expr = 27;
-        QuoteExpr quote_expr = 28;
-        RBLAtom rbl_atom = 29;
-        RBLstring rbl_string = 30;
-        RBLBool rbl_bool = 31;
-        ReflectiveMethodExpr reflective_method_expr = 32;
-        RequestExpr request_expr = 33;
-        SendExpr send_expr = 34;
-        SeqExpr seq_expr = 35;
-        SetExpr set_expr = 36;
-        StdExtension std_extension = 37;
-        StdMthd std_mthd = 38;
-        Symbol symbol = 39;
-        TblObject tbl_object = 40;
-        Template template = 41;
-        Tuple tuple = 42;
-        TupleExpr tuple_expr = 43;
-        CompoundPattern compound_pattern = 44;
-        ComplexPattern complex_pattern = 45;
-        StdMeta std_meta = 46;
-        IdVecPattern id_vec_pattern = 47;
-        IdAmprRestPattern id_ampr_rest_pattern = 48;
-        IdPattern id_pattern = 49;
-        Prim prim = 50;
-        Sysval sysval = 51;
-        ConstPattern const_pattern = 52;
-        RblTable rbl_table = 53;
+        ComplexPattern complex_pattern = 14;
+        ConstPattern const_pattern = 15;
+        ExpandedLocation expanded_location = 16;
+        Fixnum fixnum = 17;
+        Float float = 18;
+        FreeExpr free_expr = 19;
+        GotoExpr goto_expr = 20;
+        IdAmprRestPattern id_ampr_rest_pattern = 21;
+        IdPattern id_pattern = 22;
+        IdVecPattern id_vec_pattern = 23;
+        IfExpr if_expr = 24;
+        LabelExpr label_expr = 25;
+        LetExpr let_expr = 26;
+        LetrecExpr let_rec_expr = 27;
+        MethodExpr method_expr = 28;
+        Niv niv = 29;
+        NullExpr null_expr = 30;
+        Prim prim = 31;
+        Proc proc = 32;
+        ProcExpr proc_expr = 33;
+        QuoteExpr quote_expr = 34;
+        RBLBool rbl_bool = 35;
+        RBLstring rbl_string = 36;
+        RblTable rbl_table = 37;
+        ReflectiveMethodExpr reflective_method_expr = 38;
+        RequestExpr request_expr = 39;
+        SendExpr send_expr = 40;
+        SeqExpr seq_expr = 41;
+        SetExpr set_expr = 42;
+        StdExtension std_extension = 43;
+        StdMeta std_meta = 44;
+        StdMthd std_mthd = 45;
+        Symbol symbol = 46;
+        Sysval sysval = 47;
+        TblObject tbl_object = 48;
+        Template template = 49;
+        Tuple tuple = 50;
+        TupleExpr tuple_expr = 51;
     }
 }

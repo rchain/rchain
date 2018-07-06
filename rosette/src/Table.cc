@@ -66,6 +66,11 @@ RblTable* RblTable::create(int max) {
     return new (loc) RblTable(max, tmp);
 }
 
+RblTable* RblTable::create(Tuple * tup) {
+    void* loc = PALLOC1(sizeof(RblTable), tup);
+    return new (loc) RblTable(SIZE(tup), tup);
+}
+
 RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
     : BinaryOb(sizeof(RblTable), CLASS_META(RblTable), CLASS_SBO(RblTable)),
       maxEntries(max),

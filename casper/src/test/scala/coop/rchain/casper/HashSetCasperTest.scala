@@ -5,10 +5,11 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.comm.transport.CommMessages.{packet, PacketMessage}
+import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import monix.execution.Scheduler.Implicits.global
@@ -21,7 +22,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = Genesis.fromBonds(bonds)
+  val genesis                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -69,6 +70,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val logMessages = List(
       "CASPER: Received Deploy",
       "CASPER: Beginning send of Block #1",
+      "CASPER: Sent",
       "CASPER: Added",
       "CASPER: New fork-choice tip is block"
     )
@@ -163,7 +165,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).logEff.infos
       .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
     nodes(1).logEff.infos.count(s =>
-      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
+      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
+      1)
   }
 
   it should "ignore adding equivocation blocks" in {
@@ -268,14 +271,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).transportLayerEff
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
-    val signedInvalidBlockPacketMessage =
-      PacketMessage(packet(nodes(1).local, signedInvalidBlock.toByteString))
-    nodes(0).transportLayerEff.send(signedInvalidBlockPacketMessage, nodes(1).local)
+    val signedInvalidBlockPacketMessage = packet(nodes(1).local, signedInvalidBlock.toByteString)
+    nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedBlockThatPointsToInvalidBlock; attempts to add both blocks
 
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Ignoring block ") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: About to slash the following ") should be(1)
   }
+
 }
 
 object HashSetCasperTest {

@@ -1,6 +1,7 @@
 package coop.rchain.comm.connect
 
 import org.scalatest._
+import coop.rchain.comm.protocol.routing._
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
@@ -9,7 +10,7 @@ import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.p2p.EffectsTestInstances._
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectToBootstrapSpec
     extends FunSpec
@@ -17,7 +18,7 @@ class ConnectToBootstrapSpec
     with BeforeAndAfterEach
     with AppendedClues {
 
-  val timeout: Duration = Duration(1, MILLISECONDS)
+  val timeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -45,11 +46,11 @@ class ConnectToBootstrapSpec
       // then
       logEff.warns should equal(
         List(
-          "Failed to connect to bootstrap (attempt 1 / 5)",
-          "Failed to connect to bootstrap (attempt 2 / 5)",
-          "Failed to connect to bootstrap (attempt 3 / 5)",
-          "Failed to connect to bootstrap (attempt 4 / 5)",
-          "Failed to connect to bootstrap (attempt 5 / 5)"
+          "Failed to connect to bootstrap (attempt 1 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 2 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 3 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 4 / 5). Reason: UnknownProtocolError(unknown)",
+          "Failed to connect to bootstrap (attempt 5 / 5). Reason: UnknownProtocolError(unknown)"
         ))
     }
 
@@ -78,10 +79,10 @@ class ConnectToBootstrapSpec
   }
 
   // TODO extract common trait for comm tests
-  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
-    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
+  def alwaysSuccess: Protocol => CommErr[Protocol] =
+    kp(Right(protocolHandshake(src)))
 
-  private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
+  private val failEverything = kp(Left[CommError, Protocol](unknownProtocol("unknown")))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

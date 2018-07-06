@@ -1,9 +1,9 @@
 package coop.rchain.roscala.ob
 
 import com.typesafe.scalalogging.Logger
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.Actor.logger
+import coop.rchain.roscala.ob.mbox.MboxOb
 
 class Actor extends MboxOb {
   val extension = new Extension()

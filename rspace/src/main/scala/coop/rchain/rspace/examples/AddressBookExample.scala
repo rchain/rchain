@@ -132,7 +132,7 @@ object AddressBookExample {
     /**
       * An instance of [[Match]] for [[Pattern]] and [[Entry]]
       */
-    implicit object matchPatternEntry extends Match[Pattern, Entry] {
+    implicit object matchPatternEntry extends Match[Pattern, Entry, Entry] {
       def get(p: Pattern, a: Entry): Option[Entry] =
         p match {
           case NameMatch(last) if a.name.last == last        => Some(a)
@@ -171,7 +171,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -205,7 +205,7 @@ object AddressBookExample {
     val store: LMDBStore[Channel, Pattern, Entry, Printer] =
       LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER)
+    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -277,13 +277,13 @@ object AddressBookExample {
     space.store.close()
   }
 
-  private[this] def withSpace(f: RSpace[Channel, Pattern, Entry, Printer] => Unit) = {
+  private[this] def withSpace(f: RSpace[Channel, Pattern, Entry, Entry, Printer] => Unit) = {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val store = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    f(new RSpace[Channel, Pattern, Entry, Printer](store, Branch.MASTER))
+    f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
   }
 
 }

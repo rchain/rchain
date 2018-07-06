@@ -3,6 +3,8 @@
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
 # Return code of 0 is success on test and 1 is fail.
+# Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
+# ./p2p-test-tool.py -b -m 2048m -i rchain/rnode:dev -T propose -t
 from pexpect import replwrap
 import subprocess
 import argparse
@@ -13,6 +15,7 @@ import requests
 import re
 import time
 import sys
+import random
 
 
 parser = argparse.ArgumentParser(
@@ -58,7 +61,7 @@ parser.add_argument("--peer-command",
                     default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
-                    dest='peers_amount',
+                    dest='peer_amount',
                     type=int,
                     default="2",
                     help="set total amount of peers for network")
@@ -67,6 +70,11 @@ parser.add_argument("--prompt",
                     type=str,
                     default="rholang $ ",
                     help="set REPL prompt")
+parser.add_argument("--propose-loop-amount",
+                    dest='propose_loop_amount',
+                    type=int,
+                    default="3",
+                    help="set amount of times propose test will loop before checking logs for issues")
 parser.add_argument("--repl-commands",
                     dest='repl_cmds',
                     type=str,
@@ -79,7 +87,7 @@ parser.add_argument("--repl-load-repetitions",
                     dest='repl_load_repetitions',
                     type=int,
                     default=50,
-                    help="set repl load repetition peers_amount for loops")
+                    help="set repl load repetition peer_amount for loops")
 parser.add_argument("--rnode-directory",
                     dest='rnode_directory',
                     type=str,
@@ -92,15 +100,19 @@ parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
+parser.add_argument("--test-performance",
+                    dest='test_performance',
+                    action='store_true',
+                    help="Runs infite loops of load generating node functions so you can test performance by looking at metrics.")
 parser.add_argument("-t", "--tests",
                     dest='run_tests',
                     action='store_true',
                     help="only run tests")
 parser.add_argument("-T", "--tests-to-run",
-                    dest='tests',
+                    dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['network_sockets', 'count', 'eval', 'repl', 'errors', 'RuntimeException'],
+                    default=['network_sockets', 'count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 # Print -h/help if no args
 if len(sys.argv)==1:
@@ -112,20 +124,23 @@ if len(sys.argv)==1:
 args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
+# bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
+bonds_file = dir_path = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt' 
+container_bonds_file = f'{args.rnode_directory}/validators/bonds.txt'
 
 
 def main():
     """Main program"""
-    if args.run_tests == True:
-        run_tests()
-        return
     if args.logs == True:
         show_logs()
+        return
+    if args.test_performance == True:
+        test_performance()
         return
     if args.remove == True:
         remove_resources_by_network(args.network)
         return
-    if args.deploy_demo == True: # deploy casper demo
+    if args.deploy_demo == True: # Deploy casper demo
         deploy_demo()
         return
     if args.boot == True:
@@ -134,20 +149,19 @@ def main():
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
                 check_network_convergence(container)
-        deploy_demo()
-        if args.tests:
-            run_tests()
-            return
+    if args.run_tests == True:
+        run_tests()
+        return
 
 
 def run_tests():
     notices ={} 
     notices['fail'] = []
     notices['pass'] = []
-    if not client.containers.list(all=True, filters={"name":f".{args.network}"}): # return if empty
+    if not client.containers.list(all=True, filters={"name":f".{args.network}"}): # Return if empty
         return 
 
-    for test in args.tests:
+    for test in args.tests_to_run:
         if test == "network_sockets":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_network_sockets(container) == 0:
@@ -174,6 +188,12 @@ def run_tests():
                     notices['pass'].append(f"{container.name}: Peers count correct in node logs.")
                 else:
                     notices['fail'].append(f"{container.name}: Peers count incorrect in node logs.")
+        if test == "propose":
+            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+                if test_propose(container) == 0:
+                    notices['pass'].append(f"{container.name}: Proposal of blocks for deployed contracts worked.")
+                else:
+                    notices['fail'].append(f"{container.name}: Proposal of blocks for deployed contracts failed.")
         if test == "eval":
             for container in client.containers.list(filters={"name":f"peer\d.{args.network}"}):
                 if test_node_eval_of_rholang_files(container) == 0:
@@ -186,8 +206,11 @@ def run_tests():
                     notices['pass'].append(f"{container.name}: REPL loader success!")
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
+            time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
 
     print("=======================SHOW LOGS===========================")
+    print("Dumping logs from nodes in 3 seconds.")
+    time.sleep(3)
     show_logs()
     print("====================END OF SHOW LOGS=======================")
     print("===========================================================")
@@ -231,6 +254,41 @@ def test_node_eval_of_rholang_files(container):
     return 0 
 
 
+def test_propose(container):
+    retval = 0
+    print(f"Running propose tests after deploy using on container {container.name}.")
+    for i in range(1, args.propose_loop_amount+1):
+        print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+
+        # Deploy example contracts using 3 random example files
+        cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
+
+        # Propose blocks from example contracts
+        cmd = "/opt/docker/bin/rnode propose"
+        print("Propose to blockchain previously deployed smart contracts.")
+
+        r = container.exec_run(['sh', '-c', cmd])
+        for line in r.output.decode('utf-8').splitlines():
+            print(line)
+
+    print("Check all peer logs for casper WARN or ERROR messages")
+    time.sleep(5) # Allow for logs to fill out from last propose if needed
+    for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+            #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
+            for line in container.logs().decode('utf-8').splitlines():
+                if "WARN" in line and "CASPER" in line:
+                    print(f"{container.name}: {line}")
+                    retval = 1
+                if "ERROR" in line and "CASPER" in line:
+                    print(f"{container.name}: {line}")
+                    retval = 1
+
+    return retval
+
+
 def show_logs():
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
         print(f"Showing logs for {container.name}.")
@@ -238,12 +296,23 @@ def show_logs():
         print(r)
 
 
+def create_empty_bonds_file():
+
+    # Create or zero out bonds file so it is empty and can be mounted as volumes by containers 
+    try:
+        with open(bonds_file, 'w+') as f:
+            f.write("")
+    except IOError as e:
+        print(f"Failed to open or write to file {e}.")
+
+
 def boot_p2p_network():
     try:
         client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
+        # create_empty_bonds_file() # disabled until python generated keys work
         create_bootstrap_node()
-        time.sleep(10) # give bootstrap node an early start
+        time.sleep(20) # Give bootstrap node an early start
         print("Starting peer nodes.")
         create_peer_nodes()
         return 0
@@ -267,7 +336,7 @@ def var_to_docker_file(var, container_name, file_path):
 def check_network_convergence(container):
     print("Check for network convergence via prometheus metrics api before running tests.")
     peers_metric = ''
-    peers_metric_expected = args.peers_amount
+    peers_metric_expected = args.peer_amount
     timeout = 200
     count = 0
 
@@ -277,13 +346,52 @@ def check_network_convergence(container):
         print(r)
         print(f"checking {count} of {timeout} seconds")
         for line in r.splitlines():
-            if line == f"peers {args.peers_amount}.0":
+            if line == f"peers {args.peer_amount}.0":
                 print("Network converged.")
                 return 0
         time.sleep(10)
         count += 10
     print("Timeout of {timeout} seconds reached ... exiting network convergence pre tests probe.")
     return 1 
+
+
+def test_performance():
+    # Infinite loop for performance testing via metrics.
+    # Only run parent script "-p 1" so it runs only on one peer, peer0.rchain.coop.
+    print("=====================================================================================")
+    print("Preparing to run infinite deploy/propose loop for stress/performance testing and metric collection.")
+    print("You will have to cancel or Ctrl-C to exit script.")
+    print("=====================================================================================")
+    print('Run parent script with "-p 1" if you only want deploy/propose to run from a single node to network nodes')
+    print("=====================================================================================")
+    print("Grab metrics on peer0 container via:")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095'")
+    print("sudo docker exec -it peer0.rchain.coop bash -c './bin/rnode diagnostics'")
+    print("=====================================================================================")
+    print("Quick and dirty comparative script. Shows metric lines changed and the values.")
+    print("Run last command to see changes from start /tmp/1")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/1")
+    print("""sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
+    print("=====================================================================================")
+    time.sleep(10)
+    while True:
+        for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
+            for i in range(1, args.propose_loop_amount+1):
+                print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
+
+                # Deploy example contracts using 3 random example files
+                cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+                r = container.exec_run(['sh', '-c', cmd])
+                for line in r.output.decode('utf-8').splitlines():
+                    print(line)
+
+                # Propose blocks from example contracts
+                cmd = "/opt/docker/bin/rnode propose"
+                print("Propose to blockchain previously deployed smart contracts.")
+
+                r = container.exec_run(['sh', '-c', cmd])
+                for line in r.output.decode('utf-8').splitlines():
+                    print(line)
 
 
 def remove_resources_by_network(args_network):
@@ -296,12 +404,69 @@ def remove_resources_by_network(args_network):
         if args_network == network.name:
             print(f"removing {network.name}")
             network.remove()
-    # client.volumes.prune() # removes unused volumes
+    # client.volumes.prune() # Removes unused volumes
     return 0
+
+
+def generate_validator_private_key():
+    ### Create --validator-private-key and --validator--public-key and add to bonds.txt # ed25519 eventually secp256k1 ###
+
+    # # pynacl for libsodium
+    # # import nacl # libsodium/ed25519 support
+    # from nacl.public import PrivateKey, PublicKey
+    # import nacl.encoding
+    # import nacl.signing
+    # private_key = PrivateKey.generate()
+    # encoded_private_key = private_key.encode(encoder=nacl.encoding.Base16Encoder).decode('utf-8').lower()
+    # encoded_public_key = private_key.public_key.encode(encoder=nacl.encoding.Base16Encoder).decode('utf-8').lower()
+    # signing_key = nacl.signing.SigningKey.generate() 
+    # verify_key = signing_key.verify_key
+    # encoded_private_key = signing_key.encode(encoder=nacl.encoding.Base16Encoder).lower()
+    # encoded_public_key = verify_key.encode(encoder=nacl.encoding.Base16Encoder).lower() 
+
+    # import ed25519
+    # signing_key, verifying_key = ed25519.create_keypair()
+    # encoded_private_key = signing_key.to_ascii(encoding="base16").decode('utf-8')
+    # encoded_public_key = verifying_key.to_ascii(encoding="base16").decode('utf-8')
+
+    # import ecdsa # secp256k1 suppport
+
+    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
+    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
+    f=open('scripts/demo-validator-private-public-key-pairs.txt')
+    lines=f.readlines()
+    line_number = random.randint(1,295)
+    encoded_private_key = lines[line_number].split()[0]
+    encoded_public_key = lines[line_number].split()[1]
+
+    # print(f"Populating bonds file {bonds_file}")
+    # bond_weight = random.randint(1,100)
+    # line = f"{encoded_public_key} {bond_weight}"
+    # print(line)
+    # try:
+    #     with open(bonds_file, 'a+') as f:
+    #         f.write(f"{line}\n")
+    # except IOError as e:
+    #     print(f"Failed to open or write to file {e}.") 
+
+    return encoded_private_key, encoded_public_key
+
+
+def populate_bonds_file():
+    print(f"Populating bonds file {bonds_file}")
+    try:
+        with open(bonds_file, 'a+') as f:
+            for line in bonds:
+                print(line)
+                f.write(f"{line}\n")
+    except IOError as e:
+        print(f"Failed to open or write to file {e}.") 
 
 
 def create_bootstrap_node():
     """Create bootstrap node."""
+
+    validator_private_key, validator_public_key = generate_validator_private_key()
 
     # Create key/cert pem files to be loaded into rnode volume
     bootstrap_node_demo_key=(
@@ -343,12 +508,20 @@ def create_bootstrap_node():
         cpuset_cpus=args.cpuset_cpus, \
         mem_limit=args.memory, \
         network=args.network, \
-        volumes={
-                tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
-                tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
-                bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
-        }, \
-        command=f"{args.bootstrap_command} --host {bootstrap_node['name']}", \
+        volumes=[
+                f"{bootstrap_node['volume'].name}:{args.rnode_directory}", \
+                f"{bonds_file}:{container_bonds_file}", \
+                f"{tmp_file_cert}:{args.rnode_directory}/node.certificate.pem", \
+                f"{tmp_file_key}:{args.rnode_directory}/node.key.pem"
+        ],
+        # # Alternate volume mount
+        # volumes={
+        #         tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
+        #         tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
+        #         bonds_file: {'bind': container_bonds_file, 'mode': 'rw'}, \
+        #         bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
+        # }, \
+        command=f"{args.bootstrap_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {bootstrap_node['name']}", \
         hostname=bootstrap_node['name'])
     print("Installing additonal packages on container.")
     r = container.exec_run(cmd='apt-get update', user='root').output.decode("utf-8")
@@ -359,8 +532,10 @@ def create_bootstrap_node():
 
 def create_peer_nodes():
     """Create peer nodes."""
-    print("Start peer nodes to connect via bootstrap.")
-    for i in range(args.peers_amount):
+    print("Create and run peer nodes to connect via bootstrap.")
+
+    for i in range(args.peer_amount):
+        validator_private_key, validator_public_key = generate_validator_private_key()
         peer_node = {}
         peer_node[i] = {}
         peer_node[i]['name'] = f"peer{i}.{args.network}"
@@ -373,8 +548,11 @@ def create_peer_nodes():
             cpuset_cpus=args.cpuset_cpus, \
             mem_limit=args.memory, \
             network=args.network, \
-            volumes=[f"{peer_node[i]['volume'].name}:{args.rnode_directory}"], \
-            command=f"{args.peer_command} --host {peer_node[i]['name']}", \
+            volumes=[
+                f"{bonds_file}:{container_bonds_file}", \
+                f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
+            ], \
+            command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")
@@ -414,7 +592,7 @@ def test_repl_load(container):
             repl_node[i]['name'] = f"repl{i}.{args.network}"
             repl_node[i]['volume'] = client.volumes.create()
 
-            cmd = (f"sudo docker run -u root --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
+            cmd = (f"sudo docker run -u root -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
                    f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
                    f"--network {args.network} {args.image} "
                    f"--grpc-host {container.name} repl")
@@ -426,6 +604,12 @@ def test_repl_load(container):
                     result = conn.run_command(repl_cmd)
                     print(f"repetition: {i} output: {result}")
                 i += 1 
+
+            # Remove repl container after use as we don't want it running 
+            for repl_container in client.containers.list(all=True, filters={"name":f"repl\d.{args.network}"}):
+                print(f"removing {repl_container.name}")
+                repl_container.remove(force=True, v=True)
+
             return 0 
         except Exception as e:
             print(e)
@@ -447,6 +631,7 @@ def test_node_logs_for_errors(container):
                 retval = 1 
     return retval 
 
+
 def test_node_logs_for_RuntimeException(container):
     retval = 1 
     print(f"Testing {container.name} node logs for \"java RuntimeException\".")
@@ -467,7 +652,7 @@ def test_node_logs_for_correct_peers_count(container):
     r = container.logs()
     for line in r.splitlines():
         line = line.decode('utf-8')
-        if f"Peers: {args.peers_amount}." in line:
+        if f"Peers: {args.peer_amount}." in line:
             print(line)
             retval = 0 
     return retval 

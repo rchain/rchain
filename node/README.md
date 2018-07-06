@@ -80,7 +80,7 @@ Subcommand: run
   -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
                                 being used for identification
   -d, --data_dir  <arg>         Path to data directory. Defaults to
-                                /var/lib/rnode
+                                $HOME/.rnode
       --host  <arg>             Hostname or IP of this node.
   -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
                                 ported to gRPC API).
@@ -144,15 +144,8 @@ Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see
 
 #### 2.1.2 Data directory
 
-Node needs to have read and write access to a folder called data directory. By default that folder is `/var/lib/rnode/`. User can control that value by providing `--data_dir` flag. 
+Node needs to have read and write access to a folder called data directory. By default that folder is `$HOME/.rnode`. User can control that value by providing `--data_dir` flag. 
 Regardless of which path on the file system you choose for the data directory, please remember that node needs to have read and write access to that folder.
-
-Below is an example of creating folder for default location and giving it ownership to the current user.
-
-```
-sudo mkdir -p /var/lib/rnode
-sudo chown $USER /var/lib/rnode
-```
 
 #### 2.1.2 Running the Node
 

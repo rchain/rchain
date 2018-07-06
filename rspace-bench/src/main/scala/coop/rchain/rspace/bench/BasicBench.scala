@@ -46,7 +46,7 @@ object BasicBench {
     val testStore: LMDBStore[String, Pattern, String, StringsCaptor] =
       LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
 
-    val testSpace: RSpace[String, Pattern, String, StringsCaptor] =
-      new RSpace(testStore, Branch("bench"))
+    val testSpace: RSpace[String, Pattern, String, String, StringsCaptor] =
+      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
   }
 }

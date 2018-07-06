@@ -3,50 +3,48 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad}
 import cats.implicits._
 
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
-import coop.rchain.comm.{PeerNode, ProtocolMessage}
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.metrics.Metrics
+import coop.rchain.comm.PeerNode
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.FiniteDuration
 import scala.collection.mutable
 import coop.rchain.comm.transport._
 
 class TransportLayerTestImpl[F[_]: Monad: Capture](
     identity: PeerNode,
-    val msgQueues: collection.Map[PeerNode, mutable.Queue[ProtocolMessage]])
+    val msgQueues: collection.Map[PeerNode, mutable.Queue[Protocol]])
     extends TransportLayer[F] {
 
-  def roundTrip(msg: ProtocolMessage,
-                remote: PeerNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]] = ???
+  def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
   def local: F[PeerNode] = identity.pure[F]
 
-  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = Capture[F].capture {
+  def send(peer: PeerNode, msg: Protocol): F[Unit] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)
 
-    maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q =>
-      ProtocolMessage.toProtocolMessage(msg.proto).map(q.enqueue(_)))
+    maybeQ.fold[CommErr[Unit]](Left(peerNodeNotFound(peer)))(q => Right(q.enqueue(msg)))
   }
 
-  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] =
+    Capture[F].capture(peers.map(send(_, msg)))
 
-  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
+  def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
   def disconnect(peer: PeerNode): F[Unit] = ???
+
+  def shutdown(msg: Protocol): F[Unit] = ???
 }
 
 object TransportLayerTestImpl {
-  def handleQueue[F[_]: Monad: Capture](dispatch: (ProtocolMessage) => F[CommunicationResponse],
-                                        q: mutable.Queue[ProtocolMessage]): F[Unit] =
+  def handleQueue[F[_]: Monad: Capture](dispatch: Protocol => F[CommunicationResponse],
+                                        q: mutable.Queue[Protocol]): F[Unit] =
     if (q.nonEmpty) for {
-      msg <- Capture[F].capture { q.dequeue() }
-      _   <- dispatch(msg)
-      _   <- handleQueue(dispatch, q)
+      proto <- Capture[F].capture { q.dequeue() }
+      _     <- dispatch(proto)
+      _     <- handleQueue(dispatch, q)
     } yield ()
     else ().pure[F]
 }

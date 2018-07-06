@@ -4,12 +4,15 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.Ob.logger
+import coop.rchain.roscala.ob.mbox.MboxOb
 import coop.rchain.roscala.util.Slot
 
 abstract class Ob {
   val slot       = Slot()
   var meta: Meta = _
   var parent: Ob = _
+
+  def accepts(msg: Ctxt): Boolean = false
 
   def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
 
@@ -70,6 +73,8 @@ abstract class Ob {
   }
 
   def numberOfSlots: Int = slot.size
+
+  def matches(ctxt: Ctxt): Boolean = false
 }
 
 object Ob {

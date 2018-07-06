@@ -1,16 +1,11 @@
 package coop.rchain.rspace.trace
 
+import coop.rchain.rspace.StableHashProvider
 import cats.implicits._
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
-import coop.rchain.shared.AttemptOps._
-import scodec.bits.BitVector
-import scodec.interop.cats._
-import scodec.{Attempt, Codec}
-import coop.rchain.rspace.internal._
-import coop.rchain.scodec.codecs._
+import coop.rchain.rspace.internal.codecSeq
 import scala.collection.immutable.Seq
 import scodec.Codec
-import scodec.bits.ByteVector
 import scodec.codecs._
 
 /**
@@ -20,7 +15,31 @@ import scodec.codecs._
   *   2. [[COMM]] Events, which consist of a single [[Consume]] and one or more [[Produce]]s
   */
 sealed trait Event
+
+object Event {
+
+  implicit def codecEvent: Codec[Event] =
+    discriminated[Event]
+      .by(uint8)
+      .subcaseP(0) {
+        case (comm: COMM) => comm
+      }(Codec[COMM])
+      .subcaseP(1) {
+        case (produce: Produce) => produce
+      }(Codec[Produce])
+      .subcaseP(2) {
+        case (consume: Consume) => consume
+      }(Codec[Consume])
+
+  implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
+}
+
 case class COMM(consume: Consume, produces: Seq[Produce]) extends Event
+
+object COMM {
+
+  implicit val codecCOMM: Codec[COMM] = (Codec[Consume] :: Codec[Seq[Produce]]).as[COMM]
+}
 
 sealed trait IOEvent extends Event
 
@@ -45,18 +64,10 @@ object Produce {
 
   def create[C, A](channel: C, datum: A, persist: Boolean)(implicit
                                                            serializeC: Serialize[C],
-                                                           serializeA: Serialize[A]): Produce = {
-    implicit val codecC: Codec[C] = serializeC.toCodec
-    implicit val codecA: Codec[A] = serializeA.toCodec
+                                                           serializeA: Serialize[A]): Produce =
+    new Produce(StableHashProvider.hash(channel, datum, persist))
 
-    val hash: Blake2b256Hash =
-      List(Codec[C].encode(channel), Codec[A].encode(datum), (ignore(7) ~> bool).encode(persist))
-        .sequence[Attempt, BitVector]
-        .map((vectors: List[BitVector]) => Blake2b256Hash.create(vectors.combineAll.toByteArray))
-        .get
-
-    new Produce(hash)
-  }
+  def fromHash(hash: Blake2b256Hash): Produce = new Produce(hash)
 
   implicit val codecProduce: Codec[Produce] =
     Codec[Blake2b256Hash].as[Produce]
@@ -84,22 +95,10 @@ object Consume {
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
-      serializeK: Serialize[K]): Consume = {
-    implicit val codecC: Codec[C] = serializeC.toCodec
-    implicit val codecA: Codec[P] = serializeP.toCodec
-    implicit val codecK: Codec[K] = serializeK.toCodec
+      serializeK: Serialize[K]): Consume =
+    new Consume(StableHashProvider.hash(channels, patterns, continuation, persist))
 
-    val hash: Blake2b256Hash =
-      List(Codec[Seq[C]].encode(channels),
-           Codec[Seq[P]].encode(patterns),
-           Codec[K].encode(continuation),
-           (ignore(7) ~> bool).encode(persist))
-        .sequence[Attempt, BitVector]
-        .map((vectors: List[BitVector]) => Blake2b256Hash.create(vectors.combineAll.toByteArray))
-        .get
-
-    new Consume(hash)
-  }
+  def fromHash(hash: Blake2b256Hash): Consume = new Consume(hash)
 
   implicit val codecConsume: Codec[Consume] =
     Codec[Blake2b256Hash].as[Consume]
