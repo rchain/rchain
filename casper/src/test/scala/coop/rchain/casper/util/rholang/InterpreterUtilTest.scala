@@ -17,6 +17,7 @@ import java.nio.file.Files
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.shared.Time
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
@@ -232,5 +233,112 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
+  }
+
+  "validateBlockCheckpoint" should "pass linked list test" in {
+    val deploys = Vector(
+      """
+        |contract @["LinkedList", "prepend"](@value, @tail, return) = {
+        |  return!([value, tail])
+        |} |
+        |//A fold over the list which breaks early if a condition is met.
+        |//Both the condition and combinator are are combined into a single
+        |//function which returns a [boolean, value] pair.
+        |//Use cases: see get and indexOf
+        |contract @["LinkedList", "partialFold"](@list, @start, combinatorAndCondition, return) = {
+        |  new loop in {
+        |    contract loop(@accumulatedValue, @lst) = {
+        |      match lst {
+        |        [head, tail] => {
+        |          new result in {
+        |            combinatorAndCondition!(head, accumulatedValue, *result) |
+        |            for (@r <- result) {
+        |              match r {
+        |                [true, _] => { return!(r) }
+        |                [false, newValue] => { loop!(newValue, tail) }
+        |              }
+        |            }
+        |          }
+        |        }
+        |        _ => { return!([false, accumulatedValue]) }
+        |      }
+        |    } | loop!(start, list)
+        |  }
+        |} |
+        |contract @["LinkedList", "fold"](@list, @start, combinator, return) = {
+        |  new combinatorAndCondition in {
+        |    contract combinatorAndCondition(@head, @accumulatedValue, return) = {
+        |      new result in {
+        |        combinator!(head, accumulatedValue, *result) |
+        |        for(@r <- result){ return!([false, r]) }
+        |      }
+        |    } |
+        |    new result in {
+        |      @["LinkedList", "partialFold"]!(list, start, *combinatorAndCondition, *result) |
+        |      for(@r <- result) {
+        |        match r { [_, v] => { return!(v) } }
+        |      }
+        |    }
+        |  }
+        |} |
+        |contract @["LinkedList", "reverse"](@list, return) = {
+        |  new combinator in {
+        |    contract combinator(@head, @accumulatedValue, return) = {
+        |      @["LinkedList", "prepend"]!(head, accumulatedValue, *return)
+        |    } | @["LinkedList", "fold"]!(list, [], *combinator, *return)
+        |  }
+        |} |
+        |//Create a linked list from an ordinary list of length
+        |//9 or less by pattern matching. This constructor is
+        |//only temporary until list processes have methods.
+        |contract @["LinkedList", "fromList"](@list, return) = {
+        |  new loop in {
+        |    contract loop(@rem, @acc, ret) = {
+        |      match rem {
+        |        [head, ...tail] => {
+        |          new newAccCh in {
+        |            @["LinkedList", "prepend"]!(head, acc, *newAccCh) |
+        |            for(@newAcc <- newAccCh) {
+        |              loop!(tail, newAcc, *ret)
+        |            }
+        |          }
+        |        }
+        |        _ => { ret!(acc) }
+        |      }
+        |    } |
+        |
+        |    new revListCh in {
+        |      loop!(list, [], *revListCh) |
+        |      for(@revList <- revListCh) {
+        |        @["LinkedList", "reverse"]!(revList, *return)
+        |      }
+        |    }
+        |  }
+        |}
+      """.stripMargin,
+      "@[\"LinkedList\", \"fromList\"]!([2, 3, 5, 7], \"primes\")"
+    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    // TODO: The following should work: tsHash should be(Some(computedTsHash))
   }
 }
