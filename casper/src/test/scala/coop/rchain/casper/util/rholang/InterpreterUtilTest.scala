@@ -241,56 +241,6 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
         |contract @["LinkedList", "prepend"](@value, @tail, return) = {
         |  return!([value, tail])
         |} |
-        |//A fold over the list which breaks early if a condition is met.
-        |//Both the condition and combinator are are combined into a single
-        |//function which returns a [boolean, value] pair.
-        |//Use cases: see get and indexOf
-        |contract @["LinkedList", "partialFold"](@list, @start, combinatorAndCondition, return) = {
-        |  new loop in {
-        |    contract loop(@accumulatedValue, @lst) = {
-        |      match lst {
-        |        [head, tail] => {
-        |          new result in {
-        |            combinatorAndCondition!(head, accumulatedValue, *result) |
-        |            for (@r <- result) {
-        |              match r {
-        |                [true, _] => { return!(r) }
-        |                [false, newValue] => { loop!(newValue, tail) }
-        |              }
-        |            }
-        |          }
-        |        }
-        |        _ => { return!([false, accumulatedValue]) }
-        |      }
-        |    } | loop!(start, list)
-        |  }
-        |} |
-        |contract @["LinkedList", "fold"](@list, @start, combinator, return) = {
-        |  new combinatorAndCondition in {
-        |    contract combinatorAndCondition(@head, @accumulatedValue, return) = {
-        |      new result in {
-        |        combinator!(head, accumulatedValue, *result) |
-        |        for(@r <- result){ return!([false, r]) }
-        |      }
-        |    } |
-        |    new result in {
-        |      @["LinkedList", "partialFold"]!(list, start, *combinatorAndCondition, *result) |
-        |      for(@r <- result) {
-        |        match r { [_, v] => { return!(v) } }
-        |      }
-        |    }
-        |  }
-        |} |
-        |contract @["LinkedList", "reverse"](@list, return) = {
-        |  new combinator in {
-        |    contract combinator(@head, @accumulatedValue, return) = {
-        |      @["LinkedList", "prepend"]!(head, accumulatedValue, *return)
-        |    } | @["LinkedList", "fold"]!(list, [], *combinator, *return)
-        |  }
-        |} |
-        |//Create a linked list from an ordinary list of length
-        |//9 or less by pattern matching. This constructor is
-        |//only temporary until list processes have methods.
         |contract @["LinkedList", "fromList"](@list, return) = {
         |  new loop in {
         |    contract loop(@rem, @acc, ret) = {
@@ -306,17 +256,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
         |        _ => { ret!(acc) }
         |      }
         |    } |
-        |
         |    new revListCh in {
-        |      loop!(list, [], *revListCh) |
-        |      for(@revList <- revListCh) {
-        |        @["LinkedList", "reverse"]!(revList, *return)
-        |      }
+        |      loop!(list, [], *return)
         |    }
         |  }
         |}
       """.stripMargin,
-      "@[\"LinkedList\", \"fromList\"]!([2, 3, 5, 7], \"primes\")"
+      "@[\"LinkedList\", \"fromList\"]!([1,2], \"exampleList\")"
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
     val (computedTsCheckpoint, _) =
       computeDeploysCheckpoint(Seq.empty,
