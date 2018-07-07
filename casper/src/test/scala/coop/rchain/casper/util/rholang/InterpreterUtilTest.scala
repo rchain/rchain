@@ -253,7 +253,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
         |        _ => { Nil } // Normally we would print the "acc" ([2,[1,[]]]) out
         |      }
         |    } |
-        |    new revListCh in {
+        |    new unusedCh in {
         |      loop!(list, [])
         |    }
         |  }
