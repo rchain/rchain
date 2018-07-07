@@ -238,7 +238,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   "validateBlockCheckpoint" should "pass linked list test" in {
     val deploys = Vector(
       """
-        |contract @["LinkedList", "fromList"](@list, return) = {
+        |contract @"toLinkedList"(@list, return) = {
         |  new loop in {
         |    contract loop(@rem, @acc, ret) = {
         |      match rem {
@@ -258,7 +258,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
         |    }
         |  }
         |} |
-        |@["LinkedList", "fromList"]!([1,2], "exampleList")
+        |@"toLinkedList"!([1,2], "exampleList")
       """.stripMargin
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
     val (computedTsCheckpoint, _) =
