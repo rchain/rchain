@@ -23,7 +23,10 @@
 extern pOb NILmeta;
 extern CompoundPattern* NILpattern;
 
+// This is the locally imported Object Code Protobuf
 ObjectCodePB::ObjectCode importObjectCode;
+
+// This is an entry in the table of Rosette Objects
 class ObjectInfo {
 public:
     ObjectInfo() : id(0), pbIndex(0), object(NULL) {}
@@ -32,6 +35,7 @@ public:
     pOb object;
 };
 
+// The table of Rosette Objects
 std::map<IdType, ObjectInfo> objects;
 ObjectInfo * getObject(IdType id) {
     auto oi = objects.find(id);
@@ -43,13 +47,16 @@ ObjectInfo * getObject(IdType id) {
     return NULL;
 }
 
+// When a Rosette object is referenced, this routine is called to either find the previously
+// created object, or to create the object. If this object references other objects, this
+// routine is called recursively to find or create them.
 pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     pOb retval = NULL;
     ObjectInfo * oi = NULL;
 
     if (VerboseFlag) {
-        fprintf(stderr, "%s: Object=\n%s\n", __PRETTY_FUNCTION__, ob->DebugString().c_str());
+        fprintf(stderr, "%s:\nObject=\n%s\n", __PRETTY_FUNCTION__, ob->DebugString().c_str());
     }
 
     // Is this a regular (not RblAtom) object
@@ -68,10 +75,15 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
     }
 
     // If this is a reference, find the real object
-    if (ob->reference() != 0) {
-        ob = importObjectCode.mutable_objects(oi->pbIndex);
-        if (VerboseFlag) {
-            fprintf(stderr, " Referenced Object=\n%s\n", ob->DebugString().c_str());
+    if (ob->reference()) {
+        if (oi->pbIndex >= 0) {
+            ob = importObjectCode.mutable_objects(oi->pbIndex);
+            if (VerboseFlag) {
+                fprintf(stderr, " Referenced Object=\n%s\n", ob->DebugString().c_str());
+            }
+        } else {
+            // It's an already built code object.
+            return oi->object;
         }
     }
 
@@ -97,7 +109,9 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         break;
 
     case ObjectCodePB::OT_CODE:
-        retval = oi->object;
+        // Code objects are previously build by createRosetteCode(), and the pointer
+        // should be returned above.
+        suicide("Referenced unbuilt code object id=%llu\n", ob->object_id());
         break;
 
     case ObjectCodePB::OT_EXPANDED_LOCATION: {
@@ -158,9 +172,8 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
         }
 
-        ExpandedLocation * el = ExpandedLocation::create();
-// TODO: This isn't correct. Figure out the correct way to turn a loc into a ExpandedLocation Object
-//        retval = valWrt(loc, el);
+        // An ExpandedLocation is an RblAtom
+        retval = (pOb)loc.atom;
         break;
     }
 
@@ -311,16 +324,26 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     case ObjectCodePB::OT_TUPLE: {
         ObjectCodePB::Tuple * pbob = ob->mutable_tuple();
-        Tuple * tup = Tuple::create(pbob->elements().size(), INVALID);
-        for (int i = 0; i < pbob->elements().size(); i++) {
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
             tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
         }
+        retval = tup;
+        break;
     }
 
     case ObjectCodePB::OT_TUPLE_EXPR: {
         ObjectCodePB::TupleExpr * pbob = ob->mutable_tuple_expr();
-        TupleExpr * tup = TupleExpr::create();
+        TupleExpr * tup = TupleExpr::create(pbob->elements_size());
         tup->rest = createRosetteObject( pbob->mutable_rest() );
+
+        // Create the list of objects contained in the TupleExpr
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+
+        retval = tup;
+        break;
     }
 
     case ObjectCodePB::OT_RBL_BOOL:
@@ -333,11 +356,15 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     case ObjectCodePB::OT_STD_EXTENSION: {
         ObjectCodePB::StdExtension * pbob = ob->mutable_std_extension();
-        Tuple * tup = Tuple::create(pbob->elements().size(), INVALID);
-        for (int i = 0; i < pbob->elements().size(); i++) {
-            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+
+        // A StdExtension is similar to a tuple which is a list of objects.
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            BASE(tup)->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
         }
+
         retval = StdExtension::create( tup );
+        break;
     }
 
     case ObjectCodePB::OT_NULL_EXPR:
@@ -345,24 +372,33 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         break;
 
     case ObjectCodePB::OT_COMPLEX_PATTERN: {
-// TODO fix this
-        // ObjectCodePB::ComplexPattern * pbob = ob->mutable_complex_pattern();
-        // retval = ComplexPattern::create(
-        //     (TupleExpr *)createRosetteObject(pbob->mutable_expr()));
-        // break;
+        ObjectCodePB::ComplexPattern * pbob = ob->mutable_complex_pattern();
+
+        void* loc = PALLOC(sizeof(ComplexPattern));
+        retval = new (loc) ComplexPattern(
+                            (TupleExpr *)createRosetteObject(pbob->mutable_expr()),
+                            (Tuple *)createRosetteObject(pbob->mutable_patvec()),
+                            (Tuple *)createRosetteObject(pbob->mutable_offsetvec()) );
+        break;
     }
 
-    case ObjectCodePB::OT_STD_META:
-        retval = StdMeta::create(NIL);
+    case ObjectCodePB::OT_STD_META: {
+        ObjectCodePB::StdMeta * pbob = ob->mutable_std_meta();
+        retval = StdMeta::create( (Tuple *)createRosetteObject(pbob->mutable_extension()) );
         break;
+    }
 
-    case ObjectCodePB::OT_ID_VEC_PATTERN:
-        retval = IdVecPattern::create(NILexpr);
+    case ObjectCodePB::OT_ID_VEC_PATTERN: {
+        ObjectCodePB::IdVecPattern * pbob = ob->mutable_id_vec_pattern();
+        retval = IdVecPattern::create( (TupleExpr *)createRosetteObject(pbob->mutable_expr()) );
         break;
+    }
 
-    case ObjectCodePB::OT_ID_AMPR_REST_PATTERN:
-        retval = IdAmperRestPattern::create(NULL);
+    case ObjectCodePB::OT_ID_AMPR_REST_PATTERN: {
+        ObjectCodePB::IdAmprRestPattern * pbob = ob->mutable_id_ampr_rest_pattern();
+        retval = IdAmperRestPattern::create( (TupleExpr *)createRosetteObject(pbob->mutable_expr()) );
         break;
+    }
 
     case ObjectCodePB::OT_ID_PATTERN:
         retval = IdPattern::create( SYMBOL(ob->id_pattern().symbol().symbol().name().c_str()) );
@@ -371,7 +407,7 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
     case ObjectCodePB::OT_PRIM:
         retval =  Prim::create(
             (char *)ob->prim().id().symbol().name().c_str(),
-            NULL,
+            NULL,   // TODO: Somehow populate this from the primnum()
             (int)ob->prim().minargs(),
             (int)ob->prim().maxargs());
         break;
@@ -398,12 +434,15 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         retval = ConstPattern::create(FIXNUM(ob->const_pattern().val().fixnum().value()));
         break;
 
-    case ObjectCodePB::OT_RBL_TABLE:
-        retval = RblTable::create();
+    case ObjectCodePB::OT_RBL_TABLE: {
+        ObjectCodePB::RblTable * pbob = ob->mutable_rbl_table();
+        retval = RblTable::create( (Tuple *)createRosetteObject(pbob->mutable_tbl()) );
         break;
+    }
 
     default:
-        warning("Import object type=%d not yet implemented!", ob->type());
+        warning("Import object type=%d not yet implemented!\nObjectPB=\n%s\n", ob->type(), ob->DebugString().c_str());
+        assert(false);
     }
 
     // Save the result in the objects table so we don't create another next time this object is referenced.
@@ -413,28 +452,45 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
     return retval;
 }
 
-
+// This routine creates a Rosette Code object along with its respective CodeVec and LitVec
 Code * createRosetteCode(ObjectCodePB::CodeBlock * cb) {
-fprintf(stderr, "%s\n", __PRETTY_FUNCTION__);
 
-    // Create the CodeBuf and CodeVec objects, then copy in the opcodes. 
-    int codesize = cb->codevec().opcodes().size();   // In bytes
-    CodeBuf * cbuf = CodeBuf::create();
-    cbuf->growCodevec( codesize / sizeof(Instr) );  // Set the size in 16 bit words
-    char * code_binary = (char *)cbuf->codevec->absolutize(0);  // Pointer to the buffer to hold the code
-    memcpy(code_binary, cb->codevec().opcodes().data(), codesize);
+    if (VerboseFlag) {
+        fprintf(stderr, "%s:\nCode=\n%s\n", __PRETTY_FUNCTION__, cb->DebugString().c_str());
+    }
+
+    // Create the CodeBuf object, then copy in the opcodes. 
+    int codewords = cb->codevec().opcodes().size();   // In words
+    CodeBuf * cbuf = CodeBuf::create(); // Create an empty CodeBuf
+
+    // Import the object code
+    ObjectCodePB::CodeVec * cv = cb->mutable_codevec();
+    for(int i=0; i<codewords; i++) {
+        Instr ins;
+        ins.word = cv->opcodes(i);
+        cbuf->deposit( ins );
+    }
 
     // Create the LitVec object and populate it from the protobuf objects
-    Tuple * litvec = Tuple::create(cb->litvec().ob().size(), INVALID);
-    for (int i=0; i<cb->litvec().ob().size(); i++) {
-        ObjectCodePB::Object * pbob = cb->mutable_litvec()->mutable_ob(i);
+    Tuple * litvec = Tuple::create(cb->litvec().ob_size(), INVALID);
+    ObjectCodePB::LitVec * pblv = cb->mutable_litvec();
+    for (int i=0; i<pblv->ob_size(); i++) {
+        ObjectCodePB::Object * pbob = pblv->mutable_ob(i);
         litvec->setNth(i, createRosetteObject(pbob));
     }
 
+    // Create the Code object with the CodeBuf and LitVec
     Code * code = Code::create(cbuf, litvec);
+
+    // if (VerboseFlag) {
+    //     fprintf(stderr, "Built code (%llu)=\n", cb->object_id());
+    //     code->dumpOn(stderr);
+    // }
+
     return code;
 }
 
+// This is the main driver for object code import
 bool readImportCode() {
 
     if ('\0' == *ImportFile)
@@ -463,7 +519,8 @@ bool readImportCode() {
         fprintf(stderr, "code count = %d\n", importObjectCode.code_block_size());
     }
 
-    // Make a map of the objects by id
+    // Make a map of the objects by id. The pointer to the objects will be added
+    // later as they are referenced and created by a LitVec entry within a code block.
     for (int i=0; i<importObjectCode.objects_size(); i++) {
         ObjectInfo obi;
         obi.id = importObjectCode.objects(i).object_id();
@@ -473,17 +530,33 @@ bool readImportCode() {
         objects.insert(std::make_pair(obi.id, obi));
     } 
 
-    // Process the code blocks and link the litvecs to actual objects
+    // Process the code blocks and link the litvec objects to actual objects
     for (int i=0; i<importObjectCode.code_block_size(); i++) {
         ObjectCodePB::CodeBlock * ob = importObjectCode.mutable_code_block(i);
+
+        // Create the Rosette Code object. This is where the LitVec is created
+        //  as well as the Rosette data objects referenced therein.
         Code * code = createRosetteCode(ob);
 
-        ObjectInfo obi;
-        obi.id = ob->object_id();
-        obi.pbIndex = -1;
-        obi.object = NULL;
+        // Save the code object in the table for future references
+        ObjectInfo * oi = getObject(ob->object_id());
+        if (oi != NULL) {
+            // It's there, set the pointer
+            oi->object = code;
+        } else {
+            // Add it to the table
+            ObjectInfo obi;
+            obi.id = importObjectCode.objects(i).object_id();
+            obi.pbIndex = -1;
+            obi.object = code;
 
-        objects.insert(std::make_pair(obi.id, obi));
+            objects.insert(std::make_pair(obi.id, obi));
+        }
+
+        // TODO: Here is where we should execute the code.
+        // Somehow get a Ctxt created, and call into VirtualMachine::execute()
+        // More research is needed.
+
     } 
 
     return true;
