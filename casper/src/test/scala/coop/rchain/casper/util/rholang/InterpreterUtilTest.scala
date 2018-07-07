@@ -260,9 +260,9 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
         |      loop!(list, [], *return)
         |    }
         |  }
-        |}
-      """.stripMargin,
-      "@[\"LinkedList\", \"fromList\"]!([1,2], \"exampleList\")"
+        |} |
+        |@["LinkedList", "fromList"]!([1,2], "exampleList")
+      """.stripMargin
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
     val (computedTsCheckpoint, _) =
       computeDeploysCheckpoint(Seq.empty,
