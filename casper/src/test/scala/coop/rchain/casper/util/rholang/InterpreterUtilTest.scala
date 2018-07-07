@@ -238,16 +238,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   "validateBlockCheckpoint" should "pass linked list test" in {
     val deploys = Vector(
       """
-        |contract @["LinkedList", "prepend"](@value, @tail, return) = {
-        |  return!([value, tail])
-        |} |
         |contract @["LinkedList", "fromList"](@list, return) = {
         |  new loop in {
         |    contract loop(@rem, @acc, ret) = {
         |      match rem {
         |        [head, ...tail] => {
         |          new newAccCh in {
-        |            @["LinkedList", "prepend"]!(head, acc, *newAccCh) |
+        |            newAccCh!([head, acc]) |
         |            for(@newAcc <- newAccCh) {
         |              loop!(tail, newAcc, *ret)
         |            }
