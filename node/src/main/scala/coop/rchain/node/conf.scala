@@ -28,7 +28,9 @@ object Profile {
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
 
-  val profile = opt[String](default = Some("default"), name = "profile")
+  val profile = opt[String](default = Some("default"),
+                            name = "profile",
+                            descr = "Which predefined set of defaults to use: default or docker.")
     .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
