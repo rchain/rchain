@@ -282,6 +282,6 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val (tsHash, _) =
       validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
 
-    // TODO: The following should work: tsHash should be(Some(computedTsHash))
+    tsHash should be(Some(computedTsHash))
   }
 }
