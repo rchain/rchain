@@ -14,7 +14,7 @@ trait Costs {
   final val SUM_COST: Cost         = 3
   final val SUBTRACTION_COST: Cost = 3
 
-  def equalityCheckCost(x: Par, y: Par) = scala.math.min(x.serializedSize, y.serializedSize)
+  def equivalenceCheckCost(x: Par, y: Par) = scala.math.min(x.serializedSize, y.serializedSize)
 
   final val BOOLEAN_AND_COST = 2
   final val BOOLEAN_OR_COST  = 2

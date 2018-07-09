@@ -550,7 +550,7 @@ object Reduce {
             // TODO: build an equality operator that takes in an environment.
             sv1 <- substitutePar[M].substitute(v1, depth = 0)
             sv2 <- substitutePar[M].substitute(v2, depth = 0)
-            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
+            _   <- costAccountingAlg.charge(equivalenceCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
@@ -558,7 +558,7 @@ object Reduce {
             v2  <- evalExpr(p2)
             sv1 <- substitutePar[M].substitute(v1, depth = 0)
             sv2 <- substitutePar[M].substitute(v2, depth = 0)
-            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
+            _   <- costAccountingAlg.charge(equivalenceCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
