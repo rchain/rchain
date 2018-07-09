@@ -143,19 +143,25 @@ Process-valued variables are bound in process positions in patterns.  Process po
     match R { contract foo(x) = { P } => Q }
     match R { contract foo(@S) = { x!(P + S) } => Q }
 
-In addition to free variables we have the logical connectives "AND", written `/\`, and "OR", written `\/`. In order to match with a list of patterns, separated by `/\`, a process or name must match each pattern in the list. For example, to send a message over `@"chan"` that be received by
+In addition to free variables we have the logical connectives "AND", written `/\`, and "OR", written `\/`. In order to match with a list of patterns, separated by `/\`, a process or name must match each pattern in the list. For example, to send a message over a channel `students` that will be received by
 
-    for(@{ @Nil!(x) /\ @y!(Nil) } <- @"chan"){ ... }
+    for(@{ @"grade"!(x) /\ @y!(10) } <- students){ ... }
 
-the process we send must necessarily be of the form `@Nil!(Nil)`. The first pattern requires that the process be something of the form `@Nil!(x)`, where `x` is a process variable, and the second pattern requires that `x` be `Nil`. If we run
+the process we send must necessarily be of the form `@"grade"!(10)`. The first pattern requires that the process be something of the form `@"grade"!(x)`, where `x` is a process variable, and the second pattern requires that `x` be `10`. So this waits for a student to register in grade 10 and then executes the body of the `for`. If we register the student in grade 10 via
 
-    @"chan"!(@Nil!(Nil))
+    students!(@"grade"!(10))
 
-in parallel with the `for` above, `x` and `y` will both bind to `Nil`. In contrast, in order to match a list of patterns, separated by `\/`, a process or name need only match ONE pattern in the list. Because we cannot depend on a specific pattern matching, we cannot use patterns separated by `\/` to bind any variables. For instance, replacing the `/\` with an `\/` in the `for` above yields an incorrect Rholang program
+in parallel with the `for` above, `x` will bind to `10` and `y` will bind to `"grade"`. In contrast, in order to match a list of patterns, separated by `\/`, a process or name need only match ONE pattern in the list. Because we cannot depend on a specific pattern matching, we cannot use patterns separated by `\/` to bind any variables. For instance, replacing the `/\` with an `\/` in the `for` above yields an incorrect Rholang program
 
-    for(@{ @Nil!(x) /\ @y!(Nil) } <- @"chan"){ ... }
+    for(@{ @"grade"!(x) \/ @y!(10) } <- students){ ... }
 
 which is incorrect because `x` and `y` are both free. Furthermore, we cannot capture `x` or `y` because we cannot use a binder to capture variables inside a pattern. We will cover this more later on, when we talk about patterns within patterns.
+
+To correct this code, we could write something like 
+
+    for(@{ @"grade"!(10) \/ @"grade"!(11) } <- students){ ... }
+
+which waits for a student to register in either grade `10` or `11` before executing the body of the `for`.
 
 We can use both `/\` and `\/` in any given pattern, such as in: 
 
@@ -169,11 +175,11 @@ which has the free variable `x`. We can make this into a correct Rholang program
 
     for(@{ { 10 \/ 20 } /\ x } <- @"chan"){ ... }
 
-Finally, logical connectives need not only separate process patterns, but can be used in any component of a pattern. For example, we can write
+Finally, logical connectives need not only separate process patterns, but can be used in any component of a pattern. For example, we can simplify our code that waits for a student to register in either grade `10` or `11` and write
 
-    for(@{Nil!(1 \/ 2) <- @"chan"){ ... }
+    for(@{ @"grade"!(10 \/ 11) } <- students){ ... }
 
-which will accept either `@Nil!(1)` or `@Nil!(2)` over the channel `@"chan"`. The same precedence rules from before apply.
+This will match with whichever of `students!(@"grade"!(10))` and `students!(@"grade"!(11))` runs first. The same precedence rules from before apply.
 
 ### Patterns in a `for`
 
