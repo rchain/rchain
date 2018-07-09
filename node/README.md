@@ -59,46 +59,83 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
-RChain Node 0.4.1
+Starting with profile default
+RChain Node 0.4.2
       --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
                            running.
   -g, --grpc-port  <arg>   Port used for gRPC API.
+  -p, --profile  <arg>     Which predefined set of defaults to use: default or
+                           docker.
       --help               Show help message
       --version            Show version of this program
 
-Subcommand: diagnostics (alias: d) - Node diagnostics
+Subcommand: diagnostics - Node diagnostics
       --help   Show help message
 Subcommand: run
-      --bonds-file  <arg>       Plain text file consisting of lines of the form
-                                `<pk> <stake>`, which defines the bond amounts
-                                for each validator at genesis. <pk> is the
-                                public key (in base-16 encoding) identifying the
-                                validator and <stake>is the amount of Rev they
-                                have bonded (an integer). Note: this overrides
-                                the --num-validators option.
-  -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
-  -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
-                                being used for identification
-  -d, --data_dir  <arg>         Path to data directory. Defaults to
-                                $HOME/.rnode
-      --host  <arg>             Hostname or IP of this node.
-  -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
-                                ported to gRPC API).
-  -k, --key  <arg>              Path to node's private key PEM file, that is
-                                being used for TLS communication
-      --map_size  <arg>         Map size (in bytes)
-  -m, --metrics-port  <arg>     Port used by metrics API.
-  -n, --num-validators  <arg>   Number of validators at genesis.
-  -p, --port  <arg>             Network port to use.
-  -s, --standalone              Start a stand-alone node (no bootstrapping).
-      --help                    Show help message
+      --bonds-file  <arg>                Plain text file consisting of lines of
+                                         the form `<pk> <stake>`, which defines
+                                         the bond amounts for each validator at
+                                         genesis. <pk> is the public key (in
+                                         base-16 encoding) identifying the
+                                         validator and <stake>is the amount of
+                                         Rev they have bonded (an integer).
+                                         Note: this overrides the
+                                         --num-validators option.
+  -b, --bootstrap  <arg>                 Bootstrap rnode address for initial
+                                         seed.
+  -c, --certificate  <arg>               Path to node's X.509 certificate file,
+                                         that is being used for identification
+      --data_dir  <arg>                  Path to data directory. Defaults to
+                                         $HOME/.rnode
+  -d, --default-timeout  <arg>           Default timeout for roundtrip
+                                         connections. Default 1 second.
+      --host  <arg>                      Hostname or IP of this node.
+  -h, --http-port  <arg>                 HTTP port (deprecated - all API
+                                         features will be ported to gRPC API).
+  -k, --key  <arg>                       Path to node's private key PEM file,
+                                         that is being used for TLS
+                                         communication
+      --known-validators  <arg>          Plain text file listing the public keys
+                                         of validators known to the user (one
+                                         per line). Signatures from these
+                                         validators are required in order to
+                                         accept a block which starts the
+                                         localnode's view of the blockDAG.
+      --map_size  <arg>                  Map size (in bytes)
+  -m, --metrics-port  <arg>              Port used by metrics API.
+  -n, --no-upnp                          Use this flag to disable UpNp.
+      --num-validators  <arg>            Number of validators at genesis.
+  -p, --port  <arg>                      Network port to use.
+  -s, --standalone                       Start a stand-alone node (no
+                                         bootstrapping).
+      --validator-private-key  <arg>     Base16 encoding of the private key to
+                                         use for signing a proposed blocks.
+  -v, --validator-public-key  <arg>      Base16 encoding of the public key to
+                                         use for signing a proposed blocks. Can
+                                         be inferred from the private key for
+                                         some signature algorithms.
+      --validator-sig-algorithm  <arg>   Name of the algorithm to use for
+                                         signing proposed blocks. Currently
+                                         supported values: ed25519
+  -w, --wallets-file  <arg>              Plain text file consisting of lines of
+                                         the form `<algorithm> <pk>
+                                         <revBalance>`, which defines the Rev
+                                         wallets that exist at genesis.
+                                         <algorithm> is the algorithm used to
+                                         verify signatures when using the wallet
+                                         (one of ed25519 or secp256k1),<pk> is
+                                         the public key (in base-16 encoding)
+                                         identifying the wallet and
+                                         <revBalance>is the amount of Rev in the
+                                         wallet.
+      --help                             Show help message
 Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
       --help   Show help message
 Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
       --help   Show help message
 
  trailing arguments:
-  file-name (required)
+  file-names (required)
 Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
       --help   Show help message
 Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
@@ -111,12 +148,10 @@ Subcommand: show-block - View properties of a block known by Casper on an existi
 
  trailing arguments:
   hash (required)   the hash value of the block
-Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node. 
-    --help   Show help message
-Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
-  -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
-                            for signing a proposed block.
-      --help                Show help message
+Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node.
+      --help   Show help message
+Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys.
+      --help   Show help message
 ```
 
 ### 2.1 The Node
@@ -172,7 +207,7 @@ $ docker run -ti rchain/rnode
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -              |_|
 17:12:22.889 [main] INFO org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30304.
+17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30300.
 17:12:22.970 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
 17:12:22.975 [main] DEBUG main - Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 (...)
@@ -203,7 +238,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -              |_|
 17:12:22.889 [main] INFO org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30304.
+17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30300.
 17:12:22.970 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
 17:12:22.975 [main] DEBUG main - Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 (...)
@@ -248,10 +283,10 @@ This command will run the node in interpreter mode and will make a directory on 
 The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable UDP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
 
 ```
---host 1.2.3.4 --port 30304
+--host 1.2.3.4 --port 30300
 ```
 
-By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick different
+By default it uses UDP port 30300. This is also how more than one node may be run on a single machine: just pick different
 ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the test net on UDP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
 
 ```

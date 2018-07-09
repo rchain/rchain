@@ -17,6 +17,7 @@ import java.nio.file.Files
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.shared.Time
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
@@ -199,7 +200,121 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   }
 
   "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
-    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val deploys =
+      Vector("@1!(1)",
+             "@2!(1)",
+             "@2!(2)",
+             "@2!(3)",
+             "@2!(4)",
+             "@2!(5)",
+             "for (@x <- @1) { @2!(x) }",
+             "for (@x <- @2) { @3!(x) }")
+        .flatMap(mkTerm(_).toOption)
+        .map(ProtoUtil.termDeploy)
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
+  }
+
+  "validateBlockCheckpoint" should "pass linked list test" in {
+    val deploys = Vector(
+      """
+        |contract @"recursionTest"(@list) = {
+        |  new loop in {
+        |    contract loop(@rem, @acc) = {
+        |      match rem {
+        |        [head, ...tail] => {
+        |          new newAccCh in {
+        |            newAccCh!([head, acc]) |
+        |            for(@newAcc <- newAccCh) {
+        |              loop!(tail, newAcc)
+        |            }
+        |          }
+        |        }
+        |        _ => { Nil } // Normally we would print the "acc" ([2,[1,[]]]) out
+        |      }
+        |    } |
+        |    new unusedCh in {
+        |      loop!(list, [])
+        |    }
+        |  }
+        |} |
+        |@"recursionTest"!([1,2])
+      """.stripMargin
+    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
+  }
+
+  "validateBlockCheckpoint" should "pass persistent produce test with causality" in {
+    val deploys =
+      Vector("""new x, y, delay in {
+              contract delay(@n) = {
+                if (n < 100) {
+                  delay!(n + 1)
+                } else {
+                  x!!(1)
+                }
+              } |
+              delay!(0) |
+              y!(0) |
+              for (_ <- x; @0 <- y) { y!(1) } |
+              for (_ <- x; @1 <- y) { y!(2) } |
+              for (_ <- x; @2 <- y) { y!(3) } |
+              for (_ <- x; @3 <- y) { y!(4) } |
+              for (_ <- x; @4 <- y) { y!(5) } |
+              for (_ <- x; @5 <- y) { y!(6) } |
+              for (_ <- x; @6 <- y) { y!(7) } |
+              for (_ <- x; @7 <- y) { y!(8) } |
+              for (_ <- x; @8 <- y) { y!(9) } |
+              for (_ <- x; @9 <- y) { y!(10) } |
+              for (_ <- x; @10 <- y) { y!(11) } |
+              for (_ <- x; @11 <- y) { y!(12) } |
+              for (_ <- x; @12 <- y) { y!(13) } |
+              for (_ <- x; @13 <- y) { y!(14) } |
+              for (_ <- x; @14 <- y) { Nil }
+             }
+          """)
+        .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
     val (computedTsCheckpoint, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,

@@ -28,11 +28,13 @@ object Profile {
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
 
-  val profile = opt[String](default = Some("default"), name = "profile")
+  val profile = opt[String](default = Some("default"),
+                            name = "profile",
+                            descr = "Which predefined set of defaults to use: default or docker.")
     .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
-    opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
+    opt[Int](default = Some(30301), descr = "Port used for gRPC API.")
 
   val grpcHost =
     opt[String](default = Some("localhost"),
@@ -64,10 +66,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
     val port =
-      opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
+      opt[Int](default = Some(30300), short = 'p', descr = "Network port to use.")
 
     val httpPort =
-      opt[Int](default = Some(8080),
+      opt[Int](default = Some(30302),
                descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
     val metricsPort =
@@ -98,7 +100,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val bootstrap =
       opt[String](default =
-                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:30304"),
+                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:30300"),
                   short = 'b',
                   descr = "Bootstrap rnode address for initial seed.")
 
@@ -199,22 +201,22 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
     Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-  private def checkAll: (String, String) = {
+  private def upnpIpCheck(upnp: UPnP): PartialFunction[Unit, (String, String)] =
+    Function.unlift(Unit =>
+      upnp.externalAddress.map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress)))
+
+  private def checkAll(upnp: UPnP): (String, String) = {
     val func: PartialFunction[Unit, (String, String)] =
       check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
-        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse {
-        case _ => ("failed to guess", "localhost")
-      }
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
+        upnpIpCheck(upnp: UPnP) orElse { case _ => ("failed to guess", "localhost") }
 
     func.apply(())
   }
 
   private def whoami(port: Int, upnp: UPnP): String = {
     println("INFO - flag --host was not provided, guessing your external IP address")
-
-    val (source, ip) = upnp.externalAddress
-      .map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress))
-      .getOrElse(checkAll)
+    val (source, ip) = checkAll(upnp)
     println(s"INFO - guessed $ip from source: $source")
     ip
   }
