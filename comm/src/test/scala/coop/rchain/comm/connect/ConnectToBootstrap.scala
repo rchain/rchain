@@ -22,8 +22,8 @@ class ConnectToBootstrapSpec
 
   type Effect[A] = CommErrT[Id, A]
 
-  val src: PeerNode    = peerNode("src", 30300)
-  val remote: PeerNode = peerNode("remote", 30301)
+  val src: PeerNode    = peerNode("src", 40400)
+  val remote: PeerNode = peerNode("remote", 40401)
 
   implicit val logEff            = new LogStub[Effect]
   implicit val timeEff           = new LogicalTime[Effect]

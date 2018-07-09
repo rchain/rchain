@@ -26,7 +26,7 @@ parser.add_argument("-b", "--boot",
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="run --port 30304 --standalone",
+                    default="run --port 40400 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
@@ -58,7 +58,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:30304",
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
@@ -165,9 +165,9 @@ def run_tests():
         if test == "network_sockets":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_network_sockets(container) == 0:
-                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/9095 is available.")
+                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/40403 is available.")
                 else:
-                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/9095 is not available.")
+                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/40403 is not available.")
         if test == "errors":
             for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
                 print(container.name)
@@ -341,7 +341,7 @@ def check_network_convergence(container):
     count = 0
 
     while count < 200:
-        cmd = f'curl -s {container.name}:9095'
+        cmd = f'curl -s {container.name}:40403'
         r = container.exec_run(cmd=cmd).output.decode('utf-8')
         print(r)
         print(f"checking {count} of {timeout} seconds")
@@ -365,13 +365,13 @@ def test_performance():
     print('Run parent script with "-p 1" if you only want deploy/propose to run from a single node to network nodes')
     print("=====================================================================================")
     print("Grab metrics on peer0 container via:")
-    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095'")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403'")
     print("sudo docker exec -it peer0.rchain.coop bash -c './bin/rnode diagnostics'")
     print("=====================================================================================")
     print("Quick and dirty comparative script. Shows metric lines changed and the values.")
     print("Run last command to see changes from start /tmp/1")
-    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/1")
-    print("""sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:9095' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
+    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403' > /tmp/1")
+    print("""sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
     print("=====================================================================================")
     time.sleep(10)
     while True:
@@ -565,9 +565,9 @@ def create_peer_nodes():
 def test_network_sockets(container):
     print(f"Test metrics api socket for {container.name}")
     try:
-        cmd = f"nmap -sS -n -p T:9095 -oG - {container.name}"
+        cmd = f"nmap -sS -n -p T:40403 -oG - {container.name}"
         r = container.exec_run(cmd=cmd, user='root').output.decode("utf-8")
-        if "9095/open/tcp" in r:
+        if "40403/open/tcp" in r:
             return 0 
         else:
             return 1 
