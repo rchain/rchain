@@ -1,14 +1,17 @@
 package coop.rchain.roscala
 
+import java.util.concurrent.{ForkJoinPool, RecursiveAction, TimeUnit}
+
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Location._
+import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
+import coop.rchain.roscala.pools.{Executor, StrandPool}
 import coop.rchain.roscala.prim.Prim
 
 import scala.collection.mutable
 
 object Vm {
-  val logger = Logger("Vm")
 
   /**
     * `State` holds the currently installed `Ctxt` and `Code`.
@@ -28,6 +31,18 @@ object Vm {
     val strandPool = new StrandPool
   }
 
+  def run(ctxt: Ctxt, state: State): Unit = {
+    val vm = new Vm(ctxt, state)
+    Executor.start(vm)
+    vm.logger.debug("Exiting the VM")
+  }
+}
+
+class Vm(ctxt0: Ctxt, val state0: State) extends RecursiveAction {
+  val logger = Logger("Vm")
+
+  override def compute(): Unit = run(ctxt0, state0)
+
   /**
     * Install a `Ctxt` and runs `Ctxt.code`
     *
@@ -35,7 +50,7 @@ object Vm {
     * Runs until `doExitFlag` is set or there are no more opcodes.
     * Also tries to fetch new work from `state.strandPool`
     */
-  def run(ctxt: Ctxt, state: State): Unit = {
+  private def run(ctxt: Ctxt, state: State): Unit = {
     // Install `ctxt`
     state.ctxt = ctxt
     state.code = ctxt.code
