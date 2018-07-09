@@ -4,6 +4,9 @@ class Tuple(val value: Array[Ob]) extends Ob {
 
   def apply(n: Int): Ob = value(n)
 
+  override def accepts(msg: Ctxt): Boolean =
+    value.exists(_.matches(msg))
+
   def becomeExtension(newMeta: Meta, newParent: Ob): Extension = {
     val extension = new Extension()
     extension.meta = newMeta
@@ -13,9 +16,9 @@ class Tuple(val value: Array[Ob]) extends Ob {
     extension
   }
 
-  def update(arg: Int, ob: Ob): Unit = value.update(arg, ob)
+  def elem(n: Int): Ob = value(n)
 
-  def accepts(msg: Ctxt): Boolean = this.value.exists(_.matches(msg))
+  def update(arg: Int, ob: Ob): Unit = value.update(arg, ob)
 
   def makeSlice(offset: Int, n: Int): Tuple = Tuple(n, this, offset, n)
 
@@ -50,9 +53,7 @@ class Tuple(val value: Array[Ob]) extends Ob {
             case (e, arg) => e == arg
           }
       }
-    } else {
-      false
-    }
+    } else false
   }
 
   def matches(msg: Tuple): Boolean = {

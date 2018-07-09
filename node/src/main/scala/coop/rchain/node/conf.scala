@@ -10,8 +10,26 @@ import org.rogach.scallop._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import scala.collection.JavaConverters._
 
+// TODO replace with default config file when CORE-512 is resolved
+case class Profile(name: String, dataDir: (() => Path, String))
+
+object Profile {
+  val docker =
+    Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
+  val default =
+    Profile("default",
+            dataDir =
+              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+
+  val profiles =
+    Map(default.name -> default, docker.name -> docker)
+}
+
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
+
+  val profile = opt[String](default = Some("default"), name = "profile")
+    .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
     opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
@@ -63,10 +81,24 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
         "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
     )
+    val knownValidators = opt[String](
+      default = None,
+      descr = "Plain text file listing the public keys of validators known to the user (one per line). " +
+        "Signatures from these validators are required in order to accept a block which starts the local" +
+        "node's view of the blockDAG."
+    )
+    val walletsFile = opt[String](
+      default = None,
+      descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
+        "which defines the Rev wallets that exist at genesis. " +
+        "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
+        "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+        "is the amount of Rev in the wallet."
+    )
 
     val bootstrap =
       opt[String](default =
-                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@216.83.154.106:30304"),
+                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:30304"),
                   short = 'b',
                   descr = "Bootstrap rnode address for initial seed.")
 
@@ -78,7 +110,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val data_dir = opt[Path](required = false,
                              descr = "Path to data directory. Defaults to $HOME/.rnode",
-                             default = Some(Paths.get(sys.props("user.home"), ".rnode")))
+                             default = profile.toOption.map(_.dataDir._1.apply()))
 
     val map_size = opt[Long](required = false,
                              descr = "Map size (in bytes)",
@@ -167,22 +199,22 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
     Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-  private def checkAll: (String, String) = {
+  private def upnpIpCheck(upnp: UPnP): PartialFunction[Unit, (String, String)] =
+    Function.unlift(Unit =>
+      upnp.externalAddress.map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress)))
+
+  private def checkAll(upnp: UPnP): (String, String) = {
     val func: PartialFunction[Unit, (String, String)] =
       check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
-        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse {
-        case _ => ("failed to guess", "localhost")
-      }
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
+        upnpIpCheck(upnp: UPnP) orElse { case _ => ("failed to guess", "localhost") }
 
     func.apply(())
   }
 
   private def whoami(port: Int, upnp: UPnP): String = {
     println("INFO - flag --host was not provided, guessing your external IP address")
-
-    val (source, ip) = upnp.externalAddress
-      .map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress))
-      .getOrElse(checkAll)
+    val (source, ip) = checkAll(upnp)
     println(s"INFO - guessed $ip from source: $source")
     ip
   }
@@ -192,8 +224,11 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.validatorPrivateKey.toOption,
     run.validatorSigAlgorithm(),
     run.bondsFile.toOption,
+    run.knownValidators.toOption,
     run.numValidators(),
-    run.data_dir().resolve("validators")
+    run.data_dir().resolve("genesis"),
+    run.walletsFile.toOption,
+    run.standalone()
   )
 
   verify()
