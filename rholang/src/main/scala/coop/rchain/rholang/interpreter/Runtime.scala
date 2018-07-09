@@ -3,9 +3,9 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import cats.Functor
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -33,8 +33,8 @@ class Runtime private (val reducer: Reduce[Task],
                                                      ListChannelWithRandom,
                                                      TaggedContinuation],
                        var errorLog: ErrorLog) {
-  def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
-  def close(): Unit                                       = space.close()
+  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
+  def close(): Unit                                = space.close()
 }
 
 object Runtime {
@@ -63,7 +63,7 @@ object Runtime {
         )
     }
 
-  def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
+  def create(dataDir: Path, mapSize: Long): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
@@ -84,8 +84,8 @@ object Runtime {
                                           ListChannelWithRandom,
                                           TaggedContinuation](context, Branch.REPLAY)
 
-    val errorLog                                         = new ErrorLog()
-    implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
+    val errorLog                                  = new ErrorLog()
+    implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
       RholangAndScalaDispatcher.create(space, dispatchTable)

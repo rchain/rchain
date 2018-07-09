@@ -76,7 +76,7 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  private def printErrors(errors: Vector[InterpreterError]) =
+  private def printErrors(errors: Vector[Throwable]) =
     if (!errors.isEmpty) {
       Console.println("Errors received during evaluation:")
       for {
@@ -120,7 +120,7 @@ object RholangCLI {
   }
 
   @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[InterpreterError]]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[Throwable]]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
         case Some(Success(errors)) => printErrors(errors)
