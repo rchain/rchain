@@ -83,13 +83,10 @@ object Reduce {
     private def consume(binds: Seq[(BindPattern, Quote)],
                         body: Par,
                         persistent: Boolean,
-                        rand: Blake2b512Random): M[Unit] = {
-      val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-      val srcs                                              = sources.map(q => Channel(q)).toList
+                        rand: Blake2b512Random): M[Unit] =
       for {
         _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
       } yield ()
-    }
 
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
@@ -147,7 +144,7 @@ object Reduce {
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
-                varref <- eval(v.get)
+                varref <- eval(v)
                 _      <- eval(varref)(env, newRand)
               } yield ()).handleError(fTell.tell)
             case e: EEvalBody =>
@@ -300,7 +297,7 @@ object Reduce {
           cases match {
             case Nil => Applicative[M].pure(Right(()))
             case singleCase +: caseRem =>
-              substitutePar[M].substitute(singleCase.pattern.get)(1, env).flatMap { pattern =>
+              substitutePar[M].substitute(singleCase.pattern)(1, env).flatMap { pattern =>
                 val matchResult =
                   SpatialMatcher
                     .spatialMatch(target, pattern)
@@ -309,7 +306,7 @@ object Reduce {
                   case None => Applicative[M].pure(Left((target, caseRem)))
                   case Some(freeMap) => {
                     val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                    eval(singleCase.source.get)(newEnv, implicitly).map(Right(_))
+                    eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                   }
                 }
               }
@@ -319,7 +316,7 @@ object Reduce {
       }
 
       for {
-        evaledTarget <- evalExpr(mat.target.get)
+        evaledTarget <- evalExpr(mat.target)
         // TODO(kyle): Make the matcher accept an environment, instead of
         // substituting it.
         substTarget <- substitutePar[M].substitute(evaledTarget)(0, env)
@@ -343,12 +340,12 @@ object Reduce {
           _env.put(addr)
         }
 
-      eval(neu.p.get)(alloc(neu.bindCount), rand)
+      eval(neu.p)(alloc(neu.bindCount), rand)
     }
 
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =
       for {
-        quote <- eval(rb.source.get)
+        quote <- eval(rb.source)
         subst <- substituteQuote[M].substitute(quote)(0, env)
         // Check if we try to read from bundled channel
         unbndl <- subst.quote.get.singleBundle() match {
@@ -356,7 +353,7 @@ object Reduce {
                      if (!value.readFlag) {
                        s.raiseError(ReduceError("Trying to read from non-readable channel."))
                      } else {
-                       s.pure(Quote(value.body.get))
+                       s.pure(Quote(value.body))
                      }
                    case None =>
                      s.pure(subst)
@@ -366,24 +363,24 @@ object Reduce {
     def evalExplicit(bundle: Bundle)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
       eval(bundle)(env, rand)
     def eval(bundle: Bundle)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
-      eval(bundle.body.get)
+      eval(bundle.body)
 
     def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
       expr.exprInstance match {
         case EVarBody(EVar(v)) =>
           for {
-            p       <- eval(v.get)
+            p       <- eval(v)
             evaledP <- evalExpr(p)
           } yield evaledP
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
-            evaledTarget <- evalExpr(target.get)
+            evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
                             s.raiseError(ReduceError("Unimplemented method: " + method))
-                          case Some(f) => f(target.get, evaledArgs)(env)
+                          case Some(f) => f(target, evaledArgs)(env)
                         }
           } yield resultPar
         }
@@ -417,64 +414,64 @@ object Reduce {
         case x: GByteArray => Applicative[M].pure[Expr](x)
         case ENotBody(ENot(p)) =>
           for {
-            b <- evalToBool(p.get)
+            b <- evalToBool(p)
           } yield GBool(!b)
         case ENegBody(ENeg(p)) =>
           for {
-            v <- evalToInt(p.get)
+            v <- evalToInt(p)
           } yield GInt(-v)
         case EMultBody(EMult(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1.get)
-            v2 <- evalToInt(p2.get)
+            v1 <- evalToInt(p1)
+            v2 <- evalToInt(p2)
           } yield GInt(v1 * v2)
         case EDivBody(EDiv(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1.get)
-            v2 <- evalToInt(p2.get)
+            v1 <- evalToInt(p1)
+            v2 <- evalToInt(p2)
           } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1.get)
-            v2 <- evalToInt(p2.get)
+            v1 <- evalToInt(p1)
+            v2 <- evalToInt(p2)
           } yield GInt(v1 + v2)
         case EMinusBody(EMinus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1.get)
-            v2 <- evalToInt(p2.get)
+            v1 <- evalToInt(p1)
+            v2 <- evalToInt(p2)
           } yield GInt(v1 - v2)
-        case ELtBody(ELt(p1, p2))   => relop(p1.get, p2.get, (_ < _), (_ < _), (_ < _))
-        case ELteBody(ELte(p1, p2)) => relop(p1.get, p2.get, (_ <= _), (_ <= _), (_ <= _))
-        case EGtBody(EGt(p1, p2))   => relop(p1.get, p2.get, (_ > _), (_ > _), (_ > _))
-        case EGteBody(EGte(p1, p2)) => relop(p1.get, p2.get, (_ >= _), (_ >= _), (_ >= _))
+        case ELtBody(ELt(p1, p2))   => relop(p1, p2, (_ < _), (_ < _), (_ < _))
+        case ELteBody(ELte(p1, p2)) => relop(p1, p2, (_ <= _), (_ <= _), (_ <= _))
+        case EGtBody(EGt(p1, p2))   => relop(p1, p2, (_ > _), (_ > _), (_ > _))
+        case EGteBody(EGte(p1, p2)) => relop(p1, p2, (_ >= _), (_ >= _), (_ >= _))
         case EEqBody(EEq(p1, p2)) =>
           for {
-            v1 <- evalExpr(p1.get)
-            v2 <- evalExpr(p2.get)
+            v1 <- evalExpr(p1)
+            v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
             sv1 <- substitutePar[M].substitute(v1)(0, env)
             sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
-            v1  <- evalExpr(p1.get)
-            v2  <- evalExpr(p2.get)
+            v1  <- evalExpr(p1)
+            v2  <- evalExpr(p2)
             sv1 <- substitutePar[M].substitute(v1)(0, env)
             sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
-            b1 <- evalToBool(p1.get)
-            b2 <- evalToBool(p2.get)
+            b1 <- evalToBool(p1)
+            b2 <- evalToBool(p2)
           } yield GBool(b1 && b2)
         case EOrBody(EOr(p1, p2)) =>
           for {
-            b1 <- evalToBool(p1.get)
-            b2 <- evalToBool(p2.get)
+            b1 <- evalToBool(p1)
+            b2 <- evalToBool(p2)
           } yield GBool(b1 || b2)
         case EVarBody(EVar(v)) =>
           for {
-            p       <- eval(v.get)
+            p       <- eval(v)
             exprVal <- evalSingleExpr(p)
           } yield exprVal
         case EListBody(el) => {
@@ -509,12 +506,12 @@ object Reduce {
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
-            evaledTarget <- evalExpr(target.get)
+            evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
                             s.raiseError(ReduceError("Unimplemented method: " + method))
-                          case Some(f) => f(target.get, evaledArgs)(env)
+                          case Some(f) => f(target, evaledArgs)(env)
                         }
             resultExpr <- evalSingleExpr(resultPar)
           } yield resultExpr
@@ -795,7 +792,7 @@ object Reduce {
           case Expr(GInt(v)) +: Nil => Applicative[M].pure(v)
           case Expr(EVarBody(EVar(v))) +: Nil =>
             for {
-              p      <- eval(v.get)
+              p      <- eval(v)
               intVal <- evalToInt(p)
             } yield intVal
           case (e: Expr) +: Nil =>
@@ -821,7 +818,7 @@ object Reduce {
           case Expr(GBool(b)) +: Nil => Applicative[M].pure(b)
           case Expr(EVarBody(EVar(v))) +: Nil =>
             for {
-              p       <- eval(v.get)
+              p       <- eval(v)
               boolVal <- evalToBool(p)
             } yield boolVal
           case (e: Expr) +: Nil =>
