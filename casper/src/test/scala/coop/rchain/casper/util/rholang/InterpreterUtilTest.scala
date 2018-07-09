@@ -287,8 +287,26 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
   "validateBlockCheckpoint" should "pass persistent produce test with causality" in {
     val deploys =
-      Vector(
-        "new x, y in { x!!(1) | y!(0) | for (_ <- x; @0 <- y) { y!(1) } | for (_ <- x; @1 <- y) { Nil } }")
+      Vector("""new x, y, delay in {
+              contract delay(@n) = {
+                if (n < 100) {
+                  delay!(n + 1)
+                } else {
+                  x!!(1)
+                }
+              } |
+              delay!(0) |
+              y!(0) |
+              for (_ <- x; @0 <- y) { y!(1) } |
+              for (_ <- x; @1 <- y) { y!(2) } |
+              for (_ <- x; @2 <- y) { y!(3) } |
+              for (_ <- x; @3 <- y) { y!(4) } |
+              for (_ <- x; @4 <- y) { y!(5) } |
+              for (_ <- x; @5 <- y) { y!(6) } |
+              for (_ <- x; @6 <- y) { y!(7) } |
+              for (_ <- x; @7 <- y) { Nil }
+             }
+          """)
         .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
     val (computedTsCheckpoint, _) =
       computeDeploysCheckpoint(Seq.empty,
