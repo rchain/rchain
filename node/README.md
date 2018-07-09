@@ -164,7 +164,7 @@ properly. This may happen automatically, and it may not; it completely depends o
 ```
 $ docker run -ti rchain/rnode
 17:12:21.938 [main] INFO main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 17:12:22.850 [main] INFO org.http4s.blaze.channel.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 17:12:22.851 [main] INFO org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
@@ -195,7 +195,7 @@ This will run Node from JAR file that was built in [Building from source](#build
 ```
 $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
 17:12:21.938 [main] INFO main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 17:12:22.850 [main] INFO org.http4s.blaze.channel.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 17:12:22.851 [main] INFO org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
@@ -276,7 +276,7 @@ It is possible to set up a private RChain network by running a standalone node a
 ```
 $ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar -s -p 4000
 11:21:00.164 [main] INFO  main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-11:21:00.600 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+11:21:00.600 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 11:21:01.012 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 11:21:01.013 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___

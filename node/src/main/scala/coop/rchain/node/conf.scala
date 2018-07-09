@@ -71,7 +71,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
     val metricsPort =
-      opt[Int](default = Some(9095), descr = "Port used by metrics API.")
+      opt[Int](default = Some(40403), descr = "Port used by metrics API.")
 
     val numValidators = opt[Int](default = Some(5), descr = "Number of validators at genesis.")
     val bondsFile = opt[String](

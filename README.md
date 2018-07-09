@@ -194,7 +194,7 @@ Invoking the above Docker image is simple enough (exit with `C-c`):
 08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
 08:30:32.647 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 08:30:32.799 [main] INFO  logger - gRPC server started, listening on
 08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:30304.
 08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}.
@@ -225,7 +225,7 @@ In a new terminal:
 08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
 08:38:11.298 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-08:38:11.358 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:38:11.358 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 08:38:11.436 [main] INFO  logger - gRPC server started, listening on
 08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:30304.
 08:38:11.463 [main] INFO  logger - Starting stand-alone node.
@@ -269,7 +269,7 @@ A peer node can be started with the following command (note that `--bootstrap` t
 08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
 08:58:36.098 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-08:58:36.139 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:58:36.139 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 08:58:36.241 [main] INFO  logger - gRPC server started, listening on
 08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://29d77e8cfd924db49e715d4cf4eeb28d@172.18.0.4:30304.
 08:58:36.279 [main] INFO  logger - Bootstrapping from #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.

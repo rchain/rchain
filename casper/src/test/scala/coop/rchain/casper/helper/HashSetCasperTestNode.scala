@@ -68,7 +68,7 @@ object HashSetCasperTestNode {
   def standalone(genesis: BlockMessage, sk: Array[Byte])(
       implicit scheduler: Scheduler): HashSetCasperTestNode = {
     val name     = "standalone"
-    val identity = peerNode(name, 30300)
+    val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
 
@@ -79,7 +79,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
     val n         = sks.length
     val names     = (1 to n).map(i => s"node-$i")
-    val peers     = names.map(peerNode(_, 30300))
+    val peers     = names.map(peerNode(_, 40400))
     val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
 
     val nodes =
