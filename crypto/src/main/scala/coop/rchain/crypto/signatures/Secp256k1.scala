@@ -1,8 +1,44 @@
 package coop.rchain.crypto.signatures
 
+import coop.rchain.crypto.codec.Base16
+
+import java.security.{KeyPairGenerator, SecureRandom}
+import java.security.interfaces.ECPrivateKey
+import java.security.spec.ECGenParameterSpec
+
 import org.bitcoin._
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Secp256k1 {
+
+  private val provider  = new BouncyCastleProvider()
+  private val curveName = "secp256k1"
+
+  /**
+    * Verifies the given secp256k1 signature in native code.
+    *
+    * {{{
+    * >>> import coop.rchain.crypto.hash.Sha256
+    * >>> val (sec, pub) = Secp256k1.newKeyPair
+    * >>> val data = Sha256.hash("testing".getBytes)
+    * >>> val sig = Secp256k1.sign(data, sec)
+    * >>> Secp256k1.verify(data, sig, pub)
+    * true
+    * }}}
+    *
+    * @return (private key, public key) pair
+    *
+    */
+  def newKeyPair: (Array[Byte], Array[Byte]) = {
+    val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
+    kpg.initialize(new ECGenParameterSpec(curveName), new SecureRandom())
+    val kp = kpg.generateKeyPair
+
+    val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS().toString(16))
+    val pub = Secp256k1.toPublic(sec)
+
+    (sec, pub)
+  }
 
   /**
     * Verifies the given secp256k1 signature in native code.
@@ -40,7 +76,6 @@ object Secp256k1 {
     * >>> import coop.rchain.crypto.hash._
     * >>> import coop.rchain.crypto.codec._
     * >>> val data = Sha256.hash("testing".getBytes)
-    * >>> val sig = Base16.decode("3044022079BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F817980220294F14E883B3F525B5367756C2A11EF6CF84B730B36C17CB0C56F0AAB2C98589")
     * >>> val sec = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
     * >>> Base16.encode(Secp256k1.sign(data, sec)).toUpperCase()
     * 30440220182A108E1448DC8F1FB467D06A0F3BB8EA0533584CB954EF8DA112F1D60E39A202201C66F36DA211C087F3AF88B50EDF4F9BDAA6CF5FD6817E74DCA34DB12390C6E9
