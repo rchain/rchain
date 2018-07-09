@@ -62,7 +62,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
                     .map(_.toString())
                     .mkString("Errors received during evaluation:\n", "\n", "\n")
               s"Deployment cost: $cost\n" +
-              s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
             }
           }
       }

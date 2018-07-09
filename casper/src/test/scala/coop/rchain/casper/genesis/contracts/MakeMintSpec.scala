@@ -1,6 +1,7 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.{MakeMint, MakeMintTest}
 
 import monix.execution.Scheduler.Implicits.global

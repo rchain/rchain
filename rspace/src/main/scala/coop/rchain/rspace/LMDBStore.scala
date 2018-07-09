@@ -120,10 +120,7 @@ class LMDBStore[C, P, A, K] private (
   }
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
-    Codec[Seq[C]]
-      .encode(channels)
-      .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
-      .get
+    StableHashProvider.hash(channels)
 
   /* Channels */
 

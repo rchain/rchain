@@ -66,8 +66,6 @@ apt-get install openjdk-8-jdk -yqq
 ## Build Needed Crypto
 # Build secp 
 apt-get install autoconf libtool -yqq
-cd ${PROJECT_ROOT_DIR}
-./scripts/install_secp.sh
 
 # Build libsodium
 cd ${PROJECT_ROOT_DIR}

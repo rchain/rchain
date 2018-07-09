@@ -163,7 +163,7 @@ case class PrettyPrinter(freeShift: Int,
               }
           } + " }"
 
-      case g: GPrivate => g.id
+      case g: GPrivate => "Unforgeable(0x" + Base16.encode(g.id.toByteArray) + ")"
       case c: Connective =>
         c.connectiveInstance match {
           case ConnectiveInstance.Empty => ""

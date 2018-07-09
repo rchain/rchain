@@ -33,9 +33,9 @@ class CodeBuf : public Ob {
     STD_DECLS(CodeBuf);
 
    protected:
-    void deposit(Instr);
 
    public:
+    void deposit(Instr);
     void growCodevec(int = DefaultCodeVecSize);
     CodeBuf();
 

@@ -1,8 +1,8 @@
 ## Overview
 Provide a brief description of what this PR does, and why it's needed.
 
-### Does this PR relate to an RChain JIRA issue? 
-If applicable, add link to corresponding JIRA issue.
+### Which JIRA issue does this PR relate to? If there is not a JIRA issue addressing this work, please create one now and add the link here.
+Add link to corresponding JIRA issue.
 
 ### Complete this checklist before you submit the PR
 - [ ] This PR contains no more than 200 lines of code, excluding test code.

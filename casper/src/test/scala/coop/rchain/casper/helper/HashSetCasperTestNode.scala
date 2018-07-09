@@ -6,7 +6,12 @@ import cats._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
+import coop.rchain.casper.{
+  MultiParentCasper,
+  MultiParentCasperConstructor,
+  SafetyOracle,
+  ValidatorIdentity
+}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
 import coop.rchain.comm.connect.Connect.dispatch
@@ -45,8 +50,11 @@ class HashSetCasperTestNode(name: String,
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   val activeRuntime = Runtime.create(storageDirectory, storageSize)
+  val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](activeRuntime, Ed25519.toPublic(sk), sk, "ed25519", genesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
+  implicit val constructor = MultiParentCasperConstructor
+    .successCasperConstructor[Id](ApprovedBlock(block = Some(genesis)), casperEff)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]
@@ -113,6 +121,8 @@ object HashSetCasperTestNode {
         case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
         case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
         case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
+        case TimeOut                              => "TimeOut"
+        case _                                    => e.toString
       }
 
       throw new Exception(errString)

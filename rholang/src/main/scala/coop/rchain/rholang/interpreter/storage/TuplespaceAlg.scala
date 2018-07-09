@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.storage
 import cats.Parallel
 import cats.effect.Sync
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
+import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
 import coop.rchain.rholang.interpreter.errors.ReduceError
@@ -13,23 +13,26 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 
 trait TuplespaceAlg[F[_]] {
-  def produce(chan: Channel, data: Seq[Channel], persistent: Boolean): F[Unit]
-  def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean): F[Unit]
+  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[Unit]
+  def consume(binds: Seq[(BindPattern, Quote)], body: ParWithRandom, persistent: Boolean): F[Unit]
 }
 
 object TuplespaceAlg {
-  def rspaceTuplespace[F[_], M[_]](pureRSpace: PureRSpace[F,
-                                                          Channel,
-                                                          BindPattern,
-                                                          Seq[Channel],
-                                                          Seq[Channel],
-                                                          TaggedContinuation],
-                                   dispatcher: => Dispatch[F, Seq[Channel], TaggedContinuation])(
+  def rspaceTuplespace[F[_], M[_]](
+      pureRSpace: PureRSpace[F,
+                             Channel,
+                             BindPattern,
+                             ListChannelWithRandom,
+                             ListChannelWithRandom,
+                             TaggedContinuation],
+      dispatcher: => Dispatch[F, ListChannelWithRandom, TaggedContinuation])(
       implicit F: Sync[F],
       P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
-    override def produce(channel: Channel, data: Seq[Channel], persistent: Boolean): F[Unit] = {
+    override def produce(channel: Channel,
+                         data: ListChannelWithRandom,
+                         persistent: Boolean): F[Unit] = {
       // TODO: Handle the environment in the store
-      def go(res: Option[(TaggedContinuation, Seq[Seq[Channel]])]): F[Unit] =
+      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[Unit] =
         res match {
           case Some((continuation, dataList)) =>
             if (persistent) {
@@ -50,7 +53,7 @@ object TuplespaceAlg {
     }
 
     override def consume(binds: Seq[(BindPattern, Quote)],
-                         body: Par,
+                         body: ParWithRandom,
                          persistent: Boolean): F[Unit] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))

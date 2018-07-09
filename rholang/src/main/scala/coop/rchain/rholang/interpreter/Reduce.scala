@@ -3,12 +3,14 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Applicative, FlatMap, Monad, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
@@ -31,9 +33,10 @@ import scala.util.Try
   * @tparam M The kind of Monad used for evaluation.
   */
 trait Reduce[M[_]] {
-  def eval(par: Par)(implicit env: Env[Par]): M[Unit]
 
-  def inj(par: Par): M[Unit]
+  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
+
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
 
   /**
     * Evaluate any top level expressions in @param Par .
@@ -64,11 +67,41 @@ object Reduce {
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
-    private def produce(chan: Quote, data: Seq[Channel], persistent: Boolean): M[Unit] =
+    private def produce(chan: Quote,
+                        data: Seq[Channel],
+                        persistent: Boolean,
+                        rand: Blake2b512Random): M[Unit] =
       for {
         _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        _ <- tuplespaceAlg.produce(Channel(chan), data, persistent)
+        _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
       } yield ()
+
+    /*override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
+      implicit env: Env[Par],
+      rand: Blake2b512Random): M[Unit] = {
+      // TODO: Handle the environment in the store
+      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]) =
+        res match {
+          case Some((continuation, dataList)) =>
+            if (persistent) {
+              Parallel.parSequence_[List, M, F, Unit](
+                List(dispatcher.dispatch(continuation, dataList), produce(chan, data, persistent)))
+            } else {
+              dispatcher.dispatch(continuation, dataList)
+            }
+          case None =>
+            Applicative[M].pure(())
+        }
+
+      for {
+        substData <- data.toList.traverse(
+          substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
+        res <- tupleSpace.produce(Channel(chan),
+          ListChannelWithRandom(substData, rand),
+          persist = persistent)
+        _ <- go(res)
+      } yield ()
+    }*/
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -83,16 +116,43 @@ object Reduce {
       */
     private def consume(binds: Seq[(BindPattern, Quote)],
                         body: Par,
-                        persistent: Boolean): M[Unit] = {
+                        persistent: Boolean,
+                        rand: Blake2b512Random): M[Unit] = {
       val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
       val srcs                                              = sources.map(q => Channel(q)).toList
       val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
         _ <- costAccountingAlg.charge(rspaceCost)
-        _ <- tuplespaceAlg.consume(binds, body, persistent)
+        _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
       } yield ()
     }
-
+    /*
+    override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
+      implicit env: Env[Par],
+      rand: Blake2b512Random): M[Unit] =
+      binds match {
+        case Nil => interpreterErrorM[M].raiseError(ReduceError("Error: empty binds"))
+        case _ =>
+          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
+          tupleSpace
+            .consume(sources.map(q => Channel(q)).toList,
+              patterns.toList,
+              TaggedContinuation(ParBody(ParWithRandom(body, rand))),
+              persist = persistent)
+            .flatMap {
+              case Some((continuation, dataList)) =>
+                dispatcher.dispatch(continuation, dataList)
+                if (persistent) {
+                  List(dispatcher.dispatch(continuation, dataList),
+                    consume(binds, body, persistent)).parSequence
+                    .map(_ => ())
+                } else {
+                  dispatcher.dispatch(continuation, dataList)
+                }
+              case None => Applicative[M].pure(())
+            }
+      }
+     */
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
       *
@@ -104,50 +164,78 @@ object Reduce {
       * @param par
       * @return
       */
-    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] = {
-      def handle[A](eval: A => M[Unit])(a: A): M[Unit] =
-        eval(a).handleError(fTell.tell)
-
+    override def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
+      val filteredExprs = par.exprs.filter { expr =>
+        expr.exprInstance match {
+          case _: EVarBody    => true
+          case _: EEvalBody   => true
+          case _: EMethodBody => true
+          case _              => false
+        }
+      }
+      val starts = Vector(par.sends.size,
+                          par.receives.size,
+                          par.news.size,
+                          par.matches.size,
+                          par.bundles.size,
+                          filteredExprs.size)
+        .scanLeft(0)(_ + _)
+      def handle[A](eval: (A => (Env[Par], Blake2b512Random) => M[Unit]), start: Int)(
+          ta: (A, Int)): M[Unit] = {
+        val newRand =
+          if (starts(6) == 1)
+            rand
+          else if (starts(6) > 256)
+            rand.splitShort((start + ta._2).toShort)
+          else
+            rand.splitByte((start + ta._2).toByte)
+        eval(ta._1)(env, newRand).handleError(fTell.tell)
+      }
       List(
-        Parallel.parTraverse(par.sends.toList)(handle(eval)),
-        Parallel.parTraverse(par.receives.toList)(handle(eval)),
-        Parallel.parTraverse(par.news.toList)(handle(eval)),
-        Parallel.parTraverse(par.matches.toList)(handle(eval)),
-        Parallel.parTraverse(par.bundles.toList)(handle(eval)),
-        Parallel.parTraverse(par.exprs.filter { expr =>
-          expr.exprInstance match {
-            case _: EVarBody    => true
-            case _: EEvalBody   => true
-            case _: EMethodBody => true
-            case _              => false
-          }
-        }.toList)(expr =>
+        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(evalExplicit, starts(0))),
+        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(evalExplicit, starts(1))),
+        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(evalExplicit, starts(2))),
+        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(evalExplicit, starts(3))),
+        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(evalExplicit, starts(4))),
+        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(texpr => {
+          val (expr, idx) = texpr
+          val newRand =
+            if (starts(6) == 1)
+              rand
+            else if (starts(6) > 256)
+              rand.splitShort((starts(5) + idx).toShort)
+            else
+              rand.splitByte((starts(5) + idx).toByte)
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
                 varref <- eval(v)
-                _      <- eval(varref)
+                _      <- eval(varref)(env, newRand)
               } yield ()).handleError(fTell.tell)
             case e: EEvalBody =>
               (for {
                 p <- evalExprToPar(Expr(e))
-                _ <- eval(p)
+                _ <- eval(p)(env, newRand)
               } yield ()).handleError(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))
-                _ <- eval(p)
+                _ <- eval(p)(env, newRand)
               } yield ()).handleError(fTell.tell)
             case _ => s.unit
+          }
         })
       ).parSequence.as(Unit)
     }
 
-    override def inj(par: Par): M[Unit] =
+    override def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
       for {
         _ <- costAccountingAlg.set(CostAccount.zero)
-        _ <- eval(par)(Env[Par]())
+        _ <- eval(par)(Env[Par](), rand)
       } yield ()
+
+    private def evalExplicit(send: Send)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
+      eval(send)(env, rand)
 
     /** Algorithm as follows:
       *
@@ -162,7 +250,7 @@ object Reduce {
       * @param env An execution context
       * @return
       */
-    private def eval(send: Send)(implicit env: Env[Par]): M[Unit] =
+    private def eval(send: Send)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
       for {
         quote   <- eval(send.chan)
         subChan <- substituteQuote[M].substitute(quote, depth = 0)
@@ -182,11 +270,14 @@ object Reduce {
                         .substitute(_, depth = 0)
                         .map(p => Channel(Quote(p))))
 
-        _ <- produce(unbundled, substData, send.persistent)
+        _ <- produce(unbundled, substData, send.persistent, rand)
         _ <- costAccountingAlg.charge(SEND_EVAL_COST)
       } yield ()
 
-    def eval(receive: Receive)(implicit env: Env[Par]): M[Unit] =
+    private def evalExplicit(receive: Receive)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
+      eval(receive)(env, rand)
+
+    private def eval(receive: Receive)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
       for {
         binds <- receive.binds.toList
                   .traverse(rb =>
@@ -198,10 +289,10 @@ object Reduce {
                                             .substitute(pattern, depth = 1))
                     } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substitute(receive.body, depth = 0)(
+        substBody <- substitutePar[M].substituteNoSort(receive.body, depth = 0)(
                       env.shift(receive.bindCount),
                       costAccountingAlg)
-        _ <- consume(binds, substBody, receive.persistent)
+        _ <- consume(binds, substBody, receive.persistent, rand)
         _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
       } yield ()
 
@@ -266,7 +357,9 @@ object Reduce {
         }
       }
 
-    private def eval(mat: Match)(implicit env: Env[Par]): M[Unit] = {
+    private def evalExplicit(mat: Match)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
+      eval(mat)(env, rand)
+    private def eval(mat: Match)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
         Range(0, freeCount).foldLeft(env)(
           (acc, e) =>
@@ -294,13 +387,12 @@ object Reduce {
                   case None => Applicative[M].pure(Left((target, caseRem)))
                   case Some(freeMap) => {
                     val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                    eval(singleCase.source)(newEnv).map(Right(_))
+                    eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                   }
                 }
               }
           }
         }
-
         FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
       }
 
@@ -320,15 +412,17 @@ object Reduce {
       * @param neu
       * @return
       */
-    private def eval(neu: New)(implicit env: Env[Par]): M[Unit] = {
+    private def evalExplicit(neu: New)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
+      eval(neu)(env, rand)
+    private def eval(neu: New)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
       def alloc(level: Int): Env[Par] =
         (env /: (0 until level).toList) { (_env, _) =>
-          val addr: Par = GPrivate()
+          val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
           _env.put(addr)
         }
 
       costAccountingAlg.charge(newBindingsCost(neu.bindCount)) *>
-        eval(neu.p)(alloc(neu.bindCount))
+        eval(neu.p)(alloc(neu.bindCount), rand)
     }
 
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =
@@ -348,7 +442,9 @@ object Reduce {
                  }
       } yield unbndl
 
-    private def eval(bundle: Bundle)(implicit env: Env[Par]): M[Unit] =
+    private def evalExplicit(bundle: Bundle)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
+      eval(bundle)(env, rand)
+    private def eval(bundle: Bundle)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
       eval(bundle.body)
 
     def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
@@ -798,7 +894,7 @@ object Reduce {
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -808,8 +904,8 @@ object Reduce {
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
-    private def evalToInt(p: Par)(implicit env: Env[Par]): M[Int] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+    def evalToInt(p: Par)(implicit env: Env[Par]): M[Int] =
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -836,7 +932,7 @@ object Reduce {
         }
 
     def evalToBool(p: Par)(implicit env: Env[Par]): M[Boolean] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -868,7 +964,8 @@ object Reduce {
           par.receives.foldLeft(BitSet())((acc, receive) => acc | receive.locallyFree) |
           par.news.foldLeft(BitSet())((acc, newProc) => acc | newProc.locallyFree) |
           par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr)) |
-          par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree)
+          par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree) |
+          par.bundles.foldLeft(BitSet())((acc, bundleProc) => acc | bundleProc.locallyFree)
       par.copy(locallyFree = resultLocallyFree)
     }
 

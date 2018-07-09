@@ -4,11 +4,11 @@ import java.io.Reader
 
 import cats.MonadError
 import cats.implicits._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.ParSortMatcher
 import coop.rchain.rholang.interpreter.accounting.CostAccount
-import monix.eval.{Coeval, Task}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   SyntaxError,
@@ -17,6 +17,7 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {
   def raiseOnLeft =
@@ -90,12 +91,14 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[(CostAccount, Vector[Throwable])] =
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[(CostAccount, Vector[Throwable])] = {
+    implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
       cost   <- runtime.getCost()
     } yield (cost, errors)
+  }
 
   private def mkErrorMsg(errors: Vector[Throwable]) =
     errors

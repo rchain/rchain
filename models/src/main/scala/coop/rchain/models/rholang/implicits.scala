@@ -10,6 +10,7 @@ import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 
+import com.google.protobuf.ByteString
 import scala.collection.immutable.{BitSet, Vector}
 
 object implicits {
@@ -166,8 +167,10 @@ object implicits {
   }
 
   object GPrivate {
-    def apply(): GPrivate          = new GPrivate(java.util.UUID.randomUUID.toString)
-    def apply(s: String): GPrivate = new GPrivate(s)
+    def apply(): GPrivate =
+      new GPrivate(ByteString.copyFromUtf8(java.util.UUID.randomUUID.toString))
+    def apply(s: String): GPrivate     = new GPrivate(ByteString.copyFromUtf8(s))
+    def apply(b: ByteString): GPrivate = new GPrivate(b)
   }
 
   implicit class ParExtension[T](p: T)(implicit toPar: T => Par) {
