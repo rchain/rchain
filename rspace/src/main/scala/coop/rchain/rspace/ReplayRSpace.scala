@@ -97,6 +97,25 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
           Some((continuation, mats.map(_.datum.a)))
         }
 
+        @tailrec
+        def getCommOrDataCandidates(comms: Seq[COMM]): Either[COMM, Seq[DataCandidate[C, R]]] =
+          comms match {
+            case Nil =>
+              val msg = "List comms must not be empty"
+              logger.error(msg)
+              throw new IllegalArgumentException(msg)
+            case commRef :: Nil =>
+              runMatcher(Some(commRef)) match {
+                case Some(x) => Right(x)
+                case None    => Left(commRef)
+              }
+            case commRef :: rem =>
+              runMatcher(Some(commRef)) match {
+                case Some(x) => Right(x)
+                case None    => getCommOrDataCandidates(rem)
+              }
+          }
+
         logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
@@ -115,17 +134,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
             }
           case Some(comms) =>
             val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
-              comms
-                .iterator()
-                .asScala
-                .collectFirst {
-                  case commRef: COMM =>
-                    runMatcher(Some(commRef)) match {
-                      case Some(x) => Right(x)
-                      case None    => Left(commRef)
-                    }
-                }
-                .get
+              getCommOrDataCandidates(comms.iterator().asScala.toList)
 
             commOrDataCandidates match {
               case Left(commRef) =>
@@ -231,6 +240,26 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
         val produceRef = Produce.create(channel, data, persist)
         val replays    = replayData.take()
 
+        @tailrec
+        def getCommOrProduceCandidate(
+            comms: Seq[COMM]): Either[COMM, ProduceCandidate[C, P, R, K]] =
+          comms match {
+            case Nil =>
+              val msg = "comms must not be empty"
+              logger.error(msg)
+              throw new IllegalArgumentException(msg)
+            case commRef :: Nil =>
+              runMatcher(Some(commRef), produceRef, groupedChannels) match {
+                case Some(x) => Right(x)
+                case None    => Left(commRef)
+              }
+            case commRef :: rem =>
+              runMatcher(Some(commRef), produceRef, groupedChannels) match {
+                case Some(x) => Right(x)
+                case None    => getCommOrProduceCandidate(rem)
+              }
+          }
+
         replays.get(produceRef) match {
           case None =>
             runMatcher(None, produceRef, groupedChannels) match {
@@ -244,18 +273,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
             }
           case Some(comms) =>
             val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
-              comms
-                .iterator()
-                .asScala
-                .collectFirst {
-                  case commRef: COMM =>
-                    runMatcher(Some(commRef), produceRef, groupedChannels) match {
-                      case Some(mat) => Right(mat)
-                      case None      => Left(commRef)
-                    }
-                }
-                .get
-
+              getCommOrProduceCandidate(comms.iterator().asScala.toList)
             commOrProduceCandidate match {
               case Left(comm) =>
                 storeDatum(replays, produceRef, Some(comm))
