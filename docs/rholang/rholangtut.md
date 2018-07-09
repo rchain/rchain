@@ -328,7 +328,7 @@ will NOT match, and neither will a message of the form
 
     for( @{ 10 \/ Nil } <- @"chan2" ){ ... }
 
-(where we've switched the order of `10` and `Nil` around the `\/`). If we do send a message that matches, note that `y` will bind to the body of the `for` in the pattern. This is perfectly legal, so long as the body of the `for` being sent contains a locally free variable. In this case, since neither `10` nor `Nil` have free variables we don't have to worry, but, for example, the following send/receive will not match
+(where we've switched the order of `10` and `Nil` around the `\/`). If we do send a message that matches, note that `y` will bind to the body of the `for` in the pattern. This is perfectly legal, so long as the body of the `for` being sent, when isolated, does not contain a free variable. In this case, since neither `10` nor `Nil` have free variables we don't have to worry, but, for example, the following send/receive will not match
 
     for( @{ for( x <- @"chan2" ){ y } } <- @"chan1" ){ ... } |
     @"chan1"!( for( x <- @"chan2" ){ x!(Nil) } )
