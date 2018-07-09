@@ -126,7 +126,7 @@ client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 bonds_file = dir_path = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt' 
-container_bonds_file = f'{args.rnode_directory}/validators/bonds.txt'
+container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
 
 
 def main():

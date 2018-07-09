@@ -34,7 +34,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
-    opt[Int](default = Some(30301), descr = "Port used for gRPC API.")
+    opt[Int](default = Some(40401), descr = "Port used for gRPC API.")
 
   val grpcHost =
     opt[String](default = Some("localhost"),
@@ -66,10 +66,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
     val port =
-      opt[Int](default = Some(30300), short = 'p', descr = "Network port to use.")
+      opt[Int](default = Some(40400), short = 'p', descr = "Network port to use.")
 
     val httpPort =
-      opt[Int](default = Some(30302),
+      opt[Int](default = Some(40402),
                descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
     val metricsPort =
@@ -100,7 +100,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val bootstrap =
       opt[String](default =
-                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:30300"),
+                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400"),
                   short = 'b',
                   descr = "Bootstrap rnode address for initial seed.")
 
