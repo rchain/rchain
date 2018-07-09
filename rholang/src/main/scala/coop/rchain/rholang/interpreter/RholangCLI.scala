@@ -143,7 +143,7 @@ object RholangCLI {
   private def writeHumanReadable(fileName: String)(sortedTerm: Par): Unit = {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
     new java.io.PrintWriter(compiledFileName) {
-      write(sortedTerm.toString)
+      write(sortedTerm.toProtoString)
       close()
     }
     println(s"Compiled $fileName to $compiledFileName")

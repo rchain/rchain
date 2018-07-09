@@ -76,33 +76,6 @@ object Reduce {
         _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
       } yield ()
 
-    /*override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random): M[Unit] = {
-      // TODO: Handle the environment in the store
-      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]) =
-        res match {
-          case Some((continuation, dataList)) =>
-            if (persistent) {
-              Parallel.parSequence_[List, M, F, Unit](
-                List(dispatcher.dispatch(continuation, dataList), produce(chan, data, persistent)))
-            } else {
-              dispatcher.dispatch(continuation, dataList)
-            }
-          case None =>
-            Applicative[M].pure(())
-        }
-
-      for {
-        substData <- data.toList.traverse(
-          substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
-        res <- tupleSpace.produce(Channel(chan),
-          ListChannelWithRandom(substData, rand),
-          persist = persistent)
-        _ <- go(res)
-      } yield ()
-    }*/
-
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
       *
@@ -126,33 +99,7 @@ object Reduce {
         _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
       } yield ()
     }
-    /*
-    override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random): M[Unit] =
-      binds match {
-        case Nil => interpreterErrorM[M].raiseError(ReduceError("Error: empty binds"))
-        case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          tupleSpace
-            .consume(sources.map(q => Channel(q)).toList,
-              patterns.toList,
-              TaggedContinuation(ParBody(ParWithRandom(body, rand))),
-              persist = persistent)
-            .flatMap {
-              case Some((continuation, dataList)) =>
-                dispatcher.dispatch(continuation, dataList)
-                if (persistent) {
-                  List(dispatcher.dispatch(continuation, dataList),
-                    consume(binds, body, persistent)).parSequence
-                    .map(_ => ())
-                } else {
-                  dispatcher.dispatch(continuation, dataList)
-                }
-              case None => Applicative[M].pure(())
-            }
-      }
-     */
+
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
       *

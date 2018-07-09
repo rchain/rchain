@@ -199,22 +199,22 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
     Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-  private def checkAll: (String, String) = {
+  private def upnpIpCheck(upnp: UPnP): PartialFunction[Unit, (String, String)] =
+    Function.unlift(Unit =>
+      upnp.externalAddress.map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress)))
+
+  private def checkAll(upnp: UPnP): (String, String) = {
     val func: PartialFunction[Unit, (String, String)] =
       check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
-        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse {
-        case _ => ("failed to guess", "localhost")
-      }
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
+        upnpIpCheck(upnp: UPnP) orElse { case _ => ("failed to guess", "localhost") }
 
     func.apply(())
   }
 
   private def whoami(port: Int, upnp: UPnP): String = {
     println("INFO - flag --host was not provided, guessing your external IP address")
-
-    val (source, ip) = upnp.externalAddress
-      .map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress))
-      .getOrElse(checkAll)
+    val (source, ip) = checkAll(upnp)
     println(s"INFO - guessed $ip from source: $source")
     ip
   }

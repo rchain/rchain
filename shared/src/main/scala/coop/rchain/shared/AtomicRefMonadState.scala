@@ -9,6 +9,8 @@ import cats.implicits._
 
 import scala.annotation.tailrec
 
+//Inspired by Ref from  fs2 and cats
+//TODO: Remove once we upgrade to cats 1.0.1
 final class AtomicRefMonadState[F[_], S] private (private val ar: AtomicReference[S])(
     implicit F: Sync[F])
     extends MonadState[F, S] {
