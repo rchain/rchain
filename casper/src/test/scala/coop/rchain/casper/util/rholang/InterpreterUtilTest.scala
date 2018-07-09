@@ -284,4 +284,33 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     tsHash should be(Some(computedTsHash))
   }
+
+  "validateBlockCheckpoint" should "pass persistent produce test with causality" in {
+    val deploys =
+      Vector(
+        "new x, y in { x!!(1) | y!(0) | for (_ <- x; @0 <- y) { y!(1) } | for (_ <- x; @1 <- y) { Nil } }")
+        .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
+  }
 }
