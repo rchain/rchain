@@ -8,9 +8,9 @@ test:integration-test-for-p2p-network:
     - preloaded-ubuntu1804 
   script:
     - ./scripts/install_bnfc.sh
-    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
-    - sudo ./scripts/p2p-test-tool.py -b -p 1
+    - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 1024m
 
 test:integration-test-for-artifact-creation:
   stage: test 
@@ -18,7 +18,7 @@ test:integration-test-for-artifact-creation:
     - preloaded-ubuntu1804 
   script:
     - ./scripts/install_bnfc.sh
-    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
 
 deploy:deploy-rnode-to-dockerhub:
   stage: deploy 
@@ -26,10 +26,37 @@ deploy:deploy-rnode-to-dockerhub:
     - preloaded-ubuntu1804 
   script:
     - ./scripts/install_bnfc.sh
-    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
     - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
     - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
+  only:
+    - master
+    - dev
+
+deploy:deploy-rnode-artifacts:
+  stage: deploy 
+  tags:
+    - preloaded-ubuntu1804 
+  script:
+    - ./scripts/install_bnfc.sh
+    # build rosette 
+    - cd rosette
+    - ./build.sh
+    - cd ..
+    # build deb/rpm packages and compressed archive 
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
+    - set -eo pipefail
+    - artifacts_dir=$(mktemp -d /tmp/artifacts_out.XXXXXXXX)
+    - cp node/target/rnode_*_all.deb ${artifacts_dir}/
+    - cp node/target/rpm/RPMS/noarch/rnode-*.noarch.rpm ${artifacts_dir}/
+    - cp rosette/build.out/rosette-*.deb ${artifacts_dir}/
+    - cp node/target/universal/*.tgz ${artifacts_dir}/
+    # deploy artifacts to dispatcher 
+    - mkdir -p ~/.ssh
+    - echo "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - rsync -avrz --delete -e  "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" ${artifacts_dir}/* inbound@dispatch.pyr8.io:/home/inbound/cd/artifacts/${CI_COMMIT_REF_NAME}/
   only:
     - master
     - dev

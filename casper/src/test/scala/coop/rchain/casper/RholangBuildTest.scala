@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.Id
 import cats.implicits._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -15,7 +16,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = Genesis.fromBonds(bonds)
+  val genesis                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it

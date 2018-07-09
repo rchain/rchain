@@ -120,10 +120,9 @@ class IdAmperRestPattern : public CompoundPattern {
 class ComplexPattern : public CompoundPattern {
     STD_DECLS(ComplexPattern);
 
-   protected:
-    ComplexPattern(TupleExpr*, Tuple*, Tuple*);
 
    public:
+    ComplexPattern(TupleExpr*, Tuple*, Tuple*);
     Tuple* patvec;
     Tuple* offsetvec;
 

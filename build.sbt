@@ -8,7 +8,9 @@ lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.4",
   version := "0.1.0-SNAPSHOT",
-  resolvers += Resolver.sonatypeRepo("releases"),
+  resolvers ++= Seq(
+    Resolver.sonatypeRepo("releases"),
+    Resolver.sonatypeRepo("snapshots")),
   scalafmtOnCompile := true
 )
 
@@ -40,24 +42,17 @@ lazy val shared = (project in file("shared"))
     )
   )
 
-lazy val rholangProtoBuildTask = Def.task(
-  constructArtifacts(
-    (rholangProtoBuild/Compile/incrementalAssembly).value,
-    (baseDirectory in Compile).value,
-    (sourceManaged in Compile).value
-  )
-)
-  
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
+  .settings(rholangSettings: _*)
   .settings(
     name := "casper",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsMtl,
       monix
     ),
-    sourceGenerators in Compile += rholangProtoBuildTask.taskValue
+    rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
   .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
@@ -86,15 +81,15 @@ lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
   .settings(
     name := "crypto",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       guava,
       bouncyCastle,
+      scalacheckNoTest,
       kalium,
-      jaxb
-    ),
+      jaxb,
+      secp256k1Java,
+      scodecBits),
     fork := true,
-    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
-    javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
@@ -160,8 +155,8 @@ lazy val node = (project in file("node"))
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
         Cmd("USER", daemon),
-        ExecCmd("ENTRYPOINT", "bin/rnode"),
-        ExecCmd("CMD")
+        ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker"),
+        ExecCmd("CMD", "run")
       )
     },
     mappings in Docker ++= {
@@ -170,6 +165,7 @@ lazy val node = (project in file("node"))
          .map { case (f, p) => f -> s"$base/$p" }
      },
     /* Packaging */
+    mappings in packageZipTarball in Universal += baseDirectory.value / "macos_install.sh" -> "macos_install.sh",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")

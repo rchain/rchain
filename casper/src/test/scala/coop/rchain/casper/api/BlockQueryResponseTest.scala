@@ -5,10 +5,11 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.{BlockDag, MultiParentCasper, SafetyOracle}
+import coop.rchain.casper.{BlockDag, MultiParentCasper, MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -73,7 +74,11 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
-  implicit val casperEffect                        = testCasper[Id]
+  implicit val casperEffect = testCasper[Id]
+  implicit val logEff       = new LogStub[Id]
+  implicit val constructorEffect =
+    MultiParentCasperConstructor
+      .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   // TODO: Test tsCheckpoint:

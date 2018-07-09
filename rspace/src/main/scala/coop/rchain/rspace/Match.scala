@@ -5,8 +5,9 @@ package coop.rchain.rspace
   *
   * @tparam P A type representing patterns
   * @tparam A A type representing data
+  * @tparam R A type representing a match result
   */
-trait Match[P, A] {
+trait Match[P, A, R] {
 
-  def get(p: P, a: A): Option[A]
+  def get(p: P, a: A): Option[R]
 }

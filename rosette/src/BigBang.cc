@@ -54,6 +54,7 @@
 #include "ModuleInit.h"
 
 #include "Export.h"
+#include "Import.h"
 
 int access(const char*, int);
 
@@ -471,12 +472,17 @@ static RblTable* GetEnvp(char** envp) {
 }
 
 static void LoadBootFiles() {
-    Reader* reader = Reader::create(FindBootFile());
-    PROTECT(reader);
 
-    Ob* expr = INVALID;
-    while ((expr = reader->readExpr()) != RBLEOF) {
-        vm->load(expr);
+    if ('\0' != *ImportFile) {
+        readImportCode();
+    } else {
+        Reader* reader = Reader::create(FindBootFile());
+        PROTECT(reader);
+
+        Ob* expr = INVALID;
+        while ((expr = reader->readExpr()) != RBLEOF) {
+            vm->load(expr);
+        }
     }
 }
 
