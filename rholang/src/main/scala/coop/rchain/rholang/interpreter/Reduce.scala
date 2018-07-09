@@ -4,6 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
 import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.mtl.implicits._
+import cats.mtl.{FunctorTell, MonadState}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -206,7 +209,7 @@ object Reduce {
                         if (!value.writeFlag) {
                           s.raiseError(ReduceError("Trying to send on non-writeable channel."))
                         } else {
-                          Applicative[M].pure(Quote(value.body))
+                          s.pure(Quote(value.body))
                         }
                       case None => Applicative[M].pure(subChan)
                     }
@@ -260,7 +263,7 @@ object Reduce {
           case BoundVar(level) =>
             env.get(level) match {
               case Some(par) =>
-                Applicative[M].pure(par)
+                s.pure(par)
               case None =>
                 s.raiseError(ReduceError("Unbound variable: " + level + " in " + env.envMap))
             }
@@ -382,10 +385,10 @@ object Reduce {
                      if (!value.readFlag) {
                        s.raiseError(ReduceError("Trying to read from non-readable channel."))
                      } else {
-                       Applicative[M].pure(Quote(value.body))
+                       s.pure(Quote(value.body))
                      }
                    case None =>
-                     Applicative[M].pure(subst)
+                     s.pure(subst)
                  }
       } yield unbndl
 

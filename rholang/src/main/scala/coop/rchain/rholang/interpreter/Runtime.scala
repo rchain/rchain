@@ -2,6 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Functor
+import cats.effect.Sync
+import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString

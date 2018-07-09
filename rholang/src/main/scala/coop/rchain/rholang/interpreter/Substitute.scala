@@ -10,6 +10,8 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.models.rholang.sort._
+import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort._
 import coop.rchain.rholang.interpreter.accounting.CostAccountingAlg
