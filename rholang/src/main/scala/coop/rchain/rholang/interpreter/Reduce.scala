@@ -2,33 +2,27 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.FunctorTell
 import cats.{Applicative, FlatMap, Parallel, Eval => _}
-import cats.mtl.implicits._
-import cats.mtl.{FunctorTell, MonadState}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.ListChannelWithRandom
-import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort.ordering._
 import coop.rchain.models.serialization.implicits._
-import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
+import coop.rchain.models.{ListChannelWithRandom, Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
-import coop.rchain.rspace.pure.PureRSpace
+import monix.eval.Coeval
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
-import monix.eval.Coeval
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -37,13 +31,6 @@ import monix.eval.Coeval
   * @tparam M The kind of Monad used for evaluation.
   */
 trait Reduce[M[_]] {
-
-  def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(implicit env: Env[Par],
-                                                                rand: Blake2b512Random): M[Unit]
-
-  def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random): M[Unit]
 
   def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
 
@@ -59,20 +46,11 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
-  class DebruijnInterpreter[M[_], F[_]](
-      tupleSpace: PureRSpace[M,
-                             Channel,
-                             BindPattern,
-                             ListChannelWithRandom,
-                             ListChannelWithRandom,
-                             TaggedContinuation],
-      dispatcher: => Dispatch[M, ListChannelWithRandom, TaggedContinuation])(
+  class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M])(
       implicit parallel: cats.Parallel[M, F],
       s: Sync[M],
       fTell: FunctorTell[M, Throwable])
       extends Reduce[M] {
-
-    type Cont[Data, Body] = (Body, Env[Data])
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -83,32 +61,13 @@ object Reduce {
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
-    override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par],
-        rand: Blake2b512Random): M[Unit] = {
-      // TODO: Handle the environment in the store
-      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]) =
-        res match {
-          case Some((continuation, dataList)) =>
-            if (persistent) {
-              Parallel.parSequence_[List, M, F, Unit](
-                List(dispatcher.dispatch(continuation, dataList), produce(chan, data, persistent)))
-            } else {
-              dispatcher.dispatch(continuation, dataList)
-            }
-          case None =>
-            s.unit
-        }
-
+    private def produce(chan: Quote,
+                        data: Seq[Channel],
+                        persistent: Boolean,
+                        rand: Blake2b512Random): M[Unit] =
       for {
-        substData <- data.toList.traverse(
-                      substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
-        res <- tupleSpace.produce(Channel(chan),
-                                  ListChannelWithRandom(substData, rand),
-                                  persist = persistent)
-        _ <- go(res)
+        _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
       } yield ()
-    }
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -121,31 +80,16 @@ object Reduce {
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
       */
-    override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par],
-        rand: Blake2b512Random): M[Unit] =
-      binds match {
-        case Nil => s.raiseError(ReduceError("Error: empty binds"))
-        case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          tupleSpace
-            .consume(sources.map(q => Channel(q)).toList,
-                     patterns.toList,
-                     TaggedContinuation(ParBody(ParWithRandom(body, rand))),
-                     persist = persistent)
-            .flatMap {
-              case Some((continuation, dataList)) =>
-                dispatcher.dispatch(continuation, dataList)
-                if (persistent) {
-                  List(dispatcher.dispatch(continuation, dataList),
-                       consume(binds, body, persistent)).parSequence
-                    .map(_ => ())
-                } else {
-                  dispatcher.dispatch(continuation, dataList)
-                }
-              case None => Applicative[M].pure(())
-            }
-      }
+    private def consume(binds: Seq[(BindPattern, Quote)],
+                        body: Par,
+                        persistent: Boolean,
+                        rand: Blake2b512Random): M[Unit] = {
+      val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
+      val srcs                                              = sources.map(q => Channel(q)).toList
+      for {
+        _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+      } yield ()
+    }
 
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
@@ -241,22 +185,27 @@ object Reduce {
       * @param env An execution context
       * @return
       */
-    def eval(send: Send)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
+    private def eval(send: Send)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
       for {
-        quote <- eval(send.chan)
-        data  <- send.data.toList.traverse(x => evalExpr(x))
-
-        subChan <- substituteQuote[M].substitute(quote)(0, env)
+        quote   <- eval(send.chan)
+        subChan <- substituteQuote[M].substitute(quote)(depth = 0, env)
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
                           s.raiseError(ReduceError("Trying to send on non-writeable channel."))
                         } else {
-                          s.pure(Quote(value.body.get))
+                          s.pure(Quote(value.body))
                         }
                       case None => Applicative[M].pure(subChan)
                     }
-        _ <- produce(unbundled, data, send.persistent)
+
+        data <- send.data.toList.traverse(x => evalExpr(x))
+        substData <- data.traverse(
+                      substitutePar[M]
+                        .substitute(_)(depth = 0, env)
+                        .map(p => Channel(Quote(p))))
+
+        _ <- produce(unbundled, substData, send.persistent, rand)
       } yield ()
 
     def evalExplicit(receive: Receive)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
@@ -271,10 +220,9 @@ object Reduce {
                                         substituteChannel[M].substitute(pattern)(1, env))
                     } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substituteNoSort(receive.body.get)(
-                      0,
-                      env.shift(receive.bindCount))
-        _ <- consume(binds, substBody, receive.persistent)
+        substBody <- substitutePar[M].substituteNoSort(receive.body)(0,
+                                                                     env.shift(receive.bindCount))
+        _ <- consume(binds, substBody, receive.persistent, rand)
       } yield ()
 
     /**
