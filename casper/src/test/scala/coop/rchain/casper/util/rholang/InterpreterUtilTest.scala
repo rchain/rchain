@@ -304,7 +304,14 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
               for (_ <- x; @4 <- y) { y!(5) } |
               for (_ <- x; @5 <- y) { y!(6) } |
               for (_ <- x; @6 <- y) { y!(7) } |
-              for (_ <- x; @7 <- y) { Nil }
+              for (_ <- x; @7 <- y) { y!(8) } |
+              for (_ <- x; @8 <- y) { y!(9) } |
+              for (_ <- x; @9 <- y) { y!(10) } |
+              for (_ <- x; @10 <- y) { y!(11) } |
+              for (_ <- x; @11 <- y) { y!(12) } |
+              for (_ <- x; @12 <- y) { y!(13) } |
+              for (_ <- x; @13 <- y) { y!(14) } |
+              for (_ <- x; @14 <- y) { Nil }
              }
           """)
         .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
