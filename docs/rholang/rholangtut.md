@@ -316,11 +316,11 @@ Since both `for` and `match` use patterns, it is conceivable that we can get a p
 
     for( @{ for( @{ Nil \/ 10 } <- @"chan2" ){ y } } <- @"chan1" ){ ... }
 
-Here `x` is a pattern within a pattern. In order for this to receive a message over `@"chan1"` and execute its body, the message has to have the form
+Here `@{ Nil \/ 10 }` is a pattern within a pattern. In order for this to receive a message over `@"chan1"` and execute its body, the message has to have the form
 
     for( @{ Nil \/ 10 } <- @"chan2" ){ ... }
 
-When Rholang looks to see if the message matches the pattern, any instance of a pattern within a pattern must match character-by-character, up to alpha equivalence. Thus, for example, while it might make intuitive sense that this would match because of the `\/`, a message such as 
+When Rholang looks to see if the message matches the pattern, any instance of a pattern within a pattern must match character-by-character (up to a change in variable names). Thus, for example, while it might make intuitive sense that this would match because of the `\/`, a message such as 
 
     for( @10 <- @"chan2" ){ ... }
 
@@ -814,7 +814,7 @@ Before using a channel, Rholang first evaluates expressions and accounts for the
 
 will never receive any message on `@"chan"` since if we send anything, such as `10 + 5`, over `@"chan"`, the arithmetic expression gets evaluated and the name `@15` is sent.
 
-Finally, channels also respect alpha equivalence, so the following channels are equivalent:
+Finally, channels also respect a change in variable name (alpha equivalence), so the following channels are equivalent:
 
     @{ for( x <- @Nil ){ Nil } }
     @{ for( z <- @Nil ){ Nil } }
