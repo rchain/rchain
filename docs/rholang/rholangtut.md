@@ -117,7 +117,7 @@ In order to have one message follow after another is known to have been received
 
 ## Pattern matching and channels as databases
 
-There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`:
+There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables and logical connectives, which appear to the left of an arrow in a `for` or a `match`:
 
     for (<name pattern> <- <channel>) { <process> }
     match <process> { <process pattern> => <process> }
@@ -142,6 +142,38 @@ Process-valued variables are bound in process positions in patterns.  Process po
     match R { [P, S, ...T] => Q }
     match R { contract foo(x) = { P } => Q }
     match R { contract foo(@S) = { x!(P + S) } => Q }
+
+In addition to free variables we have the logical connectives "AND", written `/\`, and "OR", written `\/`. In order to match with a list of patterns, separated by `/\`, a process or name must match each pattern in the list. For example, to send a message over `@"chan"` that be received by
+
+    for(@{ @Nil!(x) /\ @y!(Nil) } <- @"chan"){ ... }
+
+the process we send must necessarily be of the form `@Nil!(Nil)`. The first pattern requires that the process be something of the form `@Nil!(x)`, where `x` is a process variable, and the second pattern requires that `x` be `Nil`. If we run
+
+    @"chan"!(@Nil!(Nil))
+
+in parallel with the `for` above, `x` and `y` will both bind to `Nil`. In contrast, in order to match a list of patterns, separated by `\/`, a process or name need only match ONE pattern in the list. Because we cannot depend on a specific pattern matching, we cannot use patterns separated by `\/` to bind any variables. For instance, replacing the `/\` with an `\/` in the `for` above yields an incorrect Rholang program
+
+    for(@{ @Nil!(x) /\ @y!(Nil) } <- @"chan"){ ... }
+
+which is incorrect because `x` and `y` are both free. Furthermore, we cannot capture `x` or `y` because we cannot use a binder to capture variables inside a pattern. We will cover this more later on, when we talk about patterns within patterns.
+
+We can use both `/\` and `\/` in any given pattern, such as in: 
+
+    for(@{ 10 \/ 20 /\ x } <- @"chan"){ ... }
+
+This program is not quite correct. In Rholang, precedence rules for logical connectives are standard, meaning that `/\` binds tighter than `\/`, so the `for` above is equivalent to
+
+    for(@{ 10 \/ { 20 /\ x } } <- @"chan"){ ... }
+
+which has the free variable `x`. We can make this into a correct Rholang program by shifting parentheses
+
+    for(@{ { 10 \/ 20 } /\ x } <- @"chan"){ ... }
+
+Finally, logical connectives need not only separate process patterns, but can be used in any component of a pattern. For example, we can write
+
+    for(@{Nil!(1 \/ 2) <- @"chan"){ ... }
+
+which will accept either `@Nil!(1)` or `@Nil!(2)` over the channel `@"chan"`. The same precedence rules from before apply.
 
 ### Patterns in a `for`
 
@@ -271,6 +303,41 @@ This example shows how to implement a fold over a list, then uses it to compute 
 
 42) Invoke the main contract on an example list.
 
+
+## Patterns Within Patterns
+
+Since both `for` and `match` use patterns, it is conceivable that we can get a pattern with a pattern, for example:
+
+    for( @{ for( @{ Nil \/ 10 } <- @"chan2" ){ y } } <- @"chan1" ){ ... }
+
+Here `x` is a pattern within a pattern. In order for this to receive a message over `@"chan1"` and execute its body, the message has to have the form
+
+    for( @{ Nil \/ 10 } <- @"chan2" ){ ... }
+
+When Rholang looks to see if the message matches the pattern, any instance of a pattern within a pattern must match character-by-character, up to alpha equivalence. Thus, for example, while it might make intuitive sense that this would match because of the `\/`, a message such as 
+
+    for( @10 <- @"chan2" ){ ... }
+
+will NOT match, and neither will a message of the form
+
+    for( @{ 10 \/ Nil } <- @"chan2" ){ ... }
+
+(where we've switched the order of `10` and `Nil` around the `\/`). If we do send a message that matches, note that `y` will bind to the body of the `for` in the pattern. This is perfectly legal, so long as the body of the `for` being sent contains a locally free variable. In this case, since neither `10` nor `Nil` have free variables we don't have to worry, but, for example, the following send/receive will not match
+
+    for( @{ for( x <- @"chan2" ){ y } } <- @"chan1" ){ ... } |
+    @"chan1"!( for( x <- @"chan2" ){ x!(Nil) } )
+
+because `y` would have to bind to `x!(Nil)`, in which `x` is free.
+
+
+## Patterns With Wildcards
+
+As we just mentioned, in matching we can never bind a variable to something which, when isolated, contains a free variable. Since we use wildcards to throw bits of code away, this rule does not apply to wildcards. For instance, if we change the example from last section by substituting `_` for `y`, the send/receive will match despite the fact that `x!(Nil)` has a free variable.
+
+    for( @{ for( x <- @"chan2" ){ _ } } <- @"chan1" ){ ... } |
+    @"chan1"!( for( x <- @"chan2" ){ x!(Nil) } )
+
+The difference here is that we cannot use the `_` in the body of our `for`, whereas before we could use `y`.
 
 ## Mutable state
 
@@ -721,6 +788,30 @@ Suppose that Bob is willing to run some code for Alice; he has a contract that s
     for (p <- x) { *p }
 
 This is just like a web browser being willing to run the JavaScript code it gets from a website.  If Alice sends Bob an attenuating forwarder, Bob can use the pattern matching productions in Rholang to take apart the process and get access to the underlying resource.  Instead, like in the e-commerce example, Alice should only send code that forwards requests to her own processes and do the attenuation there.
+
+## Name Equivalence
+
+It is possible to write one single name in several different ways. For example, the two following channels are equivalent:
+
+    @{10 + 2}
+    @{5 + 7}
+
+Any message sent over these channels can be received by listening on the channel `@12`. There are other instances in which a name can be written in two different ways. The guiding principle for this is that if `P` and `Q` are two equivalent processes, then `@P` and `@Q` are equivalent names. In particular, all of the following channels are equivalent:
+
+    @{ P | Q }
+    @{ Q | P }
+    @{ Q | P | Nil }
+
+Before using a channel, Rholang first evaluates expressions and accounts for these `|` rules at the top level--but only at the top level. This means that if an arithmetic expression forms part of a pattern within a pattern, it is left untouched. Because of this,
+
+    for( @{ x + 5 } <- @"chan" ){ ... }
+
+will never receive any message on `@"chan"` since if we send anything, such as `10 + 5`, over `@"chan"`, the arithmetic expression gets evaluated and the name `@15` is sent.
+
+Finally, channels also respect alpha equivalence, so the following channels are equivalent:
+
+    @{ for( x <- @Nil ){ Nil } }
+    @{ for( z <- @Nil ){ Nil } }
 
 ## Conclusion
 
