@@ -98,7 +98,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
         }
 
         @tailrec
-        def getCommOrDataCandidates(comms: List[COMM]): Either[COMM, Seq[DataCandidate[C, R]]] =
+        def getCommOrDataCandidates(comms: Seq[COMM]): Either[COMM, Seq[DataCandidate[C, R]]] =
           comms match {
             case Nil =>
               val msg = "List comms must not be empty"
