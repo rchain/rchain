@@ -17,8 +17,7 @@ services:
     volumes: 
       - rnode_data_storage:/var/lib/rnode
     ports:
-      - 9095:9095
-      - 30304:30304
+      - 30300:30330
     networks:
       - rchain 
   prometheus-pushgateway:
