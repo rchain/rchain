@@ -202,6 +202,7 @@ object Reduce {
       for {
         quote   <- eval(send.chan)
         subChan <- substituteQuote[M].substitute(quote)(0, env)
+        _       <- costAccountingAlg.charge(subChan.serializedSize)
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -213,9 +214,12 @@ object Reduce {
                     }
 
         data <- send.data.toList.traverse(x => evalExpr(x))
-        substData <- data.traverse(
-                      substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
-
+        substData <- data.traverse { p =>
+                      for {
+                        substPar <- substitutePar[M].substitute(p)(0, env)
+                        _        <- costAccountingAlg.charge(substPar.serializedSize)
+                      } yield Channel(Quote(substPar))
+                    }
         _ <- produce(unbundled, substData, send.persistent, rand)
         _ <- costAccountingAlg.charge(SEND_EVAL_COST)
       } yield ()
@@ -229,11 +233,17 @@ object Reduce {
                   .traverse(rb =>
                     for {
                       q <- unbundleReceive(rb)
-                      substPatterns <- rb.patterns.toList.traverse(pattern =>
-                                        substituteChannel[M].substitute(pattern)(1, env))
+                      substPatterns <- rb.patterns.toList.traverse { pattern =>
+                                        for {
+                                          substPattern <- substituteChannel[M]
+                                                           .substitute(pattern)(1, env)
+                                          _ <- costAccountingAlg.charge(substPattern.serializedSize)
+                                        } yield substPattern
+                                      }
                     } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
         substBody <- substitutePar[M].substitute(receive.body)(0, env.shift(receive.bindCount))
+        _         <- costAccountingAlg.charge(substBody.serializedSize)
         _         <- consume(binds, substBody, receive.persistent, rand)
         _         <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
       } yield ()
@@ -320,19 +330,19 @@ object Reduce {
           cases match {
             case Nil => Applicative[M].pure(Right(()))
             case singleCase +: caseRem =>
-              substitutePar[M].substitute(singleCase.pattern)(1, env).flatMap { pattern =>
-                val matchResult =
-                  SpatialMatcher
-                    .spatialMatch(target, pattern)
-                    .runS(SpatialMatcher.emptyMap)
-                matchResult match {
-                  case None => Applicative[M].pure(Left((target, caseRem)))
-                  case Some(freeMap) => {
-                    val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                    eval(singleCase.source)(newEnv, implicitly).map(Right(_))
-                  }
-                }
-              }
+              for {
+                pattern <- substitutePar[M].substitute(singleCase.pattern)(1, env)
+                _       <- costAccountingAlg.charge(pattern.serializedSize)
+                matchResult = SpatialMatcher
+                  .spatialMatch(target, pattern)
+                  .runS(SpatialMatcher.emptyMap)
+                res <- matchResult match {
+                        case None => Applicative[M].pure(Left((target, caseRem)))
+                        case Some(freeMap) =>
+                          val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
+                          eval(singleCase.source)(newEnv, implicitly).map(Right(_))
+                      }
+              } yield res
           }
         }
         FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
@@ -342,6 +352,7 @@ object Reduce {
         evaledTarget <- evalExpr(mat.target)
         // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
         substTarget <- substitutePar[M].substitute(evaledTarget)(0, env)
+        _           <- costAccountingAlg.charge(substTarget.serializedSize)
         _           <- firstMatch(substTarget, mat.cases)
         _           <- costAccountingAlg.charge(MATCH_EVAL_COST)
       } yield ()
@@ -371,6 +382,7 @@ object Reduce {
       for {
         quote <- eval(rb.source)
         subst <- substituteQuote[M].substitute(quote)(0, env)
+        _     <- costAccountingAlg.charge(subst.serializedSize)
         // Check if we try to read from bundled channel
         unbndl <- subst.quote.get.singleBundle() match {
                    case Some(value) =>
@@ -491,7 +503,9 @@ object Reduce {
             v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
             sv1 <- substitutePar[M].substitute(v1)(0, env)
+            _   <- costAccountingAlg.charge(sv1.serializedSize)
             sv2 <- substitutePar[M].substitute(v2)(0, env)
+            _   <- costAccountingAlg.charge(sv2.serializedSize)
             _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
@@ -499,7 +513,9 @@ object Reduce {
             v1  <- evalExpr(p1)
             v2  <- evalExpr(p2)
             sv1 <- substitutePar[M].substitute(v1)(0, env)
+            _   <- costAccountingAlg.charge(sv1.serializedSize)
             sv2 <- substitutePar[M].substitute(v2)(0, env)
+            _   <- costAccountingAlg.charge(sv2.serializedSize)
             _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
