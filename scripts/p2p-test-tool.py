@@ -261,7 +261,8 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        #cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy ${i}; done'
         r = container.exec_run(['sh', '-c', cmd])
         for line in r.output.decode('utf-8').splitlines():
             print(line)
@@ -549,7 +550,6 @@ def create_peer_nodes():
             mem_limit=args.memory, \
             network=args.network, \
             volumes=[
-                f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
             command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
