@@ -310,40 +310,12 @@ This example shows how to implement a fold over a list, then uses it to compute 
 42) Invoke the main contract on an example list.
 
 
-## Patterns Within Patterns
-
-Since both `for` and `match` use patterns, it is conceivable that we can get a pattern with a pattern, for example:
-
-    for( @{ for( @{ Nil \/ 10 } <- @"chan2" ){ y } } <- @"chan1" ){ ... }
-
-Here `@{ Nil \/ 10 }` is a pattern within a pattern. In order for this to receive a message over `@"chan1"` and execute its body, the message has to have the form
-
-    for( @{ Nil \/ 10 } <- @"chan2" ){ ... }
-
-When Rholang looks to see if the message matches the pattern, any instance of a pattern within a pattern must match character-by-character (up to a change in variable names). Thus, for example, while it might make intuitive sense that this would match because of the `\/`, a message such as 
-
-    for( @10 <- @"chan2" ){ ... }
-
-will NOT match, and neither will a message of the form
-
-    for( @{ 10 \/ Nil } <- @"chan2" ){ ... }
-
-(where we've switched the order of `10` and `Nil` around the `\/`). If we do send a message that matches, note that `y` will bind to the body of the `for` in the pattern. This is perfectly legal, so long as the body of the `for` being sent, when isolated, does not contain a free variable. In this case, since neither `10` nor `Nil` have free variables we don't have to worry, but, for example, the following send/receive will not match
-
-    for( @{ for( x <- @"chan2" ){ y } } <- @"chan1" ){ ... } |
-    @"chan1"!( for( x <- @"chan2" ){ x!(Nil) } )
-
-because `y` would have to bind to `x!(Nil)`, in which `x` is free.
-
-
 ## Patterns With Wildcards
 
-As we just mentioned, in matching we can never bind a variable to something which, when isolated, contains a free variable. Since we use wildcards to throw bits of code away, this rule does not apply to wildcards. For instance, if we change the example from last section by substituting `_` for `y`, the send/receive will match despite the fact that `x!(Nil)` has a free variable.
+We can also include wildcards in patterns. The intuition for these is that they throw away whatever they match to in the pattern. This can be useful, for example, to synchronize processes by listening on a channel `ack` for an acknowledgment that one process has completed and that the body of this `for` is supposed to execute.
 
-    for( @{ for( x <- @"chan2" ){ _ } } <- @"chan1" ){ ... } |
-    @"chan1"!( for( x <- @"chan2" ){ x!(Nil) } )
+    for( _ <- ack ){ ... }
 
-The difference here is that we cannot use the `_` in the body of our `for`, whereas before we could use `y`.
 
 ## Mutable state
 
