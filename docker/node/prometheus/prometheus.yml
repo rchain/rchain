@@ -32,4 +32,4 @@ scrape_configs:
     scrape_interval: 10s
     scrape_timeout: 5s
     static_configs:
-      - targets: ['rchain-node:9095']
+      - targets: ['rchain-node:40403']

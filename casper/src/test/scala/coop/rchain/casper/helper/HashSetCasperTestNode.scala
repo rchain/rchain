@@ -25,6 +25,9 @@ import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
+import com.google.protobuf.ByteString
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
 
 import scala.collection.mutable
@@ -51,8 +54,14 @@ class HashSetCasperTestNode(name: String,
 
   val activeRuntime = Runtime.create(storageDirectory, storageSize)
   val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+
+  val initStateHash           = ByteString.copyFrom(activeRuntime.space.createCheckpoint().root.bytes.toArray)
+  val updatedGenesisPostState = genesis.body.get.postState.get.withTuplespace(initStateHash)
+  val updatedGenesisBody      = genesis.body.get.withPostState(updatedGenesisPostState)
+  val updatedGenesis          = genesis.withBody(updatedGenesisBody)
+
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), updatedGenesis)
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](ApprovedBlock(block = Some(genesis)), casperEff)
 
@@ -68,7 +77,7 @@ object HashSetCasperTestNode {
   def standalone(genesis: BlockMessage, sk: Array[Byte])(
       implicit scheduler: Scheduler): HashSetCasperTestNode = {
     val name     = "standalone"
-    val identity = peerNode(name, 30300)
+    val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
 
@@ -79,7 +88,7 @@ object HashSetCasperTestNode {
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
     val n         = sks.length
     val names     = (1 to n).map(i => s"node-$i")
-    val peers     = names.map(peerNode(_, 30300))
+    val peers     = names.map(peerNode(_, 40400))
     val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
 
     val nodes =
