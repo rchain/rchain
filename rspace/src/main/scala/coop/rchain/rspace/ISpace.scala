@@ -189,8 +189,11 @@ trait ISpace[C, P, A, R, K] {
       store.trieStore.validateAndPutRoot(txn, branch, root)
       val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, root)
       store.clear(txn)
+      restoreInstalls(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }
+
+  protected[this] def restoreInstalls(txn: store.T): Unit = ()
 
   /** Closes
     */
