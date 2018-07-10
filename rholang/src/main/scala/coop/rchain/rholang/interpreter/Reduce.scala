@@ -59,8 +59,6 @@ object Reduce {
       fTell: FunctorTell[M, Throwable])
       extends Reduce[M] {
 
-    implicit val costAlg: CostAccountingAlg[M] = costAccountingAlg
-
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
       *
@@ -203,7 +201,7 @@ object Reduce {
     private def eval(send: Send)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
       for {
         quote   <- eval(send.chan)
-        subChan <- substituteQuote[M].substitute(quote, depth = 0)
+        subChan <- substituteQuote[M].substitute(quote)(0, env)
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -216,9 +214,7 @@ object Reduce {
 
         data <- send.data.toList.traverse(x => evalExpr(x))
         substData <- data.traverse(
-                      substitutePar[M]
-                        .substitute(_, depth = 0)
-                        .map(p => Channel(Quote(p))))
+                      substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
 
         _ <- produce(unbundled, substData, send.persistent, rand)
         _ <- costAccountingAlg.charge(SEND_EVAL_COST)
@@ -233,17 +229,13 @@ object Reduce {
                   .traverse(rb =>
                     for {
                       q <- unbundleReceive(rb)
-                      substPatterns <- rb.patterns.toList.traverse(
-                                        pattern =>
-                                          substituteChannel[M]
-                                            .substitute(pattern, depth = 1))
+                      substPatterns <- rb.patterns.toList.traverse(pattern =>
+                                        substituteChannel[M].substitute(pattern)(1, env))
                     } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substituteNoSort(receive.body, depth = 0)(
-                      env.shift(receive.bindCount),
-                      costAccountingAlg)
-        _ <- consume(binds, substBody, receive.persistent, rand)
-        _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
+        substBody <- substitutePar[M].substitute(receive.body)(0, env.shift(receive.bindCount))
+        _         <- consume(binds, substBody, receive.persistent, rand)
+        _         <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
       } yield ()
 
     /**
@@ -328,7 +320,7 @@ object Reduce {
           cases match {
             case Nil => Applicative[M].pure(Right(()))
             case singleCase +: caseRem =>
-              substitutePar[M].substitute(singleCase.pattern, depth = 1).flatMap { pattern =>
+              substitutePar[M].substitute(singleCase.pattern)(1, env).flatMap { pattern =>
                 val matchResult =
                   SpatialMatcher
                     .spatialMatch(target, pattern)
@@ -349,7 +341,7 @@ object Reduce {
       for {
         evaledTarget <- evalExpr(mat.target)
         // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
-        substTarget <- substitutePar[M].substitute(evaledTarget, depth = 0)
+        substTarget <- substitutePar[M].substitute(evaledTarget)(0, env)
         _           <- firstMatch(substTarget, mat.cases)
         _           <- costAccountingAlg.charge(MATCH_EVAL_COST)
       } yield ()
@@ -378,7 +370,7 @@ object Reduce {
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =
       for {
         quote <- eval(rb.source)
-        subst <- substituteQuote[M].substitute(quote, depth = 0)
+        subst <- substituteQuote[M].substitute(quote)(0, env)
         // Check if we try to read from bundled channel
         unbndl <- subst.quote.get.singleBundle() match {
                    case Some(value) =>
@@ -498,17 +490,17 @@ object Reduce {
             v1 <- evalExpr(p1)
             v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substitutePar[M].substitute(v1, depth = 0)
-            sv2 <- substitutePar[M].substitute(v2, depth = 0)
-            _   <- costAccountingAlg.charge(equivalenceCheckCost(sv1, sv2))
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
+            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1)
             v2  <- evalExpr(p2)
-            sv1 <- substitutePar[M].substitute(v1, depth = 0)
-            sv2 <- substitutePar[M].substitute(v2, depth = 0)
-            _   <- costAccountingAlg.charge(equivalenceCheckCost(sv1, sv2))
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
+            _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
