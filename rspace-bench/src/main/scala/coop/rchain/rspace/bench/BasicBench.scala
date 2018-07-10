@@ -42,7 +42,7 @@ object BasicBench {
   class BenchState {
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
-    
+
     val context: Context[String, Pattern, String, StringsCaptor] =
       Context.create(dbDir, 1024 * 1024 * 1024)
 
@@ -53,8 +53,7 @@ object BasicBench {
       new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
 
     @TearDown
-    def tearDown() = {
+    def tearDown() =
       context.close()
-    }
   }
 }
