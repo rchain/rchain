@@ -28,6 +28,30 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
 
+### Name Equivalence
+
+It is possible to write one single name in several different ways. For example, the two following channels are equivalent:
+
+    @{10 + 2}
+    @{5 + 7}
+
+Any message sent over these channels can be received by listening on the channel `@12`. There are other instances in which a name can be written in two different ways. The guiding principle for this is that if `P` and `Q` are two equivalent processes, then `@P` and `@Q` are equivalent names. In particular, all of the following channels are equivalent:
+
+    @{ P | Q }
+    @{ Q | P }
+    @{ Q | P | Nil }
+
+Before using a channel, Rholang first evaluates expressions and accounts for these `|` rules at the top level--but only at the top level. This means that if an arithmetic expression forms part of a pattern within a pattern, it is left untouched. Because of this,
+
+    for( @{ x + 5 } <- @"chan" ){ ... }
+
+will never receive any message on `@"chan"` since if we send anything, such as `10 + 5`, over `@"chan"`, the arithmetic expression gets evaluated and the name `@15` is sent.
+
+Finally, channels also respect a change in variable name (alpha equivalence), so the following channels are equivalent:
+
+    @{ for( x <- @Nil ){ Nil } }
+    @{ for( z <- @Nil ){ Nil } }
+
 ## Replicated receive
 
     1 new HelloWorld in {
@@ -310,7 +334,7 @@ This example shows how to implement a fold over a list, then uses it to compute 
 42) Invoke the main contract on an example list.
 
 
-## Patterns With Wildcards
+### Patterns With Wildcards
 
 We can also include wildcards in patterns. The intuition for these is that they throw away whatever they match to in the pattern. This can be useful, for example, to synchronize processes by listening on a channel `ack` for an acknowledgment that one process has completed and that the body of this `for` is supposed to execute.
 
@@ -766,30 +790,6 @@ Suppose that Bob is willing to run some code for Alice; he has a contract that s
     for (p <- x) { *p }
 
 This is just like a web browser being willing to run the JavaScript code it gets from a website.  If Alice sends Bob an attenuating forwarder, Bob can use the pattern matching productions in Rholang to take apart the process and get access to the underlying resource.  Instead, like in the e-commerce example, Alice should only send code that forwards requests to her own processes and do the attenuation there.
-
-## Name Equivalence
-
-It is possible to write one single name in several different ways. For example, the two following channels are equivalent:
-
-    @{10 + 2}
-    @{5 + 7}
-
-Any message sent over these channels can be received by listening on the channel `@12`. There are other instances in which a name can be written in two different ways. The guiding principle for this is that if `P` and `Q` are two equivalent processes, then `@P` and `@Q` are equivalent names. In particular, all of the following channels are equivalent:
-
-    @{ P | Q }
-    @{ Q | P }
-    @{ Q | P | Nil }
-
-Before using a channel, Rholang first evaluates expressions and accounts for these `|` rules at the top level--but only at the top level. This means that if an arithmetic expression forms part of a pattern within a pattern, it is left untouched. Because of this,
-
-    for( @{ x + 5 } <- @"chan" ){ ... }
-
-will never receive any message on `@"chan"` since if we send anything, such as `10 + 5`, over `@"chan"`, the arithmetic expression gets evaluated and the name `@15` is sent.
-
-Finally, channels also respect a change in variable name (alpha equivalence), so the following channels are equivalent:
-
-    @{ for( x <- @Nil ){ Nil } }
-    @{ for( z <- @Nil ){ Nil } }
 
 ## Conclusion
 
