@@ -279,7 +279,7 @@ def test_propose(container):
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
-                if "WARN" in line and "CASPER" in line:
+                if "WARN" in line and "CASPER" in line and not "wallets" in line:
                     print(f"{container.name}: {line}")
                     retval = 1
                 if "ERROR" in line and "CASPER" in line:
