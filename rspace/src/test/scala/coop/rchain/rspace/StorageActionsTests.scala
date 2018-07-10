@@ -1084,7 +1084,7 @@ class LMDBStoreActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll {
 
-  "install" should "not allow installing after a produce operation" in withTestSpace { space =>
+  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
     val channel  = "ch1"
     val datum    = "datum1"
     val key      = List(channel)
