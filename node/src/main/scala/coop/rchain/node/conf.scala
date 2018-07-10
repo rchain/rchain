@@ -141,10 +141,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       key.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
-    def fetchHost(upnp: UPnP): String =
+    def fetchHost(externalAddress: Option[String]): String =
       host.toOption match {
         case Some(host) => host
-        case None       => whoami(port(), upnp)
+        case None       => whoami(port(), externalAddress)
       }
   }
   addSubcommand(run)
@@ -201,22 +201,23 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
     Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
-  private def upnpIpCheck(upnp: UPnP): PartialFunction[Unit, (String, String)] =
+  private def upnpIpCheck(
+      externalAddress: Option[String]): PartialFunction[Unit, (String, String)] =
     Function.unlift(Unit =>
-      upnp.externalAddress.map(addy => ("uPnP", InetAddress.getByName(addy).getHostAddress)))
+      externalAddress.map(addy => ("UPnP", InetAddress.getByName(addy).getHostAddress)))
 
-  private def checkAll(upnp: UPnP): (String, String) = {
+  private def checkAll(externalAddress: Option[String]): (String, String) = {
     val func: PartialFunction[Unit, (String, String)] =
       check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
         check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
-        upnpIpCheck(upnp: UPnP) orElse { case _ => ("failed to guess", "localhost") }
+        upnpIpCheck(externalAddress) orElse { case _ => ("failed to guess", "localhost") }
 
     func.apply(())
   }
 
-  private def whoami(port: Int, upnp: UPnP): String = {
+  private def whoami(port: Int, externalAddress: Option[String]): String = {
     println("INFO - flag --host was not provided, guessing your external IP address")
-    val (source, ip) = checkAll(upnp)
+    val (source, ip) = checkAll(externalAddress)
     println(s"INFO - guessed $ip from source: $source")
     ip
   }
