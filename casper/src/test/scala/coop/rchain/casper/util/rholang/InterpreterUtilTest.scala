@@ -338,4 +338,93 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     tsHash should be(Some(computedTsHash))
   }
+
+  "validateBlockCheckpoint" should "pass stdout tests" in {
+    val deploys =
+      Vector(
+        """
+               |@"stdout"!(Set(1,2,3).contains(1)) |
+               |// prints false
+               |@"stdout"!(Set(1,2,3).contains(5)) |
+               |// prints Set(1,2,3,4)
+               |@"stdout"!(Set(1,2,3).add(4)) |
+               |// prints Set(1,2,3)
+               |@"stdout"!(Set(1,2,3).add(1)) |
+               |// prints Set(1, 2, 3, 4, 5, 6)
+               |@"stdout"!(Set(1,2,3).union(Set(4,5,6))) |
+               |// prints Set(1, 2, 3)
+               |@"stdout"!(Set(1,2,3).union(Set(1))) |
+               |// prints Set(2, 3)
+               |@"stdout"!(Set(1,2,3).diff(Set(1))) |
+               |// prints Set(1,2,3)
+               |@"stdout"!(Set(1,2,3).diff(Set(4))) |
+               |// prints false
+               |new x in {
+               |    @"stdout"!(Set(x!(7)).contains(x!(10)))
+               |} |
+               |// prints @{Set(@{_some_unforgeable_name}!(7), for( @{x0} <- @{_same_unforgeable_name} ) { @{"stdout"}!(x0) })}
+               |new x in {
+               |    @"stdout"!(Set(x!(7)).add(for (@X <- x) { @"stdout"!(X) }))
+               |} |
+               |// prints true
+               |new x in { x!(10) | for(X <- x) { @"stdout"!(Set(X!(7)).add(*X).contains(10)) }}
+          """.stripMargin,
+        """
+          |new orExample in {
+          |  contract orExample(@{record /\ {{@"name"!(_) | @"age"!(_) | _} \/ {@"nombre"!(_) | @"edad"!(_)}}}) = {
+          |    match record {
+          |      {@"name"!(name) | @"age"!(age) | _} => @"stdout"!(["Hello, ", name, " aged ", age])
+          |      {@"nombre"!(nombre) | @"edad"!(edad) | _} => @"stdout"!(["Hola, ", nombre, " con ", edad, " años."])
+          |    }
+          |  } |
+          |  orExample!(@"name"!("Joe") | @"age"!(40)) |
+          |  orExample!(@"nombre"!("Jose") | @"edad"!(41))
+          |}""".stripMargin,
+        """
+          |new loop, primeCheck in {
+          |  contract loop(@x) = {
+          |    match x {
+          |      [] => Nil
+          |      [head ...tail] => {
+          |        new ret in {
+          |          for (_ <- ret) {
+          |            loop!(tail)
+          |          } | primeCheck!(head, *ret)
+          |        }
+          |      }
+          |    }
+          |  } |
+          |  contract primeCheck(@x, ret) = {
+          |    match x {
+          |      Nil => @"stdoutAck"!("Nil", *ret)
+          |      ~{~Nil | ~Nil} => @"stdoutAck"!("Prime", *ret)
+          |      _ => @"stdoutAck"!("Composite", *ret)
+          |    }
+          |  } |
+          |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
+          |}""".stripMargin
+      ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
+  }
 }
