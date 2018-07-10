@@ -119,9 +119,4 @@ object internal {
           value
       }
   }
-
-  case class Install[K, R, A, P](patterns: Seq[P], continuation: K, _match: Match[P, A, R])
-
-  type Installs[C, K, R, A, P] = Map[Seq[C], Install[K, R, A, P]]
-
 }
