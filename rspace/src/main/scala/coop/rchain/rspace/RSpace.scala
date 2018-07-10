@@ -112,7 +112,7 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
       throw new IllegalArgumentException(msg)
     }
     logger.debug(s"""|install: searching for data matching <patterns: $patterns>
-                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
     installs.update(_.updated(channels, Install(patterns, continuation, m)))
@@ -142,8 +142,8 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
           WaitingContinuation(patterns, continuation, persist = true, consumeRef))
         for (channel <- channels) store.addJoin(txn, channel, channels)
         logger.debug(s"""|consume: no data found,
-                           |storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                         |storing <(patterns, continuation): ($patterns, $continuation)>
+                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
       case Some(_) =>
         throw new RuntimeException("Installing can be done only on startup")
