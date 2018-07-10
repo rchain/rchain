@@ -439,7 +439,7 @@ trait HistoryActionsTests
 }
 
 class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryActionsTests {
-  "install" should "not be peristed to the history trie" in withTestSpace { space =>
+  "an install" should "not be persisted to the history trie" in withTestSpace { space =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
 
