@@ -343,44 +343,6 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val deploys =
       Vector(
         """
-               |@"stdout"!(Set(1,2,3).contains(1)) |
-               |// prints false
-               |@"stdout"!(Set(1,2,3).contains(5)) |
-               |// prints Set(1,2,3,4)
-               |@"stdout"!(Set(1,2,3).add(4)) |
-               |// prints Set(1,2,3)
-               |@"stdout"!(Set(1,2,3).add(1)) |
-               |// prints Set(1, 2, 3, 4, 5, 6)
-               |@"stdout"!(Set(1,2,3).union(Set(4,5,6))) |
-               |// prints Set(1, 2, 3)
-               |@"stdout"!(Set(1,2,3).union(Set(1))) |
-               |// prints Set(2, 3)
-               |@"stdout"!(Set(1,2,3).diff(Set(1))) |
-               |// prints Set(1,2,3)
-               |@"stdout"!(Set(1,2,3).diff(Set(4))) |
-               |// prints false
-               |new x in {
-               |    @"stdout"!(Set(x!(7)).contains(x!(10)))
-               |} |
-               |// prints @{Set(@{_some_unforgeable_name}!(7), for( @{x0} <- @{_same_unforgeable_name} ) { @{"stdout"}!(x0) })}
-               |new x in {
-               |    @"stdout"!(Set(x!(7)).add(for (@X <- x) { @"stdout"!(X) }))
-               |} |
-               |// prints true
-               |new x in { x!(10) | for(X <- x) { @"stdout"!(Set(X!(7)).add(*X).contains(10)) }}
-          """.stripMargin,
-        """
-          |new orExample in {
-          |  contract orExample(@{record /\ {{@"name"!(_) | @"age"!(_) | _} \/ {@"nombre"!(_) | @"edad"!(_)}}}) = {
-          |    match record {
-          |      {@"name"!(name) | @"age"!(age) | _} => @"stdout"!(["Hello, ", name, " aged ", age])
-          |      {@"nombre"!(nombre) | @"edad"!(edad) | _} => @"stdout"!(["Hola, ", nombre, " con ", edad, " años."])
-          |    }
-          |  } |
-          |  orExample!(@"name"!("Joe") | @"age"!(40)) |
-          |  orExample!(@"nombre"!("Jose") | @"edad"!(41))
-          |}""".stripMargin,
-        """
           |new loop, primeCheck in {
           |  contract loop(@x) = {
           |    match x {
