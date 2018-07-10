@@ -2,11 +2,10 @@ package coop.rchain.rspace.bench
 
 import java.nio.file.{Files, Path}
 
-import cats.syntax.either._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.util._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.util._
 import coop.rchain.rspace.{LMDBStore, _}
 import org.openjdk.jmh.annotations.{Benchmark, Scope, State, TearDown}
 
@@ -50,10 +49,12 @@ object BasicBench {
       LMDBStore.create[String, Pattern, String, StringsCaptor](context)
 
     val testSpace: RSpace[String, Pattern, String, String, StringsCaptor] =
-      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
+      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
 
     @TearDown
-    def tearDown() =
+    def tearDown() = {
+      testSpace.close()
       context.close()
+    }
   }
 }

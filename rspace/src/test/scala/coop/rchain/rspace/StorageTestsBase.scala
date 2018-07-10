@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{Branch, ITrieStore, LMDBTrieStore, initialize}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.lmdbjava.Txn
@@ -81,7 +81,8 @@ class LMDBStoreTestsBase
     val testBranch = Branch("test")
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
-    val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
+    val testSpace =
+      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)
