@@ -101,14 +101,14 @@ object Runtime {
 
     lazy val replayDispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] = Map(
       0L -> SystemProcesses.stdout,
-      1L -> SystemProcesses.stdoutAck(replaySpace, dispatcher),
+      1L -> SystemProcesses.stdoutAck(replaySpace, replayDispatcher),
       2L -> SystemProcesses.stderr,
-      3L -> SystemProcesses.stderrAck(replaySpace, dispatcher),
-      4L -> SystemProcesses.ed25519Verify(replaySpace, dispatcher),
-      5L -> SystemProcesses.sha256Hash(replaySpace, dispatcher),
-      6L -> SystemProcesses.keccak256Hash(replaySpace, dispatcher),
-      7L -> SystemProcesses.blake2b256Hash(replaySpace, dispatcher),
-      9L -> SystemProcesses.secp256k1Verify(replaySpace, dispatcher)
+      3L -> SystemProcesses.stderrAck(replaySpace, replayDispatcher),
+      4L -> SystemProcesses.ed25519Verify(replaySpace, replayDispatcher),
+      5L -> SystemProcesses.sha256Hash(replaySpace, replayDispatcher),
+      6L -> SystemProcesses.keccak256Hash(replaySpace, replayDispatcher),
+      7L -> SystemProcesses.blake2b256Hash(replaySpace, replayDispatcher),
+      9L -> SystemProcesses.secp256k1Verify(replaySpace, replayDispatcher)
     )
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
