@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, Leaf}
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.AttemptOps._

@@ -100,7 +100,7 @@ trait IStore[C, P, A, K] {
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
     collapse(trieUpdates).foreach(processTrieUpdate)
-    trieStore.withTxn(trieStore.createTxnWrite()) { txn => // huh
+    trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
       trieStore
         .persistAndGetRoot(txn, trieBranch)
         .getOrElse(throw new Exception("Could not get root hash"))

@@ -252,7 +252,7 @@ object AddressBookExample {
     assert(cres.isEmpty)
 
     println("Rollback example: And create a checkpoint...")
-    val checkpointHash = space.createCheckpoint.root
+    val checkpointHash = space.createCheckpoint().root
 
     def produceAlice(): Option[(Printer, Seq[Entry])] =
       space.produce(Channel("friends"), alice, persist = false)
@@ -285,10 +285,11 @@ object AddressBookExample {
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
     val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
+    val space   = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
     try {
-      f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
+      f(space)
     } finally {
-      store.close()
+      space.close()
       context.close()
     }
 

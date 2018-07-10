@@ -8,7 +8,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{LMDBStore, _}
-import org.openjdk.jmh.annotations.{Benchmark, Scope, State}
+import org.openjdk.jmh.annotations.{Benchmark, Scope, State, TearDown}
 
 class BasicBench {
 
@@ -42,8 +42,7 @@ object BasicBench {
   class BenchState {
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
-
-    // TODO need to close this, @TearDown seems the way to go
+    
     val context: Context[String, Pattern, String, StringsCaptor] =
       Context.create(dbDir, 1024 * 1024 * 1024)
 
@@ -52,5 +51,10 @@ object BasicBench {
 
     val testSpace: RSpace[String, Pattern, String, String, StringsCaptor] =
       new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
+
+    @TearDown
+    def tearDown() = {
+      context.close()
+    }
   }
 }

@@ -1,16 +1,13 @@
 package coop.rchain.rspace
 
-import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
-import coop.rchain.rspace.internal.GNAT
-import coop.rchain.rspace.internal.codecGNAT
-import coop.rchain.rspace.util._
+import coop.rchain.rspace.history.{Branch, LMDBTrieStore, initialize}
+import coop.rchain.rspace.internal.{GNAT, codecGNAT}
 import coop.rchain.rspace.test.InMemoryStore
-import org.lmdbjava.Txn
+import coop.rchain.rspace.util._
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 

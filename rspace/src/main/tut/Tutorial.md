@@ -229,7 +229,8 @@ val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
 Next we create an instance of `LMDBStore` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```tut
-val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
+val context: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
+val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
 ```
 Now we can create an RSpace using the created store
 ```tut
@@ -426,8 +427,9 @@ space.reset(checkpointHash)
 Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
 ```tut
 val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath, 1024L * 1024L * 100L)
-val rollbackExampleSpace = new RSpace[Channel, Pattern, Entry, Entry, Printer](rollbackExampleStore, coop.rchain.rspace.history.Branch.MASTER)
+val rollbackExampleContext: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath,  1024L * 1024L * 100L)
+val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleContext)
+val rollbackExampleSpace = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
 val cres =
   rollbackExampleSpace.consume(List(Channel("friends")),
                 List(CityMatch(city = "Crystal Lake")),
