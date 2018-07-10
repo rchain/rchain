@@ -339,7 +339,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     tsHash should be(Some(computedTsHash))
   }
 
-  "validateBlockCheckpoint" should "pass stdout tests" in {
+  "validateBlockCheckpoint" should "pass tests involving primitives" in {
     val deploys =
       Vector(
         """
