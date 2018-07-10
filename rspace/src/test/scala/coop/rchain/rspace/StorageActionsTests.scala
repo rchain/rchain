@@ -4,6 +4,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalatest._
 
 trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
@@ -1069,6 +1070,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
       getK(r2).results should contain(List("datum", "datum"))
   }
+
 }
 
 class InMemoryStoreStorageActionsTests
@@ -1080,4 +1082,19 @@ class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
     with StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll
+    with BeforeAndAfterAll {
+
+  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
+    val channel  = "ch1"
+    val datum    = "datum1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    space.produce(channel, datum, persist = false)
+    val ex = the[RuntimeException] thrownBy {
+      space.install(key, patterns, new StringsCaptor)
+    }
+    ex.getMessage shouldBe "Installing can be done only on startup"
+  }
+
+}
