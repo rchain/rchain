@@ -41,10 +41,10 @@ class LMDBStore[C, P, A, K] private (
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private[rspace] type T  = Txn[ByteBuffer]
-  private[rspace] type TT = T
+  private[rspace] type T        = Txn[ByteBuffer]
+  private[rspace] type TRIE_TXN = T
 
-  def withTrieTxn[R](txn: T)(f: TT => R): R = f(txn)
+  def withTrieTxn[R](txn: T)(f: TRIE_TXN => R): R = f(txn)
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
@@ -286,13 +286,13 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  //TODO(dz) figure out if this can go to IStore
-  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit] = {
-    case TrieUpdate(_, Insert, channelsHash, gnat) =>
-      history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-    case TrieUpdate(_, Delete, channelsHash, gnat) =>
-      history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-  }
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
+    update match {
+      case TrieUpdate(_, Insert, channelsHash, gnat) =>
+        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+      case TrieUpdate(_, Delete, channelsHash, gnat) =>
+        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+    }
 
   // TODO: Does using a cursor improve performance for bulk operations?
   private[rspace] def bulkInsert(txn: Txn[ByteBuffer],
@@ -311,7 +311,7 @@ class LMDBStore[C, P, A, K] private (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch = Branch.MASTER)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -331,29 +331,5 @@ object LMDBStore {
                               dbJoins,
                               context.trieStore,
                               branch)
-  }
-
-  def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean = true)(
-      implicit sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val flags =
-      if (noTls)
-        List(EnvFlags.MDB_NOTLS)
-      else
-        List.empty[EnvFlags]
-
-    val env    = Context.create[C, P, A, K](path, mapSize, flags)
-    val branch = Branch.MASTER
-
-    initialize(env.trieStore, branch)
-
-    create(env, branch)
   }
 }

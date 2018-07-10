@@ -10,7 +10,7 @@ import coop.rchain.rspace.internal.GNAT
 import coop.rchain.rspace.internal.codecGNAT
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test.InMemoryStore
-import org.lmdbjava.{Env, EnvFlags, Txn}
+import org.lmdbjava.Txn
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
@@ -287,14 +287,6 @@ class InMemoryStoreStorageExamplesTestsBase
   val mapSize: Long = 1024L * 1024L * 1024L
 
   override def withTestSpace[R](f: T => R): R = {
-    val env: Env[ByteBuffer] =
-      Env
-        .create()
-        .setMapSize(mapSize)
-        .setMaxDbs(8)
-        .setMaxReaders(126)
-        .open(dbDir.toFile, List(EnvFlags.MDB_NOTLS): _*)
-
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
       implicits.serializeChannel.toCodec,
       implicits.serializePattern.toCodec,
@@ -302,21 +294,20 @@ class InMemoryStoreStorageExamplesTestsBase
       implicits.serializeEntriesCaptor.toCodec)
 
     val branch = Branch("inmem")
-
-    val trieStore
-      : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]] =
+    val env    = Context.env(dbDir, mapSize)
+    val trieStore =
       LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env)
-
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
-    val testSpace =
-      new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+    val testSpace = new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
     try {
       f(testSpace)
     } finally {
+      trieStore.close()
       testStore.close()
+      env.close()
     }
   }
 
@@ -334,13 +325,13 @@ class LMDBStoreStorageExamplesTestBase
     extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
-
-  def noTls: Boolean = false
+  val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long  = 1024L * 1024L * 1024L
+  val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => R): R = {
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
+    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
       new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
     try {
@@ -348,6 +339,8 @@ class LMDBStoreStorageExamplesTestBase
       f(testSpace)
     } finally {
       testStore.close()
+      testSpace.close()
+      context.close()
     }
   }
 

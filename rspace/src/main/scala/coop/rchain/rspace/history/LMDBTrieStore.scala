@@ -1,8 +1,9 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
+import java.nio.file.Path
 
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.{Blake2b256Hash, Context}
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
@@ -68,8 +69,11 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
     }
 
-  def close(): Unit =
+  def close(): Unit = {
     _dbTrie.close()
+    _dbRoot.close()
+    _dbPastRoots.close()
+  }
 
   private[rspace] def clear(txn: Txn[ByteBuffer]): Unit = {
     _dbTrie.drop(txn)

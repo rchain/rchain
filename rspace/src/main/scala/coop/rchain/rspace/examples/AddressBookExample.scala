@@ -168,8 +168,8 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val store: LMDBStore[Channel, Pattern, Entry, Printer] =
-      LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
 
     val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
@@ -194,6 +194,7 @@ object AddressBookExample {
     runKs(Seq(pres1, pres2))
 
     store.close()
+    context.close()
   }
 
   def exampleTwo(): Unit = {
@@ -202,8 +203,8 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val store: LMDBStore[Channel, Pattern, Entry, Printer] =
-      LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
 
     val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
 
@@ -236,6 +237,7 @@ object AddressBookExample {
     Console.printf(store.toMap.toString())
 
     store.close()
+    context.close()
   }
 
   def rollbackExample(): Unit = withSpace { space =>
@@ -281,9 +283,15 @@ object AddressBookExample {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val store = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
+    try {
+      f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
+    } finally {
+      store.close()
+      context.close()
+    }
 
-    f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
   }
 
 }

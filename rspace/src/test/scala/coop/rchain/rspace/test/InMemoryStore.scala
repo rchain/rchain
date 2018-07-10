@@ -4,29 +4,23 @@ import java.nio.ByteBuffer
 
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, Leaf}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
-import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import coop.rchain.shared.AttemptOps._
+import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import org.lmdbjava.Txn
 import scodec.Codec
-import scodec.bits.BitVector
 
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
 trait Transaction[S] {
   def commit(): Unit
-
   def abort(): Unit
-
   def close(): Unit
-
   def readState[R](f: S => R): R
-
   def writeState[R](f: S => (S, R)): R
-
   def name: String
 }
 
@@ -51,10 +45,10 @@ class InMemoryStore[C, P, A, K](
 )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
     extends IStore[C, P, A, K] {
 
-  private implicit val codecK: Codec[K] = sk.toCodec
   private implicit val codecC: Codec[C] = sc.toCodec
   private implicit val codecP: Codec[P] = sp.toCodec
   private implicit val codecA: Codec[A] = sa.toCodec
+  private implicit val codecK: Codec[K] = sk.toCodec
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
@@ -64,8 +58,8 @@ class InMemoryStore[C, P, A, K](
     sv
   }
 
-  private[rspace] type T  = Transaction[StateType]
-  private[rspace] type TT = Txn[ByteBuffer]
+  private[rspace] type T        = Transaction[StateType]
+  private[rspace] type TRIE_TXN = Txn[ByteBuffer]
 
   private[this] type StateType = State[C, P, A, K]
 
@@ -281,12 +275,13 @@ class InMemoryStore[C, P, A, K](
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit] = {
-    case TrieUpdate(_, Insert, channelsHash, gnat) =>
-      history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-    case TrieUpdate(_, Delete, channelsHash, gnat) =>
-      history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
-  }
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
+    update match {
+      case TrieUpdate(_, Insert, channelsHash, gnat) =>
+        history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+      case TrieUpdate(_, Delete, channelsHash, gnat) =>
+        history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
+    }
 
   private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
     gnats.foreach {

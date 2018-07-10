@@ -23,7 +23,7 @@ trait IStore[C, P, A, K] {
     */
   private[rspace] type T
 
-  private[rspace] type TT // trie transaction
+  private[rspace] type TRIE_TXN
 
   private[rspace] def createTxnRead(): T
 
@@ -68,11 +68,11 @@ trait IStore[C, P, A, K] {
 
   def getStoreCounters: StoreCounters
 
-  val trieStore: ITrieStore[TT, Blake2b256Hash, GNAT[C, P, A, K]]
+  val trieStore: ITrieStore[TRIE_TXN, Blake2b256Hash, GNAT[C, P, A, K]]
 
   val trieBranch: Branch
 
-  def withTrieTxn[R](txn: T)(f: TT => R): R
+  def withTrieTxn[R](txn: T)(f: TRIE_TXN => R): R
 
   private[rspace] val eventsCounter: StoreEventsCounter
 
@@ -93,7 +93,7 @@ trait IStore[C, P, A, K] {
 
   protected val _trieUpdateCount: AtomicLong = new AtomicLong(0L)
 
-  protected def processTrieUpdate: PartialFunction[TrieUpdate[C, P, A, K], Unit]
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take

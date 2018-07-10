@@ -43,8 +43,12 @@ object BasicBench {
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
+    // TODO need to close this, @TearDown seems the way to go
+    val context: Context[String, Pattern, String, StringsCaptor] =
+      Context.create(dbDir, 1024 * 1024 * 1024)
+
     val testStore: LMDBStore[String, Pattern, String, StringsCaptor] =
-      LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
+      LMDBStore.create[String, Pattern, String, StringsCaptor](context)
 
     val testSpace: RSpace[String, Pattern, String, String, StringsCaptor] =
       new RSpace[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))

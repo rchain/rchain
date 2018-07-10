@@ -20,21 +20,27 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
-                       val space: ISpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
-                       val replaySpace: ReplayRSpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                       var errorLog: Runtime.ErrorLog) {
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel,
+                                  BindPattern,
+                                  ListChannelWithRandom,
+                                  ListChannelWithRandom,
+                                  TaggedContinuation],
+    var errorLog: Runtime.ErrorLog,
+    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
   def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
-  def close(): Unit                                       = space.close()
+  def close(): Unit = {
+    space.close()
+    replaySpace.close()
+    context.close()
+  }
 }
 
 object Runtime {
@@ -156,6 +162,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog)
+    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
   }
 }

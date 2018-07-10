@@ -40,20 +40,12 @@ class InMemoryStoreTestsBase
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-    val env: Env[ByteBuffer] =
-      Env
-        .create()
-        .setMapSize(mapSize)
-        .setMaxDbs(8)
-        .setMaxReaders(126)
-        .open(dbDir.toFile, List(EnvFlags.MDB_NOTLS): _*)
+    val branch                                = Branch("inmem")
 
-    val branch = Branch("inmem")
-
+    val env = Context.env(dbDir, mapSize)
     val trieStore
       : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
       LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env)
-
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
     val testSpace =
       new RSpace[String, Pattern, String, String, StringsCaptor](testStore, branch)
@@ -63,7 +55,9 @@ class InMemoryStoreTestsBase
     try {
       f(testSpace)
     } finally {
+      trieStore.close()
       testStore.close()
+      env.close()
     }
   }
 
@@ -86,10 +80,8 @@ class LMDBStoreTestsBase
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testBranch = Branch("test")
-    val env = Context.create[String, Pattern, String, StringsCaptor](dbDir,
-                                                                     mapSize,
-                                                                     List(EnvFlags.MDB_NOTLS))
-    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+    val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
       new RSpace[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
@@ -102,6 +94,7 @@ class LMDBStoreTestsBase
     } finally {
       testStore.trieStore.close()
       testStore.close()
+      env.close()
     }
   }
 
