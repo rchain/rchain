@@ -87,12 +87,6 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable)
-
-    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, dispatchTable)
-
     lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
@@ -104,6 +98,24 @@ object Runtime {
       7L -> SystemProcesses.blake2b256Hash(space, dispatcher),
       9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
+
+    lazy val replayDispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] = Map(
+      0L -> SystemProcesses.stdout,
+      1L -> SystemProcesses.stdoutAck(replaySpace, dispatcher),
+      2L -> SystemProcesses.stderr,
+      3L -> SystemProcesses.stderrAck(replaySpace, dispatcher),
+      4L -> SystemProcesses.ed25519Verify(replaySpace, dispatcher),
+      5L -> SystemProcesses.sha256Hash(replaySpace, dispatcher),
+      6L -> SystemProcesses.keccak256Hash(replaySpace, dispatcher),
+      7L -> SystemProcesses.blake2b256Hash(replaySpace, dispatcher),
+      9L -> SystemProcesses.secp256k1Verify(replaySpace, dispatcher)
+    )
+
+    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+      RholangAndScalaDispatcher.create(space, dispatchTable)
+
+    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       ("stdout", 1, None, 0L),
