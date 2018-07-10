@@ -5,11 +5,11 @@ import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
-import coop.rchain.rspace.internal._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{Branch, ITrieStore, LMDBTrieStore, initialize}
+import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
-import org.lmdbjava.{Env, EnvFlags, Txn}
+import org.lmdbjava.Txn
 import org.scalatest._
 import scodec.Codec
 
@@ -47,8 +47,7 @@ class InMemoryStoreTestsBase
       : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
       LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env)
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
-    val testSpace =
-      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, branch)
+    val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -82,8 +81,7 @@ class LMDBStoreTestsBase
     val testBranch = Branch("test")
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
-    val testSpace =
-      new RSpace[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
+    val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)

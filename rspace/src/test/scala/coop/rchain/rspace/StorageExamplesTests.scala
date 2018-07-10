@@ -4,8 +4,8 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.{Branch, LMDBTrieStore, initialize}
-import coop.rchain.rspace.internal.{GNAT, codecGNAT}
+import coop.rchain.rspace.history.{initialize, Branch, LMDBTrieStore}
+import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.test.InMemoryStore
 import coop.rchain.rspace.util._
 import org.scalatest.BeforeAndAfterAll
@@ -295,7 +295,7 @@ class InMemoryStoreStorageExamplesTestsBase
     val trieStore =
       LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env)
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
-    val testSpace = new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
+    val testSpace = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -330,7 +330,7 @@ class LMDBStoreStorageExamplesTestBase
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
-      new RSpace[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+      RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)

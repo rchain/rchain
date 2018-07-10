@@ -169,9 +169,8 @@ object AddressBookExample {
 
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
-    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
 
-    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
+    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -193,7 +192,6 @@ object AddressBookExample {
 
     runKs(Seq(pres1, pres2))
 
-    store.close()
     context.close()
   }
 
@@ -204,9 +202,8 @@ object AddressBookExample {
 
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
-    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
 
-    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
+    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -234,9 +231,8 @@ object AddressBookExample {
 
     runKs(Seq(cres1, cres2))
 
-    Console.printf(store.toMap.toString())
+    Console.printf(space.store.toMap.toString())
 
-    store.close()
     context.close()
   }
 
@@ -284,7 +280,6 @@ object AddressBookExample {
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
-    val store   = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
     val space   = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
     try {
       f(space)

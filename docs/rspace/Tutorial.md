@@ -161,13 +161,13 @@ import coop.rchain.rspace.examples._
 Let's go ahead use that to make instances for our other types.
 ```scala
 scala> implicit val serializeEntry: Serialize[Entry] = makeSerializeFromSerializable[Entry]
-serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@522cdd43
+serializeEntry: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Entry] = coop.rchain.rspace.examples.package$$anon$1@792aecf5
 
 scala> implicit val serializePattern: Serialize[Pattern] = makeSerializeFromSerializable[Pattern]
-serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@f7b4a2c
+serializePattern: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Pattern] = coop.rchain.rspace.examples.package$$anon$1@1440fb66
 
 scala> implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
-serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@4a59c3a2
+serializePrinter: coop.rchain.rspace.Serialize[coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.examples.package$$anon$1@cc43e9c
 ```
 
 Now we will define some example `Entry`s.
@@ -247,21 +247,18 @@ scala> import java.nio.file.{Files, Path}
 import java.nio.file.{Files, Path}
 
 scala> val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-storePath: java.nio.file.Path = /var/folders/dz/97zld1590rj05g0rg_28ww9r0000gn/T/rspace-address-book-example-6165903482848779493
+storePath: java.nio.file.Path = /var/folders/dz/97zld1590rj05g0rg_28ww9r0000gn/T/rspace-address-book-example-6633666794296732569
 ```
 
-Next we create an instance of `LMDBStore` using `storePath`.  We will create our store with a maximum map size of 100MB.
+Next we create an instance of `Context` using `storePath`.  We will create our store with a maximum map size of 100MB.
 ```scala
 scala> val context: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L * 100L)
-context: coop.rchain.rspace.Context[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.Context@4fa07cc7
-
-scala> val store: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](context)
-store: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@42b412e0
+context: coop.rchain.rspace.Context[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.Context@274238f1
 ```
-Now we can create an RSpace using the created store
+Now we can create an RSpace using the created context
 ```scala
-scala> val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, coop.rchain.rspace.history.Branch.MASTER)
-space: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@1e313dc3
+scala> val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
+space: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@483214ea
 ```
 
 ### Producing and Consuming
@@ -489,7 +486,7 @@ pres12: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.co
 Now let's try to do a `consume` with the persist flag set to `true`.
 ```scala
 scala> val cres8 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
-cres8: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212))))
+cres8: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212))))
 ```
 
 Look, data!
@@ -499,10 +496,10 @@ Let's run with it.
 scala> runK(cres8)
 
 === ENTRY ===
-name:    Lahblah, Bob
-address: 1000 Main St, Crystal Lake, Idaho 223322
-email:   blablah@tenex.net
-phone:   698-555-1212
+name:    Lincoln, Alice
+address: 777 Ford St., Crystal Lake, Idaho 223322
+email:   alicel@ringworld.net
+phone:   777-555-1212
 ```
 
 As a side note, we can observe the fact there is no particular order to which we retrieve matching data (or continuations).  If multiple matches exist, one is non-deterministically chosen and returned to the caller.
@@ -511,7 +508,7 @@ So did our `consume` stick?
 
 ```scala
 scala> println(space.store.toMap)
-Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212),false,Produce(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x9c3b19bf53fb8a9eccad55cf959704c290d8aca7097a0c34f90ee3401567aa64))))),List()))
+Map(List(Channel(friends)) -> Row(List(Datum(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212),false,Produce(hash: Blake2b256Hash(bytes: ByteVector(32 bytes, 0x7b39ca265b2cfdd27fc464b71470c3259a2ddd5f2e37e139e9d1c29ced3a6a31))))),List()))
 ```
 
 It did not!  That's strange...
@@ -520,15 +517,15 @@ This quirk of `rspace` is to address the circumstance where matches already exis
 
 ```scala
 scala> val cres9 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
-cres9: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Alice,Lincoln),Address(777 Ford St.,Crystal Lake,Idaho,223322),alicel@ringworld.net,777-555-1212))))
+cres9: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = Some((<function1>,List(Entry(Name(Bob,Lahblah),Address(1000 Main St,Crystal Lake,Idaho,223322),blablah@tenex.net,698-555-1212))))
 
 scala> runK(cres9)
 
 === ENTRY ===
-name:    Lincoln, Alice
-address: 777 Ford St., Crystal Lake, Idaho 223322
-email:   alicel@ringworld.net
-phone:   777-555-1212
+name:    Lahblah, Bob
+address: 1000 Main St, Crystal Lake, Idaho 223322
+email:   blablah@tenex.net
+phone:   698-555-1212
 
 scala> val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 cres10: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, scala.collection.immutable.Seq[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
@@ -581,16 +578,13 @@ space.reset(checkpointHash)
 Let's see how this works in practice. We'll start by creating a new, untouched RSpace followed by a consume operation which should put data and a continuation at given channel.
 ```scala
 scala> val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-rollbackExampleStorePath: java.nio.file.Path = /var/folders/dz/97zld1590rj05g0rg_28ww9r0000gn/T/rspace-address-book-example-925093651920357548
+rollbackExampleStorePath: java.nio.file.Path = /var/folders/dz/97zld1590rj05g0rg_28ww9r0000gn/T/rspace-address-book-example-3997021744629265
 
 scala> val rollbackExampleContext: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath,  1024L * 1024L * 100L)
-rollbackExampleContext: coop.rchain.rspace.Context[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.Context@56aa3dcb
+rollbackExampleContext: coop.rchain.rspace.Context[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.Context@6c61aeed
 
-scala> val rollbackExampleStore: LMDBStore[Channel, Pattern, Entry, Printer] = LMDBStore.create[Channel, Pattern, Entry, Printer](rollbackExampleContext)
-rollbackExampleStore: coop.rchain.rspace.LMDBStore[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.LMDBStore@1a2dfb57
-
-scala> val rollbackExampleSpace = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
-rollbackExampleSpace: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@2b42f9c1
+scala> val rollbackExampleSpace = RSpace.create[Channel, Pattern, Entry, Entry, Printer](rollbackExampleContext, coop.rchain.rspace.history.Branch.MASTER)
+rollbackExampleSpace: coop.rchain.rspace.RSpace[coop.rchain.rspace.examples.AddressBookExample.Channel,coop.rchain.rspace.examples.AddressBookExample.Pattern,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Entry,coop.rchain.rspace.examples.AddressBookExample.Printer] = coop.rchain.rspace.RSpace@2e262cb9
 
 scala> val cres =
      |   rollbackExampleSpace.consume(List(Channel("friends")),
@@ -606,7 +600,7 @@ res19: Boolean = true
 We can now create a checkpoint and store it's root.
 ```scala
 scala> val checkpointHash = rollbackExampleSpace.createCheckpoint.root
-checkpointHash: coop.rchain.rspace.Blake2b256Hash = Blake2b256Hash(bytes: ByteVector(32 bytes, 0xb08ce72b9372edc8b53aa8f61ad2a297fef0ef4ac6bfcc908891d3251e46f655))
+checkpointHash: coop.rchain.rspace.Blake2b256Hash = Blake2b256Hash(bytes: ByteVector(32 bytes, 0x4a185587047ea23989da128a23d29d1a685202276c3d89561a837244e36d10ab))
 ```
 
 The first `produceAlice` operation should be able to find data stored by the consume.
@@ -621,12 +615,12 @@ res20: Boolean = true
 Running the same operation again shouldn't return anything, as data hasn't been persisted.
 ```scala
 scala> produceAlice.isEmpty
-res21: Boolean = false
+res21: Boolean = true
 ```
 Every following repetition of the operation above should yield an empty result.
 ```scala
 scala> produceAlice.isEmpty
-res22: Boolean = false
+res22: Boolean = true
 ```
 
 After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
@@ -640,7 +634,7 @@ And again, every following operation should yield an empty result
 Every following repetition of the operation above should yield an empty result.
 ```scala
 scala> produceAlice.isEmpty
-res25: Boolean = false
+res25: Boolean = true
 ```
 
 ### Finishing Up
