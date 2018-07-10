@@ -549,6 +549,7 @@ def create_peer_nodes():
             mem_limit=args.memory, \
             network=args.network, \
             volumes=[
+                f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
             command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
