@@ -11,8 +11,8 @@ import org.lmdbjava._
 import scodec.Codec
 import scodec.bits.BitVector
 
-import scala.collection.immutable.Seq
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Seq
 
 class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
                                    _dbTrie: Dbi[ByteBuffer],
@@ -68,8 +68,11 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
     }
 
-  def close(): Unit =
+  def close(): Unit = {
     _dbTrie.close()
+    _dbRoot.close()
+    _dbPastRoots.close()
+  }
 
   private[rspace] def clear(txn: Txn[ByteBuffer]): Unit = {
     _dbTrie.drop(txn)

@@ -14,7 +14,7 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+class RSpace[C, P, A, R, K] private (val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -248,16 +248,24 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]): RSpace[C, P, A, R, K] = {
+    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
+    create(mainStore, branch)
+  }
+
+  def create[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    history.initialize(context.trieStore, branch)
+    history.initialize(store.trieStore, branch)
 
-    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
-
-    new RSpace[C, P, A, R, K](mainStore, branch)
+    new RSpace[C, P, A, R, K](store, branch)
   }
 }
