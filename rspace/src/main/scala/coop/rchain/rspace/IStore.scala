@@ -21,44 +21,46 @@ trait IStore[C, P, A, K] {
   /**
     * The type of transactions
     */
-  private[rspace] type T
+  private[rspace] type Transaction
 
-  private[rspace] type TRIE_TXN
+  private[rspace] type TrieTransaction
 
-  private[rspace] def createTxnRead(): T
+  private[rspace] def createTxnRead(): Transaction
 
-  private[rspace] def createTxnWrite(): T
+  private[rspace] def createTxnWrite(): Transaction
 
-  private[rspace] def withTxn[R](txn: T)(f: T => R): R
+  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 
-  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C]
+  private[rspace] def getChannels(txn: Transaction, channelsHash: Blake2b256Hash): Seq[C]
 
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit
+  private[rspace] def putDatum(txn: Transaction, channels: Seq[C], datum: Datum[A]): Unit
 
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]]
+  private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]]
 
-  private[rspace] def removeDatum(txn: T, channel: Seq[C], index: Int): Unit
+  private[rspace] def removeDatum(txn: Transaction, channel: Seq[C], index: Int): Unit
 
-  private[rspace] def putWaitingContinuation(txn: T,
+  private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit
 
-  private[rspace] def getWaitingContinuation(txn: T,
+  private[rspace] def getWaitingContinuation(txn: Transaction,
                                              channels: Seq[C]): Seq[WaitingContinuation[P, K]]
 
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit
+  private[rspace] def removeWaitingContinuation(txn: Transaction,
+                                                channels: Seq[C],
+                                                index: Int): Unit
 
-  private[rspace] def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]]
+  private[rspace] def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]]
 
-  private[rspace] def removeAll(txn: T, channels: Seq[C]): Unit
+  private[rspace] def removeAll(txn: Transaction, channels: Seq[C]): Unit
 
-  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit
+  private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit
 
-  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]]
+  private[rspace] def getJoin(txn: Transaction, channel: C): Seq[Seq[C]]
 
-  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
+  private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit
 
   private[rspace] def joinMap: Map[Blake2b256Hash, Seq[Seq[C]]]
 
@@ -68,11 +70,11 @@ trait IStore[C, P, A, K] {
 
   def getStoreCounters: StoreCounters
 
-  val trieStore: ITrieStore[TRIE_TXN, Blake2b256Hash, GNAT[C, P, A, K]]
+  val trieStore: ITrieStore[TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
 
   val trieBranch: Branch
 
-  def withTrieTxn[R](txn: T)(f: TRIE_TXN => R): R
+  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
 
   private[rspace] val eventsCounter: StoreEventsCounter
 
@@ -121,9 +123,10 @@ trait IStore[C, P, A, K] {
       }
       .toList
 
-  private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
+  private[rspace] def bulkInsert(txn: Transaction,
+                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
 
-  private[rspace] def clear(txn: T): Unit
+  private[rspace] def clear(txn: Transaction): Unit
 
   def isEmpty: Boolean
 }

@@ -41,18 +41,18 @@ class LMDBStore[C, P, A, K] private (
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private[rspace] type T        = Txn[ByteBuffer]
-  private[rspace] type TRIE_TXN = T
+  private[rspace] type Transaction     = Txn[ByteBuffer]
+  private[rspace] type TrieTransaction = Transaction
 
-  def withTrieTxn[R](txn: T)(f: TRIE_TXN => R): R = f(txn)
+  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[rspace] def createTxnRead(): T = env.txnRead
+  private[rspace] def createTxnRead(): Transaction = env.txnRead
 
-  private[rspace] def createTxnWrite(): T = env.txnWrite
+  private[rspace] def createTxnWrite(): Transaction = env.txnWrite
 
-  private[rspace] def withTxn[R](txn: T)(f: T => R): R =
+  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
     try {
       val ret: R = f(txn)
       txn.commit()
@@ -66,14 +66,15 @@ class LMDBStore[C, P, A, K] private (
     }
 
   /* Basic operations */
-  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
+  private[this] def fetchGNAT(txn: Transaction,
+                              channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
       Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
     }
   }
 
-  private[this] def insertGNAT(txn: T,
+  private[this] def insertGNAT(txn: Transaction,
                                channelsHash: Blake2b256Hash,
                                gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
@@ -96,7 +97,8 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[this] def fetchJoin(txn: T, joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
+  private[this] def fetchJoin(txn: Transaction,
+                              joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
     val joinedChannelHashBuff = joinedChannelHash.bytes.toDirectByteBuffer
     Option(_dbJoins.get(txn, joinedChannelHashBuff))
       .map { bytes =>
@@ -104,7 +106,7 @@ class LMDBStore[C, P, A, K] private (
       }
   }
 
-  private[this] def insertJoin(txn: T,
+  private[this] def insertJoin(txn: Transaction,
                                joinedChannelHash: Blake2b256Hash,
                                joins: Seq[Seq[C]]): Unit = {
     val channelsHashBuff   = joinedChannelHash.bytes.toDirectByteBuffer
@@ -119,12 +121,12 @@ class LMDBStore[C, P, A, K] private (
 
   /* Channels */
 
-  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C] =
+  private[rspace] def getChannels(txn: Transaction, channelsHash: Blake2b256Hash): Seq[C] =
     fetchGNAT(txn, channelsHash).map(_.channels).getOrElse(Seq.empty)
 
   /* Data */
 
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
+  private[rspace] def putDatum(txn: Transaction, channels: Seq[C], datum: Datum[A]): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, _)) =>
@@ -134,12 +136,12 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] = {
+  private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]] = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).map(_.data).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeDatum(txn: Transaction, channels: Seq[C], index: Int): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, Seq())) =>
@@ -156,12 +158,12 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
+  private[rspace] def removeDatum(txn: Transaction, channel: C, index: Int): Unit =
     removeDatum(txn, Seq(channel), index)
 
   /* Continuations */
 
-  private[rspace] def putWaitingContinuation(txn: T,
+  private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit = {
     val channelsHash = hashChannels(channels)
@@ -173,13 +175,15 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def getWaitingContinuation(txn: T,
+  private[rspace] def getWaitingContinuation(txn: Transaction,
                                              channels: Seq[C]): Seq[WaitingContinuation[P, K]] = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).map(_.wks).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeWaitingContinuation(txn: Transaction,
+                                                channels: Seq[C],
+                                                index: Int): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
@@ -211,7 +215,7 @@ class LMDBStore[C, P, A, K] private (
     fetchJoin(txn, joinedChannelHash).getOrElse(Seq.empty)
   }
 
-  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if !joins.contains(channels) =>
@@ -223,7 +227,7 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if joins.contains(channels) =>
@@ -252,7 +256,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  private[rspace] def clear(txn: T): Unit = {
+  private[rspace] def clear(txn: Transaction): Unit = {
     _dbGNATs.drop(txn)
     _dbJoins.drop(txn)
     eventsCounter.reset()
@@ -272,7 +276,7 @@ class LMDBStore[C, P, A, K] private (
       !_dbJoins.iterate(txn).hasNext
     }
 
-  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
+  def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]] =
     getWaitingContinuation(txn, channels).map(_.patterns)
 
   def toMap: Map[Seq[C], Row[P, A, K]] =
