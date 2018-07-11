@@ -11,7 +11,7 @@ The open-source RChain project is building a decentralized, economic, censorship
 
 ### Running from Docker
 
-Assuming you have Docker running on your system, use the following pull command to run the latest version of RNode in Docker
+Assuming you have Docker running on your system, use the following pull command to fetch the latest version of RNode in Docker from the remote repository.
 `docker pull rchain/rnode:latest`
 
 Invoking the above Docker image is simple enough (exit with `C-c`):
@@ -142,7 +142,7 @@ TBD
 
 ## Deverloper guide
 
-For gettin started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
+For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
 
 ## Caveats and filing issues
 

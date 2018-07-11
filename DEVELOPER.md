@@ -24,10 +24,25 @@ brew install jflex
 Download and run the installer of the [Haskell Platform](https://www.haskell.org/platform/mac.html#osx)
 
 #### Development environment on Ubuntu and Debian
-TBD
+```
+echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+sudo apt-get update
+sudo apt-get install sbt
 
-#### Development environment on Fedora and RedHat
-TBD
+sudo apt-get libsodium18
+sudo apt-get jflex
+sudo apt-get install haskell-platform
+```
+
+#### Development environment on Fedora
+```
+sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be necessary)
+sudo dnf --enablerepo=bintray--sbt-rpm install sbt
+sudo dnf install libsodium
+sudo dnf install jflex
+sudo dnf install haskell-platform
+```
 
 #### Building and running
 Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
