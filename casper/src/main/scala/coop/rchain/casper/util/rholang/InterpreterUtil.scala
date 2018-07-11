@@ -117,16 +117,10 @@ object InterpreterUtil {
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
-      if (knownStateHashes.contains(parentStateHash)) {
-        (parentStateHash, knownStateHashes)
-      } else {
-        computeBlockCheckpoint(parentTuplespaces.head._1,
-                               genesis,
-                               dag,
-                               defaultStateHash,
-                               knownStateHashes,
-                               computeState)
-      }
+      assert(
+        knownStateHashes.contains(parentStateHash),
+        "We should have already computed parent state hash when we added the parent to our blockDAG.")
+      (parentStateHash, knownStateHashes)
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -139,18 +133,11 @@ object InterpreterUtil {
           .reduce(DagOperations.greatestCommonAncestor(_, _, genesis, dag))
 
       val gcaStateHash = ProtoUtil.tuplespace(gca).get
-      val (computedGcaStateHash, _) =
-        if (knownStateHashes.contains(gcaStateHash)) {
-          (gcaStateHash, knownStateHashes)
-        } else {
-          computeBlockCheckpoint(gca,
-                                 genesis,
-                                 dag,
-                                 defaultStateHash,
-                                 knownStateHashes,
-                                 computeState)
-        }
+      assert(
+        knownStateHashes.contains(gcaStateHash),
+        "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
 
+      // TODO: Fix so that all search branches reach GCA before quitting
       val deploys = DagOperations
         .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
           ProtoUtil.parents(_).iterator.map(dag.blockLookup))
@@ -161,7 +148,7 @@ object InterpreterUtil {
 
       //TODO: figure out what casper should do with errors in deploys
       val Right(resultStateCheckpoint) =
-        computeState(computedGcaStateHash, deploys)
+        computeState(gcaStateHash, deploys)
       val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
       (resultStateHash, knownStateHashes + resultStateHash)
     }
