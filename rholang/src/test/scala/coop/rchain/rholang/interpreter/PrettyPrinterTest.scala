@@ -543,6 +543,14 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "for( @{match x0 | x1 { 47 => Nil }} <- @{Nil} ) { Nil }"
   }
 
+  "PMatches" should "display matches" in {
+    val pMatches = new PMatches(new PGround(new GroundInt(1)), new PVar(new ProcVarWildcard()))
+
+    val result = PrettyPrinter(0, 1).buildString(
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value.par)
+
+    result shouldBe "(1 matches _)"
+  }
 }
 
 class IncrementTester extends FlatSpec with Matchers {

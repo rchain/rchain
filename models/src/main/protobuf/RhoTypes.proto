@@ -161,6 +161,8 @@ message Expr {
         EMap e_map_body = 23 [(scalapb.field).type = "coop.rchain.models.ParMap"];
         EMethod e_method_body = 24;
         Channel e_eval_body = 26;
+
+        EMatches e_matches_body = 27;
     }
 }
 
@@ -276,6 +278,11 @@ message EAnd {
 message EOr {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
+}
+
+message EMatches {
+    Par target = 1 [(scalapb.field).no_box = true];
+    Par pattern = 2 [(scalapb.field).no_box = true];
 }
 
 message Connective {

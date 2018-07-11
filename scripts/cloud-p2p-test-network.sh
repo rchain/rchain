@@ -62,7 +62,7 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
     ssh_tcp_port=$((40000+$i))
     res=$(ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space "
-      curl -s 127.0.0.1:9095 | grep "^peers ";
+      curl -s 127.0.0.1:40403 | grep "^peers ";
       ")
     if [[ "$res" ==  "peers 3.0" ]]; then
       echo "PASS: Metric \"${res}\" is correct for node $i."
