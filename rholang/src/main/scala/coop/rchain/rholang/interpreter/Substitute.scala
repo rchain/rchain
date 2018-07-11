@@ -18,11 +18,8 @@ import errors._
 import coop.rchain.models.rholang.sort.ordering._
 
 trait Substitute[M[_], A] {
-  def substitute(term: A)(implicit depth: Int,
-                          env: Env[Par] /*, costAccounting: MonadState[M, CostAccount]*/ ): M[A]
-  def substituteNoSort(term: A)(
-      implicit depth: Int,
-      env: Env[Par] /*, costAccounting: MonadState[M, CostAccount*/ ): M[A]
+  def substitute(term: A)(implicit depth: Int, env: Env[Par]): M[A]
+  def substituteNoSort(term: A)(implicit depth: Int, env: Env[Par]): M[A]
 }
 
 object Substitute {

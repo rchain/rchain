@@ -12,6 +12,8 @@ trait CostAccountingAlg[F[_]] {
 }
 
 object CostAccountingAlg {
+  def apply[F[_]](implicit ev: CostAccountingAlg[F]): CostAccountingAlg[F] = ev
+
   def monadState[F[_]](state: MonadState[F, CostAccount])(
       implicit F: Sync[F]): CostAccountingAlg[F] =
     new CostAccountingAlg[F] {
