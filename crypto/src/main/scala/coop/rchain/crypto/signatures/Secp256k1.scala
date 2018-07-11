@@ -1,8 +1,10 @@
 package coop.rchain.crypto.signatures
 
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.util.SecureRandomUtil.getSecureRandomInstance
 
-import java.security.{KeyPairGenerator, SecureRandom}
+import java.security.KeyPairGenerator
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
 
@@ -19,7 +21,8 @@ object Secp256k1 {
     *
     * {{{
     * >>> import coop.rchain.crypto.hash.Sha256
-    * >>> val (sec, pub) = Secp256k1.newKeyPair
+    * >>> import coop.rchain.crypto.{PrivateKey, PublicKey}
+    * >>> val (PrivateKey(sec), PublicKey(pub)) = Secp256k1.newKeyPair
     * >>> val data = Sha256.hash("testing".getBytes)
     * >>> val sig = Secp256k1.sign(data, sec)
     * >>> Secp256k1.verify(data, sig, pub)
@@ -29,17 +32,18 @@ object Secp256k1 {
     * @return (private key, public key) pair
     *
     */
-  def newKeyPair: (Array[Byte], Array[Byte]) = {
+  def newKeyPair: (PrivateKey, PublicKey) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
-    kpg.initialize(new ECGenParameterSpec(curveName), new SecureRandom())
+    kpg.initialize(new ECGenParameterSpec(curveName), getSecureRandomInstance)
     val kp = kpg.generateKeyPair
 
     val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS().toString(16))
     val pub = Secp256k1.toPublic(sec)
 
-    (sec, pub)
+    (PrivateKey(sec), PublicKey(pub))
   }
 
+  //TODO: refactor to make use of strongly typed keys
   /**
     * Verifies the given secp256k1 signature in native code.
     *
