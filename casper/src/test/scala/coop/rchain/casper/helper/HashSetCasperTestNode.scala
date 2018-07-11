@@ -55,13 +55,8 @@ class HashSetCasperTestNode(name: String,
   val activeRuntime = Runtime.create(storageDirectory, storageSize)
   val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
-  val initStateHash           = ByteString.copyFrom(activeRuntime.space.createCheckpoint().root.bytes.toArray)
-  val updatedGenesisPostState = genesis.body.get.postState.get.withTuplespace(initStateHash)
-  val updatedGenesisBody      = genesis.body.get.withPostState(updatedGenesisPostState)
-  val updatedGenesis          = genesis.withBody(updatedGenesisBody)
-
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), updatedGenesis)
+    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](ApprovedBlock(block = Some(genesis)), casperEff)
 
