@@ -11,23 +11,12 @@ import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration.FiniteDuration
 import java.io.File
 
 package object effects {
 
-  def log: Log[Task] = new Log[Task] {
-    import com.typesafe.scalalogging.Logger
-
-    def debug(msg: String)(implicit ev: LogSource): Task[Unit] =
-      Task.delay(Logger(ev.clazz).debug(msg))
-    def info(msg: String)(implicit ev: LogSource): Task[Unit] =
-      Task.delay(Logger(ev.clazz).info(msg))
-    def warn(msg: String)(implicit ev: LogSource): Task[Unit] =
-      Task.delay(Logger(ev.clazz).warn(msg))
-    def error(msg: String)(implicit ev: LogSource): Task[Unit] =
-      Task.delay(Logger(ev.clazz).error(msg))
-  }
+  def log: Log[Task] = Log.log
 
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
@@ -41,7 +30,6 @@ package object effects {
   def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
                                                           timeout: FiniteDuration): Ping[F] =
     new Ping[F] {
-      import scala.concurrent.duration._
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
@@ -50,7 +38,7 @@ package object effects {
         } yield res.toOption.isDefined
     }
 
-  def tcpTranposrtLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
+  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
       implicit scheduler: Scheduler,
       connections: TcpTransportLayer.State,
       log: Log[Task]) =
