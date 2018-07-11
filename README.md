@@ -11,12 +11,9 @@ The open-source RChain project is building a decentralized, economic, censorship
 
 ### Running from Docker
 
-Assuming you have Docker running on your system, use the following pull command to fetch the latest version of RNode in Docker from the remote repository.
-`docker pull rchain/rnode:latest`
-
-Invoking the above Docker image is simple enough (exit with `C-c`):
+Assuming you have Docker running on your system, use the following command to fetch the latest version of RNode from the remote Docker hub and run it (exit with `C-c`):
 ```
-<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti -p 30304:30304 coop.rchain/rnode:latest --profile docker
+<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 coop.rchain/rnode:latest --profile docker
 08:30:30.894 [main] INFO  conf - uPnP: None -> None
 08:30:32.599 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 08:30:32.600 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
