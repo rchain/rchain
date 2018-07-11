@@ -11,6 +11,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.ListChannelWithRandom
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -524,6 +525,19 @@ object Reduce {
             b1 <- evalToBool(p1.get)
             b2 <- evalToBool(p2.get)
           } yield GBool(b1 || b2)
+
+        case EMatchesBody(EMatches(target, pattern)) =>
+          for {
+            evaledTarget <- evalExpr(target)
+            substTarget  <- substitutePar[M].substitute(evaledTarget)(0, env)
+            substPattern <- substitutePar[M].substitute(pattern)(1, env)
+          } yield
+            (GBool(
+              SpatialMatcher
+                .spatialMatch(substTarget, substPattern)
+                .runS(SpatialMatcher.emptyMap)
+                .isDefined))
+
         case EVarBody(EVar(v)) =>
           for {
             p       <- eval(v.get)

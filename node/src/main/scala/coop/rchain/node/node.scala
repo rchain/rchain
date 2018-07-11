@@ -128,24 +128,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
     This needs to be moved to node program! Part of execution. Effectful!
     */
-  val upnpErrorMsg =
-    s"ERROR - Could not open the port via uPnP. Please open it manaually on your router!"
-  val upnp = new UPnP
-  if (!conf.run.noUpnp()) {
-    println("INFO - trying to open port using uPnP....")
-    upnp.addPort(conf.run.port()) match {
-      case Left(UnknownCommError("no gateway")) =>
-        println(s"INFO - [OK] no gateway found, no need to open any port.")
-      case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
-      case Right(false) => println(s"$upnpErrorMsg")
-      case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
-    }
+  private val externalAddress = if (conf.run.noUpnp()) {
+    None
+  } else {
+    UPnP.assurePortForwarding(Seq(conf.run.port()))
   }
 
   import ApplicativeError_._
 
   /** Configuration */
-  private val host              = conf.run.fetchHost(upnp)
+  private val host              = conf.run.fetchHost(externalAddress)
   private val port              = conf.run.port()
   private val certificateFile   = conf.run.certificatePath.toFile
   private val keyFile           = conf.run.keyPath.toFile

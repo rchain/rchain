@@ -22,6 +22,26 @@ class Context[C, P, A, K] private (
 
 object Context {
 
+  def env(path: Path,
+          mapSize: Long,
+          flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)): Env[ByteBuffer] =
+    Env
+      .create()
+      .setMapSize(mapSize)
+      .setMaxDbs(8)
+      .setMaxReaders(126)
+      .open(path.toFile, flags: _*)
+
+  def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): Context[C, P, A, K] = {
+    val flags = if (noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+    create(path, mapSize, flags)
+  }
+
   def create[C, P, A, K](path: Path,
                          mapSize: Long,
                          flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS))(
@@ -36,13 +56,7 @@ object Context {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val env: Env[ByteBuffer] =
-      Env
-        .create()
-        .setMapSize(mapSize)
-        .setMaxDbs(8)
-        .setMaxReaders(126)
-        .open(path.toFile, flags: _*)
+    val env = Context.env(path, mapSize, flags)
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
 

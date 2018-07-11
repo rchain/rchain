@@ -338,4 +338,55 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     tsHash should be(Some(computedTsHash))
   }
+
+  "validateBlockCheckpoint" should "pass tests involving primitives" in {
+    val deploys =
+      Vector(
+        """
+          |new loop, primeCheck in {
+          |  contract loop(@x) = {
+          |    match x {
+          |      [] => Nil
+          |      [head ...tail] => {
+          |        new ret in {
+          |          for (_ <- ret) {
+          |            loop!(tail)
+          |          } | primeCheck!(head, *ret)
+          |        }
+          |      }
+          |    }
+          |  } |
+          |  contract primeCheck(@x, ret) = {
+          |    match x {
+          |      Nil => @"stdoutAck"!("Nil", *ret)
+          |      ~{~Nil | ~Nil} => @"stdoutAck"!("Prime", *ret)
+          |      _ => @"stdoutAck"!("Composite", *ret)
+          |    }
+          |  } |
+          |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
+          |}""".stripMargin
+      ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    val (computedTsCheckpoint, _) =
+      computeDeploysCheckpoint(Seq.empty,
+                               deploys,
+                               BlockMessage(),
+                               initState,
+                               initStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
+    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = deploys,
+                                  tsHash = computedTsHash,
+                                  tsLog = computedTsLog)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (tsHash, _) =
+      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+
+    tsHash should be(Some(computedTsHash))
+  }
 }

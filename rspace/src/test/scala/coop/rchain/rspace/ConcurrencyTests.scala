@@ -182,7 +182,7 @@ class LMDBStoreConcurrencyTestsWithTls
     with ConcurrencyTests {
   override def version: String = "LMDB with TLS"
 
-  override def noTls: Boolean = false
+  override val noTls: Boolean = false
 }
 
 class LMDBStoreConcurrencyTestsNoTls
@@ -191,5 +191,5 @@ class LMDBStoreConcurrencyTestsNoTls
 
   override def version: String = "LMDB NO_TLS"
 
-  override def noTls: Boolean = true
+  override val noTls: Boolean = true
 }

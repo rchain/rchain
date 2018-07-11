@@ -130,6 +130,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
               case Some(_) =>
                 val msg = "untraced event resulted in a comm event"
                 logger.error(msg)
+                replayData.put(replays)
                 throw new ReplayException(msg)
             }
           case Some(comms) =>
@@ -269,6 +270,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
                 logger.debug(s"produce: matching continuation found at <channels: $channels>")
                 val msg = "untraced event resulted in a comm event"
                 logger.error(msg)
+                replayData.put(replays)
                 throw new ReplayException(msg)
             }
           case Some(comms) =>

@@ -102,6 +102,18 @@ sealed abstract class MultiParentCasperInstances {
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
         Set[StateHash](initStateHash)
       )
+      knownStateHashesContainer.update(
+        InterpreterUtil
+          .computeBlockCheckpoint(
+            genesis,
+            genesis,
+            _blockDag.get,
+            initStateHash,
+            _,
+            runtimeManager.computeState
+          )
+          ._2
+      )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
