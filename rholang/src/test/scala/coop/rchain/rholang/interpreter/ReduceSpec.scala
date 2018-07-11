@@ -1209,9 +1209,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches 1" should "return true" in {
     implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), GInt(1)))
 
@@ -1224,9 +1226,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches 0" should "return false" in {
     implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), GInt(0)))
 
@@ -1239,9 +1243,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches _" should "return true" in {
     implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), EVar(Wildcard(Var.WildcardMsg()))))
 
@@ -1254,10 +1260,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "x matches 1" should "return true when x is bound to 1" in {
     implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par](GInt(1))
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1)))
 
@@ -1270,10 +1278,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches =x" should "return true when x is bound to 1" in {
     implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par](GInt(1))
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), Connective(VarRefBody(VarRef(0, 1)))))
 

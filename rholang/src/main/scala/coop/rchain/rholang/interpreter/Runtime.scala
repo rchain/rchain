@@ -33,10 +33,12 @@ class Runtime private (val reducer: Reduce[Task],
                                                      ListChannelWithRandom,
                                                      ListChannelWithRandom,
                                                      TaggedContinuation],
-                       val costAccounting: CostAccountingAlg[Task],
+                       val costAccountingPure: CostAccountingAlg[Task],
+                       val costAccountingReplay: CostAccountingAlg[Task],
                        var errorLog: ErrorLog) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def getCost(): Task[CostAccount]                 = costAccounting.getTotal
+  def getCost(): Task[CostAccount]                 = costAccountingPure.getTotal
+  def getCostReplay(): Task[CostAccount]           = costAccountingReplay.getTotal
   def close(): Unit                                = space.close()
 }
 
@@ -89,8 +91,8 @@ object Runtime {
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
-    val costStatePure                                 = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
-    val costStateReplay                                 = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
+    val costStatePure                             = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
+    val costStateReplay                           = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
     val costAccountingPure: CostAccountingAlg[Task] =
       CostAccountingAlg.monadState(costStatePure)
     val costAccountingReplay: CostAccountingAlg[Task] =
@@ -147,7 +149,8 @@ object Runtime {
                 replayDispatcher.reducer,
                 space,
                 replaySpace,
-                costAccounting,
+                costAccountingPure,
+                costAccountingReplay,
                 errorLog)
   }
 }

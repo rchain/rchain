@@ -68,9 +68,9 @@ object Reduce {
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
-                                                                                              term: A,
-                                                                                              depth: Int,
-                                                                                              env: Env[Par]): M[A] =
+      term: A,
+      depth: Int,
+      env: Env[Par]): M[A] =
     Substitute[M, A]
       .substituteNoSort(term)(depth, env)
       .attempt
@@ -264,9 +264,11 @@ object Reduce {
                                         substituteAndCharge[Channel, M](pattern, 1, env))
                     } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substituteNoSortAndCharge[Par, M](receive.body, 0, env.shift(receive.bindCount))
-        _         <- consume(binds, substBody, receive.persistent, rand)
-        _         <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
+        substBody <- substituteNoSortAndCharge[Par, M](receive.body,
+                                                       0,
+                                                       env.shift(receive.bindCount))
+        _ <- consume(binds, substBody, receive.persistent, rand)
+        _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
       } yield ()
 
     /**
@@ -548,8 +550,8 @@ object Reduce {
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
             evaledTarget <- evalExpr(target)
-            substTarget  <- substitutePar[M].substitute(evaledTarget)(0, env)
-            substPattern <- substitutePar[M].substitute(pattern)(1, env)
+            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
+            substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
           } yield
             (GBool(
               SpatialMatcher
