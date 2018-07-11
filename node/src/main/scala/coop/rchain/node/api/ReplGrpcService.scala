@@ -69,7 +69,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
   def eval(request: EvalRequest): Future[ReplResponse] =
     exec(new StringReader(request.program))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[Vector[errors.InterpreterError]] =
+  def runEvaluate(runtime: Runtime, term: Par): Task[Vector[Throwable]] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
       result <- evaluate(runtime, term)

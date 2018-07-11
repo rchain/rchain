@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
 import coop.rchain.models.Channel.ChannelInstance
@@ -10,7 +11,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort._
-import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, SubstituteError}
+import coop.rchain.rholang.interpreter.errors.SubstituteError
 import coop.rchain.models.rholang.implicits._
 import errors._
 import coop.rchain.models.rholang.sort.ordering._
@@ -37,8 +38,8 @@ object Substitute {
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
-  def maybeSubstitute[M[+ _]: InterpreterErrorsM](term: Var)(implicit depth: Int,
-                                                             env: Env[Par]): M[Either[Var, Par]] =
+  def maybeSubstitute[M[+ _]: Sync](term: Var)(implicit depth: Int,
+                                               env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0)
       Applicative[M].pure(Left(term))
     else
@@ -50,18 +51,18 @@ object Substitute {
               Applicative[M].pure(Left(term))
           }
         case _ =>
-          interpreterErrorM[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
+          Sync[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
       }
 
-  def maybeSubstitute[M[_]: InterpreterErrorsM](term: EVar)(implicit depth: Int,
-                                                            env: Env[Par]): M[Either[EVar, Par]] =
+  def maybeSubstitute[M[_]: Sync](term: EVar)(implicit depth: Int,
+                                              env: Env[Par]): M[Either[EVar, Par]] =
     maybeSubstitute[M](term.v).map {
       case Left(v)    => Left(EVar(v))
       case Right(par) => Right(par)
     }
 
-  def maybeSubstitute[M[_]: InterpreterErrorsM](
-      term: EEvalBody)(implicit depth: Int, env: Env[Par]): M[Either[Expr, Par]] =
+  def maybeSubstitute[M[_]: Sync](term: EEvalBody)(implicit depth: Int,
+                                                   env: Env[Par]): M[Either[Expr, Par]] =
     term.value.channelInstance match {
       case Quote(p) => substitutePar[M].substituteNoSort(p).map(Right(_))
       case ChanVar(v) =>
@@ -72,8 +73,8 @@ object Substitute {
       case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
     }
 
-  def maybeSubstitute[M[_]: InterpreterErrorsM](
-      term: VarRef)(implicit depth: Int, env: Env[Par]): M[Either[VarRef, Par]] =
+  def maybeSubstitute[M[_]: Sync](term: VarRef)(implicit depth: Int,
+                                                env: Env[Par]): M[Either[VarRef, Par]] =
     if (term.depth != depth)
       Applicative[M].pure(Left(term))
     else
@@ -83,7 +84,7 @@ object Substitute {
           Applicative[M].pure(Left(term))
       }
 
-  implicit def substituteQuote[M[_]: InterpreterErrorsM]: Substitute[M, Quote] =
+  implicit def substituteQuote[M[_]: Sync]: Substitute[M, Quote] =
     new Substitute[M, Quote] {
       override def substitute(term: Quote)(implicit depth: Int, env: Env[Par]): M[Quote] =
         substitutePar[M].substitute(term.value).map(Quote(_))
@@ -91,7 +92,7 @@ object Substitute {
         substitutePar[M].substituteNoSort(term.value).map(Quote(_))
     }
 
-  implicit def substituteBundle[M[_]: InterpreterErrorsM]: Substitute[M, Bundle] =
+  implicit def substituteBundle[M[_]: Sync]: Substitute[M, Bundle] =
     new Substitute[M, Bundle] {
       import BundleOps._
 
@@ -111,7 +112,7 @@ object Substitute {
         }
     }
 
-  implicit def substituteChannel[M[_]: InterpreterErrorsM]: Substitute[M, Channel] =
+  implicit def substituteChannel[M[_]: Sync]: Substitute[M, Channel] =
     new Substitute[M, Channel] {
       override def substituteNoSort(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
         for {
@@ -129,7 +130,7 @@ object Substitute {
         substituteNoSort(term).map(channelSubst => ChannelSortMatcher.sortMatch(channelSubst).term)
     }
 
-  implicit def substitutePar[M[_]: InterpreterErrorsM]: Substitute[M, Par] =
+  implicit def substitutePar[M[_]: Sync]: Substitute[M, Par] =
     new Substitute[M, Par] {
       def subExp(exprs: Seq[Expr])(implicit depth: Int, env: Env[Par]): M[Par] =
         exprs.toList.reverse.foldM(VectorPar()) { (par, expr) =>
@@ -198,7 +199,7 @@ object Substitute {
         substituteNoSort(term).map(par => ParSortMatcher.sortMatch(par).term)
     }
 
-  implicit def substituteSend[M[_]: InterpreterErrorsM]: Substitute[M, Send] =
+  implicit def substituteSend[M[_]: Sync]: Substitute[M, Send] =
     new Substitute[M, Send] {
       override def substituteNoSort(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
         for {
@@ -216,7 +217,7 @@ object Substitute {
         substituteNoSort(term).map(send => SendSortMatcher.sortMatch(send).term)
     }
 
-  implicit def substituteReceive[M[_]: InterpreterErrorsM]: Substitute[M, Receive] =
+  implicit def substituteReceive[M[_]: Sync]: Substitute[M, Receive] =
     new Substitute[M, Receive] {
       override def substituteNoSort(term: Receive)(implicit depth: Int, env: Env[Par]): M[Receive] =
         for {
@@ -246,7 +247,7 @@ object Substitute {
 
     }
 
-  implicit def substituteNew[M[_]: InterpreterErrorsM]: Substitute[M, New] =
+  implicit def substituteNew[M[_]: Sync]: Substitute[M, New] =
     new Substitute[M, New] {
       override def substituteNoSort(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
         for {
@@ -257,7 +258,7 @@ object Substitute {
         substituteNoSort(term).map(newSub => NewSortMatcher.sortMatch(newSub).term)
     }
 
-  implicit def substituteMatch[M[_]: InterpreterErrorsM]: Substitute[M, Match] =
+  implicit def substituteMatch[M[_]: Sync]: Substitute[M, Match] =
     new Substitute[M, Match] {
       override def substituteNoSort(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
         for {
@@ -276,7 +277,7 @@ object Substitute {
         substituteNoSort(term).map(mat => MatchSortMatcher.sortMatch(mat).term)
     }
 
-  implicit def substituteExpr[M[_]: InterpreterErrorsM]: Substitute[M, Expr] =
+  implicit def substituteExpr[M[_]: Sync]: Substitute[M, Expr] =
     new Substitute[M, Expr] {
       private[this] def substituteDelegate(
           term: Expr,
@@ -309,6 +310,8 @@ object Substitute {
             s2(par1.get, par2.get)(EAnd(_, _))
           case EOrBody(EOr(par1, par2)) =>
             s2(par1.get, par2.get)(EOr(_, _))
+          case EMatchesBody(EMatches(target, pattern)) =>
+            s2(target, pattern)(EMatches(_, _))
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
             for {
               pss <- ps.toVector
