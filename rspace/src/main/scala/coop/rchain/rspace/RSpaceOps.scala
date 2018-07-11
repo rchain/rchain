@@ -27,14 +27,16 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     installs
   }
 
-  override protected[this] def restoreInstalls(txn: store.T): Unit =
+  override protected[this] def restoreInstalls(txn: store.Transaction): Unit =
     installs.get.foreach {
       case (channels, Install(patterns, continuation, _match)) =>
         install(txn, channels, patterns, continuation)(_match)
     }
 
-  private[this] def install(txn: store.T, channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
+  private[this] def install(txn: store.Transaction,
+                            channels: Seq[C],
+                            patterns: Seq[P],
+                            continuation: K)(implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -88,11 +90,12 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 
   override def reset(root: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.validateAndPutRoot(txn, branch, root)
-      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, root)
-      store.clear(txn)
-      restoreInstalls(txn)
-      store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+      store.withTrieTxn(txn) { trieTxn =>
+        store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+        val leaves = store.trieStore.getLeaves(trieTxn, root)
+        store.clear(txn)
+        restoreInstalls(txn)
+        store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+      }
     }
-
 }

@@ -184,16 +184,9 @@ trait ISpace[C, P, A, R, K] {
     *
     * @param root A BLAKE2b256 Hash representing the checkpoint
     */
-  def reset(root: Blake2b256Hash): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.validateAndPutRoot(txn, branch, root)
-      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, root)
-      store.clear(txn)
-      restoreInstalls(txn)
-      store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
-    }
+  def reset(root: Blake2b256Hash): Unit
 
-  protected[this] def restoreInstalls(txn: store.T): Unit = ()
+  protected[this] def restoreInstalls(txn: store.Transaction): Unit = ()
 
   /** Closes
     */

@@ -38,15 +38,21 @@ object Genesis {
                     wallets: Seq[Wallet],
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-
-    val blessedTerms = List(
+    val defaultBlessedTerms = List(
       LinkedList.term,
       NonNegativeNumber.term,
       MakeMint.term,
       BasicWallet.term,
       (new Rev(wallets)).term
     ).map(termDeploy)
-
+    withContracts(defaultBlessedTerms, initial, wallets, startHash, runtimeManager)
+  }
+  
+  def withContracts(blessedTerms: List[Deploy],
+                    initial: BlockMessage,
+                    wallets: Seq[Wallet],
+                    startHash: StateHash,
+                    runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
     val Right(checkpoint) = runtimeManager.computeState(startHash, blessedTerms)
     val stateHash         = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     val reductionLog      = checkpoint.log.map(EventConverter.toCasperEvent)

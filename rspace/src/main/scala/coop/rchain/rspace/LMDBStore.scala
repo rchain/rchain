@@ -2,9 +2,8 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.AttemptOps._
@@ -19,7 +18,6 @@ import scodec.bits._
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
 
 /**
   * The main store class.
@@ -31,8 +29,6 @@ class LMDBStore[C, P, A, K] private (
     databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
     _dbJoins: Dbi[ByteBuffer],
-    _trieUpdateCount: AtomicLong,
-    _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(implicit
@@ -45,15 +41,18 @@ class LMDBStore[C, P, A, K] private (
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private[rspace] type T = Txn[ByteBuffer]
+  private[rspace] type Transaction     = Txn[ByteBuffer]
+  private[rspace] type TrieTransaction = Transaction
+
+  def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[rspace] def createTxnRead(): T = env.txnRead
+  private[rspace] def createTxnRead(): Transaction = env.txnRead
 
-  private[rspace] def createTxnWrite(): T = env.txnWrite
+  private[rspace] def createTxnWrite(): Transaction = env.txnWrite
 
-  private[rspace] def withTxn[R](txn: T)(f: T => R): R =
+  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
     try {
       val ret: R = f(txn)
       txn.commit()
@@ -67,14 +66,15 @@ class LMDBStore[C, P, A, K] private (
     }
 
   /* Basic operations */
-  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
+  private[this] def fetchGNAT(txn: Transaction,
+                              channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
       Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
     }
   }
 
-  private[this] def installGNAT(txn: T,
+  private[this] def installGNAT(txn: Transaction,
                                 channelsHash: Blake2b256Hash,
                                 gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
@@ -83,7 +83,7 @@ class LMDBStore[C, P, A, K] private (
       throw new Exception(s"could not persist: $gnat")
   }
 
-  private[this] def insertGNAT(txn: T,
+  private[this] def insertGNAT(txn: Transaction,
                                channelsHash: Blake2b256Hash,
                                gnat: GNAT[C, P, A, K]): Unit = {
     installGNAT(txn, channelsHash, gnat)
@@ -97,15 +97,14 @@ class LMDBStore[C, P, A, K] private (
                          gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     if (_dbGNATs.delete(txn, channelsHashBuff)) {
-      val count   = _trieUpdateCount.getAndIncrement()
-      val currLog = _trieUpdates.take()
-      _trieUpdates.put(currLog :+ TrieUpdate(count, Delete, channelsHash, gnat))
+      trieDelete(channelsHash, gnat)
     } else {
       throw new Exception(s"could not delete: $channelsHash")
     }
   }
 
-  private[this] def fetchJoin(txn: T, joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
+  private[this] def fetchJoin(txn: Transaction,
+                              joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
     val joinedChannelHashBuff = joinedChannelHash.bytes.toDirectByteBuffer
     Option(_dbJoins.get(txn, joinedChannelHashBuff))
       .map { bytes =>
@@ -113,7 +112,7 @@ class LMDBStore[C, P, A, K] private (
       }
   }
 
-  private[this] def insertJoin(txn: T,
+  private[this] def insertJoin(txn: Transaction,
                                joinedChannelHash: Blake2b256Hash,
                                joins: Seq[Seq[C]]): Unit = {
     val channelsHashBuff   = joinedChannelHash.bytes.toDirectByteBuffer
@@ -128,12 +127,12 @@ class LMDBStore[C, P, A, K] private (
 
   /* Channels */
 
-  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C] =
+  private[rspace] def getChannels(txn: Transaction, channelsHash: Blake2b256Hash): Seq[C] =
     fetchGNAT(txn, channelsHash).map(_.channels).getOrElse(Seq.empty)
 
   /* Data */
 
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
+  private[rspace] def putDatum(txn: Transaction, channels: Seq[C], datum: Datum[A]): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, _)) =>
@@ -143,12 +142,12 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] = {
+  private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]] = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).map(_.data).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeDatum(txn: Transaction, channels: Seq[C], index: Int): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, Seq())) =>
@@ -165,12 +164,12 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
+  private[rspace] def removeDatum(txn: Transaction, channel: C, index: Int): Unit =
     removeDatum(txn, Seq(channel), index)
 
   /* Continuations */
 
-  private[rspace] def installWaitingContinuation(txn: T,
+  private[rspace] def installWaitingContinuation(txn: Transaction,
                                                  channels: Seq[C],
                                                  continuation: WaitingContinuation[P, K]): Unit = {
     val channelsHash = hashChannels(channels)
@@ -182,7 +181,7 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def putWaitingContinuation(txn: T,
+  private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit = {
     val channelsHash = hashChannels(channels)
@@ -194,13 +193,15 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def getWaitingContinuation(txn: T,
+  private[rspace] def getWaitingContinuation(txn: Transaction,
                                              channels: Seq[C]): Seq[WaitingContinuation[P, K]] = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).map(_.wks).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeWaitingContinuation(txn: Transaction,
+                                                channels: Seq[C],
+                                                index: Int): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
@@ -232,7 +233,7 @@ class LMDBStore[C, P, A, K] private (
     fetchJoin(txn, joinedChannelHash).getOrElse(Seq.empty)
   }
 
-  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if !joins.contains(channels) =>
@@ -244,7 +245,7 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if joins.contains(channels) =>
@@ -273,7 +274,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  private[rspace] def clear(txn: T): Unit = {
+  private[rspace] def clear(txn: Transaction): Unit = {
     _dbGNATs.drop(txn)
     _dbJoins.drop(txn)
     eventsCounter.reset()
@@ -293,7 +294,7 @@ class LMDBStore[C, P, A, K] private (
       !_dbJoins.iterate(txn).hasNext
     }
 
-  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
+  def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]] =
     getWaitingContinuation(txn, channels).map(_.patterns)
 
   def toMap: Map[Seq[C], Row[P, A, K]] =
@@ -307,22 +308,13 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def createCheckpoint(): Blake2b256Hash = {
-    val trieUpdates = _trieUpdates.take
-    _trieUpdates.put(Seq.empty)
-    _trieUpdateCount.set(0L)
-    collapse(trieUpdates).foreach {
+  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit =
+    update match {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, trieBranch, channelsHash, canonicalize(gnat))
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
-    withTxn(createTxnWrite()) { txn =>
-      trieStore
-        .persistAndGetRoot(txn, trieBranch)
-        .getOrElse(throw new Exception("Could not get root hash"))
-    }
-  }
 
   // TODO: Does using a cursor improve performance for bulk operations?
   private[rspace] def bulkInsert(txn: Txn[ByteBuffer],
@@ -341,7 +333,7 @@ class LMDBStore[C, P, A, K] private (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch = Branch.MASTER)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -355,41 +347,11 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    val trieUpdateCount = new AtomicLong(0L)
-    val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
-    trieUpdates.put(Seq.empty)
-
     new LMDBStore[C, P, A, K](context.env,
                               context.path,
                               dbGnats,
                               dbJoins,
-                              trieUpdateCount,
-                              trieUpdates,
                               context.trieStore,
                               branch)
-  }
-
-  def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean = true)(
-      implicit sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val flags =
-      if (noTls)
-        List(EnvFlags.MDB_NOTLS)
-      else
-        List.empty[EnvFlags]
-
-    val env    = Context.create[C, P, A, K](path, mapSize, flags)
-    val branch = Branch.MASTER
-
-    initialize(env.trieStore, branch)
-
-    create(env, branch)
   }
 }
