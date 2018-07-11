@@ -20,20 +20,21 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
-                       val space: ISpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
-                       val replaySpace: ReplayRSpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                       var errorLog: ErrorLog,
-                       val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel,
+                                  BindPattern,
+                                  ListChannelWithRandom,
+                                  ListChannelWithRandom,
+                                  TaggedContinuation],
+    var errorLog: ErrorLog,
+    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def close(): Unit = {
     space.close()
