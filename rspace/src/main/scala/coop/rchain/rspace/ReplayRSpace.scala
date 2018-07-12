@@ -39,8 +39,9 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
 
-  private[this] val consumeSpan = Kamon.buildSpan("replayrspace.consume")
-  private[this] val produceSpan = Kamon.buildSpan("replayrspace.produce")
+  private[this] val consumeSpan   = Kamon.buildSpan("replayrspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("replayrspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("replayrspace.install")
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =

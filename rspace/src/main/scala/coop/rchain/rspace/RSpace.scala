@@ -35,11 +35,10 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
-  private[this] val installCommCounter = Kamon.counter("rspace.comm.install")
 
-  private[this] val consumeSpan = Kamon.buildSpan("rspace.consume")
-  private[this] val produceSpan = Kamon.buildSpan("rspace.produce")
-  private[this] val installSpan = Kamon.buildSpan("rspace.install")
+  private[this] val consumeSpan   = Kamon.buildSpan("rspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
@@ -101,12 +100,6 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             Some((continuation, dataCandidates.map(_.datum.a)))
         }
       }
-    }
-
-  override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    Kamon.withSpan(installSpan.start(), finishSpan = true) {
-      super.install(channels: Seq[C], patterns: Seq[P], continuation: K)
     }
 
   def produce(channel: C, data: A, persist: Boolean)(
