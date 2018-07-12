@@ -85,11 +85,7 @@ object Connect {
       phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-      addedErr <- NodeDiscovery[F].addNode(peer)
-      _ <- addedErr.fold(
-            error => Log[F].error(s"Could not add $peer, reason: $error"),
-            _ => ().pure[F]
-          )
+      _   <- NodeDiscovery[F].addNode(peer)
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
@@ -120,25 +116,36 @@ object Connect {
   private def handleProtocolHandshake[
       F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler](
       peer: PeerNode,
-      maybePh: Option[ProtocolHandshake]): F[CommunicationResponse] =
+      maybePh: Option[ProtocolHandshake],
+      defaultTimeout: FiniteDuration
+  ): F[CommunicationResponse] =
     for {
-      local    <- TransportLayer[F].local
-      _        <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      phr      = protocolHandshakeResponse(local)
-      addedErr <- NodeDiscovery[F].addNode(peer)
-      commResponse <- addedErr.fold(
+      local  <- TransportLayer[F].local
+      _      <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      hbrErr <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
+      commResponse <- hbrErr.fold(
                        error =>
-                         Log[F].error(s"Could not add $peer, reason: $error").as(notHandled(error)),
+                         Log[F].warn(s"Not adding. Could receive Pong message back from $peer, reason: $error").as(notHandled(error)),
                        _ =>
-                         Log[F]
-                           .info(s"Responded to protocol handshake request from $peer")
-                           .as(handledWithMessage(phr))
+                         NodeDiscovery[F].addNode(peer) *>
+                           Log[F]
+                             .info(s"Responded to protocol handshake request from $peer")
+                             .as(handledWithMessage(protocolHandshakeResponse(local)))
                      )
     } yield commResponse
 
+  private def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler](
+      peer: PeerNode,
+      maybeHeartbeat: Option[Heartbeat]): F[CommunicationResponse] =
+    for {
+      local <- TransportLayer[F].local
+      _     <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
+    } yield handledWithMessage(heartbeatResponse(local))
+
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
-      protocol: RoutingProtocol): F[CommunicationResponse] = {
+      protocol: RoutingProtocol,
+      defaultTimeout: FiniteDuration): F[CommunicationResponse] = {
 
     def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[CommunicationResponse] =
       proto.message.upstream
@@ -147,11 +154,16 @@ object Connect {
             usmsg.typeUrl match {
               // TODO interpolate this string to check if class exists
 
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Heartbeat" =>
+                handleHeartbeat[F](sender, toHeartbeat(proto).toOption)
+
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
                 handlePacket[F](sender, toPacket(proto).toOption)
 
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-                handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption)
+                handleProtocolHandshake[F](sender,
+                                           toProtocolHandshake(proto).toOption,
+                                           defaultTimeout)
 
               case _ =>
                 Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
