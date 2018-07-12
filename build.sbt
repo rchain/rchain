@@ -112,7 +112,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.4.2",
+    version := "0.5.1",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -131,7 +131,7 @@ lazy val node = (project in file("node"))
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
     ),
-    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
     mainClass in assembly := Some("coop.rchain.node.Main"),
     assemblyMergeStrategy in assembly := {
