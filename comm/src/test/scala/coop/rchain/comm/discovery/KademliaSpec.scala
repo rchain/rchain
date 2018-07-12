@@ -49,7 +49,6 @@ class KademliaSpec extends FlatSpec with Matchers {
 
     val d = distance(peer0)
     table.distance(peer0) shouldBe Some(d)
-    pingedPeers shouldEqual Seq(peer0)
 
     val entries = table.table(d).map(_.entry)
     entries shouldEqual Seq(peer0)
@@ -73,7 +72,7 @@ class KademliaSpec extends FlatSpec with Matchers {
     table.distance(peer2) shouldBe Some(d)
     table.distance(peer3) shouldBe Some(d)
     table.distance(peer4) shouldBe Some(d)
-    pingedPeers shouldEqual Seq(peer1, peer2, peer3, peer4, peer1)
+    pingedPeers shouldEqual Seq(peer1)
 
     val entries = table.table(d).map(_.entry)
     entries shouldEqual Seq(peer2, peer3, peer1)
@@ -99,9 +98,10 @@ class KademliaSpec extends FlatSpec with Matchers {
     table.distance(peer2) shouldBe Some(d)
     table.distance(peer3) shouldBe Some(d)
     table.distance(peer4) shouldBe Some(d)
-    pingedPeers shouldEqual Seq(peer1, peer2, peer3, peer4, peer1)
+    pingedPeers shouldEqual Seq(peer1)
 
     val entries = table.table(d).map(_.entry)
     entries shouldEqual Seq(peer2, peer3, peer4)
   }
+
 }
