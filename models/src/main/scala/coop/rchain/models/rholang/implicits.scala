@@ -115,6 +115,10 @@ object implicits {
     new Expr(exprInstance = EMethodBody(e))
   implicit def fromEMethod(e: EMethod): Expr = apply(e)
 
+  def apply(e: EMatches): Expr =
+    new Expr(exprInstance = EMatchesBody(e))
+  implicit def fromEMatches(e: EMatches): Expr = apply(e)
+
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
@@ -137,7 +141,7 @@ object implicits {
   def apply(b: Bundle): Par =
     new Par(
       bundles = Vector(b),
-      locallyFree = b.body.get.locallyFree,
+      locallyFree = b.body.locallyFree,
       connectiveUsed = false
     )
 
@@ -204,7 +208,7 @@ object implicits {
     def prepend(b: Bundle): Par =
       p.copy(
         bundles = b +: p.bundles,
-        locallyFree = b.body.get.locallyFree | p.locallyFree
+        locallyFree = b.body.locallyFree | p.locallyFree
       )
     def prepend(c: Connective): Par =
       p.copy(
@@ -283,7 +287,7 @@ object implicits {
 
   implicit val BundleLocallyFree: HasLocallyFree[Bundle] = new HasLocallyFree[Bundle] {
     override def connectiveUsed(source: Bundle): Boolean = false
-    override def locallyFree(source: Bundle): BitSet     = source.body.get.locallyFree
+    override def locallyFree(source: Bundle): BitSet     = source.body.locallyFree
   }
 
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
@@ -293,64 +297,66 @@ object implicits {
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
     def connectiveUsed(e: Expr) =
       e.exprInstance match {
-        case GBool(_)                   => false
-        case GInt(_)                    => false
-        case GString(_)                 => false
-        case GUri(_)                    => false
-        case GByteArray(_)              => false
-        case EListBody(e)               => e.connectiveUsed
-        case ETupleBody(e)              => e.connectiveUsed
-        case ESetBody(e)                => e.connectiveUsed
-        case EMapBody(e)                => e.connectiveUsed
-        case EVarBody(EVar(v))          => VarLocallyFree.connectiveUsed(v.get)
-        case EEvalBody(chan)            => ChannelLocallyFree.connectiveUsed(chan)
-        case ENotBody(ENot(p))          => p.get.connectiveUsed
-        case ENegBody(ENeg(p))          => p.get.connectiveUsed
-        case EMultBody(EMult(p1, p2))   => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EDivBody(EDiv(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EPlusBody(EPlus(p1, p2))   => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EMinusBody(EMinus(p1, p2)) => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case ELtBody(ELt(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case ELteBody(ELte(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EGtBody(EGt(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EGteBody(EGte(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EEqBody(EEq(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case ENeqBody(ENeq(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
-        case EMethodBody(e)             => e.connectiveUsed
-        case ExprInstance.Empty         => false
+        case GBool(_)                                    => false
+        case GInt(_)                                     => false
+        case GString(_)                                  => false
+        case GUri(_)                                     => false
+        case GByteArray(_)                               => false
+        case EListBody(e)                                => e.connectiveUsed
+        case ETupleBody(e)                               => e.connectiveUsed
+        case ESetBody(e)                                 => e.connectiveUsed
+        case EMapBody(e)                                 => e.connectiveUsed
+        case EVarBody(EVar(v))                           => VarLocallyFree.connectiveUsed(v)
+        case EEvalBody(chan)                             => ChannelLocallyFree.connectiveUsed(chan)
+        case ENotBody(ENot(p))                           => p.connectiveUsed
+        case ENegBody(ENeg(p))                           => p.connectiveUsed
+        case EMultBody(EMult(p1, p2))                    => p1.connectiveUsed || p2.connectiveUsed
+        case EDivBody(EDiv(p1, p2))                      => p1.connectiveUsed || p2.connectiveUsed
+        case EPlusBody(EPlus(p1, p2))                    => p1.connectiveUsed || p2.connectiveUsed
+        case EMinusBody(EMinus(p1, p2))                  => p1.connectiveUsed || p2.connectiveUsed
+        case ELtBody(ELt(p1, p2))                        => p1.connectiveUsed || p2.connectiveUsed
+        case ELteBody(ELte(p1, p2))                      => p1.connectiveUsed || p2.connectiveUsed
+        case EGtBody(EGt(p1, p2))                        => p1.connectiveUsed || p2.connectiveUsed
+        case EGteBody(EGte(p1, p2))                      => p1.connectiveUsed || p2.connectiveUsed
+        case EEqBody(EEq(p1, p2))                        => p1.connectiveUsed || p2.connectiveUsed
+        case ENeqBody(ENeq(p1, p2))                      => p1.connectiveUsed || p2.connectiveUsed
+        case EAndBody(EAnd(p1, p2))                      => p1.connectiveUsed || p2.connectiveUsed
+        case EOrBody(EOr(p1, p2))                        => p1.connectiveUsed || p2.connectiveUsed
+        case EMethodBody(e)                              => e.connectiveUsed
+        case EMatchesBody(EMatches(target, pattern @ _)) => target.connectiveUsed
+        case ExprInstance.Empty                          => false
       }
 
     def locallyFree(e: Expr) =
       e.exprInstance match {
-        case GBool(_)                   => BitSet()
-        case GInt(_)                    => BitSet()
-        case GString(_)                 => BitSet()
-        case GUri(_)                    => BitSet()
-        case GByteArray(_)              => BitSet()
-        case EListBody(e)               => e.locallyFree
-        case ETupleBody(e)              => e.locallyFree
-        case ESetBody(e)                => e.locallyFree.value
-        case EMapBody(e)                => e.locallyFree.value
-        case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
-        case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)
-        case ENotBody(ENot(p))          => p.get.locallyFree
-        case ENegBody(ENeg(p))          => p.get.locallyFree
-        case EMultBody(EMult(p1, p2))   => p1.get.locallyFree | p2.get.locallyFree
-        case EDivBody(EDiv(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
-        case EPlusBody(EPlus(p1, p2))   => p1.get.locallyFree | p2.get.locallyFree
-        case EMinusBody(EMinus(p1, p2)) => p1.get.locallyFree | p2.get.locallyFree
-        case ELtBody(ELt(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
-        case ELteBody(ELte(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
-        case EGtBody(EGt(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
-        case EGteBody(EGte(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
-        case EEqBody(EEq(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
-        case ENeqBody(ENeq(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
-        case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
-        case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
-        case EMethodBody(e)             => e.locallyFree
-        case ExprInstance.Empty         => BitSet()
+        case GBool(_)                                    => BitSet()
+        case GInt(_)                                     => BitSet()
+        case GString(_)                                  => BitSet()
+        case GUri(_)                                     => BitSet()
+        case GByteArray(_)                               => BitSet()
+        case EListBody(e)                                => e.locallyFree
+        case ETupleBody(e)                               => e.locallyFree
+        case ESetBody(e)                                 => e.locallyFree.value
+        case EMapBody(e)                                 => e.locallyFree.value
+        case EVarBody(EVar(v))                           => VarLocallyFree.locallyFree(v)
+        case EEvalBody(chan)                             => ChannelLocallyFree.locallyFree(chan)
+        case ENotBody(ENot(p))                           => p.locallyFree
+        case ENegBody(ENeg(p))                           => p.locallyFree
+        case EMultBody(EMult(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case EDivBody(EDiv(p1, p2))                      => p1.locallyFree | p2.locallyFree
+        case EPlusBody(EPlus(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case EMinusBody(EMinus(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case ELtBody(ELt(p1, p2))                        => p1.locallyFree | p2.locallyFree
+        case ELteBody(ELte(p1, p2))                      => p1.locallyFree | p2.locallyFree
+        case EGtBody(EGt(p1, p2))                        => p1.locallyFree | p2.locallyFree
+        case EGteBody(EGte(p1, p2))                      => p1.locallyFree | p2.locallyFree
+        case EEqBody(EEq(p1, p2))                        => p1.locallyFree | p2.locallyFree
+        case ENeqBody(ENeq(p1, p2))                      => p1.locallyFree | p2.locallyFree
+        case EAndBody(EAnd(p1, p2))                      => p1.locallyFree | p2.locallyFree
+        case EOrBody(EOr(p1, p2))                        => p1.locallyFree | p2.locallyFree
+        case EMethodBody(e)                              => e.locallyFree
+        case EMatchesBody(EMatches(target, pattern @ _)) => target.locallyFree
+        case ExprInstance.Empty                          => BitSet()
       }
   }
 
@@ -376,7 +382,7 @@ object implicits {
   }
 
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
-    def connectiveUsed(n: New) = n.p.get.connectiveUsed
+    def connectiveUsed(n: New) = n.p.connectiveUsed
     def locallyFree(n: New)    = n.locallyFree
   }
 
@@ -413,10 +419,10 @@ object implicits {
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
-        ChannelLocallyFree.connectiveUsed(rb.source.get)
+        ChannelLocallyFree.connectiveUsed(rb.source)
 
       def locallyFree(rb: ReceiveBind) =
-        ChannelLocallyFree.locallyFree(rb.source.get)
+        ChannelLocallyFree.locallyFree(rb.source)
     }
 
   implicit val MatchLocallyFree: HasLocallyFree[Match] =
@@ -427,8 +433,8 @@ object implicits {
 
   implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
     new HasLocallyFree[MatchCase] {
-      def connectiveUsed(mc: MatchCase) = mc.source.get.connectiveUsed
-      def locallyFree(mc: MatchCase)    = mc.source.get.locallyFree
+      def connectiveUsed(mc: MatchCase) = mc.source.connectiveUsed
+      def locallyFree(mc: MatchCase)    = mc.source.locallyFree
     }
 
   implicit val ConnectiveLocallyFree: HasLocallyFree[Connective] =

@@ -168,10 +168,9 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val store: LMDBStore[Channel, Pattern, Entry, Printer] =
-      LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
+    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -193,7 +192,7 @@ object AddressBookExample {
 
     runKs(Seq(pres1, pres2))
 
-    store.close()
+    context.close()
   }
 
   def exampleTwo(): Unit = {
@@ -202,10 +201,9 @@ object AddressBookExample {
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
-    val store: LMDBStore[Channel, Pattern, Entry, Printer] =
-      LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
 
-    val space = new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER)
+    val space = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -233,9 +231,9 @@ object AddressBookExample {
 
     runKs(Seq(cres1, cres2))
 
-    Console.printf(store.toMap.toString())
+    Console.printf(space.store.toMap.toString())
 
-    store.close()
+    context.close()
   }
 
   def rollbackExample(): Unit = withSpace { space =>
@@ -250,7 +248,7 @@ object AddressBookExample {
     assert(cres.isEmpty)
 
     println("Rollback example: And create a checkpoint...")
-    val checkpointHash = space.createCheckpoint.root
+    val checkpointHash = space.createCheckpoint().root
 
     def produceAlice(): Option[(Printer, Seq[Entry])] =
       space.produce(Channel("friends"), alice, persist = false)
@@ -281,9 +279,15 @@ object AddressBookExample {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val store = LMDBStore.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val context = Context.create[Channel, Pattern, Entry, Printer](storePath, 1024L * 1024L)
+    val space   = RSpace.create[Channel, Pattern, Entry, Entry, Printer](context, Branch.MASTER)
+    try {
+      f(space)
+    } finally {
+      space.close()
+      context.close()
+    }
 
-    f(new RSpace[Channel, Pattern, Entry, Entry, Printer](store, Branch.MASTER))
   }
 
 }

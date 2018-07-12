@@ -26,7 +26,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
-    println(s"Starting with profile ${conf.profile.toOption.map(_.name)}")
+    println(s"Starting with profile ${conf.profile.toOption.map(_.name).getOrElse("unknown")}")
 
     Security.insertProviderAt(new BouncyCastleProvider(), 1)
 

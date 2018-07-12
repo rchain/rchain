@@ -17,8 +17,8 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
-  val src: PeerNode                  = peerNode("src", 30300)
-  val remote: PeerNode               = peerNode("remote", 30301)
+  val src: PeerNode                  = peerNode("src", 40400)
+  val remote: PeerNode               = peerNode("remote", 40401)
 
   type Effect[A] = CommErrT[Id, A]
 
