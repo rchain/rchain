@@ -300,6 +300,12 @@ class InMemoryStore[C, P, A, K](
           addJoin(txn, channel, channels)
         }
     }
+
+  private[rspace] def installWaitingContinuation(txn: Transaction,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit =
+    ???
+
 }
 
 object InMemoryStore {

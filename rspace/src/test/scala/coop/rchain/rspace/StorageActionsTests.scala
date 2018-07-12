@@ -1499,7 +1499,6 @@ trait StorageActionsTests
                                                     expectedProduce1,
                                                     expectedConsume)
   }
-
 }
 
 class InMemoryStoreStorageActionsTests
@@ -1511,4 +1510,19 @@ class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
     with StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll
+    with BeforeAndAfterAll {
+
+  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
+    val channel  = "ch1"
+    val datum    = "datum1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    space.produce(channel, datum, persist = false)
+    val ex = the[RuntimeException] thrownBy {
+      space.install(key, patterns, new StringsCaptor)
+    }
+    ex.getMessage shouldBe "Installing can be done only on startup"
+  }
+
+}

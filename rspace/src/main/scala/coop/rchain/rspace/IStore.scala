@@ -41,6 +41,10 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeDatum(txn: Transaction, channel: Seq[C], index: Int): Unit
 
+  private[rspace] def installWaitingContinuation(txn: Transaction,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit
+
   private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit
