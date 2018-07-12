@@ -104,13 +104,13 @@ sealed abstract class MultiParentCasperInstances {
       )
       knownStateHashesContainer.update(
         InterpreterUtil
-          .computeBlockCheckpoint(
+          .validateBlockCheckpoint(
             genesis,
             genesis,
             _blockDag.get,
             initStateHash,
             _,
-            runtimeManager.computeState
+            runtimeManager
           )
           ._2
       )
