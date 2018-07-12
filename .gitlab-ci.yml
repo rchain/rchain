@@ -28,11 +28,19 @@ deploy:deploy-rnode-to-dockerhub:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
-    - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
+    - sudo docker tag coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
     - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
+    - |
+      if [[ $CI_COMMIT_TAG == v* ]]; then
+        echo "Is a release tag starting with v. Tag and push latest.";
+        sudo docker tag coop.rchain/rnode:latest rchain/rnode:latest
+        sudo docker push rchain/rnode:latest 
+      fi
+ 
   only:
     - master
     - dev
+    - tags 
 
 deploy:deploy-rnode-artifacts:
   stage: deploy 
@@ -60,3 +68,4 @@ deploy:deploy-rnode-artifacts:
   only:
     - master
     - dev
+    - tags 
