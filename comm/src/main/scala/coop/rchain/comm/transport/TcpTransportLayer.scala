@@ -115,7 +115,9 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       .attempt
       .map(_.leftMap {
         case _: TimeoutException => TimeOut
-        case e                   => protocolException(e)
+        case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
+          peerUnavailable(peer)
+        case e => protocolException(e)
       })
 
   // TODO: Rename to send
