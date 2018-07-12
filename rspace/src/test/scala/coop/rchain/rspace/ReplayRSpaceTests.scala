@@ -726,6 +726,25 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     val cp2 = process(10 to 0 by -1)
     cp1.root shouldBe cp2.root
   }
+
+  "an install" should "be available after resetting to a checkpoint" in withTestSpaces {
+    (space, replaySpace) =>
+      val channel      = "ch1"
+      val datum        = "datum1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      space.install(key, patterns, continuation)
+      replaySpace.install(key, patterns, continuation)
+
+      space.produce(channel, datum, persist = false) shouldBe defined
+      val afterProduce = space.createCheckpoint()
+
+      replaySpace.rig(afterProduce.root, afterProduce.log)
+
+      replaySpace.produce(channel, datum, persist = false) shouldBe defined
+  }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]

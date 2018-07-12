@@ -3,9 +3,9 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import cats.Functor
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -20,21 +20,27 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
-                       val space: ISpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
-                       val replaySpace: ReplayRSpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                       var errorLog: Runtime.ErrorLog) {
-  def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
-  def close(): Unit                                       = space.close()
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel,
+                                  BindPattern,
+                                  ListChannelWithRandom,
+                                  ListChannelWithRandom,
+                                  TaggedContinuation],
+    var errorLog: ErrorLog,
+    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
+  def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
+  def close(): Unit = {
+    space.close()
+    replaySpace.close()
+    context.close()
+  }
 }
 
 object Runtime {
@@ -49,6 +55,11 @@ object Runtime {
                                                      ListChannelWithRandom,
                                                      ListChannelWithRandom,
                                                      TaggedContinuation],
+                                       replaySpace: ISpace[Channel,
+                                                           BindPattern,
+                                                           ListChannelWithRandom,
+                                                           ListChannelWithRandom,
+                                                           TaggedContinuation],
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.map {
@@ -61,43 +72,17 @@ object Runtime {
                         freeCount = arity)),
           TaggedContinuation(ScalaBodyRef(ref))
         )
+        replaySpace.install(
+          List(Channel(Quote(GString(name)))),
+          List(
+            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+                        remainder,
+                        freeCount = arity)),
+          TaggedContinuation(ScalaBodyRef(ref))
+        )
     }
 
-  class ErrorLog extends FunctorTell[Task, InterpreterError] {
-    private var errorVector: Vector[InterpreterError] = Vector.empty
-    val functor                                       = implicitly[Functor[Task]]
-    override def tell(e: InterpreterError): Task[Unit] =
-      Task.now {
-        this.synchronized {
-          errorVector = errorVector :+ e
-        }
-      }
-
-    override def writer[A](a: A, e: InterpreterError): Task[A] =
-      Task.now {
-        this.synchronized {
-          errorVector = errorVector :+ e
-        }
-        a
-      }
-
-    override def tuple[A](ta: (InterpreterError, A)): Task[A] =
-      Task.now {
-        this.synchronized {
-          errorVector = errorVector :+ ta._1
-        }
-        ta._2
-      }
-
-    def readAndClearErrorVector(): Vector[InterpreterError] =
-      this.synchronized {
-        val ret = errorVector
-        errorVector = Vector.empty
-        ret
-      }
-  }
-
-  def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
+  def create(dataDir: Path, mapSize: Long): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
@@ -118,16 +103,16 @@ object Runtime {
                                           ListChannelWithRandom,
                                           TaggedContinuation](context, Branch.REPLAY)
 
-    val errorLog                                         = new ErrorLog()
-    implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
+    val errorLog                                  = new ErrorLog()
+    implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable)
-
-    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, dispatchTable)
-
-    lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] = Map(
+    def dispatchTableCreator(
+        space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
       2L -> SystemProcesses.stderr,
@@ -138,6 +123,18 @@ object Runtime {
       7L -> SystemProcesses.blake2b256Hash(space, dispatcher),
       9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
+
+    lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+      dispatchTableCreator(space, dispatcher)
+
+    lazy val replayDispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+      dispatchTableCreator(replaySpace, replayDispatcher)
+
+    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+      RholangAndScalaDispatcher.create(space, dispatchTable)
+
+    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       ("stdout", 1, None, 0L),
@@ -152,10 +149,10 @@ object Runtime {
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-      introduceSystemProcesses(space, procDefs)
+      introduceSystemProcesses(space, replaySpace, procDefs)
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog)
+    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
   }
 }

@@ -90,7 +90,7 @@ object Interpreter {
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield (result)
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] = {
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[Throwable]] = {
     implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
@@ -98,7 +98,7 @@ object Interpreter {
     } yield errors
   }
 
-  private def mkErrorMsg(errors: Vector[InterpreterError]) =
+  private def mkErrorMsg(errors: Vector[Throwable]) =
     errors
       .map(_.toString())
       .mkString("Errors received during evaluation:\n", "\n", "\n")

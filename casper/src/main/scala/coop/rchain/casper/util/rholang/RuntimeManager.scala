@@ -33,7 +33,7 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
         }
         val error = eval(terms, riggedRuntime.replayReducer)
         val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
-          Right(riggedRuntime.space.createCheckpoint()))(Left(_))
+          Right(riggedRuntime.replaySpace.createCheckpoint()))(Left(_))
         runtimeContainer.put(riggedRuntime)
         newCheckpoint
       }

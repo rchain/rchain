@@ -12,7 +12,6 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
@@ -82,9 +81,7 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
       activeRuntime: Runtime,
-      publicKey: Array[Byte],
-      privateKey: Array[Byte],
-      sigAlgorithm: String,
+      validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -92,12 +89,6 @@ sealed abstract class MultiParentCasperInstances {
 
       //TODO: Extract hardcoded version
       private val version = 0L
-
-      //TODO: accept other signature algorithms
-      private val signFunction = sigAlgorithm match {
-        case "ed25519" => Ed25519.sign _
-        case _         => throw new Exception(s"Unknown signature algorithm $sigAlgorithm")
-      }
 
       private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
@@ -110,6 +101,18 @@ sealed abstract class MultiParentCasperInstances {
 
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
         Set[StateHash](initStateHash)
+      )
+      knownStateHashesContainer.update(
+        InterpreterUtil
+          .computeBlockCheckpoint(
+            genesis,
+            genesis,
+            _blockDag.get,
+            initStateHash,
+            _,
+            runtimeManager.computeState
+          )
+          ._2
       )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
@@ -124,6 +127,8 @@ sealed abstract class MultiParentCasperInstances {
       // each EquivocationRecord.
       private val equivocationsTracker: mutable.Set[EquivocationRecord] =
         new mutable.HashSet[EquivocationRecord]()
+      private val invalidBlockTracker: mutable.HashSet[BlockHash] =
+        new mutable.HashSet[BlockHash]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -134,9 +139,10 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case Valid                  => reAttemptBuffer
-                case AdmissibleEquivocation => reAttemptBuffer
-                case _                      => ().pure[F]
+                case MissingBlocks         => ().pure[F]
+                case IgnorableEquivocation => ().pure[F]
+                case _ =>
+                  reAttemptBuffer // reAttempt for any status that resulted in the  adding of the block into the view
               }
           estimates <- estimator
           tip       = estimates.head
@@ -172,19 +178,24 @@ sealed abstract class MultiParentCasperInstances {
        *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
        *  -Else None
        */
-      def createBlock: F[Option[BlockMessage]] =
-        for {
-          orderedHeads   <- estimator
-          dag            <- blockDag
-          p              = chooseNonConflicting(orderedHeads, genesis, dag)
-          r              <- remDeploys(dag, p)
-          justifications = toJustification(dag.latestMessages)
-          proposal <- if (r.nonEmpty || p.length > 1) {
-                       createProposal(p, r, justifications)
-                     } else {
-                       none[BlockMessage].pure[F]
-                     }
-        } yield proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, signFunction))
+      def createBlock: F[Option[BlockMessage]] = validatorId match {
+        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+          for {
+            orderedHeads   <- estimator
+            dag            <- blockDag
+            p              = chooseNonConflicting(orderedHeads, genesis, dag)
+            r              <- remDeploys(dag, p)
+            justifications = toJustification(dag.latestMessages)
+            proposal <- if (r.nonEmpty || p.length > 1) {
+                         createProposal(p, r, justifications)
+                       } else {
+                         none[BlockMessage].pure[F]
+                       }
+          } yield
+            proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction))
+
+        case None => none[BlockMessage].pure[F]
+      }
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         Capture[F].capture {
@@ -263,20 +274,25 @@ sealed abstract class MultiParentCasperInstances {
                                                                      initStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
-          postedNeglectedEquivocationCheckStatus <- postTransactionsCheckStatus.traverse(
+          postNeglectedInvalidBlockStatus <- postTransactionsCheckStatus.joinRight.traverse(
+                                              _ =>
+                                                Validate.neglectedInvalidBlockCheck[F](
+                                                  b,
+                                                  invalidBlockTracker.toSet))
+          postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
+                                                   .traverse(
                                                      _ =>
                                                        neglectedEquivocationsCheckWithRecordUpdate(
                                                          b,
                                                          dag))
-          postEquivocationCheckStatus <- postedNeglectedEquivocationCheckStatus.joinRight.traverse(
+          postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ => equivocationsCheck(b, dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
 
-      private def equivocationsCheck(
-          block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+      private def equivocationsCheck(block: BlockMessage,
+                                     dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
         val justificationOfCreator = block.justifications
           .find {
             case Justification(validator: Validator, _) => validator == block.sender
@@ -288,7 +304,7 @@ sealed abstract class MultiParentCasperInstances {
         if (isNotEquivocation) {
           Applicative[F].pure(Right(Valid))
         } else if (awaitingJustificationToChild.contains(block.blockHash)) {
-          Applicative[F].pure(Right(AdmissibleEquivocation))
+          Applicative[F].pure(Left(AdmissibleEquivocation))
         } else {
           Applicative[F].pure(Left(IgnorableEquivocation))
         }
@@ -297,7 +313,7 @@ sealed abstract class MultiParentCasperInstances {
       // See EquivocationRecord.scala for summary of algorithm.
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
         Capture[F].capture {
           val neglectedEquivocationDetected =
             equivocationsTracker.foldLeft(false) {
@@ -338,10 +354,18 @@ sealed abstract class MultiParentCasperInstances {
                                    dag,
                                    equivocationRecord,
                                    equivocationChild)) {
-          if (latestMessages.contains(equivocatingValidator)) {
-            EquivocationNeglected
-          } else {
-            EquivocationDetected
+          val maybeEquivocatingValidatorBond =
+            bonds(block).find(_.validator == equivocatingValidator)
+          maybeEquivocatingValidatorBond match {
+            case Some(Bond(_, stake)) =>
+              if (stake > 0) {
+                EquivocationNeglected
+              } else {
+                // TODO: Eliminate by having a validity check that says no stake can be 0
+                EquivocationDetected
+              }
+            case None =>
+              EquivocationDetected
           }
         } else {
           // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
@@ -483,6 +507,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidSequenceNumber =>
             handleInvalidBlockEffect(status, block)
+          case NeglectedInvalidBlock =>
+            handleInvalidBlockEffect(status, block)
           case NeglectedEquivocation =>
             handleInvalidBlockEffect(status, block)
           case InvalidTransaction =>
@@ -492,15 +518,10 @@ sealed abstract class MultiParentCasperInstances {
 
       private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
         for {
-          _ <- Log[F].info(s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(
+          _ <- Log[F].warn(s"CASPER: Recording invalid block ${PrettyPrinter.buildString(
                 block.blockHash)} for ${status.toString}.")
-          // TODO: Slash block.blockHash for status except InvalidUnslashableBlock
-          blocksToSlash = allChildren[BlockHash](awaitingJustificationToChild, block.blockHash) - block.blockHash
-          _ <- Log[F].warn(s"""CASPER: About to slash the following blocks ${blocksToSlash
-                .map(PrettyPrinter.buildString)
-                .mkString("", ",", "")} for neglecting an invalid block""")
-          // TODO: Slash blocksToSlash for neglecting an invalid block
-          _ <- Capture[F].capture { blocksToSlash.foreach(awaitingJustificationToChild.remove) }
+          // TODO: Slash block for status except InvalidUnslashableBlock
+          _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
 
       private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
@@ -571,42 +592,14 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log](conf: CasperConf, activeRuntime: Runtime)(
+      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    Genesis
-      .fromBondsFile[G](conf.bondsFile, conf.numValidators, conf.validatorsPath)
-      .map(genesis => {
-        val privateKey = conf.privateKey
-          .orElse(defaultPrivateKey(conf, genesis))
-          .getOrElse(throw new Exception("Private key must be specified!"))
-        val publicKey = conf.sigAlgorithm match {
-          case "ed25519" =>
-            Ed25519.toPublic(privateKey)
-
-          case _ =>
-            conf.publicKey.getOrElse(throw new Exception(
-              "Public key must be specified, cannot infer from private key with given signature algorithm."))
-        }
-        if (conf.publicKey.exists(_.zip(publicKey).exists { case (x, y) => x != y })) {
-          throw new Exception("Public key not compatible with given private key!")
-        }
-        hashSetCasper[F](activeRuntime, publicKey, privateKey, conf.sigAlgorithm, genesis)
-      })
-
-  private def defaultPrivateKey(conf: CasperConf, genesis: BlockMessage): Option[Array[Byte]] = {
-    val (maxValidator, _) = bonds(genesis).foldLeft[(Option[String], Int)](None -> 0) {
-      case (currMax @ (_, maxBond), Bond(validator, stake)) =>
-        if (maxBond < stake) Some(Base16.encode(validator.toByteArray)) -> stake
-        else currMax
-    }
-
-    val privateKey = maxValidator.flatMap(publicKey => {
-      val file = conf.validatorsPath.resolve(s"$publicKey.sk").toFile
-      Try(
-        Source.fromFile(file).mkString.trim
-      ).toOption
-    })
-
-    privateKey.map(Base16.decode)
-  }
+    for {
+      genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
+                                           conf.numValidators,
+                                           conf.genesisPath,
+                                           conf.walletsFile,
+                                           activeRuntime)
+      validatorId <- ValidatorIdentity.fromConfig[G](conf)
+    } yield hashSetCasper[F](activeRuntime, validatorId, genesis)
 }

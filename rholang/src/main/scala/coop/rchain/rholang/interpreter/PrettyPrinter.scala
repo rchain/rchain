@@ -62,6 +62,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
         (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
+      case EMatchesBody(EMatches(target, pattern)) =>
+        (buildString(target) + " matches " + buildString(pattern)).wrapWithBraces
       case EListBody(EList(s, _, _, remainderO)) =>
         "[" + buildSeq(s) ++ remainderO.fold("")(v => "..." + buildString(v)) + "]"
       case ETupleBody(ETuple(s, _, _)) =>

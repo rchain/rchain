@@ -28,4 +28,4 @@ scrape_configs:
 
     metrics_path: "/"
     static_configs:
-      - targets: ['rchain-node:9095']
+      - targets: ['rchain-node:40403']

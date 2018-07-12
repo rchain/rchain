@@ -11,9 +11,8 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
 import TaskContrib._
-import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
-import coop.rchain.casper.genesis.Genesis.fromBondsFile
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
+import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -129,24 +128,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
     This needs to be moved to node program! Part of execution. Effectful!
     */
-  val upnpErrorMsg =
-    s"ERROR - Could not open the port via uPnP. Please open it manaually on your router!"
-  val upnp = new UPnP
-  if (!conf.run.noUpnp()) {
-    println("INFO - trying to open port using uPnP....")
-    upnp.addPort(conf.run.port()) match {
-      case Left(UnknownCommError("no gateway")) =>
-        println(s"INFO - [OK] no gateway found, no need to open any port.")
-      case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
-      case Right(false) => println(s"$upnpErrorMsg")
-      case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
-    }
+  private val externalAddress = if (conf.run.noUpnp()) {
+    None
+  } else {
+    UPnP.assurePortForwarding(Seq(conf.run.port()))
   }
 
   import ApplicativeError_._
 
   /** Configuration */
-  private val host              = conf.run.fetchHost(upnp)
+  private val host              = conf.run.fetchHost(externalAddress)
   private val port              = conf.run.port()
   private val certificateFile   = conf.run.certificatePath.toFile
   private val keyFile           = conf.run.keyPath.toFile
@@ -187,15 +178,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime,
                        casperRuntime: Runtime,
-                       casperEffect: MultiParentCasper[Effect])
+                       casperConstructor: MultiParentCasperConstructor[Effect],
+                       packetHandler: PacketHandler[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
       runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
-      casperEffect  <- MultiParentCasper.fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+      casperConstructor <- MultiParentCasperConstructor
+                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
       grpcServer <- {
-        implicit val casperEvidence: MultiParentCasper[Effect] = casperEffect
+        implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         implicit val storeMetrics =
           diagnostics.storeMetrics[Effect](casperRuntime.space.store,
                                            casperRuntime.replaySpace.store,
@@ -205,7 +198,19 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer, runtime, casperRuntime, casperEffect)
+    } yield {
+      implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
+      val packetHandlerEffect = PacketHandler.pf[Effect](
+        casperPacketHandler[Effect]
+      )
+      Resources(grpcServer,
+                metricsServer,
+                httpServer,
+                runtime,
+                casperRuntime,
+                casperConstructor,
+                packetHandlerEffect)
+    }
 
   def startResources(resources: Resources): Effect[Unit] =
     for {
@@ -259,10 +264,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
-    implicit val casperEvidence: MultiParentCasper[Effect] = resources.casperEffect
-    implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
-      casperPacketHandler[Effect]
-    )
+    implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
@@ -273,7 +275,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      _         <- Log[Effect].info(s"RChain Node ${BuildInfo.version}")
+      _ <- Log[Effect].info(
+            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
@@ -291,8 +294,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                       Connect.connectToBootstrap[Effect](addr,
                                                          maxNumOfAttempts = 5,
                                                          defaultTimeout = defaultTimeout)))
-      _ <- if (res.isRight) MonadOps.forever(Connect.findAndConnect[Effect](defaultTimeout), 0)
-          else ().pure[Effect]
+      _ <- {
+        implicit val casperEvidence      = resources.casperConstructor
+        implicit val packetHandlerEffect = resources.packetHandler
+        if (res.isRight)
+          MonadOps.forever((i: Int) =>
+                             Connect
+                               .findAndConnect[Effect](defaultTimeout)
+                               .apply(i) <* requestApprovedBlock[Effect],
+                           0)
+        else ().pure[Effect]
+      }
       _ <- exit0.toEffect
     } yield ()
 
