@@ -21,8 +21,8 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[C, K, R, A, P]] = {
-    val installs = new SyncVar[Installs[C, K, R, A, P]]()
+  private[this] val installs: SyncVar[Installs[C, P, A, R, K]] = {
+    val installs = new SyncVar[Installs[C, P, A, R, K]]()
     installs.put(Map.empty)
     installs
   }
