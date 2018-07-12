@@ -36,7 +36,6 @@ deploy:deploy-rnode-to-dockerhub:
         sudo docker tag coop.rchain/rnode:latest rchain/rnode:latest
         sudo docker push rchain/rnode:latest 
       fi
- 
   only:
     - master
     - dev
