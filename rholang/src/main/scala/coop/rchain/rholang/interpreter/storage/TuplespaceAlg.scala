@@ -33,18 +33,17 @@ object TuplespaceAlg {
                          persistent: Boolean): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[Unit] =
-        res match {
-          case Some((continuation, dataList)) =>
-            if (persistent) {
-              Parallel.parSequence_[List, F, M, Unit](
+        res
+          .map {
+            case (continuation, dataList) =>
+              if (persistent) {
                 List(dispatcher.dispatch(continuation, dataList),
-                     produce(channel, data, persistent)))
-            } else {
-              dispatcher.dispatch(continuation, dataList)
-            }
-          case None =>
-            F.unit
-        }
+                     produce(channel, data, persistent)).parSequence.as(())
+              } else {
+                dispatcher.dispatch(continuation, dataList)
+              }
+          }
+          .getOrElse(F.unit)
 
       for {
         res <- pureRSpace.produce(channel, data, persist = persistent)
@@ -59,23 +58,26 @@ object TuplespaceAlg {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          pureRSpace
-            .consume(sources.map(q => Channel(q)).toList,
-                     patterns.toList,
-                     TaggedContinuation(ParBody(body)),
-                     persist = persistent)
-            .flatMap {
+          def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[Unit] =
+            res match {
               case Some((continuation, dataList)) =>
                 dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
                   List(dispatcher.dispatch(continuation, dataList),
-                       consume(binds, body, persistent)).parSequence
-                    .as(())
+                       consume(binds, body, persistent)).parSequence.as(())
                 } else {
                   dispatcher.dispatch(continuation, dataList)
                 }
               case None => F.unit
             }
+
+          for {
+            res <- pureRSpace.consume(sources.map(q => Channel(q)).toList,
+                                      patterns.toList,
+                                      TaggedContinuation(ParBody(body)),
+                                      persist = persistent)
+            _ <- go(res)
+          } yield ()
       }
   }
 }

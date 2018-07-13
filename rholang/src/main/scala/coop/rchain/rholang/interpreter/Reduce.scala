@@ -62,9 +62,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Chargeable[A].termSize(term)) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Chargeable[A].termSize(term)) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
@@ -76,9 +76,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Chargeable[A].termSize(term)) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Chargeable[A].termSize(term)) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
@@ -708,14 +708,14 @@ object Reduce {
       def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
-            costAccountingAlg.charge(basePs.size * ADD_COST) *>
+            costAccountingAlg.charge(ADD_COST * basePs.size) *>
               Applicative[M].pure[Expr](
                 ESetBody(
                   ParSet(basePs.union(otherPs.sortedPars.toSet),
                          base.connectiveUsed || other.connectiveUsed,
                          locallyFreeUnion(base.locallyFree, other.locallyFree))))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
-            costAccountingAlg.charge(baseMap.size * ADD_COST) *>
+            costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap((baseMap ++ otherMap.sortedMap).toSeq,
@@ -749,7 +749,7 @@ object Reduce {
           case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
-            costAccountingAlg.charge(basePs.size * REMOVE_COST) *>
+            costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
               Applicative[M].pure[Expr](
                 ESetBody(
                   ParSet(basePs.diff(otherPs.sortedPars.toSet),
@@ -757,7 +757,7 @@ object Reduce {
                          locallyFreeUnion(base.locallyFree, other.locallyFree))))
           case (EMapBody(ParMap(basePs, _, _)), EMapBody(ParMap(otherPs, _, _))) =>
             val newMap = basePs -- otherPs.keys
-            costAccountingAlg.charge(basePs.size * REMOVE_COST) *>
+            costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
               Applicative[M].pure[Expr](
                 EMapBody(ParMap(newMap))
               )

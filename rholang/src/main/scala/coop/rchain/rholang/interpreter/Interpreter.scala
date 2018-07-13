@@ -84,25 +84,27 @@ object Interpreter {
   def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
     for {
       term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
-      errors <- evaluate(runtime, term).map(_._2).attempt.raiseOnLeft
+      errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
       result <- if (errors.isEmpty)
                  Task.now(runtime)
                else
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
     } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[(CostAccount, Vector[Throwable])] = {
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
       cost   <- runtime.getCost()
-    } yield (cost, errors)
+    } yield EvaluateResult(cost, errors)
   }
 
   private def mkErrorMsg(errors: Vector[Throwable]) =
     errors
       .map(_.toString())
       .mkString("Errors received during evaluation:\n", "\n", "\n")
+
+  final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
 
 }

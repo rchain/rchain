@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -123,10 +124,10 @@ object RholangCLI {
   }
 
   @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[(CostAccount, Vector[Throwable])]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success((cost, errors))) =>
+        case Some(Success(EvaluateResult(cost, errors))) =>
           printCost(cost)
           printErrors(errors)
         case Some(Failure(e)) => throw e
