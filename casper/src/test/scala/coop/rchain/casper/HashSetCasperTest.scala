@@ -32,10 +32,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val storageDirectory            = Files.createTempDirectory(s"hash-set-casper-test-genesis")
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
-  val runtime                     = new SyncVar[Runtime]()
-  runtime.put(activeRuntime)
-  val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
-  val genesis                         = Genesis.withContracts(initial, Nil, initStateHash, runtimeManager)
+  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
+  val initStateHash               = runtimeManager.initStateHash
+  val genesis                     = Genesis.withContracts(initial, Nil, initStateHash, runtimeManager)
   activeRuntime.close()
 
   //put a new casper instance at the start of each

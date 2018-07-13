@@ -25,9 +25,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val storageDirectory            = Files.createTempDirectory(s"rholang-build-test-genesis")
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
-  val runtime                     = new SyncVar[Runtime]()
-  runtime.put(activeRuntime)
-  val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
+  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
+  val initStateHash               = runtimeManager.initStateHash
   val genesis =
     Genesis.withContracts(List.empty[Deploy], initial, Nil, initStateHash, runtimeManager)
   activeRuntime.close()

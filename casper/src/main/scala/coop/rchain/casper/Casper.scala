@@ -80,7 +80,7 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      activeRuntime: Runtime,
+      runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
@@ -94,10 +94,7 @@ sealed abstract class MultiParentCasperInstances {
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
-
-      private val runtime = new SyncVar[Runtime]()
-      runtime.put(activeRuntime)
-      private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
+      private val initStateHash = runtimeManager.initStateHash
 
       private val (maybePostGenesisStateHash, _) = InterpreterUtil
         .validateBlockCheckpoint(
@@ -594,14 +591,14 @@ sealed abstract class MultiParentCasperInstances {
 
   def fromConfig[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
+      G[_]: Monad: Capture: Log: Time](conf: CasperConf, runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
     for {
       genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
                                            conf.numValidators,
                                            conf.genesisPath,
                                            conf.walletsFile,
-                                           activeRuntime)
+                                           runtimeManager)
       validatorId <- ValidatorIdentity.fromConfig[G](conf)
-    } yield hashSetCasper[F](activeRuntime, validatorId, genesis)
+    } yield hashSetCasper[F](runtimeManager, validatorId, genesis)
 }

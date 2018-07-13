@@ -33,10 +33,10 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   val initState        = BlockDag().copy(currentId = -1)
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-  val runtime          = new SyncVar[Runtime]()
-  runtime.put(Runtime.create(storageDirectory, storageSize))
-  val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
-  val knownStateHashes                = Set[StateHash](initStateHash)
+  val activeRuntime    = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
+  val initStateHash    = runtimeManager.initStateHash
+  val knownStateHashes = Set[StateHash](initStateHash)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
     val genesisDeploys = Vector(

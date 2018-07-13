@@ -17,7 +17,7 @@ import RuntimeManager.StateHash
 import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
+class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
 
   def replayComputeState(log: trace.Log)(
       implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
@@ -84,11 +84,11 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(runtime: SyncVar[Runtime]): (StateHash, RuntimeManager) = {
-    val active = runtime.take()
-    val hash   = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+  def fromRuntime(active: Runtime): RuntimeManager = {
+    val hash    = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+    val runtime = new SyncVar[Runtime]()
     runtime.put(active)
 
-    (hash, new RuntimeManager(runtime))
+    new RuntimeManager(hash, runtime)
   }
 }
