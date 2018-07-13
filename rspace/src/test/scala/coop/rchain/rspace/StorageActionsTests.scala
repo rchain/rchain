@@ -1105,6 +1105,39 @@ trait StorageActionsTests
       getK(r2).results should contain(List("datum", "datum"))
   }
 
+  "clear" should "empty the store, reset the event log, and reset the trie updates log" in withTestSpace {
+    space =>
+      val store    = space.store
+      val key      = List("ch1")
+      val patterns = List(Wildcard)
+      val keyHash  = store.hashChannels(key)
+
+      val r = space.consume(key, patterns, new StringsCaptor, persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getChannels(txn, keyHash) shouldBe List("ch1")
+        store.getPatterns(txn, key) shouldBe List(patterns)
+        store.getData(txn, key) shouldBe Nil
+        store.getWaitingContinuation(txn, key) should not be empty
+      }
+
+      r shouldBe None
+      store.isEmpty shouldBe false
+      store.getTrieUpdates.length shouldBe 1
+      store.getTrieUpdateCount shouldBe 1
+
+      val checkpoint0 = space.createCheckpoint()
+      checkpoint0.log should not be empty
+
+      space.clear()
+      store.isEmpty shouldBe true
+      store.getTrieUpdates.length shouldBe 0
+      store.getTrieUpdateCount shouldBe 0
+
+      val checkpoint1 = space.createCheckpoint()
+      checkpoint1.log shouldBe empty
+  }
+
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates

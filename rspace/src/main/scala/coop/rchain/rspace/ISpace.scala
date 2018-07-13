@@ -4,9 +4,12 @@ import cats.implicits._
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.catscontrib._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.Log
+import coop.rchain.shared.SyncVarOps
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
+import scala.concurrent.SyncVar
 
 /** The interface for RSpace
   *
@@ -24,6 +27,9 @@ trait ISpace[C, P, A, R, K] {
   val store: IStore[C, P, A, K]
 
   val branch: Branch
+
+  protected[this] val eventLog: SyncVar[Log] =
+    SyncVarOps.create[Log](Seq.empty)
 
   /* Consume */
 
@@ -186,7 +192,9 @@ trait ISpace[C, P, A, R, K] {
     */
   def reset(root: Blake2b256Hash): Unit
 
-  protected[this] def restoreInstalls(txn: store.Transaction): Unit = ()
+  /** Clears the store.  Does not affect the history trie.
+    */
+  def clear(): Unit
 
   /** Closes
     */
