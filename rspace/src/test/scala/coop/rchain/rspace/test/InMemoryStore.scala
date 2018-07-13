@@ -69,7 +69,7 @@ class InMemoryStore[C, P, A, K](
   private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
 
   private[this] def updateGauges() =
-    withTxn(createTxnRead())(_.readState{state =>
+    withTxn(createTxnRead())(_.readState { state =>
       entriesGauge.set(state.size)
     })
 
@@ -275,9 +275,6 @@ class InMemoryStore[C, P, A, K](
       eventsCounter.reset()
       (State.empty, ())
     })
-
-  def getStoreCounters: StoreCounters =
-    withTxn(createTxnRead())(_.readState(state => eventsCounter.createCounters(0, state.size)))
 
   def isEmpty: Boolean = withTxn(createTxnRead())(_.readState(_.isEmpty))
 

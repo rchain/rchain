@@ -47,7 +47,7 @@ object Genesis {
     ).map(termDeploy)
     withContracts(defaultBlessedTerms, initial, wallets, startHash, runtimeManager)
   }
-  
+
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
                     wallets: Seq[Wallet],

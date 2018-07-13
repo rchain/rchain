@@ -46,7 +46,7 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] type Transaction     = Txn[ByteBuffer]
   private[rspace] type TrieTransaction = Transaction
 
-  private[this] val gaugeTags       = Map("path" -> databasePath.toString)
+  private[this] val gaugeTags    = Map("path" -> databasePath.toString)
   private[this] val sizeGauge    = Kamon.gauge("size").refine(gaugeTags)
   private[this] val entriesGauge = Kamon.gauge("entries").refine(gaugeTags)
 
@@ -296,9 +296,6 @@ class LMDBStore[C, P, A, K] private (
     _dbGNATs.close()
     _dbJoins.close()
   }
-
-  def getStoreCounters: StoreCounters =
-    eventsCounter.createCounters(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>

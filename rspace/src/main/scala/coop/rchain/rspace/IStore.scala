@@ -72,8 +72,6 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def close(): Unit
 
-  def getStoreCounters: StoreCounters
-
   val trieStore: ITrieStore[TrieTransaction, Blake2b256Hash, GNAT[C, P, A, K]]
 
   val trieBranch: Branch
