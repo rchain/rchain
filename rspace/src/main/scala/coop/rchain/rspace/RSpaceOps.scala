@@ -27,7 +27,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     installs
   }
 
-  override protected[this] def restoreInstalls(txn: store.Transaction): Unit =
+  protected[this] def restoreInstalls(txn: store.Transaction): Unit =
     installs.get.foreach {
       case (channels, Install(patterns, continuation, _match)) =>
         install(txn, channels, patterns, continuation)(_match)

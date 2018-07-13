@@ -186,7 +186,6 @@ trait ISpace[C, P, A, R, K] {
     */
   def reset(root: Blake2b256Hash): Unit
 
-  protected[this] def restoreInstalls(txn: store.Transaction): Unit = ()
 
   /** Closes
     */
