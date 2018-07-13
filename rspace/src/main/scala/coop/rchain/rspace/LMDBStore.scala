@@ -37,7 +37,7 @@ class LMDBStore[C, P, A, K] private (
   codecA: Codec[A],
   codecK: Codec[K])
     extends IStore[C, P, A, K]
-    with LMDBStorage {
+    with LMDBOps {
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))

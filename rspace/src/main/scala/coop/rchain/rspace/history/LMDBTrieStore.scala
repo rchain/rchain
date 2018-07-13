@@ -2,7 +2,7 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 
-import coop.rchain.rspace.{Blake2b256Hash, LMDBStorage}
+import coop.rchain.rspace.{Blake2b256Hash, LMDBOps}
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
@@ -21,7 +21,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
                                                                   codecK: Codec[K],
                                                                   codecV: Codec[V])
     extends ITrieStore[Txn[ByteBuffer], K, V]
-    with LMDBStorage {
+    with LMDBOps {
 
   private[rspace] def put(txn: Txn[ByteBuffer], key: Blake2b256Hash, value: Trie[K, V]): Unit =
     _dbTrie.put(txn, key, value)
