@@ -17,15 +17,16 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, R, K] {
+) extends RSpaceOps[C, P, A, R, K](store, branch)
+    with ISpace[C, P, A, R, K] {
 
-  private val logger: Logger = Logger[this.type]
+  override protected[this] val logger: Logger = Logger[this.type]
 
   private val replayData: SyncVar[ReplayData] = {
     val sv = new SyncVar[ReplayData]()
@@ -146,9 +147,6 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
         }
       }
     }
-
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] = None
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
@@ -317,6 +315,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
     // update the replay data
     replayData.update(const(rigs))
   }
+
 }
 
 object ReplayRSpace {

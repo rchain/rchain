@@ -21,25 +21,31 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
-                       val space: ISpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
-                       val replaySpace: ReplayRSpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                       val costAccountingPure: CostAccountingAlg[Task],
-                       val costAccountingReplay: CostAccountingAlg[Task],
-                       var errorLog: ErrorLog) {
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel,
+                                  BindPattern,
+                                  ListChannelWithRandom,
+                                  ListChannelWithRandom,
+                                  TaggedContinuation],
+    val costAccountingPure: CostAccountingAlg[Task],
+    val costAccountingReplay: CostAccountingAlg[Task],
+    var errorLog: ErrorLog,
+    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def getCost(): Task[CostAccount]                 = costAccountingPure.getTotal
   def getCostReplay(): Task[CostAccount]           = costAccountingReplay.getTotal
-  def close(): Unit                                = space.close()
+  def close(): Unit = {
+    space.close()
+    replaySpace.close()
+    context.close()
+  }
 }
 
 object Runtime {
@@ -54,11 +60,24 @@ object Runtime {
                                                      ListChannelWithRandom,
                                                      ListChannelWithRandom,
                                                      TaggedContinuation],
+                                       replaySpace: ISpace[Channel,
+                                                           BindPattern,
+                                                           ListChannelWithRandom,
+                                                           ListChannelWithRandom,
+                                                           TaggedContinuation],
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.map {
       case (name, arity, remainder, ref) =>
         space.install(
+          List(Channel(Quote(GString(name)))),
+          List(
+            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+                        remainder,
+                        freeCount = arity)),
+          TaggedContinuation(ScalaBodyRef(ref))
+        )
+        replaySpace.install(
           List(Channel(Quote(GString(name)))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
@@ -141,7 +160,7 @@ object Runtime {
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-      introduceSystemProcesses(space, procDefs)
+      introduceSystemProcesses(space, replaySpace, procDefs)
 
     assert(res.forall(_.isEmpty))
 
@@ -151,6 +170,7 @@ object Runtime {
                 replaySpace,
                 costAccountingPure,
                 costAccountingReplay,
-                errorLog)
+                errorLog,
+                context)
   }
 }

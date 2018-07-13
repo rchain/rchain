@@ -53,7 +53,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
         case Right(term) =>
           runEvaluate(runtime, term).attempt.map {
             case Left(ex) => s"Caught boxed exception: $ex"
-            case Right((cost, errors)) => {
+            case Right(EvaluateResult(cost, errors)) => {
               val errorStr =
                 if (errors.isEmpty)
                   ""
@@ -76,11 +76,11 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
   def eval(request: EvalRequest): Future[ReplResponse] =
     exec(new StringReader(request.program))
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[(CostAccount, Vector[Throwable])] =
+  def runEvaluate(runtime: Runtime, term: Par): Task[EvaluateResult] =
     for {
       _      <- Task.now(printNormalizedTerm(term))
       result <- evaluate(runtime, term)
-    } yield (result)
+    } yield result
 
   private def printNormalizedTerm(normalizedTerm: Par): Unit = {
     Console.println("\nEvaluating:")

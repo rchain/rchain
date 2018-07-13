@@ -36,19 +36,21 @@ trait PersistentStoreTester {
                 ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
+      dbDir,
+      1024 * 1024 * 1024)
     val store: IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation] =
-      LMDBStore.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
-        dbDir,
-        1024 * 1024 * 1024)
-    val space = new RSpace[Channel,
-                           BindPattern,
-                           ListChannelWithRandom,
-                           ListChannelWithRandom,
-                           TaggedContinuation](store, Branch("test"))
+      LMDBStore.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](context)
+    val space = RSpace.create[Channel,
+                              BindPattern,
+                              ListChannelWithRandom,
+                              ListChannelWithRandom,
+                              TaggedContinuation](store, Branch("test"))
     try {
       f(space)
     } finally {
       space.close()
+      context.close()
     }
   }
 }
