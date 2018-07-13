@@ -4,9 +4,11 @@ import cats.implicits._
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.catscontrib._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.Log
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
+import scala.concurrent.SyncVar
 
 /** The interface for RSpace
   *
@@ -24,6 +26,13 @@ trait ISpace[C, P, A, R, K] {
   val store: IStore[C, P, A, K]
 
   val branch: Branch
+
+  protected[this] val eventLog: SyncVar[Log] = {
+    val log = new SyncVar[Log]()
+    log.put(Seq.empty)
+    log
+  }
+
 
   /* Consume */
 
