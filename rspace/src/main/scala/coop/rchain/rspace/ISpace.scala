@@ -195,6 +195,9 @@ trait ISpace[C, P, A, R, K] {
     */
   def reset(root: Blake2b256Hash): Unit
 
+  /** Clears the store.  Does not affect the history trie.
+    */
+  def clear(): Unit
 
   /** Closes
     */
