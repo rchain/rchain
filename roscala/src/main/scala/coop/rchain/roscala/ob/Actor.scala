@@ -42,13 +42,14 @@ class Actor extends MboxOb {
                                                                globalEnv: GlobalEnv): Ob = {
     logger.debug(s"Update $this")
 
-    val keyStart   = if (enabledSetProvided) 1 else 0
-    var result: Ob = this
+    val keyStart      = if (enabledSetProvided) 1 else 0
+    val newEnabledSet = if (enabledSetProvided) ctxt.argvec(0) else Nil
+    var result: Ob    = this
 
     if (ctxt.nargs > keyStart)
       result = super.update(enabledSetProvided, ctxt)(state, globalEnv)
 
-    mbox.nextMsg(this, if (enabledSetProvided) ctxt.argvec(0) else Nil, state, globalEnv)
+    mbox.nextMsg(this, newEnabledSet, state, globalEnv)
 
     result
   }

@@ -2,7 +2,7 @@ package coop.rchain.roscala.ob
 
 import com.typesafe.scalalogging.Logger
 
-import Ob.logger
+import coop.rchain.roscala.ob.Ob.logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 
