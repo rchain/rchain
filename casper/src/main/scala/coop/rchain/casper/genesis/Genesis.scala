@@ -47,7 +47,7 @@ object Genesis {
     ).map(termDeploy)
     withContracts(defaultBlessedTerms, initial, wallets, startHash, runtimeManager)
   }
-  
+
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
                     wallets: Seq[Wallet],
@@ -98,7 +98,7 @@ object Genesis {
       numValidators: Int,
       genesisPath: Path,
       maybeWalletsPath: Option[String],
-      activeRuntime: Runtime)(implicit scheduler: Scheduler): F[BlockMessage] =
+      runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
@@ -122,13 +122,7 @@ object Genesis {
       bonds   <- getBonds[F](bondsFile, numValidators, genesisPath)
       now     <- Time[F].currentMillis
       initial = withoutContracts(bonds = bonds, timestamp = now, version = 0L)
-      runtime = new SyncVar[Runtime]()
-      genesis <- Capture[F].capture {
-                  runtime.put(activeRuntime)
-                  val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
-                  withContracts(initial, wallets, initStateHash, runtimeManager)
-                }
-    } yield genesis
+    } yield withContracts(initial, wallets, runtimeManager.initStateHash, runtimeManager)
 
   private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
                                              defaultPath: Path): F[Option[File]] =
