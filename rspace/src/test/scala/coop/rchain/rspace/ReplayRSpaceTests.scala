@@ -746,7 +746,11 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replaySpace.produce(channel, datum, persist = false) shouldBe defined
   }
 
-  "clear" should "empty the store, reset the event log, reset the trie updates log, and reset the replay data" in
+  "clear" should
+    """|empty the replay store,
+       |reset the replay event log,
+       |reset the replay trie updates log,
+       |and reset the replay data""".stripMargin in
     withTestSpaces { (space, replaySpace) =>
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
