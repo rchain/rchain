@@ -10,8 +10,8 @@ object SecureRandomUtil {
     "SHA1PRNG"
   )
 
-  def getSecureRandomInstance: SecureRandom =
-    instances.iterator //use iterator for lazy evaluation
+  lazy val secureRandomInstance: SecureRandom =
+    instances.iterator //use iterator to try instances lazily
       .map(name => Try(SecureRandom.getInstance(name)))
       .collectFirst {
         case Success(sr) => sr
