@@ -19,6 +19,8 @@ import scodec.bits._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
+import kamon._
+
 /**
   * The main store class.
   *
@@ -44,6 +46,15 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] type Transaction     = Txn[ByteBuffer]
   private[rspace] type TrieTransaction = Transaction
 
+  private[this] val gaugeTags       = Map("path" -> databasePath.toString)
+  private[this] val sizeGauge    = Kamon.gauge("size").refine(gaugeTags)
+  private[this] val entriesGauge = Kamon.gauge("entries").refine(gaugeTags)
+
+  private[this] def updateGauges() = {
+    sizeGauge.set(databasePath.folderSize)
+    entriesGauge.set(env.stat().entries)
+  }
+
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
@@ -62,6 +73,7 @@ class LMDBStore[C, P, A, K] private (
         txn.abort()
         throw ex
     } finally {
+      updateGauges()
       txn.close()
     }
 

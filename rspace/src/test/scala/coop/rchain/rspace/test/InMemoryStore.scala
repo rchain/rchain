@@ -15,6 +15,8 @@ import scodec.Codec
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
+import kamon._
+
 trait InMemTransaction[S] {
   def commit(): Unit
   def abort(): Unit
@@ -63,6 +65,14 @@ class InMemoryStore[C, P, A, K](
 
   private[this] type StateType = State[C, P, A, K]
 
+  private[this] val refine       = Map("path" -> "inmem")
+  private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
+
+  private[this] def updateGauges() =
+    withTxn(createTxnRead())(_.readState{state =>
+      entriesGauge.set(state.size)
+    })
+
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
 
@@ -91,8 +101,10 @@ class InMemoryStore[C, P, A, K](
       private[this] val initial = stateRef.take
       private[this] var current = initial
 
-      override def commit(): Unit =
+      override def commit(): Unit = {
         stateRef.put(current)
+        updateGauges()
+      }
 
       override def abort(): Unit = stateRef.put(initial)
 
