@@ -5,6 +5,7 @@ import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.catscontrib._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log
+import coop.rchain.shared.SyncVarOps
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
@@ -27,12 +28,8 @@ trait ISpace[C, P, A, R, K] {
 
   val branch: Branch
 
-  protected[this] val eventLog: SyncVar[Log] = {
-    val log = new SyncVar[Log]()
-    log.put(Seq.empty)
-    log
-  }
-
+  protected[this] val eventLog: SyncVar[Log] =
+    SyncVarOps.create[Log](Seq.empty)
 
   /* Consume */
 
