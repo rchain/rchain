@@ -99,23 +99,21 @@ sealed abstract class MultiParentCasperInstances {
       runtime.put(activeRuntime)
       private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
 
-      private val (maybePostGenesisStateHash, _) = InterpreterUtil
-        .validateBlockCheckpoint(
-          genesis,
-          genesis,
-          _blockDag.get,
-          initStateHash,
-          Set[StateHash](initStateHash),
-          runtimeManager
-        )
-      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] =
-        maybePostGenesisStateHash match {
-          case Some(postGenesisStateHash) =>
-            new AtomicSyncVar(
-              Set[StateHash](initStateHash, postGenesisStateHash)
-            )
-          case None => throw new Error("Genesis block validation failed.")
-        }
+      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
+        Set[StateHash](initStateHash)
+      )
+      knownStateHashesContainer.update(
+        InterpreterUtil
+          .computeBlockCheckpoint(
+            genesis,
+            genesis,
+            _blockDag.get,
+            initStateHash,
+            _,
+            runtimeManager.computeState
+          )
+          ._2
+      )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
