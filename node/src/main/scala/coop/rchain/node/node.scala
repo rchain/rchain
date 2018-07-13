@@ -13,6 +13,7 @@ import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -183,10 +184,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
-      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         implicit val storeMetrics =
