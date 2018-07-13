@@ -767,19 +767,19 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replaySpace.consume(channels, patterns, continuation, false) shouldBe None
 
-      val store = replaySpace.store
+      val replayStore = replaySpace.store
 
-      store.isEmpty shouldBe false
-      store.getTrieUpdates.length shouldBe 1
-      store.getTrieUpdateCount shouldBe 1
+      replayStore.isEmpty shouldBe false
+      replayStore.getTrieUpdates.length shouldBe 1
+      replayStore.getTrieUpdateCount shouldBe 1
 
       val checkpoint0 = replaySpace.createCheckpoint()
       checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
 
       replaySpace.clear()
-      store.isEmpty shouldBe true
-      store.getTrieUpdates.length shouldBe 0
-      store.getTrieUpdateCount shouldBe 0
+      replayStore.isEmpty shouldBe true
+      replayStore.getTrieUpdates.length shouldBe 0
+      replayStore.getTrieUpdateCount shouldBe 0
       replaySpace.replayData.get shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
