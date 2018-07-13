@@ -33,12 +33,10 @@ class KeyBench {
 }
 
 object KeyBench {
-  val r = new Random()
-
   @State(Scope.Benchmark)
   class KeyState {
     def hash: Blake2b256Hash = {
-      val bytes = Array.fill[Byte](32)(r.nextInt().toByte)
+      val bytes = Array.fill[Byte](32)(Random.nextInt().toByte)
       Blake2b256Hash.create(bytes)
     }
 
