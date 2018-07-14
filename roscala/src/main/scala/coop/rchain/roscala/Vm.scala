@@ -6,10 +6,8 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Location._
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
-import coop.rchain.roscala.pools.{Executor, StrandPool}
+import coop.rchain.roscala.pools.{ParallelStrandPool, StrandPool, StrandPoolExecutor}
 import coop.rchain.roscala.prim.Prim
-
-import scala.collection.mutable
 
 object Vm {
 
@@ -27,18 +25,17 @@ object Vm {
                          var nextOpFlag: Boolean = false,
                          var pc: Int = 0,
                          var vmErrorFlag: Boolean = false,
-                         globalEnv: GlobalEnv) {
-    val strandPool = new StrandPool
-  }
+                         globalEnv: GlobalEnv)(val strandPool: StrandPool) {}
 
-  def run(ctxt: Ctxt, state: State): Unit = {
-    val vm = new Vm(ctxt, state)
-    Executor.start(vm)
+  def run[E: StrandPoolExecutor](ctxt: Ctxt, state: StrandPool => State): Unit = {
+    val strandPool = StrandPoolExecutor.instance[E]
+    val vm         = new Vm(ctxt, state(strandPool))
+    StrandPoolExecutor.start(vm)
     vm.logger.debug("Exiting the VM")
   }
 }
 
-class Vm(ctxt0: Ctxt, val state0: State) extends RecursiveAction {
+class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
   val logger = Logger("Vm")
 
   override def compute(): Unit = run(ctxt0, state0)
@@ -188,7 +185,7 @@ class Vm(ctxt0: Ctxt, val state0: State) extends RecursiveAction {
       case OpFork(pc) =>
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
-        state.strandPool.enqueue((newCtxt, globalEnv))
+        state.strandPool.prepend((newCtxt, globalEnv))
         state.nextOpFlag = true
 
       /**

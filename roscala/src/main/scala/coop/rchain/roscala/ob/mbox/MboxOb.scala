@@ -13,7 +13,7 @@ class MboxOb extends Ob {
   }
 
   def schedule(ctxt: Ctxt, state: State): Unit =
-    state.strandPool.enqueue((ctxt, state.globalEnv))
+    state.strandPool.append((ctxt, state.globalEnv))
 }
 
 object MboxOb {

@@ -84,7 +84,7 @@ class Ctxt(var tag: Location,
   }
 
   def scheduleStrand(state: State): Unit =
-    state.strandPool.enqueue((this, state.globalEnv))
+    state.strandPool.append((this, state.globalEnv))
 
   def reg(reg: Int): Ob =
     reg match {
