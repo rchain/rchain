@@ -25,7 +25,6 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
     store.eventsCounter.registerConsume {

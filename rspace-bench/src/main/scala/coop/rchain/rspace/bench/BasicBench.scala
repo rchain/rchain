@@ -33,6 +33,7 @@ class BasicBench {
 
     assert(getK(r2).results.head.toSet == Set("bad", "finger"))
   }
+
 }
 
 object BasicBench {
