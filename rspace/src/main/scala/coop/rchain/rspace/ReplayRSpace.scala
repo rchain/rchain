@@ -30,7 +30,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private val replayData: SyncVar[ReplayData] = {
+  private[rspace] val replayData: SyncVar[ReplayData] = {
     val sv = new SyncVar[ReplayData]()
     sv.put(ReplayData.empty)
     sv
@@ -327,6 +327,10 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     replayData.update(const(rigs))
   }
 
+  override def clear(): Unit = {
+    replayData.update(const(ReplayData.empty))
+    super.clear()
+  }
 }
 
 object ReplayRSpace {

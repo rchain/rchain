@@ -27,12 +27,6 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private val eventLog: SyncVar[Log] = {
-    val log = new SyncVar[Log]()
-    log.put(Seq.empty)
-    log
-  }
-
   private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
 
