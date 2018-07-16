@@ -26,7 +26,7 @@ import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
-
+import matcher._
 import scala.collection.immutable.BitSet
 import scala.util.Try
 import Chargeable._
@@ -357,7 +357,7 @@ object Reduce {
                 pattern <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
                 matchResult = SpatialMatcher
                   .spatialMatch(target, pattern)
-                  .runS(SpatialMatcher.emptyMap)
+                  .runS(emptyMap)
                 res <- matchResult match {
                         case None => Applicative[M].pure(Left((target, caseRem)))
                         case Some(freeMap) =>
@@ -556,7 +556,7 @@ object Reduce {
             (GBool(
               SpatialMatcher
                 .spatialMatch(substTarget, substPattern)
-                .runS(SpatialMatcher.emptyMap)
+                .runS(emptyMap)
                 .isDefined))
 
         case EVarBody(EVar(v)) =>
