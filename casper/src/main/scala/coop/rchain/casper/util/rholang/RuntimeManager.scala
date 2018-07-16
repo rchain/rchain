@@ -60,12 +60,11 @@ class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: S
     result
   }
 
-  def getBonds(hash: StateHash): Seq[Bond] = {
+  def computeBonds(hash: StateHash): Seq[Bond] = {
     val resetRuntime     = getResetRuntime(hash)
     val bondsChannel     = Channel(Quote(Par().copy(exprs = Seq(Expr(GString("proofOfStake"))))))
     val bondsChannelData = resetRuntime.space.getData(bondsChannel)
     runtimeContainer.put(resetRuntime)
-    // TODO: Switch to Try() to capture any errors
     toBondSeq(bondsChannelData)
   }
 
