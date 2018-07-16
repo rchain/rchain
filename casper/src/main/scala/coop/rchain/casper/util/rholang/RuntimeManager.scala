@@ -85,6 +85,7 @@ object RuntimeManager {
   type StateHash = ByteString
 
   def fromRuntime(active: Runtime): RuntimeManager = {
+    active.space.clear()
     val hash    = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     val runtime = new SyncVar[Runtime]()
     runtime.put(active)
