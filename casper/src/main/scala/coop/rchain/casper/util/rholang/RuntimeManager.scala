@@ -62,6 +62,7 @@ class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: S
 
   def computeBonds(hash: StateHash): Seq[Bond] = {
     val resetRuntime     = getResetRuntime(hash)
+    // TODO: Switch to a read only name
     val bondsChannel     = Channel(Quote(Par().copy(exprs = Seq(Expr(GString("proofOfStake"))))))
     val bondsChannelData = resetRuntime.space.getData(bondsChannel)
     runtimeContainer.put(resetRuntime)
