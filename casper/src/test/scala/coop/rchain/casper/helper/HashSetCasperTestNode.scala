@@ -124,6 +124,7 @@ object HashSetCasperTestNode {
         case EncryptionHandshakeIncorrectlySigned => "EncryptionHandshakeIncorrectlySigned"
         case BootstrapNotProvided                 => "BootstrapNotProvided"
         case PeerNodeNotFound(peer)               => s"PeerNodeNotFound($peer)"
+        case PeerUnavailable(peer)                => s"PeerUnavailable($peer)"
         case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
         case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
         case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
