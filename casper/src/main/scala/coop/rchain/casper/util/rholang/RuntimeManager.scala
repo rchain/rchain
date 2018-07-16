@@ -1,11 +1,10 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Deploy
-import coop.rchain.casper.protocol.DeployString
+import coop.rchain.casper.protocol.{Bond, Deploy, DeployString}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Par
+import coop.rchain.models.{Channel, _}
 import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
@@ -14,6 +13,11 @@ import monix.execution.Scheduler
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.StateHash
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.rspace.internal.Datum
+import coop.rchain.rspace.trace.Produce
 import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
@@ -54,6 +58,31 @@ class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: S
     val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
     runtimeContainer.put(resetRuntime)
     result
+  }
+
+  def getBonds(hash: StateHash): Seq[Bond] = {
+    val resetRuntime     = getResetRuntime(hash)
+    val bondsChannel     = Channel(Quote(Par().copy(exprs = Seq(Expr(GString("proofOfStake"))))))
+    val bondsChannelData = resetRuntime.space.getData(bondsChannel)
+    // TODO: Switch to Try() to capture any errors
+    toBondSeq(bondsChannelData)
+  }
+
+  private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
+    assert(data.length == 1)
+    val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
+    as.channels.head match {
+      case Channel(Quote(p)) =>
+        p.exprs.head.getEMapBody.ps.map {
+          case (validator: Par, bond: Par) =>
+            assert(validator.exprs.length == 1)
+            assert(bond.exprs.length == 1)
+            val validatorName = validator.exprs.head.getGString
+            val stakeAmount   = bond.exprs.head.getGInt
+            Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
+        }.toList
+      case Channel(_) => throw new Error("Should never happen")
+    }
   }
 
   private def getResetRuntime(hash: StateHash) = {

@@ -333,4 +333,19 @@ object Validate {
       Applicative[F].pure(Right(Valid))
     }
   }
+
+  def bondsCache[F[_]: Applicative: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager): F[Either[InvalidBlock, ValidBlock]] = {
+    val bonds          = ProtoUtil.bonds(b)
+    val tuplespaceHash = ProtoUtil.tuplespace(b).get
+    val computedBonds  = runtimeManager.getBonds(tuplespaceHash)
+    if (bonds == computedBonds) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn("Bonds in proof of stake contract do not match block's bond cache.")
+      } yield Left(InvalidBondsCache)
+    }
+  }
 }
