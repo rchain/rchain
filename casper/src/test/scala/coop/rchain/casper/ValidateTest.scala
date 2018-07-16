@@ -383,5 +383,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val modifiedBody      = genesis.body.get.withPostState(modifiedPostState)
     val modifiedGenesis   = genesis.withBody(modifiedBody)
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
+    
+    activeRuntime.close()
   }
 }
