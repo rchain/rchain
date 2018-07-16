@@ -18,7 +18,7 @@ class NonNegativeNumberSpec extends FlatSpec with Matchers {
     TestSetUtil.testPassed(tests.head, tuplespace) should be(true)
   }
 
-  tests.tail.map(test => {
+  tests.tail.foreach(test => {
     it should test in {
       TestSetUtil.testPassed(test, tuplespace) should be(true)
     }
