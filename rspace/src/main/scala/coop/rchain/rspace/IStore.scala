@@ -5,7 +5,9 @@ import java.util.concurrent.atomic.AtomicLong
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.shared.SyncVarOps
+import coop.rchain.shared.SyncVarOps._
 
+import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
@@ -40,6 +42,10 @@ trait IStore[C, P, A, K] {
   private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]]
 
   private[rspace] def removeDatum(txn: Transaction, channel: Seq[C], index: Int): Unit
+
+  private[rspace] def installWaitingContinuation(txn: Transaction,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit
 
   private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
@@ -93,9 +99,20 @@ trait IStore[C, P, A, K] {
     _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, key, gnat))
   }
 
+  private[rspace] def getTrieUpdates: Seq[TrieUpdate[C, P, A, K]] =
+    _trieUpdates.get
+
   protected val _trieUpdateCount: AtomicLong = new AtomicLong(0L)
 
+  private[rspace] def getTrieUpdateCount: Long =
+    _trieUpdateCount.get()
+
   protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
+
+  private[rspace] def clearTrieUpdates(): Unit = {
+    _trieUpdates.update(const(Seq.empty))
+    _trieUpdateCount.set(0L)
+  }
 
   def createCheckpoint(): Blake2b256Hash = {
     val trieUpdates = _trieUpdates.take

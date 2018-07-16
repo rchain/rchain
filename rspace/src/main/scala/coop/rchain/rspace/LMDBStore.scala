@@ -25,7 +25,7 @@ import scala.collection.immutable.Seq
   * To create an instance, use [[LMDBStore.create]].
   */
 class LMDBStore[C, P, A, K] private (
-    env: Env[ByteBuffer],
+    val env: Env[ByteBuffer],
     databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
     _dbJoins: Dbi[ByteBuffer],
@@ -36,7 +36,8 @@ class LMDBStore[C, P, A, K] private (
   codecP: Codec[P],
   codecA: Codec[A],
   codecK: Codec[K])
-    extends IStore[C, P, A, K] {
+    extends IStore[C, P, A, K]
+    with LMDBOps {
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
@@ -48,73 +49,38 @@ class LMDBStore[C, P, A, K] private (
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[rspace] def createTxnRead(): Transaction = env.txnRead
-
-  private[rspace] def createTxnWrite(): Transaction = env.txnWrite
-
-  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
-    try {
-      val ret: R = f(txn)
-      txn.commit()
-      ret
-    } catch {
-      case ex: Throwable =>
-        txn.abort()
-        throw ex
-    } finally {
-      txn.close()
-    }
-
   /* Basic operations */
   private[this] def fetchGNAT(txn: Transaction,
-                              channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
-    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
-    Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
-      Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
-    }
-  }
+                              channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+    _dbGNATs.get(txn, channelsHash)(codecGNAT[C, P, A, K])
+
+  private[this] def installGNAT(txn: Transaction,
+                                channelsHash: Blake2b256Hash,
+                                gnat: GNAT[C, P, A, K]): Unit =
+    _dbGNATs.put(txn, channelsHash, gnat)
 
   private[this] def insertGNAT(txn: Transaction,
                                channelsHash: Blake2b256Hash,
                                gnat: GNAT[C, P, A, K]): Unit = {
-    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
-    val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
-    if (_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
-      trieInsert(channelsHash, gnat)
-    } else {
-      throw new Exception(s"could not persist: $gnat")
-    }
+    _dbGNATs.put(txn, channelsHash, gnat)
+    trieInsert(channelsHash, gnat)
   }
 
   private def deleteGNAT(txn: Txn[ByteBuffer],
                          channelsHash: Blake2b256Hash,
                          gnat: GNAT[C, P, A, K]): Unit = {
-    val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
-    if (_dbGNATs.delete(txn, channelsHashBuff)) {
-      trieDelete(channelsHash, gnat)
-    } else {
-      throw new Exception(s"could not delete: $channelsHash")
-    }
+    _dbGNATs.delete(txn, channelsHash)
+    trieDelete(channelsHash, gnat)
   }
 
   private[this] def fetchJoin(txn: Transaction,
-                              joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
-    val joinedChannelHashBuff = joinedChannelHash.bytes.toDirectByteBuffer
-    Option(_dbJoins.get(txn, joinedChannelHashBuff))
-      .map { bytes =>
-        joinCodec.decode(BitVector(bytes)).map(_.value).get
-      }
-  }
+                              joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] =
+    _dbJoins.get(txn, joinedChannelHash)(joinCodec)
 
   private[this] def insertJoin(txn: Transaction,
                                joinedChannelHash: Blake2b256Hash,
-                               joins: Seq[Seq[C]]): Unit = {
-    val channelsHashBuff   = joinedChannelHash.bytes.toDirectByteBuffer
-    val joinedChannelsBuff = joinCodec.encode(joins).map(_.bytes.toDirectByteBuffer).get
-    if (!_dbJoins.put(txn, channelsHashBuff, joinedChannelsBuff)) {
-      throw new Exception(s"could not persist: $joins")
-    }
-  }
+                               joins: Seq[Seq[C]]): Unit =
+    _dbJoins.put(txn, joinedChannelHash, joins)(joinCodec)
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
@@ -162,6 +128,18 @@ class LMDBStore[C, P, A, K] private (
     removeDatum(txn, Seq(channel), index)
 
   /* Continuations */
+
+  private[rspace] def installWaitingContinuation(txn: Transaction,
+                                                 channels: Seq[C],
+                                                 continuation: WaitingContinuation[P, K]): Unit = {
+    val channelsHash = hashChannels(channels)
+    fetchGNAT(txn, channelsHash) match {
+      case Some(gnat @ GNAT(_, _, currContinuations)) =>
+        installGNAT(txn, channelsHash, gnat.copy(wks = continuation +: currContinuations))
+      case None =>
+        installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
+    }
+  }
 
   private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
@@ -236,7 +214,7 @@ class LMDBStore[C, P, A, K] private (
           if (newJoins.nonEmpty)
             insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
           else
-            _dbJoins.delete(txn, joinedChannelHash.bytes.toDirectByteBuffer)
+            _dbJoins.delete(txn, joinedChannelHash)
         }
       case None =>
         ()
