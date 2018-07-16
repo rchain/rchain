@@ -39,13 +39,6 @@ import monix.eval.Coeval
   */
 trait Reduce[M[_]] {
 
-  def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(implicit env: Env[Par],
-                                                                rand: Blake2b512Random): M[Unit]
-
-  def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random): M[Unit]
-
   def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
 
   def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
@@ -84,7 +77,7 @@ object Reduce {
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
-    override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
+    def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par],
         rand: Blake2b512Random): M[Unit] = {
       // TODO: Handle the environment in the store
@@ -122,7 +115,7 @@ object Reduce {
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
       */
-    override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
+    def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par],
         rand: Blake2b512Random): M[Unit] =
       binds match {
