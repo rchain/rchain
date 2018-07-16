@@ -361,8 +361,13 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
     val initStateHash     = runtimeManager.initStateHash
 
+    val validatorsString = validators.zipWithIndex
+      .map { case (v, i) => s"""
+                            "${Base16.encode(v)}" : ${(2 * i + 1).toString}
+                            """ }
+      .mkString(",")
     val proofOfStakeStub    = s"""
-                           @"proofOfStake"!({"validatorOne" : 1, "validatorTwo" : 2})
+                           @"proofOfStake"!({$validatorsString})
                            """
     val proofOfStakeStubPar = InterpreterUtil.mkTerm(proofOfStakeStub).right.get
     val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
