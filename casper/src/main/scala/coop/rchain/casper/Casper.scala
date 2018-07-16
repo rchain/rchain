@@ -273,7 +273,9 @@ sealed abstract class MultiParentCasperInstances {
                                                                      initStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
-          postNeglectedInvalidBlockStatus <- postTransactionsCheckStatus.joinRight.traverse(
+          postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(_ =>
+                                   Validate.bondsCache[F](b, runtimeManager))
+          postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                               _ =>
                                                 Validate.neglectedInvalidBlockCheck[F](
                                                   b,
@@ -511,6 +513,8 @@ sealed abstract class MultiParentCasperInstances {
           case NeglectedEquivocation =>
             handleInvalidBlockEffect(status, block)
           case InvalidTransaction =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidBondsCache =>
             handleInvalidBlockEffect(status, block)
           case _ => throw new Error("Should never reach")
         }

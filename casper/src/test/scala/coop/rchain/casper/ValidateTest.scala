@@ -372,7 +372,6 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val proofOfStakeStubPar = InterpreterUtil.mkTerm(proofOfStakeStub).right.get
     val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
                                         initial,
-                                        Nil,
                                         initStateHash,
                                         runtimeManager)
 
