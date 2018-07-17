@@ -609,10 +609,18 @@ object Reduce {
                              }
                              GString(result.toString)
                            }
-                       case (_: GString, _) =>
-                         s.raiseError(ReduceError("Error: String can be interpolated only by Map"))
-                       case _ =>
-                         s.raiseError(ReduceError("Error: only Strings can be interpolated"))
+                       case (_: GString, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `%` expected Map but got ${other.getClass.getName}"
+                           )
+                         )
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `%` is not defined on ${other.getClass.getName}"
+                           )
+                         )
                      }
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
@@ -622,8 +630,12 @@ object Reduce {
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
                          Applicative[M].pure[Expr](GString(lhs + rhs))
-                       case _ =>
-                         s.raiseError(ReduceError("Error: only Strings can be concatenated"))
+                       case other =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` is not defined on ${other.getClass.getName}"
+                           )
+                         )
                      }
           } yield result
         case EVarBody(EVar(v)) =>
@@ -940,8 +952,12 @@ object Reduce {
             baseExpr.exprInstance match {
               case GString(string) =>
                 Applicative[M].pure[Expr](GInt(string.length))
-              case _ =>
-                s.raiseError(ReduceError("Error: method 'length' can only be called on Strings."))
+              case other =>
+                s.raiseError(
+                  ReduceError(
+                    s"Error: Method `length` is not defined on ${other.getClass.getName}."
+                  )
+                )
             }
           method("length", 0, args) {
             for {
@@ -958,8 +974,12 @@ object Reduce {
             baseExpr.exprInstance match {
               case GString(string) =>
                 Applicative[M].pure[Par](GString(string.slice(from, until)))
-              case _ =>
-                s.raiseError(ReduceError("Error: method 'slice' can only be called on Strings."))
+              case other =>
+                s.raiseError(
+                  ReduceError(
+                    s"Error: Method `slice` is not defined on ${other.getClass.getName}."
+                  )
+                )
             }
           method("slice", 2, args) {
             for {
