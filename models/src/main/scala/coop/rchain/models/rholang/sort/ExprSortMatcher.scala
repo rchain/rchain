@@ -80,7 +80,14 @@ object ExprSortMatcher {
         val (sortedTarget, sortedPattern) = sortBinaryOperation(em.target, em.pattern)
         constructExpr(EMatchesBody(EMatches(sortedTarget.term, sortedPattern.term)),
                       Node(Score.EMATCHES, sortedTarget.score, sortedPattern.score))
-
+      case EPercentBody(ep) =>
+        val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
+        constructExpr(EPercentBody(EPercent(sortedPar1.term, sortedPar2.term)),
+                      Node(Score.EPERCENT, sortedPar1.score, sortedPar2.score))
+      case EPlusPlusBody(ep) =>
+        val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
+        constructExpr(EPlusPlusBody(EPlusPlus(sortedPar1.term, sortedPar2.term)),
+                      Node(Score.EPLUSPLUS, sortedPar1.score, sortedPar2.score))
       case EMethodBody(em) =>
         val args         = em.arguments.toList.map(par => ParSortMatcher.sortMatch(par))
         val sortedTarget = ParSortMatcher.sortMatch(em.target)

@@ -558,7 +558,61 @@ object Reduce {
                 .spatialMatch(substTarget, substPattern)
                 .runS(SpatialMatcher.emptyMap)
                 .isDefined))
-
+        case EPercentBody(EPercent(p1, p2)) =>
+          for {
+            v1     <- evalSingleExpr(p1.get)
+            v2     <- evalSingleExpr(p2.get)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+              case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
+                rhs.iterator.map {
+                  case (k, v) =>
+                    for {
+                      keyExpr   <- evalSingleExpr(k)
+                      valueExpr <- evalSingleExpr(v)
+                      result    <- (keyExpr.exprInstance, valueExpr.exprInstance) match {
+                        case (GString(keyString), GString(valueString)) =>
+                          Applicative[M].pure[(String, String)](keyString -> valueString)
+                        case (GString(keyString), GInt(valueInt)) =>
+                          Applicative[M].pure[(String, String)](keyString -> valueInt.toString)
+                        // TODO: Add cases for other ground terms as well? Maybe it would be better
+                        // to implement cats.Show for all ground terms.
+                        case (_: GString, value) =>
+                          s.raiseError[(String, String)](
+                            ReduceError(s"Error: interpolation doesn't support ${value.getClass}")
+                          )
+                        case _ =>
+                          s.raiseError[(String, String)](
+                            ReduceError("Error: interpolation Map should only contain String keys")
+                          )
+                      }
+                    } yield result
+                }.toList
+                  .sequence[M, (String, String)]
+                  .map { keyValuePairs =>
+                    GString(
+                      keyValuePairs.foldLeft(lhs) {
+                        case (string, (key, value)) =>
+                          string.replace("${" + key + "}", value)
+                      }
+                    )
+                  }
+              case (_: GString, _) =>
+                s.raiseError(ReduceError("Error: String can be interpolated only by Map"))
+              case _ =>
+                s.raiseError(ReduceError("Error: only Strings can be interpolated"))
+            }
+          } yield result
+        case EPlusPlusBody(EPlusPlus(p1, p2)) =>
+          for {
+            v1     <- evalSingleExpr(p1.get)
+            v2     <- evalSingleExpr(p2.get)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+              case (GString(lhs), GString(rhs)) =>
+                Applicative[M].pure[Expr](GString(lhs + rhs))
+              case _ =>
+                s.raiseError(ReduceError("Error: only Strings can be concatenated"))
+            }
+          } yield result
         case EVarBody(EVar(v)) =>
           for {
             p       <- eval(v)
