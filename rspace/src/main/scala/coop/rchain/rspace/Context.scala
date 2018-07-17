@@ -58,7 +58,7 @@ object Context {
 
     val env = Context.env(path, mapSize, flags)
 
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
 
     new Context(env, path, trieStore)
   }

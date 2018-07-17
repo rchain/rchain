@@ -1,20 +1,34 @@
 package coop.rchain.rspace
 
 import java.nio.ByteBuffer
+import java.nio.file.Path
 
 import org.lmdbjava.{Dbi, Env, Txn}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.AttemptOps._
+import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 
-trait LMDBOps {
+import kamon._
 
-  private[rspace] def env: Env[ByteBuffer]
+trait LMDBOps {
 
   private[rspace] def createTxnRead(): Txn[ByteBuffer] = env.txnRead
 
   private[rspace] def createTxnWrite(): Txn[ByteBuffer] = env.txnWrite
+
+  protected[this] def databasePath: Path
+  protected[this] def env: Env[ByteBuffer]
+
+  private[this] val gaugeTags    = Map("path" -> databasePath.toString)
+  private[this] val sizeGauge    = Kamon.gauge("size").refine(gaugeTags)
+  private[this] val entriesGauge = Kamon.gauge("entries").refine(gaugeTags)
+
+  protected[this] def updateGauges() = {
+    sizeGauge.set(databasePath.folderSize)
+    entriesGauge.set(env.stat().entries)
+  }
 
   private[rspace] def withTxn[R](txn: Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): R =
     try {
@@ -26,6 +40,7 @@ trait LMDBOps {
         txn.abort()
         throw ex
     } finally {
+      updateGauges()
       txn.close()
     }
 

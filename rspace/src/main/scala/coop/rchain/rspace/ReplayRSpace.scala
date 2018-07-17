@@ -17,6 +17,8 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
+import kamon._
+
 class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
@@ -34,9 +36,16 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     sv
   }
 
+  private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
+  private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
+
+  private[this] val consumeSpan   = Kamon.buildSpan("replayrspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("replayrspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("replayrspace.install")
+
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerConsume {
+    Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
@@ -81,6 +90,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                           replays: ReplayData,
                           consumeRef: Consume,
                           comms: Multiset[COMM]): Option[(K, Seq[R])] = {
+          consumeCommCounter.increment()
           store.eventsCounter.registerConsumeCommEvent()
           val commRef = COMM(consumeRef, mats.map(_.datum.source))
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -150,7 +160,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerProduce {
+    Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         @tailrec
         def runMatcher(maybeComm: Option[COMM],
@@ -208,6 +218,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                                   WaitingContinuation(_, continuation, persistK, consumeRef),
                                   continuationIndex,
                                   dataCandidates) =>
+              produceCommCounter.increment()
               store.eventsCounter.registerProduceCommEvent()
               val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
               assert(comms.contains(commRef), "COMM Event was not contained in the trace")
