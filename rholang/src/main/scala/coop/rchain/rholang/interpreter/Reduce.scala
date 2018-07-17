@@ -577,8 +577,8 @@ object Reduce {
                 )
             }
           for {
-            v1 <- evalSingleExpr(p1.get)
-            v2 <- evalSingleExpr(p2.get)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
                          rhs.iterator
@@ -625,8 +625,8 @@ object Reduce {
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
           for {
-            v1 <- evalSingleExpr(p1.get)
-            v2 <- evalSingleExpr(p2.get)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
                          Applicative[M].pure[Expr](GString(lhs + rhs))
