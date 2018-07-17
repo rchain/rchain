@@ -1,14 +1,11 @@
 package coop.rchain.node
 
-import java.net.{InetAddress, NetworkInterface}
+import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
-import com.typesafe.scalalogging.Logger
-import coop.rchain.comm.UPnP
 import coop.rchain.casper.CasperConf
+
 import org.rogach.scallop._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
-import scala.collection.JavaConverters._
 
 // TODO replace with default config file when CORE-512 is resolved
 case class Profile(name: String, dataDir: (() => Path, String))

@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Monad, Parallel, Eval => _}
 import cats.mtl.implicits._
 import cats.mtl.{FunctorTell, MonadState}
 import com.google.protobuf.ByteString
@@ -39,21 +39,23 @@ import monix.eval.Coeval
   */
 trait Reduce[M[_]] {
 
-  def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(implicit env: Env[Par],
-                                                                rand: Blake2b512Random): M[Unit]
-
-  def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
-      implicit env: Env[Par],
-      rand: Blake2b512Random): M[Unit]
+  protected[this] implicit def monadM: Monad[M]
 
   def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit]
 
-  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit]
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
+    for { _ <- eval(par)(Env[Par](), rand) } yield ()
 
   /**
     * Evaluate any top level expressions in @param Par .
     */
-  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
+  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
+    for {
+      evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr))
+      result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
+        acc ++ newPar
+      }
+    } yield result
 
   def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par]
 }
@@ -73,6 +75,8 @@ object Reduce {
       fTell: FunctorTell[M, Throwable])
       extends Reduce[M] {
 
+    implicit val monadM: Monad[M] = implicitly
+
     type Cont[Data, Body] = (Body, Env[Data])
 
     /**
@@ -84,7 +88,7 @@ object Reduce {
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
-    override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
+    def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par],
         rand: Blake2b512Random): M[Unit] = {
       // TODO: Handle the environment in the store
@@ -122,7 +126,7 @@ object Reduce {
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
       */
-    override def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
+    def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par],
         rand: Blake2b512Random): M[Unit] =
       binds match {
@@ -222,9 +226,6 @@ object Reduce {
         })
       ).parSequence.map(_ => ())
     }
-
-    override def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
-      for { _ <- eval(par)(Env[Par](), rand) } yield ()
 
     def evalExplicit(send: Send)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
       eval(send)(env, rand)
@@ -924,16 +925,5 @@ object Reduce {
       val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
       elist.copy(locallyFree = resultLocallyFree)
     }
-
-    /**
-      * Evaluate any top level expressions in @param Par .
-      */
-    def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
-      for {
-        evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr))
-        result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
-          acc ++ newPar
-        }
-      } yield result
   }
 }

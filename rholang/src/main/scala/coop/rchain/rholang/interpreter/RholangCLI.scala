@@ -157,7 +157,7 @@ object RholangCLI {
       for {
         _      <- Task.now(printNormalizedTerm(par))
         result <- Interpreter.evaluate(runtime, par)
-      } yield (result)
+      } yield result
 
     waitForSuccess(evaluatorTask.runAsync)
     printStorageContents(runtime.space.store)
