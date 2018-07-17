@@ -437,7 +437,7 @@ trait LMDBWithTestTrieStore[K]
   override def withTestTrieStore[R](
       f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R = {
     val env        = Context.env(dbDir, mapSize, Nil)
-    val testTrie   = LMDBTrieStore.create[K, ByteVector](env)
+    val testTrie   = LMDBTrieStore.create[K, ByteVector](env, dbDir)
     val testBranch = Branch("test")
     testTrie.withTxn(testTrie.createTxnWrite())(txn => testTrie.clear(txn))
     try {

@@ -26,8 +26,6 @@ object Runtime {
       _       <- ConsoleIO[F].println(showGarbageCollectors(gc))
       threads <- DiagnosticsService[F].threads
       _       <- ConsoleIO[F].println(showThreads(threads))
-      store   <- DiagnosticsService[F].store
-      _       <- ConsoleIO[F].println(showStoreUsage(store))
       _       <- ConsoleIO[F].close
     } yield ()
 
@@ -114,37 +112,4 @@ object Runtime {
        |  - Peers: ${nodeCoreMetrics.peers}
        |""".stripMargin
 
-  def showStoreUsage(storeUsage: StoreUsage): String = {
-    def writeCounts(rspaceName: String)(name: String, value: Option[RSpaceUsageMetric]): String =
-      s"""
-         |  + $rspaceName $name
-         |    - Total Count: ${value.map(_.count).getOrElse(0)}
-         |    - Average (ms): ${value.map(_.avgMilliseconds.formatted("%.2f")).getOrElse("-")}
-         |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
-         |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
-          """
-
-    def writeCommCounts(rspaceName: String)(name: String,
-                                            value: Option[RSpaceUsageMetric]): String =
-      s"""
-         |  + $rspaceName $name
-         |    - Total Count: ${value.map(_.count).getOrElse(0)}
-         |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
-         |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
-          """
-    def writeRSpaceMetrics(rspaceName: String)(maybeRSpaceUsage: Option[RSpaceUsage]) =
-      s"""
-       |  ${writeCounts(rspaceName)("Consumes", maybeRSpaceUsage.flatMap(_.consumes))}
-       |  ${writeCounts(rspaceName)("Produces", maybeRSpaceUsage.flatMap(_.produces))}
-       |  ${writeCommCounts(rspaceName)("Consumes COMM", maybeRSpaceUsage.flatMap(_.consumesComm))}
-       |  ${writeCommCounts(rspaceName)("Produces COMM", maybeRSpaceUsage.flatMap(_.producesComm))}
-       |  ${writeCommCounts(rspaceName)("Install COMM", maybeRSpaceUsage.flatMap(_.installComm))}
-      """.stripMargin
-
-    s"""Store metrics:
-       |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
-       |  - RSpace & ReplayRSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
-       |  - RSpace & ReplayRSpace Data Entries: ${storeUsage.rspaceDataEntries}""".stripMargin + writeRSpaceMetrics(
-      "RSpace")(storeUsage.rspace) + writeRSpaceMetrics("ReplayRSpace")(storeUsage.replayRSpace)
-  }
 }

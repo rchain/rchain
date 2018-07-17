@@ -14,26 +14,28 @@ networks:
 services:
   rchain-node:
     image: rchain/rnode:latest
-    volumes: 
+    volumes:
       - rnode_data_storage:/var/lib/rnode
+      - ../../rholang/examples:/tmp/examples
     ports:
       - 40403:40403
       - 40400:40400
     networks:
-      - rchain 
+      - rchain
+    command: run -s -p 60000
   prometheus-pushgateway:
     image: prom/pushgateway
     ports:
       - 9091:9091
     networks:
-      - rchain 
+      - rchain
   prometheus-server:
     image: prom/prometheus:v2.1.0
     ports:
       - 9090:9090
     networks:
-      - rchain 
-      - metrics 
+      - rchain
+      - metrics
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data_storage:/prometheus
@@ -47,7 +49,7 @@ services:
     ports:
       - 3000:3000
     networks:
-      - metrics 
+      - metrics
     #environment:
     #  - GF_SECURITY_ADMIN_PASSWORD=secret
     env_file:

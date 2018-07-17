@@ -5,6 +5,8 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 // TODO we need lower level errors and general error, for now all in one place
+// TODO cleanup unused errors (UDP trash)
+// TODO add a message which we can log instead of doing toString
 sealed trait CommError
 final case class UnknownCommError(msg: String)           extends CommError
 final case class DatagramSizeError(size: Int)            extends CommError
@@ -18,6 +20,7 @@ final case class ParseError(msg: String)                 extends CommError
 final case object EncryptionHandshakeIncorrectlySigned   extends CommError
 final case object BootstrapNotProvided                   extends CommError
 final case class PeerNodeNotFound(peer: PeerNode)        extends CommError
+final case class PeerUnavailable(peer: PeerNode)         extends CommError
 final case class MalformedMessage(pm: Protocol)          extends CommError
 final case object CouldNotConnectToBootstrap             extends CommError
 final case class InternalCommunicationError(msg: String) extends CommError
@@ -42,6 +45,7 @@ object CommError {
   def protocolException(th: Throwable): CommError        = ProtocolException(th)
   def headerNotAvailable: CommError                      = HeaderNotAvailable
   def peerNodeNotFound(peer: PeerNode): CommError        = PeerNodeNotFound(peer)
+  def peerUnavailable(peer: PeerNode): CommError         = PeerUnavailable(peer)
   def publicKeyNotAvailable(peer: PeerNode): CommError   = PublicKeyNotAvailable(peer)
   def couldNotConnectToBootstrap: CommError              = CouldNotConnectToBootstrap
   def internalCommunicationError(msg: String): CommError = InternalCommunicationError(msg)
