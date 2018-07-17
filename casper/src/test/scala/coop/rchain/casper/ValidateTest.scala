@@ -8,7 +8,7 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.Rev
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol._
@@ -361,15 +361,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
     val initStateHash     = runtimeManager.initStateHash
 
-    val validatorsString = validators.zipWithIndex
-      .map { case (v, i) => s"""
-                            "${Base16.encode(v)}" : ${(2 * i + 1).toString}
-                            """ }
-      .mkString(",")
-    val proofOfStakeStub    = s"""
-                           @"proofOfStake"!({$validatorsString})
-                           """
-    val proofOfStakeStubPar = InterpreterUtil.mkTerm(proofOfStakeStub).right.get
+    val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
     val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
                                         initial,
                                         initStateHash,
