@@ -826,6 +826,42 @@ object Reduce {
         } yield result
       }
     }
+    
+    private[this] def length: MethodType =
+      (p: Par, args: Seq[Par]) => (env: Env[Par]) => {
+        def length(baseExpr: Expr): M[Expr] =
+          baseExpr.exprInstance match {
+            case GString(string) =>
+              Applicative[M].pure[Expr](GInt(string.length))
+            case _ =>
+              s.raiseError(ReduceError("Error: method 'length' can only be called on Strings."))
+          }
+        method("length", 0, args) {
+          for {
+            baseExpr <- evalSingleExpr(p)(env)
+            result   <- length(baseExpr)
+          } yield result
+        }
+      }
+    
+    private[this] def slice: MethodType =
+      (p: Par, args: Seq[Par]) => (env: Env[Par]) => {
+        def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
+          baseExpr.exprInstance match {
+            case GString(string) =>
+              Applicative[M].pure[Par](GString(string.slice(from, until)))
+            case _ =>
+              s.raiseError(ReduceError("Error: method 'slice' can only be called on Strings."))
+          }
+        method("slice", 2, args) {
+          for {
+            baseExpr <- evalSingleExpr(p)(env)
+            fromArg  <- evalToInt(args(0))(env)
+            toArg    <- evalToInt(args(1))(env)
+            result   <- slice(baseExpr, fromArg, toArg)
+          } yield result
+        }
+      }
 
     def methodTable(method: String): Option[MethodType] =
       method match {
@@ -838,6 +874,8 @@ object Reduce {
         case "delete"      => Some(delete)
         case "contains"    => Some(contains)
         case "get"         => Some(get)
+        case "length"      => Some(length)
+        case "slice"       => Some(slice)
         case _             => None
       }
 
