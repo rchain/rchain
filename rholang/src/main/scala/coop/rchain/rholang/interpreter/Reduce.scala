@@ -555,6 +555,23 @@ object Reduce {
                   ReduceError("Error: interpolation Map should only contain String keys")
                 )
             }
+          def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
+            val result  = StringBuilder.newBuilder
+            var current = string
+            while (current.nonEmpty) {
+              keyValuePairs.find {
+                case (k, v) => current.startsWith("${" + k + "}")
+              } match {
+                case Some((k, v)) =>
+                  result ++= v
+                  current = current.drop(k.length + 3)
+                case None =>
+                  result += current.head
+                  current = current.tail
+              }
+            }
+            result.toString
+          }
           for {
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
@@ -571,23 +588,7 @@ object Reduce {
                            }
                            .toList
                            .sequence[M, (String, String)]
-                           .map { keyValuePairs =>
-                             val result  = StringBuilder.newBuilder
-                             var current = lhs
-                             while (current.nonEmpty) {
-                               keyValuePairs.find {
-                                 case (k, v) => current.startsWith("${" + k + "}")
-                               } match {
-                                 case Some((k, v)) =>
-                                   result ++= v
-                                   current = current.drop(k.length + 3)
-                                 case None =>
-                                   result += current.head
-                                   current = current.tail
-                               }
-                             }
-                             GString(result.toString)
-                           }
+                           .map(keyValuePairs => GString(interpolate(lhs, keyValuePairs)))
                        case (_: GString, other) =>
                          s.raiseError(
                            ReduceError(
