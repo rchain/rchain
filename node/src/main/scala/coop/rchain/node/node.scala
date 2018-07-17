@@ -275,7 +275,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
-                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .fold[Either[CommError, PeerNode]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (
                     addr =>
                       Connect.connectToBootstrap[Effect](addr,
