@@ -1,14 +1,17 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Deploy
-import coop.rchain.casper.protocol.DeployString
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.protocol.{Deploy, DeployString}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Par
+import coop.rchain.models._
+import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
+import coop.rchain.rspace.internal.Datum
 import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
@@ -18,6 +21,26 @@ import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
+
+  def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
+      implicit scheduler: Scheduler): Seq[Par] = {
+    val runtime = getResetRuntime(start)
+    val deploy  = ProtoUtil.termDeploy(term)
+    val error   = eval(deploy :: Nil, runtime.reducer)
+
+    val result = error.fold {
+      val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
+      runtime.space.getData(returnChannel)
+    }(_ => Nil)
+
+    runtimeContainer.put(runtime)
+
+    for {
+      datum   <- result
+      channel <- datum.a.channels
+      par     <- channel.channelInstance.quote
+    } yield par
+  }
 
   def replayComputeState(log: trace.Log)(
       implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
