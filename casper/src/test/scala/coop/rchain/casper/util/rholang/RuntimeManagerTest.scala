@@ -19,7 +19,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
-    val purseValue = "37"
+    val purseValue     = "37"
+    val captureChannel = "__PURSEVALUE__"
     val deploys = Seq(
       NonNegativeNumber.term,
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
@@ -30,10 +31,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
-        .mkTerm(""" for(@nn <- @"nn"){ @[nn, "value"]!("__PURSEVALUE__") } """)
+        .mkTerm(s""" for(@nn <- @"nn"){ @[nn, "value"]!("$captureChannel") } """)
         .right
         .get,
-      "__PURSEVALUE__")
+      captureChannel)
 
     result.size should be(1)
     result.head should be(InterpreterUtil.mkTerm(purseValue).right.get)
@@ -43,7 +44,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val n           = 8
     val code        = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
     val term        = InterpreterUtil.mkTerm(code).right.get
-    val manyResults = runtimeManager.captureResults(runtimeManager.initStateHash, term)
+    val manyResults = runtimeManager.captureResults(runtimeManager.initStateHash, term, "__SCALA__")
     val noResults =
       runtimeManager.captureResults(runtimeManager.initStateHash, term, "differentName")
 
