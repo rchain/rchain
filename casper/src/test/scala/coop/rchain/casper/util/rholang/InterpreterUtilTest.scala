@@ -18,10 +18,12 @@ import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Time
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
 import coop.rchain.shared.AttemptOps._
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import scodec.Codec
 
@@ -37,6 +39,25 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
   val initStateHash    = runtimeManager.initStateHash
   val knownStateHashes = Set[StateHash](initStateHash)
+
+  private def computeBlockCheckpoint(
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
+      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+    val (checkpoint, updatedKnownStateHashes) =
+      InterpreterUtil.computeBlockCheckpointFromDeploys(b,
+                                                        genesis,
+                                                        dag,
+                                                        defaultStateHash,
+                                                        knownStateHashes,
+                                                        computeState)(scheduler)
+    val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    (blockStateHash, updatedKnownStateHashes)
+  }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
     val genesisDeploys = Vector(

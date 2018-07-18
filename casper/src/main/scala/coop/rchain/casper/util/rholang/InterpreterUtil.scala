@@ -76,31 +76,6 @@ object InterpreterUtil {
     (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash)
   }
 
-  private[casper] def computeBlockCheckpoint(
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag,
-      defaultStateHash: StateHash,
-      knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
-
-    val blockStateHash = ProtoUtil.tuplespace(b).get
-    if (knownStateHashes.contains(blockStateHash)) {
-      (blockStateHash, knownStateHashes)
-    } else {
-      val (checkpoint, updatedKnownStateHashes) = computeBlockCheckpointFromDeploys(
-        b,
-        genesis,
-        dag,
-        defaultStateHash,
-        knownStateHashes,
-        computeState)
-      val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-      (blockStateHash, updatedKnownStateHashes)
-    }
-  }
-
   private def computeParentsPostState(
       parents: Seq[BlockMessage],
       genesis: BlockMessage,
@@ -154,7 +129,7 @@ object InterpreterUtil {
     }
   }
 
-  private def computeBlockCheckpointFromDeploys(
+  private[casper] def computeBlockCheckpointFromDeploys(
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
