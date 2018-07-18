@@ -48,7 +48,7 @@ parser.add_argument("-l", "--logs",
 parser.add_argument("-m", "--memory",
                     dest='memory',
                     type=str,
-                    default="1024m",
+                    default="2048m",
                     help="set docker memory limit for all nodes")
 parser.add_argument("-n", "--network",
                     dest='network',
