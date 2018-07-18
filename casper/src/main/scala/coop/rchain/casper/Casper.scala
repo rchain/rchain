@@ -592,17 +592,4 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
       }
     }
-
-  def fromConfig[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log: Time](conf: CasperConf, runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    for {
-      genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
-                                           conf.numValidators,
-                                           conf.genesisPath,
-                                           conf.walletsFile,
-                                           runtimeManager)
-      validatorId <- ValidatorIdentity.fromConfig[G](conf)
-    } yield hashSetCasper[F](runtimeManager, validatorId, genesis)
 }
