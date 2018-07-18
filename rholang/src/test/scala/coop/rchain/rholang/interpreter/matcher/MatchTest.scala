@@ -1,31 +1,19 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.matcher
 
-import cats.{Eval => _, _}
-import cats.data._
-import cats.implicits._
-
+import cats.{Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
-import coop.rchain.rholang.interpreter.matcher._
-import SpatialMatcher._
 import coop.rchain.models._
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
-  Bundle => AbsynBundle,
-  Ground => AbsynGround,
-  Send => AbsynSend,
-  _
-}
-
 import org.scalatest._
 
 import scala.collection.immutable.BitSet
 
 class VarMatcherSpec extends FlatSpec with Matchers {
-  import coop.rchain.models.rholang.implicits._
   import SpatialMatcher._
+  import coop.rchain.models.rholang.implicits._
   val wc = Wildcard(Var.WildcardMsg())
   "Matching ground with var" should "work" in {
     val target: Par  = GInt(7)
