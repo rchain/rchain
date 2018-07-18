@@ -5,7 +5,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing, routing.Header
+import coop.rchain.comm.protocol.routing
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
 import coop.rchain.comm.protocol.rchain._
@@ -42,7 +42,7 @@ object Connect {
 
   def connectToBootstrap[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
-      bootstrapAddrStr: String,
+      bootstrap: PeerNode,
       maxNumOfAttempts: Int = 5,
       defaultTimeout: FiniteDuration): F[Unit] = {
 
@@ -66,10 +66,9 @@ object Connect {
         } yield ()
 
     for {
-      bootstrapAddr <- errorHandler[F].fromEither(PeerNode.parse(bootstrapAddrStr))
-      _             <- Log[F].info(s"Bootstrapping from $bootstrapAddr.")
-      _             <- connectAttempt(attempt = 1, defaultTimeout, bootstrapAddr)
-      _             <- Log[F].info(s"Connected $bootstrapAddr.")
+      _ <- Log[F].info(s"Bootstrapping from $bootstrap.")
+      _ <- connectAttempt(attempt = 1, defaultTimeout, bootstrap)
+      _ <- Log[F].info(s"Connected $bootstrap.")
     } yield ()
   }
 
