@@ -15,7 +15,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -34,7 +34,12 @@ object Validate {
 
   def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
                                             requiredValidators: Set[ByteString]): F[Boolean] = {
-    val maybeSigData = a.block.map(b => ProtoUtil.add(b.blockHash.toByteArray, a.requiredSigs))
+    val maybeSigData = for {
+      c     <- a.candidate
+      bytes = c.toByteArray
+    } yield Blake2b256.hash(bytes)
+
+    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
 
     maybeSigData match {
       case Some(sigData) =>
@@ -46,8 +51,7 @@ object Validate {
             if verify(sigData, s.sig.toByteArray, pk.toByteArray)
           } yield pk).toSet
 
-        if (validatedSigs.size >= a.requiredSigs && requiredValidators.forall(
-              validatedSigs.contains))
+        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
           true.pure[F]
         else
           Log[F]
@@ -57,7 +61,7 @@ object Validate {
 
       case None =>
         Log[F]
-          .warn("CASPER: Received invalid ApprovedBlock message not containing any block.")
+          .warn("CASPER: Received invalid ApprovedBlock message not containing any candidate.")
           .map(_ => false)
     }
   }
@@ -283,7 +287,7 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      initStateHash: StateHash,
+      emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
       implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
@@ -297,7 +301,7 @@ object Validate {
                                   block,
                                   genesis,
                                   dag,
-                                  initStateHash,
+                                  emptyStateHash,
                                   _,
                                   runtimeManager
                                 ),
@@ -331,6 +335,34 @@ object Validate {
       Applicative[F].pure(Left(NeglectedInvalidBlock))
     } else {
       Applicative[F].pure(Right(Valid))
+    }
+  }
+
+  def bondsCache[F[_]: Applicative: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager): F[Either[InvalidBlock, ValidBlock]] = {
+    val bonds = ProtoUtil.bonds(b)
+    ProtoUtil.tuplespace(b) match {
+      case Some(tuplespaceHash) =>
+        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
+          case Success(computedBonds) =>
+            if (bonds == computedBonds) {
+              Applicative[F].pure(Right(Valid))
+            } else {
+              for {
+                _ <- Log[F].warn(
+                      "Bonds in proof of stake contract do not match block's bond cache.")
+              } yield Left(InvalidBondsCache)
+            }
+          case Failure(_) =>
+            for {
+              _ <- Log[F].warn("Failed to compute bonds from tuplespace hash.")
+            } yield Left(InvalidBondsCache)
+        }
+      case None =>
+        for {
+          _ <- Log[F].warn("Block is missing a tuplespace hash.")
+        } yield Left(InvalidBondsCache)
     }
   }
 }

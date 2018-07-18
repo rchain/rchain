@@ -4,8 +4,9 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.catscontrib.Capture._
-import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, Par, TaggedContinuation}
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.IStore
@@ -76,6 +77,9 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
+  private def printCost(cost: CostAccount): Unit =
+    Console.println(s"Estimated deploy cost: $cost")
+
   private def printErrors(errors: Vector[Throwable]) =
     if (!errors.isEmpty) {
       Console.println("Errors received during evaluation:")
@@ -120,12 +124,14 @@ object RholangCLI {
   }
 
   @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[Throwable]]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(errors)) => printErrors(errors)
-        case Some(Failure(e))      => throw e
-        case None                  => throw new Exception("Future claimed to be ready, but value was None")
+        case Some(Success(EvaluateResult(cost, errors))) =>
+          printCost(cost)
+          printErrors(errors)
+        case Some(Failure(e)) => throw e
+        case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
       case _: TimeoutException =>

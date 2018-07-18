@@ -26,7 +26,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(ProtoUtil.termDeploy(_))
 
-    val Right(checkpoint) = runtimeManager.computeState(runtimeManager.initStateHash, deploys)
+    val Right(checkpoint) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val hash              = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     val result = runtimeManager.captureResults(
       hash,
@@ -41,12 +41,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   it should "handle multiple results and no results appropriately" in {
-    val n           = 8
-    val code        = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
-    val term        = InterpreterUtil.mkTerm(code).right.get
-    val manyResults = runtimeManager.captureResults(runtimeManager.initStateHash, term, "__SCALA__")
+    val n    = 8
+    val code = (1 to n).map(i => s""" @"__SCALA__"!($i) """).mkString("|")
+    val term = InterpreterUtil.mkTerm(code).right.get
+    val manyResults =
+      runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "__SCALA__")
     val noResults =
-      runtimeManager.captureResults(runtimeManager.initStateHash, term, "differentName")
+      runtimeManager.captureResults(runtimeManager.emptyStateHash, term, "differentName")
 
     noResults.isEmpty should be(true)
 
