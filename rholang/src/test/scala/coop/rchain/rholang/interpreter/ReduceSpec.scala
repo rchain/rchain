@@ -1327,4 +1327,48 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(GString("aba"))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
+
+  "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
+    implicit val errorLog = new ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EPercentBody(
+          EPercent(
+            GString("Hello, ${name}!"),
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+  
+  "'abc' ++ 'def'" should "return 'abcdef" in {
+    implicit val errorLog = new ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EPlusPlusBody(
+          EPlusPlus(
+            GString("abc"),
+            GString("def")
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("abcdef"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
 }
