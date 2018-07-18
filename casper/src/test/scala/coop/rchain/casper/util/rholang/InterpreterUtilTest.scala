@@ -18,10 +18,12 @@ import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Time
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
 import coop.rchain.shared.AttemptOps._
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import scodec.Codec
 
@@ -35,8 +37,27 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime    = Runtime.create(storageDirectory, storageSize)
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
-  val initStateHash    = runtimeManager.initStateHash
-  val knownStateHashes = Set[StateHash](initStateHash)
+  val emptyStateHash   = runtimeManager.emptyStateHash
+  val knownStateHashes = Set[StateHash](emptyStateHash)
+
+  private def computeBlockCheckpoint(
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      defaultStateHash: StateHash,
+      knownStateHashes: Set[StateHash],
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
+      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+    val (checkpoint, updatedKnownStateHashes) =
+      InterpreterUtil.computeBlockCheckpointFromDeploys(b,
+                                                        genesis,
+                                                        dag,
+                                                        defaultStateHash,
+                                                        knownStateHashes,
+                                                        computeState)(scheduler)
+    val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    (blockStateHash, updatedKnownStateHashes)
+  }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
     val genesisDeploys = Vector(
@@ -82,7 +103,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(genesis,
                              genesis,
                              chain,
-                             initStateHash,
+                             emptyStateHash,
                              knownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
@@ -96,7 +117,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
-                             initStateHash,
+                             emptyStateHash,
                              postGenKnownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
@@ -110,7 +131,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
-                             initStateHash,
+                             emptyStateHash,
                              postB1KnownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
@@ -120,7 +141,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b3,
                              genesis,
                              chainWithUpdatedB2,
-                             initStateHash,
+                             emptyStateHash,
                              postB2KnownStateHashes,
                              runtimeManager.computeState)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
@@ -182,7 +203,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(genesis,
                              genesis,
                              chain,
-                             initStateHash,
+                             emptyStateHash,
                              knownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
@@ -191,7 +212,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
-                             initStateHash,
+                             emptyStateHash,
                              postGenKnownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
@@ -200,7 +221,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
-                             initStateHash,
+                             emptyStateHash,
                              postB1KnownStateHashes,
                              runtimeManager.computeState)
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
@@ -210,7 +231,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       computeBlockCheckpoint(b3,
                              updatedGenesis,
                              chainWithUpdatedB2,
-                             initStateHash,
+                             emptyStateHash,
                              postB2KnownStateHashes,
                              runtimeManager.computeState)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
@@ -226,7 +247,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
-                               initStateHash,
+                               emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
     val computedTsLog = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
@@ -241,7 +262,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (stateHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
 
     stateHash should be(None)
   }
@@ -263,7 +284,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
-                               initStateHash,
+                               emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
@@ -277,7 +298,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -313,7 +334,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
-                               initStateHash,
+                               emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
@@ -327,7 +348,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -367,7 +388,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
-                               initStateHash,
+                               emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
@@ -381,7 +402,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -418,7 +439,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
-                               initStateHash,
+                               emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
@@ -432,7 +453,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, initStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }

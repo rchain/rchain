@@ -283,7 +283,7 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      initStateHash: StateHash,
+      emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
       implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
@@ -297,7 +297,7 @@ object Validate {
                                   block,
                                   genesis,
                                   dag,
-                                  initStateHash,
+                                  emptyStateHash,
                                   _,
                                   runtimeManager
                                 ),

@@ -124,7 +124,7 @@ object Genesis {
       withContracts(initial,
                     bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
                     wallets,
-                    runtimeManager.initStateHash,
+                    runtimeManager.emptyStateHash,
                     runtimeManager)
 
   private def toFile[F[_]: Applicative: Log](maybePath: Option[String],

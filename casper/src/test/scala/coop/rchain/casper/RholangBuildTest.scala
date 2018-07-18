@@ -27,11 +27,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
   val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val initStateHash               = runtimeManager.initStateHash
+  val emptyStateHash              = runtimeManager.emptyStateHash
   val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
   val proofOfStakeDeploy          = ProtoUtil.termDeploy(new ProofOfStake(proofOfStakeValidators).term)
   val genesis =
-    Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, initStateHash, runtimeManager)
+    Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
   activeRuntime.close()
 
   //put a new casper instance at the start of each

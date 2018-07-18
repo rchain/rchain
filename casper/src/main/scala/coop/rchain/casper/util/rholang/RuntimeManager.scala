@@ -21,7 +21,7 @@ import coop.rchain.rspace.trace.Produce
 import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class RuntimeManager private (val initStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
+class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
 
   def replayComputeState(log: trace.Log)(
       implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
@@ -116,6 +116,7 @@ object RuntimeManager {
 
   def fromRuntime(active: Runtime): RuntimeManager = {
     active.space.clear()
+    active.replaySpace.clear()
     val hash    = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     val runtime = new SyncVar[Runtime]()
     runtime.put(active)
