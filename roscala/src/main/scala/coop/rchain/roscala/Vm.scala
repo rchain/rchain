@@ -126,6 +126,7 @@ object Vm {
             map.useWithReadLock { m =>
               import collection.JavaConverters._
 
+              // TODO: Fix output - output is not ordered correctly
               val keys = m.keys.asScala.toIterable
 
               val pairsStr = keys
@@ -169,6 +170,7 @@ object Vm {
       case OpFork(pc) =>
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
+        logger.debug(s"Fork: Schedule cloned ctxt ($newCtxt)")
         state.strandPool.prepend(newCtxt)
         state.nextOpFlag = true
 
@@ -620,9 +622,8 @@ object Vm {
       logger.debug("Empty strandPool - exiting VM")
       true
     } else {
-      logger.debug("Install ctxt")
-
       val ctxt = state.strandPool.remove(state.strandPool.size - 1)
+      logger.debug(s"Get next ctxt ($ctxt) and install it")
 
       // Install `ctxt`
       state.ctxt = ctxt
@@ -640,8 +641,6 @@ object Vm {
     * gets scheduled.
     */
   def doRtn(next: Boolean, state: State): Unit = {
-    logger.debug(s"doRtn${if (next) "/nxt"}")
-
     val result = state.ctxt.rslt
 
     if (state.ctxt.ret(result, state))

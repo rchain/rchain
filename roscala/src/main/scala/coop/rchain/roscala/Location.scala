@@ -2,14 +2,22 @@ package coop.rchain.roscala
 
 import coop.rchain.roscala.ob._
 
-sealed trait Location                                              extends Ob
-case class ArgRegister(arg: Int)                                   extends Location
-case class CtxtRegister(reg: Int)                                  extends Location
-case class GlobalVar(offset: Int)                                  extends Location
-case class LexVariable(level: Int, offset: Int, indirect: Boolean) extends Location
-case object LocLimbo                                               extends Location
-case object LocRslt                                                extends Location
-case object LocTrgt                                                extends Location
+sealed trait Location extends Ob
+case class ArgRegister(arg: Int) extends Location {
+  override def toString: String = s"ArgRegister(arg = $arg)"
+}
+case class CtxtRegister(reg: Int) extends Location {
+  override def toString: String = s"CtxtRegister(reg = ${regName(reg)})"
+}
+case class GlobalVar(offset: Int) extends Location {
+  override def toString: String = s"GlobalVar(offset = $offset)"
+}
+case class LexVariable(level: Int, offset: Int, indirect: Boolean) extends Location {
+  override def toString: String = s"LexVar(level = $level, offset = $offset, indirect = $indirect)"
+}
+case object LocLimbo extends Location
+case object LocRslt  extends Location
+case object LocTrgt  extends Location
 
 object Location {
   val NumberOfCtxtRegs = 10

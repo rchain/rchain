@@ -125,7 +125,7 @@ args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
-bonds_file = dir_path = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt' 
+bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
 
 
@@ -261,7 +261,7 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy ${i}; done'
         r = container.exec_run(['sh', '-c', cmd])
         for line in r.output.decode('utf-8').splitlines():
             print(line)

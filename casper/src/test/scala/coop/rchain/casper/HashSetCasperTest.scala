@@ -9,12 +9,18 @@ import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.Runtime
+import java.nio.file.Files
+
+import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.concurrent.SyncVar
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -24,7 +30,19 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val genesis                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+  val initial                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+  val storageDirectory            = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+  val storageSize: Long           = 1024L * 1024
+  val activeRuntime               = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
+  val emptyStateHash              = runtimeManager.emptyStateHash
+  val genesis = Genesis.withContracts(
+    initial,
+    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+    Nil,
+    emptyStateHash,
+    runtimeManager)
+  activeRuntime.close()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -158,8 +176,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "ask peers for blocks it is missing" in {
-    val nodes   = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
-    val deploys = (0 until 3).map(i => ProtoUtil.basicDeploy(i))
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
+    val deploys = Vector(
+      "for(_ <- @1){ Nil } | @1!(1)",
+      "@2!(2)"
+    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
 
     val Some(signedBlock1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
 

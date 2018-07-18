@@ -10,4 +10,11 @@ object SyncVarOps {
       syncVar.put(f(curr))
     }
   }
+
+  def create[A](a: A): SyncVar[A] = synchronized {
+    val r = new SyncVar[A]
+    r.put(a)
+    r
+  }
+
 }

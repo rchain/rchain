@@ -10,31 +10,42 @@ import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, TaggedContinuation, Var}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace._
+import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.AtomicRefMonadState
 import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
-                       val space: ISpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
-                       val replaySpace: ReplayRSpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                       var errorLog: ErrorLog) {
+class Runtime private (
+    val reducer: Reduce[Task],
+    val replayReducer: Reduce[Task],
+    val space: ISpace[Channel,
+                      BindPattern,
+                      ListChannelWithRandom,
+                      ListChannelWithRandom,
+                      TaggedContinuation],
+    val replaySpace: ReplayRSpace[Channel,
+                                  BindPattern,
+                                  ListChannelWithRandom,
+                                  ListChannelWithRandom,
+                                  TaggedContinuation],
+    val costAccountingPure: CostAccountingAlg[Task],
+    val costAccountingReplay: CostAccountingAlg[Task],
+    var errorLog: ErrorLog,
+    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def close(): Unit                                = space.close()
+  def getCost(): Task[CostAccount]                 = costAccountingPure.getTotal
+  def getCostReplay(): Task[CostAccount]           = costAccountingReplay.getTotal
+  def close(): Unit = {
+    space.close()
+    replaySpace.close()
+    context.close()
+  }
 }
 
 object Runtime {
@@ -49,11 +60,24 @@ object Runtime {
                                                      ListChannelWithRandom,
                                                      ListChannelWithRandom,
                                                      TaggedContinuation],
+                                       replaySpace: ISpace[Channel,
+                                                           BindPattern,
+                                                           ListChannelWithRandom,
+                                                           ListChannelWithRandom,
+                                                           TaggedContinuation],
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.map {
       case (name, arity, remainder, ref) =>
         space.install(
+          List(Channel(Quote(GString(name)))),
+          List(
+            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+                        remainder,
+                        freeCount = arity)),
+          TaggedContinuation(ScalaBodyRef(ref))
+        )
+        replaySpace.install(
           List(Channel(Quote(GString(name)))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
@@ -86,6 +110,12 @@ object Runtime {
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
+    val costStatePure                             = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
+    val costStateReplay                           = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
+    val costAccountingPure: CostAccountingAlg[Task] =
+      CostAccountingAlg.monadState(costStatePure)
+    val costAccountingReplay: CostAccountingAlg[Task] =
+      CostAccountingAlg.monadState(costStateReplay)
 
     def dispatchTableCreator(
         space: ISpace[Channel,
@@ -112,10 +142,10 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable)
+      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable)
+      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, costAccountingReplay)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       ("stdout", 1, None, 0L),
@@ -130,10 +160,17 @@ object Runtime {
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-      introduceSystemProcesses(space, procDefs)
+      introduceSystemProcesses(space, replaySpace, procDefs)
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog)
+    new Runtime(dispatcher.reducer,
+                replayDispatcher.reducer,
+                space,
+                replaySpace,
+                costAccountingPure,
+                costAccountingReplay,
+                errorLog,
+                context)
   }
 }

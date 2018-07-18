@@ -17,25 +17,35 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+import kamon._
+
+class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, R, K] {
+) extends RSpaceOps[C, P, A, R, K](store, branch)
+    with ISpace[C, P, A, R, K] {
 
-  private val logger: Logger = Logger[this.type]
+  override protected[this] val logger: Logger = Logger[this.type]
 
-  private val replayData: SyncVar[ReplayData] = {
+  private[rspace] val replayData: SyncVar[ReplayData] = {
     val sv = new SyncVar[ReplayData]()
     sv.put(ReplayData.empty)
     sv
   }
 
+  private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
+  private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
+
+  private[this] val consumeSpan   = Kamon.buildSpan("replayrspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("replayrspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("replayrspace.install")
+
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerConsume {
+    Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
@@ -80,6 +90,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
                           replays: ReplayData,
                           consumeRef: Consume,
                           comms: Multiset[COMM]): Option[(K, Seq[R])] = {
+          consumeCommCounter.increment()
           store.eventsCounter.registerConsumeCommEvent()
           val commRef = COMM(consumeRef, mats.map(_.datum.source))
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -130,6 +141,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
               case Some(_) =>
                 val msg = "untraced event resulted in a comm event"
                 logger.error(msg)
+                replayData.put(replays)
                 throw new ReplayException(msg)
             }
           case Some(comms) =>
@@ -146,12 +158,9 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
       }
     }
 
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] = None
-
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerProduce {
+    Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         @tailrec
         def runMatcher(maybeComm: Option[COMM],
@@ -209,6 +218,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
                                   WaitingContinuation(_, continuation, persistK, consumeRef),
                                   continuationIndex,
                                   dataCandidates) =>
+              produceCommCounter.increment()
               store.eventsCounter.registerProduceCommEvent()
               val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
               assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -269,6 +279,7 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
                 logger.debug(s"produce: matching continuation found at <channels: $channels>")
                 val msg = "untraced event resulted in a comm event"
                 logger.error(msg)
+                replayData.put(replays)
                 throw new ReplayException(msg)
             }
           case Some(comms) =>
@@ -314,6 +325,11 @@ class ReplayRSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Bra
     reset(startRoot)
     // update the replay data
     replayData.update(const(rigs))
+  }
+
+  override def clear(): Unit = {
+    replayData.update(const(ReplayData.empty))
+    super.clear()
   }
 }
 

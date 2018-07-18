@@ -13,12 +13,16 @@ class MboxOb extends Ob {
     mbox.receiveMsg(this, ctxt, state, globalEnv)
   }
 
-  def schedule(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Unit =
-    state.strandPool.append(ctxt)
+  def schedule(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Unit = {
+    MboxOb.logger.debug(s"Schedule $ctxt from $this")
+    state.strandPool.prepend(ctxt)
+  }
 }
 
 object MboxOb {
   val logger = Logger("Mailbox")
+
+  val EmptyMbox: Ob = new EmptyMbox
 
   val LockedMbox: Ob = new LockedMbox
 }

@@ -14,25 +14,29 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
-class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+import kamon._
+
+class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, R, K] {
+) extends RSpaceOps[C, P, A, R, K](store, branch)
+    with ISpace[C, P, A, R, K] {
 
-  private val logger: Logger = Logger[this.type]
+  override protected[this] val logger: Logger = Logger[this.type]
 
-  private val eventLog: SyncVar[Log] = {
-    val log = new SyncVar[Log]()
-    log.put(Seq.empty)
-    log
-  }
+  private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
+  private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
+
+  private[this] val consumeSpan   = Kamon.buildSpan("rspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerConsume {
+    Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
@@ -73,7 +77,7 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
             None
           case Some(dataCandidates) =>
-            store.eventsCounter.registerConsumeCommEvent()
+            consumeCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
@@ -92,69 +96,9 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
       }
     }
 
-  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
-    if (channels.length =!= patterns.length) {
-      val msg = "channels.length must equal patterns.length"
-      logger.error(msg)
-      throw new IllegalArgumentException(msg)
-    }
-    store.withTxn(store.createTxnWrite()) { txn =>
-      logger.debug(s"""|install: searching for data matching <patterns: $patterns>
-                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-
-      val consumeRef = Consume.create(channels, patterns, continuation, true)
-      eventLog.update(consumeRef +: _)
-
-      /*
-       * Here, we create a cache of the data at each channel as `channelToIndexedData`
-       * which is used for finding matches.  When a speculative match is found, we can
-       * remove the matching datum from the remaining data candidates in the cache.
-       *
-       * Put another way, this allows us to speculatively remove matching data without
-       * affecting the actual store contents.
-       */
-
-      val channelToIndexedData = channels.map { (c: C) =>
-        c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-      }.toMap
-
-      val options: Option[Seq[DataCandidate[C, R]]] =
-        extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-
-      options match {
-        case None =>
-          store.removeAll(txn, channels)
-          store.putWaitingContinuation(
-            txn,
-            channels,
-            WaitingContinuation(patterns, continuation, persist = true, consumeRef))
-          for (channel <- channels) store.addJoin(txn, channel, channels)
-          logger.debug(s"""|consume: no data found,
-                           |storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-          None
-        case Some(dataCandidates) =>
-          store.eventsCounter.registerInstallCommEvent()
-
-          eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
-
-          dataCandidates.foreach {
-            case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
-                if !persistData =>
-              store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-            case _ =>
-              ()
-          }
-          logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-          Some((continuation, dataCandidates.map(_.datum.a)))
-      }
-    }
-  }
-
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerProduce {
+    Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
         logger.debug(s"""|produce: searching for matching continuations
@@ -205,7 +149,7 @@ class RSpace[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
                                WaitingContinuation(_, continuation, persistK, consumeRef),
                                continuationIndex,
                                dataCandidates)) =>
-            store.eventsCounter.registerProduceCommEvent()
+            produceCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
@@ -248,16 +192,24 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]): RSpace[C, P, A, R, K] = {
+    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
+    create(mainStore, branch)
+  }
+
+  def create[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    history.initialize(context.trieStore, branch)
+    history.initialize(store.trieStore, branch)
 
-    val mainStore = LMDBStore.create[C, P, A, K](context, branch)
-
-    new RSpace[C, P, A, R, K](mainStore, branch)
+    new RSpace[C, P, A, R, K](store, branch)
   }
 }
