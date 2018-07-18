@@ -35,12 +35,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
   val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val initStateHash               = runtimeManager.initStateHash
+  val emptyStateHash              = runtimeManager.emptyStateHash
   val genesis = Genesis.withContracts(
     initial,
     bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
     Nil,
-    initStateHash,
+    emptyStateHash,
     runtimeManager)
   activeRuntime.close()
 

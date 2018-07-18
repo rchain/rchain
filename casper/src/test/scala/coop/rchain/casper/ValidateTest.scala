@@ -359,13 +359,13 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
     val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-    val initStateHash     = runtimeManager.initStateHash
+    val emptyStateHash    = runtimeManager.emptyStateHash
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
     val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
                                         initial,
-                                        initStateHash,
+                                        emptyStateHash,
                                         runtimeManager)
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))

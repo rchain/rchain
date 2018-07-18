@@ -94,22 +94,22 @@ sealed abstract class MultiParentCasperInstances {
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
-      private val initStateHash = runtimeManager.initStateHash
+      private val emptyStateHash = runtimeManager.emptyStateHash
 
       private val (maybePostGenesisStateHash, _) = InterpreterUtil
         .validateBlockCheckpoint(
           genesis,
           genesis,
           _blockDag.get,
-          initStateHash,
-          Set[StateHash](initStateHash),
+          emptyStateHash,
+          Set[StateHash](emptyStateHash),
           runtimeManager
         )
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] =
         maybePostGenesisStateHash match {
           case Some(postGenesisStateHash) =>
             new AtomicSyncVar(
-              Set[StateHash](initStateHash, postGenesisStateHash)
+              Set[StateHash](emptyStateHash, postGenesisStateHash)
             )
           case None => throw new Error("Genesis block validation failed.")
         }
@@ -218,7 +218,7 @@ sealed abstract class MultiParentCasperInstances {
                                                        r,
                                                        genesis,
                                                        _blockDag.get,
-                                                       initStateHash,
+                                                       emptyStateHash,
                                                        _,
                                                        runtimeManager.computeState),
               _._2)
@@ -270,7 +270,7 @@ sealed abstract class MultiParentCasperInstances {
                                             Validate.transactions[F](b,
                                                                      genesis,
                                                                      dag,
-                                                                     initStateHash,
+                                                                     emptyStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
           postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(_ =>
