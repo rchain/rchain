@@ -8,6 +8,7 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
@@ -27,10 +28,15 @@ object implicits {
     : StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] =
     new StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] {
 
-      def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] =
-        SpatialMatcher
+      def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] = {
+        val (cost, resultMatch) = SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
           .run(emptyMap)
+          .value
+          .run(CostAccount.zero)
+          .value
+
+        resultMatch
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
               val remainderMap = pattern.remainder match {
@@ -47,6 +53,7 @@ object implicits {
               }
               ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount), data.randomState)
           }
+      }
     }
 
   /* Serialize instances */

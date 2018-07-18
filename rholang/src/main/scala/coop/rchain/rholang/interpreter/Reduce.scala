@@ -358,11 +358,17 @@ object Reduce {
                 matchResult = SpatialMatcher
                   .spatialMatch(target, pattern)
                   .runS(emptyMap)
+                  .value
+                  .run(CostAccount.zero)
+                  .value
                 res <- matchResult match {
-                        case None => Applicative[M].pure(Left((target, caseRem)))
-                        case Some(freeMap) =>
+                        case (cost, None) =>
+                          costAccountingAlg.modify(_.charge(cost)) *>
+                            Applicative[M].pure(Left((target, caseRem)))
+                        case (cost, Some(freeMap)) =>
                           val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                          eval(singleCase.source)(newEnv, implicitly).map(Right(_))
+                          costAccountingAlg.modify(_.charge(cost)) *>
+                            eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                       }
               } yield res
           }
@@ -552,12 +558,14 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
-          } yield
-            (GBool(
-              SpatialMatcher
-                .spatialMatch(substTarget, substPattern)
-                .runS(emptyMap)
-                .isDefined))
+            (cost, matchResult) = SpatialMatcher
+              .spatialMatch(substTarget, substPattern)
+              .runS(emptyMap)
+              .value
+              .run(CostAccount.zero)
+              .value
+            _ <- costAccountingAlg.modify(_.charge(cost))
+          } yield GBool(matchResult.isDefined)
 
         case EVarBody(EVar(v)) =>
           for {
@@ -684,7 +692,7 @@ object Reduce {
               for {
                 _           <- costAccountingAlg.charge(hexToByteCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
-                res <- encodingRes.fold(th => s.raiseError(th),
+                res <- encodingRes.fold(th => s.raiseError(decodingError(th)),
                                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba))))
               } yield res
             case _ =>

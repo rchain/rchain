@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data.StateT
+import cats.data.{OptionT, State, StateT}
+import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance.{
@@ -12,9 +13,10 @@ import coop.rchain.models.Connective.ConnectiveInstance.{
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits.VectorPar
-import cats.implicits._
-import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholang.implicits.{VectorPar, _}
+import coop.rchain.rholang.interpreter.StreamT
+import coop.rchain.rholang.interpreter.StreamT._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 
 import scala.annotation.tailrec
@@ -29,44 +31,48 @@ import scala.collection.immutable.Stream
 // to help cut down on backtracking, wherever one of several possible matches
 // will do, we just take one.
 trait SpatialMatcher[T, P] {
-  def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit]
-  def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit]
+  def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit]
+  def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit]
 }
 
 object SpatialMatcher extends SpatialMatcherInstances {
   def spatialMatch[T, P](target: T, pattern: P)(
-      implicit sm: SpatialMatcher[T, P]): OptionalFreeMap[Unit] =
+      implicit sm: SpatialMatcher[T, P]): OptionalFreeMapWithCost[Unit] =
     SpatialMatcher[T, P].spatialMatch(target, pattern)
 
   def nonDetMatch[T, P](target: T, pattern: P)(
-      implicit sm: SpatialMatcher[T, P]): NonDetFreeMap[Unit] =
+      implicit sm: SpatialMatcher[T, P]): NonDetFreeMapWithCost[Unit] =
     SpatialMatcher[T, P].nonDetMatch(target, pattern)
 
   def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
-  def fromFunction[T, P](fn: (T, P) => OptionalFreeMap[Unit]): SpatialMatcher[T, P] =
+  def fromFunction[T, P](fn: (T, P) => OptionalFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
-      override def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit] =
+      override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
         fn(target, pattern)
-      override def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit] =
-        StateT((s: FreeMap) => {
-          fn(target, pattern).run(s) match {
-            case None         => Stream.empty
-            case Some(single) => Stream(single)
-          }
+      override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
+        StateT((m: FreeMap) => {
+          StreamT[State[CostAccount, ?], (FreeMap, Unit)](State { (c: CostAccount) =>
+            fn(target, pattern).run(m).value.run(c).value match {
+              case (cost, None)         => (cost, Stream.empty)
+              case (cost, Some(single)) => (cost, Stream(single))
+            }
+          })
         })
     }
 
-  def fromNonDetFunction[T, P](fn: (T, P) => NonDetFreeMap[Unit]): SpatialMatcher[T, P] =
+  def fromNonDetFunction[T, P](fn: (T, P) => NonDetFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
-      override def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit] =
+      override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
         fn(target, pattern)
-      override def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit] =
+      override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
         StateT((s: FreeMap) => {
-          fn(target, pattern).run(s) match {
-            case Stream.Empty => None
-            case single #:: _ => Some(single)
-          }
+          OptionT[State[CostAccount, ?], (FreeMap, Unit)](State { (c: CostAccount) =>
+            fn(target, pattern).run(s).value.run(c).value match {
+              case (cost, Stream.Empty) => (cost, None)
+              case (cost, single #:: _) => (cost, Some(single))
+            }
+          })
         })
     }
 
@@ -186,27 +192,29 @@ object SpatialMatcher extends SpatialMatcherInstances {
   // This helper function is useful in several productions
   def foldMatch[T, P](tlist: Seq[T], plist: Seq[P], remainder: Option[Var] = None)(
       implicit lft: HasLocallyFree[T],
-      sm: SpatialMatcher[T, P]): OptionalFreeMap[Seq[T]] =
+      sm: SpatialMatcher[T, P]): OptionalFreeMapWithCost[Seq[T]] =
     (tlist, plist) match {
-      case (Nil, Nil) => StateT.pure(Nil)
-      case (Nil, _)   => StateT.liftF[Option, FreeMap, Seq[T]](None)
+      case (Nil, Nil) => OptionalFreeMapWithCost.pure(Nil)
+      case (Nil, _) =>
+        OptionalFreeMapWithCost.emptyMap[Seq[T]]
       case (trem, Nil) =>
         remainder match {
-          case None => StateT.liftF[Option, FreeMap, Seq[T]](None)
+          case None =>
+            OptionalFreeMapWithCost.emptyMap[Seq[T]]
           case Some(Var(FreeVar(level))) => {
-            def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): OptionalFreeMap[Seq[T]] =
+            def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): OptionalFreeMapWithCost[Seq[T]] =
               trem match {
-                case Nil => StateT.pure(acc)
+                case Nil => OptionalFreeMapWithCost.pure(acc)
                 case item +: rem =>
                   if (lft.locallyFree(item).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
-                    StateT.liftF(None)
+                    OptionalFreeMapWithCost.emptyMap[Seq[T]]
               }
             freeCheck(trem, level, Vector.empty[T])
           }
-          case Some(Var(Wildcard(_))) => StateT.pure(Nil)
-          case _                      => StateT.liftF[Option, FreeMap, Seq[T]](None)
+          case Some(Var(Wildcard(_))) => OptionalFreeMapWithCost.pure(Nil)
+          case _                      => OptionalFreeMapWithCost.emptyMap[Seq[T]]
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
@@ -230,35 +238,48 @@ object SpatialMatcher extends SpatialMatcherInstances {
                                plist: Seq[T],
                                merger: (Par, T) => Par,
                                varLevel: Option[Int],
-                               wildcard: Boolean)(implicit lf: HasLocallyFree[T],
-                                                  sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] = {
+                               wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): NonDetFreeMapWithCost[Unit] = {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
     if (exactMatch && plen != tlen)
-      StateT.liftF(None)
+      NonDetFreeMapWithCost.emptyMap[Unit]
     else if (plen > tlen)
-      StateT.liftF(None)
-    // This boundary is very similar to Oleg's once.
-    StateT((s: FreeMap) => {
-      listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty => Stream.Empty
-        case head #:: _   => Stream(head)
-      }
-    })
+      NonDetFreeMapWithCost.emptyMap[Unit]
+    else
+      // This boundary is very similar to Oleg's once.
+      StateT((s: FreeMap) => {
+        StreamT(State((c: CostAccount) => {
+          listMatch(tlist, plist, merger, varLevel, wildcard).run(s).value.run(c).value match {
+            case (cost, Stream.Empty) => (cost, Stream.Empty)
+            case (cost, head #:: _)   => (cost, Stream(head))
+          }
+        }))
+      })
   }
 
   def listMatchSingle[T](tlist: Seq[T],
                          plist: Seq[T],
                          merger: (Par, T) => Par,
                          varLevel: Option[Int],
-                         wildcard: Boolean)(implicit lf: HasLocallyFree[T],
-                                            sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
-    StateT((s: FreeMap) => {
-      listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty => None
-        case head #:: _   => Some(head)
-      }
+                         wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
+    StateT((m: FreeMap) => {
+      OptionT(
+        State(
+          (c: CostAccount) =>
+            listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard)
+              .run(m)
+              .value
+              .run(c)
+              .value match {
+              case (cost, Stream.Empty) => (cost, None)
+              case (cost, head #:: _)   => (cost, Some(head))
+          })
+      )
     })
 
   private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
@@ -274,7 +295,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
                    merger: (Par, T) => Par,
                    varLevel: Option[Int],
                    wildcard: Boolean)(implicit lf: HasLocallyFree[T],
-                                      sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] =
+                                      sm: SpatialMatcher[T, T]): NonDetFreeMapWithCost[Unit] =
     (tlist, plist) match {
       // Handle the remainder.
       case (rem, Nil) =>
@@ -283,31 +304,33 @@ object SpatialMatcher extends SpatialMatcherInstances {
             // If there is a wildcard, we succeed.
             // We also succeed if there isn't but the remainder is empty.
             if (wildcard || rem == Nil)
-              StateT.pure(Unit)
+              NonDetFreeMapWithCost.pure(Unit)
             else
               // This should be prevented by the length checks.
-              StateT.liftF(Stream.Empty)
+              NonDetFreeMapWithCost.emptyMap[Unit]
           // If there's a capture variable, we prefer to add things to that rather than throw them
           // away.
           case Some(level) => {
             // This function is essentially an early terminating left fold.
             @tailrec
-            def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMap[Par] =
+            def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMapWithCost[Par] =
               remainder match {
-                case Nil => StateT.pure(p)
+                case Nil => NonDetFreeMapWithCost.pure(p)
                 case item +: rem =>
                   if (lf.locallyFree(item).isEmpty)
                     foldRemainder(rem, merger(p, item))
                   else if (wildcard)
                     foldRemainder(rem, p)
                   else
-                    StateT.liftF(Stream.Empty)
+                    NonDetFreeMapWithCost.emptyMap[Par]
               }
             for {
-              p <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) =>
+              //TODO: investigate how it affect the `CostAccount` state
+              p <- StateT.inspect[StreamT[State[CostAccount, ?], ?], FreeMap, Par]((m: FreeMap) =>
                     m.getOrElse(level, VectorPar()))
               collectPar <- foldRemainder(rem, p)
-              _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
+              _ <- StateT.modify[StreamT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
+                    m + (level -> collectPar))
             } yield Unit
           }
         }
@@ -315,7 +338,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       case (targets, pattern +: prem) => {
         if (!lf.connectiveUsed(pattern)) {
           possiblyRemove(pattern, targets) match {
-            case None => StateT.liftF(Stream.Empty)
+            case None => NonDetFreeMapWithCost.liftF(Stream.empty)
             case Some(filtered) =>
               listMatch(filtered, prem, merger, varLevel, wildcard)
           }
@@ -340,20 +363,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
       ._2
       .reverse
 
-  def listMatchItem[T](tlist: Seq[T],
-                       pattern: T,
-                       matcher: (T, T) => OptionalFreeMap[Unit]): NonDetFreeMap[Seq[T]] =
+  def listMatchItem[T](
+      tlist: Seq[T],
+      pattern: T,
+      matcher: (T, T) => OptionalFreeMapWithCost[Unit]): NonDetFreeMapWithCost[Seq[T]] =
     for {
-      triple               <- StateT.liftF(singleOut(tlist).toStream)
+      triple               <- NonDetFreeMapWithCost.liftF(singleOut(tlist).toStream)
       (head, target, tail) = triple
-      forcedYield <- StateT[Stream, FreeMap, Seq[T]]((s: FreeMap) => {
-                      matcher(target, pattern).run(s) match {
-                        case None =>
-                          Stream.Empty
-                        case Some((state, _)) =>
-                          Stream((state, head.reverse ++ tail))
-                      }
-                    })
+      forcedYield <- NonDetFreeMapWithCost[Seq[T]](s =>
+                      StreamT[State[CostAccount, ?], (FreeMap, Seq[T])](State((c: CostAccount) =>
+                        matcher(target, pattern).run(s).value.run(c).value match {
+                          case (cost, None) =>
+                            (cost, Stream.empty)
+                          case (cost, Some((state, _))) =>
+                            (cost, Stream((state, head.reverse ++ tail)))
+                      })))
     } yield forcedYield
 
   case class ParCount(sends: Int = 0,
@@ -463,32 +487,37 @@ trait SpatialMatcherInstances {
         case ConnAndBody(ConnectiveBody(ps)) =>
           ps.toList.traverse_(p => spatialMatch(target, p))
         case ConnOrBody(ConnectiveBody(ps)) => {
-          def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMap[Unit] =
+          def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMapWithCost[Unit] =
             patterns match {
-              case Nil => StateT.liftF(None)
+              case Nil => OptionalFreeMapWithCost.emptyMap
               case p +: rem =>
-                StateT[Option, FreeMap, Unit]((s: FreeMap) => {
-                  spatialMatch(target, p).run(s) match {
-                    case None               => firstMatch(target, rem).run(s)
-                    case Some((_, _: Unit)) => Some((s, Unit))
-                  }
+                OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
+                  OptionT(State((c: CostAccount) => {
+                    spatialMatch(target, p).run(s).value.run(c).value match {
+                      case (cost, None) =>
+                        (cost, firstMatch(target, rem).run(s).value.run(c).value._2)
+                      case (cost, Some((_, _: Unit))) => (cost, Some((s, Unit)))
+                    }
+                  }))
                 })
             }
           firstMatch(target, ps)
         }
         case ConnNotBody(p) =>
-          StateT[Option, FreeMap, Unit]((s: FreeMap) => {
-            spatialMatch(target, p).run(s) match {
-              case None         => Some((s, Unit))
-              case Some((_, _)) => None
-            }
+          OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
+            OptionT(State((c: CostAccount) => {
+              spatialMatch(target, p).run(s).value.run(c).value match {
+                case (cost, None)         => (cost, Some((s, Unit)))
+                case (cost, Some((_, _))) => (cost, None)
+              }
+            }))
           })
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
-          StateT.liftF(None)
+          OptionalFreeMapWithCost.emptyMap[Unit]
 
         case ConnectiveInstance.Empty =>
-          StateT.liftF(None)
+          OptionalFreeMapWithCost.emptyMap[Unit]
       }
     }
 
@@ -496,9 +525,9 @@ trait SpatialMatcherInstances {
     (target, pattern) =>
       if (!pattern.connectiveUsed) {
         if (pattern == target)
-          StateT.pure(Unit)
+          NonDetFreeMapWithCost.pure(Unit)
         else {
-          StateT.liftF(Stream.Empty)
+          NonDetFreeMapWithCost.emptyMap[Unit]
         }
       } else {
 
@@ -556,11 +585,12 @@ trait SpatialMatcherInstances {
         def matchConnectiveWithBounds(
             target: Par,
             labeledConnective: (Connective, (ParCount, ParCount), (ParCount, ParCount)))
-          : NonDetFreeMap[Par] = {
+          : NonDetFreeMapWithCost[Par] = {
           val (con, bounds, remainders) = labeledConnective
           for {
-            sp <- StateT.liftF(subPars(target, bounds._1, bounds._2, remainders._1, remainders._2))
-            _  <- nonDetMatch(sp._1, con)
+            sp <- NonDetFreeMapWithCost.liftF(
+                   subPars(target, bounds._1, bounds._2, remainders._1, remainders._2))
+            _ <- nonDetMatch(sp._1, con)
           } yield sp._2
         }
         for {
@@ -607,16 +637,16 @@ trait SpatialMatcherInstances {
   implicit val bundleSpatialMatcherInstance: SpatialMatcher[Bundle, Bundle] =
     fromFunction[Bundle, Bundle] { (target, pattern) =>
       if (pattern == target)
-        StateT.pure(Unit)
+        OptionalFreeMapWithCost.pure(Unit)
       else {
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
       }
     }
 
   implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
       else
         for {
           _ <- spatialMatch(target.chan, pattern.chan)
@@ -627,7 +657,7 @@ trait SpatialMatcherInstances {
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
     fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
@@ -640,7 +670,7 @@ trait SpatialMatcherInstances {
       if (target.bindCount == pattern.bindCount)
         spatialMatch(target.p, pattern.p)
       else
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
   }
 
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
@@ -651,8 +681,10 @@ trait SpatialMatcherInstances {
             matchedRem <- foldMatch(tlist, plist, rem)
             _ <- rem match {
                   case Some(Var(FreeVar(level))) =>
-                    StateT.modify[Option, FreeMap](m => m + (level -> EList(matchedRem)))
-                  case _ => StateT.pure[Option, FreeMap, Unit](Unit)
+                    //TODO: investigate how this affect `CostAccount` state
+                    StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap](m =>
+                      m + (level -> EList(matchedRem)))
+                  case _ => OptionalFreeMapWithCost.pure[Unit](Unit)
                 }
           } yield Unit
         }
@@ -660,7 +692,10 @@ trait SpatialMatcherInstances {
           foldMatch(tlist, plist).map(_ => Unit)
         }
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
-          if (vp == vt) StateT.pure(Unit) else StateT.liftF(None)
+          if (vp == vt)
+            OptionalFreeMapWithCost.pure(Unit)
+          else
+            OptionalFreeMapWithCost.emptyMap[Unit]
         case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
         case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
@@ -680,7 +715,7 @@ trait SpatialMatcherInstances {
           } yield Unit
         case (EEvalBody(chan1), EEvalBody(chan2)) =>
           spatialMatch(chan1, chan2)
-        case _ => StateT.liftF(None)
+        case _ => OptionalFreeMapWithCost.emptyMap[Unit]
       }
   }
 
@@ -700,40 +735,41 @@ trait SpatialMatcherInstances {
   implicit val gprivateSpatialMatcherInstance: SpatialMatcher[GPrivate, GPrivate] =
     fromFunction[GPrivate, GPrivate] { (target, pattern) =>
       if (target == pattern)
-        StateT.pure(Unit)
+        OptionalFreeMapWithCost.pure(Unit)
       else
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
     }
 
   implicit val channelSpatialMatcherInstance: SpatialMatcher[Channel, Channel] =
     fromFunction[Channel, Channel] { (target, pattern) =>
       (target.channelInstance, pattern.channelInstance) match {
-        case (_, ChanVar(v)) if v.varInstance.isWildcard => StateT.pure(Unit)
+        case (_, ChanVar(v)) if v.varInstance.isWildcard => OptionalFreeMapWithCost.pure(Unit)
         case (Quote(p), ChanVar(v)) => {
           v.varInstance match {
             case FreeVar(level) => {
               if (p.locallyFree.isEmpty) StateT.modify(m => m + (level -> p))
-              else StateT.liftF(None)
+              else OptionalFreeMapWithCost.emptyMap
             }
-            case _ => StateT.liftF(None)
+            case _ => OptionalFreeMapWithCost.emptyMap
           }
         }
         case (ChanVar(tv), ChanVar(pv)) =>
           (tv.varInstance, pv.varInstance) match {
             case (BoundVar(tlevel), BoundVar(plevel)) => {
-              if (tlevel === plevel) StateT.pure(Unit) else StateT.liftF(None)
+              if (tlevel === plevel) OptionalFreeMapWithCost.pure(Unit)
+              else OptionalFreeMapWithCost.emptyMap
             }
-            case _ => StateT.liftF(None)
+            case _ => OptionalFreeMapWithCost.emptyMap
           }
         case (Quote(tproc), Quote(pproc)) => spatialMatch(tproc, pproc)
-        case _                            => StateT.liftF(None)
+        case _                            => OptionalFreeMapWithCost.emptyMap
       }
     }
 
   implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind, ReceiveBind] =
     fromFunction[ReceiveBind, ReceiveBind] { (target, pattern) =>
       if (target.patterns != pattern.patterns)
-        StateT.liftF[Option, FreeMap, Unit](None)
+        OptionalFreeMapWithCost.emptyMap
       else
         spatialMatch(target.source, pattern.source)
     }
@@ -741,7 +777,7 @@ trait SpatialMatcherInstances {
   implicit val matchCaseSpatialMatcherInstance: SpatialMatcher[MatchCase, MatchCase] =
     fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern)
-        StateT.liftF(None)
+        OptionalFreeMapWithCost.emptyMap
       else
         spatialMatch(target.source, pattern.source)
     }
