@@ -290,26 +290,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PPlusPlus" should "Delegate" in {
-    val lhsListData = new ListProc()
-    lhsListData.add(new PGround(new GroundInt(1)))
-    lhsListData.add(new PGround(new GroundInt(2)))
-    lhsListData.add(new PGround(new GroundInt(3)))
-    val rhsListData = new ListProc()
-    rhsListData.add(new PGround(new GroundInt(4)))
-    rhsListData.add(new PGround(new GroundInt(5)))
-    rhsListData.add(new PGround(new GroundInt(6)))
     val pPlusPlus = new PPlusPlus(
-      new PCollect(new CollectList(lhsListData, new RemainderEmpty())),
-      new PCollect(new CollectList(rhsListData, new RemainderEmpty()))
+      new PGround(new GroundString("abc")),
+      new PGround(new GroundString("def"))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        EPlusPlus(
-          EList(List[Par](GInt(1), GInt(2), GInt(3))),
-          EList(List[Par](GInt(4), GInt(5), GInt(6)))
-        )
-      ))
+    result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def"))))
     result.knownFree should be(inputs.knownFree)
   }
 
