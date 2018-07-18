@@ -1295,4 +1295,36 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(GBool(true))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
+
+  "'abc'.length()" should "return the length of the string" in {
+    implicit val errorLog = new ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GInt(3))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abcabac'.slice(3, 6)" should "return 'aba'" in {
+    implicit val errorLog = new ErrorLog()
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(3), GInt(6))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("aba"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
 }
