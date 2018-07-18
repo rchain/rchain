@@ -138,6 +138,9 @@ object InterpreterUtil {
 
     val deploys = ProtoUtil.deploys(b)
 
+    assert(parents.nonEmpty || (parents.isEmpty && b == genesis),
+           "Received a different genesis block.")
+
     computeDeploysCheckpoint(
       parents,
       deploys,
