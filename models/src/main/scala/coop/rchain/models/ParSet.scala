@@ -9,14 +9,12 @@ case class ParSet(ps: SortedParHashSet, connectiveUsed: Boolean, locallyFree: Co
 
   override def equals(o: scala.Any): Boolean = o match {
     case parSet: ParSet =>
-      this.ps == parSet.ps && this.connectiveUsed == parSet.connectiveUsed && this.locallyFree.value == parSet.locallyFree.value
+      this.ps == parSet.ps
     case _ => false
   }
 
   override def hashCode(): Int = (
-    37 * this.ps.hashCode() +
-      37 * this.connectiveUsed.hashCode() +
-      37 * this.locallyFree.value.hashCode()
+    37 * this.ps.hashCode()
   )
 }
 

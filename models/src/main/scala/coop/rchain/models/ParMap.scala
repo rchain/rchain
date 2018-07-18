@@ -8,15 +8,12 @@ import coop.rchain.models.rholang.implicits._
 case class ParMap(ps: SortedParMap, connectiveUsed: Boolean, locallyFree: Coeval[BitSet]) {
 
   override def equals(o: scala.Any): Boolean = o match {
-    case parMap: ParMap =>
-      this.ps == parMap.ps && this.connectiveUsed == parMap.connectiveUsed && this.locallyFree.value == parMap.locallyFree.value
-    case _ => false
+    case parMap: ParMap => this.ps == parMap.ps
+    case _              => false
   }
 
   override def hashCode(): Int = (
-    37 * this.ps.hashCode() +
-      37 * this.connectiveUsed.hashCode() +
-      37 * this.locallyFree.value.hashCode()
+    37 * this.ps.hashCode()
   )
 }
 

@@ -306,7 +306,7 @@ object SpatialMatcher {
               trem match {
                 case Nil => StateT.pure(acc)
                 case item +: rem =>
-                  if (lft.locallyFree(item).isEmpty)
+                  if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
                     StateT.liftF(None)
@@ -406,7 +406,7 @@ object SpatialMatcher {
               remainder match {
                 case Nil => StateT.pure(p)
                 case item +: rem =>
-                  if (lf.locallyFree(item).isEmpty)
+                  if (lf.locallyFree(item, 0).isEmpty)
                     foldRemainder(rem, merger(p, item))
                   else if (wildcard)
                     foldRemainder(rem, p)

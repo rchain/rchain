@@ -909,7 +909,7 @@ object Reduce {
         par.sends.foldLeft(BitSet())((acc, send) => acc | send.locallyFree) |
           par.receives.foldLeft(BitSet())((acc, receive) => acc | receive.locallyFree) |
           par.news.foldLeft(BitSet())((acc, newProc) => acc | newProc.locallyFree) |
-          par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr)) |
+          par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr, 0)) |
           par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree) |
           par.bundles.foldLeft(BitSet())((acc, bundleProc) => acc | bundleProc.locallyFree)
       par.copy(locallyFree = resultLocallyFree)

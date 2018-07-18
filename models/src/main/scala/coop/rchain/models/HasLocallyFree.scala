@@ -4,5 +4,5 @@ import scala.collection.immutable.BitSet
 
 trait HasLocallyFree[T] {
   def connectiveUsed(source: T): Boolean
-  def locallyFree(source: T): BitSet
+  def locallyFree(source: T, depth: Int): BitSet
 }

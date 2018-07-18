@@ -127,11 +127,11 @@ object implicits {
     new Par(receives = Vector(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
   def apply(n: New): Par =
     new Par(news = Vector(n),
-            locallyFree = NewLocallyFree.locallyFree(n),
+            locallyFree = NewLocallyFree.locallyFree(n, 0),
             connectiveUsed = NewLocallyFree.connectiveUsed(n))
   def apply(e: Expr): Par =
     new Par(exprs = Vector(e),
-            locallyFree = ExprLocallyFree.locallyFree(e),
+            locallyFree = ExprLocallyFree.locallyFree(e, 0),
             connectiveUsed = ExprLocallyFree.connectiveUsed(e))
   def apply(m: Match): Par =
     new Par(matches = Vector(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
@@ -192,14 +192,17 @@ object implicits {
     def prepend(n: New): Par =
       p.copy(
         news = n +: p.news,
-        locallyFree = p.locallyFree | NewLocallyFree.locallyFree(n),
-        connectiveUsed = p.connectiveUsed || NewLocallyFree.connectiveUsed(n)
+        locallyFree =
+          p.locallyFree | n.locallyFree,
+        connectiveUsed = p.connectiveUsed || n.connectiveUsed
       )
-    def prepend(e: Expr): Par =
+    def prepend(e: Expr, depth: Int): Par =
       p.copy(
         exprs = e +: p.exprs,
-        locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
-        connectiveUsed = p.connectiveUsed || ExprLocallyFree.connectiveUsed(e)
+        locallyFree = p.locallyFree | ExprLocallyFree
+          .locallyFree(e, depth),
+        connectiveUsed = p.connectiveUsed || ExprLocallyFree
+          .connectiveUsed(e)
       )
     def prepend(m: Match): Par =
       p.copy(matches = m +: p.matches,
@@ -210,10 +213,11 @@ object implicits {
         bundles = b +: p.bundles,
         locallyFree = b.body.locallyFree | p.locallyFree
       )
-    def prepend(c: Connective): Par =
+    def prepend(c: Connective, depth: Int): Par =
       p.copy(
         connectives = c +: p.connectives,
-        connectiveUsed = p.connectiveUsed || ConnectiveLocallyFree.connectiveUsed(c)
+        connectiveUsed = p.connectiveUsed || ConnectiveLocallyFree.connectiveUsed(c),
+        locallyFree = ConnectiveLocallyFree.locallyFree(c, depth)
       )
 
     def singleEval(): Option[Channel] =
@@ -281,18 +285,18 @@ object implicits {
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
 
   implicit val ParLocallyFree: HasLocallyFree[Par] = new HasLocallyFree[Par] {
-    def connectiveUsed(p: Par) = p.connectiveUsed
-    def locallyFree(p: Par)    = p.locallyFree
+    def connectiveUsed(p: Par)          = p.connectiveUsed
+    def locallyFree(p: Par, depth: Int) = p.locallyFree
   }
 
   implicit val BundleLocallyFree: HasLocallyFree[Bundle] = new HasLocallyFree[Bundle] {
-    override def connectiveUsed(source: Bundle): Boolean = false
-    override def locallyFree(source: Bundle): BitSet     = source.body.locallyFree
+    override def connectiveUsed(source: Bundle): Boolean         = false
+    override def locallyFree(source: Bundle, depth: Int): BitSet = source.body.locallyFree
   }
 
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
-    def connectiveUsed(s: Send) = s.connectiveUsed
-    def locallyFree(s: Send)    = s.locallyFree
+    def connectiveUsed(s: Send)          = s.connectiveUsed
+    def locallyFree(s: Send, depth: Int) = s.locallyFree
   }
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
     def connectiveUsed(e: Expr) =
@@ -327,42 +331,42 @@ object implicits {
         case ExprInstance.Empty                          => false
       }
 
-    def locallyFree(e: Expr) =
+    def locallyFree(e: Expr, depth: Int) =
       e.exprInstance match {
-        case GBool(_)                                    => BitSet()
-        case GInt(_)                                     => BitSet()
-        case GString(_)                                  => BitSet()
-        case GUri(_)                                     => BitSet()
-        case GByteArray(_)                               => BitSet()
-        case EListBody(e)                                => e.locallyFree
-        case ETupleBody(e)                               => e.locallyFree
-        case ESetBody(e)                                 => e.locallyFree.value
-        case EMapBody(e)                                 => e.locallyFree.value
-        case EVarBody(EVar(v))                           => VarLocallyFree.locallyFree(v)
-        case EEvalBody(chan)                             => ChannelLocallyFree.locallyFree(chan)
-        case ENotBody(ENot(p))                           => p.locallyFree
-        case ENegBody(ENeg(p))                           => p.locallyFree
-        case EMultBody(EMult(p1, p2))                    => p1.locallyFree | p2.locallyFree
-        case EDivBody(EDiv(p1, p2))                      => p1.locallyFree | p2.locallyFree
-        case EPlusBody(EPlus(p1, p2))                    => p1.locallyFree | p2.locallyFree
-        case EMinusBody(EMinus(p1, p2))                  => p1.locallyFree | p2.locallyFree
-        case ELtBody(ELt(p1, p2))                        => p1.locallyFree | p2.locallyFree
-        case ELteBody(ELte(p1, p2))                      => p1.locallyFree | p2.locallyFree
-        case EGtBody(EGt(p1, p2))                        => p1.locallyFree | p2.locallyFree
-        case EGteBody(EGte(p1, p2))                      => p1.locallyFree | p2.locallyFree
-        case EEqBody(EEq(p1, p2))                        => p1.locallyFree | p2.locallyFree
-        case ENeqBody(ENeq(p1, p2))                      => p1.locallyFree | p2.locallyFree
-        case EAndBody(EAnd(p1, p2))                      => p1.locallyFree | p2.locallyFree
-        case EOrBody(EOr(p1, p2))                        => p1.locallyFree | p2.locallyFree
-        case EMethodBody(e)                              => e.locallyFree
-        case EMatchesBody(EMatches(target, pattern @ _)) => target.locallyFree
-        case ExprInstance.Empty                          => BitSet()
+        case GBool(_)                                => BitSet()
+        case GInt(_)                                 => BitSet()
+        case GString(_)                              => BitSet()
+        case GUri(_)                                 => BitSet()
+        case GByteArray(_)                           => BitSet()
+        case EListBody(e)                            => e.locallyFree
+        case ETupleBody(e)                           => e.locallyFree
+        case ESetBody(e)                             => e.locallyFree.value
+        case EMapBody(e)                             => e.locallyFree.value
+        case EVarBody(EVar(v))                       => VarLocallyFree.locallyFree(v, depth)
+        case EEvalBody(chan)                         => ChannelLocallyFree.locallyFree(chan, depth)
+        case ENotBody(ENot(p))                       => p.locallyFree
+        case ENegBody(ENeg(p))                       => p.locallyFree
+        case EMultBody(EMult(p1, p2))                => p1.locallyFree | p2.locallyFree
+        case EDivBody(EDiv(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case EPlusBody(EPlus(p1, p2))                => p1.locallyFree | p2.locallyFree
+        case EMinusBody(EMinus(p1, p2))              => p1.locallyFree | p2.locallyFree
+        case ELtBody(ELt(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case ELteBody(ELte(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case EGtBody(EGt(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case EGteBody(EGte(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case EEqBody(EEq(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case ENeqBody(ENeq(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case EAndBody(EAnd(p1, p2))                  => p1.locallyFree | p2.locallyFree
+        case EOrBody(EOr(p1, p2))                    => p1.locallyFree | p2.locallyFree
+        case EMethodBody(e)                          => e.locallyFree
+        case EMatchesBody(EMatches(target, pattern)) => target.locallyFree | pattern.locallyFree
+        case ExprInstance.Empty                      => BitSet()
       }
   }
 
   implicit val GPrivateLocallyFree: HasLocallyFree[GPrivate] = new HasLocallyFree[GPrivate] {
-    def connectiveUsed(g: GPrivate) = false
-    def locallyFree(g: GPrivate)    = BitSet()
+    def connectiveUsed(g: GPrivate)          = false
+    def locallyFree(g: GPrivate, depth: Int) = BitSet()
   }
 
   implicit val ChannelLocallyFree: HasLocallyFree[Channel] = new HasLocallyFree[Channel] {
@@ -373,17 +377,17 @@ object implicits {
         case ChannelInstance.Empty => false
       }
 
-    def locallyFree(c: Channel) =
+    def locallyFree(c: Channel, depth: Int) =
       c.channelInstance match {
         case Quote(p)              => p.locallyFree
-        case ChanVar(v)            => VarLocallyFree.locallyFree(v)
+        case ChanVar(v)            => VarLocallyFree.locallyFree(v, depth)
         case ChannelInstance.Empty => BitSet()
       }
   }
 
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
-    def connectiveUsed(n: New) = n.p.connectiveUsed
-    def locallyFree(n: New)    = n.locallyFree
+    def connectiveUsed(n: New)          = n.p.connectiveUsed
+    def locallyFree(n: New, depth: Int) = n.locallyFree
   }
 
   implicit val VarInstanceLocallyFree: HasLocallyFree[VarInstance] =
@@ -396,9 +400,9 @@ object implicits {
           case VarInstance.Empty => false
         }
 
-      def locallyFree(v: VarInstance) =
+      def locallyFree(v: VarInstance, depth: Int) =
         v match {
-          case BoundVar(level)   => BitSet(level)
+          case BoundVar(index)   => if (depth == 0) BitSet(index) else BitSet()
           case FreeVar(_)        => BitSet()
           case Wildcard(_)       => BitSet()
           case VarInstance.Empty => BitSet()
@@ -406,14 +410,14 @@ object implicits {
     }
 
   implicit val VarLocallyFree: HasLocallyFree[Var] = new HasLocallyFree[Var] {
-    def connectiveUsed(v: Var) = VarInstanceLocallyFree.connectiveUsed(v.varInstance)
-    def locallyFree(v: Var)    = VarInstanceLocallyFree.locallyFree(v.varInstance)
+    def connectiveUsed(v: Var)          = VarInstanceLocallyFree.connectiveUsed(v.varInstance)
+    def locallyFree(v: Var, depth: Int) = VarInstanceLocallyFree.locallyFree(v.varInstance, depth)
   }
 
   implicit val ReceiveLocallyFree: HasLocallyFree[Receive] =
     new HasLocallyFree[Receive] {
-      def connectiveUsed(r: Receive) = r.connectiveUsed
-      def locallyFree(r: Receive)    = r.locallyFree
+      def connectiveUsed(r: Receive)          = r.connectiveUsed
+      def locallyFree(r: Receive, depth: Int) = r.locallyFree
     }
 
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
@@ -421,20 +425,24 @@ object implicits {
       def connectiveUsed(rb: ReceiveBind) =
         ChannelLocallyFree.connectiveUsed(rb.source)
 
-      def locallyFree(rb: ReceiveBind) =
-        ChannelLocallyFree.locallyFree(rb.source)
+      def locallyFree(rb: ReceiveBind, depth: Int) =
+        ChannelLocallyFree.locallyFree(rb.source, depth) |
+          rb.patterns.foldLeft(BitSet()) { (acc, pat) =>
+            acc | ChannelLocallyFree.locallyFree(pat, depth + 1)
+          }
     }
 
   implicit val MatchLocallyFree: HasLocallyFree[Match] =
     new HasLocallyFree[Match] {
-      def connectiveUsed(m: Match) = m.connectiveUsed
-      def locallyFree(m: Match)    = m.locallyFree
+      def connectiveUsed(m: Match)          = m.connectiveUsed
+      def locallyFree(m: Match, depth: Int) = m.locallyFree
     }
 
   implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
     new HasLocallyFree[MatchCase] {
       def connectiveUsed(mc: MatchCase) = mc.source.connectiveUsed
-      def locallyFree(mc: MatchCase)    = mc.source.locallyFree
+      def locallyFree(mc: MatchCase, depth: Int) =
+        mc.source.locallyFree | ParLocallyFree.locallyFree(mc.pattern, depth + 1)
     }
 
   implicit val ConnectiveLocallyFree: HasLocallyFree[Connective] =
@@ -449,6 +457,14 @@ object implicits {
         }
       // Because connectives can only be used in patterns, we don't need to
       // calculate what is locally free inside
-      def locallyFree(conn: Connective) = BitSet()
+      def locallyFree(conn: Connective, depth: Int) =
+        conn.connectiveInstance match {
+          case VarRefBody(VarRef(idx, varDepth)) =>
+            if (depth == varDepth)
+              BitSet(idx)
+            else
+              BitSet()
+          case _ => BitSet()
+        }
     }
 }
