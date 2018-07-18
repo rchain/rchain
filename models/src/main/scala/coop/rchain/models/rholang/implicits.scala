@@ -118,6 +118,14 @@ object implicits {
   def apply(e: EMatches): Expr =
     new Expr(exprInstance = EMatchesBody(e))
   implicit def fromEMatches(e: EMatches): Expr = apply(e)
+  
+  def apply(e: EPercent): Expr =
+    new Expr(exprInstance = EPercentBody(e))
+  implicit def fromEPercent(e: EPercent): Expr = apply(e)
+  
+  def apply(e: EPlusPlus): Expr =
+    new Expr(exprInstance = EPlusPlusBody(e))
+  implicit def fromEPlusPlus(e: EPlusPlus): Expr = apply(e)
 
   // Par Related
   def apply(): Par = new Par()
@@ -324,6 +332,8 @@ object implicits {
         case EOrBody(EOr(p1, p2))                        => p1.connectiveUsed || p2.connectiveUsed
         case EMethodBody(e)                              => e.connectiveUsed
         case EMatchesBody(EMatches(target, pattern @ _)) => target.connectiveUsed
+        case EPercentBody(EPercent(p1, p2))              => p1.connectiveUsed || p2.connectiveUsed
+        case EPlusPlusBody(EPlusPlus(p1, p2))            => p1.connectiveUsed || p2.connectiveUsed
         case ExprInstance.Empty                          => false
       }
 
@@ -356,6 +366,8 @@ object implicits {
         case EOrBody(EOr(p1, p2))                        => p1.locallyFree | p2.locallyFree
         case EMethodBody(e)                              => e.locallyFree
         case EMatchesBody(EMatches(target, pattern @ _)) => target.locallyFree
+        case EPercentBody(EPercent(p1, p2))              => p1.locallyFree | p2.locallyFree
+        case EPlusPlusBody(EPlusPlus(p1, p2))            => p1.locallyFree | p2.locallyFree
         case ExprInstance.Empty                          => BitSet()
       }
   }
