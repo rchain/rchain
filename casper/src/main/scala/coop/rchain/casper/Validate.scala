@@ -15,7 +15,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -331,6 +331,34 @@ object Validate {
       Applicative[F].pure(Left(NeglectedInvalidBlock))
     } else {
       Applicative[F].pure(Right(Valid))
+    }
+  }
+
+  def bondsCache[F[_]: Applicative: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager): F[Either[InvalidBlock, ValidBlock]] = {
+    val bonds = ProtoUtil.bonds(b)
+    ProtoUtil.tuplespace(b) match {
+      case Some(tuplespaceHash) =>
+        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
+          case Success(computedBonds) =>
+            if (bonds == computedBonds) {
+              Applicative[F].pure(Right(Valid))
+            } else {
+              for {
+                _ <- Log[F].warn(
+                      "Bonds in proof of stake contract do not match block's bond cache.")
+              } yield Left(InvalidBondsCache)
+            }
+          case Failure(_) =>
+            for {
+              _ <- Log[F].warn("Failed to compute bonds from tuplespace hash.")
+            } yield Left(InvalidBondsCache)
+        }
+      case None =>
+        for {
+          _ <- Log[F].warn("Block is missing a tuplespace hash.")
+        } yield Left(InvalidBondsCache)
     }
   }
 }
