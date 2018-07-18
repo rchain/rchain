@@ -77,11 +77,15 @@ message BlockInfo {
 // --------- End DeployService  --------
 
 // ---------- Signing Protocol ---------
-message UnapprovedBlock {
-  BlockMessage candidate    = 1;
+message ApprovedBlockCandidate {
+  BlockMessage block        = 1;
   int32        requiredSigs = 2;
-  int64        timestamp    = 3;
-  int64        duration     = 4;
+}
+
+message UnapprovedBlock {
+  ApprovedBlockCandidate candidate = 1; 
+  int64                  timestamp = 2;
+  int64                  duration  = 3;
 }
 
 message Signature {
@@ -91,9 +95,8 @@ message Signature {
 }
 
 message ApprovedBlock  {
-  BlockMessage       block        = 1;
-  int32              requiredSigs = 2;
-  repeated Signature sigs         = 3;
+  ApprovedBlockCandidate candidate = 1; 
+  repeated Signature     sigs      = 2;
 }
 
 message ApprovedBlockRequest {

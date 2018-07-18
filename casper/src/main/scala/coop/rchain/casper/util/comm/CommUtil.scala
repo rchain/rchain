@@ -198,7 +198,7 @@ object CommUtil {
 
   private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
     Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-      .filter(_.block.nonEmpty)
+      .filter(_.candidate.nonEmpty)
 
   private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
     Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption

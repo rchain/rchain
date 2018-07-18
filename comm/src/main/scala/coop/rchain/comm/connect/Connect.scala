@@ -30,6 +30,8 @@ object Connect {
         peers     <- NodeDiscovery[F].findMorePeers(10).map(_.toList)
         responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
         _ <- peers.zip(responses).traverse {
+              case (peer, Left(PeerUnavailable(_))) =>
+                Log[F].warn(s"Failed to connect to $peer. Reason: Peer is currently unavailable")
               case (peer, Left(error)) =>
                 Log[F].error(s"Failed to connect to $peer. Reason: $error")
               case (_, Right(_)) => ().pure[F]

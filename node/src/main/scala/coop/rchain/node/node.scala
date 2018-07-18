@@ -13,6 +13,7 @@ import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -167,7 +168,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
+    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
@@ -183,16 +184,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
-      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
-        implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
-                                           casperRuntime.replaySpace.store,
-                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -248,16 +246,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def startReportStoreMetrics(resources: Resources): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
-                                       resources.casperRuntime.replaySpace.store,
-                                       conf.run.data_dir().normalize)
-      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
-    }
-
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -281,7 +269,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(

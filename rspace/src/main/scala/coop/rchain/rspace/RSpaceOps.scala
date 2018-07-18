@@ -1,9 +1,5 @@
 package coop.rchain.rspace
 
-import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
-import scala.util.Random
-
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -11,6 +7,14 @@ import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
+
+import scala.Function.const
+import scala.collection.immutable.Seq
+import scala.concurrent.SyncVar
+import scala.util.Random
+
+import kamon._
+import kamon.trace.Tracer.SpanBuilder
 
 abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
@@ -20,6 +24,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 ) extends ISpace[C, P, A, R, K] {
 
   protected[this] val logger: Logger
+  protected[this] val installSpan: SpanBuilder
 
   private[this] val installs: SyncVar[Installs[C, P, A, R, K]] = {
     val installs = new SyncVar[Installs[C, P, A, R, K]]()
@@ -27,7 +32,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     installs
   }
 
-  override protected[this] def restoreInstalls(txn: store.Transaction): Unit =
+  protected[this] def restoreInstalls(txn: store.Transaction): Unit =
     installs.get.foreach {
       case (channels, Install(patterns, continuation, _match)) =>
         install(txn, channels, patterns, continuation)(_match)
@@ -84,8 +89,10 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      install(txn, channels, patterns, continuation)
+    Kamon.withSpan(installSpan.start(), finishSpan = true) {
+      store.withTxn(store.createTxnWrite()) { txn =>
+        install(txn, channels, patterns, continuation)
+      }
     }
 
   override def reset(root: Blake2b256Hash): Unit =
@@ -97,5 +104,14 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
         restoreInstalls(txn)
         store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
       }
+    }
+
+  override def clear(): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      eventLog.update(const(Seq.empty))
+      store.clearTrieUpdates()
+      store.eventsCounter.reset()
+      store.clear(txn)
+      restoreInstalls(txn)
     }
 }

@@ -2,11 +2,9 @@ package coop.rchain.casper.genesis
 
 import cats.{Applicative, Foldable, Monad}
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
 import coop.rchain.catscontrib._
-import coop.rchain.casper.genesis.contracts.{Rev, Wallet}
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev, Wallet}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
@@ -20,7 +18,6 @@ import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.BasicWallet
 import coop.rchain.shared.{Log, LogSource, Time}
-
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, Path}
 
@@ -35,6 +32,7 @@ object Genesis {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def withContracts(initial: BlockMessage,
+                    validators: Seq[ProofOfStakeValidator],
                     wallets: Seq[Wallet],
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
@@ -43,14 +41,14 @@ object Genesis {
       NonNegativeNumber.term,
       MakeMint.term,
       BasicWallet.term,
-      (new Rev(wallets)).term
+      new Rev(wallets).term,
+      new ProofOfStake(validators).term
     ).map(termDeploy)
-    withContracts(defaultBlessedTerms, initial, wallets, startHash, runtimeManager)
+    withContracts(defaultBlessedTerms, initial, startHash, runtimeManager)
   }
 
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
-                    wallets: Seq[Wallet],
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
     val Right(checkpoint) = runtimeManager.computeState(startHash, blessedTerms)
@@ -98,7 +96,7 @@ object Genesis {
       numValidators: Int,
       genesisPath: Path,
       maybeWalletsPath: Option[String],
-      activeRuntime: Runtime)(implicit scheduler: Scheduler): F[BlockMessage] =
+      runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
@@ -122,13 +120,12 @@ object Genesis {
       bonds   <- getBonds[F](bondsFile, numValidators, genesisPath)
       now     <- Time[F].currentMillis
       initial = withoutContracts(bonds = bonds, timestamp = now, version = 0L)
-      runtime = new SyncVar[Runtime]()
-      genesis <- Capture[F].capture {
-                  runtime.put(activeRuntime)
-                  val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
-                  withContracts(initial, wallets, initStateHash, runtimeManager)
-                }
-    } yield genesis
+    } yield
+      withContracts(initial,
+                    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+                    wallets,
+                    runtimeManager.emptyStateHash,
+                    runtimeManager)
 
   private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
                                              defaultPath: Path): F[Option[File]] =

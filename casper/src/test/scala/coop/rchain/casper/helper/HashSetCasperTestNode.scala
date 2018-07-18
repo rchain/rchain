@@ -52,13 +52,17 @@ class HashSetCasperTestNode(name: String,
   implicit val errorHandlerEff   = errorHandler
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-  val activeRuntime = Runtime.create(storageDirectory, storageSize)
-  val validatorId   = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+  val activeRuntime  = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+
+  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](activeRuntime, Some(validatorId), genesis)
+    MultiParentCasper.hashSetCasper[Id](runtimeManager, Some(validatorId), genesis)
   implicit val constructor = MultiParentCasperConstructor
-    .successCasperConstructor[Id](ApprovedBlock(block = Some(genesis)), casperEff)
+    .successCasperConstructor[Id](
+      ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
+      casperEff)
 
   implicit val packetHandlerEff = PacketHandler.pf[Id](
     casperPacketHandler[Id]
@@ -122,6 +126,7 @@ object HashSetCasperTestNode {
         case EncryptionHandshakeIncorrectlySigned => "EncryptionHandshakeIncorrectlySigned"
         case BootstrapNotProvided                 => "BootstrapNotProvided"
         case PeerNodeNotFound(peer)               => s"PeerNodeNotFound($peer)"
+        case PeerUnavailable(peer)                => s"PeerUnavailable($peer)"
         case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
         case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
         case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
