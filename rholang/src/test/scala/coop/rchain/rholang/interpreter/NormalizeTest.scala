@@ -238,6 +238,34 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  "PPercent" should "Delegate" in {
+    val mapData = new ListKeyValuePair()
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("name")),
+        new PGround(new GroundString("Alice"))
+      )
+    )
+    val pPercent =
+      new PPercent(
+        new PGround(new GroundString("Hi ${name}")),
+        new PCollect(new CollectMap(mapData))
+      )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercent, inputs).value
+    result.par should be(
+      inputs.par.prepend(
+        EPercent(
+          GString("Hi ${name}"),
+          ParMap(
+            seq = List[(Par, Par)]((GString("name"), GString("Alice"))),
+            connectiveUsed = false,
+            locallyFree = BitSet()
+          )
+        )
+      ))
+    result.knownFree should be(inputs.knownFree)
+  }
+
   "PAdd" should "Delegate" in {
     val pAdd = new PAdd(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
     val boundInputs =
@@ -258,6 +286,30 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinus, boundInputs).value
     result.par should be(
       inputs.par.prepend(EMinus(EVar(BoundVar(2)), EMult(EVar(BoundVar(1)), EVar(BoundVar(0))))))
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PPlusPlus" should "Delegate" in {
+    val lhsListData = new ListProc()
+    lhsListData.add(new PGround(new GroundInt(1)))
+    lhsListData.add(new PGround(new GroundInt(2)))
+    lhsListData.add(new PGround(new GroundInt(3)))
+    val rhsListData = new ListProc()
+    rhsListData.add(new PGround(new GroundInt(4)))
+    rhsListData.add(new PGround(new GroundInt(5)))
+    rhsListData.add(new PGround(new GroundInt(6)))
+    val pPlusPlus = new PPlusPlus(
+      new PCollect(new CollectList(lhsListData, new RemainderEmpty())),
+      new PCollect(new CollectList(rhsListData, new RemainderEmpty()))
+    )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
+    result.par should be(
+      inputs.par.prepend(
+        EPlusPlus(
+          EList(List[Par](GInt(1), GInt(2), GInt(3))),
+          EList(List[Par](GInt(4), GInt(5), GInt(6)))
+        )
+      ))
     result.knownFree should be(inputs.knownFree)
   }
 
