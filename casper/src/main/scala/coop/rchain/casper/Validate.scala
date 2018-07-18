@@ -34,7 +34,12 @@ object Validate {
 
   def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
                                             requiredValidators: Set[ByteString]): F[Boolean] = {
-    val maybeSigData = a.block.map(b => ProtoUtil.add(b.blockHash.toByteArray, a.requiredSigs))
+    val maybeSigData = for {
+      c     <- a.candidate
+      bytes = c.toByteArray
+    } yield Blake2b256.hash(bytes)
+
+    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
 
     maybeSigData match {
       case Some(sigData) =>
@@ -46,8 +51,7 @@ object Validate {
             if verify(sigData, s.sig.toByteArray, pk.toByteArray)
           } yield pk).toSet
 
-        if (validatedSigs.size >= a.requiredSigs && requiredValidators.forall(
-              validatedSigs.contains))
+        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
           true.pure[F]
         else
           Log[F]
@@ -57,7 +61,7 @@ object Validate {
 
       case None =>
         Log[F]
-          .warn("CASPER: Received invalid ApprovedBlock message not containing any block.")
+          .warn("CASPER: Received invalid ApprovedBlock message not containing any candidate.")
           .map(_ => false)
     }
   }
