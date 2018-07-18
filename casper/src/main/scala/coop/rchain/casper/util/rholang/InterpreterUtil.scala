@@ -61,8 +61,8 @@ object InterpreterUtil {
       dag: BlockDag,
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (Checkpoint, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents, genesis, dag, emptyStateHash, knownStateHashes, computeState)
 
@@ -77,8 +77,8 @@ object InterpreterUtil {
       dag: BlockDag,
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
@@ -130,8 +130,8 @@ object InterpreterUtil {
       dag: BlockDag,
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (Checkpoint, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
       .map(dag.blockLookup)

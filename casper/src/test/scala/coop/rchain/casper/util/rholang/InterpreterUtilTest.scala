@@ -46,15 +46,15 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (StateHash, Set[StateHash]) = {
     val (checkpoint, updatedKnownStateHashes) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
                                                         genesis,
                                                         dag,
                                                         defaultStateHash,
                                                         knownStateHashes,
-                                                        computeState)(scheduler)
+                                                        computeState)
     val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     (blockStateHash, updatedKnownStateHashes)
   }
