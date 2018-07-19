@@ -163,7 +163,7 @@ message Expr {
         Channel e_eval_body = 26;
 
         EMatches e_matches_body = 27;
-        EPercent e_percent_body = 28;
+        EPercentPercent e_percent_percent_body = 28;
         EPlusPlus e_plus_plus_body = 29;
     }
 }
@@ -287,7 +287,7 @@ message EMatches {
     Par pattern = 2 [(scalapb.field).no_box = true];
 }
 
-message EPercent {
+message EPercentPercent {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
 }

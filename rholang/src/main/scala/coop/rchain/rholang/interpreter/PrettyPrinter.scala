@@ -42,8 +42,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " * " + buildString(p2)).wrapWithBraces
       case EDivBody(EDiv(p1, p2)) =>
         (buildString(p1) + " / " + buildString(p2)).wrapWithBraces
-      case EPercentBody(EPercent(p1, p2)) =>
-        (buildString(p1) + " % " + buildString(p2)).wrapWithBraces
+      case EPercentPercentBody(EPercentPercent(p1, p2)) =>
+        (buildString(p1) + " %% " + buildString(p2)).wrapWithBraces
       case EPlusBody(EPlus(p1, p2)) =>
         (buildString(p1) + " + " + buildString(p2)).wrapWithBraces
       case EPlusPlusBody(EPlusPlus(p1, p2)) =>

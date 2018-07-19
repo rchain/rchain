@@ -1342,8 +1342,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(
-        EPercentBody(
-          EPercent(
+        EPercentPercentBody(
+          EPercentPercent(
             GString("Hello, ${name}!"),
             EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
           )
@@ -1390,8 +1390,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
 
       val inspectTask = reducer.evalExpr(
-        EPercentBody(
-          EPercent(
+        EPercentPercentBody(
+          EPercentPercent(
             GString("${a} ${b}"),
             EMapBody(
               ParMap(

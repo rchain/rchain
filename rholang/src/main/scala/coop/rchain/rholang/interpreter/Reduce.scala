@@ -558,7 +558,7 @@ object Reduce {
                 .spatialMatch(substTarget, substPattern)
                 .runS(SpatialMatcher.emptyMap)
                 .isDefined))
-        case EPercentBody(EPercent(p1, p2)) =>
+        case EPercentPercentBody(EPercentPercent(p1, p2)) =>
           def evalToStringPair(keyExpr: Expr, valueExpr: Expr): M[(String, String)] =
             (keyExpr.exprInstance, valueExpr.exprInstance) match {
               case (GString(keyString), GString(valueString)) =>
@@ -569,7 +569,7 @@ object Reduce {
               // to implement cats.Show for all ground terms.
               case (_: GString, value) =>
                 s.raiseError[(String, String)](
-                  ReduceError(s"Error: interpolation doesn't support ${value.getClass}")
+                  ReduceError(s"Error: interpolation doesn't support ${value.typ}")
                 )
               case _ =>
                 s.raiseError[(String, String)](
@@ -613,13 +613,13 @@ object Reduce {
                        case (_: GString, other) =>
                          s.raiseError(
                            ReduceError(
-                             s"Error: Operator `%` expected Map but got ${other.typ}"
+                             s"Error: Operator `%%` expected Map but got ${other.typ}"
                            )
                          )
                        case (other, _) =>
                          s.raiseError(
                            ReduceError(
-                             s"Error: Operator `%` is not defined on ${other.typ}"
+                             s"Error: Operator `%%` is not defined on ${other.typ}"
                            )
                          )
                      }

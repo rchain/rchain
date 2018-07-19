@@ -238,7 +238,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  "PPercent" should "Delegate" in {
+  "PPercentPercent" should "Delegate" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
       new KeyValuePairImpl(
@@ -246,15 +246,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         new PGround(new GroundString("Alice"))
       )
     )
-    val pPercent =
-      new PPercent(
+    val pPercentPercent =
+      new PPercentPercent(
         new PGround(new GroundString("Hi ${name}")),
         new PCollect(new CollectMap(mapData))
       )
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercent, inputs).value
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
     result.par should be(
       inputs.par.prepend(
-        EPercent(
+        EPercentPercent(
           GString("Hi ${name}"),
           ParMap(
             seq = List[(Par, Par)]((GString("name"), GString("Alice"))),

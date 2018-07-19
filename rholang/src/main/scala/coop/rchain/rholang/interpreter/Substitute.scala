@@ -291,8 +291,8 @@ object Substitute {
             s2(par1.get, par2.get)(EMult(_, _))
           case EDivBody(EDiv(par1, par2)) =>
             s2(par1.get, par2.get)(EDiv(_, _))
-          case EPercentBody(EPercent(par1, par2)) =>
-            s2(par1, par2)(EPercent(_, _))
+          case EPercentPercentBody(EPercentPercent(par1, par2)) =>
+            s2(par1, par2)(EPercentPercent(_, _))
           case EPlusBody(EPlus(par1, par2)) =>
             s2(par1.get, par2.get)(EPlus(_, _))
           case EMinusBody(EMinus(par1, par2)) =>
