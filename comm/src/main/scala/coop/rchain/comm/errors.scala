@@ -63,7 +63,7 @@ object CommError {
       case CouldNotConnectToBootstrap      => "Node could not connect to bootstrap node"
       case TimeOut                         => "Timeout"
       case InternalCommunicationError(msg) => s"Internal communication error. $msg"
-      case UnknownProtocolError(msg)       => msg
+      case UnknownProtocolError(msg)       => s"Unknown protocol error. $msg"
       case ProtocolException(t) =>
         val msg = Option(t.getMessage).getOrElse("")
         s"Protocol error. $msg"
