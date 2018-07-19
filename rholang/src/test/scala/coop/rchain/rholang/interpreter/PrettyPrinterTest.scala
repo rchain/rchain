@@ -56,13 +56,12 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
     listData.add(new PGround(new GroundInt(7)))
-    val list = new PCollect(new CollectList(listData, new RemainderEmpty()))
+    val list = new PCollect(new CollectList(listData, new RemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value.par)
-    val target = "[x0, *x1, 7]"
-    result shouldBe target
+    result shouldBe "[x0, *x1, 7...free0]"
   }
 
   "Map" should "Print" in {
