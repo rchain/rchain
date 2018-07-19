@@ -1,9 +1,9 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Applicative, FlatMap, Functor, Monad, Traverse}
 import cats.data.{OptionT, State, StateT}
-import coop.rchain.models.Par
 import cats.implicits._
+import cats.{Applicative, Functor, Monad}
+import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 
 import scala.collection.immutable.Stream
