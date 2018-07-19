@@ -648,7 +648,17 @@ object SpatialMatcher {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
+        case (EPercentBody(EPercent(t1, t2)), EPercentBody(EPercent(p1, p2))) =>
+          for {
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
+          } yield Unit
         case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
+          for {
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
+          } yield Unit
+        case (EPlusPlusBody(EPlusPlus(t1, t2)), EPlusPlusBody(EPlusPlus(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
