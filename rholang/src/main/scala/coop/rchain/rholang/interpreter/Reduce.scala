@@ -62,9 +62,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
@@ -76,9 +76,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
@@ -355,20 +355,19 @@ object Reduce {
             case singleCase +: caseRem =>
               for {
                 pattern <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
-                matchResult = SpatialMatcher
+                (cost, matchResult) = SpatialMatcher
                   .spatialMatch(target, pattern)
                   .runS(emptyMap)
                   .value
                   .run(CostAccount.zero)
                   .value
+                _ <- costAccountingAlg.modify(_.charge(cost))
                 res <- matchResult match {
-                        case (cost, None) =>
-                          costAccountingAlg.modify(_.charge(cost)) *>
-                            Applicative[M].pure(Left((target, caseRem)))
-                        case (cost, Some(freeMap)) =>
+                        case None =>
+                          Applicative[M].pure(Left((target, caseRem)))
+                        case Some(freeMap) =>
                           val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                          costAccountingAlg.modify(_.charge(cost)) *>
-                            eval(singleCase.source)(newEnv, implicitly).map(Right(_))
+                          eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                       }
               } yield res
           }

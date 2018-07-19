@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import coop.rchain.models.Par
+import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 //TODO: Adjust the costs of operations
@@ -10,7 +10,13 @@ final case class Cost(value: BigInt) extends AnyVal {
   def +(other: Cost): Cost = Cost(value + other.value)
 }
 
+object Cost {
+  implicit val costNumeric: Numeric[Cost] =
+    NumericOps.by[Cost, BigInt](_.value, Cost(_))
+}
+
 trait Costs {
+  import Chargeable._
 
   final val BOOLEAN_COST: Cost = Cost(1)
   final val INT_COST: Cost     = Cost(2)
@@ -18,8 +24,8 @@ trait Costs {
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost(x: Par, y: Par): Cost =
-    Cost(scala.math.min(x.serializedSize, y.serializedSize))
+  def equalityCheckCost[T: Chargeable, P: Chargeable](x: T, y: P): Cost =
+    Cost(scala.math.min(cost(x), cost(y)))
 
   final val BOOLEAN_AND_COST = Cost(2)
   final val BOOLEAN_OR_COST  = Cost(2)
