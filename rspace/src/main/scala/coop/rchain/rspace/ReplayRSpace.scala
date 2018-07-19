@@ -351,6 +351,10 @@ object ReplayRSpace {
 
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
 
-    new ReplayRSpace[C, P, A, R, K](mainStore, branch)
+    val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
+
+    val _ = replaySpace.createCheckpoint()
+
+    replaySpace
   }
 }

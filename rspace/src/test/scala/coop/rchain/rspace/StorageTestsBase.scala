@@ -55,6 +55,7 @@ class InMemoryStoreTestsBase
       }
     }
     history.initialize(trieStore, branch)
+    val _ = testSpace.createCheckpoint()
     try {
       f(testSpace)
     } finally {
@@ -94,6 +95,7 @@ class LMDBStoreTestsBase
       }
     }
     history.initialize(testStore.trieStore, testBranch)
+    val _ = testSpace.createCheckpoint()
     try {
       f(testSpace)
     } finally {

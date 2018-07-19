@@ -108,12 +108,13 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
       }
     }
 
-  override def clear(): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      eventLog.update(const(Seq.empty))
-      store.clearTrieUpdates()
-      store.eventsCounter.reset()
-      store.clear(txn)
-      restoreInstalls(txn)
-    }
+  override def clear(): Unit = {
+    val emptyRootHash: Blake2b256Hash =
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.withTrieTxn(txn) { trieTxn =>
+          store.trieStore.getAllPastRoots(trieTxn).last
+        }
+      }
+    reset(emptyRootHash)
+  }
 }

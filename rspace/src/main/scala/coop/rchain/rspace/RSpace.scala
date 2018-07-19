@@ -210,6 +210,10 @@ object RSpace {
 
     history.initialize(store.trieStore, branch)
 
-    new RSpace[C, P, A, R, K](store, branch)
+    val space = new RSpace[C, P, A, R, K](store, branch)
+
+    val _ = space.createCheckpoint()
+
+    space
   }
 }
