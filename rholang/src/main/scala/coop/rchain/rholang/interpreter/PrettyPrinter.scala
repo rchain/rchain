@@ -19,7 +19,7 @@ import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0)
 
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
     PrettyPrinter(freeShift, boundShift, "INVALID", "a", 23, 128)
