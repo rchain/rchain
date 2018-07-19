@@ -28,6 +28,30 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
 
+### Name Equivalence
+
+It is possible to write one single name in several different ways. For example, the two following channels are equivalent:
+
+    @{10 + 2}
+    @{5 + 7}
+
+Any message sent over these channels can be received by listening on the channel `@12`. There are other instances in which a name can be written in two different ways. The guiding principle for this is that if `P` and `Q` are two equivalent processes, then `@P` and `@Q` are equivalent names. In particular, all of the following channels are equivalent:
+
+    @{ P | Q }
+    @{ Q | P }
+    @{ Q | P | Nil }
+
+Before using a channel, Rholang first evaluates expressions and accounts for these `|` rules at the top level--but only at the top level. This means that if an arithmetic expression forms part of a pattern within a pattern, it is left untouched. Because of this,
+
+    for( @{ x + 5 } <- @"chan" ){ ... }
+
+will never receive any message on `@"chan"` since if we send anything, such as `10 + 5`, over `@"chan"`, the arithmetic expression gets evaluated and the name `@15` is sent.
+
+Finally, channels also respect a change in variable name (alpha equivalence), so the following channels are equivalent:
+
+    @{ for( x <- chan ){ ... } }
+    @{ for( z <- chan ){ ... } }
+
 ## Replicated receive
 
     1 new HelloWorld in {
@@ -117,7 +141,7 @@ In order to have one message follow after another is known to have been received
 
 ## Pattern matching and channels as databases
 
-There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`:
+There are two kinds of value in Rholang, names and processes.  Patterns are names or processes with free variables and logical connectives, which appear to the left of an arrow in a `for` or a `match`:
 
     for (<name pattern> <- <channel>) { <process> }
     match <process> { <process pattern> => <process> }
@@ -142,6 +166,44 @@ Process-valued variables are bound in process positions in patterns.  Process po
     match R { [P, S, ...T] => Q }
     match R { contract foo(x) = { P } => Q }
     match R { contract foo(@S) = { x!(P + S) } => Q }
+
+In addition to free variables we have the logical connectives "AND", written `/\`, and "OR", written `\/`. In order to match with a list of patterns, separated by `/\`, a process or name must match each pattern in the list. For example, to send a message over a channel `students` that will be received by
+
+    for(@{ @"grade"!(x) /\ @y!(10) } <- StudentGradeLevel){ ... }
+
+the process we send must necessarily be of the form `@"grade"!(10)`. The first pattern requires that the process be something of the form `@"grade"!(x)`, where `x` is a process variable, and the second pattern requires that `x` be `10`. So this waits for a student to register in grade 10 and then executes the body of the `for`. If we register the student in grade 10 via
+
+    StudentGradeLevel!(@"grade"!(10))
+
+in parallel with the `for` above, `x` will bind to `10` and `y` will bind to `"grade"`. In contrast, in order to match a list of patterns, separated by `\/`, a process or name need only match ONE pattern in the list. Because we cannot depend on a specific pattern matching, we cannot use patterns separated by `\/` to bind any variables. For instance, replacing the `/\` with an `\/` in the `for` above yields an incorrect Rholang program
+
+    for(@{ @"grade"!(x) \/ @y!(10) } <- StudentGradeLevel){ ... }
+
+which is incorrect because `x` and `y` are both free. Furthermore, we cannot capture `x` or `y` because we cannot use a binder to capture variables inside a pattern. We will cover this more later on, when we talk about patterns within patterns.
+
+To correct this code, we could write something like 
+
+    for(@{ @"grade"!(10) \/ @"grade"!(11) } <- StudentGradeLevel){ ... }
+
+which waits for a student to register in either grade `10` or `11` before executing the body of the `for`.
+
+We can use both `/\` and `\/` in any given pattern, such as in: 
+
+    for(@{ 10 \/ 20 /\ x } <- @"chan"){ ... }
+
+This program is not quite correct. In Rholang, precedence rules for logical connectives are standard, meaning that `/\` binds tighter than `\/`, so the `for` above is equivalent to
+
+    for(@{ 10 \/ { 20 /\ x } } <- @"chan"){ ... }
+
+which has the free variable `x`. We can make this into a correct Rholang program by shifting parentheses
+
+    for(@{ { 10 \/ 20 } /\ x } <- @"chan"){ ... }
+
+Finally, logical connectives need not only separate process patterns, but can be used in any component of a pattern. For example, we can simplify our code that waits for a student to register in either grade `10` or `11` and write
+
+    for(@{ @"grade"!(10 \/ 11) } <- StudentGradeLevel){ ... }
+
+This will match with whichever of `StudentGradeLevel!(@"grade"!(10))` and `StudentGradeLevel!(@"grade"!(11))` runs first. The same precedence rules from before apply.
 
 ### Patterns in a `for`
 
@@ -270,6 +332,13 @@ This example shows how to implement a fold over a list, then uses it to compute 
 37) Send a two-element list back containing the results.
 
 42) Invoke the main contract on an example list.
+
+
+### Patterns With Wildcards
+
+We can also include wildcards in patterns. The intuition for these is that they throw away whatever they match to in the pattern. This can be useful, for example, to synchronize processes by listening on a channel `ack` for an acknowledgment that one process has completed and that the body of this `for` is supposed to execute.
+
+    for( _ <- ack ){ ... }
 
 
 ## Mutable state

@@ -1,23 +1,51 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Deploy
-import coop.rchain.casper.protocol.DeployString
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.protocol.{Bond, Deploy, DeployString}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Par
+import coop.rchain.models._
+import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.{Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
+import coop.rchain.rspace.internal.Datum
 import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.StateHash
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.rspace.internal.Datum
+import coop.rchain.rspace.trace.Produce
 import monix.eval.Task
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
+class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
+
+  def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
+      implicit scheduler: Scheduler): Seq[Par] = {
+    val runtime = getResetRuntime(start)
+    val deploy  = ProtoUtil.termDeploy(term)
+    val error   = eval(deploy :: Nil, runtime.reducer)
+
+    val result = error.fold {
+      val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
+      runtime.space.getData(returnChannel)
+    }(_ => Nil)
+
+    runtimeContainer.put(runtime)
+
+    for {
+      datum   <- result
+      channel <- datum.a.channels
+      par     <- channel.channelInstance.quote
+    } yield par
+  }
 
   def replayComputeState(log: trace.Log)(
       implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
@@ -33,7 +61,7 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
         }
         val error = eval(terms, riggedRuntime.replayReducer)
         val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
-          Right(riggedRuntime.space.createCheckpoint()))(Left(_))
+          Right(riggedRuntime.replaySpace.createCheckpoint()))(Left(_))
         runtimeContainer.put(riggedRuntime)
         newCheckpoint
       }
@@ -54,6 +82,32 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
     val result       = StoragePrinter.prettyPrint(resetRuntime.space.store)
     runtimeContainer.put(resetRuntime)
     result
+  }
+
+  def computeBonds(hash: StateHash): Seq[Bond] = {
+    val resetRuntime = getResetRuntime(hash)
+    // TODO: Switch to a read only name
+    val bondsChannel     = Channel(Quote(Par().copy(exprs = Seq(Expr(GString("proofOfStake"))))))
+    val bondsChannelData = resetRuntime.space.getData(bondsChannel)
+    runtimeContainer.put(resetRuntime)
+    toBondSeq(bondsChannelData)
+  }
+
+  private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
+    assert(data.length == 1)
+    val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
+    as.channels.head match {
+      case Channel(Quote(p)) =>
+        p.exprs.head.getEMapBody.ps.map {
+          case (validator: Par, bond: Par) =>
+            assert(validator.exprs.length == 1)
+            assert(bond.exprs.length == 1)
+            val validatorName = validator.exprs.head.getGString
+            val stakeAmount   = bond.exprs.head.getGInt
+            Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
+        }.toList
+      case Channel(_) => throw new Error("Should never happen")
+    }
   }
 
   private def getResetRuntime(hash: StateHash) = {
@@ -84,11 +138,13 @@ class RuntimeManager private (runtimeContainer: SyncVar[Runtime]) {
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(runtime: SyncVar[Runtime]): (StateHash, RuntimeManager) = {
-    val active = runtime.take()
-    val hash   = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+  def fromRuntime(active: Runtime): RuntimeManager = {
+    active.space.clear()
+    active.replaySpace.clear()
+    val hash    = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+    val runtime = new SyncVar[Runtime]()
     runtime.put(active)
 
-    (hash, new RuntimeManager(runtime))
+    new RuntimeManager(hash, runtime)
   }
 }

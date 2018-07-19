@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Capture
@@ -14,7 +15,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 object Validate {
   type PublicKey = Array[Byte]
@@ -33,7 +34,12 @@ object Validate {
 
   def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
                                             requiredValidators: Set[ByteString]): F[Boolean] = {
-    val maybeSigData = a.block.map(b => ProtoUtil.add(b.blockHash.toByteArray, a.requiredSigs))
+    val maybeSigData = for {
+      c     <- a.candidate
+      bytes = c.toByteArray
+    } yield Blake2b256.hash(bytes)
+
+    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
 
     maybeSigData match {
       case Some(sigData) =>
@@ -45,8 +51,7 @@ object Validate {
             if verify(sigData, s.sig.toByteArray, pk.toByteArray)
           } yield pk).toSet
 
-        if (validatedSigs.size >= a.requiredSigs && requiredValidators.forall(
-              validatedSigs.contains))
+        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
           true.pure[F]
         else
           Log[F]
@@ -56,7 +61,7 @@ object Validate {
 
       case None =>
         Log[F]
-          .warn("CASPER: Received invalid ApprovedBlock message not containing any block.")
+          .warn("CASPER: Received invalid ApprovedBlock message not containing any candidate.")
           .map(_ => false)
     }
   }
@@ -101,23 +106,22 @@ object Validate {
    * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
    * Justification regressions validation depends on sequence numbers being valid
    */
-  def blockSummary[F[_]: Monad: Log: Time](
-      block: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+  def blockSummary[F[_]: Monad: Log: Time](block: BlockMessage,
+                                           genesis: BlockMessage,
+                                           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
-      blockNumberStatus  <- timestampStatus.traverse(_ => Validate.blockNumber[F](block, dag))
+      blockNumberStatus <- timestampStatus.joinRight.traverse(_ =>
+                            Validate.blockNumber[F](block, dag))
       parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
                                Validate.sequenceNumber[F](block, dag))
     } yield sequenceNumberStatus.joinRight
 
-  def missingBlocks[F[_]: Applicative: Log](
-      block: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage,
+                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
     val justificationsPresent =
       block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
@@ -132,9 +136,8 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Monad: Log: Time](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+  def timestamp[F[_]: Monad: Log: Time](b: BlockMessage,
+                                        dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
@@ -165,9 +168,8 @@ object Validate {
                }
     } yield result
 
-  def blockNumber[F[_]: Applicative: Log](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def blockNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val parentNumber = ProtoUtil
       .parents(b)
       .headOption
@@ -193,9 +195,8 @@ object Validate {
     }
   }
 
-  def sequenceNumber[F[_]: Applicative: Log](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage,
+                                             dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val creatorJustificationSeqNumber = b.justifications
       .find {
         case Justification(validator, _) => validator == b.sender
@@ -217,10 +218,9 @@ object Validate {
     }
   }
 
-  def parents[F[_]: Applicative: Log](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+  def parents[F[_]: Applicative: Log](b: BlockMessage,
+                                      genesis: BlockMessage,
+                                      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
     if (b.justifications.isEmpty) {
@@ -257,7 +257,7 @@ object Validate {
   def justificationRegressions[F[_]: Applicative: Log](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val latestMessagesOfBlock = ProtoUtil.toLatestMessages(b.justifications)
     val latestMessagesOfLatestMessagesForSender =
       dag.latestMessagesOfLatestMessages.getOrElse(b.sender, latestMessagesOfBlock)
@@ -287,10 +287,10 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      initStateHash: StateHash,
+      emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
-      implicit scheduler: Scheduler): F[Either[RejectableBlock, IncludeableBlock]] =
+      implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
       maybeCheckPoint <- Capture[F].capture {
                           val Right((maybeCheckPoint, _)) =
@@ -301,7 +301,7 @@ object Validate {
                                   block,
                                   genesis,
                                   dag,
-                                  initStateHash,
+                                  emptyStateHash,
                                   _,
                                   runtimeManager
                                 ),
@@ -314,4 +314,55 @@ object Validate {
         case Some(_) => Right(Valid)
         case None    => Left(InvalidTransaction)
       }
+
+  /**
+    * If block contains an invalid justification block B and the creator of B is still bonded,
+    * return a RejectableBlock. Otherwise return an IncludeableBlock.
+    */
+  def neglectedInvalidBlockCheck[F[_]: Applicative](
+      block: BlockMessage,
+      invalidBlockTracker: Set[BlockHash]): F[Either[InvalidBlock, ValidBlock]] = {
+    val invalidJustifications = block.justifications.filter(justification =>
+      invalidBlockTracker.contains(justification.latestBlockHash))
+    val neglectedInvalidJustification = invalidJustifications.exists { justification =>
+      val slashedValidatorBond = bonds(block).find(_.validator == justification.validator)
+      slashedValidatorBond match {
+        case Some(bond) => bond.stake > 0
+        case None       => false
+      }
+    }
+    if (neglectedInvalidJustification) {
+      Applicative[F].pure(Left(NeglectedInvalidBlock))
+    } else {
+      Applicative[F].pure(Right(Valid))
+    }
+  }
+
+  def bondsCache[F[_]: Applicative: Log](
+      b: BlockMessage,
+      runtimeManager: RuntimeManager): F[Either[InvalidBlock, ValidBlock]] = {
+    val bonds = ProtoUtil.bonds(b)
+    ProtoUtil.tuplespace(b) match {
+      case Some(tuplespaceHash) =>
+        Try(runtimeManager.computeBonds(tuplespaceHash)) match {
+          case Success(computedBonds) =>
+            if (bonds == computedBonds) {
+              Applicative[F].pure(Right(Valid))
+            } else {
+              for {
+                _ <- Log[F].warn(
+                      "Bonds in proof of stake contract do not match block's bond cache.")
+              } yield Left(InvalidBondsCache)
+            }
+          case Failure(_) =>
+            for {
+              _ <- Log[F].warn("Failed to compute bonds from tuplespace hash.")
+            } yield Left(InvalidBondsCache)
+        }
+      case None =>
+        for {
+          _ <- Log[F].warn("Block is missing a tuplespace hash.")
+        } yield Left(InvalidBondsCache)
+    }
+  }
 }

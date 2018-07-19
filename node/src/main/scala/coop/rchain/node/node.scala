@@ -13,6 +13,7 @@ import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -128,24 +129,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
     This needs to be moved to node program! Part of execution. Effectful!
     */
-  val upnpErrorMsg =
-    s"ERROR - Could not open the port via uPnP. Please open it manaually on your router!"
-  val upnp = new UPnP
-  if (!conf.run.noUpnp()) {
-    println("INFO - trying to open port using uPnP....")
-    upnp.addPort(conf.run.port()) match {
-      case Left(UnknownCommError("no gateway")) =>
-        println(s"INFO - [OK] no gateway found, no need to open any port.")
-      case Left(error)  => println(s"$upnpErrorMsg Reason: $error")
-      case Right(false) => println(s"$upnpErrorMsg")
-      case Right(true)  => println("INFO - uPnP port forwarding was most likely successful!")
-    }
+  private val externalAddress = if (conf.run.noUpnp()) {
+    None
+  } else {
+    UPnP.assurePortForwarding(Seq(conf.run.port()))
   }
 
   import ApplicativeError_._
 
   /** Configuration */
-  private val host              = conf.run.fetchHost(upnp)
+  private val host              = conf.run.fetchHost(externalAddress)
   private val port              = conf.run.port()
   private val certificateFile   = conf.run.certificatePath.toFile
   private val keyFile           = conf.run.keyPath.toFile
@@ -175,7 +168,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
+    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
@@ -191,16 +184,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
-      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
-        implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
-                                           casperRuntime.replaySpace.store,
-                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -256,16 +246,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def startReportStoreMetrics(resources: Resources): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
-                                       resources.casperRuntime.replaySpace.store,
-                                       conf.run.data_dir().normalize)
-      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
-    }
-
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -283,19 +263,19 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      _         <- Log[Effect].info(s"RChain Node ${BuildInfo.version}")
+      _ <- Log[Effect].info(
+            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
-                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .fold[Either[CommError, PeerNode]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (
                     addr =>
                       Connect.connectToBootstrap[Effect](addr,

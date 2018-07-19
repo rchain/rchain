@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
+import coop.rchain.rspace.Context
 import coop.rchain.rspace.test._
 import org.lmdbjava.{Env, Txn}
 import org.scalacheck.Arbitrary
@@ -435,21 +436,15 @@ trait LMDBWithTestTrieStore[K]
 
   override def withTestTrieStore[R](
       f: (ITrieStore[Txn[ByteBuffer], K, ByteVector], Branch) => R): R = {
-    val env: Env[ByteBuffer] =
-      Env
-        .create()
-        .setMapSize(mapSize)
-        .setMaxDbs(3)
-        .setMaxReaders(126)
-        .open(dbDir.toFile)
-    val testStore  = LMDBTrieStore.create[K, ByteVector](env)
+    val env        = Context.env(dbDir, mapSize, Nil)
+    val testTrie   = LMDBTrieStore.create[K, ByteVector](env, dbDir)
     val testBranch = Branch("test")
-    testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
+    testTrie.withTxn(testTrie.createTxnWrite())(txn => testTrie.clear(txn))
     try {
-      initialize(testStore, testBranch)
-      f(testStore, testBranch)
+      initialize(testTrie, testBranch)
+      f(testTrie, testBranch)
     } finally {
-      testStore.close()
+      testTrie.close()
       env.close()
     }
   }

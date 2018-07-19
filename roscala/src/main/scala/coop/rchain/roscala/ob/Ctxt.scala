@@ -65,16 +65,16 @@ class Ctxt(var tag: Location,
       true
     } else {
       if (outstanding.decrementAndGet() == 0) {
-        logger.debug("Scheduling continuation")
+        logger.debug(ы"Scheduling continuation $this")
         scheduleStrand(state)
       } else {
-        logger.debug(s"$outstanding outstanding argument in continuation")
+        logger.debug(s"$outstanding outstanding argument in continuation ($this)")
       }
       false
     }
 
   def ret(result: Ob, state: State): Boolean = {
-    logger.debug(s"Return $result to $tag in continuation")
+    logger.debug(s"Write $result to $tag in continuation (${this.ctxt.get})")
 
     tag match {
       case LocLimbo => false

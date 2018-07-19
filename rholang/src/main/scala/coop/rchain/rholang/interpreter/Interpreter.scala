@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.ParSortMatcher
-import monix.eval.{Coeval, Task}
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   SyntaxError,
@@ -17,6 +17,7 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {
   def raiseOnLeft =
@@ -83,24 +84,27 @@ object Interpreter {
   def execute(runtime: Runtime, reader: Reader): Task[Runtime] =
     for {
       term   <- Task.coeval(buildNormalizedTerm(reader)).attempt.raiseOnLeft
-      errors <- evaluate(runtime, term).attempt.raiseOnLeft
+      errors <- evaluate(runtime, term).map(_.errors).attempt.raiseOnLeft
       result <- if (errors.isEmpty)
                  Task.now(runtime)
                else
                  Task.raiseError(new RuntimeException(mkErrorMsg(errors)))
-    } yield (result)
+    } yield result
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] = {
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand = Blake2b512Random(128)
     for {
       _      <- runtime.reducer.inj(normalizedTerm)
       errors <- Task.now(runtime.readAndClearErrorVector)
-    } yield errors
+      cost   <- runtime.getCost()
+    } yield EvaluateResult(cost, errors)
   }
 
-  private def mkErrorMsg(errors: Vector[InterpreterError]) =
+  private def mkErrorMsg(errors: Vector[Throwable]) =
     errors
       .map(_.toString())
       .mkString("Errors received during evaluation:\n", "\n", "\n")
+
+  final case class EvaluateResult(cost: CostAccount, errors: Vector[Throwable])
 
 }

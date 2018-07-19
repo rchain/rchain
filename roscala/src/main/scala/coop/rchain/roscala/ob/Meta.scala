@@ -82,6 +82,22 @@ class Meta(val refCount: AtomicInteger, var extensible: Boolean) extends Ob {
     }
   }
 
+  def set(client: Ob, key: Ob, value: Ob, ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
+    val lock = map.lock
+
+    lock.writeLock().withLock {
+      map(key) match {
+        case Some(location) =>
+          setValWrt(location, client, value)(globalEnv)
+          client
+
+        case None =>
+          // There is no binding for `key`
+          MissingBinding
+      }
+    }
+  }
+
   def lookupObo(client: Ob, key: Ob, globalEnv: GlobalEnv): Ob = {
     val result = get(client, key, globalEnv)
 

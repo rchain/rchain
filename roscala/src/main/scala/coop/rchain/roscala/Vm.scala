@@ -142,6 +142,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
             map.useWithReadLock { m =>
               import collection.JavaConverters._
 
+              // TODO: Fix output - output is not ordered correctly
               val keys = m.keys.asScala.toIterable
 
               val pairsStr = keys
@@ -185,6 +186,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
       case OpFork(pc) =>
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
+        logger.debug(s"Fork: Schedule cloned ctxt ($newCtxt)")
         state.strandPool.prepend((newCtxt, globalEnv))
         state.nextOpFlag = true
 
@@ -640,7 +642,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
 
       val ctxt = state.strandPool.dequeue
 
-      logger.debug("Ctxt completed. Install ctxt")
+      logger.debug(s"Ctxt completed. Install $ctxt")
 
       // Install `ctxt`
       state.ctxt = ctxt
@@ -658,8 +660,6 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
     * gets scheduled.
     */
   def doRtn(next: Boolean, state: State): Unit = {
-    logger.debug(s"doRtn${if (next) "/nxt"}")
-
     val result = state.ctxt.rslt
 
     if (state.ctxt.ret(result, state))

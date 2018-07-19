@@ -1,13 +1,14 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
+import cats.effect.Sync
 import cats.mtl.FunctorTell
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
-import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, InterpreterErrorsM}
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting.CostAccountingAlg
+import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.pure.PureRSpace
 
@@ -31,7 +32,7 @@ object Dispatch {
         }): _*)
 }
 
-class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit captureM: Capture[M])
+class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -43,9 +44,9 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit capt
         val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
         reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
       case ScalaBodyRef(_) =>
-        captureM.apply(())
+        s.unit
       case Empty =>
-        captureM.apply(())
+        s.unit
     }
 }
 
@@ -55,13 +56,12 @@ object RholangOnlyDispatcher {
                                             BindPattern,
                                             ListChannelWithRandom,
                                             ListChannelWithRandom,
-                                            TaggedContinuation])(
+                                            TaggedContinuation],
+                         costAccountingAlg: CostAccountingAlg[M])(
       implicit
-      intepreterErrorsM: InterpreterErrorsM[M],
-      captureM: Capture[M],
       parallel: Parallel[M, F],
-      ft: FunctorTell[M, InterpreterError])
-    : Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
+      s: Sync[M],
+      ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
@@ -69,10 +69,11 @@ object RholangOnlyDispatcher {
                               ListChannelWithRandom,
                               TaggedContinuation] =
       new PureRSpace(tuplespace)
+    lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](pureSpace, dispatcher)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
     dispatcher
   }
 }
@@ -80,7 +81,7 @@ object RholangOnlyDispatcher {
 class RholangAndScalaDispatcher[M[_]] private (
     _reducer: => Reduce[M],
     _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]])(
-    implicit captureM: Capture[M])
+    implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
 
   val reducer: Reduce[M] = _reducer
@@ -94,10 +95,10 @@ class RholangAndScalaDispatcher[M[_]] private (
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
-          case None    => captureM.fail(new Exception(s"dispatch: no function for $ref"))
+          case None    => s.raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
-        captureM.apply(())
+        s.unit
     }
 }
 
@@ -109,13 +110,12 @@ object RholangAndScalaDispatcher {
                          ListChannelWithRandom,
                          ListChannelWithRandom,
                          TaggedContinuation],
-      dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]])(
+      dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
+      costAccountingAlg: CostAccountingAlg[M])(
       implicit
-      intepreterErrorsM: InterpreterErrorsM[M],
-      captureM: Capture[M],
       parallel: Parallel[M, F],
-      ft: FunctorTell[M, InterpreterError])
-    : Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
+      s: Sync[M],
+      ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
@@ -123,10 +123,11 @@ object RholangAndScalaDispatcher {
                               ListChannelWithRandom,
                               TaggedContinuation] =
       new PureRSpace(tuplespace)
+    lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](pureSpace, dispatcher)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
     dispatcher
   }
 }

@@ -1,7 +1,12 @@
 package coop.rchain.comm.transport
 
+import cats.Id
+
+import coop.rchain.catscontrib._
+import coop.rchain.comm.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.shared.{Log, LogSource}
 
 import io.grpc._
 import javax.net.ssl.SSLSession
@@ -16,6 +21,9 @@ class SslSessionClientInterceptor() extends ClientInterceptor {
 class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT])
     extends ClientCall[ReqT, RespT] {
   self =>
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private val log                           = Log.log[Id]
 
   def cancel(message: String, cause: Throwable): Unit = next.cancel(message, cause)
   def request(numMessages: Int): Unit                 = next.request(numMessages)
@@ -37,10 +45,25 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
 
     override def onMessage(message: RespT): Unit =
       message match {
-        case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _))) =>
+        case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), msg))) =>
+          if (log.isTraceEnabled) {
+            val peerNode = ProtocolHelper.toPeerNode(sender)
+            val msgType = msg match {
+              case m if m.isDisconnect     => "disconnect"
+              case m if m.isLookup         => "lookup"
+              case m if m.isLookupResponse => "lookup response"
+              case m if m.isPing           => "ping"
+              case m if m.isPong           => "pong"
+              case m if m.isUpstream       => "upstream"
+              case m if m.isEmpty          => "empty"
+              case _                       => "unknown"
+            }
+            log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
+          }
           val sslSession: Option[SSLSession] = Option(
             self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION))
           if (sslSession.isEmpty) {
+            log.warn("No TLS Session. Closing connection")
             close()
           } else {
             sslSession.foreach { session =>
@@ -49,8 +72,10 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
                 .exists(_ sameElements sender.id.toByteArray)
               if (verified)
                 next.onMessage(message)
-              else
+              else {
+                log.warn("Certificate verification failed. Closing connection")
                 close()
+              }
             }
           }
 

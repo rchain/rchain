@@ -13,4 +13,30 @@ class LockedMbox extends Ob {
     client.mbox = newMbox
     Niv
   }
+
+  /**
+    * `nextMsg` is called after an `Actor` finished updating its
+    * state. It gets called when an `Actor` is ready to process more
+    * messages.
+    *
+    * In the case of a `LockedMbox` the only message in the mailbox
+    * already got processed. Therefore all that needs to be done here
+    * is to change the client's mailbox to an `EmptyMbox`.
+    */
+  override def nextMsg(client: MboxOb,
+                       newEnabledSet: Ob,
+                       state: State,
+                       globalEnv: GlobalEnv): Ob = {
+    MboxOb.logger.debug(s"Next message received on $this")
+
+    if (newEnabledSet == Nil)
+      client.mbox = MboxOb.EmptyMbox
+    else {
+      val newMbox = QueueMbox(newEnabledSet)
+      newMbox.unlock()
+      client.mbox = newMbox
+    }
+
+    Niv
+  }
 }

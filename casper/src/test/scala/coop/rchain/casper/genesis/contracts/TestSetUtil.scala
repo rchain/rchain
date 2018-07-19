@@ -20,7 +20,7 @@ object TestSetUtil {
   def runtime(name: String, size: Long = 1024L * 1024): Runtime = {
     val storageLocation = Files.createTempDirectory(name)
 
-    Runtime.create(storageLocation, size)(taskCapture)
+    Runtime.create(storageLocation, size)
   }
 
   def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler,

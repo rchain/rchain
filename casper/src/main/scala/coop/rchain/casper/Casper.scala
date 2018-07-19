@@ -80,7 +80,7 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
-      activeRuntime: Runtime,
+      runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     new MultiParentCasper[F] {
@@ -94,14 +94,25 @@ sealed abstract class MultiParentCasperInstances {
         BlockDag().copy(
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
+      private val emptyStateHash = runtimeManager.emptyStateHash
 
-      private val runtime = new SyncVar[Runtime]()
-      runtime.put(activeRuntime)
-      private val (initStateHash, runtimeManager) = RuntimeManager.fromRuntime(runtime)
-
-      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] = new AtomicSyncVar(
-        Set[StateHash](initStateHash)
-      )
+      private val (maybePostGenesisStateHash, _) = InterpreterUtil
+        .validateBlockCheckpoint(
+          genesis,
+          genesis,
+          _blockDag.get,
+          emptyStateHash,
+          Set[StateHash](emptyStateHash),
+          runtimeManager
+        )
+      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] =
+        maybePostGenesisStateHash match {
+          case Some(postGenesisStateHash) =>
+            new AtomicSyncVar(
+              Set[StateHash](emptyStateHash, postGenesisStateHash)
+            )
+          case None => throw new Error("Genesis block validation failed.")
+        }
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
@@ -115,6 +126,8 @@ sealed abstract class MultiParentCasperInstances {
       // each EquivocationRecord.
       private val equivocationsTracker: mutable.Set[EquivocationRecord] =
         new mutable.HashSet[EquivocationRecord]()
+      private val invalidBlockTracker: mutable.HashSet[BlockHash] =
+        new mutable.HashSet[BlockHash]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -125,9 +138,10 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case Valid                  => reAttemptBuffer
-                case AdmissibleEquivocation => reAttemptBuffer
-                case _                      => ().pure[F]
+                case MissingBlocks         => ().pure[F]
+                case IgnorableEquivocation => ().pure[F]
+                case _ =>
+                  reAttemptBuffer // reAttempt for any status that resulted in the  adding of the block into the view
               }
           estimates <- estimator
           tip       = estimates.head
@@ -204,7 +218,7 @@ sealed abstract class MultiParentCasperInstances {
                                                        r,
                                                        genesis,
                                                        _blockDag.get,
-                                                       initStateHash,
+                                                       emptyStateHash,
                                                        _,
                                                        runtimeManager.computeState),
               _._2)
@@ -256,23 +270,30 @@ sealed abstract class MultiParentCasperInstances {
                                             Validate.transactions[F](b,
                                                                      genesis,
                                                                      dag,
-                                                                     initStateHash,
+                                                                     emptyStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
-          postedNeglectedEquivocationCheckStatus <- postTransactionsCheckStatus.traverse(
+          postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(_ =>
+                                   Validate.bondsCache[F](b, runtimeManager))
+          postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
+                                              _ =>
+                                                Validate.neglectedInvalidBlockCheck[F](
+                                                  b,
+                                                  invalidBlockTracker.toSet))
+          postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
+                                                   .traverse(
                                                      _ =>
                                                        neglectedEquivocationsCheckWithRecordUpdate(
                                                          b,
                                                          dag))
-          postEquivocationCheckStatus <- postedNeglectedEquivocationCheckStatus.joinRight.traverse(
+          postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ => equivocationsCheck(b, dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
 
-      private def equivocationsCheck(
-          block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] = {
+      private def equivocationsCheck(block: BlockMessage,
+                                     dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
         val justificationOfCreator = block.justifications
           .find {
             case Justification(validator: Validator, _) => validator == block.sender
@@ -284,7 +305,7 @@ sealed abstract class MultiParentCasperInstances {
         if (isNotEquivocation) {
           Applicative[F].pure(Right(Valid))
         } else if (awaitingJustificationToChild.contains(block.blockHash)) {
-          Applicative[F].pure(Right(AdmissibleEquivocation))
+          Applicative[F].pure(Left(AdmissibleEquivocation))
         } else {
           Applicative[F].pure(Left(IgnorableEquivocation))
         }
@@ -293,7 +314,7 @@ sealed abstract class MultiParentCasperInstances {
       // See EquivocationRecord.scala for summary of algorithm.
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
-          dag: BlockDag): F[Either[RejectableBlock, IncludeableBlock]] =
+          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
         Capture[F].capture {
           val neglectedEquivocationDetected =
             equivocationsTracker.foldLeft(false) {
@@ -334,10 +355,18 @@ sealed abstract class MultiParentCasperInstances {
                                    dag,
                                    equivocationRecord,
                                    equivocationChild)) {
-          if (latestMessages.contains(equivocatingValidator)) {
-            EquivocationNeglected
-          } else {
-            EquivocationDetected
+          val maybeEquivocatingValidatorBond =
+            bonds(block).find(_.validator == equivocatingValidator)
+          maybeEquivocatingValidatorBond match {
+            case Some(Bond(_, stake)) =>
+              if (stake > 0) {
+                EquivocationNeglected
+              } else {
+                // TODO: Eliminate by having a validity check that says no stake can be 0
+                EquivocationDetected
+              }
+            case None =>
+              EquivocationDetected
           }
         } else {
           // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
@@ -479,32 +508,24 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidSequenceNumber =>
             handleInvalidBlockEffect(status, block)
+          case NeglectedInvalidBlock =>
+            handleInvalidBlockEffect(status, block)
           case NeglectedEquivocation =>
             handleInvalidBlockEffect(status, block)
           case InvalidTransaction =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidBondsCache =>
             handleInvalidBlockEffect(status, block)
           case _ => throw new Error("Should never reach")
         }
 
       private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
         for {
-          _ <- Log[F].info(s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(
+          _ <- Log[F].warn(s"CASPER: Recording invalid block ${PrettyPrinter.buildString(
                 block.blockHash)} for ${status.toString}.")
-          // TODO: Slash block.blockHash for status except InvalidUnslashableBlock
-          blocksToSlash = allChildren[BlockHash](awaitingJustificationToChild, block.blockHash) - block.blockHash
-          _ <- Log[F].warn(s"""CASPER: About to slash the following blocks ${blocksToSlash
-                .map(PrettyPrinter.buildString)
-                .mkString("", ",", "")} for neglecting an invalid block""")
-          // TODO: Slash blocksToSlash for neglecting an invalid block
-          _ <- Capture[F].capture { blocksToSlash.foreach(awaitingJustificationToChild.remove) }
+          // TODO: Slash block for status except InvalidUnslashableBlock
+          _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
-
-      private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
-        DagOperations
-          .bfTraverse[A](Some(element)) { (el: A) =>
-            map.getOrElse(el, Set.empty[A]).iterator
-          }
-          .toSet
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
@@ -564,17 +585,4 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
       }
     }
-
-  def fromConfig[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log: Time](conf: CasperConf, activeRuntime: Runtime)(
-      implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    for {
-      genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
-                                           conf.numValidators,
-                                           conf.genesisPath,
-                                           conf.walletsFile,
-                                           activeRuntime)
-      validatorId <- ValidatorIdentity.fromConfig[G](conf)
-    } yield hashSetCasper[F](activeRuntime, validatorId, genesis)
 }

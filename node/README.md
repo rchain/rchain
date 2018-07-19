@@ -3,46 +3,18 @@
 Rchain Node is a module that gathers all other subprojects into final executable.
 
 ## 1. Building from source
-
-### 1.1 Building JAR
-
-#### 1.1.1 Prerequisites
-
-In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](https://github.com/rchain/rchain/blob/master/README.md). 
-
-__Note__ Failure to attend to all prerequisites will result in errors.
-      
-#### 1.1.2. Node depends on the following subprojects: 
-
-1. comm
-2. crypto
-3. rholang
-4. rspace
-
-Building some of them is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
-Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
-
-Example
-
-```scala
-sbt:rchain> node/assembly
-[info] Including: JLex.jar
-[info] Including: log4s_2.12-1.4.0.jar
-[info] Including: java-cup-11b-runtime.jar
-
-(...)
-
-[info] SHA-1: bd4471642bb340c8b1fc0571fc614902c5bafbb2
-[info] Packaging /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar ...
-[info] Done packaging.
-[success] Total time: 25 s, completed Mar 26, 2018 3:36:09 PM
+   
 ```
+sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball
+```
+The build artifacts will be located in the `node/target/universal` directory if the build is successful.
+
 
 ### 1.2 Building Docker image
 
 Run:
 ```
-sbt docker
+sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
 ```
 
 To test if the image is available to use, simply run `docker images`, `coop.rchain/rnode` should be on the list of available images.
@@ -59,46 +31,83 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
-RChain Node 0.4.1
+Starting with profile default
+RChain Node 0.4.2
       --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
                            running.
   -g, --grpc-port  <arg>   Port used for gRPC API.
+  -p, --profile  <arg>     Which predefined set of defaults to use: default or
+                           docker.
       --help               Show help message
       --version            Show version of this program
 
-Subcommand: diagnostics (alias: d) - Node diagnostics
+Subcommand: diagnostics - Node diagnostics
       --help   Show help message
 Subcommand: run
-      --bonds-file  <arg>       Plain text file consisting of lines of the form
-                                `<pk> <stake>`, which defines the bond amounts
-                                for each validator at genesis. <pk> is the
-                                public key (in base-16 encoding) identifying the
-                                validator and <stake>is the amount of Rev they
-                                have bonded (an integer). Note: this overrides
-                                the --num-validators option.
-  -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
-  -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
-                                being used for identification
-  -d, --data_dir  <arg>         Path to data directory. Defaults to
-                                $HOME/.rnode
-      --host  <arg>             Hostname or IP of this node.
-  -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
-                                ported to gRPC API).
-  -k, --key  <arg>              Path to node's private key PEM file, that is
-                                being used for TLS communication
-      --map_size  <arg>         Map size (in bytes)
-  -m, --metrics-port  <arg>     Port used by metrics API.
-  -n, --num-validators  <arg>   Number of validators at genesis.
-  -p, --port  <arg>             Network port to use.
-  -s, --standalone              Start a stand-alone node (no bootstrapping).
-      --help                    Show help message
+      --bonds-file  <arg>                Plain text file consisting of lines of
+                                         the form `<pk> <stake>`, which defines
+                                         the bond amounts for each validator at
+                                         genesis. <pk> is the public key (in
+                                         base-16 encoding) identifying the
+                                         validator and <stake>is the amount of
+                                         Rev they have bonded (an integer).
+                                         Note: this overrides the
+                                         --num-validators option.
+  -b, --bootstrap  <arg>                 Bootstrap rnode address for initial
+                                         seed.
+  -c, --certificate  <arg>               Path to node's X.509 certificate file,
+                                         that is being used for identification
+      --data_dir  <arg>                  Path to data directory. Defaults to
+                                         $HOME/.rnode
+  -d, --default-timeout  <arg>           Default timeout for roundtrip
+                                         connections. Default 1 second.
+      --host  <arg>                      Hostname or IP of this node.
+  -h, --http-port  <arg>                 HTTP port (deprecated - all API
+                                         features will be ported to gRPC API).
+  -k, --key  <arg>                       Path to node's private key PEM file,
+                                         that is being used for TLS
+                                         communication
+      --known-validators  <arg>          Plain text file listing the public keys
+                                         of validators known to the user (one
+                                         per line). Signatures from these
+                                         validators are required in order to
+                                         accept a block which starts the
+                                         localnode's view of the blockDAG.
+      --map_size  <arg>                  Map size (in bytes)
+  -m, --metrics-port  <arg>              Port used by metrics API.
+  -n, --no-upnp                          Use this flag to disable UpNp.
+      --num-validators  <arg>            Number of validators at genesis.
+  -p, --port  <arg>                      Network port to use.
+  -s, --standalone                       Start a stand-alone node (no
+                                         bootstrapping).
+      --validator-private-key  <arg>     Base16 encoding of the private key to
+                                         use for signing a proposed blocks.
+  -v, --validator-public-key  <arg>      Base16 encoding of the public key to
+                                         use for signing a proposed blocks. Can
+                                         be inferred from the private key for
+                                         some signature algorithms.
+      --validator-sig-algorithm  <arg>   Name of the algorithm to use for
+                                         signing proposed blocks. Currently
+                                         supported values: ed25519
+  -w, --wallets-file  <arg>              Plain text file consisting of lines of
+                                         the form `<algorithm> <pk>
+                                         <revBalance>`, which defines the Rev
+                                         wallets that exist at genesis.
+                                         <algorithm> is the algorithm used to
+                                         verify signatures when using the wallet
+                                         (one of ed25519 or secp256k1),<pk> is
+                                         the public key (in base-16 encoding)
+                                         identifying the wallet and
+                                         <revBalance>is the amount of Rev in the
+                                         wallet.
+      --help                             Show help message
 Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
       --help   Show help message
 Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
       --help   Show help message
 
  trailing arguments:
-  file-name (required)
+  file-names (required)
 Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
       --help   Show help message
 Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
@@ -111,12 +120,10 @@ Subcommand: show-block - View properties of a block known by Casper on an existi
 
  trailing arguments:
   hash (required)   the hash value of the block
-Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node. 
-    --help   Show help message
-Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
-  -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
-                            for signing a proposed block.
-      --help                Show help message
+Subcommand: show-blocks - View list of blocks on the main chain in the current Casper view on an existing running node.
+      --help   Show help message
+Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys.
+      --help   Show help message
 ```
 
 ### 2.1 The Node
@@ -127,7 +134,7 @@ Node will instantiate a peer-to-peer network. It will either connect to some alr
 An RChain node is addressed by an "rnode address", which has the following form
 
 ```
-rnode://<address-key>@<host-or-ip>:<udp-port>
+rnode://<address-key>@<host-or-ip>:<tcp-port>
 ```
 
 This version generates (non-cryptographically) random address keys of 128 bits, or 32 characters (UUIDs,
@@ -149,22 +156,20 @@ Regardless of which path on the file system you choose for the data directory, p
 
 #### 2.1.2 Running the Node
 
-##### 2.1.2.1 via Docker
+RNode runs as a server, and requires a specific network configuration.  Please reference [https://rchain.atlassian.net/wiki/spaces/CORE/pages/498958481/RNode+supported+network+configuration] for details.
 
-By far the simplest way to run this code is by using Docker. Use this pull command in Docker to get the current version of RNode
+##### 2.1.2.1 Running via Docker
+
+An easy way to run RNode is by using Docker. Use this pull command in Docker to get the current version of RNode
 
 ```docker pull rchain/rnode```
 
-You can also [build a docker image yourself](#building-via-docker) and then run it.
-
-__Note__ The port used has to be mapped to the proper host port for the node to be able to advertise itself to the network
-properly. This may happen automatically, and it may not; it completely depends on how your computer and network are configured. Some monkeying with `docker run` options may be required, and the `--host` and `--port` options to this system may also help.
-
+You can also [build a docker image yourself](#building-via-docker) and then run it.  The Docker image requires the folder `var/lib/rnode` to be present and accessible at runtime.  
 
 ```
-$ docker run -ti rchain/rnode
+$ docker run -ti -v "$HOME/rnode":/var/lib/rnode rchain/rnode run 
 17:12:21.938 [main] INFO main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 17:12:22.850 [main] INFO org.http4s.blaze.channel.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 17:12:22.851 [main] INFO org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
@@ -172,13 +177,13 @@ $ docker run -ti rchain/rnode
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -              |_|
 17:12:22.889 [main] INFO org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30304.
+17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:40400.
 17:12:22.970 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
 17:12:22.975 [main] DEBUG main - Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 (...)
 ```
 
-To use both the peer-to-peer and REPL capabilities of RNode, two containers running RNode need to be connected to one user-defined network bridge:
+To use the REPL capabilities of RNode, two containers running RNode need to be connected to one user-defined network bridge: One will be the server that exposes the gRPC API, the other is a client.
 
 ```bash
 > docker network create rnode-net
@@ -188,14 +193,14 @@ To use both the peer-to-peer and REPL capabilities of RNode, two containers runn
 > docker run -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 repl
 ```
 
-##### 2.1.2.2 via Java
+##### 2.1.2.2 Running RNode directly from Packages
 
-This will run Node from JAR file that was built in [Building from source](#building-from-source)
+This will run Node from a package that was built in [Building from source](#building-from-source).  Select the package for your system and install.
 
 ```
-$ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
+$ ./bin/rnode run
 17:12:21.938 [main] INFO main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 17:12:22.850 [main] INFO org.http4s.blaze.channel.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 17:12:22.851 [main] INFO org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
@@ -203,7 +208,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
 17:12:22.852 [main] INFO org.http4s.server.blaze.BlazeBuilder -              |_|
 17:12:22.889 [main] INFO org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
-17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:30304.
+17:12:22.963 [main] INFO main - Listening for traffic on rnode://6403d6e9f0874d31940a654f3f52a830@192.168.1.123:40400.
 17:12:22.970 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
 17:12:22.975 [main] DEBUG main - Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 (...)
@@ -221,22 +226,26 @@ Assuming you have a RNode running in Docker, use the command below to run the no
 $ docker run -ti rchain/rnode repl
 ```
 
-#### 2.2.2. Running via Java
+#### 2.2.2 Running from Packages
 This will run Node from JAR file that was built in [Building from source](#building-from-source)
 
 ```
-$ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar repl
+$ ./bin/rnode repl
 ```
 
 ### 2.3 Eval
 When running the program with sub command `eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code that is stored in a plain text file on the node itself.
 
+```
+$ ./bin/rnode eval <path to filename>
+```
+
 ### 2.3.1 Running via Docker
 This assumes you have a RNode running in Docker. To run Rholang that is stored in a plain text file (filename.rho), use
 
-'''
+```
 docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode eval /tmp/filename.rho
-'''
+```
 
 This command will run the node in interpreter mode and will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed. When running your docker container, be aware of your current path - the 'pwd' command sticks your current path in the bind command.
 
@@ -245,23 +254,23 @@ This command will run the node in interpreter mode and will make a directory on 
 
 ### 3.1. Host and Port
 
-The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable UDP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
+The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable TCP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
 
 ```
---host 1.2.3.4 --port 30304
+--host 1.2.3.4 --port 40400
 ```
 
-By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick different
-ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the test net on UDP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
+By default it uses TCP port 40400. This is also how more than one node may be run on a single machine: just pick different
+ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the test net on TCP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
 
 ```
-$ docker run -ti -p 12345:12345/udp rchain/rchain-comm:latest -p 12345 --host 1.2.3.4
+$ docker run -ti -p 12345:12345 rchain/rnode:latest run -p 12345 --host 1.2.3.4
 ```
 
-or perhaps by causing docker to use the host network and not its own bridge:
+or perhaps by causing docker to use the host network and not its own bridge: Note: This does NOT work on MacOSX
 
 ```
-$ docker run -ti --network=host rchain/rchain-comm:latest -p 12345
+$ docker run -ti --network=host rchain/rnode:latest run -p 12345
 ```
 
 This may take some experimentation to find combinations of arguments that work for any given setup.
@@ -274,9 +283,9 @@ Read more than you want to know about Docker networking starting about
 It is possible to set up a private RChain network by running a standalone node and using it for bootstrapping other nodes. Here we run one on port 4000:
 
 ```
-$ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar -s -p 4000
+$ ./bin/rnode run -s -p 4000
 11:21:00.164 [main] INFO  main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
-11:21:00.600 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+11:21:00.600 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 11:21:01.012 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
 11:21:01.013 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
 11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
@@ -297,7 +306,7 @@ Now bootstrapping the other node just means giving the argument
 For example:
 
 ```
-$ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar --bootstrap rnode://a96a6c152711416f869da7fe8c2ced61@192.168.1.123:4000 -p 4001 -x 8081
+$ ./bin/rnode run --bootstrap rnode://a96a6c152711416f869da7fe8c2ced61@192.168.1.123:4000 -p 4001
 11:24:09.885 [main] INFO  main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
 11:24:10.183 [kamon.prometheus.PrometheusReporter] ERROR kamon.ReporterRegistry - Metric reporter [kamon.prometheus.PrometheusReporter] failed to start.
 11:24:10.567 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8081
