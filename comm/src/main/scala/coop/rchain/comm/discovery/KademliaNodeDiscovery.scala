@@ -108,7 +108,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
     */
   private def handleDisconnect(sender: PeerNode, disconnect: Disconnect): F[CommunicationResponse] =
     for {
-      _ <- Log[F].info(s"Forgetting about $sender.")
+      _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
       _ <- TransportLayer[F].disconnect(sender)
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
