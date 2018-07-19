@@ -27,11 +27,15 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery.{Ping => NDPing, _}
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
+import cats.effect.{Bracket, ExitCase}
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
+
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -160,11 +164,39 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
+  val bracketEffect: Bracket[Effect, Exception] =
+    new Bracket[Effect, Exception] {
+      def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
+
+      def handleErrorWith[A](fa: Effect[A])(f: Exception => Effect[A]): Effect[A] = fa.onError {
+        case Left(commError) => f(new Exception(s"$commError"))
+      }
+
+      def raiseError[A](e: Exception): Effect[A] = Left(e)
+
+      // Members declared in FlatMap
+      def flatMap[A, B](fa: Effect[A])(f: A => Effect[B]): Effect[B] =
+        implicitly[FlatMap[Effect]].flatMap(fa)(f)
+      def tailRecM[A, B](a: A)(f: A => Effect[Either[A, B]]): Effect[B] =
+        implicitly[FlatMap[Effect]].tailRecM(a)(f)
+
+      def bracketCase[A, B](acquire: Effect[A])(use: A => Effect[B])(
+          release: (A, ExitCase[Exception]) => Effect[Unit]): Effect[B] =
+        acquire.flatMap { state =>
+          try {
+            use(state)
+          } finally {
+            release(state, ExitCase.Completed)
+          }
+        }
+    }
+
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
+  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
@@ -172,6 +204,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
+  implicit val blockStore: BlockStore[Effect] =
+    InMemBlockStore.inMemInstanceEff[Effect](bracketEffect, metricsEffect)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,

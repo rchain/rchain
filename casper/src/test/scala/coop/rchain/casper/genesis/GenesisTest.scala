@@ -2,11 +2,10 @@ package coop.rchain.casper.genesis
 
 import cats.Id
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.catscontrib._
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -14,24 +13,28 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-
 import java.io.PrintWriter
 import java.nio.file.Files
 
+import cats.effect.Bracket
+import cats.mtl.MonadState
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.casper.helper.BlockGenerator.StateWithChain
 import monix.execution.Scheduler.Implicits.global
-
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
 class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
-  val storageSize     = 1024L * 1024
-  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
-  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
-  val numValidators   = 5
-  implicit val log    = new LogStub[Id]
-  implicit val time   = new LogicalTime[Id]
+  implicit def blockStore = InMemBlockStore.inMemInstanceId
+  val storageSize         = 1024L * 1024
+  def storageLocation     = Files.createTempDirectory(s"casper-genesis-test-runtime")
+  def genesisPath         = Files.createTempDirectory(s"casper-genesis-test")
+  val numValidators       = 5
+  implicit val log        = new LogStub[Id]
+  implicit val time       = new LogicalTime[Id]
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -143,14 +146,17 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val emptyStateHash = runtimeManager.emptyStateHash
 
     val genesis = Genesis.fromInputFiles[Id](None, numValidators, genesisPath, None, runtimeManager)
-    val blockDag =
-      BlockDag().copy(blockLookup = HashMap[ByteString, BlockMessage](genesis.blockHash -> genesis))
+    val blockDag = {
+      BlockStore[Id].put(genesis.blockHash, genesis)
+      BlockDag()
+    }
 
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint(
         genesis,
         genesis,
         blockDag,
+        BlockStore[Id].asMap(),
         emptyStateHash,
         Set[ByteString](emptyStateHash),
         runtimeManager

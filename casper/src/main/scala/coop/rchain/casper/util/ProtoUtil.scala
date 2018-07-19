@@ -8,7 +8,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 
 import scala.annotation.tailrec
@@ -20,7 +19,7 @@ object ProtoUtil {
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
   @tailrec
-  def isInMainChain(blocks: collection.Map[ByteString, BlockMessage],
+  def isInMainChain(internalMap: Map[BlockHash, BlockMessage],
                     candidate: BlockMessage,
                     target: BlockMessage): Boolean =
     if (candidate == target) {
@@ -29,29 +28,29 @@ object ProtoUtil {
       (for {
         hdr        <- target.header
         parentHash <- hdr.parentsHashList.headOption
-        mainParent <- blocks.get(parentHash)
+        mainParent <- internalMap.get(parentHash)
       } yield mainParent) match {
-        case Some(parent) => isInMainChain(blocks, candidate, parent)
+        case Some(parent) => isInMainChain(internalMap, candidate, parent)
         case None         => false
       }
     }
 
   @tailrec
-  def getMainChain(blockDag: BlockDag,
+  def getMainChain(internalMap: Map[BlockHash, BlockMessage],
                    estimate: BlockMessage,
                    acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
     val parentsHashes       = ProtoUtil.parents(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash.flatMap(blockDag.blockLookup.get) match {
+    maybeMainParentHash.flatMap(internalMap.get) match {
       case Some(newEstimate) =>
-        getMainChain(blockDag, newEstimate, acc :+ estimate)
+        getMainChain(internalMap, newEstimate, acc :+ estimate)
       case None => acc :+ estimate
     }
   }
 
   @tailrec
   def findJustificationParentWithSeqNum(b: BlockMessage,
-                                        blockLookup: collection.Map[BlockHash, BlockMessage],
+                                        internalMap: Map[BlockHash, BlockMessage],
                                         seqNum: SequenceNumber): Option[BlockMessage] =
     if (b.seqNum == seqNum) {
       Some(b)
@@ -61,9 +60,9 @@ object ProtoUtil {
       }
       creatorJustificationHash match {
         case Some(Justification(_, blockHash)) =>
-          val creatorJustification = blockLookup.get(blockHash)
+          val creatorJustification = internalMap.get(blockHash)
           creatorJustification match {
-            case Some(block) => findJustificationParentWithSeqNum(block, blockLookup, seqNum)
+            case Some(block) => findJustificationParentWithSeqNum(block, internalMap, seqNum)
             case None        => None
           }
         case None => None
@@ -93,23 +92,23 @@ object ProtoUtil {
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
-  def mainParent(blocks: collection.Map[ByteString, BlockMessage],
+  def mainParent(internalMap: Map[BlockHash, BlockMessage],
                  blockMessage: BlockMessage): Option[BlockMessage] =
     for {
       hdr        <- blockMessage.header
       parentHash <- hdr.parentsHashList.headOption
-      mainParent <- blocks.get(parentHash)
+      mainParent <- internalMap.get(parentHash)
     } yield mainParent
 
   def weightFromValidator(b: BlockMessage,
                           validator: ByteString,
-                          blocks: collection.Map[ByteString, BlockMessage]): Int =
-    mainParent(blocks, b)
+                          internalMap: Map[BlockHash, BlockMessage]): Int =
+    mainParent(internalMap, b)
       .map(weightMap(_).getOrElse(validator, 0))
       .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
 
-  def weightFromSender(b: BlockMessage, blocks: collection.Map[ByteString, BlockMessage]): Int =
-    weightFromValidator(b, b.sender, blocks)
+  def weightFromSender(b: BlockMessage, internalMap: Map[BlockHash, BlockMessage]): Int =
+    weightFromValidator(b, b.sender, internalMap)
 
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
@@ -139,15 +138,16 @@ object ProtoUtil {
   def conflicts(b1: BlockMessage,
                 b2: BlockMessage,
                 genesis: BlockMessage,
-                dag: BlockDag): Boolean = {
-    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag)
+                dag: BlockDag,
+                internalMap: Map[BlockHash, BlockMessage]): Boolean = {
+    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag, internalMap)
     if (gca == b1 || gca == b2) {
       //blocks which already exist in each other's chains do not conflict
       false
     } else {
       def getDeploys(b: BlockMessage) =
         DagOperations
-          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(dag.blockLookup))
+          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(internalMap(_)))
           .takeWhile(_ != gca)
           .flatMap(b => {
             b.body.map(_.newCode).getOrElse(List.empty[Deploy])
@@ -160,11 +160,12 @@ object ProtoUtil {
 
   def chooseNonConflicting(blocks: Seq[BlockMessage],
                            genesis: BlockMessage,
-                           dag: BlockDag): Seq[BlockMessage] =
+                           dag: BlockDag,
+                           internalMap: Map[BlockHash, BlockMessage]): Seq[BlockMessage] =
     blocks
       .foldLeft(List.empty[BlockMessage]) {
         case (acc, b) =>
-          if (acc.forall(!conflicts(_, b, genesis, dag))) {
+          if (acc.forall(!conflicts(_, b, genesis, dag, internalMap))) {
             b :: acc
           } else {
             acc

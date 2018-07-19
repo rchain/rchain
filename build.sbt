@@ -54,7 +54,7 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -263,6 +263,38 @@ lazy val roscala = (project in file("roscala"))
     libraryDependencies ++= commonDependencies
   ).dependsOn(roscala_macros)
 
+lazy val blockStorage = (project in file("block-storage"))
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "block-storage",
+    version := "0.0.1-SNAPSHOT",
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      lmdbjava,
+      catsCore,
+      catsEffect,
+      catsMtl
+    ),
+    /* Publishing Settings */
+    scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
+    git.remoteRepo := scmInfo.value.get.connection,
+    useGpg := true,
+    pomIncludeRepository := { _ => false },
+    publishMavenStyle := true,
+    publishTo := {
+      val nexus = "https://oss.sonatype.org/"
+      if (isSnapshot.value)
+        Some("snapshots" at nexus + "content/repositories/snapshots")
+      else
+        Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+    },
+    publishArtifact in Test := false,
+    licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    homepage := Some(url("https://www.rchain.coop"))
+  )
+  .dependsOn(shared, models)
+
+
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
@@ -332,6 +364,7 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
+    blockStorage,
     casper,
     comm,
     crypto,

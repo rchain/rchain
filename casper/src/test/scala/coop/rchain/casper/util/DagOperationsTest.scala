@@ -1,18 +1,25 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
-import cats.Monad
+import cats.{Id, Monad}
 import cats.data.State
+import cats.effect.Bracket
 import cats.implicits._
+import cats.mtl.MonadState
 import cats.mtl.implicits._
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
 class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
-  val initState = BlockDag().copy(currentId = -1)
+  implicit val blockStore      = InMemBlockStore.inMemInstanceId
+  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+  val initState                = BlockDag().copy(currentId = -1)
 
   "Greatest common ancestor" should "be computed properly" in {
     /*
@@ -28,7 +35,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty)
         b1      <- createBlock[F](Seq(genesis.blockHash))
@@ -39,6 +46,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
         b6      <- createBlock[F](Seq(b2.blockHash, b4.blockHash))
         b7      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
       } yield b7
+
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
@@ -49,11 +57,16 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
     val b6 = chain.idToBlocks(6)
     val b7 = chain.idToBlocks(7)
 
-    DagOperations.greatestCommonAncestor(b1, b5, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestor(b3, b2, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestor(b6, b7, genesis, chain) should be(b1)
-    DagOperations.greatestCommonAncestor(b2, b2, genesis, chain) should be(b2)
-    DagOperations.greatestCommonAncestor(b3, b7, genesis, chain) should be(b3)
+    DagOperations.greatestCommonAncestor(b1, b5, genesis, chain, BlockStore[Id].asMap()) should be(
+      b1)
+    DagOperations.greatestCommonAncestor(b3, b2, genesis, chain, BlockStore[Id].asMap()) should be(
+      b1)
+    DagOperations.greatestCommonAncestor(b6, b7, genesis, chain, BlockStore[Id].asMap()) should be(
+      b1)
+    DagOperations.greatestCommonAncestor(b2, b2, genesis, chain, BlockStore[Id].asMap()) should be(
+      b2)
+    DagOperations.greatestCommonAncestor(b3, b7, genesis, chain, BlockStore[Id].asMap()) should be(
+      b3)
   }
 
 }

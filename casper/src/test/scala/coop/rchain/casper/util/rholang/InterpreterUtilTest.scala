@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import com.google.protobuf.ByteString
 import InterpreterUtil._
 import coop.rchain.catscontrib.Capture._
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
@@ -14,6 +14,11 @@ import cats.implicits._
 import cats.mtl.implicits._
 import java.nio.file.Files
 
+import cats.effect.Bracket
+import cats.mtl.MonadState
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -32,13 +37,15 @@ import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
 class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
-  val initState        = BlockDag().copy(currentId = -1)
-  val storageSize      = 1024L * 1024
-  val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-  val activeRuntime    = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
-  val emptyStateHash   = runtimeManager.emptyStateHash
-  val knownStateHashes = Set[StateHash](emptyStateHash)
+  implicit val blockStore      = InMemBlockStore.inMemInstanceId
+  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+  val initState                = BlockDag().copy(currentId = -1)
+  val storageSize              = 1024L * 1024
+  val storageDirectory         = Files.createTempDirectory("casper-interp-util-test")
+  val activeRuntime            = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager           = RuntimeManager.fromRuntime(activeRuntime)
+  val emptyStateHash           = runtimeManager.emptyStateHash
+  val knownStateHashes         = Set[StateHash](emptyStateHash)
 
   private def computeBlockCheckpoint(
       b: BlockMessage,
@@ -52,6 +59,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
                                                         genesis,
                                                         dag,
+                                                        BlockStore[Id].asMap(),
                                                         defaultStateHash,
                                                         knownStateHashes,
                                                         computeState)
@@ -89,7 +97,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploys)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1Deploys)
@@ -157,8 +165,8 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val updatedBlockPostState = b.body.get.postState.get.withTuplespace(postGenStateHash)
     val updatedBlockBody      = b.body.get.withPostState(updatedBlockPostState)
     val updatedBlock          = b.withBody(updatedBlockBody)
-    chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock),
-               blockLookup = chain.blockLookup.updated(b.blockHash, updatedBlock))
+    BlockStore[Id].put(b.blockHash, updatedBlock)
+    chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
   }
 
   it should "merge histories in case of multiple parents" in {
@@ -190,7 +198,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
      *         \    /
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploys)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1Deploys)
@@ -247,6 +255,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
+                               BlockStore[Id].asMap(),
                                emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
@@ -262,7 +271,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (stateHash, _) =
-      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block,
+                              block,
+                              chain,
+                              BlockStore[Id].asMap(),
+                              emptyStateHash,
+                              knownStateHashes,
+                              runtimeManager)
 
     stateHash should be(None)
   }
@@ -284,6 +299,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
+                               BlockStore[Id].asMap(),
                                emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
@@ -298,7 +314,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block,
+                              block,
+                              chain,
+                              BlockStore[Id].asMap(),
+                              emptyStateHash,
+                              knownStateHashes,
+                              runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -334,6 +356,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
+                               BlockStore[Id].asMap(),
                                emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
@@ -348,7 +371,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block,
+                              block,
+                              chain,
+                              BlockStore[Id].asMap(),
+                              emptyStateHash,
+                              knownStateHashes,
+                              runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -388,6 +417,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
+                               BlockStore[Id].asMap(),
                                emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
@@ -402,7 +432,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block,
+                              block,
+                              chain,
+                              BlockStore[Id].asMap(),
+                              emptyStateHash,
+                              knownStateHashes,
+                              runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -439,6 +475,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
                                deploys,
                                BlockMessage(),
                                initState,
+                               BlockStore[Id].asMap(),
                                emptyStateHash,
                                knownStateHashes,
                                runtimeManager.computeState)
@@ -453,7 +490,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block, block, chain, emptyStateHash, knownStateHashes, runtimeManager)
+      validateBlockCheckpoint(block,
+                              block,
+                              chain,
+                              BlockStore[Id].asMap(),
+                              emptyStateHash,
+                              knownStateHashes,
+                              runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
