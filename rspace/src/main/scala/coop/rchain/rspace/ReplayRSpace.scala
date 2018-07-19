@@ -347,13 +347,19 @@ object ReplayRSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    history.initialize(context.trieStore, branch)
-
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
 
     val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
 
-    val _ = replaySpace.createCheckpoint()
+    /*
+     * history.initialize returns true if the history trie contains no root (i.e. is empty).
+     *
+     * In this case, we create a checkpoint for the empty store so that we can reset
+     * to the empty store state with the clear method.
+     */
+    val _ = if (history.initialize(mainStore.trieStore, branch)) {
+      replaySpace.createCheckpoint()
+    }
 
     replaySpace
   }

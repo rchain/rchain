@@ -208,11 +208,17 @@ object RSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    history.initialize(store.trieStore, branch)
-
     val space = new RSpace[C, P, A, R, K](store, branch)
 
-    val _ = space.createCheckpoint()
+    /*
+     * history.initialize returns true if the history trie contains no root (i.e. is empty).
+     *
+     * In this case, we create a checkpoint for the empty store so that we can reset
+     * to the empty store state with the clear method.
+     */
+    val _ = if (history.initialize(store.trieStore, branch)) {
+      space.createCheckpoint()
+    }
 
     space
   }
