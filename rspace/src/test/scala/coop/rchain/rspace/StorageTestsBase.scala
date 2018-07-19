@@ -54,7 +54,7 @@ class InMemoryStoreTestsBase
         testStore.trieStore.clear(trieTxn)
       }
     }
-    initialize(trieStore, branch)
+    history.initialize(trieStore, branch)
     try {
       f(testSpace)
     } finally {
