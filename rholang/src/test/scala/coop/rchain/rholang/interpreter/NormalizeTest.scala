@@ -110,7 +110,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
     setData.add(new PGround(new GroundInt(7)))
     setData.add(new PPar(new PGround(new GroundInt(8)), new PVar(new ProcVarVar("Q"))))
-    val set = new PCollect(new CollectSet(setData))
+    val set = new PCollect(new CollectSet(setData, new ProcRemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
     result.par should be(
