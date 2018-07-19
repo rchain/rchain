@@ -22,7 +22,7 @@ object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)
 
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
-    PrettyPrinter(freeShift, boundShift, "INVALID", "a", 23, 128)
+    PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
 }
 
 case class PrettyPrinter(freeShift: Int,

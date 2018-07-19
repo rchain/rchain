@@ -347,7 +347,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleFree, inputs).value.par)
-    result shouldBe "INVALID1 | INVALID0"
+    result shouldBe "free1 | free0"
   }
 
   "PInput" should "Print a receive" in {
