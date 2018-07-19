@@ -613,13 +613,13 @@ object Reduce {
                        case (_: GString, other) =>
                          s.raiseError(
                            ReduceError(
-                             s"Error: Operator `%` expected Map but got ${other.getClass.getName}"
+                             s"Error: Operator `%` expected Map but got ${other.typ}"
                            )
                          )
                        case (other, _) =>
                          s.raiseError(
                            ReduceError(
-                             s"Error: Operator `%` is not defined on ${other.getClass.getName}"
+                             s"Error: Operator `%` is not defined on ${other.typ}"
                            )
                          )
                      }
@@ -631,10 +631,16 @@ object Reduce {
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
                          Applicative[M].pure[Expr](GString(lhs + rhs))
-                       case other =>
+                       case (_: GString, other) =>
                          s.raiseError(
                            ReduceError(
-                             s"Error: Operator `++` is not defined on ${other.getClass.getName}"
+                             s"Error: Operator `++` expected String but got ${other.typ}"
+                           )
+                         )
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` is not defined on ${other.typ}"
                            )
                          )
                      }
@@ -956,7 +962,7 @@ object Reduce {
               case other =>
                 s.raiseError(
                   ReduceError(
-                    s"Error: Method `length` is not defined on ${other.getClass.getName}."
+                    s"Error: Method `length` is not defined on ${other.typ}."
                   )
                 )
             }
@@ -978,7 +984,7 @@ object Reduce {
               case other =>
                 s.raiseError(
                   ReduceError(
-                    s"Error: Method `slice` is not defined on ${other.getClass.getName}."
+                    s"Error: Method `slice` is not defined on ${other.typ}."
                   )
                 )
             }

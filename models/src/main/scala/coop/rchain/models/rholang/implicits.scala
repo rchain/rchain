@@ -185,6 +185,22 @@ object implicits {
     def apply(b: ByteString): GPrivate = new GPrivate(b)
   }
 
+  implicit class RichExprInstance(exprInstance: ExprInstance) {
+    def typ: String =
+      exprInstance match {
+        case GBool(_)      => "Bool"
+        case GInt(_)       => "Int"
+        case GString(_)    => "String"
+        case GUri(_)       => "Uri"
+        case GByteArray(_) => "ByteArray"
+        case EListBody(e)  => "List"
+        case ETupleBody(e) => "Tuple"
+        case ESetBody(e)   => "Set"
+        case EMapBody(e)   => "Map"
+        case _             => "Unit"
+      }
+  }
+
   implicit class ParExtension[T](p: T)(implicit toPar: T => Par) {
     // Convenience prepend methods
     def prepend(s: Send): Par =
