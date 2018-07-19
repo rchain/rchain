@@ -140,7 +140,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
                     case TLResponse.Payload.InternalServerError(ise) =>
-                      Left(internalCommunicationError(ise.error.toStringUtf8))
+                      Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
                 })
                 .pure[Task]
     } yield pmErr
@@ -220,7 +220,7 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
-          case NotHandled(error)            => internalServerError(s"$error")
+          case NotHandled(error)            => internalServerError(error.message)
           case HandledWitoutMessage         => noResponse
           case HandledWithMessage(response) => returnProtocol(response)
         }
