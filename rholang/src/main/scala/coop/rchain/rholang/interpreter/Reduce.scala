@@ -972,6 +972,10 @@ object Reduce {
     def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr))
+        // Note: the locallyFree cache in par could now be invalid, but given
+        // that locallyFree is for use in the matcher, and the matcher uses
+        // substitution, it will resolve in that case. AlwaysEqual makes sure
+        // that this isn't an issue in the rest of cases.
         result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
           acc ++ newPar
         }
