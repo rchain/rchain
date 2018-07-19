@@ -12,11 +12,11 @@ import org.scalatest._
 class KademliaSpec extends FlatSpec with Matchers {
   val endpoint = Endpoint("local", 0, 0)
   val local    = PeerNode(NodeIdentifier(Seq("00000001".b)), endpoint)
-  val peer0    = PeerNode(NodeIdentifier(Seq("00000010".b)), endpoint) // k = 6
-  val peer1    = PeerNode(NodeIdentifier(Seq("00001000".b)), endpoint) // k = 4
-  val peer2    = PeerNode(NodeIdentifier(Seq("00001001".b)), endpoint) // k = 4
-  val peer3    = PeerNode(NodeIdentifier(Seq("00001010".b)), endpoint) // k = 4
-  val peer4    = PeerNode(NodeIdentifier(Seq("00001100".b)), endpoint) // k = 4
+  val peer0    = PeerNode(NodeIdentifier(Seq("00000010".b)), endpoint) // d = 6
+  val peer1    = PeerNode(NodeIdentifier(Seq("00001000".b)), endpoint) // d = 4
+  val peer2    = PeerNode(NodeIdentifier(Seq("00001001".b)), endpoint) // d = 4
+  val peer3    = PeerNode(NodeIdentifier(Seq("00001010".b)), endpoint) // d = 4
+  val peer4    = PeerNode(NodeIdentifier(Seq("00001100".b)), endpoint) // d = 4
 
   implicit val capture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A]       = a
@@ -75,7 +75,7 @@ class KademliaSpec extends FlatSpec with Matchers {
     table.distance(peer4) shouldBe Some(d)
     pingedPeers shouldEqual Seq(peer1, peer2, peer3, peer4, peer1)
 
-    val entries = table.table(4).map(_.entry)
+    val entries = table.table(d).map(_.entry)
     entries shouldEqual Seq(peer2, peer3, peer1)
   }
 
@@ -101,7 +101,7 @@ class KademliaSpec extends FlatSpec with Matchers {
     table.distance(peer4) shouldBe Some(d)
     pingedPeers shouldEqual Seq(peer1, peer2, peer3, peer4, peer1)
 
-    val entries = table.table(4).map(_.entry)
+    val entries = table.table(d).map(_.entry)
     entries shouldEqual Seq(peer2, peer3, peer4)
   }
 }
