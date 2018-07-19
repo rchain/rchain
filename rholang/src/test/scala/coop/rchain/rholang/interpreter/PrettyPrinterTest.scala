@@ -84,17 +84,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
-  val p: Par = Par()
-
   "New" should "use 0-based indexing" in {
-    val source = p.copy(news = Seq(New(3, Par())))
+    val source = Par(news = Seq(New(3, Par())))
     val result = PrettyPrinter().buildString(source)
     val target = "new x0, x1, x2 in { Nil }"
     result shouldBe target
   }
 
   "Par" should "Print" in {
-    val source: Par = p.copy(
+    val source: Par = Par(
       exprs = Seq(GInt(0), GBool(true), GString("2"), GUri("www.3cheese.com")),
       ids = Seq(GPrivate("4"), GPrivate("5"))
     )
@@ -105,7 +103,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "Send" should "Print" in {
     val source: Par =
-      p.copy(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
+      Par(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
     val result = PrettyPrinter().buildString(source)
     val target = "@{Nil}!!(Nil, Nil)"
     result shouldBe target
