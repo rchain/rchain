@@ -31,11 +31,14 @@ object GroundSortMatcher {
         val sortedPars = gs.ps.sortedPars
           .map(par => ParSortMatcher.sortMatch(par))
           .sorted
-        ScoredTerm(ESetBody(
-                     ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
-                            gs.connectiveUsed,
-                            gs.locallyFree)),
-                   Node(Score.ESET, sortedPars.map(_.score): _*))
+        ScoredTerm(
+          ESetBody(
+            ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
+                   gs.connectiveUsed,
+                   gs.locallyFree,
+                   gs.remainder)),
+          Node(Score.ESET, sortedPars.map(_.score): _*) /* FIXME add reminder score? */
+        )
       case EMapBody(gm) =>
         def sortKeyValuePair(key: Par, value: Par): ScoredTerm[(Par, Par)] = {
           val sortedKey   = ParSortMatcher.sortMatch(key)

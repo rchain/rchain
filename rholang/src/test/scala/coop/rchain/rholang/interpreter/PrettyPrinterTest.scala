@@ -64,6 +64,19 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     result shouldBe "[x0, *x1, 7...free0]"
   }
 
+  "Set" should "Print" in {
+    val listData = new ListProc()
+    listData.add(new PVar(new ProcVarVar("P")))
+    listData.add(new PEval(new NameVar("x")))
+    listData.add(new PGround(new GroundInt(7)))
+    val list = new PCollect(new CollectSet(listData, new RemainderVar(new ProcVarVar("ignored"))))
+
+    val result =
+      PrettyPrinter(0, 2).buildString(
+        ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value.par)
+    result shouldBe "Set(7, x0, *x1...free0)"
+  }
+
   "Map" should "Print" in {
     val mapData = new ListKeyValuePair()
     mapData.add(

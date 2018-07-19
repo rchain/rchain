@@ -183,6 +183,7 @@ message ESet {
     repeated Par ps = 1;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 4;
+    Var remainder = 5;
 }
 
 message EMap {
