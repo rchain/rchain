@@ -1,8 +1,8 @@
 package coop.rchain.blockstorage
 
 import cats._
-import cats.implicits._
 import cats.effect.{Bracket, ExitCase}
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
@@ -44,6 +44,15 @@ class InMemBlockStore[F[_], E] private ()(implicit
       ret <- bracketF.bracket(applicative.pure(stateRef.take()))(state => applicative.pure(state))(
               state => applicative.pure(stateRef.put(state)))
     } yield ret
+
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+    for {
+      _ <- metricsF.incrementCounter("block-store-put")
+      ret <- bracketF.bracket(applicative.pure(stateRef.take())) { state =>
+              val (blockHash, blockMessage) = f
+              applicative.pure(stateRef.put(state.updated(blockHash, blockMessage)))
+            }(_ => applicative.pure(()))
+    } yield ret
 }
 
 object InMemBlockStore {
@@ -54,10 +63,10 @@ object InMemBlockStore {
 
   type ExceptionalBracket[F[_]] = Bracket[F, Exception]
 
-  def inMemInstanceEff[Effect[_], E](implicit
-                                     bracketF: Bracket[Effect, E],
-                                     metricsF: Metrics[Effect]): BlockStore[Effect] =
-    InMemBlockStore.create[Effect, E](bracketF, metricsF)
+  def inMemInstanceEff[F[_], E](implicit
+                                bracketF: Bracket[F, E],
+                                metricsF: Metrics[F]): BlockStore[F] =
+    InMemBlockStore.create[F, E](bracketF, metricsF)
 
   def inMemInstanceId: BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP
@@ -85,6 +94,7 @@ object InMemBlockStore {
         try {
           use(state)
         } finally {
+          //FIXME add exception handling
           release(acquire, ExitCase.Completed)
         }
       }

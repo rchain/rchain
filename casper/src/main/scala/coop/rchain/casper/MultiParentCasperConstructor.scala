@@ -118,7 +118,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
   def withCasper[F[_]: Monad: Log: MultiParentCasperConstructor, A](f: MultiParentCasper[F] => F[A],
                                                                     default: A): F[A] =
     MultiParentCasperConstructor[F].casperInstance match {
-      case Right(casper) => casper.flatMap(f(_))
+      case Right(casper) => casper >>= (f(_))
       case Left(ex) =>
         Log[F].warn(s"Casper instance was not available: ${ex.getMessage}").map(_ => default)
     }

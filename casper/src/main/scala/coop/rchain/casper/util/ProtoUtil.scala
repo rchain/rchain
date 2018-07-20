@@ -1,5 +1,6 @@
 package coop.rchain.casper.util
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -41,7 +42,7 @@ object ProtoUtil {
                    acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
     val parentsHashes       = ProtoUtil.parents(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash.flatMap(internalMap.get) match {
+    maybeMainParentHash >>= internalMap.get match {
       case Some(newEstimate) =>
         getMainChain(internalMap, newEstimate, acc :+ estimate)
       case None => acc :+ estimate
