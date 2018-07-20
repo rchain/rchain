@@ -10,8 +10,9 @@ object ParSetTypeMapper {
   private[models] def esetToParSet(eset: ESet): ParSet =
     ParSet(ps = eset.ps,
            locallyFree = Coeval.delay(eset.locallyFree),
-           connectiveUsed = eset.connectiveUsed)
+           connectiveUsed = eset.connectiveUsed,
+           remainder = eset.remainder)
 
   private[models] def parSetToESet(parSet: ParSet): ESet =
-    ESet(parSet.ps.sortedPars, parSet.locallyFree.value, parSet.connectiveUsed)
+    ESet(parSet.ps.sortedPars, parSet.locallyFree.value, parSet.connectiveUsed, parSet.remainder)
 }

@@ -158,11 +158,24 @@ object CollectionNormalizeMatcher {
           case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
+
       case cs: CollectSet =>
-        val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
-          (pars, locallyFree, connectiveUsed) =>
-            ParSet(SortedParHashSet(pars), connectiveUsed, Coeval.delay(locallyFree))
-        foldMatch(input.knownFree, cs.listproc_.toList, constructor)
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cs.remainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              val constructor: Option[Var] => (Seq[Par], BitSet, Boolean) => ParSet =
+                optionalRemainder =>
+                  (ps, lf, cu) => {
+                    val tmpParSet =
+                      ParSet(SortedParHashSet(ps), cu, Coeval.delay(lf), optionalRemainder)
+                    tmpParSet.copy(
+                      connectiveUsed = tmpParSet.connectiveUsed || optionalRemainder.isDefined)
+                }
+
+              foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
+          }
+
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
     }
   }

@@ -707,13 +707,20 @@ object Reduce {
         base.flatMap(b => other.map(o => b | o))
       def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
-          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
-            costAccountingAlg.charge(ADD_COST * basePs.size) *>
-              Applicative[M].pure[Expr](
-                ESetBody(
-                  ParSet(basePs.union(otherPs.sortedPars.toSet),
-                         base.connectiveUsed || other.connectiveUsed,
-                         locallyFreeUnion(base.locallyFree, other.locallyFree))))
+          case (ESetBody(base @ ParSet(basePs, _, _, _)),
+                ESetBody(other @ ParSet(otherPs, _, _, _))) =>
+            costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
+              ESetBody(ParSet(
+                basePs.union(otherPs.sortedPars.toSet),
+                base.connectiveUsed || other.connectiveUsed,
+                locallyFreeUnion(base.locallyFree, other.locallyFree),
+                /* FIXME! this seems as if ParSet should be split in two:
+                    - a data-structure-like DataParSet, for whatever usage we had before
+                    - a pattern-like PatternParSet, for carrying pattern info, including remainder
+                    Also: I'm not sure, but aren't `locallyFree` and `connectiveUsed` specific to patterns?
+                 */
+                None
+              )))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
@@ -746,7 +753,8 @@ object Reduce {
 
       def diff(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
-          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
+          case (ESetBody(base @ ParSet(basePs, _, _, _)),
+                ESetBody(other @ ParSet(otherPs, _, _, _))) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
             costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
@@ -754,7 +762,8 @@ object Reduce {
                 ESetBody(
                   ParSet(basePs.diff(otherPs.sortedPars.toSet),
                          base.connectiveUsed || other.connectiveUsed,
-                         locallyFreeUnion(base.locallyFree, other.locallyFree))))
+                         locallyFreeUnion(base.locallyFree, other.locallyFree),
+                         None /* FIXME */ )))
           case (EMapBody(ParMap(basePs, _, _)), EMapBody(ParMap(otherPs, _, _))) =>
             val newMap = basePs -- otherPs.keys
             costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
@@ -776,12 +785,13 @@ object Reduce {
     private[this] def add: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def add(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(base @ ParSet(basePs, _, _)) =>
+          case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs + par,
                        base.connectiveUsed || par.connectiveUsed,
-                       base.locallyFree.map(b => b | par.locallyFree))))
+                       base.locallyFree.map(b => b | par.locallyFree),
+                       None /* FIXME */ )))
 
           case _ =>
             s.raiseError(ReduceError("Error: add can be called only with one Par as argument."))
@@ -800,12 +810,13 @@ object Reduce {
     private[this] def delete: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def delete(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(base @ ParSet(basePs, _, _)) =>
+          case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
-                       base.locallyFree.map(b => b | par.locallyFree))))
+                       base.locallyFree.map(b => b | par.locallyFree),
+                       None /* FIXME */ )))
           case EMapBody(base @ ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](
               EMapBody(
@@ -829,12 +840,12 @@ object Reduce {
     private[this] def contains: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def contains(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(ParSet(basePs, _, _)) =>
+          case ESetBody(ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
-            s.raiseError(ReduceError("Error: add can be called only on Map and Set."))
+            s.raiseError(ReduceError("Error: contains can be called only on Map and Set."))
         }
 
       method("contains", 1, args) {
