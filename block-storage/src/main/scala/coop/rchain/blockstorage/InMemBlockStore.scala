@@ -52,26 +52,28 @@ object InMemBlockStore {
 
   def createWithId: BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP
-    implicit val implicitSyncId       = syncId
-    val refId                         = Ref[Id].of(Map.empty[BlockHash, BlockMessage])
+    val refId                         = emptyMapRef[Id](syncId)
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
     InMemBlockStore.create(syncId, refId, metrics)
   }
 
+  def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage]]] =
+    Ref[F].of(Map.empty[BlockHash, BlockMessage])
+
   val syncId: Sync[Id] = new Sync[Id] {
-    override def suspend[A](thunk: => Id[A]): Id[A] = thunk
+    def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
 
-    override def bracketCase[A, B](acquire: Id[A])(use: A => Id[B])(
-        release: (A, ExitCase[Throwable]) => Id[Unit]): Id[B] = ???
+    def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] = ???
 
-    override def raiseError[A](e: Throwable): Id[A] = ???
+    def raiseError[A](e: Throwable): cats.Id[A] = ???
 
-    override def handleErrorWith[A](fa: Id[A])(f: Throwable => Id[A]): Id[A] = ???
+    def bracketCase[A, B](acquire: cats.Id[A])(use: A => cats.Id[B])(
+        release: (A, cats.effect.ExitCase[Throwable]) => cats.Id[Unit]): cats.Id[B] = ???
 
-    override def flatMap[A, B](fa: Id[A])(f: A => Id[B]): Id[B] = f(fa)
+    def flatMap[A, B](fa: cats.Id[A])(f: A => cats.Id[B]): cats.Id[B] =
+      implicitly[Monad[Id]].flatMap(fa)(f)
+    def tailRecM[A, B](a: A)(f: A => cats.Id[Either[A, B]]): cats.Id[B] = ???
 
-    override def tailRecM[A, B](a: A)(f: A => Id[Either[A, B]]): Id[B] = ???
-
-    override def pure[A](x: A): Id[A] = x
+    def suspend[A](thunk: => cats.Id[A]): cats.Id[A] = thunk
   }
 }

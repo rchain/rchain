@@ -29,7 +29,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery.{Ping => NDPing, _}
 import coop.rchain.shared._
 import ThrowableOps._
-import cats.effect.{Bracket, ExitCase}
+import cats.effect.{Bracket, ExitCase, Sync}
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
@@ -164,7 +164,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  val bracketEffect: Bracket[Effect, CommError] = BracketInstances.bracketEffect
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
 
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
@@ -179,9 +180,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
-  implicit val blockStore: BlockStore[Effect] =
-    InMemBlockStore.create[Effect, CommError](bracketEffect, metricsEffect)
-  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -193,12 +191,24 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
+      storeRef   <- storeRefEffect
+      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
+      oracle = {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        SafetyOracle.turanOracle[Effect]
+      }
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-      casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+      casperConstructor <- {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        MultiParentCasperConstructor
+          .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+      }
       grpcServer <- {
+        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
@@ -206,6 +216,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
+      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
