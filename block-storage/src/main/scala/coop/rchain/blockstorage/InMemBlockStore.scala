@@ -11,9 +11,9 @@ import coop.rchain.shared.SyncVarOps
 import scala.concurrent.SyncVar
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private ()(implicit
-                                       bracketF: Bracket[F, Exception],
-                                       metricsF: Metrics[F])
+class InMemBlockStore[F[_], E] private ()(implicit
+                                          bracketF: Bracket[F, E],
+                                          metricsF: Metrics[F])
     extends BlockStore[F] {
 
   implicit val applicative: Applicative[F] = bracketF
@@ -47,17 +47,17 @@ class InMemBlockStore[F[_]] private ()(implicit
 }
 
 object InMemBlockStore {
-  def create[F[_]](implicit
-                   bracketF: Bracket[F, Exception],
-                   metricsF: Metrics[F]): BlockStore[F] =
+  def create[F[_], E](implicit
+                      bracketF: Bracket[F, E],
+                      metricsF: Metrics[F]): BlockStore[F] =
     new InMemBlockStore()(bracketF, metricsF)
 
   type ExceptionalBracket[F[_]] = Bracket[F, Exception]
 
-  def inMemInstanceEff[Effect[_]](implicit
-                                  bracketF: Bracket[Effect, Exception],
-                                  metricsF: Metrics[Effect]): BlockStore[Effect] =
-    InMemBlockStore.create[Effect](bracketF, metricsF)
+  def inMemInstanceEff[Effect[_], E](implicit
+                                     bracketF: Bracket[Effect, E],
+                                     metricsF: Metrics[Effect]): BlockStore[Effect] =
+    InMemBlockStore.create[Effect, E](bracketF, metricsF)
 
   def inMemInstanceId: BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP

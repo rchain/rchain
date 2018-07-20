@@ -164,15 +164,18 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  val bracketEffect: Bracket[Effect, Exception] =
-    new Bracket[Effect, Exception] {
+  val bracketEffect: Bracket[Effect, CommError] =
+    new Bracket[Effect, CommError] {
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
-      def handleErrorWith[A](fa: Effect[A])(f: Exception => Effect[A]): Effect[A] = fa.onError {
-        case Left(commError) => f(new Exception(s"$commError"))
-      }
+      def handleErrorWith[A](fa: Effect[A])(f: CommError => Effect[A]): Effect[A] =
+        EitherT(fa.value.flatMap {
+          case Left(commError) => f(commError).value
+          case r @ Right(_)    => Task.pure(r)
+        })
 
-      def raiseError[A](e: Exception): Effect[A] = Left(e)
+      def raiseError[A](e: CommError): Effect[A] =
+        EitherT.left(Task.pure(e))
 
       // Members declared in FlatMap
       def flatMap[A, B](fa: Effect[A])(f: A => Effect[B]): Effect[B] =
@@ -181,7 +184,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         implicitly[FlatMap[Effect]].tailRecM(a)(f)
 
       def bracketCase[A, B](acquire: Effect[A])(use: A => Effect[B])(
-          release: (A, ExitCase[Exception]) => Effect[Unit]): Effect[B] =
+          release: (A, ExitCase[CommError]) => Effect[Unit]): Effect[B] =
         acquire.flatMap { state =>
           try {
             use(state)
@@ -205,7 +208,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val blockStore: BlockStore[Effect] =
-    InMemBlockStore.inMemInstanceEff[Effect](bracketEffect, metricsEffect)
+    InMemBlockStore.inMemInstanceEff[Effect, CommError](bracketEffect, metricsEffect)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,
