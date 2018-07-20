@@ -293,7 +293,7 @@ class InMemoryStoreStorageExamplesTestsBase
     val branch = Branch("inmem")
     val env    = Context.env(dbDir, mapSize)
     val trieStore =
-      LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env)
+      LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env, dbDir)
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
     val testSpace = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)

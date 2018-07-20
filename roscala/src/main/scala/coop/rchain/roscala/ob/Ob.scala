@@ -2,7 +2,7 @@ package coop.rchain.roscala.ob
 
 import com.typesafe.scalalogging.Logger
 
-import Ob.logger
+import coop.rchain.roscala.ob.Ob.logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 
@@ -19,6 +19,8 @@ abstract class Ob {
   def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
 
   def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
+
+  def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State, globalEnv: GlobalEnv): Ob = Niv
 
   def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
     if (keyMeta == NilMeta)
@@ -49,6 +51,33 @@ abstract class Ob {
       result
   }
 
+  def update(enabledSetProvided: Boolean, ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob = {
+    val keyStart = if (enabledSetProvided) 1 else 0
+    val me       = this
+    val rslt     = this
+
+    /**
+      * `ctxt` has keys and values paired up.
+      * For example the pair `Symbol(i) -> Fixnum(5)` could be stored
+      * in `ctxt.argvec(0)` and `ctxt.argvec(1)`.
+      *
+      * If the `argvec` is ill-formed `Meta.set` will return an error
+      * which `update` will forward.
+      */
+    if (ctxt.nargs > keyStart) {
+      ctxt.argvec.value
+        .drop(keyStart)
+        .grouped(2)
+        .toList
+        .takeWhile { pair =>
+          logger.debug(s"Set ${pair(0)} -> ${pair(1)} in $this")
+          meta.set(this, pair(0), pair(1), ctxt)(globalEnv) == me
+        }
+    }
+
+    rslt
+  }
+
   def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
     var p = this
 
@@ -74,6 +103,9 @@ abstract class Ob {
     value
   }
 
+  override def toString: String =
+    this.getClass.getSimpleName + "@" + Integer.toHexString(System.identityHashCode(this))
+
   def numberOfSlots: Int = slot.size
 
   def matches(ctxt: Ctxt): Boolean = false
@@ -83,16 +115,20 @@ object Ob {
   val logger = Logger("Ob")
 }
 
-case class Monitor()             extends Ob
-case class Symbol(value: String) extends Ob
+case class Monitor() extends Ob
+case class Symbol(value: String) extends Ob {
+  override def toString: String =
+    s"'$value"
+}
 
-case object Absent     extends Ob
-case object Deadthread extends Ob
-case object Invalid    extends Ob
-case object Niv        extends Ob
-case object Qanon      extends Ob
-case object RblFalse   extends Ob
-case object RblTrue    extends Ob
-case object Suicide    extends Ob
-case object Suspended  extends Ob
-case object Upcall     extends Ob
+case object Absent         extends Ob
+case object Deadthread     extends Ob
+case object Invalid        extends Ob
+case object Niv            extends Ob
+case object Qanon          extends Ob
+case object RblFalse       extends Ob
+case object RblTrue        extends Ob
+case object Suicide        extends Ob
+case object Suspended      extends Ob
+case object Upcall         extends Ob
+case object MissingBinding extends Ob

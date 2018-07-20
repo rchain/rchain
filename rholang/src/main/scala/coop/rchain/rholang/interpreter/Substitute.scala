@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.MonadState
 import cats.{Applicative, Monad}
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._

@@ -1,17 +1,29 @@
 package coop.rchain.casper
 
+import java.nio.file.Files
+
 import cats.{Id, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.termDeploy
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.math.NonNegativeNumber
+import coop.rchain.rholang.mint.MakeMint
+import coop.rchain.rholang.wallet.BasicWallet
 import coop.rchain.shared.Time
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
@@ -337,5 +349,33 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     Validate.justificationRegressions[Id](blockWithJustificationRegression, b0, chain) should be(
       Left(JustificationRegression))
     log.warns.size should be(1)
+  }
+
+  "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in {
+    val (_, validators)   = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long = 1024L * 1024
+    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
+    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
+    val emptyStateHash    = runtimeManager.emptyStateHash
+
+    val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+    val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
+    val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
+                                        initial,
+                                        emptyStateHash,
+                                        runtimeManager)
+
+    Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
+
+    val modifiedBonds     = Seq.empty[Bond]
+    val modifiedPostState = genesis.body.get.postState.get.withBonds(modifiedBonds)
+    val modifiedBody      = genesis.body.get.withPostState(modifiedPostState)
+    val modifiedGenesis   = genesis.withBody(modifiedBody)
+    Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
+
+    activeRuntime.close()
   }
 }

@@ -13,6 +13,9 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
+import kamon._
+import kamon.trace.Tracer.SpanBuilder
+
 abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
     serializeC: Serialize[C],
@@ -21,6 +24,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 ) extends ISpace[C, P, A, R, K] {
 
   protected[this] val logger: Logger
+  protected[this] val installSpan: SpanBuilder
 
   private[this] val installs: SyncVar[Installs[C, P, A, R, K]] = {
     val installs = new SyncVar[Installs[C, P, A, R, K]]()
@@ -85,8 +89,10 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      install(txn, channels, patterns, continuation)
+    Kamon.withSpan(installSpan.start(), finishSpan = true) {
+      store.withTxn(store.createTxnWrite()) { txn =>
+        install(txn, channels, patterns, continuation)
+      }
     }
 
   override def reset(root: Blake2b256Hash): Unit =
@@ -99,6 +105,10 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
         store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
       }
     }
+
+  override def retrieve(root: Blake2b256Hash,
+                        channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+    history.lookup(store.trieStore, root, channelsHash)
 
   override def clear(): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>

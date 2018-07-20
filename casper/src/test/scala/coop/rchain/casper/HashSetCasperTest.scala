@@ -15,10 +15,12 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
+
+import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import scala.concurrent.SyncVar
 
+import scala.concurrent.SyncVar
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -33,8 +35,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
   val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val initStateHash               = runtimeManager.initStateHash
-  val genesis                     = Genesis.withContracts(initial, Nil, initStateHash, runtimeManager)
+  val emptyStateHash              = runtimeManager.emptyStateHash
+  val genesis = Genesis.withContracts(
+    initial,
+    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+    Nil,
+    emptyStateHash,
+    runtimeManager)
   activeRuntime.close()
 
   //put a new casper instance at the start of each

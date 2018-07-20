@@ -50,8 +50,9 @@ package object history {
       }
     }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
-      implicit codecK: Codec[K]): Option[V] = {
+  private[this] def lookup[T, K, V](store: ITrieStore[T, K, V],
+                                    root: Either[Branch, Blake2b256Hash],
+                                    key: K)(implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
@@ -84,16 +85,22 @@ package object history {
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       for {
-        currentRootHash <- store.getRoot(txn, branch)
+        currentRootHash <- root.fold(branch => store.getRoot(txn, branch), Some(_))
         currentRoot     <- store.get(txn, currentRootHash)
         res             <- loop(txn, 0, currentRoot)
       } yield res
     }
   }
 
+  def lookup[T, K, V](store: ITrieStore[T, K, V], rootHash: Blake2b256Hash, key: K)(
+      implicit codecK: Codec[K]): Option[V] = lookup(store, Right(rootHash), key)
+
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
+      implicit codecK: Codec[K]): Option[V] = lookup(store, Left(branch), key)
+
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    keys.traverse[Option, V]((k: K) => lookup(store, branch, k))
+    keys.traverse[Option, V]((k: K) => lookup(store, Left(branch), k))
 
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
                                         txn: T,

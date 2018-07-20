@@ -26,7 +26,7 @@ import scala.collection.immutable.Seq
   */
 class LMDBStore[C, P, A, K] private (
     val env: Env[ByteBuffer],
-    databasePath: Path,
+    protected[this] val databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
     _dbJoins: Dbi[ByteBuffer],
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
@@ -244,9 +244,6 @@ class LMDBStore[C, P, A, K] private (
     _dbGNATs.close()
     _dbJoins.close()
   }
-
-  def getStoreCounters: StoreCounters =
-    eventsCounter.createCounters(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>

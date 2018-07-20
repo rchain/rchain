@@ -45,7 +45,7 @@ class InMemoryStoreTestsBase
     val env = Context.env(dbDir, mapSize)
     val trieStore
       : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
-      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env)
+      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env, dbDir)
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
     val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
