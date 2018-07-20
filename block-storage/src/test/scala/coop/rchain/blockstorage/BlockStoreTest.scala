@@ -8,11 +8,15 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
+import org.scalacheck._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.language.higherKinds
+
+import Gen._
+import Arbitrary.arbitrary
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -29,46 +33,55 @@ trait BlockStoreTest
 
   override def afterEach(): Unit = {}
 
-  def bm(v: Long, ts: Long): BlockMessage =
-    BlockMessage().withHeader(Header().withVersion(v).withTimestamp(ts))
+  def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
+    BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
 
   def withStore[R](f: BlockStore[Id] => R): R
 
-  //TODO make generative
+  private[this] val blockHashGen: Gen[BlockHash] = for {
+    testKey <- arbitrary[String]
+  } yield (ByteString.copyFrom(testKey, "utf-8"))
+
+  private[this] val blockHashesSetGen: Gen[Set[BlockHash]] =
+    Gen.buildableOf[Set[BlockHash], BlockHash](blockHashGen)
+
   "Block Store" should "return None on get while it's empty" in withStore { store =>
-    val key: BlockHash = ByteString.copyFrom("testkey", "utf-8")
-    store.get(key) shouldBe None
+    store.get(blockHashGen.sample.get) shouldBe None
   }
 
-  //TODO make generative
-  "Block Store" should "return Some(message) on get for a published key" in withStore { store =>
-    val items = 0 to 100 map { i =>
-      val key: BlockHash    = ByteString.copyFrom("testkey" + i, "utf-8")
-      val msg: BlockMessage = bm(100L + i, 10000L + i)
-      (key, msg)
+  it should "return Some(message) on get for a published key" in {
+    forAll(blockHashesSetGen) { blockHashes =>
+      withStore { store =>
+        val items = blockHashes.map { hash =>
+          val msg: BlockMessage = bm(hash, 100L, 10000L)
+          (hash, msg)
+        }
+        items.foreach { case (k, v) => store.put(k, v) }
+        items.foreach {
+          case (k, v) =>
+            store.get(k) shouldBe Some(v)
+        }
+        store.asMap().size shouldEqual items.size
+      }
     }
-    items.foreach { case (k, v) => store.put(k, v) }
-    items.foreach {
-      case (k, v) =>
-        store.get(k) shouldBe Some(v)
-    }
-    store.asMap().size shouldEqual items.size
   }
 
-  "Block Store" should "overwrite existing value" in withStore { store =>
-    val items = 0 to 100 map { i =>
-      val key: BlockHash     = ByteString.copyFrom("testkey" + i, "utf-8")
-      val msg1: BlockMessage = bm(100L + i, 10000L + i)
-      val msg2: BlockMessage = bm(200L + i, 20000L + i)
-      (key, msg1, msg2)
-    }
-    items.foreach { case (k, v1, _) => store.put(k, v1) }
-    items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
-    items.foreach { case (k, _, v2) => store.put(k, v2) }
-    items.foreach { case (k, _, v2) => store.get(k) shouldBe Some(v2) }
+  it should "overwrite existing value" in
+    forAll(blockHashesSetGen) { blockHashes =>
+      withStore { store =>
+        val items = blockHashes map { hash =>
+          val msg1: BlockMessage = bm(hash, 100L, 10000L)
+          val msg2: BlockMessage = bm(hash, 200L, 20000L)
+          (hash, msg1, msg2)
+        }
+        items.foreach { case (k, v1, _) => store.put(k, v1) }
+        items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
+        items.foreach { case (k, _, v2) => store.put(k, v2) }
+        items.foreach { case (k, _, v2) => store.get(k) shouldBe Some(v2) }
 
-    store.asMap().size shouldEqual items.size
-  }
+        store.asMap().size shouldEqual items.size
+      }
+    }
 }
 
 class InMemBlockStoreTest extends BlockStoreTest {
