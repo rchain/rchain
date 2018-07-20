@@ -33,7 +33,7 @@ object BlockGenerator {
           override def pure[A](x: A): F[A] = Monad[F].pure(x)
 
           override def ap[A, B](ff: F[A => B])(fa: F[A]): F[B] =
-            fa.flatMap(a => ff.map(f => f(a)))
+            fa >>= (a => ff.map(f => f(a)))
         }
 
       override def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
@@ -44,6 +44,9 @@ object BlockGenerator {
 
       override def asMap(): F[Map[BlockHash, BlockMessage]] =
         applicative.pure(idBs.asMap())
+
+      override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+        applicative.pure(idBs.put(f))
     }
 }
 

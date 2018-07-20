@@ -18,6 +18,8 @@ trait BlockStore[F[_]] {
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]]
 
+  def put(f: => (BlockHash, BlockMessage)): F[Unit]
+
   //FIXME carbon copy of map behavior
   def apply(blockHash: BlockHash): F[BlockMessage] = get(blockHash).map(_.get)
 

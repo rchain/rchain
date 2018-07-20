@@ -562,7 +562,7 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
 
       private def addToState(block: BlockMessage): F[Unit] =
-        Capture[F].capture {
+        BlockStore[F].put {
           awaitingJustificationToChild -= block.blockHash
           _blockDag.update(bd => {
             val hash = block.blockHash
@@ -590,9 +590,7 @@ sealed abstract class MultiParentCasperInstances {
               currentSeqNum = newSeqNum
             )
           })
-        } >>= { _ =>
-          // TODO should a BlockStore transaction encompass the above capture?
-          BlockStore[F].put(block.blockHash, block)
+          (block.blockHash, block)
         }
 
       private def reAttemptBuffer: F[Unit] = {

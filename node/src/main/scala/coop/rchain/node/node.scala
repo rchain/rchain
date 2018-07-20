@@ -169,7 +169,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
       def handleErrorWith[A](fa: Effect[A])(f: CommError => Effect[A]): Effect[A] =
-        EitherT(fa.value.flatMap {
+        EitherT(fa.value >>= {
           case Left(commError) => f(commError).value
           case r @ Right(_)    => Task.pure(r)
         })
@@ -185,10 +185,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
       def bracketCase[A, B](acquire: Effect[A])(use: A => Effect[B])(
           release: (A, ExitCase[CommError]) => Effect[Unit]): Effect[B] =
-        acquire.flatMap { state =>
+        acquire >>= { state =>
           try {
             use(state)
           } finally {
+            //FIXME add exception handling
             release(state, ExitCase.Completed)
           }
         }
