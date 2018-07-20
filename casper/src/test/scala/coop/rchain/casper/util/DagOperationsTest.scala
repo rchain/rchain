@@ -17,7 +17,7 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
 class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.inMemInstanceId
+  implicit val blockStore      = InMemBlockStore.createWithId
   implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
   val initState                = BlockDag().copy(currentId = -1)
 

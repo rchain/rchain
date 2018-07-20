@@ -127,7 +127,7 @@ object Validate {
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap() >>= { internalMap: Map[BlockHash, BlockMessage] =>
+    BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
       val parentsPresent = ProtoUtil.parents(block).forall(p => internalMap.contains(p))
       val justificationsPresent =
         block.justifications.forall(j => internalMap.contains(j.latestBlockHash))

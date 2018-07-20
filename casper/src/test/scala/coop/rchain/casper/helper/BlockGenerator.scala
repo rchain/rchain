@@ -28,25 +28,14 @@ object BlockGenerator {
 
   def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Id]): BlockStore[F] =
     new BlockStore[F] {
-      override implicit val applicative: Applicative[F] =
-        new Applicative[F] {
-          override def pure[A](x: A): F[A] = Monad[F].pure(x)
-
-          override def ap[A, B](ff: F[A => B])(fa: F[A]): F[B] =
-            fa >>= (a => ff.map(f => f(a)))
-        }
-
-      override def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
-        applicative.pure(idBs.put(blockHash, blockMessage))
-
       override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
-        applicative.pure(idBs.get(blockHash))
+        Monad[F].pure(idBs.get(blockHash))
 
       override def asMap(): F[Map[BlockHash, BlockMessage]] =
-        applicative.pure(idBs.asMap())
+        Monad[F].pure(idBs.asMap())
 
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
-        applicative.pure(idBs.put(f))
+        Monad[F].pure(idBs.put(f))
     }
 }
 

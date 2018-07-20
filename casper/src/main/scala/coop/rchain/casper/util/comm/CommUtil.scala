@@ -139,7 +139,7 @@ object CommUtil {
                 .map(_ => none[Packet])
 
             case Right(casperF) =>
-              casperF >>= { casper =>
+              casperF flatMap { casper =>
                 implicit val casperEvidence: MultiParentCasper[F] = casper
                 blockPacketHandler[F](peer, b)
               }
@@ -174,13 +174,13 @@ object CommUtil {
 
       case r: BlockRequest =>
         for {
-          local       <- TransportLayer[F].local
-          internalMap <- BlockStore[F].asMap()
-          block       = internalMap.get(r.hash).map(_.toByteString)
-          maybeMsg    = block.map(serializedMessage => packet(local, serializedMessage))
-          send        <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
-          hash        = PrettyPrinter.buildString(r.hash)
-          logIntro    = s"CASPER: Received request for block $hash from $peer. "
+          local      <- TransportLayer[F].local
+          block      <- BlockStore[F].get(r.hash)
+          serialized = block.map(_.toByteString)
+          maybeMsg   = serialized.map(serializedMessage => packet(local, serializedMessage))
+          send       <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
+          hash       = PrettyPrinter.buildString(r.hash)
+          logIntro   = s"CASPER: Received request for block $hash from $peer. "
           _ <- send match {
                 case None    => Log[F].info(logIntro + "No response given since block not found.")
                 case Some(_) => Log[F].info(logIntro + "Response sent.")

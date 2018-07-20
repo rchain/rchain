@@ -68,7 +68,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
                              HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
       } yield b8
 
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 
     val chain: BlockDag = createChain[StateWithChain].runS(initState)
@@ -131,7 +131,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
                              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
       } yield b8
 
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     val chain: BlockDag          = createChain[StateWithChain].runS(initState)
 

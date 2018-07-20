@@ -54,7 +54,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
 
   val faultTolerance = -1f
 
-  def testCasper[F[_]: Applicative: BlockStore]: MultiParentCasper[F] =
+  def testCasper[F[_]: Monad: BlockStore]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
       def contains(b: BlockMessage): F[Boolean] = false.pure[F]
@@ -62,14 +62,11 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
       def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag] = {
-        val bd: BlockDag = BlockDag()
-        // FIXME this can be written as F
-        BlockStore[F].put(ProtoUtil.stringToByteString(genesisHashString), genesisBlock)
-        BlockStore[F].put(ProtoUtil.stringToByteString(secondHashString), secondBlock)
-        bd
-      }.pure[F]
-
+      def blockDag: F[BlockDag] =
+        for {
+          _ <- BlockStore[F].put(ProtoUtil.stringToByteString(genesisHashString), genesisBlock)
+          _ <- BlockStore[F].put(ProtoUtil.stringToByteString(secondHashString), secondBlock)
+        } yield BlockDag()
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
@@ -77,7 +74,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in {
-    implicit val blockStore   = InMemBlockStore.inMemInstanceId
+    implicit val blockStore   = InMemBlockStore.createWithId
     implicit val casperEffect = testCasper[Id]
     implicit val logEff       = new LogStub[Id]
     implicit val constructorEffect =
@@ -99,7 +96,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   }
 
   "getBlockQueryResponse" should "return error when no block exists" in {
-    implicit val blockStore   = InMemBlockStore.inMemInstanceId
+    implicit val blockStore   = InMemBlockStore.createWithId
     implicit val casperEffect = testCasper[Id]
     implicit val logEff       = new LogStub[Id]
     implicit val constructorEffect =

@@ -27,7 +27,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
   val initState = BlockDag()
 
   "isInMainChain" should "classify appropriately" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
@@ -47,7 +47,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
@@ -72,7 +72,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     val v1                       = ByteString.copyFromUtf8("Validator One")
     val v2                       = ByteString.copyFromUtf8("Validator Two")
@@ -126,7 +126,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
    *         genesis
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     val deploys                  = (0 until 6).map(basicDeploy)
 

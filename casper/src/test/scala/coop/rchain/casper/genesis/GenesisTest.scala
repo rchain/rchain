@@ -28,7 +28,7 @@ import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
 class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
-  implicit def blockStore = InMemBlockStore.inMemInstanceId
+  implicit def blockStore = InMemBlockStore.createWithId
   val storageSize         = 1024L * 1024
   def storageLocation     = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath         = Files.createTempDirectory(s"casper-genesis-test")

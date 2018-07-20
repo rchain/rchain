@@ -164,36 +164,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  val bracketEffect: Bracket[Effect, CommError] =
-    new Bracket[Effect, CommError] {
-      def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
-
-      def handleErrorWith[A](fa: Effect[A])(f: CommError => Effect[A]): Effect[A] =
-        EitherT(fa.value >>= {
-          case Left(commError) => f(commError).value
-          case r @ Right(_)    => Task.pure(r)
-        })
-
-      def raiseError[A](e: CommError): Effect[A] =
-        EitherT.left(Task.pure(e))
-
-      // Members declared in FlatMap
-      def flatMap[A, B](fa: Effect[A])(f: A => Effect[B]): Effect[B] =
-        implicitly[FlatMap[Effect]].flatMap(fa)(f)
-      def tailRecM[A, B](a: A)(f: A => Effect[Either[A, B]]): Effect[B] =
-        implicitly[FlatMap[Effect]].tailRecM(a)(f)
-
-      def bracketCase[A, B](acquire: Effect[A])(use: A => Effect[B])(
-          release: (A, ExitCase[CommError]) => Effect[Unit]): Effect[B] =
-        acquire >>= { state =>
-          try {
-            use(state)
-          } finally {
-            //FIXME add exception handling
-            release(state, ExitCase.Completed)
-          }
-        }
-    }
+  val bracketEffect: Bracket[Effect, CommError] = BracketInstances.bracketEffect
 
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
@@ -209,7 +180,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
   implicit val blockStore: BlockStore[Effect] =
-    InMemBlockStore.inMemInstanceEff[Effect, CommError](bracketEffect, metricsEffect)
+    InMemBlockStore.create[Effect, CommError](bracketEffect, metricsEffect)
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,

@@ -52,7 +52,7 @@ class HashSetCasperTestNode(name: String,
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
-  implicit val blockStore        = InMemBlockStore.inMemInstanceId
+  implicit val blockStore        = InMemBlockStore.createWithId
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   val activeRuntime  = Runtime.create(storageDirectory, storageSize)

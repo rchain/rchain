@@ -184,7 +184,7 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
-        BlockStore[F].asMap() >>= { internalMap: Map[BlockHash, BlockMessage] =>
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
           Capture[F].capture {
             Estimator.tips(_blockDag.get, internalMap, genesis)
           }
@@ -220,7 +220,7 @@ sealed abstract class MultiParentCasperInstances {
       }
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
-        BlockStore[F].asMap() >>= { internalMap: Map[BlockHash, BlockMessage] =>
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
           Capture[F].capture {
             val result = deployHist.clone()
             DagOperations
@@ -344,7 +344,7 @@ sealed abstract class MultiParentCasperInstances {
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-        BlockStore[F].asMap() >>= { internalMap: Map[BlockHash, BlockMessage] =>
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
           Capture[F].capture {
             val neglectedEquivocationDetected =
               equivocationsTracker.foldLeft(false) {

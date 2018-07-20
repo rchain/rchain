@@ -23,7 +23,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.inMemInstanceId
+  implicit val blockStore      = InMemBlockStore.createWithId
   implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
   val initState                = BlockDag()
 

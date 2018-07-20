@@ -25,15 +25,10 @@ trait BlockStoreTest
     with Matchers
     with OptionValues
     with GeneratorDrivenPropertyChecks
-    with BeforeAndAfterEach
-    with BeforeAndAfterAll {
+    with BeforeAndAfterEach {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = PosInt(100))
-
-  override def beforeEach(): Unit = {}
-
-  override def afterEach(): Unit = {}
+    PropertyCheckConfiguration(minSuccessful = PosInt(10000))
 
   def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
     BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
@@ -42,7 +37,7 @@ trait BlockStoreTest
 
   private[this] val blockHashGen: Gen[BlockHash] = for {
     testKey <- arbitrary[String]
-  } yield (ByteString.copyFrom(testKey, "utf-8"))
+  } yield ByteString.copyFrom(testKey, "utf-8")
 
   private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
 
@@ -52,9 +47,9 @@ trait BlockStoreTest
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield
-      ((hash,
-        BlockMessage(blockHash = hash)
-          .withHeader(Header().withVersion(version).withTimestamp(timestamp))))
+      (hash,
+       BlockMessage(blockHash = hash)
+         .withHeader(Header().withVersion(version).withTimestamp(timestamp)))
 
   private[this] val blockStoreElementsGen: Gen[List[(BlockHash, BlockMessage)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
@@ -81,7 +76,7 @@ trait BlockStoreTest
       if (size == seen.size) seen.toList
       else {
         while (seen.size <= size && discarded < maxDiscarded) gen.sample match {
-          case Some(t) if seen.filter(comp(t, _)).isEmpty =>
+          case Some(t) if !seen.exists(comp(t, _)) =>
             seen.+=:(t)
           case _ => discarded += 1
         }
@@ -99,7 +94,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements
         //blockStoreElements.map(_._1).toSet.size shouldBe items.size
-        items.foreach { case (k, v) => store.put(k, v) }
+        items.foreach(store.put(_))
         items.foreach {
           case (k, v) =>
             store.get(k) shouldBe Some(v)

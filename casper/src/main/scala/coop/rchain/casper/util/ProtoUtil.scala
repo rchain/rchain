@@ -42,7 +42,7 @@ object ProtoUtil {
                    acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
     val parentsHashes       = ProtoUtil.parents(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash >>= internalMap.get match {
+    maybeMainParentHash flatMap internalMap.get match {
       case Some(newEstimate) =>
         getMainChain(internalMap, newEstimate, acc :+ estimate)
       case None => acc :+ estimate

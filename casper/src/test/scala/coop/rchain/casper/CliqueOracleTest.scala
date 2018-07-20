@@ -29,7 +29,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     val v1                       = ByteString.copyFromUtf8("Validator One")
     val v2                       = ByteString.copyFromUtf8("Validator Two")
@@ -94,7 +94,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Turan Oracle" should "detect possible disagreements appropriately" in {
-    implicit val blockStore      = InMemBlockStore.inMemInstanceId
+    implicit val blockStore      = InMemBlockStore.createWithId
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
     val v1                       = ByteString.copyFromUtf8("Validator One")
     val v2                       = ByteString.copyFromUtf8("Validator Two")
