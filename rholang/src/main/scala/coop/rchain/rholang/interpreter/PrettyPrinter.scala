@@ -19,9 +19,10 @@ import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0)
 
-  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "a", 23, 128)
+  def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
+    PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
 }
 
 case class PrettyPrinter(freeShift: Int,
@@ -64,8 +65,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
       case EMatchesBody(EMatches(target, pattern)) =>
         (buildString(target) + " matches " + buildString(pattern)).wrapWithBraces
-      case EListBody(EList(s, _, _, remainderO)) =>
-        "[" + buildSeq(s) ++ remainderO.fold("")(v => "..." + buildString(v)) + "]"
+      case EListBody(EList(s, _, _, remainder)) =>
+        "[" + buildSeq(s) + buildRemainderString(remainder) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case ESetBody(ParSet(pars, _, _)) =>
@@ -94,6 +95,9 @@ case class PrettyPrinter(freeShift: Int,
       case ExprInstance.GByteArray(bs) => Base16.encode(bs.toByteArray)
       case _                           => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
+
+  private def buildRemainderString(remainder: Option[Var]): String =
+    remainder.fold("")(v => "..." + buildString(v))
 
   def buildString(v: Var): String =
     v.varInstance match {

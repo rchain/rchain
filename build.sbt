@@ -327,7 +327,7 @@ lazy val rspace = (project in file("rspace"))
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace)
+  .dependsOn(rspace, rholang)
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

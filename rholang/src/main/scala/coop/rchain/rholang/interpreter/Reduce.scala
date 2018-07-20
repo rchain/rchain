@@ -834,7 +834,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
-            s.raiseError(ReduceError("Error: add can be called only on Map and Set."))
+            s.raiseError(ReduceError("Error: contains can be called only on Map and Set."))
         }
 
       method("contains", 1, args) {
