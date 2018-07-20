@@ -961,6 +961,33 @@ trait StorageActionsTests
       getK(r2).results should contain(List("datum", "datum"))
   }
 
+  "reset" should "change the state of the store, and reset the trie updates log" in withTestSpace {
+    space =>
+
+      val checkpoint0 = space.createCheckpoint()
+
+      val store    = space.store
+      val key      = List("ch1")
+      val patterns = List(Wildcard)
+      val keyHash  = store.hashChannels(key)
+
+      val r = space.consume(key, patterns, new StringsCaptor, persist = false)
+
+      r shouldBe None
+      store.isEmpty shouldBe false
+      store.getTrieUpdates.length shouldBe 1
+      store.getTrieUpdateCount shouldBe 1
+
+      space.reset(checkpoint0.root)
+
+      store.isEmpty shouldBe true
+      store.getTrieUpdates.length shouldBe 0
+      store.getTrieUpdateCount shouldBe 0
+
+      val checkpoint1 = space.createCheckpoint()
+      checkpoint1.log shouldBe empty
+  }
+
   "clear" should "empty the store, reset the event log, and reset the trie updates log" in withTestSpace {
     space =>
       val store    = space.store
