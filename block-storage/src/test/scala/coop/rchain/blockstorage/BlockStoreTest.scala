@@ -42,20 +42,61 @@ trait BlockStoreTest
     testKey <- arbitrary[String]
   } yield (ByteString.copyFrom(testKey, "utf-8"))
 
-  private[this] val blockHashesSetGen: Gen[Set[BlockHash]] =
-    Gen.buildableOf[Set[BlockHash], BlockHash](blockHashGen)
+  private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
+
+  private[this] val blockStoreElementGen: Gen[(BlockHash, BlockMessage)] =
+    for {
+      hash      <- arbitrary[BlockHash]
+      version   <- arbitrary[Long]
+      timestamp <- arbitrary[Long]
+    } yield
+      ((hash,
+        BlockMessage(blockHash = hash)
+          .withHeader(Header().withVersion(version).withTimestamp(timestamp))))
+
+  private[this] val blockStoreElementsGen: Gen[List[(BlockHash, BlockMessage)]] =
+    distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
+
+  // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
+  /**
+   Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
+
+   Distinct list of elements from a given arbitrary
+    */
+  def distinctListOf[T: Arbitrary] =
+    distinctListOfGen(arbitrary[T])(_ == _)
+
+  /**
+   Distinct list of elements from a given generator
+   with a maximum number of elements to discard
+    */
+  def distinctListOfGen[T](gen: Gen[T], maxDiscarded: Int = 1000)(
+      comp: (T, T) => Boolean): Gen[List[T]] = {
+    val seen      = new scala.collection.mutable.ListBuffer[T]
+    var discarded = 0
+
+    Gen.sized { size =>
+      if (size == seen.size) seen.toList
+      else {
+        while (seen.size <= size && discarded < maxDiscarded) gen.sample match {
+          case Some(t) if seen.filter(comp(t, _)).isEmpty =>
+            seen.+=:(t)
+          case _ => discarded += 1
+        }
+        seen.toList
+      }
+    }
+  }
 
   "Block Store" should "return None on get while it's empty" in withStore { store =>
     store.get(blockHashGen.sample.get) shouldBe None
   }
 
   it should "return Some(message) on get for a published key" in {
-    forAll(blockHashesSetGen) { blockHashes =>
+    forAll(blockStoreElementsGen) { blockStoreElements =>
       withStore { store =>
-        val items = blockHashes.map { hash =>
-          val msg: BlockMessage = bm(hash, 100L, 10000L)
-          (hash, msg)
-        }
+        val items = blockStoreElements
+        //blockStoreElements.map(_._1).toSet.size shouldBe items.size
         items.foreach { case (k, v) => store.put(k, v) }
         items.foreach {
           case (k, v) =>
@@ -67,12 +108,12 @@ trait BlockStoreTest
   }
 
   it should "overwrite existing value" in
-    forAll(blockHashesSetGen) { blockHashes =>
+    forAll(blockStoreElementsGen) { blockStoreElements =>
       withStore { store =>
-        val items = blockHashes map { hash =>
-          val msg1: BlockMessage = bm(hash, 100L, 10000L)
-          val msg2: BlockMessage = bm(hash, 200L, 20000L)
-          (hash, msg1, msg2)
+        val items = blockStoreElements.map {
+          case (hash, elem) =>
+            val msg2: BlockMessage = bm(hash, 200L, 20000L)
+            (hash, elem, msg2)
         }
         items.foreach { case (k, v1, _) => store.put(k, v1) }
         items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
