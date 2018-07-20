@@ -17,10 +17,10 @@ trait BlockStore[F[_]] {
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit]
 
-  def apply(blockHash: BlockHash)(implicit monadF: Applicative[F]): F[BlockMessage] =
+  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
     get(blockHash).map(_.get)
 
-  def contains(blockHash: BlockHash)(implicit monadF: Applicative[F]): F[Boolean] =
+  def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
   def asMap(): F[Map[BlockHash, BlockMessage]]
