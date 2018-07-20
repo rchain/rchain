@@ -56,13 +56,12 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
     listData.add(new PGround(new GroundInt(7)))
-    val list = new PCollect(new CollectList(listData, new RemainderEmpty()))
+    val list = new PCollect(new CollectList(listData, new RemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value.par)
-    val target = "[x0, *x1, 7]"
-    result shouldBe target
+    result shouldBe "[x0, *x1, 7...free0]"
   }
 
   "Map" should "Print" in {
@@ -84,17 +83,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
-  val p: Par = Par()
-
   "New" should "use 0-based indexing" in {
-    val source = p.copy(news = Seq(New(3, Par())))
+    val source = Par(news = Seq(New(3, Par())))
     val result = PrettyPrinter().buildString(source)
     val target = "new x0, x1, x2 in { Nil }"
     result shouldBe target
   }
 
   "Par" should "Print" in {
-    val source: Par = p.copy(
+    val source: Par = Par(
       exprs = Seq(GInt(0), GBool(true), GString("2"), GUri("www.3cheese.com")),
       ids = Seq(GPrivate("4"), GPrivate("5"))
     )
@@ -105,7 +102,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "Send" should "Print" in {
     val source: Par =
-      p.copy(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
+      Par(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
     val result = PrettyPrinter().buildString(source)
     val target = "@{Nil}!!(Nil, Nil)"
     result shouldBe target
@@ -349,7 +346,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleFree, inputs).value.par)
-    result shouldBe "INVALID1 | INVALID0"
+    result shouldBe "free1 | free0"
   }
 
   "PInput" should "Print a receive" in {

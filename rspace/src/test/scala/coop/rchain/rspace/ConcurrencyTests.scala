@@ -86,14 +86,7 @@ trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, Entries
     val max = nsToMs(arrResults.max)
     val avg = arrResults.map(x => nsToMs(x) * (1.0 / arrResults.length)).sum
 
-    val counter = space.store.getStoreCounters
-
     println(s"Finished $version: $iterationsCount iterations.")
-    println(
-      s"${counter.producesCount} produces, avg ${counter.producesCount.avgMilliseconds.formatted("%.2f")} ms per produce")
-    println(
-      s"${counter.consumesCount} consumes, avg ${counter.consumesCount.avgMilliseconds.formatted("%.2f")} ms per consume")
-
     println(
       s"Time per thread: avg: ${avg.formatted("%.2f")} ms; min: " +
         s"${min.formatted("%.2f")} ms; max: ${max.formatted("%.2f")} ms")
@@ -149,14 +142,7 @@ trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, Entries
     val max   = nsToMs(times.max)
     val avg   = times.map(x => nsToMs(x) * (1.0 / times.length)).sum
 
-    val counter = space.store.getStoreCounters
-
     println(s"Finished $version: $iterationsCount iterations.")
-    println(
-      s"${counter.producesCount} produces, avg ${counter.producesCount.avgMilliseconds.formatted("%.2f")} ms per produce")
-    println(
-      s"${counter.consumesCount} consumes, avg ${counter.consumesCount.avgMilliseconds.formatted("%.2f")} ms per consume")
-
     println(
       s"Time per thread: avg: ${avg.formatted("%.2f")} ms; min: " +
         s"${min.formatted("%.2f")} ms; max: ${max.formatted("%.2f")} ms")

@@ -45,12 +45,17 @@ class InMemoryStoreTestsBase
     val env = Context.env(dbDir, mapSize)
     val trieStore
       : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
-      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env)
+      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env, dbDir)
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
     val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, branch)
-    testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
-    trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
-    initialize(trieStore, branch)
+    testStore.withTxn(testStore.createTxnWrite()) { txn =>
+      testStore.withTrieTxn(txn) { trieTxn =>
+        testStore.clear(txn)
+        testStore.trieStore.clear(trieTxn)
+      }
+    }
+    history.initialize(trieStore, branch)
+    val _ = testSpace.createCheckpoint()
     try {
       f(testSpace)
     } finally {
@@ -84,10 +89,13 @@ class LMDBStoreTestsBase
     val testSpace =
       RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
-      testStore.clear(txn)
-      testStore.trieStore.clear(txn)
+      testStore.withTrieTxn(txn) { trieTxn =>
+        testStore.clear(txn)
+        testStore.trieStore.clear(trieTxn)
+      }
     }
     history.initialize(testStore.trieStore, testBranch)
+    val _ = testSpace.createCheckpoint()
     try {
       f(testSpace)
     } finally {

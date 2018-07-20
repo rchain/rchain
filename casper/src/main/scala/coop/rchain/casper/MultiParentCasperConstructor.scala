@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
+import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate, BlockMessage}
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
@@ -67,7 +67,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
             MultiParentCasper.hashSetCasper[F](
               runtimeManager,
               validatorId,
-              g.block.get
+              g.candidate.get.block.get
           ))
 
       override def receive(a: ApprovedBlock): F[Boolean] =
@@ -75,13 +75,13 @@ sealed abstract class MultiParentCasperConstructorInstances {
         if (genesis.isCompleted) false.pure[F]
         else
           for {
-            isVaid <- Validate.approvedBlock[F](a, validators)
-            _ <- if (isVaid)
+            isValid <- Validate.approvedBlock[F](a, validators)
+            _ <- if (isValid)
                   Log[F].info("CASPER: Valid ApprovedBlock received!") *> Capture[F].capture {
                     genesis.success(a)
                   }.void
                 else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
-          } yield isVaid
+          } yield isValid
 
       override def casperInstance: Either[Throwable, MultiParentCasper[F]] =
         casper.value.fold[Either[Throwable, MultiParentCasper[F]]](
@@ -104,7 +104,8 @@ sealed abstract class MultiParentCasperConstructorInstances {
                                              conf.genesisPath,
                                              conf.walletsFile,
                                              runtimeManager)
-        approved    = ApprovedBlock(block = Some(genesis)) //TODO: do actual approval protocol
+        candidate   = ApprovedBlockCandidate(block = Some(genesis), requiredSigs = 0)
+        approved    = ApprovedBlock(candidate = Some(candidate)) //TODO: do actual approval protocol
         validatorId <- ValidatorIdentity.fromConfig[G](conf)
         casper      = MultiParentCasper.hashSetCasper[F](runtimeManager, validatorId, genesis)
       } yield successCasperConstructor[F](approved, casper)

@@ -5,7 +5,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing, routing.Header
+import coop.rchain.comm.protocol.routing
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
 import coop.rchain.comm.protocol.rchain._
@@ -15,7 +15,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
 import coop.rchain.shared._
-import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.CommError._
 
 object Connect {
 
@@ -31,7 +31,7 @@ object Connect {
         responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
         _ <- peers.zip(responses).traverse {
               case (peer, Left(error)) =>
-                Log[F].error(s"Failed to connect to $peer. Reason: $error")
+                Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
               case (_, Right(_)) => ().pure[F]
             }
         thisCount <- NodeDiscovery[F].peers.map(_.size)
@@ -40,7 +40,7 @@ object Connect {
 
   def connectToBootstrap[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
-      bootstrapAddrStr: String,
+      bootstrap: PeerNode,
       maxNumOfAttempts: Int = 5,
       defaultTimeout: FiniteDuration): F[Unit] = {
 
@@ -55,7 +55,8 @@ object Connect {
           _ <- res match {
                 case Left(error) =>
                   val msg =
-                    s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts). Reason: $error"
+                    "Failed to connect to bootstrap " +
+                      s"(attempt $attempt / $maxNumOfAttempts). Reason: ${error.message}"
                   Log[F].warn(msg) *> connectAttempt(attempt + 1,
                                                      timeout + defaultTimeout,
                                                      bootstrapAddr)
@@ -64,10 +65,9 @@ object Connect {
         } yield ()
 
     for {
-      bootstrapAddr <- errorHandler[F].fromEither(PeerNode.parse(bootstrapAddrStr))
-      _             <- Log[F].info(s"Bootstrapping from $bootstrapAddr.")
-      _             <- connectAttempt(attempt = 1, defaultTimeout, bootstrapAddr)
-      _             <- Log[F].info(s"Connected $bootstrapAddr.")
+      _ <- Log[F].info(s"Bootstrapping from ${bootstrap.toAddress}.")
+      _ <- connectAttempt(attempt = 1, defaultTimeout, bootstrap)
+      _ <- Log[F].info(s"Connected ${bootstrap.toAddress}.")
     } yield ()
   }
 
@@ -76,18 +76,20 @@ object Connect {
       peer: PeerNode,
       timeout: FiniteDuration): F[Unit] =
     for {
-      tss     <- Time[F].currentMillis
-      _       <- Log[F].debug(s"Connecting to $peer")
-      _       <- Metrics[F].incrementCounter("connects")
-      _       <- Log[F].info(s"Initialize protocol handshake to $peer")
-      local   <- TransportLayer[F].local
-      ph      = protocolHandshake(local)
-      phsresp <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
+      tss      <- Time[F].currentMillis
+      peerAddr = peer.toAddress
+      _        <- Log[F].debug(s"Connecting to $peerAddr")
+      _        <- Metrics[F].incrementCounter("connects")
+      _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
+      local    <- TransportLayer[F].local
+      ph       = protocolHandshake(local)
+      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
       _ <- Log[F].debug(
-            s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
+            "Received protocol handshake response " +
+              s"from ${ProtocolHelper.sender(phsresp).map(_.toAddress).getOrElse("None")}.")
       addedErr <- NodeDiscovery[F].addNode(peer)
       _ <- addedErr.fold(
-            error => Log[F].error(s"Could not add $peer, reason: $error"),
+            error => Log[F].error(s"Could not add $peerAddr, reason: ${error.message}"),
             _ => ().pure[F]
           )
       tsf <- Time[F].currentMillis
@@ -123,15 +125,18 @@ object Connect {
       maybePh: Option[ProtocolHandshake]): F[CommunicationResponse] =
     for {
       local    <- TransportLayer[F].local
+      peerAddr = peer.toAddress
       _        <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
       phr      = protocolHandshakeResponse(local)
       addedErr <- NodeDiscovery[F].addNode(peer)
       commResponse <- addedErr.fold(
                        error =>
-                         Log[F].error(s"Could not add $peer, reason: $error").as(notHandled(error)),
+                         Log[F]
+                           .error(s"Could not add $peerAddr, reason: ${error.message}")
+                           .as(notHandled(error)),
                        _ =>
                          Log[F]
-                           .info(s"Responded to protocol handshake request from $peer")
+                           .info(s"Responded to protocol handshake request from $peerAddr")
                            .as(handledWithMessage(phr))
                      )
     } yield commResponse
