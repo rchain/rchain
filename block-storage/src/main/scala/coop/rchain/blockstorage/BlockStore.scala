@@ -1,7 +1,8 @@
 package coop.rchain.blockstorage
 
-import cats.{Applicative, MonadError}
-import cats.effect.{Bracket, Sync}
+import cats.{Monad, MonadError}
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
@@ -12,7 +13,7 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  implicit def applicative: Applicative[F]
+  //implicit def monad: Monad[F]
 
   def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit]
 
@@ -21,9 +22,11 @@ trait BlockStore[F[_]] {
   def put(f: => (BlockHash, BlockMessage)): F[Unit]
 
   //FIXME carbon copy of map behavior
-  def apply(blockHash: BlockHash): F[BlockMessage] = get(blockHash).map(_.get)
+  def apply(blockHash: BlockHash)(implicit monadF: Monad[F]): F[BlockMessage] =
+    get(blockHash).map(_.get)
 
-  def contains(blockHash: BlockHash): F[Boolean] = get(blockHash).map(_.isDefined)
+  def contains(blockHash: BlockHash)(implicit monadF: Monad[F]): F[Boolean] =
+    get(blockHash).map(_.isDefined)
 
   def asMap(): F[Map[BlockHash, BlockMessage]]
 }
@@ -38,9 +41,8 @@ object BlockStore {
 
   type BlockStoreMonadError[M[_]] = MonadError[M, BlockStoreError]
 
-  type BlockStoreBracket[M[_]] = Bracket[M, BlockStoreError]
-
   def createMapBased[F[_]](implicit
-                           bracketF: Bracket[F, Exception],
+                           monadF: Monad[F],
+                           refF: Ref[F, Map[BlockHash, BlockMessage]],
                            metricsF: Metrics[F]): BlockStore[F] = InMemBlockStore.create
 }

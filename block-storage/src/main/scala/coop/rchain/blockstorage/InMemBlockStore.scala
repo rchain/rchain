@@ -1,7 +1,7 @@
 package coop.rchain.blockstorage
 
 import cats._
-import cats.effect.{Bracket, ExitCase}
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
@@ -12,40 +12,36 @@ import scala.concurrent.SyncVar
 import scala.language.higherKinds
 
 class InMemBlockStore[F[_], E] private ()(implicit
-                                          bracketF: Bracket[F, E],
+                                          monadF: Monad[F],
+                                          refF: Ref[F, Map[BlockHash, BlockMessage]],
                                           metricsF: Metrics[F])
     extends BlockStore[F] {
 
-  implicit val applicative: Applicative[F] = bracketF
-
-  protected[this] val stateRef: SyncVar[Map[BlockHash, BlockMessage]] =
-    SyncVarOps.create[Map[BlockHash, BlockMessage]](Map.empty)
+  //implicit val monad: Monad[F] = monadF
 
   def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("block-store-put")
-      ret <- bracketF.bracket(applicative.pure(stateRef.take()))(state =>
-              applicative.pure(stateRef.put(state.updated(blockHash, blockMessage))))(_ =>
-              applicative.pure(()))
-    } yield ret
+      _ <- refF.update(_.updated(blockHash, blockMessage))
+    } yield ()
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _ <- metricsF.incrementCounter("block-store-get")
-      ret <- bracketF.bracket(applicative.pure(stateRef.take()))(state =>
-              applicative.pure(state.get(blockHash)))(state =>
-              applicative.pure(stateRef.put(state)))
-    } yield ret
+      _   <- metricsF.incrementCounter("block-store-get")
+      ret <- refF.get
+    } yield ret.get(blockHash)
 
   //TODO mark as deprecated and remove when casper code no longer needs it
-  def asMap(): F[Map[BlockHash, BlockMessage]] =
+  def asMap(): F[Map[BlockHash, BlockMessage]] = ???
+  /*
     for {
       _ <- metricsF.incrementCounter("block-store-as-map")
       ret <- bracketF.bracket(applicative.pure(stateRef.take()))(state => applicative.pure(state))(
               state => applicative.pure(stateRef.put(state)))
     } yield ret
 
-  def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+   */
+  def put(f: => (BlockHash, BlockMessage)): F[Unit] = ??? /*
     for {
       _ <- metricsF.incrementCounter("block-store-put")
       ret <- bracketF.bracket(applicative.pure(stateRef.take())) { state =>
@@ -53,14 +49,17 @@ class InMemBlockStore[F[_], E] private ()(implicit
               applicative.pure(stateRef.put(state.updated(blockHash, blockMessage)))
             }(_ => applicative.pure(()))
     } yield ret
+ */
 }
 
 object InMemBlockStore {
   def create[F[_], E](implicit
-                      bracketF: Bracket[F, E],
+                      monadF: Monad[F],
+                      refF: Ref[F, Map[BlockHash, BlockMessage]],
                       metricsF: Metrics[F]): BlockStore[F] =
-    new InMemBlockStore()(bracketF, metricsF)
+    new InMemBlockStore()
 
+  /*
   type ExceptionalBracket[F[_]] = Bracket[F, Exception]
 
   def inMemInstanceEff[F[_], E](implicit
@@ -99,4 +98,5 @@ object InMemBlockStore {
         }
       }
     }
+ */
 }
