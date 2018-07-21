@@ -37,8 +37,7 @@ class Actor extends MboxOb {
     * `ctxt.argvec(0) == Symbol(i)`
     * `ctxt.argvec(1) == Fixnum(5)`
     */
-  override def update(enabledSetProvided: Boolean, ctxt: Ctxt)(state: State,
-                                                               globalEnv: GlobalEnv): Ob = {
+  override def update(enabledSetProvided: Boolean, ctxt: Ctxt, state: State): Ob = {
     logger.debug(s"Update $this")
 
     val keyStart      = if (enabledSetProvided) 1 else 0
@@ -46,9 +45,9 @@ class Actor extends MboxOb {
     var result: Ob    = this
 
     if (ctxt.nargs > keyStart)
-      result = super.update(enabledSetProvided, ctxt)(state, globalEnv)
+      result = super.update(enabledSetProvided, ctxt, state)
 
-    mbox.nextMsg(this, newEnabledSet, state, globalEnv)
+    mbox.nextMsg(this, newEnabledSet, state)
 
     result
   }

@@ -65,7 +65,7 @@ class Ctxt(var tag: Location,
       true
     } else {
       if (outstanding.decrementAndGet() == 0) {
-        logger.debug(ы"Scheduling continuation $this")
+        logger.debug(s"Scheduling continuation $this")
         scheduleStrand(state)
       } else {
         logger.debug(s"$outstanding outstanding argument in continuation ($this)")

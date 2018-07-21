@@ -20,7 +20,7 @@ abstract class Ob {
 
   def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = Niv
 
-  def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State, globalEnv: GlobalEnv): Ob = Niv
+  def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = Niv
 
   def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
     if (keyMeta == NilMeta)
@@ -51,7 +51,7 @@ abstract class Ob {
       result
   }
 
-  def update(enabledSetProvided: Boolean, ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob = {
+  def update(enabledSetProvided: Boolean, ctxt: Ctxt, state: State): Ob = {
     val keyStart = if (enabledSetProvided) 1 else 0
     val me       = this
     val rslt     = this
@@ -71,7 +71,7 @@ abstract class Ob {
         .toList
         .takeWhile { pair =>
           logger.debug(s"Set ${pair(0)} -> ${pair(1)} in $this")
-          meta.set(this, pair(0), pair(1), ctxt)(globalEnv) == me
+          meta.set(this, pair(0), pair(1), ctxt, state.globalEnv) == me
         }
     }
 

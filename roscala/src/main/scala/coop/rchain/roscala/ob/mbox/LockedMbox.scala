@@ -23,10 +23,7 @@ class LockedMbox extends Ob {
     * already got processed. Therefore all that needs to be done here
     * is to change the client's mailbox to an `EmptyMbox`.
     */
-  override def nextMsg(client: MboxOb,
-                       newEnabledSet: Ob,
-                       state: State,
-                       globalEnv: GlobalEnv): Ob = {
+  override def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = {
     MboxOb.logger.debug(s"Next message received on $this")
 
     if (newEnabledSet == Nil)

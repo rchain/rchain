@@ -261,7 +261,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
         val location = state.ctxt.code.litvec(lit).asInstanceOf[Location]
 
         if (result == Deadthread)
@@ -284,7 +284,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -305,7 +305,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -324,7 +324,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -710,7 +710,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
     state.ctxt.argvec = newArgvec
     state.ctxt.nargs = newArgvec.numberOfElements()
 
-    val result = prim.dispatchHelper(state, globalEnv)
+    val result = prim.dispatchHelper(state)
     state.ctxt.argvec = oldArgvec
     state.ctxt.nargs = oldNargs
     result

@@ -17,7 +17,7 @@ class Mthd(code: Code, id: Ob, source: Ob) extends Ob {
     ctxt.rslt = Niv
     ctxt.pc = 0
 
-    state.strandPool.append((ctxt, state.globalEnv)) //TODO prepend?
+    state.strandPool.append((ctxt, state.globalEnv))
     Suspended
   }
 

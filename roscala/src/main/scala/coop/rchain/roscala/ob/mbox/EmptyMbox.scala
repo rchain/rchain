@@ -12,10 +12,7 @@ class EmptyMbox extends Ob {
     Niv
   }
 
-  override def nextMsg(client: MboxOb,
-                       newEnabledSet: Ob,
-                       state: State,
-                       globalEnv: GlobalEnv): Ob = {
+  override def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = {
     MboxOb.logger.debug(s"Next message received on $this")
 
     if (newEnabledSet != Nil) {
