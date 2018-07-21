@@ -110,7 +110,7 @@ object Reduce {
       } yield ()
 
     /**
-      * Materialize a send in the store, optionally returning the matched continuation.
+      * Materialize a receive in the store, optionally returning the matched continuation.
       *
       * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Channel].
       *               The Seq is for arity matching, and each term in the Seq is a name pattern.
