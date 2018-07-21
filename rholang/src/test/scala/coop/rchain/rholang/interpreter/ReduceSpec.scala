@@ -1355,7 +1355,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
-  
+
   "'abc' ++ 'def'" should "return 'abcdef" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =

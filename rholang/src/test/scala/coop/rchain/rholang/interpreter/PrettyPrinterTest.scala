@@ -103,6 +103,30 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe target
   }
 
+  "PPlusPlus" should "Print" in {
+    val source: Par = Par(
+      exprs = Seq(EPlusPlusBody(EPlusPlus(GString("abc"), GString("def"))))
+    )
+    val result = PrettyPrinter().buildString(source)
+    val target = """("abc" ++ "def")"""
+    result shouldBe target
+  }
+
+  "PPercentPercent" should "Print" in {
+    val source: Par = Par(
+      exprs = Seq(
+        EPercentPercentBody(
+          EPercentPercent(
+            GString("Hello, ${name}"),
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+          )
+        ))
+    )
+    val result = PrettyPrinter().buildString(source)
+    val target = """("Hello, ${name}" %% {"name" : "Alice"})"""
+    result shouldBe target
+  }
+
   "Send" should "Print" in {
     val source: Par =
       p.copy(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
