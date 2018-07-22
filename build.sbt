@@ -264,7 +264,7 @@ lazy val roscala = (project in file("roscala"))
   ).dependsOn(roscala_macros)
 
 lazy val blockStorage = (project in file("block-storage"))
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "block-storage",
@@ -275,25 +275,9 @@ lazy val blockStorage = (project in file("block-storage"))
       catsEffect,
       catsMtl
     ),
-    /* Publishing Settings */
-    scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
-    git.remoteRepo := scmInfo.value.get.connection,
-    useGpg := true,
-    pomIncludeRepository := { _ => false },
-    publishMavenStyle := true,
-    publishTo := {
-      val nexus = "https://oss.sonatype.org/"
-      if (isSnapshot.value)
-        Some("snapshots" at nexus + "content/repositories/snapshots")
-      else
-        Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-    },
-    publishArtifact in Test := false,
-    licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
-    homepage := Some(url("https://www.rchain.coop"))
+    git.remoteRepo := scmInfo.value.get.connection
   )
   .dependsOn(shared, models)
-
 
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
