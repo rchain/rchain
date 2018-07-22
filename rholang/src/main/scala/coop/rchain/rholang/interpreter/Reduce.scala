@@ -581,7 +581,7 @@ object Reduce {
             var current = string
             while (current.nonEmpty) {
               keyValuePairs.find {
-                case (k, v) => current.startsWith("${" + k + "}")
+                case (k, _) => current.startsWith("${" + k + "}")
               } match {
                 case Some((k, v)) =>
                   result ++= v

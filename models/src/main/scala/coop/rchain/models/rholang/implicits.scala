@@ -193,10 +193,10 @@ object implicits {
         case GString(_)    => "String"
         case GUri(_)       => "Uri"
         case GByteArray(_) => "ByteArray"
-        case EListBody(e)  => "List"
-        case ETupleBody(e) => "Tuple"
-        case ESetBody(e)   => "Set"
-        case EMapBody(e)   => "Map"
+        case EListBody(_)  => "List"
+        case ETupleBody(_) => "Tuple"
+        case ESetBody(_)   => "Set"
+        case EMapBody(_)   => "Map"
         case _             => "Unit"
       }
   }
