@@ -61,7 +61,7 @@ object InMemBlockStore {
     Ref[F].of(Map.empty[BlockHash, BlockMessage])
 
   val syncId: Sync[Id] = new Sync[Id] {
-    def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
+    def pure[A](x: A): cats.Id[A] = x
 
     def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] = ???
 
