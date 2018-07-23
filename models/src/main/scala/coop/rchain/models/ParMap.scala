@@ -1,5 +1,7 @@
 package coop.rchain.models
 
+import java.util.Objects
+
 import monix.eval.Coeval
 
 import scala.collection.immutable.BitSet
@@ -13,11 +15,7 @@ case class ParMap(ps: SortedParMap, connectiveUsed: Boolean, locallyFree: Coeval
     case _ => false
   }
 
-  override def hashCode(): Int = (
-    37 * this.ps.hashCode() +
-      37 * this.connectiveUsed.hashCode() +
-      37 * this.locallyFree.value.hashCode()
-  )
+  override def hashCode(): Int = Objects.hash(ps, Boolean.box(connectiveUsed), locallyFree.value)
 }
 
 object ParMap {

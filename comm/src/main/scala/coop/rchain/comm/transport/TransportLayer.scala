@@ -54,7 +54,8 @@ sealed abstract class TransportLayerInstances {
         val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap {
             case Left(err) =>
-              Log[F].error(s"Error while handling message. Error: $err") *> notHandled(err).pure[F]
+              Log[F].error(s"Error while handling message. Error: ${err.message}") *> notHandled(
+                err).pure[F]
             case Right(m) => m.pure[F]
         }
         EitherT.liftF(evF.receive(dis))

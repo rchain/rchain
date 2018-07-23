@@ -4,12 +4,13 @@ import cats._
 import cats.data.StateT
 import cats.implicits._
 import cats.mtl.MonadState
-import coop.rchain.catscontrib._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Time
@@ -24,12 +25,24 @@ object BlockGenerator {
 
   type BlockDagState[F[_]] = MonadState[F, BlockDag]
   def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, BlockDag]
+
+  def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Id]): BlockStore[F] =
+    new BlockStore[F] {
+      override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
+        Monad[F].pure(idBs.get(blockHash))
+
+      override def asMap(): F[Map[BlockHash, BlockMessage]] =
+        Monad[F].pure(idBs.asMap())
+
+      override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
+        Monad[F].pure(idBs.put(f))
+    }
 }
 
 trait BlockGenerator {
   import BlockGenerator._
 
-  def createBlock[F[_]: Monad: BlockDagState: Time](
+  def createBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -64,9 +77,9 @@ trait BlockGenerator {
                            serializedJustifications,
                            creator,
                            nextCreatorSeqNum)
-      idToBlocks     = chain.idToBlocks + (nextId               -> block)
-      blockLookup    = chain.blockLookup + (serializedBlockHash -> block)
-      latestMessages = chain.latestMessages + (block.sender     -> serializedBlockHash)
+      idToBlocks     = chain.idToBlocks + (nextId -> block)
+      _              <- BlockStore[F].put(serializedBlockHash, block)
+      latestMessages = chain.latestMessages + (block.sender -> serializedBlockHash)
       latestMessagesOfLatestMessages = chain.latestMessagesOfLatestMessages + (block.sender -> ProtoUtil
         .toLatestMessages(serializedJustifications))
       updatedChildren = HashMap[BlockHash, Set[BlockHash]](parentsHashList.map {
@@ -79,7 +92,6 @@ trait BlockGenerator {
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
       updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
       newChain: BlockDag = BlockDag(idToBlocks,
-                                    blockLookup,
                                     childMap,
                                     latestMessages,
                                     latestMessagesOfLatestMessages,

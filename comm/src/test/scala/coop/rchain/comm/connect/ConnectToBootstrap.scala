@@ -42,15 +42,15 @@ class ConnectToBootstrapSpec
       // given
       transportLayerEff.setResponses(kp(failEverything))
       // when
-      val _ = Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
+      val _ = Connect.connectToBootstrap[Effect](remote, maxNumOfAttempts = 5, timeout)
       // then
       logEff.warns should equal(
         List(
-          "Failed to connect to bootstrap (attempt 1 / 5). Reason: UnknownProtocolError(unknown)",
-          "Failed to connect to bootstrap (attempt 2 / 5). Reason: UnknownProtocolError(unknown)",
-          "Failed to connect to bootstrap (attempt 3 / 5). Reason: UnknownProtocolError(unknown)",
-          "Failed to connect to bootstrap (attempt 4 / 5). Reason: UnknownProtocolError(unknown)",
-          "Failed to connect to bootstrap (attempt 5 / 5). Reason: UnknownProtocolError(unknown)"
+          "Failed to connect to bootstrap (attempt 1 / 5). Reason: Unknown protocol error. unknown",
+          "Failed to connect to bootstrap (attempt 2 / 5). Reason: Unknown protocol error. unknown",
+          "Failed to connect to bootstrap (attempt 3 / 5). Reason: Unknown protocol error. unknown",
+          "Failed to connect to bootstrap (attempt 4 / 5). Reason: Unknown protocol error. unknown",
+          "Failed to connect to bootstrap (attempt 5 / 5). Reason: Unknown protocol error. unknown"
         ))
     }
 
@@ -59,7 +59,7 @@ class ConnectToBootstrapSpec
       transportLayerEff.setResponses(kp(failEverything))
       // when
       val result =
-        Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
+        Connect.connectToBootstrap[Effect](remote, maxNumOfAttempts = 5, timeout)
       // then
       logEff.errors should equal(List("Failed to connect to bootstrap node, exiting..."))
       result.value should equal(Left(couldNotConnectToBootstrap))
@@ -70,10 +70,10 @@ class ConnectToBootstrapSpec
       transportLayerEff.setResponses(kp(alwaysSuccess))
       // when
       val result =
-        Connect.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5, timeout)
+        Connect.connectToBootstrap[Effect](remote, maxNumOfAttempts = 5, timeout)
       // then
-      logEff.infos should contain(s"Bootstrapping from $remote.")
-      logEff.infos should contain(s"Connected $remote.")
+      logEff.infos should contain(s"Bootstrapping from ${remote.toAddress}.")
+      logEff.infos should contain(s"Connected ${remote.toAddress}.")
       result.value should equal(Right(()))
     }
   }
