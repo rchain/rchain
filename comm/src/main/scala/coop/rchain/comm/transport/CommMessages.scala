@@ -27,11 +27,11 @@ object CommMessages {
     ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr))
   }
 
-  def packet(src: PeerNode, content: Array[Byte]): routing.Protocol =
-    packet(src, ByteString.copyFrom(content))
+  def packet(src: PeerNode, typeId: String, content: Array[Byte]): routing.Protocol =
+    packet(src, typeId, ByteString.copyFrom(content))
 
-  def packet(src: PeerNode, content: ByteString): routing.Protocol = {
-    val p = Packet(content)
+  def packet(src: PeerNode, typeId: String, content: ByteString): routing.Protocol = {
+    val p = Packet(typeId, content)
     ProtocolHelper.upstreamMessage(src, AnyProto.pack(p))
   }
 
