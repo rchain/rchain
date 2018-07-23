@@ -54,7 +54,7 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -263,6 +263,22 @@ lazy val roscala = (project in file("roscala"))
     libraryDependencies ++= commonDependencies
   ).dependsOn(roscala_macros)
 
+lazy val blockStorage = (project in file("block-storage"))
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "block-storage",
+    version := "0.0.1-SNAPSHOT",
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      lmdbjava,
+      catsCore,
+      catsEffect,
+      catsMtl
+    ),
+    git.remoteRepo := scmInfo.value.get.connection
+  )
+  .dependsOn(shared, models)
+
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
@@ -332,6 +348,7 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
+    blockStorage,
     casper,
     comm,
     crypto,
