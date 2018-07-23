@@ -420,10 +420,12 @@ object ProcNormalizeMatcher {
       case p: PNot => unaryExp(p.proc_, input, ENot.apply)
       case p: PNeg => unaryExp(p.proc_, input, ENeg.apply)
 
-      case p: PMult  => binaryExp(p.proc_1, p.proc_2, input, EMult.apply)
-      case p: PDiv   => binaryExp(p.proc_1, p.proc_2, input, EDiv.apply)
-      case p: PAdd   => binaryExp(p.proc_1, p.proc_2, input, EPlus.apply)
-      case p: PMinus => binaryExp(p.proc_1, p.proc_2, input, EMinus.apply)
+      case p: PMult           => binaryExp(p.proc_1, p.proc_2, input, EMult.apply)
+      case p: PDiv            => binaryExp(p.proc_1, p.proc_2, input, EDiv.apply)
+      case p: PPercentPercent => binaryExp(p.proc_1, p.proc_2, input, EPercentPercent.apply)
+      case p: PAdd            => binaryExp(p.proc_1, p.proc_2, input, EPlus.apply)
+      case p: PMinus          => binaryExp(p.proc_1, p.proc_2, input, EMinus.apply)
+      case p: PPlusPlus       => binaryExp(p.proc_1, p.proc_2, input, EPlusPlus.apply)
 
       case p: PLt  => binaryExp(p.proc_1, p.proc_2, input, ELt.apply)
       case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELte.apply)
