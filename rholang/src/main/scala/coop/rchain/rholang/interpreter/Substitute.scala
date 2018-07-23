@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.MonadState
 import cats.{Applicative, Monad}
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
@@ -290,10 +291,14 @@ object Substitute {
             s2(par1.get, par2.get)(EMult(_, _))
           case EDivBody(EDiv(par1, par2)) =>
             s2(par1.get, par2.get)(EDiv(_, _))
+          case EPercentPercentBody(EPercentPercent(par1, par2)) =>
+            s2(par1, par2)(EPercentPercent(_, _))
           case EPlusBody(EPlus(par1, par2)) =>
             s2(par1.get, par2.get)(EPlus(_, _))
           case EMinusBody(EMinus(par1, par2)) =>
             s2(par1.get, par2.get)(EMinus(_, _))
+          case EPlusPlusBody(EPlusPlus(par1, par2)) =>
+            s2(par1, par2)(EPlusPlus(_, _))
           case ELtBody(ELt(par1, par2)) =>
             s2(par1.get, par2.get)(ELt(_, _))
           case ELteBody(ELte(par1, par2)) =>

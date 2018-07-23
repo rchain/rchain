@@ -97,6 +97,8 @@ object EffectsTestInstances {
       warns = List.empty[String]
       errors = List.empty[String]
     }
+    def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
+    def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def debug(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg

@@ -1,6 +1,7 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
+import java.nio.file.Path
 
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps}
 import coop.rchain.shared.AttemptOps._
@@ -15,6 +16,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
 class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
+                                   protected[this] val databasePath: Path,
                                    _dbTrie: Dbi[ByteBuffer],
                                    _dbRoot: Dbi[ByteBuffer],
                                    _dbPastRoots: Dbi[ByteBuffer])(implicit
@@ -72,7 +74,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
   private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit =
     _dbRoot.put(txn, branch, hash)(Codec[Branch], Codec[Blake2b256Hash])
 
-  private[this] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
+  private[rspace] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
     withResource(_dbPastRoots.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
       it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
         acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get
@@ -109,12 +111,12 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
 
 object LMDBTrieStore {
 
-  def create[K, V](env: Env[ByteBuffer])(implicit
-                                         codecK: Codec[K],
-                                         codecV: Codec[V]): LMDBTrieStore[K, V] = {
+  def create[K, V](env: Env[ByteBuffer], path: Path)(implicit
+                                                     codecK: Codec[K],
+                                                     codecV: Codec[V]): LMDBTrieStore[K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, dbTrie, dbRoots, dbPastRoots)
+    new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots)
   }
 }

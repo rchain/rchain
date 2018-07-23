@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
-import coop.rchain.models.Expr.ExprInstance.{EEvalBody, EVarBody, GString}
+import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
@@ -268,5 +268,27 @@ class VarRefSubSpec extends FlatSpec with Matchers {
             cases = Seq(MatchCase(pattern = source, source = Par(), freeCount = 0)))
 
     result should be(expectedResult)
+  }
+}
+
+class OpSubSpec extends FlatSpec with Matchers {
+  implicit val depth: Int = 0
+  "EPlusPlus" should "be substituted correctly" in {
+    val source: Par            = Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))
+    implicit val env: Env[Par] = Env.makeEnv(source)
+    val target                 = EPlusPlusBody(EPlusPlus(EVar(BoundVar(0)), EVar(BoundVar(1))))
+    val result                 = substitutePar[Coeval].substitute(target).value
+    val expectedResult         = EPlusPlusBody(EPlusPlus(source, EVar(BoundVar(1))))
+    result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
+  }
+
+  "EPercentPercent" should "be substituted correctly" in {
+    val source: Par            = Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))
+    implicit val env: Env[Par] = Env.makeEnv(source)
+    val target =
+      EPercentPercentBody(EPercentPercent(EVar(BoundVar(0)), EVar(BoundVar(1))))
+    val result         = substitutePar[Coeval].substitute(target).value
+    val expectedResult = EPercentPercentBody(EPercentPercent(source, EVar(BoundVar(1))))
+    result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
   }
 }

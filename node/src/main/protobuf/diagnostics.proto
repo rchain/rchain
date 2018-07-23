@@ -77,30 +77,6 @@ message NodeCoreMetrics {
   int64 peers = 7;
 }
 
-message RSpaceUsageMetric {
-  int64 count = 1;
-  double avgMilliseconds = 2;
-  int32 peakRate = 3;
-  int32 currentRate = 4;
-}
-
-message RSpaceUsage {
-  RSpaceUsageMetric consumes = 1;
-  RSpaceUsageMetric produces = 2;
-  RSpaceUsageMetric consumesComm = 3;
-  RSpaceUsageMetric producesComm = 4;
-  RSpaceUsageMetric installComm = 5;
-}
-
-message StoreUsage {
-  int64 totalSizeOnDisk = 1;
-  int64 rspaceSizeOnDisk = 2;
-  int64 rspaceDataEntries = 3;
-
-  RSpaceUsage rspace = 4;
-  RSpaceUsage replayRSpace = 5;
-}
-
 service Diagnostics {
   rpc ListPeers (google.protobuf.Empty) returns (Peers);
   rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
@@ -109,7 +85,6 @@ service Diagnostics {
   rpc GetMemoryPools (google.protobuf.Empty) returns (MemoryPools);
   rpc GetThreads (google.protobuf.Empty) returns (Threads);
   rpc GetNodeCoreMetrics (google.protobuf.Empty) returns (NodeCoreMetrics);
-  rpc GetStoreUsage (google.protobuf.Empty) returns (StoreUsage);
 }
 
 message GarbageCollectors {

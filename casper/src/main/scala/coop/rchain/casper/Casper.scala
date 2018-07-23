@@ -1,8 +1,10 @@
 package coop.rchain.casper
 
-import cats.{Applicative, Monad}
+import cats.{Applicative, Id, Monad}
 import cats.implicits._
+import cats.effect.Bracket
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -29,8 +31,11 @@ import scala.io.Source
 import scala.util.Try
 import java.nio.file.Path
 
+import cats.mtl.MonadState
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
-import coop.rchain.casper.Estimator.Validator
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rspace.{trace, Checkpoint}
 import coop.rchain.rspace.trace.{COMM, Event}
@@ -79,10 +84,39 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   def hashSetCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
+      genesis: BlockMessage)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
+    for {
+      _           <- BlockStore[F].put(genesis.blockHash, genesis)
+      internalMap <- BlockStore[F].asMap()
+      dag         = BlockDag()
+      (maybePostGenesisStateHash, _) = InterpreterUtil
+        .validateBlockCheckpoint(
+          genesis,
+          genesis,
+          dag,
+          internalMap,
+          runtimeManager.emptyStateHash,
+          Set[StateHash](runtimeManager.emptyStateHash),
+          runtimeManager
+        )
+    } yield {
+      createMultiParentCasper[F](runtimeManager,
+                                 validatorId,
+                                 genesis,
+                                 dag,
+                                 maybePostGenesisStateHash)
+    }
+
+  private[this] def createMultiParentCasper[
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      runtimeManager: RuntimeManager,
+      validatorId: Option[ValidatorIdentity],
+      genesis: BlockMessage,
+      dag: BlockDag,
+      maybePostGenesisStateHash: Option[StateHash])(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString
@@ -90,26 +124,15 @@ sealed abstract class MultiParentCasperInstances {
       //TODO: Extract hardcoded version
       private val version = 0L
 
-      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
-        BlockDag().copy(
-          blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
-      )
-      private val initStateHash = runtimeManager.initStateHash
+      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(dag)
 
-      private val (maybePostGenesisStateHash, _) = InterpreterUtil
-        .validateBlockCheckpoint(
-          genesis,
-          genesis,
-          _blockDag.get,
-          initStateHash,
-          Set[StateHash](initStateHash),
-          runtimeManager
-        )
+      private val emptyStateHash = runtimeManager.emptyStateHash
+
       private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] =
         maybePostGenesisStateHash match {
           case Some(postGenesisStateHash) =>
             new AtomicSyncVar(
-              Set[StateHash](initStateHash, postGenesisStateHash)
+              Set[StateHash](emptyStateHash, postGenesisStateHash)
             )
           case None => throw new Error("Genesis block validation failed.")
         }
@@ -150,10 +173,7 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
 
       def contains(b: BlockMessage): F[Boolean] =
-        Capture[F].capture {
-          _blockDag.get.blockLookup.contains(b.blockHash) ||
-          blockBuffer.contains(b)
-        }
+        BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
       def deploy(d: Deploy): F[Unit] =
         for {
@@ -164,8 +184,10 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
-        Capture[F].capture {
-          Estimator.tips(_blockDag.get, genesis)
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
+          Capture[F].capture {
+            Estimator.tips(_blockDag.get, internalMap, genesis)
+          }
         }
 
       /*
@@ -182,7 +204,8 @@ sealed abstract class MultiParentCasperInstances {
           for {
             orderedHeads   <- estimator
             dag            <- blockDag
-            p              = chooseNonConflicting(orderedHeads, genesis, dag)
+            internalMap    <- BlockStore[F].asMap()
+            p              = chooseNonConflicting(orderedHeads, genesis, dag, internalMap)
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
             proposal <- if (r.nonEmpty || p.length > 1) {
@@ -197,28 +220,32 @@ sealed abstract class MultiParentCasperInstances {
       }
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
-        Capture[F].capture {
-          val result = deployHist.clone()
-          DagOperations
-            .bfTraverse(p)(parents(_).iterator.map(dag.blockLookup))
-            .foreach(b => {
-              b.body.foreach(_.newCode.foreach(result -= _))
-            })
-          result.toSeq
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
+          Capture[F].capture {
+            val result = deployHist.clone()
+            DagOperations
+              .bfTraverse(p)(parents(_).iterator.map(internalMap))
+              .foreach(b => {
+                b.body.foreach(_.newCode.foreach(result -= _))
+              })
+            result.toSeq
+          }
         }
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
-          now <- Time[F].currentMillis
+          now         <- Time[F].currentMillis
+          internalMap <- BlockStore[F].asMap()
           Right((computedCheckpoint, _)) = knownStateHashesContainer
             .mapAndUpdate[(Checkpoint, Set[StateHash])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
                                                        _blockDag.get,
-                                                       initStateHash,
+                                                       internalMap,
+                                                       emptyStateHash,
                                                        _,
                                                        runtimeManager.computeState),
               _._2)
@@ -236,7 +263,9 @@ sealed abstract class MultiParentCasperInstances {
           block  = unsignedBlockProto(body, header, justifications)
         } yield Some(block)
 
-      def blockDag: F[BlockDag] = Capture[F].capture { _blockDag.get }
+      def blockDag: F[BlockDag] = Capture[F].capture {
+        _blockDag.get
+      }
 
       def storageContents(hash: StateHash): F[String] = Capture[F].capture {
         if (knownStateHashesContainer.get.contains(hash)) {
@@ -270,10 +299,12 @@ sealed abstract class MultiParentCasperInstances {
                                             Validate.transactions[F](b,
                                                                      genesis,
                                                                      dag,
-                                                                     initStateHash,
+                                                                     emptyStateHash,
                                                                      runtimeManager,
                                                                      knownStateHashesContainer))
-          postNeglectedInvalidBlockStatus <- postTransactionsCheckStatus.joinRight.traverse(
+          postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(_ =>
+                                   Validate.bondsCache[F](b, runtimeManager))
+          postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                               _ =>
                                                 Validate.neglectedInvalidBlockCheck[F](
                                                   b,
@@ -313,44 +344,48 @@ sealed abstract class MultiParentCasperInstances {
       private def neglectedEquivocationsCheckWithRecordUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-        Capture[F].capture {
-          val neglectedEquivocationDetected =
-            equivocationsTracker.foldLeft(false) {
-              case (acc, equivocationRecord) =>
-                getEquivocationDiscoveryStatus(block,
-                                               dag,
-                                               equivocationRecord,
-                                               Set.empty[BlockMessage]) match {
-                  case EquivocationNeglected =>
-                    true
-                  case EquivocationDetected =>
-                    val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
-                    equivocationsTracker.remove(equivocationRecord)
-                    equivocationsTracker.add(
-                      equivocationRecord.copy(
-                        equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes))
-                    acc
-                  case EquivocationOblivious =>
-                    acc
-                }
+        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
+          Capture[F].capture {
+            val neglectedEquivocationDetected =
+              equivocationsTracker.foldLeft(false) {
+                case (acc, equivocationRecord) =>
+                  getEquivocationDiscoveryStatus(block,
+                                                 dag,
+                                                 internalMap,
+                                                 equivocationRecord,
+                                                 Set.empty[BlockMessage]) match {
+                    case EquivocationNeglected =>
+                      true
+                    case EquivocationDetected =>
+                      val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
+                      equivocationsTracker.remove(equivocationRecord)
+                      equivocationsTracker.add(
+                        equivocationRecord.copy(
+                          equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes))
+                      acc
+                    case EquivocationOblivious =>
+                      acc
+                  }
 
+              }
+            if (neglectedEquivocationDetected) {
+              Left(NeglectedEquivocation)
+            } else {
+              Right(Valid)
             }
-          if (neglectedEquivocationDetected) {
-            Left(NeglectedEquivocation)
-          } else {
-            Right(Valid)
           }
         }
 
       private def getEquivocationDiscoveryStatus(
           block: BlockMessage,
           dag: BlockDag,
+          internalMap: Map[BlockHash, BlockMessage],
           equivocationRecord: EquivocationRecord,
           equivocationChild: Set[BlockMessage]): EquivocationDiscoveryStatus = {
         val equivocatingValidator = equivocationRecord.equivocator
         val latestMessages        = toLatestMessages(block.justifications)
         if (equivocationDetectable(latestMessages.toSeq,
-                                   dag,
+                                   internalMap,
                                    equivocationRecord,
                                    equivocationChild)) {
           val maybeEquivocatingValidatorBond =
@@ -375,19 +410,19 @@ sealed abstract class MultiParentCasperInstances {
 
       @tailrec
       private def equivocationDetectable(latestMessages: Seq[(Validator, BlockHash)],
-                                         dag: BlockDag,
+                                         internalMap: Map[BlockHash, BlockMessage],
                                          equivocationRecord: EquivocationRecord,
                                          equivocationChildren: Set[BlockMessage]): Boolean = {
         def maybeAddEquivocationChildren(
             justificationBlock: BlockMessage,
-            dag: BlockDag,
+            internalMap: Map[BlockHash, BlockMessage],
             equivocatingValidator: Validator,
             equivocationBaseBlockSeqNum: SequenceNumber,
             equivocationChildren: Set[BlockMessage]): Set[BlockMessage] =
           if (justificationBlock.sender == equivocatingValidator) {
             if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
               findJustificationParentWithSeqNum(justificationBlock,
-                                                dag.blockLookup,
+                                                internalMap,
                                                 equivocationBaseBlockSeqNum + 1) match {
                 case Some(equivocationChild) => equivocationChildren + equivocationChild
                 case None =>
@@ -403,10 +438,10 @@ sealed abstract class MultiParentCasperInstances {
               toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
             maybeLatestEquivocatingValidatorBlockHash match {
               case Some(blockHash) =>
-                val latestEquivocatingValidatorBlock = dag.blockLookup(blockHash)
+                val latestEquivocatingValidatorBlock = internalMap(blockHash)
                 if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum)
                   findJustificationParentWithSeqNum(latestEquivocatingValidatorBlock,
-                                                    dag.blockLookup,
+                                                    internalMap,
                                                     equivocationBaseBlockSeqNum + 1) match {
                     case Some(equivocationChild) => equivocationChildren + equivocationChild
                     case None =>
@@ -423,7 +458,7 @@ sealed abstract class MultiParentCasperInstances {
         latestMessages match {
           case Nil => false
           case (_, justificationBlockHash) +: remainder =>
-            val justificationBlock = dag.blockLookup(justificationBlockHash)
+            val justificationBlock = internalMap.get(justificationBlockHash).get
             if (equivocationRecord.equivocationDetectedBlockHashes.contains(justificationBlockHash)) {
               true
             } else {
@@ -431,7 +466,7 @@ sealed abstract class MultiParentCasperInstances {
               val equivocationBaseBlockSeqNum = equivocationRecord.equivocationBaseBlockSeqNum
               val updatedEquivocationChildren = maybeAddEquivocationChildren(
                 justificationBlock,
-                dag,
+                internalMap,
                 equivocatingValidator,
                 equivocationBaseBlockSeqNum,
                 equivocationChildren)
@@ -439,7 +474,7 @@ sealed abstract class MultiParentCasperInstances {
                 true
               } else {
                 equivocationDetectable(remainder,
-                                       dag,
+                                       internalMap,
                                        equivocationRecord,
                                        updatedEquivocationChildren)
               }
@@ -458,10 +493,11 @@ sealed abstract class MultiParentCasperInstances {
             for {
               _              <- Capture[F].capture { blockBuffer += block }
               dag            <- blockDag
-              missingParents = parents(block).filterNot(dag.blockLookup.contains).toSet
+              internalMap    <- BlockStore[F].asMap()
+              missingParents = parents(block).filterNot(internalMap.contains).toSet
               missingJustifictions = block.justifications
                 .map(_.latestBlockHash)
-                .filterNot(dag.blockLookup.contains)
+                .filterNot(internalMap.contains)
                 .toSet
               _ <- (missingParents union missingJustifictions).toList.traverse(
                     hash =>
@@ -512,6 +548,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidTransaction =>
             handleInvalidBlockEffect(status, block)
+          case InvalidBondsCache =>
+            handleInvalidBlockEffect(status, block)
           case _ => throw new Error("Should never reach")
         }
 
@@ -523,15 +561,8 @@ sealed abstract class MultiParentCasperInstances {
           _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
 
-      private def allChildren[A](map: mutable.MultiMap[A, A], element: A): Set[A] =
-        DagOperations
-          .bfTraverse[A](Some(element)) { (el: A) =>
-            map.getOrElse(el, Set.empty[A]).iterator
-          }
-          .toSet
-
       private def addToState(block: BlockMessage): F[Unit] =
-        Capture[F].capture {
+        BlockStore[F].put {
           awaitingJustificationToChild -= block.blockHash
           _blockDag.update(bd => {
             val hash = block.blockHash
@@ -544,9 +575,7 @@ sealed abstract class MultiParentCasperInstances {
             }
 
             val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
-
             bd.copy(
-              blockLookup = bd.blockLookup.updated(hash, block),
               //Assume that a non-equivocating validator must include
               //its own latest message in the justification. Therefore,
               //for a given validator the blocks are guaranteed to arrive in causal order.
@@ -561,6 +590,7 @@ sealed abstract class MultiParentCasperInstances {
               currentSeqNum = newSeqNum
             )
           })
+          (block.blockHash, block)
         }
 
       private def reAttemptBuffer: F[Unit] = {
@@ -588,17 +618,4 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
       }
     }
-
-  def fromConfig[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle,
-      G[_]: Monad: Capture: Log: Time](conf: CasperConf, runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): G[MultiParentCasper[F]] =
-    for {
-      genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
-                                           conf.numValidators,
-                                           conf.genesisPath,
-                                           conf.walletsFile,
-                                           runtimeManager)
-      validatorId <- ValidatorIdentity.fromConfig[G](conf)
-    } yield hashSetCasper[F](runtimeManager, validatorId, genesis)
 }

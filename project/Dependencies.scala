@@ -12,6 +12,7 @@ object Dependencies {
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0-RC2"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
@@ -33,7 +34,7 @@ object Dependencies {
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
-  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
+  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.4"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
   val scalacheckNoTest    = "org.scalacheck"             %% "scalacheck"                % "1.13.4"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"

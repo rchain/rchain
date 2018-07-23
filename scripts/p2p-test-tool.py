@@ -148,7 +148,11 @@ def main():
         boot_p2p_network()
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
-                check_network_convergence(container)
+                if check_network_convergence(container) != 0:
+                    show_logs()
+                    show_containers()
+                    print("FAIL: Network never converged. Check container logs for issues. One or more containers might have failed to start or connect.")
+                    sys.exit()
     if args.run_tests == True:
         run_tests()
         return
@@ -243,15 +247,19 @@ def deploy_demo():
 def test_node_eval_of_rholang_files(container):
     print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
     cmd = f"ls /opt/docker/examples/*.rho"
-    r = container.exec_run(['sh', '-c', cmd])
-    for file_path in r.output.decode('utf-8').splitlines():
-        print(file_path)
-        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
-        for line in eval_r.output.decode('utf-8').splitlines():
-            if 'ERROR' in line.upper():
-                print(line)
-                return 1 
-    return 0 
+    try:
+        r = container.exec_run(['sh', '-c', cmd])
+        for file_path in r.output.decode('utf-8').splitlines():
+            print(file_path)
+            eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
+            for line in eval_r.output.decode('utf-8').splitlines():
+                if 'ERROR' in line.upper():
+                    print(line)
+                    return 1 
+        return 0 
+    except Exception as e:
+        print(e)
+        return 1
 
 
 def test_propose(container):
@@ -262,17 +270,20 @@ def test_propose(container):
 
         # Deploy example contracts using 3 random example files
         cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy ${i}; done'
-        r = container.exec_run(['sh', '-c', cmd])
-        for line in r.output.decode('utf-8').splitlines():
-            print(line)
+        try:
+            r = container.exec_run(['sh', '-c', cmd])
+            for line in r.output.decode('utf-8').splitlines():
+                print(line)
 
-        # Propose blocks from example contracts
-        cmd = "/opt/docker/bin/rnode propose"
-        print("Propose to blockchain previously deployed smart contracts.")
+            # Propose blocks from example contracts
+            cmd = "/opt/docker/bin/rnode propose"
+            print("Propose to blockchain previously deployed smart contracts.")
 
-        r = container.exec_run(['sh', '-c', cmd])
-        for line in r.output.decode('utf-8').splitlines():
-            print(line)
+            r = container.exec_run(['sh', '-c', cmd])
+            for line in r.output.decode('utf-8').splitlines():
+                print(line)
+        except Exception as e:
+            print(e)
 
     print("Check all peer logs for casper WARN or ERROR messages")
     time.sleep(5) # Allow for logs to fill out from last propose if needed
@@ -290,10 +301,12 @@ def test_propose(container):
 
 
 def show_logs():
+    print("=============================SHOW LOGS==========================")
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-        print(f"Showing logs for {container.name}.")
+        print(f"========================={container.name} lOGS================================")
         r = container.logs().decode('utf-8')
         print(r)
+    print("================================================================")
 
 
 def create_empty_bonds_file():
@@ -332,6 +345,13 @@ def var_to_docker_file(var, container_name, file_path):
         os.remove(path)
     return 0
 
+def show_containers():
+    print("=================SHOW CONTAINERS=================")
+    r = subprocess.run(["docker", "ps", "-a"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    for line in r.stdout.splitlines():
+        if args.network in line.decode('utf-8'):
+            print(line.decode('utf-8'))
+    print("=================================================")
 
 def check_network_convergence(container):
     print("Check for network convergence via prometheus metrics api before running tests.")
@@ -342,8 +362,13 @@ def check_network_convergence(container):
 
     while count < 200:
         cmd = f'curl -s {container.name}:40403'
-        r = container.exec_run(cmd=cmd).output.decode('utf-8')
-        print(r)
+        try: 
+            r = container.exec_run(cmd=cmd).output.decode('utf-8')
+            # print(r) # uncomment to show output while looping 
+        except Exception as e:
+            print("Failed to run command on container.")
+            print(f"Error msg: {e}")
+            return 1
         print(f"checking {count} of {timeout} seconds")
         for line in r.splitlines():
             if line == f"peers {args.peer_amount}.0":
@@ -381,17 +406,20 @@ def test_performance():
 
                 # Deploy example contracts using 3 random example files
                 cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
-                r = container.exec_run(['sh', '-c', cmd])
-                for line in r.output.decode('utf-8').splitlines():
-                    print(line)
+                try: 
+                    r = container.exec_run(['sh', '-c', cmd])
+                    for line in r.output.decode('utf-8').splitlines():
+                        print(line)
 
-                # Propose blocks from example contracts
-                cmd = "/opt/docker/bin/rnode propose"
-                print("Propose to blockchain previously deployed smart contracts.")
+                    # Propose blocks from example contracts
+                    cmd = "/opt/docker/bin/rnode propose"
+                    print("Propose to blockchain previously deployed smart contracts.")
 
-                r = container.exec_run(['sh', '-c', cmd])
-                for line in r.output.decode('utf-8').splitlines():
-                    print(line)
+                    r = container.exec_run(['sh', '-c', cmd])
+                    for line in r.output.decode('utf-8').splitlines():
+                        print(line)
+                except Exception as e:
+                    print(e) 
 
 
 def remove_resources_by_network(args_network):

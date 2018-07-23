@@ -1,5 +1,7 @@
 package coop.rchain.models
 
+import java.util.Objects
+
 import scala.collection.immutable.BitSet
 import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
@@ -13,11 +15,7 @@ case class ParSet(ps: SortedParHashSet, connectiveUsed: Boolean, locallyFree: Co
     case _ => false
   }
 
-  override def hashCode(): Int = (
-    37 * this.ps.hashCode() +
-      37 * this.connectiveUsed.hashCode() +
-      37 * this.locallyFree.value.hashCode()
-  )
+  override def hashCode(): Int = Objects.hash(ps, Boolean.box(connectiveUsed), locallyFree.value)
 }
 
 object ParSet {

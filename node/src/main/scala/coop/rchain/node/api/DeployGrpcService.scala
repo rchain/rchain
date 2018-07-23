@@ -31,15 +31,16 @@ import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
+import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: MultiParentCasperConstructor: Log: Futurable: SafetyOracle]
+    F[_]: Monad: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployString): Future[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]) =

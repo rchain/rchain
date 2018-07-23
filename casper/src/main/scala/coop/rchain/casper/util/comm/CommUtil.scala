@@ -1,7 +1,6 @@
 package coop.rchain.casper.util.comm
 
 import com.google.protobuf.ByteString
-
 import cats.Monad
 import cats.implicits._
 import coop.rchain.catscontrib.Capture
@@ -12,7 +11,9 @@ import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.connect.Connect
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport._
+import CommMessages._
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.metrics.Metrics
@@ -116,7 +117,7 @@ object CommUtil {
   }
 
   def casperPacketHandler[
-      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
@@ -137,9 +138,11 @@ object CommUtil {
                 )
                 .map(_ => none[Packet])
 
-            case Right(casper) =>
-              implicit val casperEvidence = casper
-              blockPacketHandler[F](peer, b)
+            case Right(casperF) =>
+              casperF flatMap { casper =>
+                implicit val casperEvidence: MultiParentCasper[F] = casper
+                blockPacketHandler[F](peer, b)
+              }
           }
 
         case a: ApprovedBlock =>
@@ -154,7 +157,7 @@ object CommUtil {
       }
 
   def blockPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
       peer: PeerNode,
       msg: scalapb.GeneratedMessage): F[Option[Packet]] =
     msg match {
@@ -171,13 +174,13 @@ object CommUtil {
 
       case r: BlockRequest =>
         for {
-          dag      <- MultiParentCasper[F].blockDag
-          local    <- TransportLayer[F].local
-          block    = dag.blockLookup.get(r.hash).map(_.toByteString)
-          maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
-          send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
-          hash     = PrettyPrinter.buildString(r.hash)
-          logIntro = s"CASPER: Received request for block $hash from $peer. "
+          local      <- TransportLayer[F].local
+          block      <- BlockStore[F].get(r.hash)
+          serialized = block.map(_.toByteString)
+          maybeMsg   = serialized.map(serializedMessage => packet(local, serializedMessage))
+          send       <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
+          hash       = PrettyPrinter.buildString(r.hash)
+          logIntro   = s"CASPER: Received request for block $hash from $peer. "
           _ <- send match {
                 case None    => Log[F].info(logIntro + "No response given since block not found.")
                 case Some(_) => Log[F].info(logIntro + "Response sent.")
@@ -198,7 +201,7 @@ object CommUtil {
 
   private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
     Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-      .filter(_.block.nonEmpty)
+      .filter(_.candidate.nonEmpty)
 
   private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
     Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
