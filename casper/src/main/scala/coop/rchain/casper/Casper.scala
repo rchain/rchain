@@ -510,7 +510,8 @@ sealed abstract class MultiParentCasperInstances {
               missingJustifictions = block.justifications
                 .map(_.latestBlockHash)
                 .toSet
-              missingDependencies = (missingParents union missingJustifictions).filterNot(internalMap.contains)
+              missingDependencies = (missingParents union missingJustifictions).filterNot(
+                internalMap.contains)
               _ <- missingDependencies.toList.traverse(hash => handleMissingDependency(hash, block))
             } yield ()
           case AdmissibleEquivocation =>
@@ -578,7 +579,6 @@ sealed abstract class MultiParentCasperInstances {
 
       private def addToState(block: BlockMessage): F[Unit] =
         BlockStore[F].put {
-          awaitingJustificationToChild -= block.blockHash
           _blockDag.update(bd => {
             val hash = block.blockHash
 
