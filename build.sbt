@@ -264,7 +264,6 @@ lazy val roscala = (project in file("roscala"))
   ).dependsOn(roscala_macros)
 
 lazy val blockStorage = (project in file("block-storage"))
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "block-storage",
@@ -274,8 +273,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsCore,
       catsEffect,
       catsMtl
-    ),
-    git.remoteRepo := scmInfo.value.get.connection
+    )
   )
   .dependsOn(shared, models)
 
