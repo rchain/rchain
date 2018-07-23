@@ -294,6 +294,32 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(2)
   }
 
+  it should "handle a long chain of block requests appropriately" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+
+    (0 to 9).foreach { i =>
+      val deploy      = ProtoUtil.basicDeploy(i)
+      val Some(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
+
+      nodes(0).casperEff.addBlock(block)
+      nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
+    }
+    val Some(block) = nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeploy(10)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block)
+
+    (0 to 10).foreach { i =>
+      nodes(1).receive()
+      nodes(0).receive()
+    }
+
+    nodes(1).logEff.infos
+      .count(_ startsWith "CASPER: Beginning request of missing block") should be(10)
+    nodes(0).logEff.infos.count(s =>
+      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
+      10)
+  }
+
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
                                                  deploys: immutable.IndexedSeq[Deploy],
                                                  signedInvalidBlock: BlockMessage) = {
