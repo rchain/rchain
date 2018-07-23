@@ -1,17 +1,33 @@
 package coop.rchain.node
 
-import java.net.{InetAddress, NetworkInterface}
+import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
-import com.typesafe.scalalogging.Logger
-import coop.rchain.comm.UPnP
 import coop.rchain.casper.CasperConf
+import coop.rchain.comm.PeerNode
+
 import org.rogach.scallop._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
-import scala.collection.JavaConverters._
 
 // TODO replace with default config file when CORE-512 is resolved
 case class Profile(name: String, dataDir: (() => Path, String))
+
+object Converter {
+  val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
+      s match {
+        case (_, uri :: Nil) :: Nil =>
+          PeerNode
+            .parse(uri)
+            .map(u => Right(Some(u)))
+            .getOrElse(Left("can't parse the rnode bootstrap address"))
+        case Nil => Right(None)
+        case _   => Left("provide the rnode bootstrap address")
+      }
+
+    val argType: ArgType.V = ArgType.SINGLE
+  }
+
+}
 
 object Profile {
   val docker =
@@ -27,6 +43,7 @@ object Profile {
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
+  printedName = "rchain"
 
   val profile = opt[String](default = Some("default"),
                             name = "profile",
@@ -99,10 +116,15 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     )
 
     val bootstrap =
-      opt[String](default =
-                    Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400"),
-                  short = 'b',
-                  descr = "Bootstrap rnode address for initial seed.")
+      opt[PeerNode](
+        default = Some(
+          PeerNode
+            .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
+            .right
+            .get),
+        short = 'b',
+        descr = "Bootstrap rnode address for initial seed."
+      )(Converter.bootstrapAddressConverter)
 
     val standalone = opt[Boolean](default = Some(false),
                                   short = 's',

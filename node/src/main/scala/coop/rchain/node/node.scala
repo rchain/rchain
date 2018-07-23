@@ -168,7 +168,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
+    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
@@ -191,10 +191,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                             .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       grpcServer <- {
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
-        implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
-                                           casperRuntime.replaySpace.store,
-                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -250,16 +246,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def startReportStoreMetrics(resources: Resources): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
-                                       resources.casperRuntime.replaySpace.store,
-                                       conf.run.data_dir().normalize)
-      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
-    }
-
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -283,14 +269,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
-                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .fold[Either[CommError, PeerNode]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (
                     addr =>
                       Connect.connectToBootstrap[Effect](addr,

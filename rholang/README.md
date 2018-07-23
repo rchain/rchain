@@ -30,13 +30,11 @@ $ java -jar rholang-cli/target/scala-2.12/rholangCLI-assembly-0.1.0-SNAPSHOT.jar
 The interpereter can also be run as a REPL. Currently it won't accept multiline input, so each line must be a fully formed term.
 
 ## What's working, what's broken:
-See [the bugtracker](https://rchain.atlassian.net/projects/RHOL/issues/RHOL-95?filter=allopenissues) for an up-to-date list of known issues.
+See [the bugtracker](https://rchain.atlassian.net/projects/RHOL/issues?filter=allopenissues) for an up-to-date list of known issues.
 ### The bad
 In general:
-  * Conditional input doesn't work.
+  * Guarded patterns for channel receive (e.g. `for (@x <- y if x > 0)`) don't work.
   * 0-arity send and receive is currently broken.
-  * Matching is incomplete. We won't currently destructure receives or matches. We will match expressions.
   * We don't pre-evaluate match cases. So matching 7 + 8 as a pattern currently doesn't work. Instead, you must match against 15.
-  * There is also work to support native functions. It hasn't landed yet.
 ### The good
 Several working examples have been included in the examples directory, and the examples in the [Rholang tutorial](https://github.com/rchain/rchain/blob/master/docs/rholang/rholangtut-0.2.md) also work. If you run into something that doesn't work, check the bugtracker to see if it's a known issue, and if not, feel free to [file a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link). We want Rholang to be a useful programming environment.

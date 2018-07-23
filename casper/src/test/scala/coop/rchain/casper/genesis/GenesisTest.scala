@@ -140,7 +140,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   it should "create a valid genesis block" in {
     val activeRuntime  = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-    val initStateHash  = runtimeManager.initStateHash
+    val emptyStateHash = runtimeManager.emptyStateHash
 
     val genesis = Genesis.fromInputFiles[Id](None, numValidators, genesisPath, None, runtimeManager)
     val blockDag =
@@ -151,8 +151,8 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach {
         genesis,
         genesis,
         blockDag,
-        initStateHash,
-        Set[ByteString](initStateHash),
+        emptyStateHash,
+        Set[ByteString](emptyStateHash),
         runtimeManager
       )
     activeRuntime.close()

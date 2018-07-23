@@ -160,43 +160,6 @@ package object diagnostics {
         }
     }
 
-  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _],
-                                  replayStore: IStore[_, _, _, _],
-                                  data_dir: Path): StoreMetrics[F] = {
-    def convert(c: coop.rchain.rspace.StoreCount): Option[RSpaceUsageMetric] =
-      Some(RSpaceUsageMetric(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
-
-    new StoreMetrics[F] {
-      def storeUsage: F[StoreUsage] =
-        Capture[F].capture {
-          val storeCounters       = store.getStoreCounters
-          val replayStoreCounters = replayStore.getStoreCounters
-          val totalSize           = data_dir.folderSize
-          StoreUsage(
-            totalSizeOnDisk = totalSize,
-            rspaceSizeOnDisk = storeCounters.sizeOnDisk, // + replayStoreCounters.sizeOnDisk,
-            rspaceDataEntries = storeCounters.dataEntries, // + replayStoreCounters.dataEntries,
-            rspace = Some(
-              RSpaceUsage(
-                consumes = convert(storeCounters.consumesCount),
-                produces = convert(storeCounters.producesCount),
-                consumesComm = convert(storeCounters.consumesCommCount),
-                producesComm = convert(storeCounters.producesCommCount),
-                installComm = convert(storeCounters.installCommCount)
-              )),
-            replayRSpace = Some(
-              RSpaceUsage(
-                consumes = convert(replayStoreCounters.consumesCount),
-                produces = convert(replayStoreCounters.producesCount),
-                consumesComm = convert(replayStoreCounters.consumesCommCount),
-                producesComm = convert(replayStoreCounters.producesCommCount),
-              )
-            )
-          )
-        }
-    }
-  }
-
   def metrics[F[_]: Capture]: Metrics[F] =
     new Metrics[F] {
       import kamon._
@@ -253,7 +216,7 @@ package object diagnostics {
         }
     }
 
-  def grpc[F[_]: Functor: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable]
+  def grpc[F[_]: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable]
     : DiagnosticsGrpc.Diagnostics =
     new DiagnosticsGrpc.Diagnostics {
       def listPeers(request: Empty): Future[Peers] =
@@ -279,9 +242,6 @@ package object diagnostics {
 
       def getNodeCoreMetrics(request: Empty): Future[NodeCoreMetrics] =
         NodeMetrics[F].metrics.toFuture
-
-      def getStoreUsage(request: Empty): Future[StoreUsage] =
-        StoreMetrics[F].storeUsage.toFuture
     }
 
 }
