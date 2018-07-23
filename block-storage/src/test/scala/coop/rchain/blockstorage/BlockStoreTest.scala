@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.rspace.Context
 import org.scalacheck._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
@@ -28,7 +29,7 @@ trait BlockStoreTest
     with BeforeAndAfterEach {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = PosInt(10000))
+    PropertyCheckConfiguration(minSuccessful = PosInt(1))
 
   def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
     BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
@@ -125,5 +126,21 @@ class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Id] => R): R = {
     val store = InMemBlockStore.createWithId
     f(store)
+  }
+}
+
+class LMDBBlockStoreTest extends BlockStoreTest {
+  override def withStore[R](f: BlockStore[Id] => R): R = {
+
+    import java.nio.file.{Files, Path}
+    val dbDir: Path   = Files.createTempDirectory("block-store-test-")
+    val mapSize: Long = 1024L * 1024L * 4096L
+    val env           = Context.env(dbDir, mapSize)
+    val store         = LMDBBlockStore.createWithId(env, dbDir)
+    try {
+      f(store)
+    } finally {
+      env.close()
+    }
   }
 }
