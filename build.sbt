@@ -112,7 +112,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.1",
+    version := "0.5.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
