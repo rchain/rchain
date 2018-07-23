@@ -36,7 +36,7 @@ package object history {
 
   def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
                                                                       codecK: Codec[K],
-                                                                      codecV: Codec[V]): Unit =
+                                                                      codecV: Codec[V]): Boolean =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.getRoot(txn, branch) match {
         case None =>
@@ -45,8 +45,9 @@ package object history {
           store.put(txn, rootHash, root)
           store.putRoot(txn, branch, rootHash)
           logger.debug(s"workingRootHash: $rootHash")
+          true
         case Some(_) =>
-          ()
+          false
       }
     }
 

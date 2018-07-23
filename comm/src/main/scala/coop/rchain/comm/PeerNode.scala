@@ -1,9 +1,12 @@
 package coop.rchain.comm
 
 import java.net.InetSocketAddress
-import com.netaporter.uri.Uri
+
 import scala.util.control.NonFatal
+
 import coop.rchain.crypto.codec.Base16
+
+import io.lemonlabs.uri.{Uri, Url}
 
 // TODO: Add Show instance
 final case class NodeIdentifier(key: Seq[Byte]) {
@@ -43,20 +46,20 @@ object PeerNode {
   def parse(str: String): Either[CommError, PeerNode] =
     // TODO replace try-catch with Try
     try {
-      val uri = Uri.parse(str)
+      val url: Url = Url.parse(str)
 
       val addy =
         for {
-          scheme <- uri.scheme
-          key    <- uri.user
-          host   <- uri.host
-          port   <- uri.port
-        } yield NetworkAddress(scheme, key, host, port)
+          scheme <- url.schemeOption
+          key    <- url.user
+          host   <- url.hostOption
+          port   <- url.port
+        } yield NetworkAddress(scheme, key, host.value, port)
 
       addy match {
         case Some(NetworkAddress(_, key, host, port)) =>
           Right(PeerNode(NodeIdentifier(key), Endpoint(host, port, port)))
-        case _ => Left(ParseError(s"bad address: $str"))
+        case _ => Left(ParseError(s"bad address: $url"))
       }
     } catch {
       case NonFatal(_) => Left(ParseError(s"bad address: $str"))

@@ -86,7 +86,7 @@ object SystemProcesses {
     case Seq(
         ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
                               rand,
-        cost)) =>
+                              cost)) =>
       Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(ack,
@@ -106,7 +106,7 @@ object SystemProcesses {
     case Seq(
         ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
                               rand,
-        cost)) =>
+                              cost)) =>
       Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(ack,
@@ -132,7 +132,8 @@ object SystemProcesses {
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand, cost),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -153,7 +154,8 @@ object SystemProcesses {
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand, cost),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -174,7 +176,8 @@ object SystemProcesses {
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand, cost),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }

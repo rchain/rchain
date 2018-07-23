@@ -27,11 +27,15 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery.{Ping => NDPing, _}
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
+import cats.effect.{Bracket, ExitCase, Sync}
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
+
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -160,11 +164,15 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
+
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
+  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
@@ -172,7 +180,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
-  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -184,12 +191,24 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
+      storeRef   <- storeRefEffect
+      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
+      oracle = {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        SafetyOracle.turanOracle[Effect]
+      }
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-      casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+      casperConstructor <- {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        MultiParentCasperConstructor
+          .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+      }
       grpcServer <- {
+        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
@@ -197,6 +216,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
+      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
@@ -275,7 +295,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
-                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .fold[Either[CommError, PeerNode]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (
                     addr =>
                       Connect.connectToBootstrap[Effect](addr,

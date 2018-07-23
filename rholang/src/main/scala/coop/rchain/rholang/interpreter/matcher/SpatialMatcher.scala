@@ -700,7 +700,18 @@ trait SpatialMatcherInstances {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
+        case (EPercentPercentBody(EPercentPercent(t1, t2)),
+              EPercentPercentBody(EPercentPercent(p1, p2))) =>
+          for {
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
+          } yield Unit
         case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
+          for {
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
+          } yield Unit
+        case (EPlusPlusBody(EPlusPlus(t1, t2)), EPlusPlusBody(EPlusPlus(p1, p2))) =>
           for {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)

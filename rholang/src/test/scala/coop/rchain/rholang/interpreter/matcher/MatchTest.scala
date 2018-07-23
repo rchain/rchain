@@ -384,4 +384,26 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
     assert(spatialMatchOptionalTest(spatialMatch(failTarget, pattern), None))
   }
+
+  "Matching ++" should "work" in {
+    // "abc" ++ "def"
+    val target = Expr(EPlusPlusBody(EPlusPlus(GString("abc"), GString("def"))))
+    // x ++ y
+    val pattern = Expr(EPlusPlusBody(EPlusPlus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
+    val expectedResult = Some(Map[Int, Par](0 -> GString("abc"), 1 -> GString("def")))
+    val result  = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+  }
+
+  "Matching %%" should "work" in {
+    val map =
+      EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("a"))), false, BitSet()))
+    // "${name}" %% {"name" : "a"}
+    val target = Expr(EPercentPercentBody(EPercentPercent(GString("${name}"), map)))
+    // x %% y
+    val pattern = Expr(EPercentPercentBody(EPercentPercent(EVar(FreeVar(0)), EVar(FreeVar(1)))))
+    val expectedResult = Some(Map[Int, Par](0 -> GString("${name}"), 1 -> map))
+    val result  = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+  }
 }

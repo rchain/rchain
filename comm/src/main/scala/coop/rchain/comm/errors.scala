@@ -6,7 +6,6 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 // TODO we need lower level errors and general error, for now all in one place
 // TODO cleanup unused errors (UDP trash)
-// TODO add a message which we can log instead of doing toString
 sealed trait CommError
 final case class UnknownCommError(msg: String)           extends CommError
 final case class DatagramSizeError(size: Int)            extends CommError
@@ -55,4 +54,23 @@ object CommError {
   def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
   def senderNotAvailable: CommError                      = SenderNotAvailable
   def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
+
+  def errorMessage(ce: CommError): String =
+    ce match {
+      case PeerUnavailable(_) => "Peer is currently unavailable"
+      case PongNotReceivedForPing(_) =>
+        "Peer is behind a firewall and can't be accessed from outside"
+      case CouldNotConnectToBootstrap      => "Node could not connect to bootstrap node"
+      case TimeOut                         => "Timeout"
+      case InternalCommunicationError(msg) => s"Internal communication error. $msg"
+      case UnknownProtocolError(msg)       => s"Unknown protocol error. $msg"
+      case ProtocolException(t) =>
+        val msg = Option(t.getMessage).getOrElse("")
+        s"Protocol error. $msg"
+      case _ => ce.toString
+    }
+
+  implicit class CommErrorToMessage(commError: CommError) {
+    val message: String = CommError.errorMessage(commError)
+  }
 }

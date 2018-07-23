@@ -26,6 +26,8 @@ import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.casper.helper.BlockGenerator.StateWithChain
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
@@ -50,6 +52,7 @@ class HashSetCasperTestNode(name: String,
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
+  implicit val blockStore        = InMemBlockStore.createWithId
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   val activeRuntime  = Runtime.create(storageDirectory, storageSize)
