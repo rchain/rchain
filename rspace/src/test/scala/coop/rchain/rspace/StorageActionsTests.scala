@@ -61,12 +61,6 @@ trait StorageActionsTests
     r shouldBe None
     //store is not empty - we have 'A' stored
     store.isEmpty shouldBe false
-
-    store.eventsCounter.getProducesCount shouldBe 1
-    store.eventsCounter.getConsumesCount shouldBe 0
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing twice on the same channel" should
@@ -100,12 +94,6 @@ trait StorageActionsTests
     r2 shouldBe None
     //store is not empty - we have 2 As stored
     store.isEmpty shouldBe false
-
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 0
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming on one channel" should
@@ -127,12 +115,6 @@ trait StorageActionsTests
     r shouldBe None
     //there is a continuation stored in the storage
     store.isEmpty shouldBe false
-
-    store.eventsCounter.getProducesCount shouldBe 0
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming with a list of patterns that is a different length than the list of channels" should
@@ -143,12 +125,6 @@ trait StorageActionsTests
     val store = space.store
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 0
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming on three channels" should
@@ -170,12 +146,6 @@ trait StorageActionsTests
     r shouldBe None
     //continuation is left in the storage
     store.isEmpty shouldBe false
-
-    store.eventsCounter.getProducesCount shouldBe 0
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing and then consuming on the same channel" should
@@ -213,12 +183,6 @@ trait StorageActionsTests
     getK(r2).results should contain theSameElementsAs List(List("datum"))
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 1
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 1
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing three times then doing consuming three times" should "work" in withTestSpace { space =>
@@ -250,12 +214,6 @@ trait StorageActionsTests
     getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 3
-    store.eventsCounter.getConsumesCount shouldBe 3
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 3
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
@@ -323,12 +281,6 @@ trait StorageActionsTests
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 1
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -393,12 +345,6 @@ trait StorageActionsTests
     getK(r4).results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 3
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 1
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
@@ -438,12 +384,6 @@ trait StorageActionsTests
                                                          List("datum1"))
 
     store.isEmpty shouldBe true
-
-    store.eventsCounter.getProducesCount shouldBe 3
-    store.eventsCounter.getConsumesCount shouldBe 3
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 3
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -474,12 +414,6 @@ trait StorageActionsTests
       getK(r2).results shouldNot contain theSameElementsAs getK(r3).results
 
       store.isEmpty shouldBe true
-
-      store.eventsCounter.getProducesCount shouldBe 3
-      store.eventsCounter.getConsumesCount shouldBe 3
-      store.eventsCounter.getProducesCommCount shouldBe 3
-      store.eventsCounter.getConsumesCommCount shouldBe 0
-      store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
@@ -506,11 +440,6 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    store.eventsCounter.getProducesCount shouldBe 3
-    store.eventsCounter.getConsumesCount shouldBe 3
-    store.eventsCounter.getProducesCommCount shouldBe 3
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
@@ -534,11 +463,6 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 1
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "A joined consume with the same channel given twice followed by a produce" should
@@ -564,11 +488,6 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 1
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
@@ -605,11 +524,6 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    store.eventsCounter.getProducesCount shouldBe 4
-    store.eventsCounter.getConsumesCount shouldBe 2
-    store.eventsCounter.getProducesCommCount shouldBe 2
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming and producing with non-trivial matches" should
@@ -640,12 +554,6 @@ trait StorageActionsTests
     }
 
     store.isEmpty shouldBe false
-
-    store.eventsCounter.getProducesCount shouldBe 1
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -671,11 +579,6 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 2
-    store.eventsCounter.getProducesCommCount shouldBe 2
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
@@ -713,12 +616,6 @@ trait StorageActionsTests
       }
 
       store.isEmpty shouldBe false
-
-      store.eventsCounter.getProducesCount shouldBe 2
-      store.eventsCounter.getConsumesCount shouldBe 2
-      store.eventsCounter.getProducesCommCount shouldBe 1
-      store.eventsCounter.getConsumesCommCount shouldBe 0
-      store.eventsCounter.getInstallCommCount shouldBe 0
     }
 
   /* Persist tests */
@@ -762,12 +659,6 @@ trait StorageActionsTests
     }
 
     r3 shouldBe None
-
-    store.eventsCounter.getProducesCount shouldBe 1
-    store.eventsCounter.getConsumesCount shouldBe 2
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 1
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing, doing a persistent consume, and producing again on the same channel" should
@@ -825,12 +716,6 @@ trait StorageActionsTests
       runK(r4)
 
       getK(r4).results should contain theSameElementsAs List(List("datum2"))
-
-      store.eventsCounter.getProducesCount shouldBe 2
-      store.eventsCounter.getConsumesCount shouldBe 2
-      store.eventsCounter.getProducesCommCount shouldBe 1
-      store.eventsCounter.getConsumesCommCount shouldBe 1
-      store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "doing a persistent consume and producing multiple times" should "work" in withTestSpace {
@@ -871,12 +756,6 @@ trait StorageActionsTests
       runK(r3)
 
       getK(r3).results should contain theSameElementsAs List(List("datum2"))
-
-      store.eventsCounter.getProducesCount shouldBe 2
-      store.eventsCounter.getConsumesCount shouldBe 1
-      store.eventsCounter.getProducesCommCount shouldBe 2
-      store.eventsCounter.getConsumesCommCount shouldBe 0
-      store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming and doing a persistient produce" should "work" in withTestSpace { space =>
@@ -906,12 +785,6 @@ trait StorageActionsTests
       store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
-
-    store.eventsCounter.getProducesCount shouldBe 2
-    store.eventsCounter.getConsumesCount shouldBe 1
-    store.eventsCounter.getProducesCommCount shouldBe 1
-    store.eventsCounter.getConsumesCommCount shouldBe 0
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "consuming, doing a persistient produce, and consuming again" should "work" in withTestSpace {
@@ -955,12 +828,6 @@ trait StorageActionsTests
       runK(r4)
 
       getK(r4).results should contain theSameElementsAs List(List("datum1"))
-
-      store.eventsCounter.getProducesCount shouldBe 2
-      store.eventsCounter.getConsumesCount shouldBe 2
-      store.eventsCounter.getProducesCommCount shouldBe 1
-      store.eventsCounter.getConsumesCommCount shouldBe 1
-      store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "doing a persistent produce and consuming twice" should "work" in withTestSpace { space =>
@@ -1000,12 +867,6 @@ trait StorageActionsTests
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1"))
-
-    store.eventsCounter.getProducesCount shouldBe 1
-    store.eventsCounter.getConsumesCount shouldBe 2
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 2
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "producing three times and doing a persistent consume" should "work" in withTestSpace { space =>
@@ -1076,11 +937,6 @@ trait StorageActionsTests
 
     r7 shouldBe None
 
-    store.eventsCounter.getProducesCount shouldBe 3
-    store.eventsCounter.getConsumesCount shouldBe 4
-    store.eventsCounter.getProducesCommCount shouldBe 0
-    store.eventsCounter.getConsumesCommCount shouldBe 3
-    store.eventsCounter.getInstallCommCount shouldBe 0
   }
 
   "A persistent produce" should "be available for multiple matches (CORE-633)" in withTestSpace {
@@ -1103,6 +959,66 @@ trait StorageActionsTests
       runK(r2)
 
       getK(r2).results should contain(List("datum", "datum"))
+  }
+
+  "reset" should "change the state of the store, and reset the trie updates log" in withTestSpace {
+    space =>
+
+      val checkpoint0 = space.createCheckpoint()
+
+      val store    = space.store
+      val key      = List("ch1")
+      val patterns = List(Wildcard)
+      val keyHash  = store.hashChannels(key)
+
+      val r = space.consume(key, patterns, new StringsCaptor, persist = false)
+
+      r shouldBe None
+      store.isEmpty shouldBe false
+      store.getTrieUpdates.length shouldBe 1
+      store.getTrieUpdateCount shouldBe 1
+
+      space.reset(checkpoint0.root)
+
+      store.isEmpty shouldBe true
+      store.getTrieUpdates.length shouldBe 0
+      store.getTrieUpdateCount shouldBe 0
+
+      val checkpoint1 = space.createCheckpoint()
+      checkpoint1.log shouldBe empty
+  }
+
+  "clear" should "empty the store, reset the event log, and reset the trie updates log" in withTestSpace {
+    space =>
+      val store    = space.store
+      val key      = List("ch1")
+      val patterns = List(Wildcard)
+      val keyHash  = store.hashChannels(key)
+
+      val r = space.consume(key, patterns, new StringsCaptor, persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getChannels(txn, keyHash) shouldBe List("ch1")
+        store.getPatterns(txn, key) shouldBe List(patterns)
+        store.getData(txn, key) shouldBe Nil
+        store.getWaitingContinuation(txn, key) should not be empty
+      }
+
+      r shouldBe None
+      store.isEmpty shouldBe false
+      store.getTrieUpdates.length shouldBe 1
+      store.getTrieUpdateCount shouldBe 1
+
+      val checkpoint0 = space.createCheckpoint()
+      checkpoint0.log should not be empty
+
+      space.clear()
+      store.isEmpty shouldBe true
+      store.getTrieUpdates.length shouldBe 0
+      store.getTrieUpdateCount shouldBe 0
+
+      val checkpoint1 = space.createCheckpoint()
+      checkpoint1.log shouldBe empty
   }
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],

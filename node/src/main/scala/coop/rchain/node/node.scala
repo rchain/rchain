@@ -13,6 +13,7 @@ import ski._
 import TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
@@ -26,11 +27,15 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery.{Ping => NDPing, _}
-import coop.rchain.shared._, ThrowableOps._
+import coop.rchain.shared._
+import ThrowableOps._
+import cats.effect.{Bracket, ExitCase, Sync}
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
+
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -159,19 +164,22 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
+
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
+  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer(host, port, certificateFile, keyFile)(src)
+    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
-  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -183,22 +191,32 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
-      runtime       <- Runtime.create(storagePath, storageSize).pure[Effect]
-      casperRuntime <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
-      casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casperConf, casperRuntime)
+      storeRef   <- storeRefEffect
+      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
+      oracle = {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        SafetyOracle.turanOracle[Effect]
+      }
+      runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+      runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
+      casperConstructor <- {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        MultiParentCasperConstructor
+          .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+      }
       grpcServer <- {
+        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
-        implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](casperRuntime.space.store,
-                                           casperRuntime.replaySpace.store,
-                                           conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
+      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
@@ -248,16 +266,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def startReportStoreMetrics(resources: Resources): Task[Unit] =
-    Task.delay {
-      import scala.concurrent.duration._
-      implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.casperRuntime.space.store,
-                                       resources.casperRuntime.replaySpace.store,
-                                       conf.run.data_dir().normalize)
-      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
-    }
-
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -281,14 +289,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
                 conf.run.bootstrap.toOption
-                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .fold[Either[CommError, PeerNode]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (
                     addr =>
                       Connect.connectToBootstrap[Effect](addr,

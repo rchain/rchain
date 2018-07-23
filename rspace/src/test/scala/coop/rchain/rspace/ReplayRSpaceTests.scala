@@ -745,6 +745,82 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       replaySpace.produce(channel, datum, persist = false) shouldBe defined
   }
+
+  "reset" should
+    """|empty the replay store,
+       |reset the replay trie updates log,
+       |and reset the replay data""".stripMargin in
+    withTestSpaces { (space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      val emptyPoint = space.createCheckpoint()
+
+      space.consume(channels, patterns, continuation, false) shouldBe None
+
+      val rigPoint = space.createCheckpoint()
+
+      replaySpace.rig(emptyPoint.root, rigPoint.log)
+
+      replaySpace.consume(channels, patterns, continuation, false) shouldBe None
+
+      val replayStore = replaySpace.store
+
+      replayStore.isEmpty shouldBe false
+      replayStore.getTrieUpdates.length shouldBe 1
+      replayStore.getTrieUpdateCount shouldBe 1
+
+      replaySpace.reset(emptyPoint.root)
+      replayStore.isEmpty shouldBe true
+      replayStore.getTrieUpdates.length shouldBe 0
+      replayStore.getTrieUpdateCount shouldBe 0
+      replaySpace.replayData.get shouldBe empty
+
+      val checkpoint1 = replaySpace.createCheckpoint()
+      checkpoint1.log shouldBe empty
+    }
+
+  "clear" should
+    """|empty the replay store,
+       |reset the replay event log,
+       |reset the replay trie updates log,
+       |and reset the replay data""".stripMargin in
+    withTestSpaces { (space, replaySpace) =>
+      val channels     = List("ch1")
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val datum        = "datum1"
+
+      val emptyPoint = space.createCheckpoint()
+
+      space.consume(channels, patterns, continuation, false) shouldBe None
+
+      val rigPoint = space.createCheckpoint()
+
+      replaySpace.rig(emptyPoint.root, rigPoint.log)
+
+      replaySpace.consume(channels, patterns, continuation, false) shouldBe None
+
+      val replayStore = replaySpace.store
+
+      replayStore.isEmpty shouldBe false
+      replayStore.getTrieUpdates.length shouldBe 1
+      replayStore.getTrieUpdateCount shouldBe 1
+
+      val checkpoint0 = replaySpace.createCheckpoint()
+      checkpoint0.log shouldBe empty // we don't record trace logs in ReplayRspace
+
+      replaySpace.clear()
+      replayStore.isEmpty shouldBe true
+      replayStore.getTrieUpdates.length shouldBe 0
+      replayStore.getTrieUpdateCount shouldBe 0
+      replaySpace.replayData.get shouldBe empty
+
+      val checkpoint1 = replaySpace.createCheckpoint()
+      checkpoint1.log shouldBe empty
+    }
 }
 
 trait ReplayRSpaceTestsBase[C, P, A, K]

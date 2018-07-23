@@ -7,7 +7,9 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
 
+import cats.Id
 import com.google.protobuf.ByteString
+import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
@@ -29,7 +31,8 @@ object InterpreterUtil {
   def validateBlockCheckpoint(b: BlockMessage,
                               genesis: BlockMessage,
                               dag: BlockDag,
-                              defaultStateHash: StateHash,
+                              internalMap: Map[BlockHash, BlockMessage],
+                              emptyStateHash: StateHash,
                               knownStateHashes: Set[StateHash],
                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
@@ -40,7 +43,8 @@ object InterpreterUtil {
       computeBlockCheckpointFromDeploys(b,
                                         genesis,
                                         dag,
-                                        defaultStateHash,
+                                        internalMap,
+                                        emptyStateHash,
                                         knownStateHashes,
                                         runtimeManager.replayComputeState(log))
     val computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
@@ -59,15 +63,17 @@ object InterpreterUtil {
       deploys: Seq[Deploy],
       genesis: BlockMessage,
       dag: BlockDag,
-      defaultStateHash: StateHash,
+      internalMap: Map[BlockHash, BlockMessage],
+      emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (Checkpoint, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents,
                               genesis,
                               dag,
-                              defaultStateHash,
+                              internalMap,
+                              emptyStateHash,
                               knownStateHashes,
                               computeState)
 
@@ -76,44 +82,20 @@ object InterpreterUtil {
     (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash)
   }
 
-  private[casper] def computeBlockCheckpoint(
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag,
-      defaultStateHash: StateHash,
-      knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
-
-    val blockStateHash = ProtoUtil.tuplespace(b).get
-    if (knownStateHashes.contains(blockStateHash)) {
-      (blockStateHash, knownStateHashes)
-    } else {
-      val (checkpoint, updatedKnownStateHashes) = computeBlockCheckpointFromDeploys(
-        b,
-        genesis,
-        dag,
-        defaultStateHash,
-        knownStateHashes,
-        computeState)
-      val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-      (blockStateHash, updatedKnownStateHashes)
-    }
-  }
-
   private def computeParentsPostState(
       parents: Seq[BlockMessage],
       genesis: BlockMessage,
       dag: BlockDag,
-      defaultStateHash: StateHash,
+      internalMap: Map[BlockHash, BlockMessage],
+      emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
-      (defaultStateHash, knownStateHashes)
+      (emptyStateHash, knownStateHashes)
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
@@ -130,7 +112,7 @@ object InterpreterUtil {
       val gca =
         parentTuplespaces
           .map(_._1)
-          .reduce(DagOperations.greatestCommonAncestor(_, _, genesis, dag))
+          .reduce(DagOperations.greatestCommonAncestor(_, _, genesis, dag, internalMap))
 
       val gcaStateHash = ProtoUtil.tuplespace(gca).get
       assert(
@@ -140,7 +122,7 @@ object InterpreterUtil {
       // TODO: Fix so that all search branches reach GCA before quitting
       val deploys = DagOperations
         .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
-          ProtoUtil.parents(_).iterator.map(dag.blockLookup))
+          ProtoUtil.parents(_).iterator.map(internalMap.apply))
         .takeWhile(_ != gca)
         .flatMap(ProtoUtil.deploys(_).reverse)
         .toIndexedSeq
@@ -154,26 +136,31 @@ object InterpreterUtil {
     }
   }
 
-  private def computeBlockCheckpointFromDeploys(
+  private[casper] def computeBlockCheckpointFromDeploys(
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      defaultStateHash: StateHash,
+      internalMap: Map[BlockHash, BlockMessage],
+      emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])(
-      implicit scheduler: Scheduler): (Checkpoint, Set[StateHash]) = {
+      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+    : (Checkpoint, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
-      .map(dag.blockLookup)
+      .map(internalMap.apply)
 
     val deploys = ProtoUtil.deploys(b)
+
+    assert(parents.nonEmpty || (parents.isEmpty && b == genesis),
+           "Received a different genesis block.")
 
     computeDeploysCheckpoint(
       parents,
       deploys,
       genesis,
       dag,
-      defaultStateHash,
+      internalMap,
+      emptyStateHash,
       knownStateHashes,
       computeState
     )

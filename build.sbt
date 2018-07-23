@@ -54,7 +54,7 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -112,7 +112,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.1",
+    version := "0.5.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -154,7 +154,7 @@ lazy val node = (project in file("node"))
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
         Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
-        Cmd("USER", daemon),
+        Cmd("USER", "root"),
         ExecCmd("ENTRYPOINT", "bin/rnode", "--profile=docker"),
         ExecCmd("CMD", "run")
       )
@@ -232,7 +232,7 @@ lazy val rholangProtoBuildJar = Def.task(
 lazy val _incrementalAssembly = Def.taskDyn(
   if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
     (assembly)
-  else 
+  else
     rholangProtoBuildJar
 )
 lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
@@ -251,7 +251,7 @@ lazy val roscala_macros = (project in file("roscala/macros"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value
     )
   )
-  
+
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
   .settings(
@@ -263,13 +263,29 @@ lazy val roscala = (project in file("roscala"))
     libraryDependencies ++= commonDependencies
   ).dependsOn(roscala_macros)
 
+lazy val blockStorage = (project in file("block-storage"))
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "block-storage",
+    version := "0.0.1-SNAPSHOT",
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      lmdbjava,
+      catsCore,
+      catsEffect,
+      catsMtl
+    ),
+    git.remoteRepo := scmInfo.value.get.connection
+  )
+  .dependsOn(shared, models)
+
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
-    libraryDependencies ++= commonDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
       scodecCore,
@@ -327,11 +343,12 @@ lazy val rspace = (project in file("rspace"))
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)
   .enablePlugins(JmhPlugin)
-  .dependsOn(rspace)
+  .dependsOn(rspace, rholang)
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(
+    blockStorage,
     casper,
     comm,
     crypto,

@@ -14,6 +14,8 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
 
+import kamon._
+
 class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
@@ -25,15 +27,16 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   override protected[this] val logger: Logger = Logger[this.type]
 
-  private val eventLog: SyncVar[Log] = {
-    val log = new SyncVar[Log]()
-    log.put(Seq.empty)
-    log
-  }
+  private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
+  private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")
+
+  private[this] val consumeSpan   = Kamon.buildSpan("rspace.consume")
+  private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
+  protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerConsume {
+    Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
@@ -74,7 +77,7 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
             None
           case Some(dataCandidates) =>
-            store.eventsCounter.registerConsumeCommEvent()
+            consumeCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
@@ -95,7 +98,7 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
-    store.eventsCounter.registerProduce {
+    Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
         logger.debug(s"""|produce: searching for matching continuations
@@ -146,7 +149,7 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                                WaitingContinuation(_, continuation, persistK, consumeRef),
                                continuationIndex,
                                dataCandidates)) =>
-            store.eventsCounter.registerProduceCommEvent()
+            produceCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
@@ -205,8 +208,18 @@ object RSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    history.initialize(store.trieStore, branch)
+    val space = new RSpace[C, P, A, R, K](store, branch)
 
-    new RSpace[C, P, A, R, K](store, branch)
+    /*
+     * history.initialize returns true if the history trie contains no root (i.e. is empty).
+     *
+     * In this case, we create a checkpoint for the empty store so that we can reset
+     * to the empty store state with the clear method.
+     */
+    val _ = if (history.initialize(store.trieStore, branch)) {
+      space.createCheckpoint()
+    }
+
+    space
   }
 }
