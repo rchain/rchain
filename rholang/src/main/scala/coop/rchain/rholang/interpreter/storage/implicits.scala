@@ -51,7 +51,9 @@ object implicits {
                   freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
                 case _ => freeMap
               }
-              ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount), data.randomState)
+              ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount),
+                                    data.randomState,
+                                    CostAccount.toProto(cost))
           }
       }
     }

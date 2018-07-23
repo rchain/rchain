@@ -106,7 +106,8 @@ object Reduce {
                         rand: Blake2b512Random): M[Unit] =
       for {
         _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        _ <- costAccountingAlg.modify(_.charge(c))
       } yield ()
 
     /**
@@ -129,7 +130,8 @@ object Reduce {
       val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
         _ <- costAccountingAlg.charge(rspaceCost)
-        _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        _ <- costAccountingAlg.modify(_.charge(c))
       } yield ()
     }
 
@@ -434,16 +436,20 @@ object Reduce {
             evaledP <- evalExpr(p)
           } yield evaledP
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
+          println(s"Method $method call")
           val methodLookup = methodTable(method)
           for {
             _            <- costAccountingAlg.charge(METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
+            _            = println(s"Args: $evaledArgs")
+            _            = println(s"Target: $evaledTarget")
             resultPar <- methodLookup match {
                           case None =>
                             s.raiseError(ReduceError("Unimplemented method: " + method))
                           case Some(f) => f(target, evaledArgs)(env)
                         }
+            _ = println(s"Result: $resultPar")
           } yield resultPar
         }
         case EEvalBody(chan) => eval(chan).map(q => q.value)
