@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
@@ -288,7 +289,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
     val signedInvalidBlockPacketMessage =
-      packet(nodes(1).local, "BlockMessage", signedInvalidBlock.toByteString)
+      packet(nodes(1).local, transport.BlockMessage, signedInvalidBlock.toByteString)
     nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
