@@ -963,7 +963,6 @@ trait StorageActionsTests
 
   "reset" should "change the state of the store, and reset the trie updates log" in withTestSpace {
     space =>
-
       val checkpoint0 = space.createCheckpoint()
 
       val store    = space.store
