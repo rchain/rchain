@@ -25,6 +25,9 @@ class Ctxt(var tag: Location,
   private val _rslt = new AtomicReference[Ob](Niv)
   private val _trgt = new AtomicReference[Ob](Niv)
 
+  /*
+    Needed because these fields are modified concurrently
+   */
   @inline def rslt: Ob            = _rslt.get()
   @inline def rslt_=(v: Ob): Unit = _rslt.set(v)
 
