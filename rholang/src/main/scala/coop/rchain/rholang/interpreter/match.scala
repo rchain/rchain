@@ -320,6 +320,16 @@ object SpatialMatcher {
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
+  private[this] def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
+    implicit lf: HasLocallyFree[T],
+    sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
+    StateT((s: FreeMap) => {
+      listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false).run(s) match {
+        case Stream.Empty => None
+        case head #:: _   => Some(head)
+      }
+    })
+
   /** This function finds a single matching from a list of patterns and a list of targets.
     * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
     * If both are provided, we prefer to capture terms that can be captured.
@@ -355,24 +365,6 @@ object SpatialMatcher {
         case head #:: _   => Stream(head)
       }
     })
-  }
-
-  private[this] def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
-      implicit lf: HasLocallyFree[T],
-      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
-    StateT((s: FreeMap) => {
-      listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false).run(s) match {
-        case Stream.Empty => None
-        case head #:: _   => Some(head)
-      }
-    })
-
-  private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
-    val (before, after) = haystack.span(x => x != needle)
-    after match {
-      case Nil       => None
-      case _ +: tail => Some(before ++ tail)
-    }
   }
 
   private[this] def listMatch[T](tlist: Seq[T],
@@ -434,17 +426,13 @@ object SpatialMatcher {
       }
     }
 
-  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
-    */
-  private[this] def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
-    vals.tails
-      .foldLeft((Seq[A](), Seq[(Seq[A], A, Seq[A])]())) {
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), Nil) => (head, singled)
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), elem +: tail) =>
-          (elem +: head, (head, elem, tail) +: singled)
-      }
-      ._2
-      .reverse
+  private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
+    val (before, after) = haystack.span(x => x != needle)
+    after match {
+      case Nil       => None
+      case _ +: tail => Some(before ++ tail)
+    }
+  }
 
   private[this] def listMatchItem[T](
       tlist: Seq[T],
@@ -462,6 +450,18 @@ object SpatialMatcher {
                       }
                     })
     } yield forcedYield
+
+  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
+    */
+  private[this] def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
+    vals.tails
+      .foldLeft((Seq[A](), Seq[(Seq[A], A, Seq[A])]())) {
+        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), Nil) => (head, singled)
+        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), elem +: tail) =>
+          (elem +: head, (head, elem, tail) +: singled)
+      }
+      ._2
+      .reverse
 
   implicit val parSpatialMatcherInstance: SpatialMatcher[Par, Par] = fromNonDetFunction[Par, Par] {
     (target, pattern) =>
