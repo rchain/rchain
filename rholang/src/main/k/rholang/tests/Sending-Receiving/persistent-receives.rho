@@ -1,0 +1,10 @@
+// A persistent send demonstrates that even though a send matched, the receive persists asdfasdfasd
+
+// A successful run will yield a persistent receive, while the listen is
+// rewritten as a send on the channel @"success":
+// for( x <= @Nil ){ x!("success") } |
+// @"success"!("success")
+
+
+@Nil!("sucess") |
+for( x <= @Nil ){ x!("success") }

@@ -1,0 +1,33 @@
+// The following program consists of a receive which listens for a pattern
+// which itself is a send over *either* @1 or @2. It grabs whatever is being
+// sent and sends it over @Nil.
+
+// This will nondeterministically either rewrite to:
+//     @Nil!(@1!("first succeeds"))
+//     @Nil!("second succeeds")
+// or
+//     @Nil!(@2!("second succeeds"))
+//     @Nil!("first succeeds")
+//
+// depending on which send matches with the receive first.
+// You can play with the nondeterminism by kompiling with the tag
+// --transition "sendreceivematch" and krunning with --search.
+// Doing so should return two possible results from above.
+
+
+for(@{ @(1 \/ 2)!(x) } <- @Nil ){ @Nil!(x) } |
+@Nil!(@1!("first succeeds")) |
+@Nil!(@2!("second succeeds"))
+
+
+// We can vary this example as follows:
+//      for(@{ @x!(1 \/ 2) } <- @Nil ){ @Nil!(x) } |
+//      @Nil!(@"first succeeds"!(1)) |
+//      @Nil!(@"second succeeds"!(2))
+// which will nondeterministically rewrite to:
+//     @Nil!(@"first succeeds"!(1))
+//     @Nil!("second succeeds")
+// or
+//     @Nil!(@"second succeeds"!(2))
+//     @Nil!("first succeeds")
+//
