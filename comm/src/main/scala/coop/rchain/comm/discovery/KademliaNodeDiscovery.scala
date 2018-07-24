@@ -113,19 +113,4 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield handledWitoutMessage
-
-  private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
-    for {
-      _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = ProtocolHelper.lookup(src, key)
-      r <- TransportLayer[F]
-            .roundTrip(remoteNode, req, timeout)
-            .map(_.toOption
-              .map {
-                case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                  lr.nodes.map(ProtocolHelper.toPeerNode)
-                case _ => Seq()
-              }
-              .getOrElse(Seq()))
-    } yield r
 }

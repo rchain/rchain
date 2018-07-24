@@ -10,6 +10,7 @@ import coop.rchain.comm.PeerNode
 
 trait Ping[F[_]] {
   def ping(node: PeerNode): F[Boolean]
+  def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]]
 }
 
 object Ping extends PingInstances {
@@ -18,6 +19,7 @@ object Ping extends PingInstances {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit P: Ping[F]): Ping[T[F, ?]] =
     new Ping[T[F, ?]] {
       def ping(node: PeerNode): T[F, Boolean] = P.ping(node).liftM[T]
+      def lookup(key: Seq[Byte], peer: PeerNode): T[F, Seq[PeerNode]] = P.lookup(key, peer).liftM[T]
     }
 }
 
