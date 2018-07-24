@@ -102,14 +102,13 @@ object LMDBBlockStore {
       new Bracket[Id, Exception] {
         def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
 
-        // Members declared in cats.ApplicativeError
         def handleErrorWith[A](fa: cats.Id[A])(f: Exception => cats.Id[A]): cats.Id[A] =
-          ??? //implicitly[ApplicativeError[Id, Exception]].handleErrorWith(fa)(f)
+          try { fa } catch {
+            case e: Exception => f(e)
+          }
 
-        def raiseError[A](e: Exception): cats.Id[A] = ???
-        //implicitly[ApplicativeError[Id, Exception]].raiseError(e)
+        def raiseError[A](e: Exception): cats.Id[A] = throw e
 
-        // Members declared in cats.FlatMap
         def flatMap[A, B](fa: cats.Id[A])(f: A => cats.Id[B]): cats.Id[B] =
           implicitly[FlatMap[Id]].flatMap(fa)(f)
         def tailRecM[A, B](a: A)(f: A => cats.Id[Either[A, B]]): cats.Id[B] =
@@ -124,8 +123,8 @@ object LMDBBlockStore {
             release(acquire, ExitCase.Completed)
           }
         }
-
       }
+
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(bracket)
     LMDBBlockStore.create(env, path)(bracket, metrics)
   }
