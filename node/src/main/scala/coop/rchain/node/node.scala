@@ -179,7 +179,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
-    new TLNodeDiscovery[Task](src, defaultTimeout)
+    new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,

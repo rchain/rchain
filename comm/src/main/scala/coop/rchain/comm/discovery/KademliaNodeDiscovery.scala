@@ -11,7 +11,7 @@ import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing.{Ping => ProtocolPing, _}
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
     src: PeerNode,
     timeout: FiniteDuration)
     extends NodeDiscovery[F] {
