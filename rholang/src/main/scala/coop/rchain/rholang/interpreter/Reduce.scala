@@ -27,6 +27,8 @@ import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 import matcher._
+import OptionalFreeMapWithCost._
+import NonDetFreeMapWithCost._
 import scala.collection.immutable.BitSet
 import scala.util.Try
 import Chargeable._
@@ -359,15 +361,12 @@ object Reduce {
                 pattern <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
                 (cost, matchResult) = SpatialMatcher
                   .spatialMatch(target, pattern)
-                  .runS(emptyMap)
-                  .value
-                  .run(CostAccount.zero)
-                  .value
+                  .runWithCost
                 _ <- costAccountingAlg.modify(_.charge(cost))
                 res <- matchResult match {
                         case None =>
                           Applicative[M].pure(Left((target, caseRem)))
-                        case Some(freeMap) =>
+                        case Some((freeMap, _)) =>
                           val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
                           eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                       }
@@ -561,10 +560,8 @@ object Reduce {
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
             (cost, matchResult) = SpatialMatcher
               .spatialMatch(substTarget, substPattern)
-              .runS(emptyMap)
-              .value
-              .run(CostAccount.zero)
-              .value
+              .runWithCost
+
             _ <- costAccountingAlg.modify(_.charge(cost))
           } yield GBool(matchResult.isDefined)
 

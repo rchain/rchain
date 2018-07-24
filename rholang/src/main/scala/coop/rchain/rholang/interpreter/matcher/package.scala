@@ -25,6 +25,9 @@ package object matcher {
             (f(cost), result)
           }))
         })
+
+      def runWithCost: (CostAccount, Option[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(CostAccount.zero).value
     }
 
     implicit def toOptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) =
@@ -66,6 +69,9 @@ package object matcher {
             (f(cost), result)
           }))
         })
+
+      def runWithCost: (CostAccount, Stream[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(CostAccount.zero).value
     }
 
     implicit def toNonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) =

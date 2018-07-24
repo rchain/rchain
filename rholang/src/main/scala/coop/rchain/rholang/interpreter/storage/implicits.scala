@@ -7,6 +7,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.matcher._
+import OptionalFreeMapWithCost._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
@@ -31,10 +32,7 @@ object implicits {
       def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] = {
         val (cost, resultMatch) = SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .run(emptyMap)
-          .value
-          .run(CostAccount.zero)
-          .value
+          .runWithCost
 
         resultMatch
           .map {

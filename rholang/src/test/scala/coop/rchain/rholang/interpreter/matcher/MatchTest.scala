@@ -333,9 +333,6 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     // ~Nil | ~Nil | ~Nil | ~Nil
     // Fails because there is no way to split 3 sends into 4 non nil terms.
     val quadruplePatternPar = triplePatternPar.addConnectives(pattern)
-    val rest =
-      spatialMatch(target, quadruplePatternPar).runS(emptyMap).value.run(CostAccount.zero).value
-    println(rest)
     assert(spatialMatchOptionalTest(spatialMatch(target, quadruplePatternPar), None))
   }
 
