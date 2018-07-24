@@ -122,7 +122,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
     * If `peer` is already in the table, it becomes the most recently
     * seen entry at its distance.
     */
-  def observe[F[_]: Monad: Capture: Ping](peer: A): F[CommErr[Unit]] = {
+  def observe[F[_]: Monad: Capture: Ping](peer: A): F[Unit] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
       Capture[F].capture(distance(home.key, peer.key).filter(_ < 8 * width).map(table.apply))
@@ -170,12 +170,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
         _     <- OptionT.liftF(pingAndUpdate(ps, older))
       } yield ()
 
-    for {
-      pingResponded <- Ping[F].ping(peer)
-      res <- if (pingResponded) upsert.value.as(Right(()))
-            else Left(pongNotReceivedForPing(peer)).pure[F]
-    } yield res
-
+    upsert.value.void
   }
 
   /**

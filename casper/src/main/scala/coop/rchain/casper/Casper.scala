@@ -18,7 +18,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.discovery._
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import coop.rchain.shared.AttemptOps._
@@ -87,28 +87,22 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] =
-    for {
-      _           <- BlockStore[F].put(genesis.blockHash, genesis)
-      internalMap <- BlockStore[F].asMap()
-      dag         = BlockDag()
-      (maybePostGenesisStateHash, _) = InterpreterUtil
-        .validateBlockCheckpoint(
-          genesis,
-          genesis,
-          dag,
-          internalMap,
-          runtimeManager.emptyStateHash,
-          Set[StateHash](runtimeManager.emptyStateHash),
-          runtimeManager
-        )
-    } yield {
-      createMultiParentCasper[F](runtimeManager,
-                                 validatorId,
-                                 genesis,
-                                 dag,
-                                 maybePostGenesisStateHash)
-    }
+      genesis: BlockMessage,
+      internalMap: Map[BlockHash, BlockMessage])(
+      implicit scheduler: Scheduler): MultiParentCasper[F] = {
+    val dag = BlockDag()
+    val (maybePostGenesisStateHash, _) = InterpreterUtil
+      .validateBlockCheckpoint(
+        genesis,
+        genesis,
+        dag,
+        internalMap,
+        runtimeManager.emptyStateHash,
+        Set[StateHash](runtimeManager.emptyStateHash),
+        runtimeManager
+      )
+    createMultiParentCasper[F](runtimeManager, validatorId, genesis, dag, maybePostGenesisStateHash)
+  }
 
   private[this] def createMultiParentCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
