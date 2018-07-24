@@ -1430,4 +1430,69 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
+
+  "[0, 1, 2, 3].length()" should "return the length of the list" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val list        = EList(List(GInt(0), GInt(1), GInt(2), GInt(3)))
+      val inspectTask = reducer.evalExpr(EMethodBody(EMethod("length", list)))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GInt(4))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "[3, 7, 2, 9, 4, 3, 7].slice(3, 5)" should "return [9, 4]" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val list = EList(List(GInt(3), GInt(7), GInt(2), GInt(9), GInt(4), GInt(3), GInt(7)))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("slice", list, List(GInt(3), GInt(5))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(EListBody(EList(List(GInt(9), GInt(4)))))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "[3, 2, 9] ++ [6, 1, 7]" should "return [3, 2, 9, 6, 1, 7]" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val lhsList = EList(List(GInt(3), GInt(2), GInt(9)))
+      val rhsList = EList(List(GInt(6), GInt(1), GInt(7)))
+      val inspectTask = reducer.evalExpr(
+        EPlusPlusBody(
+          EPlusPlus(
+            lhsList,
+            rhsList
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultList = EList(List(GInt(3), GInt(2), GInt(9), GInt(6), GInt(1), GInt(7)))
+    result.exprs should be(Seq(Expr(EListBody(resultList))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
 }
