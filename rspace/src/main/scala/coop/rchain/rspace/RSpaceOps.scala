@@ -95,6 +95,10 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
       }
     }
 
+  override def retrieve(root: Blake2b256Hash,
+                        channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+    history.lookup(store.trieStore, root, channelsHash)
+
   override def reset(root: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>

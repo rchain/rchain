@@ -36,6 +36,17 @@ trait HistoryActionsTests
 
   type TestGNAT = GNAT[String, Pattern, String, StringsCaptor]
 
+  /**
+    * Helper for testing purposes only.
+   */
+  private[this] def getRootHash(store: IStore[String, Pattern, String, StringsCaptor],
+                                branch: Branch): Blake2b256Hash =
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.withTrieTxn(txn) { trieTxn =>
+        store.trieStore.getRoot(trieTxn, branch).get
+      }
+    }
+
   case class State(
       checkpoint: Blake2b256Hash,
       contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
@@ -112,11 +123,15 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
+      space.retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash) shouldBe None
+
       space.createCheckpoint().root shouldBe nodeHash
 
       history
         .lookup(space.store.trieStore, space.store.trieBranch, channelsHash)
         .value shouldBe gnat
+
+      space.retrieve(nodeHash, channelsHash).value shouldBe gnat
     }
 
   "consume twice then createCheckpoint" should "persist the expected values in the TrieStore" in
@@ -163,8 +178,16 @@ trait HistoryActionsTests
         .lookup(space.store.trieStore, space.store.trieBranch, channelsHash1)
         .value shouldBe gnat1
 
+      space
+        .retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash1)
+        .value shouldBe gnat1
+
       history
         .lookup(space.store.trieStore, space.store.trieBranch, channelsHash2)
+        .value shouldBe gnat2
+
+      space
+        .retrieve(getRootHash(space.store, space.store.trieBranch), channelsHash2)
         .value shouldBe gnat2
     }
 
@@ -210,15 +233,21 @@ trait HistoryActionsTests
             space.consume(channels, wk.patterns, wk.continuation, wk.persist)
         }
 
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+        val channelHashMap =
+          gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
+        val channelHashes = channelHashMap.keys.toList
 
         history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
-        val _ = space.createCheckpoint()
+        val checkpoint = space.createCheckpoint()
 
         history
           .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
           .value should contain theSameElementsAs gnats
+
+        for ((channelHash, gnat) <- channelHashMap) {
+          space.retrieve(checkpoint.root, channelHash).value shouldBe gnat
+        }
       }
     }
 
