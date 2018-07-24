@@ -19,7 +19,6 @@ import org.lmdbjava._
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
-    val applicative: Applicative[F],
     bracketF: Bracket[F, Exception],
     metricsF: Metrics[F])
     extends BlockStore[F] {
@@ -40,7 +39,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _           <- metricsF.incrementCounter(MetricNamePrefix + "put")
-      applicative = bracketF
+      applicative = implicitly[Applicative[F]]
       ret <- bracketF.bracket(applicative.pure(env.txnWrite())) { txn =>
               val (blockHash, blockMessage) = f
               applicative.pure {
@@ -55,7 +54,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
       _           <- metricsF.incrementCounter(MetricNamePrefix + "get")
-      applicative = bracketF
+      applicative = implicitly[Applicative[F]]
       ret <- bracketF.bracket(applicative.pure(env.txnRead()))(txn =>
               applicative.pure {
                 val r = Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
