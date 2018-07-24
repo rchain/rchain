@@ -9,7 +9,7 @@ import coop.rchain.comm._
 
 import org.scalatest._
 
-class KademliaSpec extends FlatSpec with Matchers with BeforeAndAfterEach {
+class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   val endpoint = Endpoint("local", 0, 0)
   val local    = PeerNode(NodeIdentifier(Seq("00000001".b)), endpoint)
   val peer0    = PeerNode(NodeIdentifier(Seq("00000010".b)), endpoint)
@@ -37,57 +37,80 @@ class KademliaSpec extends FlatSpec with Matchers with BeforeAndAfterEach {
     table.distance(peer0) shouldBe DISTANCE_6
   }
 
-  val pingOk: Ping[Id] = (pn: PeerNode) => {
-    pingedPeers += pn
-    true
-  }
+  describe("A PeertTable with 1 byte addresses and k = 3") {
+    describe("when adding a peer to an empty table") {
+      it("should add it to a bucket according to its distance") {
+        // given
+        implicit val ping: Ping[Id] = pingOk
+        // when
+        table.observe[Id](peer0)
+        // then
+        bucketEntriesAt(DISTANCE_6) shouldEqual Seq(peer0)
+      }
 
-  val failSecondTime: Ping[Id] = new Ping[Id] {
-    var pinged = List.empty[PeerNode]
-    def ping(peer: PeerNode): Boolean = {
-      val result = !pinged.contains(peer)
-      pinged = peer :: pinged
-      result
+      it("should not ping the peer") {
+        // given
+        implicit val ping: Ping[Id] = pingOk
+        // when
+        table.observe[Id](peer0)
+        // then
+        pingedPeers shouldEqual Seq.empty[PeerNode]
+      }
+    }
+
+    describe("when adding a peer to a table, where corresponding bucket is full") {
+      it("should ping the oldest peer to check if it responds") {
+        // given
+        implicit val ping: Ping[Id] = pingOk
+        thatBucket4IsFull
+        // when
+        table.observe[Id](peer4)
+        // then
+        pingedPeers shouldEqual Seq(peer1)
+      }
+
+      describe("and oldest peer IS responding to ping") {
+        it("should drop the new peer") {
+          // given
+          implicit val ping: Ping[Id] = pingOk
+          thatBucket4IsFull
+          // when
+          table.observe[Id](peer4)
+          // then
+          bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
+        }
+      }
+      describe("and oldest peer is NOT responding to ping") {
+        it("should add the new peer and drop the oldest one") {
+          // given
+          implicit val ping: Ping[Id] = pingFail
+          thatBucket4IsFull
+          // when
+          table.observe[Id](peer4)
+          // then
+          bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer4)
+        }
+      }
     }
   }
 
-  "A PeertTable with 1 byte addresses and k = 3" should "add new peer to the 6th bucket" in {
-    // given
-    implicit val ping: Ping[Id] = pingOk
-    // when
-    table.observe[Id](peer0)
-    // then
-    table.distance(peer0) shouldBe DISTANCE_6
-    bucketEntriesAt(DISTANCE_6) shouldEqual Seq(peer0)
-  }
-
-  it should "drop new peer if the bucket is full and the oldest peer is responding to ping" in {
-    // given
-    implicit val ping: Ping[Id] = pingOk
+  private def thatBucket4IsFull(implicit ev: Ping[Id]): Unit = {
     table.observe[Id](peer1)
     table.observe[Id](peer2)
     table.observe[Id](peer3)
-    // when
-    table.observe[Id](peer4)
-    // then
-    pingedPeers shouldEqual Seq(peer1)
-    bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
-  }
-
-  it should "drop oldest peer and add new peer if the bucket is full and the oldest peer is not responding to ping" in {
-    // given
-    implicit val ping: Ping[Id] = failSecondTime
-    table.observe[Id](peer1)
-    table.observe[Id](peer2)
-    table.observe[Id](peer3)
-    // when
-    table.observe[Id](peer4)
-    // then
-    pingedPeers shouldEqual Seq(peer1)
-    bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer4)
   }
 
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
     distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
+
+  private val pingOk: Ping[Id] = (pn: PeerNode) => {
+    pingedPeers += pn
+    true
+  }
+
+  private val pingFail: Ping[Id] = (pn: PeerNode) => {
+    pingedPeers += pn
+    false
+  }
 
 }
