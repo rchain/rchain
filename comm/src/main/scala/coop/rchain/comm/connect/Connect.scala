@@ -126,7 +126,10 @@ object Connect {
       hbrErr <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
       commResponse <- hbrErr.fold(
                        error =>
-                         Log[F].warn(s"Not adding. Could receive Pong message back from $peer, reason: $error").as(notHandled(error)),
+                         Log[F]
+                           .warn(
+                             s"Not adding. Could receive Pong message back from $peer, reason: $error")
+                           .as(notHandled(error)),
                        _ =>
                          NodeDiscovery[F].addNode(peer) *>
                            Log[F]
