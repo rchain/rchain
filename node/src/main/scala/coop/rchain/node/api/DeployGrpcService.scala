@@ -67,7 +67,20 @@ private[api] class DeployGrpcService[
 
   override def createBlock(e: Empty): Future[MaybeBlockMessage] = BlockAPI.createBlock[F].toFuture
 
-  override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
+  override def addBlock(b: BlockMessage): Future[DeployServiceResponse] = {
+    def addBlock(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
+      for {
+        either       <- MultiParentCasper[F].addBlock(b)
+        maybeFailure = either.swap.toOption
+      } yield
+        maybeFailure
+          .map(ib => DeployServiceResponse(false, s"Failure! Invalid block: ${ib}"))
+          .getOrElse(DeployServiceResponse(true, "Success!"))
+
+    MultiParentCasperConstructor
+      .withCasper[F, DeployServiceResponse](addBlock(_), DeployServiceResponse(false, "Failure!"))
+      .toFuture
+  }
 
   override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
     BlockAPI.getBlockQueryResponse[F](q).toFuture

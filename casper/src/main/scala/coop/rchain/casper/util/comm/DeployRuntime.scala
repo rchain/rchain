@@ -16,9 +16,14 @@ object DeployRuntime {
   def propose[F[_]: DeployService: Monad](): F[Unit] =
     DeployService[F].createBlock().flatMap {
       case Some(block) =>
-        DeployService[F].addBlock(block)
+        println(s"Response: Successfully created block")
+        for {
+          response <- DeployService[F].addBlock(block)
+          _        = println(s"Response: ${response._2}")
+        } yield ()
 
       case None =>
+        println(s"Response: Failure! Did not create block")
         ().pure[F]
     }
 
