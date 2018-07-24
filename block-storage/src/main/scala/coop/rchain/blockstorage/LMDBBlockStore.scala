@@ -1,25 +1,24 @@
 package coop.rchain.blockstorage
 
+import java.nio.ByteBuffer
+import java.nio.file.Path
+
+import scala.collection.JavaConverters._
+import scala.language.higherKinds
+
 import cats._
-import cats.effect.{Bracket, ExitCase}
+import cats.effect.{ExitCase, Sync}
 import cats.implicits._
-import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
-
-import scala.language.higherKinds
-import scala.collection.JavaConverters._
-
-import java.nio.ByteBuffer
-import java.nio.file.Path
-import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
+import org.lmdbjava.DbiFlags.MDB_CREATE
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
-    bracketF: Bracket[F, Exception],
+    syncF: Sync[F],
     metricsF: Metrics[F])
     extends BlockStore[F] {
 
@@ -40,9 +39,9 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     for {
       _           <- metricsF.incrementCounter(MetricNamePrefix + "put")
       applicative = implicitly[Applicative[F]]
-      ret <- bracketF.bracket(applicative.pure(env.txnWrite())) { txn =>
-              val (blockHash, blockMessage) = f
-              applicative.pure {
+      ret <- syncF.bracket(applicative.pure(env.txnWrite())) { txn =>
+              syncF.delay {
+                val (blockHash, blockMessage) = f
                 blocks.put(txn,
                            blockHash.toDirectByteBuffer,
                            blockMessage.toByteString.toDirectByteBuffer)
@@ -55,7 +54,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     for {
       _           <- metricsF.incrementCounter(MetricNamePrefix + "get")
       applicative = implicitly[Applicative[F]]
-      ret <- bracketF.bracket(applicative.pure(env.txnRead()))(txn =>
+      ret <- syncF.bracket(applicative.pure(env.txnRead()))(txn =>
               applicative.pure {
                 val r = Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
                   BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
@@ -67,8 +66,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _           <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
-      applicative = bracketF
-      ret <- bracketF.bracket(applicative.pure(env.txnRead()))(txn =>
+      applicative = syncF
+      ret <- syncF.bracket(applicative.pure(env.txnRead()))(txn =>
               applicative.pure {
                 val r = blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
                   (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
@@ -88,7 +87,7 @@ object LMDBBlockStore {
   private val MetricNamePrefix = "lmdb-block-store-"
 
   def create[F[_]](env: Env[ByteBuffer], path: Path)(implicit
-                                                     bracketF: Bracket[F, Exception],
+                                                     syncF: Sync[F],
                                                      metricsF: Metrics[F]): BlockStore[F] = {
 
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
@@ -97,16 +96,16 @@ object LMDBBlockStore {
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP
-    implicit val bracket: Bracket[Id, Exception] =
-      new Bracket[Id, Exception] {
+    implicit val bracket: Sync[Id] =
+      new Sync[Id] {
         def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
 
-        def handleErrorWith[A](fa: cats.Id[A])(f: Exception => cats.Id[A]): cats.Id[A] =
+        def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] =
           try { fa } catch {
             case e: Exception => f(e)
           }
 
-        def raiseError[A](e: Exception): cats.Id[A] = throw e
+        def raiseError[A](e: Throwable): cats.Id[A] = throw e
 
         def flatMap[A, B](fa: cats.Id[A])(f: A => cats.Id[B]): cats.Id[B] =
           implicitly[FlatMap[Id]].flatMap(fa)(f)
@@ -114,7 +113,7 @@ object LMDBBlockStore {
           implicitly[FlatMap[Id]].tailRecM(a)(f)
 
         def bracketCase[A, B](acquire: A)(use: A => B)(
-            release: (A, ExitCase[Exception]) => Unit): B = {
+            release: (A, ExitCase[Throwable]) => Unit): B = {
           val state = acquire
           try {
             use(state)
@@ -122,6 +121,8 @@ object LMDBBlockStore {
             release(acquire, ExitCase.Completed)
           }
         }
+
+        def suspend[A](thunk: => A): A = thunk
       }
 
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(bracket)
