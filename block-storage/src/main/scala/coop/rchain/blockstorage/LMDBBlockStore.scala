@@ -37,9 +37,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _           <- metricsF.incrementCounter(MetricNamePrefix + "put")
-      applicative = implicitly[Applicative[F]]
-      ret <- syncF.bracket(applicative.pure(env.txnWrite())) { txn =>
+      _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
+      ret <- syncF.bracket(syncF.pure(env.txnWrite())) { txn =>
               syncF.delay {
                 val (blockHash, blockMessage) = f
                 blocks.put(txn,
@@ -47,28 +46,26 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                            blockMessage.toByteString.toDirectByteBuffer)
                 txn.commit()
               }
-            }(txn => applicative.pure(txn.close()))
+            }(txn => syncF.pure(txn.close()))
     } yield ret
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _           <- metricsF.incrementCounter(MetricNamePrefix + "get")
-      applicative = implicitly[Applicative[F]]
-      ret <- syncF.bracket(applicative.pure(env.txnRead()))(txn =>
-              applicative.pure {
+      _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
+      ret <- syncF.bracket(syncF.pure(env.txnRead()))(txn =>
+              syncF.pure {
                 val r = Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
                   BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
                 txn.commit()
                 r
-            })(txn => applicative.pure(txn.close()))
+            })(txn => syncF.pure(txn.close()))
     } yield ret
 
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
-      _           <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
-      applicative = syncF
-      ret <- syncF.bracket(applicative.pure(env.txnRead()))(txn =>
-              applicative.pure {
+      _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
+      ret <- syncF.bracket(syncF.pure(env.txnRead()))(txn =>
+              syncF.pure {
                 val r = blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
                   (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
                     val hash = ByteString.copyFrom(x.key())
@@ -77,7 +74,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                 }
                 txn.commit()
                 r
-            })(txn => applicative.pure(txn.close()))
+            })(txn => syncF.pure(txn.close()))
     } yield ret
 
 }
@@ -96,7 +93,7 @@ object LMDBBlockStore {
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP
-    implicit val bracket: Sync[Id] =
+    val sync: Sync[Id] =
       new Sync[Id] {
         def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
 
@@ -125,7 +122,7 @@ object LMDBBlockStore {
         def suspend[A](thunk: => A): A = thunk
       }
 
-    implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(bracket)
-    LMDBBlockStore.create(env, path)(bracket, metrics)
+    implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(sync)
+    LMDBBlockStore.create(env, path)(sync, metrics)
   }
 }
