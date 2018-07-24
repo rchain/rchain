@@ -27,6 +27,22 @@ object CommMessages {
     ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr))
   }
 
+  def heartbeat(src: PeerNode): routing.Protocol = {
+    val hb = Heartbeat()
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hb))
+  }
+
+  def toHeartbeat(proto: routing.Protocol): CommErr[Heartbeat] =
+    proto.message match {
+      case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Heartbeat))
+      case a                                           => Left(UnknownProtocolError(s"Was expecting Heartbeat, got $a"))
+    }
+
+  def heartbeatResponse(src: PeerNode): routing.Protocol = {
+    val hbr = HeartbeatResponse()
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hbr))
+  }
+
   def packet(src: PeerNode, content: Array[Byte]): routing.Protocol =
     packet(src, ByteString.copyFrom(content))
 
