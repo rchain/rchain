@@ -259,13 +259,10 @@ object SpatialMatcher extends SpatialMatcherInstances {
   }
 
   def listMatchSingle[T](tlist: Seq[T],
-                         plist: Seq[T],
-                         merger: (Par, T) => Par,
-                         varLevel: Option[Int],
-                         wildcard: Boolean)(
+                         plist: Seq[T])(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
-    listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard)
+    listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false)
       .mapK[OptionT[State[CostAccount, ?], ?]](
         new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
           override def apply[A](
@@ -652,7 +649,7 @@ trait SpatialMatcherInstances {
         OptionalFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else
         for {
-          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
+          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
         } yield Unit
     }
