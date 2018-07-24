@@ -31,7 +31,7 @@ import coop.rchain.casper.helper.BlockGenerator.StateWithChain
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import scala.util.Random
 
@@ -55,8 +55,9 @@ class HashSetCasperTestNode(name: String,
   implicit val blockStore        = InMemBlockStore.createWithId
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-  val activeRuntime  = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+  val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
@@ -71,7 +72,7 @@ class HashSetCasperTestNode(name: String,
     casperPacketHandler[Id]
   )
 
-  def receive(): Unit = tle.receive(dispatch[Id] _)
+  def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
 }
 
