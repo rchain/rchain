@@ -24,6 +24,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     metricsF: Metrics[F])
     extends BlockStore[F] {
 
+  import LMDBBlockStore.MetricNamePrefix
+
   implicit class RichBlockHash(byteVector: BlockHash) {
 
     def toDirectByteBuffer: ByteBuffer = {
@@ -37,7 +39,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _           <- metricsF.incrementCounter("block-store-put")
+      _           <- metricsF.incrementCounter(MetricNamePrefix + "put")
       applicative = bracketF
       ret <- bracketF.bracket(applicative.pure(env.txnWrite())) { txn =>
               val (blockHash, blockMessage) = f
@@ -52,7 +54,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _           <- metricsF.incrementCounter("block-store-get")
+      _           <- metricsF.incrementCounter(MetricNamePrefix + "get")
       applicative = bracketF
       ret <- bracketF.bracket(applicative.pure(env.txnRead()))(txn =>
               applicative.pure {
@@ -65,7 +67,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
-      _           <- metricsF.incrementCounter("block-store-as-map")
+      _           <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
       applicative = bracketF
       ret <- bracketF.bracket(applicative.pure(env.txnRead()))(txn =>
               applicative.pure {
@@ -83,6 +85,9 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 }
 
 object LMDBBlockStore {
+
+  private val MetricNamePrefix = "lmdb-block-store-"
+
   def create[F[_]](env: Env[ByteBuffer], path: Path)(implicit
                                                      bracketF: Bracket[F, Exception],
                                                      metricsF: Metrics[F]): BlockStore[F] = {
