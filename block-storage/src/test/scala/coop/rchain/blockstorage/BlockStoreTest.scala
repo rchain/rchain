@@ -26,10 +26,10 @@ trait BlockStoreTest
     with Matchers
     with OptionValues
     with GeneratorDrivenPropertyChecks
-    with BeforeAndAfterEach {
+    with BeforeAndAfterAll {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = PosInt(1))
+    PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
   def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
     BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
@@ -91,7 +91,7 @@ trait BlockStoreTest
   }
 
   it should "return Some(message) on get for a published key" in {
-    forAll(blockStoreElementsGen) { blockStoreElements =>
+    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
         val items = blockStoreElements
         items.foreach(store.put(_))
@@ -105,7 +105,7 @@ trait BlockStoreTest
   }
 
   it should "overwrite existing value" in
-    forAll(blockStoreElementsGen) { blockStoreElements =>
+    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
       withStore { store =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
@@ -130,11 +130,30 @@ class InMemBlockStoreTest extends BlockStoreTest {
 }
 
 class LMDBBlockStoreTest extends BlockStoreTest {
+
+  import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
+  import java.nio.file.attribute.BasicFileAttributes
+
+  private def makeDeleteFileVisitor: SimpleFileVisitor[Path] =
+    new SimpleFileVisitor[Path] {
+      override def visitFile(p: Path, attrs: BasicFileAttributes): FileVisitResult = {
+        Files.delete(p)
+        FileVisitResult.CONTINUE
+      }
+      override def postVisitDirectory(p: Path, e: java.io.IOException): FileVisitResult = {
+        Files.delete(p)
+        FileVisitResult.CONTINUE
+      }
+    }
+
+  def recursivelyDeletePath(p: Path): Path =
+    Files.walkFileTree(p, makeDeleteFileVisitor)
+
+  private[this] val dbDir: Path = Files.createTempDirectory("block-store-test-")
+  private[this] val mapSize: Long = 1024L * 1024L * 4096L
+
   override def withStore[R](f: BlockStore[Id] => R): R = {
 
-    import java.nio.file.{Files, Path}
-    val dbDir: Path   = Files.createTempDirectory("block-store-test-")
-    val mapSize: Long = 1024L * 1024L * 4096L
     val env           = Context.env(dbDir, mapSize)
     val store         = LMDBBlockStore.createWithId(env, dbDir)
     try {
@@ -143,4 +162,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
       env.close()
     }
   }
+
+  override def afterAll(): Unit =
+    recursivelyDeletePath(dbDir)
 }
