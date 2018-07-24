@@ -357,15 +357,11 @@ object SpatialMatcher {
     })
   }
 
-  private[this] def listMatchSingle[T](tlist: Seq[T],
-                                       plist: Seq[T],
-                                       merger: (Par, T) => Par,
-                                       varLevel: Option[Int],
-                                       wildcard: Boolean)(
+  private[this] def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
     StateT((s: FreeMap) => {
-      listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard).run(s) match {
+      listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false).run(s) match {
         case Stream.Empty => None
         case head #:: _   => Some(head)
       }
@@ -605,7 +601,7 @@ object SpatialMatcher {
         StateT.liftF(None)
       else
         for {
-          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
+          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
         } yield Unit
     }
