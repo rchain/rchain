@@ -12,6 +12,8 @@ import monix.execution.Scheduler.Implicits.global
 
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.annotation.tailrec
+
 class RepeatedReplayRSpaceTest extends FlatSpec with Matchers {
   import RepeatedReplayRSpaceTest._
 
@@ -46,28 +48,34 @@ object RepeatedReplayRSpaceTest {
     f(start, Seq(d)).right.get
   }
 
+  private def useHash(hash: ByteString)(code: String,
+                                        rm1: RuntimeManager,
+                                        rm2: RuntimeManager): (ByteString, Checkpoint) = {
+    val (d, ch) = eval(code, hash, rm1)
+    val chRep   = replay(d, hash, ch.log, rm2)
+    //TODO: handle this better...
+    if (ch.root != chRep.root) throw new Exception("Holy Shit!")
+    else
+      ByteString.copyFrom(ch.root.bytes.toArray) -> ch
+  }
+
+  @tailrec
   def repeat(n: Int,
              code: String,
              rm1: RuntimeManager,
              rm2: RuntimeManager,
              start: Option[ByteString] = None,
-             acc: List[Checkpoint] = Nil): List[Checkpoint] = {
-    def useHash(hash: ByteString) = {
-      val (d, ch) = eval(code, hash, rm1)
-      val chRep   = replay(d, hash, ch.log, rm2)
-      //TODO: handle this better...
-      if (ch.root != chRep.root) throw new Exception("Holy Shit!")
-      else
-        repeat(n - 1, code, rm1, rm2, Some(ByteString.copyFrom(ch.root.bytes.toArray)), ch :: acc)
-    }
-
+             acc: List[Checkpoint] = Nil): List[Checkpoint] =
     if (n == 0) acc
     else
       start match {
-        case None => useHash(rm1.emptyStateHash)
+        case None =>
+          val (newStart, ch) = useHash(rm1.emptyStateHash)(code, rm1, rm2)
+          repeat(n - 1, code, rm1, rm2, Some(newStart), ch :: acc)
 
-        case Some(hash) => useHash(hash)
+        case Some(hash) =>
+          val (newStart, ch) = useHash(hash)(code, rm1, rm2)
+          repeat(n - 1, code, rm1, rm2, Some(newStart), ch :: acc)
       }
-  }
 
 }
