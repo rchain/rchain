@@ -134,6 +134,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
   import java.nio.file.attribute.BasicFileAttributes
 
+  // TODO: move this and impl from rspace tests to shared
   private def makeDeleteFileVisitor: SimpleFileVisitor[Path] =
     new SimpleFileVisitor[Path] {
       override def visitFile(p: Path, attrs: BasicFileAttributes): FileVisitResult = {
