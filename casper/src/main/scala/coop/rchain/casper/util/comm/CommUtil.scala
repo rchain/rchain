@@ -143,11 +143,9 @@ object CommUtil {
                 )
                 .map(_ => none[Packet])
 
-            case Right(casperF) =>
-              casperF flatMap { casper =>
-                implicit val casperEvidence: MultiParentCasper[F] = casper
-                blockPacketHandler[F](peer, b)
-              }
+            case Right(casper) =>
+              implicit val casperEvidence: MultiParentCasper[F] = casper
+              blockPacketHandler[F](peer, b)
           }
 
         case a: ApprovedBlock =>

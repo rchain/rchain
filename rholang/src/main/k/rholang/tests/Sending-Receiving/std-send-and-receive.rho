@@ -1,0 +1,4 @@
+// A send and receive that ends up in a send of the form @Nil!("success")
+
+@Nil!(Nil) |
+for( x <- @Nil ){ x!("success") }

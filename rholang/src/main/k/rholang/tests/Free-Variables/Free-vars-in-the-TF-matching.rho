@@ -1,0 +1,17 @@
+// There is only one possible way in which this send/receive combo can match,
+// which is that the first "for" in the listen pattern matches with the second "for"
+// in the send process. The reason is that the alternative tries to bind y to
+// x!(Nil), which has a free variable.
+
+// To experiment with the nondeterminism, use the code
+//    kompile rho.k --transition "parmatch"
+//    krun Free\ vars\ in\ the\ TF\ matching.rho --search
+
+for(@{
+  for( x <- @Nil ){ y } |
+  for( x <- @Nil ){ x!(z) }
+}  <- @Nil ){ @Nil!(z) } |
+@Nil!(
+  for( x <- @Nil ){ x!(Nil) } |
+  for( x <- @Nil ){ Nil }
+)
