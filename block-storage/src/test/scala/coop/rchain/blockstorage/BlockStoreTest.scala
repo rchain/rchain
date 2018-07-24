@@ -149,13 +149,13 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
 
-  private[this] val dbDir: Path = Files.createTempDirectory("block-store-test-")
+  private[this] val dbDir: Path   = Files.createTempDirectory("block-store-test-")
   private[this] val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
 
-    val env           = Context.env(dbDir, mapSize)
-    val store         = LMDBBlockStore.createWithId(env, dbDir)
+    val env   = Context.env(dbDir, mapSize)
+    val store = LMDBBlockStore.createWithId(env, dbDir)
     try {
       f(store)
     } finally {
