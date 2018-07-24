@@ -60,9 +60,9 @@ sealed abstract class MultiParentCasperConstructorInstances {
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString])(implicit scheduler: Scheduler): MultiParentCasperConstructor[F] =
     new MultiParentCasperConstructor[F] {
-      private val genesis = Promise[(ApprovedBlock, Map[BlockHash, BlockMessage])]()
+      private val genesisPromise = Promise[(ApprovedBlock, Map[BlockHash, BlockMessage])]()
       private val casper: Future[MultiParentCasper[F]] =
-        genesis.future.map(
+        genesisPromise.future.map(
           g =>
             MultiParentCasper.hashSetCasper[F](
               runtimeManager,
@@ -73,20 +73,18 @@ sealed abstract class MultiParentCasperConstructorInstances {
 
       override def receive(a: ApprovedBlock): F[Boolean] =
         //TODO: Allow update to more recent ApprovedBlock
-        if (genesis.isCompleted) false.pure[F]
+        if (genesisPromise.isCompleted) false.pure[F]
         else
           for {
             isValid <- Validate.approvedBlock[F](a, validators)
-            _ <- if (isValid)
-                  Log[F].info("CASPER: Valid ApprovedBlock received!") *> {
-                    val x = a.candidate.get.block.get
-                    BlockStore[F].put(x.blockHash, x)
-                  } *>
-                    BlockStore[F].asMap >>= { internalMap =>
-                    Capture[F].capture {
-                      genesis.success((a, internalMap))
-                    }.void
-                  } else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
+            _ <- if (isValid) for {
+                  _           <- Log[F].info("CASPER: Valid ApprovedBlock received!")
+                  genesis     = a.candidate.get.block.get
+                  _           <- BlockStore[F].put(genesis.blockHash, genesis)
+                  internalMap <- BlockStore[F].asMap()
+                  _           = genesisPromise.success((a, internalMap))
+                } yield ()
+                else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
           } yield isValid
 
       override def casperInstance: Either[Throwable, MultiParentCasper[F]] =
@@ -96,7 +94,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
           _.toEither)
 
       override def lastApprovedBlock: F[Option[ApprovedBlock]] =
-        genesis.future.value.flatMap(_.toOption.map(_._1)).pure[F]
+        genesisPromise.future.value.flatMap(_.toOption.map(_._1)).pure[F]
     }
 
   def fromConfig[
