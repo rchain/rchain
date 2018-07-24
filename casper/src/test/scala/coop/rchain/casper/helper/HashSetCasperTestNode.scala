@@ -53,6 +53,8 @@ class HashSetCasperTestNode(name: String,
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
   implicit val blockStore        = InMemBlockStore.createWithId
+  // pre-population removed from internals of Casper`
+  blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   val activeRuntime  = Runtime.create(storageDirectory, storageSize)
@@ -61,7 +63,8 @@ class HashSetCasperTestNode(name: String,
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](runtimeManager, Some(validatorId), genesis)
+    MultiParentCasper
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](
       ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
