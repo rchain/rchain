@@ -94,6 +94,11 @@ message Signature {
   bytes  sig       = 3;
 }
 
+message BlockApproval {
+  ApprovedBlockCandidate candidate = 1; 
+  Signature              sig       = 2;
+}
+
 message ApprovedBlock  {
   ApprovedBlockCandidate candidate = 1; 
   repeated Signature     sigs      = 2;
