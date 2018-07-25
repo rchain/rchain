@@ -137,6 +137,123 @@ rule <thread> ...
          <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
     ... </FreeVars> ... </thread>
 
+
+
+// Logical "and"
+// First for a conjunctin of HigherProcesses
+rule <thread> ...
+        <FreeVars> ...
+          <node> [ID:Int][ P1:HigherProc /\ P2:HigherProc ][ PARENT:Exp ][ (.List
+            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false
+            => true) ] </node>
+         (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
+                  <node> [NEWID +Int 1][ P2 ][ ID ][ .List ]{ .List }[false]  </node>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+    ... </FreeVars> ... </thread>
+// Now for a conjuction of Chans
+rule <thread> ...
+        <FreeVars> ...
+          <node> [ID:Int][ C1:Chan /\ C2:Chan ][ PARENT:Exp ][ (.List
+            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false
+            => true) ] </node>
+         (.Bag => <node> [NEWID][ C1 ][ ID ][ .List ]{ .List }[false]  </node>
+                  <node> [NEWID +Int 1][ C2 ][ ID ][ .List ]{ .List }[false]  </node>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+    ... </FreeVars> ... </thread>
+
+
+
+// Logical "or"
+// For a statmenet P1 \/ P2, we do not bind any variables in either P1 or P2. Thus if we hit a
+// logical "or", we check for any free variables at all. Any variables here are free variables
+// in the entire statement.
+
+// For channels
+ // Make the 'ornode'
+rule <thread> ...
+        <FreeVars> ...
+          <node>
+            [ID:Int][ C1:Chan \/ C2:Chan ][ PARENT:Exp ][
+            .List => ListItem(NEWID) ]{ FREEVARS:List }[(false => true)]
+          </node>
+          (.Bag => <ornode>
+            [NEWID][ C1:Chan \/ C2:Chan ][ ID ][ .List ]{ FREEVARS:List }[false]
+          </ornode>)
+          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
+    ... </FreeVars> ... </thread>
+ // Continue building the tree
+rule <thread> ...
+        <FreeVars> ...
+          <ornode>
+            [ID:Int][ C1:Chan \/ C2:Chan ][ PARENT:Exp ][ (.List
+            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[(false => true)]
+          </ornode>
+          (.Bag => <node> [NEWID][ C1 ][ ID ][ .List ]{ .List }[false]  </node>
+                   <node> [NEWID +Int 1][ C2 ][ ID ][ .List ]{ .List }[false]  </node>)
+          <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+    ... </FreeVars> ... </thread>
+
+// For HigherProcecesses
+ // Make the 'ornode'
+rule <thread> ...
+       <FreeVars> ...
+         <node>
+           [ID:Int][ P1:HigherProc \/ P2:HigherProc ][ PARENT:Exp ][
+           .List => ListItem(NEWID) ]{ FREEVARS:List }[(false => true)]
+         </node>
+         (.Bag => <ornode>
+           [NEWID][ P1:HigherProc \/ P2:HigherProc ][ ID ][ .List ]{ FREEVARS:List }[false]
+         </ornode>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
+   ... </FreeVars> ... </thread>
+ // Continue building the tree
+rule <thread> ...
+       <FreeVars> ...
+         <ornode>
+           [ID:Int][ P1:HigherProc \/ P2:HigherProc ][ PARENT:Exp ][ (.List
+           => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[(false => true)]
+         </ornode>
+         (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
+                  <node> [NEWID +Int 1][ P2 ][ ID ][ .List ]{ .List }[false]  </node>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+   ... </FreeVars> ... </thread>
+
+// Absorb children into ornodes
+// (Now for both Channels and HigherProcesses)
+rule <thread> ...
+        <FreeVars> ...
+          <ornode>
+            [ID:Int][ P:HigherProcOrChan ][ PARENT:Exp ][
+            ChildrenListHead:List (ListItem(ChildID:Int) => .) ChildrenListTail:List
+            ]{ (.List => ChildFreeVars) FreeVars:List }[ true ]
+          </ornode>
+          (<node> [ChildID][ Q:HigherProcOrChan ][ ID ][ .List ]{ ChildFreeVars:List }[true] </node>
+                => .)
+    ... </FreeVars> ... </thread>
+// Once you've absorbed all the children into the ornode, transport its free
+// variables to the base's free variable list
+rule <thread> ...
+        <FreeVars> ...
+          <ornode>
+            [ID:Int][ P:HigherProcOrChan ][ PARENT:Int ][ .List ]{
+            (ListItem(X:Id) => .) FreeVars:List }[ true ]
+          </ornode>
+          <node> [0][ Q:HigherProcOrChan ][ "base" ][ BaseChildren:List ]{
+          (.List => ListItem(X)) BaseFreeVars:List }[true]  </node>
+    ... </FreeVars> ... </thread>
+// Then delete the ornode
+rule <thread> ...
+        <FreeVars> ...
+          (<ornode>
+            [ID:Int][ P:HigherProcOrChan ][ PARENT:Int ][ .List ]{ .List }[ true ]
+          </ornode> => .)
+          <node> [PARENT][ Q:HigherProcOrChan ][ GrandParentId:Exp ][
+          ChildrenListHead:List (ListItem(ID) => .) ChildrenListTail:List
+          ]{ FreeVars:List }[true] </node>
+    ... </FreeVars> ... </thread>
+
+
+
 // Rules for binding operations
 // Listen
 rule <thread> ...
