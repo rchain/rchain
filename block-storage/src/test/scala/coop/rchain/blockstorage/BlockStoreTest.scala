@@ -1,26 +1,19 @@
 package coop.rchain.blockstorage
 
+import scala.language.higherKinds
+
 import cats._
-import cats.effect._
-import cats.effect.concurrent._
-import cats.implicits._
-import cats.effect.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
-import coop.rchain.metrics.Metrics
-import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import org.scalacheck._
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
-import scala.language.higherKinds
-
-import Gen._
-import Arbitrary.arbitrary
 
 trait BlockStoreTest
     extends FlatSpecLike
