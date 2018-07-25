@@ -18,6 +18,7 @@
 #include <fstream>
 #include <string>
 #include <map>
+#include <deque>
 
 // The following functions and table orchestrate the handling of
 // Rosette Object export within the litvec portion of the exported object code.
@@ -42,12 +43,34 @@ void defaultObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::Ob
 }
 
 
+// This keeps track of which objects have been exported so we don't export them multiple times.
+std::set< std::pair<IdType, pOb> > exportedIds;
+
+// There are cases where the Objects reference themselves, either directly or indirectly via referenced
+// Objects. This can cause an endless loop during export, resulting in a crash.
+// We use a stack of pOb's during the recursive export of objects to catch that case here and set "looped"
+// to true, thus avoiding going down the rabbit hole.
+
+std::deque<pOb> populateStack;  // For looped reference detection.
+                                //  Using std::deque instead of std::stack because std::stack has no iterators
+
 // This function looks up an object in the handlers table based on its type string
 // and then calls the appropriate handler to populate it.
 
-std::set< std::pair<IdType, pOb> > exportedIds;
-
 void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
+
+    // Make sure this isn't a looped reference
+    for (const pOb stackOb: populateStack) {
+        if (stackOb == ob)
+        {
+            lvOb->set_object_id(BASE(ob)->objectId);
+            lvOb->set_reference(true);
+            lvOb->set_looped(true);
+            break;
+        }
+    }
+    // Note that we are working on this object
+    populateStack.push_front(ob);
 
     std::string type = BASE(ob)->typestring();
     auto oh = handlers.find(type);
@@ -56,7 +79,11 @@ void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
         ExportObjectType obType = oh->second.second;
         lvOb->set_type(obType);
 
-
+        if (lvOb->looped()) {
+            // Done with this object
+            populateStack.pop_front();
+            return;
+        }
         if (TAG(ob) == OTptr) {
             // It's a real Rosette object (not RblAtom derived)
             lvOb->set_object_id(BASE(ob)->objectId);
@@ -84,11 +111,14 @@ void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
             handler(lvOb, ob, obType);
         }
     } else {
+        // Oops.  We don't know how to handle this object type...yet.
         warning("Exporting object type %s not yet implemented!", type.c_str());
         lvOb->set_type(ObjectCodePB::OT_UNKNOWN);
         defaultObjectHandler(lvOb, ob, ObjectCodePB::OT_UNKNOWN);
     }
 
+    // Done with this object
+    populateStack.pop_front();
 }
 
 // The following functions are the handlers that populate object specific fields in the
@@ -320,12 +350,7 @@ void tupleExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::
     // to true, thus avoiding going down the rabbit hole.
 
     ObjectCodePB::Object *rest = teob->mutable_rest();
-    if (te->rest != ob) {
-        populateObjectByType(te->rest, rest);
-    } else {
-        rest->set_object_id(BASE(te->rest)->objectId);
-        rest->set_looped(true);
-    }
+    populateObjectByType(te->rest, rest);
 
     // A tupleExpr has a list of objects.  Retrieve and call the handler for each of them.
     for (int i = 0; i < te->numberOfElements(); i++) {
