@@ -33,6 +33,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
+import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
 
 class HashSetCasperTestNode(name: String,
@@ -52,8 +53,9 @@ class HashSetCasperTestNode(name: String,
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
-  implicit val blockStore        = InMemBlockStore.createWithId
-  // pre-population removed from internals of Casper`
+  val dir                        = BlockStoreFixture.dbDir
+  implicit val (blockStore, env) = BlockStoreFixture.create(dir)
+  // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
@@ -77,6 +79,10 @@ class HashSetCasperTestNode(name: String,
 
   def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
+  def tearDown(): Unit = {
+    env.close()
+    dir.recursivelyDelete()
+  }
 }
 
 object HashSetCasperTestNode {

@@ -12,14 +12,12 @@ import cats.mtl.implicits._
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
-class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.createWithId
-  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-  val initState                = BlockDag().copy(currentId = -1)
+class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
+  val initState = BlockDag().copy(currentId = -1)
 
   "Greatest common ancestor" should "be computed properly" in {
     /*
