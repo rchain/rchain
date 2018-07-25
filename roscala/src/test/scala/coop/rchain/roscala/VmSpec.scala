@@ -411,7 +411,7 @@ class VmSpec extends VmSpecUtils {
 
       Vm.run(ctxt, Vm.State(globalEnv = globalEnv))
 
-      rtnCtxt.rslt shouldBe RblFalse
+      rtnCtxt.rslt shouldBe RblBool(false)
     }
 
     "(+ 1.2 2.3)" should "return 3.5" inMultimode {
