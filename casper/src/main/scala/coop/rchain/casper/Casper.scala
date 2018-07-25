@@ -18,7 +18,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.discovery._
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import coop.rchain.shared.AttemptOps._

@@ -20,7 +20,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.comm.connect.Connect.dispatch
-import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
@@ -31,7 +31,7 @@ import coop.rchain.casper.helper.BlockGenerator.StateWithChain
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import scala.util.Random
 
@@ -57,8 +57,9 @@ class HashSetCasperTestNode(name: String,
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-  val activeRuntime  = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+  val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
@@ -74,7 +75,7 @@ class HashSetCasperTestNode(name: String,
     casperPacketHandler[Id]
   )
 
-  def receive(): Unit = tle.receive(dispatch[Id] _)
+  def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
 }
 
