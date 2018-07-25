@@ -14,6 +14,7 @@ import org.scalacheck.Gen._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import scala.util.control.NonFatal
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -114,6 +115,21 @@ trait BlockStoreTest
         store.asMap().size shouldEqual items.size
       }
     }
+
+  it should "rollback the transaction on error" in {
+    withStore { store =>
+      store.asMap().size shouldEqual 0
+      def elem = {
+        blockStoreElementGen.sample.get
+        throw new RuntimeException("msg")
+      }
+
+      a[RuntimeException] shouldBe thrownBy {
+        store.put { elem }
+      }
+      store.asMap().size shouldEqual 0
+    }
+  }
 }
 
 class InMemBlockStoreTest extends BlockStoreTest {
@@ -127,8 +143,8 @@ class LMDBBlockStoreTest extends BlockStoreTest {
 
   import java.nio.file.{Files, Path}
 
-  private[this] val dbDir: Path   = Files.createTempDirectory("block-store-test-")
-  private[this] val mapSize: Long = 1024L * 1024L * 4096L
+  private[this] def dbDir: Path   = Files.createTempDirectory("block-store-test-")
+  private[this] val mapSize: Long = 10 * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
     val env   = Context.env(dbDir, mapSize)
