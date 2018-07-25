@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
+import java.nio.file.{Files, Paths}
 
 import io.grpc.Server
 import cats._
@@ -29,8 +30,8 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery.{Ping => NDPing, _}
 import coop.rchain.shared._
 import ThrowableOps._
-import cats.effect.{Bracket, ExitCase, Sync}
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import cats.effect.Sync
+import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
@@ -150,6 +151,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val src               = PeerNode.parse(address).right.get
   private val storagePath       = conf.run.data_dir().resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
+  private val casperPersistencePath       = storagePath.resolve("casper-persistence")
   private val storageSize       = conf.run.map_size()
   private val defaultTimeout    = FiniteDuration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
@@ -163,9 +165,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit class TaskEffectOps[A](t: Task[A]) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
-
-  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
-  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
 
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
@@ -181,6 +180,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new TLNodeDiscovery[Task](src, defaultTimeout)
 
+  if (Files.notExists(casperPersistencePath)) Files.createDirectories(casperPersistencePath)
+  val config                                  = coop.rchain.blockstorage.LMDBBlockStore.Config(casperPersistencePath, 1024 * 1024)
+  val syncEffect: Sync[Effect]                = SyncInstances.syncEffect
+  implicit val blockStore: BlockStore[Effect] = LMDBBlockStore.create[Effect](config)(syncEffect, metricsEffect)
+
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
@@ -191,23 +195,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
-      storeRef   <- storeRefEffect
-      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
-      oracle = {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        SafetyOracle.turanOracle[Effect]
-      }
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      oracle         = SafetyOracle.turanOracle[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        implicit val oracleEvidence: SafetyOracle[Effect] = oracle
         MultiParentCasperConstructor
           .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       }
       grpcServer <- {
-        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
         implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
@@ -216,7 +213,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
-      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]

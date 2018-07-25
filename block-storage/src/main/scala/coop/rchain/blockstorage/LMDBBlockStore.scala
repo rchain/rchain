@@ -38,7 +38,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
-      ret <- syncF.bracket(syncF.pure(env.txnWrite())) { txn =>
+      ret <- syncF.bracket(syncF.delay(env.txnWrite())) { txn =>
               syncF.delay {
                 val (blockHash, blockMessage) = f
                 blocks.put(txn,
@@ -46,26 +46,26 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                            blockMessage.toByteString.toDirectByteBuffer)
                 txn.commit()
               }
-            }(txn => syncF.pure(txn.close()))
+            }(txn => syncF.delay(txn.close()))
     } yield ret
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
-      ret <- syncF.bracket(syncF.pure(env.txnRead()))(txn =>
-              syncF.pure {
+      ret <- syncF.bracket(syncF.delay(env.txnRead()))(txn =>
+              syncF.delay {
                 val r = Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
                   BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
                 txn.commit()
                 r
-            })(txn => syncF.pure(txn.close()))
+            })(txn => syncF.delay(txn.close()))
     } yield ret
 
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
-      ret <- syncF.bracket(syncF.pure(env.txnRead()))(txn =>
-              syncF.pure {
+      ret <- syncF.bracket(syncF.delay(env.txnRead()))(txn =>
+              syncF.delay {
                 val r = blocks.iterate(txn).asScala.foldLeft(Map.empty[BlockHash, BlockMessage]) {
                   (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
                     val hash = ByteString.copyFrom(x.key())
@@ -74,7 +74,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                 }
                 txn.commit()
                 r
-            })(txn => syncF.pure(txn.close()))
+            })(txn => syncF.delay(txn.close()))
     } yield ret
 
 }
@@ -83,12 +83,32 @@ object LMDBBlockStore {
 
   private val MetricNamePrefix = "lmdb-block-store-"
 
+  case class Config(path: Path,
+                    mapSize: Long,
+                    maxDbs: Int = 1,
+                    maxReaders: Int = 126,
+                    noTls: Boolean = true)
+
+  def create[F[_]](config: Config)(implicit
+                                   syncF: Sync[F],
+                                   metricsF: Metrics[F]): LMDBBlockStore[F] = {
+    val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+    val env = Env
+      .create()
+      .setMapSize(config.mapSize)
+      .setMaxDbs(config.maxDbs)
+      .setMaxReaders(config.maxReaders)
+      .open(config.path.toFile, flags: _*) //TODO this is a bracket
+
+    val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE) //TODO this is a bracket
+    new LMDBBlockStore(env, config.path, blocks)
+  }
+
   def create[F[_]](env: Env[ByteBuffer], path: Path)(implicit
                                                      syncF: Sync[F],
                                                      metricsF: Metrics[F]): BlockStore[F] = {
-
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
-    new LMDBBlockStore(env, path, blocks)
+    new LMDBBlockStore[F](env, path, blocks)
   }
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
