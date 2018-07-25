@@ -1,13 +1,14 @@
 module SENDING-RECEIVING
 imports PROCESSES-SEMANTICS
 
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 // SENDING AND RECEIVING
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
 // Put "sends" in out-cells, and "receives" in in-cells
 // Gives each in- and out- cell an ID for matching purposes
-// The "InData" and "OutData" are of the form: Id ; List of Outs/Ins (respectively) that are possible matches
+// The "InData" and "OutData" are of the form: Id ; List of Outs/Ins (respectively) that
+// are possible matches
 // There is nontrivial nondeterminism in this rewrite rule, in the order
 // in which the parallel processes are spawned. This doesn't affect the
 // results of our program, but it does change the structure of where the ID
@@ -51,7 +52,7 @@ rule
         (.Bag => <k> listmatch["STDMATCH"]( P ; D ) </k>)
         // Keep the body of the listen statement to rewrite as we go along
         (.Bag => <subst> Q </subst>)
-      </thread>
+      </thread> [sendreceivematch]
 
 // (b) the send's ID is in the list of the receive
 rule <thread>
@@ -70,7 +71,7 @@ rule <thread>
     <thread> ...
        <in> for(D:Chans <- C){ Q:HigherProc } => . </in>
        <InData> I ; L => . </InData>
-    </thread>
+    </thread> [sendreceivematch]
 
 
 // If there is ever a $(MATCHFAIL), we have not matched and we separate the thread
@@ -109,7 +110,8 @@ rule <thread> ...
     </thread>)
 
 
-// When we've finished matching, we're ready to execute Q after having replaced all the variables
+// When we've finished matching, we're ready to execute Q after having replaced all the
+// variables
 rule <thread>
         <in> for(D:Chans <- C){ P:HigherProc } => . </in>
         <InData> I1:Int ; L1:List => . </InData>
@@ -126,4 +128,5 @@ rule <thread>
 // that aren't on the same channel
 // *** We will have to wait until we can check for channel equality before
 // we can do this ***
+
 endmodule

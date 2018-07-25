@@ -1,8 +1,9 @@
 module MATCH-PROCESS
-imports PERSISTENT-SENDING-RECEIVING 
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+imports PERSISTENT-SENDING-RECEIVING
+
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 // THE DEFINITION OF THE "match" PROCESS (NOT the match function)
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
 // Take the first option out and see if there's a match
 rule <k> (match P:HigherProcOrChan { Q:HigherProcOrChan => { R:HigherProc } L:HigherMatchCases })
@@ -14,7 +15,9 @@ rule <k> #(MATCHPAUSE) ~> _ => P </k>
      <subst> P:HigherProc => . </subst>
 
 // Failure (we move on to the next case and try again, in order)
-rule <k> #(MATCHFAIL)[ "STDMATCH" ] ~> #(MATCHPAUSE) ~> match P:HigherProcOrChan { L:HigherMatchCases }
+rule <k> #(MATCHFAIL)[ "STDMATCH" ]
+      ~> #(MATCHPAUSE)
+      ~> match P:HigherProcOrChan { L:HigherMatchCases }
       => match P:HigherProcOrChan { L:HigherMatchCases } </k>
      (<subst> _ </subst> => .)
 

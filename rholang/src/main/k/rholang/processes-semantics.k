@@ -1,5 +1,6 @@
 module PROCESSES-SEMANTICS
-imports RHO-SYNTAX 
+imports RHO-SYNTAX
+
 // PROCESSES
 // Nil process
 rule Nil => .
@@ -11,11 +12,11 @@ rule <k> ... @ * C:Chan  => C ... </k>
 // Parallel processes
 // This is fully nondeterministic, as desired
 rule <thread> ... <k> ... P1:HigherProc | P2:HigherProc => P1 ... </k> ... </thread>
-     (.Bag => <thread> ... <k> P2 </k> ... </thread>)
+     (.Bag => <thread> ... <k> P2 </k> ... </thread>) [ndbParallelProcesses]
 
 // New construct
 rule <thread>  ... <k> new X:Id in { P:HigherProc } => P[ @ #(I:Int) / X] </k>  ... </thread>
-     <NewIntGenerator> I => I +Int 1 </NewIntGenerator> [newchannel]
+     <NewIntGenerator> I => I +Int 1 </NewIntGenerator> [newchannelcreation]
 
 // New construct which supports lists of new channels, and not just one.
 // Since Z:Ids could be an empty list, we need this recursive rule to have two
@@ -23,6 +24,7 @@ rule <thread>  ... <k> new X:Id in { P:HigherProc } => P[ @ #(I:Int) / X] </k>  
 // infinitely.
 rule <thread>  ... <k> new X:Id, Y:Id, Z:Ids in { P:HigherProc }
                        => new X:Id in { new Y:Id, Z:Ids in { P:HigherProc } }</k>  ... </thread>
+                                                                            [newchannelcreation]
 
 // Syntactic sugar for contracs as persistent sends/receives listening only on one channel.
 rule <k> contract D:Chan(C:Chans) = { P:HigherProc } => for(C <= D){ P } </k>
@@ -38,4 +40,5 @@ rule <thread> . </thread> => .
 
 // Delete k-cells which have a ground term in them
 rule <thread> ... <k> G:Ground => . </k> ... </thread>
+
 endmodule

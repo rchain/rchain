@@ -4,6 +4,10 @@ imports SUBSTITUTION
 // We need processes, including variables
 syntax Proc ::= ProcNoVars
               | Id
+              // logical "and"
+              | Proc "/\\" Proc [left]
+              // logical "or"
+              > Proc "\\/" Proc [left]
 
 // We need processes, excluding variables
 syntax ProcNoVars ::=
@@ -25,7 +29,7 @@ syntax ProcNoVars ::=
               // Match
               | "match" ProcOrName "{" MatchCases "}"
               // Parallel
-              | Proc "|" Proc [left]
+              | Proc "|" Proc [left,ndbParallelProcesses]
               // Bracket
               | "{" Proc "}" [bracket]
 
@@ -88,6 +92,10 @@ syntax HigherProcOrChanNoVars ::= ChanNoVars
 // We need higher processes, including variables
 syntax HigherProc ::= HigherProcNoVars
               | Id
+              // logical "and"
+              | HigherProc "/\\" HigherProc [left]
+              // logical "or"
+              > HigherProc "\\/" HigherProc [left]
 
 // Channels and Hiher Processes, specifically for sending and listening for tuples
 syntax Chans ::= List{ Chan, "," }
@@ -145,8 +153,10 @@ syntax Fun  ::=
               // General matching functions which use the "matching engine" below
                 "match" "[" String "]" "(" HigherProcOrChan ";" HigherProcOrChan ")"
               | "listmatch" "[" String "]" "(" HigherProcs ";" Chans ")"
-              | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ")" [strict(2,3)]
-              | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ";" Bool ")" [strict(3)]
+              | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ")"
+                                                                            [strict(2,3)]
+              | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ";" Bool ")"
+                                                                                      [strict(4)]
               // Functions for matching parallel processes
               | "toparmatchstdform" "(" HigherProcOrChan ")"
               | "fromparmatchstdform" "(" HigherProcOrChan ")"
@@ -157,6 +167,13 @@ syntax Fun  ::=
               | "#(MATCHFAIL)[" String "," Int "]"
               | "#(PARPAUSE)[" String "," Int "]"
               | "#(MATCHPAUSE)"
+              // For variable matching
+              | "#(VARPAUSE)[" String "," HigherProcOrChan "," Id "]"
+              | "#(VARPAUSE)[" String "," HigherProcOrChan "," Id "][" List "]"
+              | "#(VARFAIL)"
+              // A function to find free variables
+              | "fv(" String "," HigherProcOrChan "," Id ")"
+              | "bv(" HigherProcOrChan ")"
 
 syntax StringlessMatchFormSyntax ::=
               // Quote, Eval and Var

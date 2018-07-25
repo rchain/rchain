@@ -1,8 +1,9 @@
 module PERSISTENT-SENDING-RECEIVING
-imports SENDING-RECEIVING 
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+imports SENDING-RECEIVING
+
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 // PERSISTENT SENDING AND RECEIVING
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
 // 1. Persistent sending
 // We create an "out" cell just as we would have previously.
@@ -65,7 +66,8 @@ rule <thread> ...
         <subst> B => . </subst>
     ... </thread>
 
-// When we've finished matching, we're ready to execute Q after having replaced all the variables
+// When we've finished matching, we're ready to execute Q after having replaced all the
+// variables
 rule <thread>
         <in> for(D:Chans <- C){ P:HigherProc } => . </in>
         <InData> I1:Int ; L1:List => . </InData>
@@ -146,7 +148,8 @@ rule <thread>
     </thread>
 
 
-// When we've finished matching, we're ready to execute Q after having replaced all the variables
+// When we've finished matching, we're ready to execute Q after having replaced all the
+// variables
 // Note that we don't delete the "in" cell.
 rule <thread>
         <in> "persistent" => . </in>
