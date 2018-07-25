@@ -4,12 +4,7 @@ import cats.data.{OptionT, State, StateT}
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Connective.ConnectiveInstance.{
-  ConnAndBody,
-  ConnNotBody,
-  ConnOrBody,
-  VarRefBody
-}
+import coop.rchain.models.Connective.ConnectiveInstance.{ConnAndBody, ConnNotBody, ConnOrBody, VarRefBody}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
@@ -22,6 +17,7 @@ import OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.accounting._
 import NonDetFreeMapWithCost._
 import cats.arrow.FunctionK
+import coop.rchain.rholang.interpreter.SpatialMatcher
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
@@ -299,26 +295,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
           // If there's a capture variable, we prefer to add things to that rather than throw them
           // away.
           case Some(level) => {
-            // This function is essentially an early terminating left fold.
-            @tailrec
-            def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMapWithCost[Par] =
-              remainder match {
-                case Nil => NonDetFreeMapWithCost.pure(p)
-                case item +: rem =>
-                  if (lf.locallyFree(item, 0).isEmpty)
-                    foldRemainder(rem, merger(p, item))
-                  else if (wildcard)
-                    foldRemainder(rem, p)
-                  else
-                    NonDetFreeMapWithCost.emptyMap[Par]
-              }
-            for {
-              p <- StateT.inspect[StreamT[State[CostAccount, ?], ?], FreeMap, Par]((m: FreeMap) =>
-                    m.getOrElse(level, VectorPar()))
-              collectPar <- foldRemainder(rem.reverse, p)
-              _ <- StateT.modify[StreamT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
-                    m + (level -> collectPar))
-            } yield Unit
+            handleRemainder(rem, level, merger, wildcard)
           }
         }
       // Try to find a match for a single pattern.
@@ -337,6 +314,35 @@ object SpatialMatcher extends SpatialMatcherInstances {
         }
       }
     }
+
+  private def handleRemainder[T](rem: Seq[T],
+                                 level: Int,
+                                 merger: (Par, T) => Par,
+                                 wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): NonDetFreeMapWithCost[Unit] = {
+    // This function is essentially an early terminating left fold.
+    @tailrec
+    def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMapWithCost[Par] =
+      remainder match {
+        case Nil => NonDetFreeMapWithCost.pure(p)
+        case item +: rem =>
+          if (lf.locallyFree(item, 0).isEmpty)
+            foldRemainder(rem, merger(p, item))
+          else if (wildcard)
+            foldRemainder(rem, p)
+          else
+            NonDetFreeMapWithCost.emptyMap[Par]
+      }
+    for {
+      p <- StateT.inspect[StreamT[State[CostAccount, ?], ?], FreeMap, Par]((m: FreeMap) =>
+            m.getOrElse(level, VectorPar()))
+      collectPar <- foldRemainder(rem.reverse, p)
+      _ <- StateT.modify[StreamT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
+            m + (level -> collectPar))
+    } yield Unit
+  }
+
 
   /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
     */
