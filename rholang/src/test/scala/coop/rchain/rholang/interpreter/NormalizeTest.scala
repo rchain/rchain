@@ -241,6 +241,34 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  "PPercentPercent" should "Delegate" in {
+    val mapData = new ListKeyValuePair()
+    mapData.add(
+      new KeyValuePairImpl(
+        new PGround(new GroundString("name")),
+        new PGround(new GroundString("Alice"))
+      )
+    )
+    val pPercentPercent =
+      new PPercentPercent(
+        new PGround(new GroundString("Hi ${name}")),
+        new PCollect(new CollectMap(mapData))
+      )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
+    result.par should be(
+      inputs.par.prepend(
+        EPercentPercent(
+          GString("Hi ${name}"),
+          ParMap(
+            seq = List[(Par, Par)]((GString("name"), GString("Alice"))),
+            connectiveUsed = false,
+            locallyFree = BitSet()
+          )
+        )
+      , 0))
+    result.knownFree should be(inputs.knownFree)
+  }
+
   "PAdd" should "Delegate" in {
     val pAdd = new PAdd(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
     val boundInputs =
@@ -261,6 +289,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinus, boundInputs).value
     result.par should be(
       inputs.par.prepend(EMinus(EVar(BoundVar(2)), EMult(EVar(BoundVar(1)), EVar(BoundVar(0)))), 0))
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PPlusPlus" should "Delegate" in {
+    val pPlusPlus = new PPlusPlus(
+      new PGround(new GroundString("abc")),
+      new PGround(new GroundString("def"))
+    )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
+    result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def")), 0))
     result.knownFree should be(inputs.knownFree)
   }
 

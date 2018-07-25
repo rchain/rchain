@@ -558,7 +558,93 @@ object Reduce {
                 .spatialMatch(substTarget, substPattern)
                 .runS(SpatialMatcher.emptyMap)
                 .isDefined))
-
+        case EPercentPercentBody(EPercentPercent(p1, p2)) =>
+          def evalToStringPair(keyExpr: Expr, valueExpr: Expr): M[(String, String)] =
+            (keyExpr.exprInstance, valueExpr.exprInstance) match {
+              case (GString(keyString), GString(valueString)) =>
+                Applicative[M].pure[(String, String)](keyString -> valueString)
+              case (GString(keyString), GInt(valueInt)) =>
+                Applicative[M].pure[(String, String)](keyString -> valueInt.toString)
+              // TODO: Add cases for other ground terms as well? Maybe it would be better
+              // to implement cats.Show for all ground terms.
+              case (_: GString, value) =>
+                s.raiseError[(String, String)](
+                  ReduceError(s"Error: interpolation doesn't support ${value.typ}")
+                )
+              case _ =>
+                s.raiseError[(String, String)](
+                  ReduceError("Error: interpolation Map should only contain String keys")
+                )
+            }
+          def interpolate(string: String, keyValuePairs: List[(String, String)]): String = {
+            val result  = StringBuilder.newBuilder
+            var current = string
+            while (current.nonEmpty) {
+              keyValuePairs.find {
+                case (k, _) => current.startsWith("${" + k + "}")
+              } match {
+                case Some((k, v)) =>
+                  result ++= v
+                  current = current.drop(k.length + 3)
+                case None =>
+                  result += current.head
+                  current = current.tail
+              }
+            }
+            result.toString
+          }
+          for {
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
+                         rhs.iterator
+                           .map {
+                             case (k, v) =>
+                               for {
+                                 keyExpr   <- evalSingleExpr(k)
+                                 valueExpr <- evalSingleExpr(v)
+                                 result    <- evalToStringPair(keyExpr, valueExpr)
+                               } yield result
+                           }
+                           .toList
+                           .sequence[M, (String, String)]
+                           .map(keyValuePairs => GString(interpolate(lhs, keyValuePairs)))
+                       case (_: GString, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `%%` expected Map but got ${other.typ}"
+                           )
+                         )
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `%%` is not defined on ${other.typ}"
+                           )
+                         )
+                     }
+          } yield result
+        case EPlusPlusBody(EPlusPlus(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GString(lhs), GString(rhs)) =>
+                         Applicative[M].pure[Expr](GString(lhs + rhs))
+                       case (_: GString, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` expected String but got ${other.typ}"
+                           )
+                         )
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` is not defined on ${other.typ}"
+                           )
+                         )
+                     }
+          } yield result
         case EVarBody(EVar(v)) =>
           for {
             p       <- eval(v)
@@ -834,7 +920,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case _ =>
-            s.raiseError(ReduceError("Error: add can be called only on Map and Set."))
+            s.raiseError(ReduceError("Error: contains can be called only on Map and Set."))
         }
 
       method("contains", 1, args) {
@@ -866,6 +952,52 @@ object Reduce {
       }
     }
 
+    private[this] def length: MethodType =
+      (p: Par, args: Seq[Par]) =>
+        (env: Env[Par]) => {
+          def length(baseExpr: Expr): M[Expr] =
+            baseExpr.exprInstance match {
+              case GString(string) =>
+                Applicative[M].pure[Expr](GInt(string.length))
+              case other =>
+                s.raiseError(
+                  ReduceError(
+                    s"Error: Method `length` is not defined on ${other.typ}."
+                  )
+                )
+            }
+          method("length", 0, args) {
+            for {
+              baseExpr <- evalSingleExpr(p)(env)
+              result   <- length(baseExpr)
+            } yield result
+          }
+      }
+
+    private[this] def slice: MethodType =
+      (p: Par, args: Seq[Par]) =>
+        (env: Env[Par]) => {
+          def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
+            baseExpr.exprInstance match {
+              case GString(string) =>
+                Applicative[M].pure[Par](GString(string.slice(from, until)))
+              case other =>
+                s.raiseError(
+                  ReduceError(
+                    s"Error: Method `slice` is not defined on ${other.typ}."
+                  )
+                )
+            }
+          method("slice", 2, args) {
+            for {
+              baseExpr <- evalSingleExpr(p)(env)
+              fromArg  <- evalToInt(args(0))(env)
+              toArg    <- evalToInt(args(1))(env)
+              result   <- slice(baseExpr, fromArg, toArg)
+            } yield result
+          }
+      }
+
     def methodTable(method: String): Option[MethodType] =
       method match {
         case "nth"         => Some(nth)
@@ -877,6 +1009,8 @@ object Reduce {
         case "delete"      => Some(delete)
         case "contains"    => Some(contains)
         case "get"         => Some(get)
+        case "length"      => Some(length)
+        case "slice"       => Some(slice)
         case _             => None
       }
 

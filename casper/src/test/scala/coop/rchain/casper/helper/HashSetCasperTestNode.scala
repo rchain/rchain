@@ -20,16 +20,18 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.comm.connect.Connect.dispatch
-import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.casper.helper.BlockGenerator.StateWithChain
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import scala.util.Random
 
@@ -50,15 +52,20 @@ class HashSetCasperTestNode(name: String,
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
+  implicit val blockStore        = InMemBlockStore.createWithId
+  // pre-population removed from internals of Casper`
+  blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
-  val activeRuntime  = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+  val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
+  val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   implicit val casperEff =
-    MultiParentCasper.hashSetCasper[Id](runtimeManager, Some(validatorId), genesis)
+    MultiParentCasper
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](
       ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
@@ -68,7 +75,7 @@ class HashSetCasperTestNode(name: String,
     casperPacketHandler[Id]
   )
 
-  def receive(): Unit = tle.receive(dispatch[Id] _)
+  def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
 }
 

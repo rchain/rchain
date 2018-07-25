@@ -7,8 +7,13 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import cats._
 import cats.data._
+import cats.effect.Bracket
 import cats.implicits._
+import cats.mtl.MonadState
 import cats.mtl.implicits._
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
@@ -24,12 +29,14 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in {
-    val v1     = ByteString.copyFromUtf8("Validator One")
-    val v2     = ByteString.copyFromUtf8("Validator Two")
-    val v1Bond = Bond(v1, 2)
-    val v2Bond = Bond(v2, 3)
-    val bonds  = Seq(v1Bond, v2Bond)
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    val v1                       = ByteString.copyFromUtf8("Validator One")
+    val v2                       = ByteString.copyFromUtf8("Validator Two")
+    val v1Bond                   = Bond(v1, 2)
+    val v2Bond                   = Bond(v2, 3)
+    val bonds                    = Seq(v1Bond, v2Bond)
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[F](Seq(genesis.blockHash),
@@ -87,14 +94,16 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Turan Oracle" should "detect possible disagreements appropriately" in {
-    val v1     = ByteString.copyFromUtf8("Validator One")
-    val v2     = ByteString.copyFromUtf8("Validator Two")
-    val v3     = ByteString.copyFromUtf8("Validator Three")
-    val v1Bond = Bond(v1, 25)
-    val v2Bond = Bond(v2, 20)
-    val v3Bond = Bond(v3, 15)
-    val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    val v1                       = ByteString.copyFromUtf8("Validator One")
+    val v2                       = ByteString.copyFromUtf8("Validator Two")
+    val v3                       = ByteString.copyFromUtf8("Validator Three")
+    val v1Bond                   = Bond(v1, 25)
+    val v2Bond                   = Bond(v2, 20)
+    val v3Bond                   = Bond(v3, 15)
+    val bonds                    = Seq(v1Bond, v2Bond, v3Bond)
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[F](
