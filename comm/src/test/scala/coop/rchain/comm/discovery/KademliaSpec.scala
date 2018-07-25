@@ -103,14 +103,15 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
     distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
 
-  private val pingOk: Ping[Id] = (pn: PeerNode) => {
-    pingedPeers += pn
-    true
-  }
+  private val pingOk: Ping[Id]   = new PingMock(returns = true)
+  private val pingFail: Ping[Id] = new PingMock(returns = false)
 
-  private val pingFail: Ping[Id] = (pn: PeerNode) => {
-    pingedPeers += pn
-    false
+  private class PingMock(returns: Boolean) extends Ping[Id] {
+    def ping(peer: PeerNode): Boolean = {
+      pingedPeers += peer
+      returns
+    }
+    def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
   }
 
 }

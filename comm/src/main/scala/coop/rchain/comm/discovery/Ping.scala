@@ -18,7 +18,7 @@ object Ping extends PingInstances {
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit P: Ping[F]): Ping[T[F, ?]] =
     new Ping[T[F, ?]] {
-      def ping(node: PeerNode): T[F, Boolean] = P.ping(node).liftM[T]
+      def ping(node: PeerNode): T[F, Boolean]                         = P.ping(node).liftM[T]
       def lookup(key: Seq[Byte], peer: PeerNode): T[F, Seq[PeerNode]] = P.lookup(key, peer).liftM[T]
     }
 }

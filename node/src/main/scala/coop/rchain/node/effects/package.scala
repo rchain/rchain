@@ -13,6 +13,7 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
+import coop.rchain.comm.protocol.routing.{Ping => _, _}
 
 package object effects {
 
@@ -42,14 +43,14 @@ package object effects {
           _   <- Metrics[F].incrementCounter("protocol-lookup-send")
           req = ProtocolHelper.lookup(src, key)
           r <- TransportLayer[F]
-          .roundTrip(remoteNode, req, timeout)
-          .map(_.toOption
-            .map {
-              case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                lr.nodes.map(ProtocolHelper.toPeerNode)
-              case _ => Seq()
-            }
-            .getOrElse(Seq()))
+                .roundTrip(remoteNode, req, timeout)
+                .map(_.toOption
+                  .map {
+                    case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
+                      lr.nodes.map(ProtocolHelper.toPeerNode)
+                    case _ => Seq()
+                  }
+                  .getOrElse(Seq()))
         } yield r
     }
 

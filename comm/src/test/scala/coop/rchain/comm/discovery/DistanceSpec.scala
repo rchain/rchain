@@ -21,8 +21,11 @@ object b {
 
 class DistanceSpec extends FlatSpec with Matchers {
 
-  val endpoint                = Endpoint("", 0, 0)
-  implicit val ping: Ping[Id] = (_: PeerNode) => true
+  val endpoint = Endpoint("", 0, 0)
+  implicit val ping: Ping[Id] = new Ping[Id] {
+    def ping(node: PeerNode): Boolean                         = true
+    def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+  }
   implicit val capture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A]       = a
     def unsafeUncapture[A](fa: Id[A]): A = fa

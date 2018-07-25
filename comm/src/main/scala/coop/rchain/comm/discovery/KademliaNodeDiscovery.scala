@@ -56,7 +56,8 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        lookup(target, peerSet.head)
+        Ping[F]
+          .lookup(target, peerSet.head)
           .map { results =>
             potentials ++ results.filter(
               r =>
