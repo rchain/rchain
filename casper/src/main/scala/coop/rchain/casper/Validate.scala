@@ -31,12 +31,11 @@ object Validate {
     )
 
   def childMapIterator(blockHashSet: Set[BlockHash],
-                       dag: BlockDag,
                        internalMap: Map[BlockHash, BlockMessage]) = new Iterator[BlockMessage] {
-    val undelying: Iterator[BlockHash] = blockHashSet.iterator
-    override def hasNext: Boolean      = undelying.hasNext
+    val underlying: Iterator[BlockHash] = blockHashSet.iterator
+    override def hasNext: Boolean      = underlying.hasNext
 
-    override def next(): BlockMessage = internalMap(undelying.next())
+    override def next(): BlockMessage = internalMap(underlying.next())
   }
 
   def ignore(b: BlockMessage, reason: String): String =
@@ -160,8 +159,8 @@ object Validate {
     BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
       {
         val deployKeySet = block.getBody.newCode.map(d => (d.getRaw.user, d.getRaw.timestamp)).toSet
-        val iterator = DagOperations.bfTraverse(Some(genesis))(x =>
-          childMapIterator(dag.childMap.getOrElse(x.blockHash, Set.empty), dag, internalMap))
+        val iterator = DagOperations.bfTraverse(Some(genesis))(b =>
+          childMapIterator(dag.childMap.getOrElse(b.blockHash, Set.empty), internalMap))
         val repeatedBlocks = iterator.filter(it => {
           it.body.exists(
             _.newCode.exists(

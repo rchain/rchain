@@ -151,10 +151,10 @@ sealed abstract class MultiParentCasperInstances {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
-          validDepoly <- Validate.repeatDeploy[F](b, genesis, dag)
+          validDeploy <- Validate.repeatDeploy[F](b, genesis, dag)
           attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
-                    else if (!validDepoly) InvalidRepeatDepoly.pure[F]
+                    else if (!validDeploy) InvalidRepeatDepoly.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case MissingBlocks         => ().pure[F]
