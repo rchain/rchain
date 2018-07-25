@@ -9,6 +9,11 @@
 #include "Method.h"
 #include "Pattern.h"
 #include "Table.h"
+#include "Vm.h"
+#include "MI.h"
+#include "Cstruct.h"
+#include "Method.h"
+#include "Operation.h"
 
 #include "CommandLine.h"
 #include "Export.h"
@@ -101,8 +106,15 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     case ObjectCodePB::OT_ACTOR: {
         ObjectCodePB::Actor * pbob = ob->mutable_actor();
-        retval = Actor::create();
-        // TODO: extension
+        ObjectCodePB::StdExtension * pbse = pbob->mutable_extension()->mutable_std_extension();
+
+        // An Actor references a StdExtension which is similar to a tuple which is a list of objects.
+        Tuple * tup = Tuple::create(pbse->elements_size(), INVALID);
+        for (int i = 0; i < pbse->elements_size(); i++) {
+            BASE(tup)->setNth( i, createRosetteObject(pbse->mutable_elements(i)) );
+        }
+
+        retval = Actor::create( meta, parent, StdExtension::create( tup ));
         break;
     }
 
@@ -448,6 +460,100 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         ObjectCodePB::RblTable * pbob = ob->mutable_rbl_table();
         retval = RblTable::create( (Tuple *)createRosetteObject(pbob->mutable_tbl()) );
         break;
+    }
+
+    case ObjectCodePB::OT_INDEXED_META: {
+        ObjectCodePB::IndexedMeta * pbob = ob->mutable_indexed_meta();
+
+        // TODO: Figure this out
+        // StdMeta * sm = StdMeta::create( (Tuple *)createRosetteObject( pbob->mutable_extension()) );
+        // retval = 
+
+        break;
+    }
+    case ObjectCodePB::OT_TOP_ENV: {
+        ObjectCodePB::TopEnv * pbob = ob->mutable_top_env();
+        retval = RBLtopenv::create();
+        break;
+    }
+
+    case ObjectCodePB::OT_MI_ACTOR: {
+        ObjectCodePB::MIActor * pbob = ob->mutable_mi_actor();
+
+        // A MIActor has a tuple extension
+        Tuple * tup = Tuple::create( (Tuple *)createRosetteObject(pbob->mutable_extension()) );
+        retval = MIActor::create( tup );
+        break;
+    }
+    
+    case ObjectCodePB::OT_ATOMIC_DESCRIPTOR: {
+        ObjectCodePB::AtomicDescriptor * pbob = ob->mutable_atomic_descriptor();
+
+        AtomicDescriptor * ad = AtomicDescriptor::create();
+        ad->_offset = pbob->_offset();
+        ad->_align_to = pbob->_align_to();
+        ad->_size = pbob->_size();
+        ad->mnemonic = createRosetteObject(pbob->mutable_mnemonic());
+        ad->imported = createRosetteObject(pbob->mutable_imported());
+        ad->freeStructOnGC = createRosetteObject(pbob->mutable_freestructongc());
+        ad->_signed = (RblBool *)createRosetteObject(pbob->mutable__signed());
+
+        retval = ad;
+        break;
+    }
+    
+    case ObjectCodePB::OT_REFLECTIVE_MTHD: {
+        ObjectCodePB::ReflectiveMthd * pbob = ob->mutable_reflective_mthd();
+        retval = ReflectiveMthd::create( (Code *)createRosetteObject(pbob->mutable_code()),
+                                                createRosetteObject(pbob->mutable_id()),
+                                                createRosetteObject(pbob->mutable_source()));
+
+        break;
+    }
+    
+    case ObjectCodePB::OT_PRODUCT_TYPE: {
+        ObjectCodePB::ProductType * pbob = ob->mutable_product_type();
+
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        retval = ProductType::create( tup, NIV );
+        break;
+    }
+    
+    case ObjectCodePB::OT_SUM_TYPE: {
+        ObjectCodePB::SumType * pbob = ob->mutable_sum_type();
+
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        retval = SumType::create( tup );
+        break;
+    }
+    
+    case ObjectCodePB::OT_MULTI_METHOD: {
+        ObjectCodePB::MultiMethod * pbob = ob->mutable_multi_method();
+
+        MultiMethod * mm = MultiMethod::create();
+
+        // A StdExtension is similar to a tuple which is a list of objects.
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            BASE(tup)->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        mm->extension = StdExtension::create( tup );
+
+        retval = mm;
+        break;
+    }
+
+    case ObjectCodePB::OT_STD_OPRN: {
+        ObjectCodePB::StdOprn * pbob = ob->mutable_std_oprn();
+
+        // TODO: fix these parameters
+        retval = StdOprn::create(INVALID, RBLBOOL(false));
     }
 
     default:
