@@ -96,13 +96,21 @@ void populateObjectByType(pOb ob, ObjectCodePB::Object *lvOb) {
                 ObjectCodePB::Object * storeOb = objectCode.add_objects();
                 storeOb->set_type(obType);
                 storeOb->set_object_id(BASE(ob)->objectId);
-                storeOb->set_meta_id(BASE(ob)->meta()->objectId);
-                storeOb->set_parent_id(BASE(ob)->parent()->objectId);
                 storeOb->set_reference(false);
 
+                // Call the handler to populate this particular object type
                 handler(storeOb, ob, obType);
+
+                // Remember that we handled this object
                 exportedIds.insert(std::make_pair(BASE(ob)->objectId, ob));
 
+                // Handle the meta and parent object pointers included in the Base class from
+                // which all object types are derived.
+                ObjectCodePB::Object *meta = storeOb->mutable_meta();
+                populateObjectByType( BASE(ob)->meta(), meta );
+
+                ObjectCodePB::Object *parent = storeOb->mutable_parent();
+                populateObjectByType( BASE(ob)->parent(), parent );
             }
 
         } else {

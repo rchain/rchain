@@ -87,6 +87,15 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         }
     }
 
+    pOb meta = INVALID;
+    pOb parent = INVALID;
+    if (ob->has_meta()) {
+        meta = createRosetteObject(ob->mutable_meta());
+    }
+    if (ob->has_parent()) {
+        parent = createRosetteObject(ob->mutable_parent());
+    }
+
     // Create the object by type
     switch(ob->type()) {
 
@@ -444,6 +453,12 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
     default:
         warning("Import object type=%d not yet implemented!\nObjectPB=\n%s\n", ob->type(), ob->DebugString().c_str());
         assert(false);
+    }
+
+    // Handle meta and parent fields. Not for RblAtom objects.
+    if (retval && TAG(retval) == OTptr) {
+        retval->meta() = meta;
+        retval->parent() = parent;
     }
 
     // Save the result in the objects table so we don't create another next time this object is referenced.

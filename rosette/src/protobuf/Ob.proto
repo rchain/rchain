@@ -332,8 +332,8 @@ enum ObType {
 message Object {
     ObType type = 1;
     uint64 object_id = 2;
-    uint64 meta_id = 3;
-    uint64 parent_id = 4;
+    Object meta = 3;
+    Object parent = 4;
     bool looped = 5;
     bool reference = 6;
 
