@@ -133,7 +133,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
           ps.find(_.key == peer.key) match {
             case Some(entry) =>
               ps -= entry
-              ps += entry
+              ps += new Entry(peer, _.key)
               None
             case None =>
               if (ps.size < k) {
