@@ -36,6 +36,9 @@ object DoublyLinkedDagOperations {
     val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList
     val dependencyFree: Set[A]                     = dag.dependencyFree
 
+    assert(!parentToChildAdjacencyList.values.toSet.contains(Set.empty[A]))
+    assert(!childToParentAdjacencyList.values.toSet.contains(Set.empty[A]))
+
     val updatedParentToChildAdjacencyList =
       MapHelper.updatedWith(parentToChildAdjacencyList, parent)(Set(child))(_ + child)
     val updatedChildToParentAdjacencyList =
