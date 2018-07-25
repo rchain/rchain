@@ -9,9 +9,9 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
-import coop.rchain.comm.protocol.routing.{Ping => ProtocolPing, _}
+import coop.rchain.comm.protocol.routing._
 
-class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
     src: PeerNode,
     timeout: FiniteDuration)
     extends NodeDiscovery[F] {
@@ -56,7 +56,7 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        Ping[F]
+        KademliaRPC[F]
           .lookup(target, peerSet.head)
           .map { results =>
             potentials ++ results.filter(

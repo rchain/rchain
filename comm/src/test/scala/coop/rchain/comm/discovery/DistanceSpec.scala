@@ -22,7 +22,7 @@ object b {
 class DistanceSpec extends FlatSpec with Matchers {
 
   val endpoint = Endpoint("", 0, 0)
-  implicit val ping: Ping[Id] = new Ping[Id] {
+  implicit val ping: KademliaRPC[Id] = new KademliaRPC[Id] {
     def ping(node: PeerNode): Boolean                         = true
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
   }

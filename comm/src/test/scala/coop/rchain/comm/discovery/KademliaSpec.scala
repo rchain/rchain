@@ -41,7 +41,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     describe("when adding a peer to an empty table") {
       it("should add it to a bucket according to its distance") {
         // given
-        implicit val ping: Ping[Id] = pingOk
+        implicit val ping: KademliaRPC[Id] = pingOk
         // when
         table.observe[Id](peer0)
         // then
@@ -50,7 +50,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
       it("should not ping the peer") {
         // given
-        implicit val ping: Ping[Id] = pingOk
+        implicit val ping: KademliaRPC[Id] = pingOk
         // when
         table.observe[Id](peer0)
         // then
@@ -61,7 +61,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     describe("when adding a peer to a table, where corresponding bucket is full") {
       it("should ping the oldest peer to check if it responds") {
         // given
-        implicit val ping: Ping[Id] = pingOk
+        implicit val ping: KademliaRPC[Id] = pingOk
         thatBucket4IsFull
         // when
         table.observe[Id](peer4)
@@ -72,7 +72,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       describe("and oldest peer IS responding to ping") {
         it("should drop the new peer") {
           // given
-          implicit val ping: Ping[Id] = pingOk
+          implicit val ping: KademliaRPC[Id] = pingOk
           thatBucket4IsFull
           // when
           table.observe[Id](peer4)
@@ -83,7 +83,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       describe("and oldest peer is NOT responding to ping") {
         it("should add the new peer and drop the oldest one") {
           // given
-          implicit val ping: Ping[Id] = pingFail
+          implicit val ping: KademliaRPC[Id] = pingFail
           thatBucket4IsFull
           // when
           table.observe[Id](peer4)
@@ -94,7 +94,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     }
   }
 
-  private def thatBucket4IsFull(implicit ev: Ping[Id]): Unit = {
+  private def thatBucket4IsFull(implicit ev: KademliaRPC[Id]): Unit = {
     table.observe[Id](peer1)
     table.observe[Id](peer2)
     table.observe[Id](peer3)
@@ -103,10 +103,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
     distance.map(d => table.table(d).map(_.entry)).getOrElse(Seq.empty[PeerNode])
 
-  private val pingOk: Ping[Id]   = new PingMock(returns = true)
-  private val pingFail: Ping[Id] = new PingMock(returns = false)
+  private val pingOk: KademliaRPC[Id]   = new KademliaRPCMock(returns = true)
+  private val pingFail: KademliaRPC[Id] = new KademliaRPCMock(returns = false)
 
-  private class PingMock(returns: Boolean) extends Ping[Id] {
+  private class KademliaRPCMock(returns: Boolean) extends KademliaRPC[Id] {
     def ping(peer: PeerNode): Boolean = {
       pingedPeers += peer
       returns

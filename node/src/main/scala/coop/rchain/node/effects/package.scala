@@ -28,9 +28,10 @@ package object effects {
     }
   }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
-                                                          timeout: FiniteDuration): Ping[F] =
-    new Ping[F] {
+  def kademliaRPC[F[_]: Monad: Capture: Metrics: TransportLayer](
+      src: PeerNode,
+      timeout: FiniteDuration): KademliaRPC[F] =
+    new KademliaRPC[F] {
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
