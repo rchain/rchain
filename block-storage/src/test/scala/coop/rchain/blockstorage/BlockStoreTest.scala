@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol.{BlockMessage, Header}
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rspace.Context
+import coop.rchain.shared.PathOps._
 import org.scalacheck._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
@@ -131,30 +132,12 @@ class InMemBlockStoreTest extends BlockStoreTest {
 
 class LMDBBlockStoreTest extends BlockStoreTest {
 
-  import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
-  import java.nio.file.attribute.BasicFileAttributes
-
-  // TODO: move this and impl from rspace tests to shared
-  private def makeDeleteFileVisitor: SimpleFileVisitor[Path] =
-    new SimpleFileVisitor[Path] {
-      override def visitFile(p: Path, attrs: BasicFileAttributes): FileVisitResult = {
-        Files.delete(p)
-        FileVisitResult.CONTINUE
-      }
-      override def postVisitDirectory(p: Path, e: java.io.IOException): FileVisitResult = {
-        Files.delete(p)
-        FileVisitResult.CONTINUE
-      }
-    }
-
-  def recursivelyDeletePath(p: Path): Path =
-    Files.walkFileTree(p, makeDeleteFileVisitor)
+  import java.nio.file.{Files, Path}
 
   private[this] val dbDir: Path   = Files.createTempDirectory("block-store-test-")
   private[this] val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
-
     val env   = Context.env(dbDir, mapSize)
     val store = LMDBBlockStore.createWithId(env, dbDir)
     try {
@@ -165,5 +148,5 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   }
 
   override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
 }
