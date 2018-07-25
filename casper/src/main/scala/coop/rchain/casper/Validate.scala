@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -29,6 +29,15 @@ object Validate {
     Map(
       "ed25519" -> Ed25519.verify
     )
+
+  def childMapIterator(blockHashSet: Set[BlockHash],
+                       dag: BlockDag,
+                       internalMap: Map[BlockHash, BlockMessage]) = new Iterator[BlockMessage] {
+    val undelying: Iterator[BlockHash] = blockHashSet.iterator
+    override def hasNext: Boolean      = undelying.hasNext
+
+    override def next(): BlockMessage = internalMap(undelying.next())
+  }
 
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
@@ -138,6 +147,44 @@ object Validate {
           _ <- Log[F].debug(
                 s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
         } yield Left(MissingBlocks)
+      }
+    }
+
+  /**
+    * Validate no deploy by the same (user, millisecond timestamp)
+    * has been produced in the chain
+    */
+  def repeatDeploy[F[_]: Monad: Log: BlockStore](block: BlockMessage,
+                                                 genesis: BlockMessage,
+                                                 dag: BlockDag): F[Boolean] =
+    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
+      {
+        val deployKeySet = block.getBody.newCode.map(d => (d.getRaw.user, d.getRaw.timestamp)).toSet
+        val iterator = DagOperations.bfTraverse(Some(genesis))(x =>
+          childMapIterator(dag.childMap.getOrElse(x.blockHash, Set.empty), dag, internalMap))
+        val repeatedBlocks = iterator.filter(it => {
+          it.body.exists(
+            _.newCode.exists(
+              _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+            )
+          )
+        })
+        // it is allowed for there to be the same (user, timestamp) transaction in both forks
+        val parents = ProtoUtil.parents(block)
+        val invalid = repeatedBlocks.exists(b1 => {
+          parents.contains(b1.blockHash)
+        })
+
+        if (!invalid) {
+          true.pure[F]
+        } else {
+          for {
+            _ <- Log[F].warn(
+                  ignore(
+                    block,
+                    "found deploy by the same (user, millisecond timestamp) produced in the chain"))
+          } yield false
+        }
       }
     }
 

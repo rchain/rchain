@@ -176,6 +176,32 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
   }
 
+  it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+
+    val deploys = (0 to 1).map(i => ProtoUtil.basicDeploy(i))
+    val deployPrim0 = deploys(1).withRaw(
+      deploys(1).getRaw.withTimestamp(deploys(0).getRaw.timestamp).withUser(deploys(0).getRaw.user)
+    )
+
+    val Some(signedBlock1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(signedBlock1)
+    nodes(1).receive() // receive block1
+
+    val Some(signedBlock2) = nodes(1).casperEff
+      .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
+    nodes(1).casperEff.addBlock(signedBlock2) // should fail
+    nodes(0).receive()
+
+    nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(1).casperEff.contains(signedBlock2) should be(false)
+    nodes(0).casperEff.contains(signedBlock2) should be(false)
+
+    nodes(1).logEff.warns
+      .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
+      1)
+  }
+
   it should "ask peers for blocks it is missing" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
     val deploys = Vector(

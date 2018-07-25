@@ -151,12 +151,15 @@ sealed abstract class MultiParentCasperInstances {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
+          validDepoly <- Validate.repeatDeploy[F](b, genesis, dag)
           attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
+                    else if (!validDepoly) InvalidRepeatDepoly.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case MissingBlocks         => ().pure[F]
                 case IgnorableEquivocation => ().pure[F]
+                case InvalidRepeatDepoly   => ().pure[F]
                 case _ =>
                   reAttemptBuffer // reAttempt for any status that resulted in the  adding of the block into the view
               }
@@ -544,7 +547,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidBondsCache =>
             handleInvalidBlockEffect(status, block)
-          case _ => throw new Error("Should never reach")
+          case InvalidRepeatDepoly => handleInvalidBlockEffect(status, block)
+          case _                   => throw new Error("Should never reach")
         }
 
       private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =

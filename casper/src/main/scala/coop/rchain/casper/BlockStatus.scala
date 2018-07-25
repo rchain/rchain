@@ -20,6 +20,7 @@ case object InvalidUnslashableBlock extends InvalidBlock
 case object MissingBlocks           extends InvalidBlock
 
 case object InvalidBlockNumber      extends InvalidBlock with Slashable
+case object InvalidRepeatDepoly     extends InvalidBlock with Slashable
 case object InvalidParents          extends InvalidBlock with Slashable
 case object InvalidSequenceNumber   extends InvalidBlock with Slashable
 case object JustificationRegression extends InvalidBlock with Slashable
