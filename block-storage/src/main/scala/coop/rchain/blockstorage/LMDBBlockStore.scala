@@ -49,7 +49,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
               }
             } {
               case (txn, ExitCase.Completed) => syncF.delay(txn.close())
-              case (txn, _)                  => syncF.delay(txn.abort())
+              case (txn, _)                  => syncF.delay { txn.abort(); txn.close() }
             }
     } yield ret
 
