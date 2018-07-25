@@ -246,6 +246,7 @@ object ProtoUtil {
     ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
+    Thread.sleep(1)
     val timestamp = System.currentTimeMillis()
     val term      = s"@${id}!($id)"
 
@@ -265,6 +266,7 @@ object ProtoUtil {
   }
 
   def termDeploy(term: Par): Deploy = {
+    Thread.sleep(1)
     val timestamp = System.currentTimeMillis()
     Deploy(
       term = Some(term),
