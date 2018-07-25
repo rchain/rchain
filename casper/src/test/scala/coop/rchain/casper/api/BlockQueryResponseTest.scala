@@ -50,10 +50,14 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   val parentsString                     = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash]  = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val senderString: String              = "someValidator1"
-  val sender: ByteString                = ByteString.copyFrom(Base16.decode(senderString))
+  val secondBlockSenderString: String   = "3456789101112131415161718192"
+  val secondBlockSender: ByteString     = ProtoUtil.stringToByteString(secondBlockSenderString)
   val secondBlock: BlockMessage =
-    BlockMessage().withBlockHash(blockHash).withHeader(header).withBody(body).withSender(sender)
+    BlockMessage()
+      .withBlockHash(blockHash)
+      .withHeader(header)
+      .withBody(body)
+      .withSender(secondBlockSender)
 
   val faultTolerance = -1f
 
@@ -96,7 +100,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
     blockInfo.faultTolerance should be(faultTolerance)
     blockInfo.mainParentHash should be(genesisHashString)
     blockInfo.parentsHashList should be(parentsString)
-    blockInfo.sender should be(senderString)
+    blockInfo.sender should be(secondBlockSenderString)
   }
 
   "getBlockQueryResponse" should "return error when no block exists" in {
