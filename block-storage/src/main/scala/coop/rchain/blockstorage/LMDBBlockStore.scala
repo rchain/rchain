@@ -15,6 +15,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import scala.util.control.NonFatal
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -111,11 +112,15 @@ object LMDBBlockStore {
 
         def bracketCase[A, B](acquire: A)(use: A => B)(
             release: (A, ExitCase[Throwable]) => Unit): B = {
-          val state = acquire
+          var maybeErrorCase: Option[ExitCase[Throwable]] = None
           try {
-            use(state)
-          } finally {
-            release(acquire, ExitCase.Completed)
+            use(acquire)
+          }
+          catch {
+            case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
+          }
+          finally {
+            release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
           }
         }
 
