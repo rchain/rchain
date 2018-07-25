@@ -388,25 +388,7 @@ object SpatialMatcher {
           // If there's a capture variable, we prefer to add things to that rather than throw them
           // away.
           case Some(level) => {
-            // This function is essentially an early terminating left fold.
-            @tailrec
-            def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMap[Par] =
-              remainder match {
-                case Nil => StateT.pure(p)
-                case item +: rem =>
-                  if (lf.locallyFree(item, 0).isEmpty)
-                    foldRemainder(rem, merger(p, item))
-                  else if (wildcard)
-                    foldRemainder(rem, p)
-                  else
-                    StateT.liftF(Stream.Empty)
-              }
-            for {
-              p <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) =>
-                    m.getOrElse(level, VectorPar()))
-              collectPar <- foldRemainder(rem, p)
-              _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
-            } yield Unit
+            handleRemainder(rem, level, merger, wildcard)
           }
         }
       // Try to find a match for a single pattern.
@@ -425,6 +407,33 @@ object SpatialMatcher {
         }
       }
     }
+
+  private def handleRemainder[T](rem: Seq[T],
+                                 level: Int,
+                                 merger: (Par, T) => Par,
+                                 wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] = {
+    // This function is essentially an early terminating left fold.
+    @tailrec
+    def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMap[Par] =
+      remainder match {
+        case Nil => StateT.pure(p)
+        case item +: rem =>
+          if (lf.locallyFree(item, 0).isEmpty)
+            foldRemainder(rem, merger(p, item))
+          else if (wildcard)
+            foldRemainder(rem, p)
+          else
+            StateT.liftF(Stream.Empty)
+      }
+
+    for {
+      p          <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) => m.getOrElse(level, VectorPar()))
+      collectPar <- foldRemainder(rem, p)
+      _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
+    } yield Unit
+  }
 
   private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
     val (before, after) = haystack.span(x => x != needle)
