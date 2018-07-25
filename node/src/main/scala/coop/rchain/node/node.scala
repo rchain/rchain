@@ -276,7 +276,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => Connect.dispatch[Effect](pm)
+        case NotHandled(_) => Connect.dispatch[Effect](pm, defaultTimeout)
         case handled       => handled.pure[Effect]
       }
   }
