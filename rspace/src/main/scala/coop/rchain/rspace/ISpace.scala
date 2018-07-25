@@ -192,6 +192,11 @@ trait ISpace[C, P, A, R, K] {
     */
   def reset(root: Blake2b256Hash): Unit
 
+  /**
+    * Retrieves a GNAT from the history trie at a particular checkpoint and channels hash.
+    */
+  def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]]
+
   /** Clears the store.  Does not affect the history trie.
     */
   def clear(): Unit

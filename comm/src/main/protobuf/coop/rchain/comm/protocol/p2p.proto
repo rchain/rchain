@@ -9,10 +9,10 @@ option (scalapb.options) = {
   flat_package: true
 };
 
-message Disconnect {
+message Heartbeat {
 }
 
-message Hello {
+message HeartbeatResponse {
 }
 
 message ProtocolHandshake {
@@ -24,13 +24,14 @@ message ProtocolHandshakeResponse {
 }
 
 message Packet {
-  bytes content     = 1;
+  string typeId  = 1;
+  bytes  content = 2;
 }
 
 message Protocol {
     oneof message {
-        Disconnect                  diconnect                     = 1;
-        Hello                       hello                         = 2;
+        Heartbeat                   heartbeat                     = 1;
+        HeartbeatResponse           heartbeat_response            = 2;
         ProtocolHandshake           protocol_handshake            = 3;
         ProtocolHandshakeResponse   protocol_handshake_response   = 4;
         Packet                      packet                        = 5;
