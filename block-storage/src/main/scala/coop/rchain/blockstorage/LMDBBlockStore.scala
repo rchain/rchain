@@ -39,7 +39,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
-      ret <- syncF.bracket(syncF.delay(env.txnWrite())) { txn =>
+      ret <- syncF.bracketCase(syncF.delay(env.txnWrite())) { txn =>
               syncF.delay {
                 val (blockHash, blockMessage) = f
                 blocks.put(txn,
@@ -47,7 +47,10 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                            blockMessage.toByteString.toDirectByteBuffer)
                 txn.commit()
               }
-            }(txn => syncF.delay(txn.close()))
+            } {
+              case (txn, ExitCase.Completed) => syncF.delay(txn.close())
+              case (txn, _)                  => syncF.delay(txn.abort())
+            }
     } yield ret
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
@@ -115,11 +118,10 @@ object LMDBBlockStore {
           var maybeErrorCase: Option[ExitCase[Throwable]] = None
           try {
             use(acquire)
-          }
-          catch {
+          } catch {
             case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
-          }
-          finally {
+            //case e: Throwable => maybeErrorCase = Some(ExitCase.error(e)); throw e;
+          } finally {
             release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
           }
         }
