@@ -61,7 +61,8 @@ message ComplexPattern {
 message ConstPattern {
     Object val = 1;
 }
-message ExpandedLocation {
+
+message Location {
     string text = 1;
     uint32 value = 2;
 
@@ -134,6 +135,9 @@ message ExpandedLocation {
         LocBitField00 bitfield00 = 10;
         LocLimbo limbo = 11;
     }
+}
+message ExpandedLocation {
+    Location loc = 1;
 }
 message Fixnum {
     int32 value = 1;

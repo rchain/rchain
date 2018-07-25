@@ -174,31 +174,30 @@ void stdExtensionObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodeP
     }
 }
 
-void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-    ObjectCodePB::ExpandedLocation *exlocob = lvob->mutable_expanded_location();
-    ExpandedLocation *el = (ExpandedLocation *)ob;
-    Location loc;
-    loc.atom = el;
-    exlocob->set_value((uint32_t)loc.locfields);
-    exlocob->set_text( BASE(el)->asCstring() );
+void populateLocation(Location loc, ObjectCodePB::Location * locob) {
+    locob->set_value((uint32_t)loc.locfields);
 
-    ObjectCodePB::ExpandedLocation_PBLocationType type = (ObjectCodePB::ExpandedLocation_PBLocationType)GET_GENERIC_TYPE(loc);
-    exlocob->set_type( type );
+    char buf[256];
+    printRep(loc, buf);
+    locob->set_text( buf );
+
+    ObjectCodePB::Location_PBLocationType type = (ObjectCodePB::Location_PBLocationType)GET_GENERIC_TYPE(loc);
+    locob->set_type( type );
     switch(type) {
     case LT_CtxtRegister: {
-        ObjectCodePB::ExpandedLocation::LocCtxt * pbloc = exlocob->mutable_ctxt();
-        pbloc->set_reg( (ObjectCodePB::ExpandedLocation_LocCtxt_PBLocationCtxt)GET_CTXTREG_INDEX(loc) );
+        ObjectCodePB::Location::LocCtxt * pbloc = locob->mutable_ctxt();
+        pbloc->set_reg( (ObjectCodePB::Location_LocCtxt_PBLocationCtxt)GET_CTXTREG_INDEX(loc) );
         break;
     }
 
     case LT_ArgRegister: {
-        ObjectCodePB::ExpandedLocation::LocArg * pbloc = exlocob->mutable_arg();
+        ObjectCodePB::Location::LocArg * pbloc = locob->mutable_arg();
         pbloc->set_arg( GET_ARGREG_INDEX(loc) );
         break;
     }
 
     case LT_LexVariable: {
-        ObjectCodePB::ExpandedLocation::LocLexVar * pbloc = exlocob->mutable_lexvar();
+        ObjectCodePB::Location::LocLexVar * pbloc = locob->mutable_lexvar();
         pbloc->set_indirect( GET_LEXVAR_IND(loc) );
         pbloc->set_level( GET_LEXVAR_LEVEL(loc) );
         pbloc->set_offset( GET_LEXVAR_OFFSET(loc) );
@@ -206,7 +205,7 @@ void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectC
     }
 
     case LT_AddrVariable: {
-        ObjectCodePB::ExpandedLocation::LocAddrVar * pbloc = exlocob->mutable_addrvar();
+        ObjectCodePB::Location::LocAddrVar * pbloc = locob->mutable_addrvar();
         pbloc->set_indirect( GET_ADDRVAR_IND(loc) );
         pbloc->set_level( GET_ADDRVAR_LEVEL(loc) );
         pbloc->set_offset( GET_ADDRVAR_OFFSET(loc) );
@@ -214,13 +213,13 @@ void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectC
     }
 
     case LT_GlobalVariable: {
-        ObjectCodePB::ExpandedLocation::LocGlobalVar * pbloc = exlocob->mutable_globalvar();
+        ObjectCodePB::Location::LocGlobalVar * pbloc = locob->mutable_globalvar();
         pbloc->set_offset( GET_GLOBALVAR_OFFSET(loc) );
         break;
     }
 
     case LT_BitField: {
-        ObjectCodePB::ExpandedLocation::LocBitField * pbloc = exlocob->mutable_bitfield();
+        ObjectCodePB::Location::LocBitField * pbloc = locob->mutable_bitfield();
         pbloc->set_indirect( GET_BITFIELD_IND(loc) );
         pbloc->set_signed_( GET_BITFIELD_SIGN(loc) );
         pbloc->set_level( GET_BITFIELD_LEVEL(loc) );
@@ -229,7 +228,7 @@ void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectC
     }
 
     case LT_BitField00: {
-        ObjectCodePB::ExpandedLocation::LocBitField00 * pbloc = exlocob->mutable_bitfield00();
+        ObjectCodePB::Location::LocBitField00 * pbloc = locob->mutable_bitfield00();
         pbloc->set_signed_( GET_BITFIELD00_SIGN(loc) );
         pbloc->set_offset( GET_BITFIELD00_OFFSET(loc) );
         pbloc->set_span( GET_BITFIELD00_SPAN(loc) );
@@ -237,7 +236,7 @@ void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectC
     }
 
     case LT_Limbo: {
-        ObjectCodePB::ExpandedLocation::LocLimbo * pbloc = exlocob->mutable_limbo();
+        ObjectCodePB::Location::LocLimbo * pbloc = locob->mutable_limbo();
         break;
     }
 
@@ -245,6 +244,16 @@ void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectC
         warning("Unknown Location Type during export.");
     }
     }
+}
+
+void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::ExpandedLocation *exlocob = lvob->mutable_expanded_location();
+    ObjectCodePB::Location *locob = exlocob->mutable_loc();
+
+    ExpandedLocation *el = (ExpandedLocation *)ob;
+    Location loc;
+    loc.atom = el;
+    populateLocation(loc, locob);
 }
 
 void freeExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {

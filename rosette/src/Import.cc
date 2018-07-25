@@ -116,53 +116,54 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     case ObjectCodePB::OT_EXPANDED_LOCATION: {
         ObjectCodePB::ExpandedLocation * pbob = ob->mutable_expanded_location();
+        ObjectCodePB::Location *pbloc = pbob->mutable_loc();
         Location loc;
 
-        switch(pbob->type()) {
+        switch(pbloc->type()) {
         case LT_CtxtRegister: {
-            ObjectCodePB::ExpandedLocation::LocCtxt * ctxt = pbob->mutable_ctxt(); 
+            ObjectCodePB::Location::LocCtxt * ctxt = pbloc->mutable_ctxt(); 
             loc = CtxtReg( (CtxtRegName)ctxt->reg() );
             break;
         }
 
         case LT_ArgRegister: {
-            ObjectCodePB::ExpandedLocation::LocArg * arg = pbob->mutable_arg(); 
+            ObjectCodePB::Location::LocArg * arg = pbloc->mutable_arg(); 
             loc = ArgReg( arg->arg() );
             break;
         }
 
         case LT_LexVariable: {
-            ObjectCodePB::ExpandedLocation::LocLexVar * lex = pbob->mutable_lexvar(); 
+            ObjectCodePB::Location::LocLexVar * lex = pbloc->mutable_lexvar(); 
             loc = LexVar( lex->level(), lex->offset(), lex->indirect() );
             break;
         }
 
         case LT_AddrVariable: {
-            ObjectCodePB::ExpandedLocation::LocAddrVar * addr = pbob->mutable_addrvar(); 
+            ObjectCodePB::Location::LocAddrVar * addr = pbloc->mutable_addrvar(); 
             loc = AddrVar( addr->level(), addr->offset(), addr->indirect() );
             break;
         }
 
         case LT_GlobalVariable: {
-            ObjectCodePB::ExpandedLocation::LocGlobalVar * lex = pbob->mutable_globalvar(); 
+            ObjectCodePB::Location::LocGlobalVar * lex = pbloc->mutable_globalvar(); 
             loc = GlobalVar( lex->offset() );
             break;
         }
 
         case LT_BitField: {
-            ObjectCodePB::ExpandedLocation::LocBitField * bf = pbob->mutable_bitfield(); 
+            ObjectCodePB::Location::LocBitField * bf = pbloc->mutable_bitfield(); 
             loc = BitField( bf->level(), bf->offset(), bf->span(), bf->indirect(), bf->signed_() );
             break;
         }
 
         case LT_BitField00: {
-            ObjectCodePB::ExpandedLocation::LocBitField00 * bf = pbob->mutable_bitfield00(); 
+            ObjectCodePB::Location::LocBitField00 * bf = pbloc->mutable_bitfield00(); 
             loc = BitField00( bf->offset(), bf->span(), bf->signed_() );
             break;
         }
 
         case LT_Limbo: {
-            ObjectCodePB::ExpandedLocation::LocLimbo * limbo = pbob->mutable_limbo(); 
+            ObjectCodePB::Location::LocLimbo * limbo = pbloc->mutable_limbo(); 
             loc = LocLimbo;
             break;
         }
