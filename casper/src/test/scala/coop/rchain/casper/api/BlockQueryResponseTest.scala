@@ -13,6 +13,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -49,8 +50,10 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   val parentsString                     = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash]  = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
+  val senderString: String              = "someValidator"
+  val sender: ByteString                = ByteString.copyFrom(Base16.decode(senderString))
   val secondBlock: BlockMessage =
-    BlockMessage().withBlockHash(blockHash).withHeader(header).withBody(body)
+    BlockMessage().withBlockHash(blockHash).withHeader(header).withBody(body).withSender(sender)
 
   val faultTolerance = -1f
 
@@ -93,6 +96,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
     blockInfo.faultTolerance should be(faultTolerance)
     blockInfo.mainParentHash should be(genesisHashString)
     blockInfo.parentsHashList should be(parentsString)
+    blockInfo.sender should be(sender)
   }
 
   "getBlockQueryResponse" should "return error when no block exists" in {
