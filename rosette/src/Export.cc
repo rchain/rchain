@@ -638,6 +638,9 @@ IdType createObjectId(Code * code) {
 
 // The collection routine that processes individual Code objects as they are compiled.
 void collectExportCode(Code *code) {
+    if ('\0' == *ExportFile)
+        return;
+
     if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
 
     IdType codeId = createObjectId( code );
@@ -646,9 +649,6 @@ void collectExportCode(Code *code) {
         fprintf(stderr, "CodeId=%llu\n", codeId);
         code->dumpOn(stderr);
     }
-
-    if ('\0' == *ExportFile)
-        return;
 
     // Build the code block protobuf to export
     ObjectCodePB::CodeBlock * cb = objectCode.add_code_block();
