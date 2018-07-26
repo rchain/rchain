@@ -263,7 +263,7 @@ def test_node_eval_of_rholang_files(container):
 
 
 def test_propose(container):
-    retval = 0
+    retval = -1
     print(f"Running propose tests after deploy using on container {container.name}.")
     for i in range(1, args.propose_loop_amount+1):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
@@ -282,6 +282,19 @@ def test_propose(container):
             r = container.exec_run(['sh', '-c', cmd])
             for line in r.output.decode('utf-8').splitlines():
                 print(line)
+                if "Response: Success!" in line:
+                    print(f"{container.name}: {line}")
+                    if retval != 1:
+                        print("Did not yet encounter errors, found success. Yay!")
+                        retval = 0
+                    else:
+                        print("Discovered success but errors already found, discarding.")
+                if "Response: Failure" in line:
+                    print(f"{container.name}: {line}")
+                    retval = 1
+                if "Response: Error" in line:
+                    print(f"{container.name}: {line}")
+                    retval = 1
         except Exception as e:
             print(e)
 
