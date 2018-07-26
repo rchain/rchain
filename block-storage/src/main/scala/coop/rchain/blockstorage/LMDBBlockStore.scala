@@ -120,7 +120,6 @@ object LMDBBlockStore {
             use(acquire)
           } catch {
             case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
-            //case e: Throwable => maybeErrorCase = Some(ExitCase.error(e)); throw e;
           } finally {
             release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
           }
