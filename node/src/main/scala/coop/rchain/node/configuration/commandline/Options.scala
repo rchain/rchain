@@ -1,18 +1,16 @@
-package coop.rchain.node
+package coop.rchain.node.configuration.commandline
 
-import java.net.InetAddress
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
-import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
+import coop.rchain.node.BuildInfo
 
 import org.rogach.scallop._
 
-// TODO replace with default config file when CORE-512 is resolved
-case class Profile(name: String, dataDir: (() => Path, String))
-
 object Converter {
-  val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
+  import Options._
+
+  implicit val bootstrapAddressConverter: ValueConverter[PeerNode] = new ValueConverter[PeerNode] {
     def parse(s: List[(String, List[String])]): Either[String, Option[PeerNode]] =
       s match {
         case (_, uri :: Nil) :: Nil =>
@@ -27,35 +25,42 @@ object Converter {
     val argType: ArgType.V = ArgType.SINGLE
   }
 
+  implicit val optionsFlagConverter: ValueConverter[Flag] = new ValueConverter[Flag] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[Flag]] =
+      flagConverter.parse(s).map(_.map(flag))
+
+    val argType: ArgType.V = ArgType.SINGLE
+  }
 }
 
-object Profile {
-  val docker =
-    Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
-  val default =
-    Profile("default",
-            dataDir =
-              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+object Options {
+  import shapeless.tag.@@
 
-  val profiles =
-    Map(default.name -> default, docker.name -> docker)
+  sealed trait FlagTag
+  type Flag = Boolean @@ FlagTag
+
+  def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
+
+  // We need this conversion because ScallopOption[A] is invariant in A
+  implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
+    so.map(identity)
 }
 
-final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
+final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
+  import Options.Flag
+  import Converter._
+
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"
 
-  val profile = opt[String](default = Some("default"),
-                            name = "profile",
+  val profile = opt[String](name = "profile",
                             descr = "Which predefined set of defaults to use: default or docker.")
-    .map(Profile.profiles.getOrElse(_, Profile.default))
 
   val grpcPort =
-    opt[Int](default = Some(40401), descr = "Port used for gRPC API.")
+    opt[Int](descr = "Port used for gRPC API.")
 
   val grpcHost =
-    opt[String](default = Some("localhost"),
-                descr = "Hostname or IP of node on which gRPC service is running.")
+    opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
 
   val diagnostics = new Subcommand("diagnostics") {
     descr("Node diagnostics")
@@ -64,50 +69,43 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val run = new Subcommand("run") {
 
-    val noUpnp = opt[Boolean](default = Some(false), descr = "Use this flag to disable UpNp.")
+    val noUpnp = opt[Flag](descr = "Use this flag to disable UpNp.")
 
     val defaultTimeout =
-      opt[Int](default = Some(1000),
-               descr = "Default timeout for roundtrip connections. Default 1 second.")
+      opt[Int](descr = "Default timeout for roundtrip connections. Default 1 second.")
 
     val certificate =
-      opt[Path](required = false,
-                short = 'c',
+      opt[Path](short = 'c',
                 descr =
                   "Path to node's X.509 certificate file, that is being used for identification")
 
     val key =
-      opt[Path](required = false,
-                short = 'k',
+      opt[Path](short = 'k',
                 descr =
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
     val port =
-      opt[Int](default = Some(40400), short = 'p', descr = "Network port to use.")
+      opt[Int](short = 'p', descr = "Network port to use.")
 
     val httpPort =
-      opt[Int](default = Some(40402),
-               descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
+      opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
     val metricsPort =
-      opt[Int](default = Some(40403), descr = "Port used by metrics API.")
+      opt[Int](descr = "Port used by metrics API.")
 
-    val numValidators = opt[Int](default = Some(5), descr = "Number of validators at genesis.")
+    val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
-      default = None,
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
         "which defines the bond amounts for each validator at genesis. " +
         "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
         "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
     )
     val knownValidators = opt[String](
-      default = None,
       descr = "Plain text file listing the public keys of validators known to the user (one per line). " +
         "Signatures from these validators are required in order to accept a block which starts the local" +
         "node's view of the blockDAG."
     )
     val walletsFile = opt[String](
-      default = None,
       descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
         "which defines the Rev wallets that exist at genesis. " +
         "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
@@ -117,57 +115,32 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     val bootstrap =
       opt[PeerNode](
-        default = Some(
-          PeerNode
-            .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
-            .right
-            .get),
         short = 'b',
         descr = "Bootstrap rnode address for initial seed."
-      )(Converter.bootstrapAddressConverter)
+      )
 
-    val standalone = opt[Boolean](default = Some(false),
-                                  short = 's',
-                                  descr = "Start a stand-alone node (no bootstrapping).")
+    val standalone =
+      opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
-    val host = opt[String](default = None, descr = "Hostname or IP of this node.")
+    val host = opt[String](descr = "Hostname or IP of this node.")
 
-    val data_dir = opt[Path](required = false,
-                             descr = "Path to data directory. Defaults to $HOME/.rnode",
-                             default = profile.toOption.map(_.dataDir._1.apply()))
+    val data_dir =
+      opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
-    val map_size = opt[Long](required = false,
-                             descr = "Map size (in bytes)",
-                             default = Some(1024L * 1024L * 1024L))
+    val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
     val validatorPublicKey = opt[String](
-      default = None,
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
     )
 
     val validatorPrivateKey = opt[String](
-      default = None,
       descr = "Base16 encoding of the private key to use for signing a proposed blocks.")
 
     val validatorSigAlgorithm = opt[String](
-      default = Some("ed25519"),
       descr = "Name of the algorithm to use for signing proposed blocks. " +
         "Currently supported values: ed25519")
 
-    def certificatePath: Path =
-      certificate.toOption
-        .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
-
-    def keyPath: Path =
-      key.toOption
-        .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
-
-    def fetchHost(externalAddress: Option[String]): String =
-      host.toOption match {
-        case Some(host) => host
-        case None       => whoami(port(), externalAddress)
-      }
   }
   addSubcommand(run)
 
@@ -195,7 +168,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       "Deploy a Rholang source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance.")
-    val location = trailArg[String]()
+    val location = trailArg[String](required = true)
   }
   addSubcommand(deploy)
 
@@ -219,42 +192,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
   }
   addSubcommand(propose)
-
-  private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
-    Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
-
-  private def upnpIpCheck(
-      externalAddress: Option[String]): PartialFunction[Unit, (String, String)] =
-    Function.unlift(Unit =>
-      externalAddress.map(addy => ("UPnP", InetAddress.getByName(addy).getHostAddress)))
-
-  private def checkAll(externalAddress: Option[String]): (String, String) = {
-    val func: PartialFunction[Unit, (String, String)] =
-      check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
-        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
-        upnpIpCheck(externalAddress) orElse { case _ => ("failed to guess", "localhost") }
-
-    func.apply(())
-  }
-
-  private def whoami(port: Int, externalAddress: Option[String]): String = {
-    println("INFO - flag --host was not provided, guessing your external IP address")
-    val (source, ip) = checkAll(externalAddress)
-    println(s"INFO - guessed $ip from source: $source")
-    ip
-  }
-
-  def casperConf: CasperConf = CasperConf(
-    run.validatorPublicKey.toOption,
-    run.validatorPrivateKey.toOption,
-    run.validatorSigAlgorithm(),
-    run.bondsFile.toOption,
-    run.knownValidators.toOption,
-    run.numValidators(),
-    run.data_dir().resolve("genesis"),
-    run.walletsFile.toOption,
-    run.standalone()
-  )
 
   verify()
 }
