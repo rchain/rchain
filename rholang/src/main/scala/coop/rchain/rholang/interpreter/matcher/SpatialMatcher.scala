@@ -240,18 +240,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
-    if (exactMatch && plen != tlen)
-      NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
-    else if (plen > tlen)
-      NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
-    else
-      // This boundary is very similar to Oleg's once.
-      listMatch(tlist, plist, merger, varLevel, wildcard)
-        .transformF[StreamT[State[CostAccount, ?], ?], Unit, FreeMap](streamT =>
-          StreamT(streamT.value.map[Stream[(FreeMap, Unit)]] {
-            case Stream.Empty => Stream.Empty
-            case head #:: _   => Stream(head)
-          }))
+
+    val result =
+      if (exactMatch && plen != tlen)
+        NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
+      else if (plen > tlen)
+        NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
+      else
+        listMatch(tlist, plist, merger, varLevel, wildcard)
+          .transformF[StreamT[State[CostAccount, ?], ?], Unit, FreeMap](streamT =>
+            StreamT(streamT.value.map[Stream[(FreeMap, Unit)]] {
+              case Stream.Empty => Stream.Empty
+              case head #:: _   => Stream(head)
+            }))
+
+    result
   }
 
   def listMatchSingle[T](tlist: Seq[T],
