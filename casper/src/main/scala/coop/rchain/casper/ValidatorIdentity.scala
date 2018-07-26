@@ -3,6 +3,9 @@ package coop.rchain.casper
 import cats.Applicative
 import cats.implicits._
 
+import com.google.protobuf.ByteString
+
+import coop.rchain.casper.protocol.Signature
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.{Log, LogSource}
 
@@ -15,6 +18,11 @@ case class ValidatorIdentity(publicKey: Array[Byte],
     case "ed25519"   => Ed25519.sign _
     case "secp256k1" => Secp256k1.sign _
     case _           => throw new Exception(s"Unknown signature algorithm $sigAlgorithm")
+  }
+
+  def signature(data: Array[Byte]): Signature = {
+    val sig = signFunction(data, privateKey)
+    Signature(ByteString.copyFrom(publicKey), sigAlgorithm, ByteString.copyFrom(sig))
   }
 }
 
