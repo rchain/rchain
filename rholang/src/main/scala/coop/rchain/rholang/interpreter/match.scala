@@ -354,17 +354,21 @@ object SpatialMatcher {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
-    if (exactMatch && plen != tlen)
-      StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
-    else if (plen > tlen)
-      StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
-    else
-      StateT((s: FreeMap) => {
-        listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
-          case Stream.Empty => Stream.Empty
-          case head #:: _   => Stream(head)
-        }
-      })
+
+    val result =
+      if (exactMatch && plen != tlen)
+        StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
+      else if (plen > tlen)
+        StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
+      else
+        StateT((s: FreeMap) => {
+          listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
+            case Stream.Empty => Stream.Empty
+            case head #:: _   => Stream(head)
+          }
+        })
+
+    result
   }
 
   private[this] def listMatch[T](tlist: Seq[T],
