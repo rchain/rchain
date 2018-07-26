@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
+import coop.rchain.casper.util.DagOperations.bfTraverse
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -16,6 +17,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
+import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
 object Validate {
@@ -30,13 +32,13 @@ object Validate {
       "ed25519" -> Ed25519.verify
     )
 
-  def childMapIterator(blockHashSet: Set[BlockHash],
-                       internalMap: Map[BlockHash, BlockMessage]) = new Iterator[BlockMessage] {
-    val underlying: Iterator[BlockHash] = blockHashSet.iterator
-    override def hasNext: Boolean      = underlying.hasNext
+  def childMapIterator(blockHashSet: Set[BlockHash], internalMap: Map[BlockHash, BlockMessage]) =
+    new Iterator[BlockMessage] {
+      val underlying: Iterator[BlockHash] = blockHashSet.iterator
+      override def hasNext: Boolean       = underlying.hasNext
 
-    override def next(): BlockMessage = internalMap(underlying.next())
-  }
+      override def next(): BlockMessage = internalMap(underlying.next())
+    }
 
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
@@ -158,6 +160,9 @@ object Validate {
                                                  dag: BlockDag): F[Boolean] =
     BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
       {
+        def parents(b: BlockMessage): Iterator[BlockMessage] =
+          ProtoUtil.parents(b).iterator.flatMap(internalMap.get)
+
         val deployKeySet = block.getBody.newCode.map(d => (d.getRaw.user, d.getRaw.timestamp)).toSet
         val iterator = DagOperations.bfTraverse(Some(genesis))(b =>
           childMapIterator(dag.childMap.getOrElse(b.blockHash, Set.empty), internalMap))
@@ -169,9 +174,11 @@ object Validate {
           )
         })
         // it is allowed for there to be the same (user, timestamp) transaction in both forks
-        val parents = ProtoUtil.parents(block)
+        val blockAncestors = new mutable.HashSet[BlockMessage]
+        bfTraverse[BlockMessage](Some(block))(parents).foreach(blockAncestors += _)
+
         val invalid = repeatedBlocks.exists(b1 => {
-          parents.contains(b1.blockHash)
+          blockAncestors.contains(b1)
         })
 
         if (!invalid) {
