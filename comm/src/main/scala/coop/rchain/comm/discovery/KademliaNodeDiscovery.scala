@@ -18,16 +18,13 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
 
   private val table = PeerTable(src)
 
-  private def updateLastSeen(peer: PeerNode): F[Unit] =
-    table.observe[F](peer)
-
   private val id: NodeIdentifier = src.id
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def addNode(peer: PeerNode): F[Unit] =
     for {
-      _ <- updateLastSeen(peer)
+      _ <- table.observe[F](peer)
       _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield ()
 
@@ -77,7 +74,7 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
   def handleCommunications: Protocol => F[CommunicationResponse] =
     protocol =>
       ProtocolHelper.sender(protocol).fold(notHandled(senderNotAvailable).pure[F]) { sender =>
-        updateLastSeen(sender) >>= kp(protocol match {
+        table.observe[F](sender) >>= kp(protocol match {
           case Protocol(_, Protocol.Message.Ping(_))        => handlePing
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
           case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
