@@ -5,32 +5,39 @@ import coop.rchain.catscontrib._, Catscontrib._
 import monix.eval.{MVar, Task}
 
 trait Cell[F[_], S] {
-  def modify(f: S => S): F[Unit]
+  def modify(f: S => F[S]): F[Unit]
 }
 
 object Cell {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
 
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans, S](implicit C: Cell[F, S]): Cell[T[F, ?], S] =
-    new Cell[T[F, ?], S] {
-      def modify(f: S => S): T[F, Unit] = C.modify(f).liftM[T]
-    }
-
-  class NOPCell[F[_]: Applicative, S] extends Cell[F, S] {
-    def modify(f: S => S): F[Unit] = ().pure[F]
-  }
-
   def mvarCell[S](initalState: S): Task[Cell[Task, S]] =
     MVar(initalState) map { mvar =>
       new Cell[Task, S] {
-        def modify(f: S => S): Task[Unit] = mvar.take >>= {
-          case s => mvar.put(f(s))
-        }
+        def modify(f: S => Task[S]): Task[Unit] =
+          for {
+            s  <- mvar.take
+            ns <- f(s)
+            _  <- mvar.put(ns)
+          } yield ()
       }
     }
 }
 
 object CellInstances0 {
-  implicit def eitherTCell[E, F[_]: Monad: Cell[?[_], S], S]: Cell[EitherT[F, E, ?], S] =
-    Cell.forTrans[F, EitherT[?[_], E, ?], S]
+  implicit def eitherTCell[E, F[_]: Monad, S](
+      implicit
+      fCell: Cell[F, S]): Cell[EitherT[F, E, ?], S] =
+    new Cell[EitherT[F, E, ?], S] {
+      def modify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
+        EitherT(
+          fCell
+            .modify(s =>
+              f(s).value >>= {
+                case Right(ns) => ns.pure[F]
+                case Left(_)   => s.pure[F]
+            })
+            .map(Right(_).leftCast[E]))
+    }
+
 }
