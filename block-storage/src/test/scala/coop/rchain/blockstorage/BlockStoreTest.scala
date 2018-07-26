@@ -26,29 +26,35 @@ trait BlockStoreTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
+  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage =
+    BlockMessage(blockHash = bh)
+      .withHeader(Header().withVersion(v).withTimestamp(ts))
 
-  def withStore[R](f: BlockStore[Id] => R): R
+  private[this] implicit def liftToBlockHash(s: String): BlockHash = ByteString.copyFromUtf8(s)
+  private[this] implicit def liftToBlockStoreElement(
+      s: (String, BlockMessage)): (BlockHash, BlockMessage) =
+    (ByteString.copyFromUtf8(s._1), s._2)
 
   private[this] val blockHashGen: Gen[BlockHash] = for {
-    testKey <- arbitrary[String]
-  } yield ByteString.copyFrom(testKey, "utf-8")
+    testKey <- arbitrary[String].suchThat(_.nonEmpty)
+  } yield ByteString.copyFromUtf8(testKey)
 
   private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
 
-  private[this] val blockStoreElementGen: Gen[(BlockHash, BlockMessage)] =
+  private[this] val blockStoreElementGen: Gen[(String, BlockMessage)] =
     for {
       hash      <- arbitrary[BlockHash]
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield
-      (hash,
+      (hash.toStringUtf8,
        BlockMessage(blockHash = hash)
          .withHeader(Header().withVersion(version).withTimestamp(timestamp)))
 
-  private[this] val blockStoreElementsGen: Gen[List[(BlockHash, BlockMessage)]] =
+  private[this] val blockStoreElementsGen: Gen[List[(String, BlockMessage)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
+
+  def withStore[R](f: BlockStore[Id] => R): R
 
   // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
   /**
@@ -104,8 +110,7 @@ trait BlockStoreTest
       withStore { store =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
-            val msg2: BlockMessage = bm(hash, 200L, 20000L)
-            (hash, elem, msg2)
+            (hash, elem, toBlockMessage(hash, 200L, 20000L))
         }
         items.foreach { case (k, v1, _) => store.put(k, v1) }
         items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
@@ -144,7 +149,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
   import java.nio.file.{Files, Path}
 
   private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
-  private[this] val mapSize: Long  = 100L * 1024L * 1024L * 4096L
+  private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
     val dbDir = mkTmpDir()
