@@ -84,6 +84,7 @@ sealed abstract class MultiParentCasperInstances {
       def storageContents(hash: ByteString): F[String]                   = "".pure[F]
     }
 
+  // TODO: Add Sync as a constraint to ensure stack safe-ness
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
@@ -623,13 +624,8 @@ sealed abstract class MultiParentCasperInstances {
                     dependencyFree.foldLeft(blockBufferDependencyDag) {
                       case (acc, hash) =>
                         DoublyLinkedDagOperations.remove(acc, hash)
-                    })
+                    }) *> reAttemptBuffer
               }
-        } yield
-          if (attempts.isEmpty) {
-            Unit
-          } else {
-            reAttemptBuffer
-          }
+        } yield ()
     }
 }
