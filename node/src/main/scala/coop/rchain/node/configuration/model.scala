@@ -1,11 +1,11 @@
 package coop.rchain.node.configuration
+
 import java.nio.file.Path
 
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 
 abstract class Configuration(
-    val profile: String,
     val command: Command,
     val server: Server,
     val grpcServer: GrpcServer,

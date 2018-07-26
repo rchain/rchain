@@ -8,9 +8,9 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.TomlRoot
 
-import org.rogach.scallop.ScallopOption
-
 object NodeConfiguration {
+
+  import commandline.Options._
 
   val dockerProfile =
     Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
@@ -44,8 +44,9 @@ object NodeConfiguration {
   }
 
   def apply(arguments: Seq[String]): Configuration = {
-    val options    = commandline.Options(arguments)
-    val profile    = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
+    val options = commandline.Options(arguments)
+    val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
+    println(s"Starting with profile ${profile.name}")
     val dataDir    = options.run.data_dir.getOrElse(profile.dataDir._1())
     val configFile = dataDir.resolve("rnode.toml").toFile
     println(s"Using configuration file: $configFile")
@@ -56,6 +57,12 @@ object NodeConfiguration {
       case Right(c) => Some(c)
     }
 
+    apply(dataDir, options, config)
+  }
+
+  def apply(dataDir: Path,
+            options: commandline.Options,
+            config: Option[TomlRoot]): Configuration = {
     val command: Command = options.subcommand match {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
@@ -69,57 +76,50 @@ object NodeConfiguration {
       case _                         => Help
     }
 
-    def getOpt[A](o: ScallopOption[A], fc: TomlRoot => Option[A]): Option[A] =
-      o.toOption.orElse(config.flatMap(fc))
+    def getOpt[A](fo: commandline.Options => Option[A], fc: TomlRoot => Option[A]): Option[A] =
+      fo(options).orElse(config.flatMap(fc))
 
-    def get[A](o: ScallopOption[A], fc: TomlRoot => Option[A], default: A): A =
-      getOpt(o, fc).getOrElse(default)
+    def get[A](fo: commandline.Options => Option[A], fc: TomlRoot => Option[A], default: => A): A =
+      getOpt(fo, fc).getOrElse(default)
 
     // gRPC
-    val grpcHost: String = get(options.grpcHost, _.grpcServer.flatMap(_.host), DefaultGrpcHost)
-    val grpcPort: Int    = get(options.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPort)
+    val grpcHost: String = get(_.grpcHost, _.grpcServer.flatMap(_.host), DefaultGrpcHost)
+    val grpcPort: Int    = get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPort)
 
     // Server
-    val port: Int     = get(options.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(options.run.httpPort, _ => None, DefaultHttPort)
+    val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
+    val httpPort: Int = get(_.run.httpPort, _ => None, DefaultHttPort)
     val metricsPort: Int =
-      get(options.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
-    val noUpnp: Boolean = get(options.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
+      get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
+    val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
-      get(options.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
+      get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
     val bootstrap: PeerNode =
-      get(options.run.bootstrap, _.server.flatMap(_.bootstrap), DefaultBootstrapServer)
+      get(_.run.bootstrap, _.server.flatMap(_.bootstrap), DefaultBootstrapServer)
     val standalone: Boolean =
-      get(options.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
-    val host: Option[String] = getOpt(options.run.host, _.server.flatMap(_.host))
-    val mapSize: Long =
-      get(options.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+      get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
+    val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
+    val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
 
     // TLS
-    val certificate: Option[Path] = getOpt(options.run.certificate, _.tls.flatMap(_.certificate))
-    val key: Option[Path]         = getOpt(options.run.key, _.tls.flatMap(_.key))
+    val certificate: Option[Path] = getOpt(_.run.certificate, _.tls.flatMap(_.certificate))
+    val key: Option[Path]         = getOpt(_.run.key, _.tls.flatMap(_.key))
 
-    val certificatePath: Path =
-      certificate.getOrElse(dataDir.resolve(DefaultCertificateFileName))
+    val certificatePath: Path = certificate.getOrElse(dataDir.resolve(DefaultCertificateFileName))
 
-    val keyPath: Path =
-      key.getOrElse(dataDir.resolve(DefaultKeyFileName))
+    val keyPath: Path = key.getOrElse(dataDir.resolve(DefaultKeyFileName))
 
     // Validators
     val numValidators =
-      get(options.run.numValidators, _.validators.flatMap(_.count), DefaultNumValidators)
-    val bondsFile       = getOpt(options.run.bondsFile, _.validators.flatMap(_.bondsFile))
-    val knownValidators = getOpt(options.run.knownValidators, _.validators.flatMap(_.known))
-    val validatorPublicKey =
-      getOpt(options.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
-    val validatorPrivateKey =
-      getOpt(options.run.validatorPrivateKey, _.validators.flatMap(_.privateKey))
-    val validatorSigAlgorithm =
-      get(options.run.validatorSigAlgorithm,
-          _.validators.flatMap(_.sigAlgorithm),
-          DefaultValidatorSigAlgorithm)
-    val walletsFile: Option[String] =
-      getOpt(options.run.walletsFile, _.validators.flatMap(_.walletsFile))
+      get(_.run.numValidators, _.validators.flatMap(_.count), DefaultNumValidators)
+    val bondsFile           = getOpt(_.run.bondsFile, _.validators.flatMap(_.bondsFile))
+    val knownValidators     = getOpt(_.run.knownValidators, _.validators.flatMap(_.known))
+    val validatorPublicKey  = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
+    val validatorPrivateKey = getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey))
+    val validatorSigAlgorithm = get(_.run.validatorSigAlgorithm,
+                                    _.validators.flatMap(_.sigAlgorithm),
+                                    DefaultValidatorSigAlgorithm)
+    val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
 
     val server = Server(
       host,
@@ -157,7 +157,6 @@ object NodeConfiguration {
       )
 
     new Configuration(
-      profile.name,
       command,
       server,
       grpcServer,
@@ -175,11 +174,11 @@ object NodeConfiguration {
   }
 
   private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
-    Function.unlift(Unit => IpChecker.checkFrom(from).map(ip => (source, ip)))
+    Function.unlift(_ => IpChecker.checkFrom(from).map(ip => (source, ip)))
 
   private def upnpIpCheck(
       externalAddress: Option[String]): PartialFunction[Unit, (String, String)] =
-    Function.unlift(Unit =>
+    Function.unlift(_ =>
       externalAddress.map(addy => ("UPnP", InetAddress.getByName(addy).getHostAddress)))
 
   private def checkAll(externalAddress: Option[String]): (String, String) = {

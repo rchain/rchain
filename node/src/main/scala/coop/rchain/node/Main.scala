@@ -25,7 +25,6 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = NodeConfiguration(args)
-    println(s"Starting with profile ${conf.profile}")
 
     Security.insertProviderAt(new BouncyCastleProvider(), 1)
 

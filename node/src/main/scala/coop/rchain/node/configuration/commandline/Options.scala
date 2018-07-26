@@ -41,6 +41,8 @@ object Options {
 
   def flag(b: Boolean): Flag = b.asInstanceOf[Flag]
 
+  implicit def scallopOptionToOption[A](so: ScallopOption[A]): Option[A] = so.toOption
+
   // We need this conversion because ScallopOption[A] is invariant in A
   implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
     so.map(identity)
