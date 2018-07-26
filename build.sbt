@@ -125,7 +125,8 @@ lazy val node = (project in file("node"))
         jline,
         scallop,
         scalaUri,
-        scalapbRuntimegGrpc
+        scalapbRuntimegGrpc,
+        tomlScala
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
