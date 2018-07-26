@@ -110,18 +110,6 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
   private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
   private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
-  /** Update the last-seen time of `peer`, possibly adding it to the
-    * routing table.
-    *
-    * If the `peer` is not in the table, it is
-    * added. If the table was already full at that distance, test the
-    * least recently seen peer at that distance. If that peer
-    * responds, discard `peer`; otherwise, discard the older entry and
-    * insert `peer`.
-    *
-    * If `peer` is already in the table, it becomes the most recently
-    * seen entry at its distance.
-    */
   def updateLastSeen[F[_]: Monad: Capture: KademliaRPC](peer: A): F[Unit] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
