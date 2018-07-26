@@ -27,7 +27,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery.{Ping => NDPing, _}
+import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import ThrowableOps._
 import cats.effect.Sync
@@ -176,9 +176,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
-  implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
+  implicit val kademliaRPCEffect: KademliaRPC[Task] = effects.kademliaRPC(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
-    new TLNodeDiscovery[Task](src, defaultTimeout)
+    new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
   if (Files.notExists(casperPersistencePath)) Files.createDirectories(casperPersistencePath)
   val config                                  = coop.rchain.blockstorage.LMDBBlockStore.Config(casperPersistencePath, 1024 * 1024)
