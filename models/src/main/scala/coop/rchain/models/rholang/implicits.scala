@@ -483,8 +483,6 @@ object implicits {
           case VarRefBody(_)            => false
           case ConnectiveInstance.Empty => false
         }
-      // Because connectives can only be used in patterns, we don't need to
-      // calculate what is locally free inside
       def locallyFree(conn: Connective, depth: Int) =
         conn.connectiveInstance match {
           case VarRefBody(VarRef(idx, varDepth)) =>
