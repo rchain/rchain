@@ -5,6 +5,7 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 
+import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib._
@@ -55,7 +56,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ApproveBlockProtocol.run[Id](0L)
 
     abp.approvedBlock.nonEmpty should be(true)
-    time.clock should be(d)
+    time.clock should be(d + 1)
   }
 
   it should "continue collecting signatures if not enough are collected after the duration has elapsed" in {
@@ -106,12 +107,11 @@ object ApproveBlockProtocolTest {
   def createIdProtocol(requiredSigs: Int, duration: Long): ApproveBlockProtocol[Id] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val (sk, _) = Ed25519.newKeyPair
-    val node    = HashSetCasperTestNode.standalone(BlockMessage.defaultInstance, sk)
+    val (sk, pk) = Ed25519.newKeyPair
+    val genesis  = HashSetCasperTest.createGenesis(Seq(pk))
+    val node     = HashSetCasperTestNode.standalone(genesis, sk)
     import node._
 
-    ApproveBlockProtocol.create[Id](
-      ApprovedBlockCandidate(Some(BlockMessage.defaultInstance), requiredSigs),
-      duration)
+    ApproveBlockProtocol.create[Id](ApprovedBlockCandidate(Some(genesis), requiredSigs), duration)
   }
 }
