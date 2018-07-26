@@ -161,7 +161,7 @@ object CollectionNormalizeMatcher {
       case cs: CollectSet =>
         val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
           (pars, locallyFree, connectiveUsed) =>
-            ParSet(SortedParHashSet(pars), connectiveUsed, Coeval.delay(locallyFree))
+            ParSet(pars, connectiveUsed, Coeval.delay(locallyFree))
         foldMatch(input.knownFree, cs.listproc_.toList, constructor)
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
     }
