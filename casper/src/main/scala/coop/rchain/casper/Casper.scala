@@ -155,8 +155,8 @@ sealed abstract class MultiParentCasperInstances {
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
-                case MissingBlocks         => MissingBlocks.pure[F]
-                case IgnorableEquivocation => IgnorableEquivocation.pure[F]
+                case MissingBlocks         => ().pure[F]
+                case IgnorableEquivocation => ().pure[F]
                 case _ =>
                   reAttemptBuffer // reAttempt for any status that resulted in the  adding of the block into the view
               }

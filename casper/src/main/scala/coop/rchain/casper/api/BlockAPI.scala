@@ -50,12 +50,13 @@ object BlockAPI {
       } yield
         status match {
           case _: InvalidBlock => DeployServiceResponse(false, s"Failure! Invalid block: $status")
-          case _: ValidBlock   => DeployServiceResponse(true, s"Success! Valid: $status")
-          case _               => DeployServiceResponse(false, s"Failure! Unknown status: $status")
+          case _: ValidBlock   => DeployServiceResponse(true, s"Success! $status")
         }
 
     MultiParentCasperConstructor
-      .withCasper[F, DeployServiceResponse](doAddBlock(_), DeployServiceResponse(false, "Failure!"))
+      .withCasper[F, DeployServiceResponse](
+        doAddBlock(_),
+        DeployServiceResponse(false, "Error: Casper instance not available"))
   }
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
