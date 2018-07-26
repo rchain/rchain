@@ -199,7 +199,7 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(chanNew) => chanNew.get
+            case Some(chanNew) => chanNew
             case _             => Quote(p)
           }
 
