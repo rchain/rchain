@@ -40,7 +40,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         implicit val ping: KademliaRPC[Id] = pingOk
         table.distance(peer0) shouldBe DISTANCE_6
         // when
-        table.observe[Id](peer0)
+        table.updateLastSeen[Id](peer0)
         // then
         bucketEntriesAt(DISTANCE_6) shouldEqual Seq(peer0)
       }
@@ -49,7 +49,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
         // when
-        table.observe[Id](peer0)
+        table.updateLastSeen[Id](peer0)
         // then
         pingedPeers shouldEqual Seq.empty[PeerNode]
       }
@@ -59,10 +59,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       it("should replace peer with new entry (the one with new IP)") {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
-        table.observe[Id](peer1)
+        table.updateLastSeen[Id](peer1)
         // when
         val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
-        table.observe[Id](newPeer1)
+        table.updateLastSeen[Id](newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(newPeer1)
       }
@@ -70,13 +70,13 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       it("should move peer to begining of the bucket (meaning it's been seen lately)") {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
-        table.observe[Id](peer2)
-        table.observe[Id](peer1)
-        table.observe[Id](peer3)
+        table.updateLastSeen[Id](peer2)
+        table.updateLastSeen[Id](peer1)
+        table.updateLastSeen[Id](peer3)
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer1, peer3)
         // when
         val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
-        table.observe[Id](newPeer1)
+        table.updateLastSeen[Id](newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, newPeer1)
       }
@@ -88,7 +88,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         implicit val ping: KademliaRPC[Id] = pingOk
         thatBucket4IsFull
         // when
-        table.observe[Id](peer4)
+        table.updateLastSeen[Id](peer4)
         // then
         pingedPeers shouldEqual Seq(peer1)
       }
@@ -99,7 +99,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           implicit val ping: KademliaRPC[Id] = pingOk
           thatBucket4IsFull
           // when
-          table.observe[Id](peer4)
+          table.updateLastSeen[Id](peer4)
           // then
           bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
         }
@@ -110,7 +110,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           implicit val ping: KademliaRPC[Id] = pingFail
           thatBucket4IsFull
           // when
-          table.observe[Id](peer4)
+          table.updateLastSeen[Id](peer4)
           // then
           bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer4)
         }
@@ -119,9 +119,9 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   }
 
   private def thatBucket4IsFull(implicit ev: KademliaRPC[Id]): Unit = {
-    table.observe[Id](peer1)
-    table.observe[Id](peer2)
-    table.observe[Id](peer3)
+    table.updateLastSeen[Id](peer1)
+    table.updateLastSeen[Id](peer2)
+    table.updateLastSeen[Id](peer3)
   }
 
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
