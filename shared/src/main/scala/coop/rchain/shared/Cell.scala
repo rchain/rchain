@@ -2,6 +2,7 @@ package coop.rchain.shared
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import monix.eval.{MVar, Task}
 
 trait Cell[F[_], S] {
   def modify(f: S => S): F[Unit]
@@ -17,6 +18,12 @@ object Cell {
 
   class NOPCell[F[_]: Applicative, S] extends Cell[F, S] {
     def modify(f: S => S): F[Unit] = ().pure[F]
+  }
+
+  def mvarCell[S](mvar: MVar[S]): Cell[Task, S] = new Cell[Task, S] {
+    def modify(f: S => S): Task[Unit] = mvar.take >>= {
+      case s => mvar.put(f(s))
+    }
   }
 }
 
