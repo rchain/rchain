@@ -44,17 +44,15 @@ object DoublyLinkedDagOperations {
     val updatedChildToParentAdjacencyList =
       MapHelper.updatedWith(childToParentAdjacencyList, child)(Set(parent))(_ + parent)
 
-    val postParentDependencyFree = if (updatedChildToParentAdjacencyList.contains(parent)) {
-      dependencyFree
-    } else {
-      dependencyFree + parent
-    }
+    val postParentDependencyFree =
+      if (updatedChildToParentAdjacencyList.contains(parent) && updatedChildToParentAdjacencyList(
+            parent).nonEmpty) {
+        dependencyFree
+      } else {
+        dependencyFree + parent
+      }
 
-    val postChildDependencyFree = if (updatedChildToParentAdjacencyList.contains(child)) {
-      postParentDependencyFree - child
-    } else {
-      postParentDependencyFree
-    }
+    val postChildDependencyFree = postParentDependencyFree - child
 
     new DoublyLinkedDag[A] {
       override val parentToChildAdjacencyList: Map[A, Set[A]] = updatedParentToChildAdjacencyList
