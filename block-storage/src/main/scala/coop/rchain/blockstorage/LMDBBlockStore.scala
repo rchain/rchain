@@ -81,6 +81,11 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             })(txn => syncF.delay(txn.close()))
     } yield ret
 
+  private[blockstorage] def clear(): F[Unit] =
+    for {
+      ret <- syncF.bracket(syncF.delay(env.txnWrite()))(txn => syncF.delay(blocks.drop(txn)))(txn =>
+              syncF.delay(txn.close()))
+    } yield ()
 }
 
 object LMDBBlockStore {

@@ -92,8 +92,8 @@ trait BlockStoreTest
   }
 
   it should "return Some(message) on get for a published key" in {
-    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
-      withStore { store =>
+    withStore { store =>
+      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements
         items.foreach(store.put(_))
         items.foreach {
@@ -101,13 +101,14 @@ trait BlockStoreTest
             store.get(k) shouldBe Some(v)
         }
         store.asMap().size shouldEqual items.size
+        store.clear()
       }
     }
   }
 
   it should "overwrite existing value" in
-    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
-      withStore { store =>
+    withStore { store =>
+      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
             (hash, elem, toBlockMessage(hash, 200L, 20000L))
@@ -118,6 +119,7 @@ trait BlockStoreTest
         items.foreach { case (k, _, v2) => store.get(k) shouldBe Some(v2) }
 
         store.asMap().size shouldEqual items.size
+        store.clear()
       }
     }
 
