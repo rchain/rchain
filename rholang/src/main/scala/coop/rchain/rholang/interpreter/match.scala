@@ -355,16 +355,16 @@ object SpatialMatcher {
     val plen       = plist.length
     val tlen       = tlist.length
     if (exactMatch && plen != tlen)
-      StateT.liftF(None)
+      StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
     else if (plen > tlen)
-      StateT.liftF(None)
-    // This boundary is very similar to Oleg's once.
-    StateT((s: FreeMap) => {
-      listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty => Stream.Empty
-        case head #:: _   => Stream(head)
-      }
-    })
+      StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
+    else
+      StateT((s: FreeMap) => {
+        listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
+          case Stream.Empty => Stream.Empty
+          case head #:: _   => Stream(head)
+        }
+      })
   }
 
   private[this] def listMatch[T](tlist: Seq[T],
