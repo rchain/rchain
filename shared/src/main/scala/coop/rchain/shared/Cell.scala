@@ -20,11 +20,14 @@ object Cell {
     def modify(f: S => S): F[Unit] = ().pure[F]
   }
 
-  def mvarCell[S](mvar: MVar[S]): Cell[Task, S] = new Cell[Task, S] {
-    def modify(f: S => S): Task[Unit] = mvar.take >>= {
-      case s => mvar.put(f(s))
+  def mvarCell[S](initalState: S): Task[Cell[Task, S]] =
+    MVar(initalState) map { mvar =>
+      new Cell[Task, S] {
+        def modify(f: S => S): Task[Unit] = mvar.take >>= {
+          case s => mvar.put(f(s))
+        }
+      }
     }
-  }
 }
 
 object CellInstances0 {
