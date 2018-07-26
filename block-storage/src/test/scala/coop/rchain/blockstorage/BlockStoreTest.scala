@@ -143,19 +143,18 @@ class LMDBBlockStoreTest extends BlockStoreTest {
 
   import java.nio.file.{Files, Path}
 
-  private[this] def dbDir: Path   = Files.createTempDirectory("block-store-test-")
-  private[this] val mapSize: Long = 10 * 1024L * 1024L * 4096L
+  private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
+  private[this] val mapSize: Long  = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
+    val dbDir = mkTmpDir()
     val env   = Context.env(dbDir, mapSize)
     val store = LMDBBlockStore.createWithId(env, dbDir)
     try {
       f(store)
     } finally {
       env.close()
+      dbDir.recursivelyDelete
     }
   }
-
-  override def afterAll(): Unit =
-    dbDir.recursivelyDelete
 }
