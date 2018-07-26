@@ -1,10 +1,8 @@
 package coop.rchain.casper.util.comm
 
-import com.google.protobuf.ByteString
-
 import cats.{Functor, Monad}
 import cats.implicits._
-import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployString}
+import coop.rchain.casper.protocol.{BlockQuery, DeployString}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.{Capture, IOUtil, MonadOps}
 
@@ -13,13 +11,13 @@ import scala.util.{Failure, Success, Try}
 
 object DeployRuntime {
 
-  def propose[F[_]: DeployService: Monad](): F[Unit] =
+  def propose[F[_]: Monad: Capture: DeployService](): F[Unit] =
     DeployService[F].createBlock().flatMap {
       case Some(block) =>
         println(s"Response: Successfully created block")
         for {
           response <- DeployService[F].addBlock(block)
-          _        = println(s"Response: ${response._2}")
+          _        <- Capture[F].capture { println(s"Response: ${response._2}") }
         } yield ()
 
       case None =>
