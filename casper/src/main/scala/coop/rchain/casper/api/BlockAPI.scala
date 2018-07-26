@@ -106,7 +106,8 @@ object BlockAPI {
         timestamp = timestamp,
         faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit)
+        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+        sender = PrettyPrinter.buildStringNoLimit(block.sender)
       )
     }
 
