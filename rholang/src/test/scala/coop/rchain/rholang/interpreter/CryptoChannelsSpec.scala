@@ -17,8 +17,8 @@ import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.internal.{Datum, Row}
-import coop.rchain.rspace.test._
 import coop.rchain.rspace.{IStore, Serialize}
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -212,7 +212,7 @@ class CryptoChannelsSpec
       test((runtime.reducer, runtime.space.store))
     } finally {
       runtime.close()
-      recursivelyDeletePath(dbDir)
+      dbDir.recursivelyDelete
     }
   }
 
