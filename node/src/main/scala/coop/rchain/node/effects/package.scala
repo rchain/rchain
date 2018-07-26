@@ -13,7 +13,7 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
-import coop.rchain.comm.protocol.routing.{Ping => _, _}
+import coop.rchain.comm.protocol.routing._
 
 package object effects {
 
