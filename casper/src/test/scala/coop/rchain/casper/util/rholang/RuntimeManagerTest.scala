@@ -55,4 +55,22 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     (1 to n).forall(i => manyResults.contains(InterpreterUtil.mkTerm(i.toString).right.get)) should be(
       true)
   }
+
+  "emptyStateHash" should "not remember previous hot store state" in {
+    val testStorageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
+
+    val testRuntime1        = Runtime.create(testStorageDirectory, storageSize)
+    val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
+    val hash1               = testRuntimeManager1.emptyStateHash
+    val deploy              = ProtoUtil.basicDeploy(0)
+    val Right(_)            = testRuntimeManager1.computeState(hash1, deploy :: Nil)
+    testRuntime1.close()
+
+    val testRuntime2        = Runtime.create(testStorageDirectory, storageSize)
+    val testRuntimeManager2 = RuntimeManager.fromRuntime(testRuntime2)
+    val hash2               = testRuntimeManager2.emptyStateHash
+    testRuntime2.close()
+
+    hash1 should be(hash2)
+  }
 }

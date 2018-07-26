@@ -1,0 +1,14 @@
+// Creation of unforgeable channels
+// Channels created via the new construct are recognized by Rholang but cannot
+// be written into a program, and are thus unforgeable.
+// This is the whole purpose for "Higher"- anything in the syntax.
+
+
+// The order in which channels are created is deterministic (see the rule in
+// process-semantics.k) This does not fundamentally affect the functionality
+// of Rholang.
+
+
+new chan1, chan2, chan3 in {
+    chan1!(1) | chan2!(2) | chan3!(3)
+}

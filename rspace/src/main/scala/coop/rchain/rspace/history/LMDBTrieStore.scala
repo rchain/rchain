@@ -74,7 +74,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
   private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit =
     _dbRoot.put(txn, branch, hash)(Codec[Branch], Codec[Blake2b256Hash])
 
-  private[this] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
+  private[rspace] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
     withResource(_dbPastRoots.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
       it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
         acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get

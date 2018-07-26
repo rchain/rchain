@@ -9,27 +9,27 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
-import coop.rchain.comm.protocol.routing.{Ping => ProtocolPing, _}
+import coop.rchain.comm.protocol.routing._
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](
+class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
     src: PeerNode,
     timeout: FiniteDuration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
 
-  private def updateLastSeen(peer: PeerNode): F[CommErr[Unit]] =
+  private def updateLastSeen(peer: PeerNode): F[Unit] =
     table.observe[F](peer)
 
   private val id: NodeIdentifier = src.id
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def addNode(peer: PeerNode): F[CommErr[Unit]] =
+  def addNode(peer: PeerNode): F[Unit] =
     for {
-      res <- updateLastSeen(peer)
-      _   <- Metrics[F].setGauge("peers", table.peers.length.toLong)
-    } yield res
+      _ <- updateLastSeen(peer)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+    } yield ()
 
   /**
     * Return up to `limit` candidate peers.
@@ -56,7 +56,8 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
         val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        lookup(target, peerSet.head)
+        KademliaRPC[F]
+          .lookup(target, peerSet.head)
           .map { results =>
             potentials ++ results.filter(
               r =>
@@ -76,14 +77,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   def handleCommunications: Protocol => F[CommunicationResponse] =
     protocol =>
       ProtocolHelper.sender(protocol).fold(notHandled(senderNotAvailable).pure[F]) { sender =>
-        protocol match {
-          case Protocol(_, Protocol.Message.Ping(_)) => handlePing
-          case Protocol(_, Protocol.Message.Lookup(lookup)) =>
-            updateLastSeen(sender) >>= kp(handleLookup(sender, lookup))
+        updateLastSeen(sender) >>= kp(protocol match {
+          case Protocol(_, Protocol.Message.Ping(_))        => handlePing
+          case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
           case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
             handleDisconnect(sender, disconnect)
           case _ => notHandled(unexpectedMessage(protocol.toString)).pure[F]
-        }
+        })
     }
 
   private def handlePing: F[CommunicationResponse] =
@@ -114,19 +114,4 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield handledWitoutMessage
-
-  private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
-    for {
-      _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = ProtocolHelper.lookup(src, key)
-      r <- TransportLayer[F]
-            .roundTrip(remoteNode, req, timeout)
-            .map(_.toOption
-              .map {
-                case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                  lr.nodes.map(ProtocolHelper.toPeerNode)
-                case _ => Seq()
-              }
-              .getOrElse(Seq()))
-    } yield r
 }

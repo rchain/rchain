@@ -10,13 +10,13 @@ import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 
 trait EvalBenchStateBase {
-  private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+  private val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   private val mapSize: Long = 1024 * 1024 * 1024
 
   val rhoScriptSource: String
-  val runtime: Runtime = Runtime.create(dbDir, mapSize)
+  val runtime: Runtime       = Runtime.create(dbDir, mapSize)
   val rand: Blake2b512Random = Blake2b512Random(128)
-  var term: Option[Par] = None
+  var term: Option[Par]      = None
 
   /**
     * until we add flag 'delete_lmdb_dir_on_close' for benchmarks and unit-tests
@@ -32,16 +32,15 @@ trait EvalBenchStateBase {
           dir.toPath.recursivelyDelete()
         } catch {
           case _: Exception =>
-        })
+      })
 
   @Setup
   def doSetup(): Unit = {
     deleteOldStorages()
 
-    term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource))
-      .runAttempt match {
+    term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)
-      case Left(err) => throw err
+      case Left(err)  => throw err
     }
     //make sure we always start from clean rspace
     runtime.replaySpace.clear()

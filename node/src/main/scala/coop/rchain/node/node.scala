@@ -1,7 +1,5 @@
 package coop.rchain.node
 
-import java.io.{File, PrintWriter}
-
 import io.grpc.Server
 import cats._
 import cats.data._
@@ -16,30 +14,28 @@ import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
-import coop.rchain.p2p
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Resources._
 
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery.{Ping => NDPing, _}
+import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import ThrowableOps._
+import cats.effect.Sync
+import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
-import scala.io.Source
+
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-import coop.rchain.comm.transport.TcpTransportLayer.Connections
 import coop.rchain.node.configuration.Configuration
 
 class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
@@ -162,19 +158,22 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
+
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                       = diagnostics.metrics
+  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
+  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
-  implicit val pingEffect: NDPing[Task] = effects.ping(src, defaultTimeout)
+  implicit val kademliaRPCEffect: KademliaRPC[Task] = effects.kademliaRPC(src, defaultTimeout)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
-    new TLNodeDiscovery[Task](src, defaultTimeout)
-  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
+    new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -186,12 +185,24 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
 
   def acquireResources: Effect[Resources] =
     for {
+      storeRef   <- storeRefEffect
+      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
+      oracle = {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        SafetyOracle.turanOracle[Effect]
+      }
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-      casperConstructor <- MultiParentCasperConstructor
-                            .fromConfig[Effect, Effect](conf.casper, runtimeManager)
+      casperConstructor <- {
+        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        MultiParentCasperConstructor
+          .fromConfig[Effect, Effect](conf.casper, runtimeManager)
+      }
       grpcServer <- {
+        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
+        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
           .acquireServer[Effect](conf.grpcServer.port, runtime)
@@ -199,6 +210,7 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
       httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
     } yield {
+      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
@@ -258,7 +270,7 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
 
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => Connect.dispatch[Effect](pm)
+        case NotHandled(_) => Connect.dispatch[Effect](pm, defaultTimeout)
         case handled       => handled.pure[Effect]
       }
   }

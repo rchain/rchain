@@ -1,0 +1,20 @@
+// A match inside of a match
+// We can grab the process being matched, and anything without locally free variables from the code waiting to be executed,
+// but we have to match the pattern.
+// Alpha equivalence not yet incorporated.
+
+// A success will return
+// @"success"!("success")
+
+match
+  match @Nil!(Nil) {
+    x => { "success" | x }
+  }
+  {
+    match _ {
+      x => { y | x }
+    }
+    => {
+      @y!(y)
+    }
+  }

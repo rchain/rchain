@@ -2,15 +2,20 @@ package coop.rchain.casper.util
 
 import ProtoUtil._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
 import Catscontrib._
 import cats._
 import cats.data._
+import cats.effect.Bracket
 import cats.implicits._
+import cats.mtl.MonadState
 import cats.mtl.implicits._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockHash
+import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.helper.BlockGenerator
 import coop.rchain.casper.helper.BlockGenerator._
@@ -22,7 +27,9 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
   val initState = BlockDag()
 
   "isInMainChain" should "classify appropriately" in {
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
@@ -33,14 +40,16 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
-    isInMainChain(chain.blockLookup, genesis, b3) should be(true)
-    isInMainChain(chain.blockLookup, b2, b3) should be(true)
-    isInMainChain(chain.blockLookup, b3, b2) should be(false)
-    isInMainChain(chain.blockLookup, b3, genesis) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), genesis, b3) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b2, b3) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b3, b2) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b3, genesis) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in {
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
@@ -54,18 +63,20 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    isInMainChain(chain.blockLookup, genesis, b2) should be(true)
-    isInMainChain(chain.blockLookup, genesis, b3) should be(true)
-    isInMainChain(chain.blockLookup, genesis, b4) should be(true)
-    isInMainChain(chain.blockLookup, b2, b4) should be(true)
-    isInMainChain(chain.blockLookup, b3, b4) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), genesis, b2) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), genesis, b3) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), genesis, b4) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b2, b4) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b3, b4) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "isInMainChain" should "classify complicated chains appropriately" in {
-    val v1 = ByteString.copyFromUtf8("Validator One")
-    val v2 = ByteString.copyFromUtf8("Validator Two")
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    val v1                       = ByteString.copyFromUtf8("Validator One")
+    val v2                       = ByteString.copyFromUtf8("Validator Two")
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY)
         b2      <- createBlock[F](Seq(genesis.blockHash), v2)
@@ -87,16 +98,16 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
-    isInMainChain(chain.blockLookup, genesis, b2) should be(true)
-    isInMainChain(chain.blockLookup, b2, b3) should be(false)
-    isInMainChain(chain.blockLookup, b3, b4) should be(false)
-    isInMainChain(chain.blockLookup, b4, b5) should be(false)
-    isInMainChain(chain.blockLookup, b5, b6) should be(false)
-    isInMainChain(chain.blockLookup, b6, b7) should be(false)
-    isInMainChain(chain.blockLookup, b7, b8) should be(true)
-    isInMainChain(chain.blockLookup, b2, b6) should be(true)
-    isInMainChain(chain.blockLookup, b2, b8) should be(true)
-    isInMainChain(chain.blockLookup, b4, b2) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), genesis, b2) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b2, b3) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b3, b4) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b4, b5) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b5, b6) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b6, b7) should be(false)
+    isInMainChain(BlockStore[Id].asMap(), b7, b8) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b2, b6) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b2, b8) should be(true)
+    isInMainChain(BlockStore[Id].asMap(), b4, b2) should be(false)
   }
 
   /*
@@ -115,9 +126,11 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
    *         genesis
    */
   "Blocks" should "conflict if they use the same deploys in different histories" in {
-    val deploys = (0 until 6).map(basicDeploy)
+    implicit val blockStore      = InMemBlockStore.createWithId
+    implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+    val deploys                  = (0 until 6).map(basicDeploy)
 
-    def createChain[F[_]: Monad: BlockDagState: Time]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
@@ -144,12 +157,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b9  = chain.idToBlocks(9)
     val b10 = chain.idToBlocks(10)
 
-    conflicts(b2, b3, genesis, chain) should be(false)
-    conflicts(b4, b5, genesis, chain) should be(true)
-    conflicts(b6, b6, genesis, chain) should be(false)
-    conflicts(b6, b9, genesis, chain) should be(false)
-    conflicts(b7, b8, genesis, chain) should be(false)
-    conflicts(b7, b10, genesis, chain) should be(false)
-    conflicts(b9, b10, genesis, chain) should be(true)
+    conflicts(b2, b3, genesis, chain, BlockStore[Id].asMap()) should be(false)
+    conflicts(b4, b5, genesis, chain, BlockStore[Id].asMap()) should be(true)
+    conflicts(b6, b6, genesis, chain, BlockStore[Id].asMap()) should be(false)
+    conflicts(b6, b9, genesis, chain, BlockStore[Id].asMap()) should be(false)
+    conflicts(b7, b8, genesis, chain, BlockStore[Id].asMap()) should be(false)
+    conflicts(b7, b10, genesis, chain, BlockStore[Id].asMap()) should be(false)
+    conflicts(b9, b10, genesis, chain, BlockStore[Id].asMap()) should be(true)
   }
 }

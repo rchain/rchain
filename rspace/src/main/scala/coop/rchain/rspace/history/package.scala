@@ -36,7 +36,7 @@ package object history {
 
   def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
                                                                       codecK: Codec[K],
-                                                                      codecV: Codec[V]): Unit =
+                                                                      codecV: Codec[V]): Boolean =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.getRoot(txn, branch) match {
         case None =>
@@ -45,21 +45,24 @@ package object history {
           store.put(txn, rootHash, root)
           store.putRoot(txn, branch, rootHash)
           logger.debug(s"workingRootHash: $rootHash")
+          true
         case Some(_) =>
-          ()
+          false
       }
     }
 
-  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
-      implicit codecK: Codec[K]): Option[V] = {
+  private[this] def lookup[T, K, V](txn: T,
+                                    store: ITrieStore[T, K, V],
+                                    branchRootHash: Blake2b256Hash,
+                                    key: K)(implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
-    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
+    def loop(depth: Int, curr: Trie[K, V]): Option[V] =
       curr match {
         case Skip(affix, pointer) =>
           store.get(txn, pointer.hash) match {
-            case Some(next) => loop(txn, depth + affix.length.toInt, next)
+            case Some(next) => loop(depth + affix.length.toInt, next)
             case None       => throw new LookupException(s"No node at ${pointer.hash}")
           }
 
@@ -72,7 +75,7 @@ package object history {
               None
             case pointer: NonEmptyPointer =>
               store.get(txn, pointer.hash) match {
-                case Some(next) => loop(txn, depth + 1, next)
+                case Some(next) => loop(depth + 1, next)
                 case None       => throw new LookupException(s"No node at ${pointer.hash}")
               }
           }
@@ -82,18 +85,30 @@ package object history {
           None
       }
 
-    store.withTxn(store.createTxnRead()) { (txn: T) =>
-      for {
-        currentRootHash <- store.getRoot(txn, branch)
-        currentRoot     <- store.get(txn, currentRootHash)
-        res             <- loop(txn, 0, currentRoot)
-      } yield res
-    }
+    for {
+      currentRoot <- store.get(txn, branchRootHash)
+      res         <- loop(0, currentRoot)
+    } yield res
   }
+
+  def lookup[T, K, V](store: ITrieStore[T, K, V], rootHash: Blake2b256Hash, key: K)(
+      implicit codecK: Codec[K]): Option[V] =
+    store.withTxn(store.createTxnRead()) { (txn: T) =>
+      lookup(txn, store, rootHash, key)
+    }
+
+  def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
+      implicit codecK: Codec[K]): Option[V] =
+    store.withTxn(store.createTxnRead()) { (txn: T) =>
+      store.getRoot(txn, branch).flatMap(lookup(txn, store, _, key))
+    }
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    keys.traverse[Option, V]((k: K) => lookup(store, branch, k))
+    store.withTxn(store.createTxnRead()) { (txn: T) =>
+      keys.traverse[Option, V]((k: K) =>
+        store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+    }
 
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
                                         txn: T,

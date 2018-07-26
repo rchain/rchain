@@ -1,7 +1,6 @@
 package coop.rchain.casper.util.comm
 
 import com.google.protobuf.ByteString
-
 import cats.Monad
 import cats.implicits._
 import coop.rchain.catscontrib.Capture
@@ -12,7 +11,10 @@ import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.connect.Connect
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport
+import coop.rchain.comm.transport.{PacketType, TransportLayer}
+import coop.rchain.comm.transport.CommMessages.{packet, toPacket}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.metrics.Metrics
@@ -31,7 +33,7 @@ object CommUtil {
     val hashString      = PrettyPrinter.buildString(b.blockHash)
     for {
       _ <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
-      _ <- sendToPeers[F](serializedBlock)
+      _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
       _ <- Log[F].info(s"CASPER: Sent $hashString to peers")
     } yield ()
   }
@@ -42,17 +44,18 @@ object CommUtil {
     val hashString = PrettyPrinter.buildString(r.hash)
     for {
       _ <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
-      _ <- sendToPeers[F](serialized)
+      _ <- sendToPeers[F](transport.BlockRequest, serialized)
       _ <- Log[F].info(s"CASPER: Requested $hashString from peers")
     } yield ()
   }
 
   def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
       peers <- NodeDiscovery[F].peers
       local <- TransportLayer[F].local
-      msg   = packet(local, serializedMessage)
+      msg   = packet(local, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
@@ -64,8 +67,11 @@ object CommUtil {
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
         for {
-          _    <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
-          send <- TransportLayer[F].roundTrip(peer, packet(local, request), 5.seconds)
+          _ <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
+          send <- TransportLayer[F]
+                   .roundTrip(peer,
+                              packet(local, transport.ApprovedBlockRequest, request),
+                              5.seconds)
           _ <- send match {
                 case Left(err) =>
                   Log[F].info(s"CASPER: Failed to get response from $peer because: $err") *>
@@ -116,7 +122,7 @@ object CommUtil {
   }
 
   def casperPacketHandler[
-      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
@@ -138,7 +144,7 @@ object CommUtil {
                 .map(_ => none[Packet])
 
             case Right(casper) =>
-              implicit val casperEvidence = casper
+              implicit val casperEvidence: MultiParentCasper[F] = casper
               blockPacketHandler[F](peer, b)
           }
 
@@ -150,11 +156,11 @@ object CommUtil {
           for {
             _ <- Log[F].info(s"CASPER: Received ApprovedBlockRequest from $peer")
             a <- MultiParentCasperConstructor[F].lastApprovedBlock
-          } yield a.map(b => Packet(b.toByteString))
+          } yield a.map(b => Packet(transport.ApprovedBlock.id, b.toByteString))
       }
 
   def blockPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
       peer: PeerNode,
       msg: scalapb.GeneratedMessage): F[Option[Packet]] =
     msg match {
@@ -171,10 +177,11 @@ object CommUtil {
 
       case r: BlockRequest =>
         for {
-          dag      <- MultiParentCasper[F].blockDag
-          local    <- TransportLayer[F].local
-          block    = dag.blockLookup.get(r.hash).map(_.toByteString)
-          maybeMsg = block.map(serializedMessage => packet(local, serializedMessage))
+          local      <- TransportLayer[F].local
+          block      <- BlockStore[F].get(r.hash)
+          serialized = block.map(_.toByteString)
+          maybeMsg = serialized.map(serializedMessage =>
+            packet(local, transport.BlockMessage, serializedMessage))
           send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
           hash     = PrettyPrinter.buildString(r.hash)
           logIntro = s"CASPER: Received request for block $hash from $peer. "
@@ -194,17 +201,22 @@ object CommUtil {
     } yield ()
 
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
-    Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
+    if (msg.typeId == transport.BlockMessage.id)
+      Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
+    else None
 
   private def packetToApprovedBlock(msg: Packet): Option[ApprovedBlock] =
-    Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
-      .filter(_.candidate.nonEmpty)
+    if (msg.typeId == transport.ApprovedBlock.id)
+      Try(ApprovedBlock.parseFrom(msg.content.toByteArray)).toOption
+    else None
 
   private def packetToApprovedBlockRequest(msg: Packet): Option[ApprovedBlockRequest] =
-    Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
-      .filter(r => r.identifier.nonEmpty && r.identifier.forall(_.isLetterOrDigit))
+    if (msg.typeId == transport.ApprovedBlockRequest.id)
+      Try(ApprovedBlockRequest.parseFrom(msg.content.toByteArray)).toOption
+    else None
 
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
-    Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
-      .filter(r => r.base16Hash == Base16.encode(r.hash.toByteArray))
+    if (msg.typeId == transport.BlockRequest.id)
+      Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
+    else None
 }

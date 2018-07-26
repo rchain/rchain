@@ -35,17 +35,15 @@ trait PersistentStoreTester {
                 ListChannelWithRandom,
                 ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
-    val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    val dbDir = Files.createTempDirectory("rholang-interpreter-test-")
     val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
       dbDir,
-      1024 * 1024 * 1024)
-    val store: IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation] =
-      LMDBStore.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](context)
+      mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,
                               BindPattern,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
-                              TaggedContinuation](store, Branch("test"))
+                              TaggedContinuation](context, Branch("test"))
     try {
       f(space)
     } finally {
@@ -1293,6 +1291,123 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     result.exprs should be(Seq(Expr(GBool(true))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abc'.length()" should "return the length of the string" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val inspectTask = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GInt(3))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abcabac'.slice(3, 6)" should "return 'aba'" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(3), GInt(6))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("aba"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EPercentPercentBody(
+          EPercentPercent(
+            GString("Hello, ${name}!"),
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("Hello, Alice!"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'abc' ++ 'def'" should "return 'abcdef" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EPlusPlusBody(
+          EPlusPlus(
+            GString("abc"),
+            GString("def")
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("abcdef"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val inspectTask = reducer.evalExpr(
+        EPercentPercentBody(
+          EPercentPercent(
+            GString("${a} ${b}"),
+            EMapBody(
+              ParMap(
+                List[(Par, Par)](
+                  (GString("a"), GString("1 ${b}")),
+                  (GString("b"), GString("2 ${a}"))
+                ),
+                false,
+                BitSet()
+              )
+            )
+          )
+        )
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("1 ${b} 2 ${a}"))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 }
