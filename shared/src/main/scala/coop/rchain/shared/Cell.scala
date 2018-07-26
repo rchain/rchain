@@ -6,6 +6,7 @@ import monix.eval.{MVar, Task}
 
 trait Cell[F[_], S] {
   def modify(f: S => F[S]): F[Unit]
+  def read: F[S]
 }
 
 object Cell {
@@ -20,6 +21,8 @@ object Cell {
             ns <- f(s)
             _  <- mvar.put(ns)
           } yield ()
+
+        def read: Task[S] = mvar.read
       }
     }
 }
@@ -38,6 +41,8 @@ object CellInstances0 {
                 case Left(_)   => s.pure[F]
             })
             .map(Right(_).leftCast[E]))
+
+      def read: EitherT[F, E, S] = EitherT(fCell.read.map(Right(_).leftCast[E]))
     }
 
 }
