@@ -48,6 +48,8 @@ class ApproveBlockProtocol[
     }
   }
 
+  def currentSigs: F[Set[Signature]] = sigsF.get
+
   def approvedBlock: F[Option[ApprovedBlock]] =
     sigsF.get.map(
       sigs =>
@@ -62,6 +64,16 @@ class ApproveBlockProtocol[
       _ <- CommUtil.sendToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
       _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
     } yield ()
+
+  def sendApprovedBlock(a: ApprovedBlock): F[Unit] = {
+    val serializedApprovedBlock = a.toByteString
+    val hash                    = a.candidate.flatMap(_.block).fold("")(b => PrettyPrinter.buildString(b.blockHash))
+    for {
+      _ <- Log[F].info(s"APPROVAL: Beginning send of ApprovedBlock $hash to peers...")
+      _ <- CommUtil.sendToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
+      _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $hash to peers.")
+    } yield ()
+  }
 
 }
 
@@ -91,8 +103,9 @@ object ApproveBlockProtocol {
       maybeApproved <- ApproveBlockProtocol[F].approvedBlock
       _ <- maybeApproved match {
             case Some(approvedBlock)
-                if (t >= ApproveBlockProtocol[F].start + ApproveBlockProtocol[F].duration) =>
-              ??? //Done! Send approved block out
+                if (ApproveBlockProtocol[F].candidate.requiredSigs == 0 || t >= ApproveBlockProtocol[
+                  F].start + ApproveBlockProtocol[F].duration) =>
+              ApproveBlockProtocol[F].sendApprovedBlock(approvedBlock)
 
             case _ =>
               ApproveBlockProtocol[F].sendUnapprovedBlock *> IOUtil.sleep(waitTime) *> run[F](
