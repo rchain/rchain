@@ -63,9 +63,9 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
 
   def testCasper[F[_]: Monad: BlockStore]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
+      def addBlock(b: BlockMessage): F[BlockStatus] = BlockStatus.valid.pure[F]
+      def contains(b: BlockMessage): F[Boolean]     = false.pure[F]
+      def deploy(r: Deploy): F[Unit]                = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
       def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
