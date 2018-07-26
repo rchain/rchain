@@ -39,12 +39,14 @@ object TuplespaceAlg {
         res
           .map {
             case (continuation, dataList) =>
-              val costF = dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll.pure[F]
+              val rspaceMatchCost =
+                dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll
               if (persistent) {
                 List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
-                     produce(channel, data, persistent)).parSequence.map(_.combineAll)
+                     produce(channel, data, persistent)).parSequence
+                  .map(_.combineAll + rspaceMatchCost)
               } else {
-                dispatcher.dispatch(continuation, dataList) *> costF
+                dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
               }
           }
           .getOrElse(F.pure(CostAccount.zero))
@@ -65,15 +67,16 @@ object TuplespaceAlg {
           def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[CostAccount] =
             res match {
               case Some((continuation, dataList)) =>
-                val costF =
-                  dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll.pure[F]
+                val rspaceMatchCost =
+                  dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll
 
                 dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
                   List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
-                       consume(binds, body, persistent)).parSequence.map(_.combineAll)
+                       consume(binds, body, persistent)).parSequence
+                    .map(_.combineAll + rspaceMatchCost)
                 } else {
-                  dispatcher.dispatch(continuation, dataList) *> costF
+                  dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
                 }
               case None => F.pure(CostAccount.zero)
             }
