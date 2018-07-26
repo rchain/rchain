@@ -621,49 +621,6 @@ void rblTableObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::O
     populateObjectByType(rt->tbl, tbl);
 }
 
-void ctxtObjectHandler( ObjectCodePB::Object * pbob, pOb ob, ObjectCodePB::ObType pbtype) {
-    ObjectCodePB::Ctxt *ctxtob = pbob->mutable_ctxt();
-    Ctxt * c = (Ctxt *)ob;
-
-    ObjectCodePB::Location *tag = ctxtob->mutable_tag();
-    populateLocation(c->tag, tag);
-
-    ctxtob->set_nargs( c->nargs );
-    ctxtob->set_outstanding( c->outstanding );
-    ctxtob->set_pc( c->pc );
-
-    ObjectCodePB::Object *rslt = ctxtob->mutable_rslt();
-    populateObjectByType(c->rslt, rslt);
-
-    ObjectCodePB::Object *trgt = ctxtob->mutable_trgt();
-    populateObjectByType(c->trgt, trgt);
-
-    ObjectCodePB::Object *argvec = ctxtob->mutable_argvec();
-    populateObjectByType(c->argvec, argvec);
-
-    ObjectCodePB::Object *env = ctxtob->mutable_env();
-    populateObjectByType(c->env, env);
-
-    ObjectCodePB::Object *code = ctxtob->mutable_code();
-    populateObjectByType(c->code, code);
-
-    ObjectCodePB::Object *ctxt = ctxtob->mutable_ctxt();
-    populateObjectByType(c->ctxt, ctxt);
-
-    ObjectCodePB::Object *self2 = ctxtob->mutable_self2();
-    populateObjectByType(c->self2, self2);
-
-    ObjectCodePB::Object *selfenv = ctxtob->mutable_selfenv();
-    populateObjectByType(c->selfEnv, selfenv);
-
-    ObjectCodePB::Object *rcvr = ctxtob->mutable_rcvr();
-    populateObjectByType(c->rcvr, rcvr);
-
-    // ObjectCodePB::Object *monitor = ctxtob->mutable_monitor();
-    // populateObjectByType(c->monitor, monitor);
-
-}
-
 void indexedMetaObjectHandler( ObjectCodePB::Object * pbob, pOb ob, ObjectCodePB::ObType pbtype) {
     ObjectCodePB::IndexedMeta *imob = pbob->mutable_indexed_meta();
     IndexedMeta * im = (IndexedMeta *)ob;
@@ -780,7 +737,6 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"Code",                {codeObjectHandler,      ObjectCodePB::OT_CODE} },
     {"ComplexPattern",      {complexPatternObjectHandler, ObjectCodePB::OT_COMPLEX_PATTERN} },
     {"ConstPattern",        {constPatternObjectHandler, ObjectCodePB::OT_CONST_PATTERN} },
-    {"Ctxt",                {ctxtObjectHandler,      ObjectCodePB::OT_CTXT} },
     {"ExpandedLocation",    {expandedLocationObjectHandler, ObjectCodePB::OT_EXPANDED_LOCATION} },
     {"Fixnum",              {fixnumObjectHandler,    ObjectCodePB::OT_FIXNUM} },
     {"Float",               {floatObjectHandler,     ObjectCodePB::OT_FLOAT} },
