@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.Context
 import coop.rchain.rspace.test._
+import coop.rchain.shared.PathOps._
 import org.lmdbjava.{Env, Txn}
 import org.scalacheck.Arbitrary
 import org.scalatest.{BeforeAndAfterAll, Suite}
@@ -450,7 +451,7 @@ trait LMDBWithTestTrieStore[K]
   }
 
   override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
 }
 
 class LMDBHistoryActionsTests
