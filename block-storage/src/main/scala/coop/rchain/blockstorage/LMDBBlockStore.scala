@@ -15,6 +15,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import scala.util.control.NonFatal
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -38,7 +39,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
-      ret <- syncF.bracket(syncF.delay(env.txnWrite())) { txn =>
+      ret <- syncF.bracketCase(syncF.delay(env.txnWrite())) { txn =>
               syncF.delay {
                 val (blockHash, blockMessage) = f
                 blocks.put(txn,
@@ -46,7 +47,10 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                            blockMessage.toByteString.toDirectByteBuffer)
                 txn.commit()
               }
-            }(txn => syncF.delay(txn.close()))
+            } {
+              case (txn, ExitCase.Completed) => syncF.delay(txn.close())
+              case (txn, _)                  => syncF.delay { txn.abort(); txn.close() }
+            }
     } yield ret
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
@@ -77,6 +81,11 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             })(txn => syncF.delay(txn.close()))
     } yield ret
 
+  private[blockstorage] def clear(): F[Unit] =
+    for {
+      ret <- syncF.bracket(syncF.delay(env.txnWrite()))(txn => syncF.delay(blocks.drop(txn)))(txn =>
+              syncF.delay(txn.close()))
+    } yield ()
 }
 
 object LMDBBlockStore {
@@ -115,7 +124,7 @@ object LMDBBlockStore {
     import coop.rchain.metrics.Metrics.MetricsNOP
     val sync: Sync[Id] =
       new Sync[Id] {
-        def pure[A](x: A): cats.Id[A] = implicitly[Applicative[Id]].pure(x)
+        def pure[A](x: A): cats.Id[A] = x
 
         def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] =
           try { fa } catch {
@@ -131,11 +140,13 @@ object LMDBBlockStore {
 
         def bracketCase[A, B](acquire: A)(use: A => B)(
             release: (A, ExitCase[Throwable]) => Unit): B = {
-          val state = acquire
+          var maybeErrorCase: Option[ExitCase[Throwable]] = None
           try {
-            use(state)
+            use(acquire)
+          } catch {
+            case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
           } finally {
-            release(acquire, ExitCase.Completed)
+            release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
           }
         }
 

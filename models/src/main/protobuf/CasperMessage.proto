@@ -14,7 +14,7 @@ option (scalapb.options) = {
 service DeployService {
   rpc DoDeploy(DeployString) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (MaybeBlockMessage) {}
-  rpc addBlock(BlockMessage) returns (google.protobuf.Empty) {}
+  rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
 }

@@ -1,25 +1,20 @@
 package coop.rchain.blockstorage
 
+import scala.language.higherKinds
+
 import cats._
-import cats.effect._
-import cats.effect.concurrent._
-import cats.implicits._
-import cats.effect.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.{BlockMessage, Header}
-import coop.rchain.metrics.Metrics
-import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.rspace.Context
+import coop.rchain.shared.PathOps._
 import org.scalacheck._
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-
-import scala.language.higherKinds
-
-import Gen._
-import Arbitrary.arbitrary
+import scala.util.control.NonFatal
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -31,29 +26,35 @@ trait BlockStoreTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  def bm(bh: BlockHash, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh).withHeader(Header().withVersion(v).withTimestamp(ts))
+  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage =
+    BlockMessage(blockHash = bh)
+      .withHeader(Header().withVersion(v).withTimestamp(ts))
 
-  def withStore[R](f: BlockStore[Id] => R): R
+  private[this] implicit def liftToBlockHash(s: String): BlockHash = ByteString.copyFromUtf8(s)
+  private[this] implicit def liftToBlockStoreElement(
+      s: (String, BlockMessage)): (BlockHash, BlockMessage) =
+    (ByteString.copyFromUtf8(s._1), s._2)
 
   private[this] val blockHashGen: Gen[BlockHash] = for {
-    testKey <- arbitrary[String]
-  } yield ByteString.copyFrom(testKey, "utf-8")
+    testKey <- arbitrary[String].suchThat(_.nonEmpty)
+  } yield ByteString.copyFromUtf8(testKey)
 
   private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
 
-  private[this] val blockStoreElementGen: Gen[(BlockHash, BlockMessage)] =
+  private[this] val blockStoreElementGen: Gen[(String, BlockMessage)] =
     for {
       hash      <- arbitrary[BlockHash]
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield
-      (hash,
+      (hash.toStringUtf8,
        BlockMessage(blockHash = hash)
          .withHeader(Header().withVersion(version).withTimestamp(timestamp)))
 
-  private[this] val blockStoreElementsGen: Gen[List[(BlockHash, BlockMessage)]] =
+  private[this] val blockStoreElementsGen: Gen[List[(String, BlockMessage)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
+
+  def withStore[R](f: BlockStore[Id] => R): R
 
   // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
   /**
@@ -91,8 +92,8 @@ trait BlockStoreTest
   }
 
   it should "return Some(message) on get for a published key" in {
-    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
-      withStore { store =>
+    withStore { store =>
+      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements
         items.foreach(store.put(_))
         items.foreach {
@@ -100,17 +101,17 @@ trait BlockStoreTest
             store.get(k) shouldBe Some(v)
         }
         store.asMap().size shouldEqual items.size
+        store.clear()
       }
     }
   }
 
   it should "overwrite existing value" in
-    forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
-      withStore { store =>
+    withStore { store =>
+      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
-            val msg2: BlockMessage = bm(hash, 200L, 20000L)
-            (hash, elem, msg2)
+            (hash, elem, toBlockMessage(hash, 200L, 20000L))
         }
         items.foreach { case (k, v1, _) => store.put(k, v1) }
         items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }
@@ -118,8 +119,24 @@ trait BlockStoreTest
         items.foreach { case (k, _, v2) => store.get(k) shouldBe Some(v2) }
 
         store.asMap().size shouldEqual items.size
+        store.clear()
       }
     }
+
+  it should "rollback the transaction on error" in {
+    withStore { store =>
+      store.asMap().size shouldEqual 0
+      def elem = {
+        blockStoreElementGen.sample.get
+        throw new RuntimeException("msg")
+      }
+
+      a[RuntimeException] shouldBe thrownBy {
+        store.put { elem }
+      }
+      store.asMap().size shouldEqual 0
+    }
+  }
 }
 
 class InMemBlockStoreTest extends BlockStoreTest {
@@ -131,39 +148,20 @@ class InMemBlockStoreTest extends BlockStoreTest {
 
 class LMDBBlockStoreTest extends BlockStoreTest {
 
-  import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
-  import java.nio.file.attribute.BasicFileAttributes
+  import java.nio.file.{Files, Path}
 
-  // TODO: move this and impl from rspace tests to shared
-  private def makeDeleteFileVisitor: SimpleFileVisitor[Path] =
-    new SimpleFileVisitor[Path] {
-      override def visitFile(p: Path, attrs: BasicFileAttributes): FileVisitResult = {
-        Files.delete(p)
-        FileVisitResult.CONTINUE
-      }
-      override def postVisitDirectory(p: Path, e: java.io.IOException): FileVisitResult = {
-        Files.delete(p)
-        FileVisitResult.CONTINUE
-      }
-    }
-
-  def recursivelyDeletePath(p: Path): Path =
-    Files.walkFileTree(p, makeDeleteFileVisitor)
-
-  private[this] val dbDir: Path   = Files.createTempDirectory("block-store-test-")
-  private[this] val mapSize: Long = 1024L * 1024L * 4096L
+  private[this] def mkTmpDir(): Path = Files.createTempDirectory("block-store-test-")
+  private[this] val mapSize: Long    = 100L * 1024L * 1024L * 4096L
 
   override def withStore[R](f: BlockStore[Id] => R): R = {
-
+    val dbDir = mkTmpDir()
     val env   = Context.env(dbDir, mapSize)
     val store = LMDBBlockStore.createWithId(env, dbDir)
     try {
       f(store)
     } finally {
       env.close()
+      dbDir.recursivelyDelete
     }
   }
-
-  override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
 }

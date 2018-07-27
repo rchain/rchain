@@ -46,7 +46,7 @@ import scodec.Codec
 import scodec.bits.BitVector
 
 trait Casper[F[_], A] {
-  def addBlock(b: BlockMessage): F[Unit]
+  def addBlock(b: BlockMessage): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: Deploy): F[Unit]
   def estimator: F[A]
@@ -72,9 +72,9 @@ sealed abstract class MultiParentCasperInstances {
 
   def noOpsCasper[F[_]: Applicative]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
+      def addBlock(b: BlockMessage): F[BlockStatus] = BlockStatus.valid.pure[F]
+      def contains(b: BlockMessage): F[Boolean]     = false.pure[F]
+      def deploy(r: Deploy): F[Unit]                = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
@@ -146,7 +146,7 @@ sealed abstract class MultiParentCasperInstances {
       private val invalidBlockTracker: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
 
-      def addBlock(b: BlockMessage): F[Unit] =
+      def addBlock(b: BlockMessage): F[BlockStatus] =
         for {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
@@ -164,7 +164,7 @@ sealed abstract class MultiParentCasperInstances {
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-        } yield ()
+        } yield attempt
 
       def contains(b: BlockMessage): F[Boolean] =
         BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))

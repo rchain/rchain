@@ -41,6 +41,9 @@ object BlockGenerator {
 
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
+
+      override def clear(): F[Unit] = ???
+
     }
 }
 
