@@ -1,14 +1,11 @@
 package coop.rchain.casper.helper
 
-import java.nio.ByteBuffer
-import java.nio.file.{Files, Path}
-
 import cats._
 import cats.data.StateT
 import cats.implicits._
 import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
@@ -16,9 +13,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rspace.Context
 import coop.rchain.shared.Time
-import org.lmdbjava.{Env, EnvFlags}
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
@@ -42,8 +37,8 @@ object BlockGenerator {
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
 
-      override def clear(): F[Unit] = ???
-
+      override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
+      override def close(): F[Unit] = Monad[F].pure(idBs.close())
     }
 }
 

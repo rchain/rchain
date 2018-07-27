@@ -54,7 +54,7 @@ class HashSetCasperTestNode(name: String,
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
   val dir                        = BlockStoreFixture.dbDir
-  implicit val (blockStore, env) = BlockStoreFixture.create(dir)
+  implicit val blockStore        = BlockStoreFixture.create(dir)
   // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
@@ -80,7 +80,7 @@ class HashSetCasperTestNode(name: String,
   def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
   def tearDown(): Unit = {
-    env.close()
+    blockStore.close()
     dir.recursivelyDelete()
   }
 }

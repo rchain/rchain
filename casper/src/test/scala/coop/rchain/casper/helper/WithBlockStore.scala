@@ -12,12 +12,12 @@ import coop.rchain.shared.PathOps.RichPath
 
 trait WithBlockStore extends BeforeAndAfter { self: Suite =>
   def withStore[R](f: BlockStore[Id] => R): R = {
-    val dir          = BlockStoreFixture.dbDir
-    val (store, env) = BlockStoreFixture.create(dir)
+    val dir   = BlockStoreFixture.dbDir
+    val store = BlockStoreFixture.create(dir)
     try {
       f(store)
     } finally {
-      env.close()
+      store.close()
       dir.recursivelyDelete()
     }
   }
@@ -37,10 +37,10 @@ object BlockStoreFixture {
   def dbDir: Path   = Files.createTempDirectory("casper-block-store-test-")
   val mapSize: Long = 1024L * 1024L * 4096L
 
-  def create(dir: Path): (BlockStore[Id], Env[ByteBuffer]) = {
+  def create(dir: Path): BlockStore[Id] = {
     val environment = env(dir, mapSize)
     val blockStore  = LMDBBlockStore.createWithId(environment, dir)
-    (blockStore, environment)
+    blockStore
   }
 }
 
@@ -48,14 +48,14 @@ trait BlockStoreFixture extends BeforeAndAfterAll { self: Suite =>
 
   val dir = BlockStoreFixture.dbDir
 
-  val (store, env) = BlockStoreFixture.create(dir)
+  val store = BlockStoreFixture.create(dir)
 
   implicit val blockStore = store
 
   implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 
   override def afterAll(): Unit = {
-    env.close()
+    store.close()
     dir.recursivelyDelete()
   }
 }

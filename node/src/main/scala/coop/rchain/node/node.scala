@@ -143,17 +143,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host              = conf.run.fetchHost(externalAddress)
-  private val port              = conf.run.port()
-  private val certificateFile   = conf.run.certificatePath.toFile
-  private val keyFile           = conf.run.keyPath.toFile
-  private val address           = s"rnode://$name@$host:$port"
-  private val src               = PeerNode.parse(address).right.get
-  private val storagePath       = conf.run.data_dir().resolve("rspace")
-  private val casperStoragePath = storagePath.resolve("casper")
-  private val casperPersistencePath       = storagePath.resolve("casper-persistence")
-  private val storageSize       = conf.run.map_size()
-  private val defaultTimeout    = FiniteDuration(conf.run.defaultTimeout().toLong, MILLISECONDS)
+  private val host                  = conf.run.fetchHost(externalAddress)
+  private val port                  = conf.run.port()
+  private val certificateFile       = conf.run.certificatePath.toFile
+  private val keyFile               = conf.run.keyPath.toFile
+  private val address               = s"rnode://$name@$host:$port"
+  private val src                   = PeerNode.parse(address).right.get
+  private val storagePath           = conf.run.data_dir().resolve("rspace")
+  private val casperStoragePath     = storagePath.resolve("casper")
+  private val casperPersistencePath = storagePath.resolve("casper-block-store")
+  private val storageSize           = conf.run.map_size()
+  private val defaultTimeout        = FiniteDuration(conf.run.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -181,9 +181,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
   if (Files.notExists(casperPersistencePath)) Files.createDirectories(casperPersistencePath)
-  val config                                  = coop.rchain.blockstorage.LMDBBlockStore.Config(casperPersistencePath, 1024 * 1024)
-  val syncEffect: Sync[Effect]                = SyncInstances.syncEffect
-  implicit val blockStore: BlockStore[Effect] = LMDBBlockStore.create[Effect](config)(syncEffect, metricsEffect)
+  val config =
+    coop.rchain.blockstorage.LMDBBlockStore.Config(casperPersistencePath, 1024 * 1024 * 1024)
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  implicit val blockStore: BlockStore[Effect] =
+    LMDBBlockStore.create[Effect](config)(syncEffect, metricsEffect)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -191,10 +193,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        runtime: Runtime,
                        casperRuntime: Runtime,
                        casperConstructor: MultiParentCasperConstructor[Effect],
-                       packetHandler: PacketHandler[Effect])
+                       packetHandler: PacketHandler[Effect],
+                       blockStore: BlockStore[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
+      _              <- blockStore.clear() // replace with a proper casper init when it's available
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       oracle         = SafetyOracle.turanOracle[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
@@ -223,7 +227,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                 runtime,
                 casperRuntime,
                 casperConstructor,
-                packetHandlerEffect)
+                packetHandlerEffect,
+                blockStore)
     }
 
   def startResources(resources: Resources): Effect[Unit] =
@@ -252,6 +257,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     resources.runtime.close()
     println("Shutting down Casper runtime ...")
     resources.casperRuntime.close()
+    println("Bringing BlockStore down ...")
+    resources.blockStore.close()
 
     println("Goodbye.")
   }
