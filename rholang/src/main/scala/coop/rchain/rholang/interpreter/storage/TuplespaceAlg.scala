@@ -40,7 +40,10 @@ object TuplespaceAlg {
           .map {
             case (continuation, dataList) =>
               val rspaceMatchCost =
-                dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll
+                dataList
+                  .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
+                  .toList
+                  .combineAll
               if (persistent) {
                 List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
                      produce(channel, data, persistent)).parSequence
@@ -68,7 +71,10 @@ object TuplespaceAlg {
             res match {
               case Some((continuation, dataList)) =>
                 val rspaceMatchCost =
-                  dataList.map(x => CostAccount.fromProto(x.cost)).toList.combineAll
+                  dataList
+                    .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
+                    .toList
+                    .combineAll
 
                 dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
