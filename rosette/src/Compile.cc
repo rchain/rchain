@@ -2448,7 +2448,6 @@ Code* CompilationUnit::compileExpr(pOb ctEnv, pOb freeEnv) {
 
     Code * cp = Code::create(SELF->codebuf, SELF->litvec);
 
-    collectExportCode(cp);
     return cp;
 }
 
@@ -2479,7 +2478,6 @@ Code* CompilationUnit::compileBody(Template* templat, pOb ctEnv, pOb freeEnv) {
 
     Code * cp = Code::create(SELF->codebuf, SELF->litvec);
 
-    collectExportCode(cp);
     return cp;
 }
 

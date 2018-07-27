@@ -14,7 +14,7 @@ option (scalapb.options) = {
 service DeployService {
   rpc DoDeploy(DeployString) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (MaybeBlockMessage) {}
-  rpc addBlock(BlockMessage) returns (google.protobuf.Empty) {}
+  rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
 }
@@ -72,6 +72,7 @@ message BlockInfo {
   float faultTolerance = 9;
   string mainParentHash = 10;
   repeated string parentsHashList = 11;
+  string sender = 12;
 }
 
 // --------- End DeployService  --------
@@ -111,6 +112,7 @@ message ApprovedBlockRequest {
 // ------- End Signing Protocol --------
 
 // --------- Core Protocol  --------
+// TODO: Include non-body BlockMessage fields into blockhash (See RHOL-546)
 message BlockMessage {
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
   Header                 header         = 2;

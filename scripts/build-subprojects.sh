@@ -15,7 +15,7 @@ case "$SUBPROJECT" in "rosette")
 
     for sub in block-storage casper crypto comm rholang roscala node rspace shared
     do
-        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
+        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F ${sub//-})
     done
     ;;
 
