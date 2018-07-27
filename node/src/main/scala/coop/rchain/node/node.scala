@@ -187,20 +187,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Effect]
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect]
   ): Effect[Resources] =
     for {
-      oracle         <- SafetyOracle.turanOracle[Effect].pure[Effect]
+
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-      casperConstructor <- {
-        implicit val oracleEvidence: SafetyOracle[Effect] = oracle
-        MultiParentCasperConstructor
-          .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
-      }
+      casperConstructor <- MultiParentCasperConstructor
+                            .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       grpcServer <- {
-        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
@@ -277,7 +274,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def unrecoverableNodeProgram(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Effect]
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect]
   ): Effect[Unit] =
     for {
       _ <- Log[Effect].info(
@@ -315,10 +313,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def nodeProgram(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Effect]
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect]
   ): Effect[Unit] =
     EitherT[Task, CommError, Unit](
-      unrecoverableNodeProgram(nodeDiscovery, blockStore).value.onErrorHandleWith {
+      unrecoverableNodeProgram(nodeDiscovery, blockStore, oracle).value.onErrorHandleWith {
         case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
           Log[Task]
             .error(
@@ -329,10 +328,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   val node: Effect[Unit] = for {
     storeRef      <- InMemBlockStore.emptyMapRef[Effect]
-    syncEffect    = SyncInstances.syncEffect
+    sync          = SyncInstances.syncEffect
     nodeDiscovery = new KademliaNodeDiscovery[Task](src, defaultTimeout)
-    blockStore    = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
-    _             <- nodeProgram(nodeDiscovery, blockStore)
+    blockStore    = InMemBlockStore.create[Effect, CommError](sync, storeRef, metricsEffect)
+    oracle        = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
+    _             <- nodeProgram(nodeDiscovery, blockStore, oracle)
   } yield ()
 
 }
