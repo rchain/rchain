@@ -38,7 +38,7 @@ import scala.util.Random
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
-                            genesis: BlockMessage,
+                            val genesis: BlockMessage,
                             sk: Array[Byte],
                             storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 

@@ -46,8 +46,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "create blocks based on deploys" in {
-    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
-    import node._
+    val node            = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    implicit val casper = node.casperEff
 
     val deploy = ProtoUtil.basicDeploy(0)
     MultiParentCasper[Id].deploy(deploy)
