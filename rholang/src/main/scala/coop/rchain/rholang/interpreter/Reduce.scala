@@ -64,9 +64,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(term)) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(term)) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
@@ -78,9 +78,9 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(term)) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(term)) *> Sync[M].pure(term)
+        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],

@@ -4,7 +4,7 @@ import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 //TODO: Adjust the costs of operations
-final case class Cost private (value: BigInt) extends AnyVal {
+final case class Cost(value: BigInt) extends AnyVal {
   def *(other: Cost): Cost = Cost(value * other.value)
   def *(other: Int): Cost  = Cost(value * other)
   def +(other: Cost): Cost = Cost(value + other.value)
@@ -13,14 +13,6 @@ final case class Cost private (value: BigInt) extends AnyVal {
 object Cost {
   implicit val costNumeric: Numeric[Cost] =
     NumericOps.by[Cost, BigInt](_.value, Cost(_))
-
-  // to get rid of "implicit widening" warnings
-  def apply(i: Long): Cost   = Cost(i)
-  def apply(i: Int): Cost    = Cost(i)
-  def apply(i: BigInt): Cost = Cost(i)
-
-  def apply[A](a: A)(implicit c: Chargeable[A]): Cost =
-    Cost(c.cost(a))
 }
 
 trait Costs {
