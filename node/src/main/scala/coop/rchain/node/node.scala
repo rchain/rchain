@@ -165,13 +165,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val log: Log[Task]                                     = effects.log
-  implicit val time: Time[Task]                                   = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metrics: Metrics[Effect]                           = diagnostics.metrics
-  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
-  implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
+  implicit val log: Log[Task]                           = effects.log
+  implicit val time: Time[Task]                         = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metrics: Metrics[Effect]                 = diagnostics.metrics
+  implicit val metricsTask: Metrics[Task]               = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -330,9 +329,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         } *> exit0.as(Right(())))
 
   val node: Effect[Unit] = for {
-    storeRef    <- InMemBlockStore.emptyMapRef[Effect]
-    sync        = SyncInstances.syncEffect
-    transport   = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
+    storeRef         <- InMemBlockStore.emptyMapRef[Effect]
+    sync             = SyncInstances.syncEffect
+    connectionsState = effects.connectionsState[Task]
+    transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
+      scheduler,
+      connectionsState,
+      log)
     kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metricsTask, transport)
     nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
                                                                time,
