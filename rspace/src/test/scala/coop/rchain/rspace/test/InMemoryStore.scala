@@ -52,8 +52,6 @@ class InMemoryStore[C, P, A, K](
   private implicit val codecA: Codec[A] = sa.toCodec
   private implicit val codecK: Codec[K] = sk.toCodec
 
-  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
-
   private[this] val stateRef: SyncVar[State[C, P, A, K]] = {
     val sv = new SyncVar[StateType]
     sv.put(State.empty)
@@ -272,7 +270,6 @@ class InMemoryStore[C, P, A, K](
 
   private[rspace] def clear(txn: Transaction): Unit =
     txn.writeState(_ => {
-      eventsCounter.reset()
       (State.empty, ())
     })
 
