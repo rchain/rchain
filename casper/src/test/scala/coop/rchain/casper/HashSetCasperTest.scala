@@ -26,24 +26,11 @@ import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
-  import HashSetCasperTest.blockTuplespaceContents
+  import HashSetCasperTest._
 
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val initial                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
-  val storageDirectory            = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-  val storageSize: Long           = 1024L * 1024
-  val activeRuntime               = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val emptyStateHash              = runtimeManager.emptyStateHash
-  val genesis = Genesis.withContracts(
-    initial,
-    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-    Nil,
-    emptyStateHash,
-    runtimeManager)
-  activeRuntime.close()
+  val genesis                     = createGenesis(validators)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -351,5 +338,24 @@ object HashSetCasperTest {
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
+  }
+
+  def createGenesis(validators: Seq[Array[Byte]]): BlockMessage = {
+    val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long = 1024L * 1024
+    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
+    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
+    val emptyStateHash    = runtimeManager.emptyStateHash
+    val genesis = Genesis.withContracts(
+      initial,
+      bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+      Nil,
+      emptyStateHash,
+      runtimeManager)
+    activeRuntime.close()
+
+    genesis
   }
 }
