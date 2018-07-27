@@ -401,8 +401,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
           persistent = false,
           bindCount = 0))))
     val expectedResult = Some(Map.empty[Int, Par])
-    val result         = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(expectedResult)
+    assertSpatialMatch(target, pattern, expectedResult)
   }
 
   "Matching ++" should "work" in {
