@@ -112,7 +112,7 @@ Then build the whole project with all submodules:
 ```
 
 #### Packaging
-To deploy a docker image to your local repo run:
+To publish a docker image to your local repo run:
 ```
 > sbt node/docker:publishLocal
 [... output snipped ...]
