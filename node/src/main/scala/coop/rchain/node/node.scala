@@ -165,16 +165,15 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                               = effects.log
-  implicit val timeEffect: Time[Task]                             = effects.time
+  implicit val log: Log[Task]                                     = effects.log
+  implicit val time: Time[Task]                                   = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
+  implicit val metrics: Metrics[Effect]                           = diagnostics.metrics
   implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
-  implicit val transportLayerEffect: TransportLayer[Task] =
+  implicit val transport: TransportLayer[Task] =
     effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
-  implicit val kademliaRPCEffect: KademliaRPC[Task] = effects.kademliaRPC(src, defaultTimeout)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -231,10 +230,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down transport layer, broadcasting DISCONNECT")
 
     (for {
-      loc <- transportLayerEffect.local
-      ts  <- timeEffect.currentMillis
+      loc <- transport.local
+      ts  <- time.currentMillis
       msg = ProtocolHelper.disconnect(loc)
-      _   <- transportLayerEffect.shutdown(msg)
+      _   <- transport.shutdown(msg)
     } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
@@ -327,12 +326,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       } *> exit0.as(Right(())))
 
   val node: Effect[Unit] = for {
-    storeRef      <- InMemBlockStore.emptyMapRef[Effect]
-    sync          = SyncInstances.syncEffect
-    nodeDiscovery = new KademliaNodeDiscovery[Task](src, defaultTimeout)
-    blockStore    = InMemBlockStore.create[Effect, CommError](sync, storeRef, metricsEffect)
-    oracle        = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    _             <- nodeProgram(nodeDiscovery, blockStore, oracle)
+    storeRef    <- InMemBlockStore.emptyMapRef[Effect]
+    sync        = SyncInstances.syncEffect
+    kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metricsTask, transport)
+    nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
+                                                               time,
+                                                               metricsTask,
+                                                               transport,
+                                                               kademliaRPC)
+    blockStore = InMemBlockStore.create[Effect, CommError](sync, storeRef, metrics)
+    oracle     = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
+    _          <- nodeProgram(nodeDiscovery, blockStore, oracle)
   } yield ()
 
 }
