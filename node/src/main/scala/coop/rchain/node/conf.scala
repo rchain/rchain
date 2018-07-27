@@ -3,6 +3,7 @@ package coop.rchain.node
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
+import coop.rchain.blockstorage.LMDBBlockStore.{Config => BlockStoreConfig}
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 
@@ -140,6 +141,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
 
+    val casperBlockStoreSize = opt[Long](required = false,
+                                         descr = "Casper BlockStore map size (in bytes)",
+                                         default = Some(1024L * 1024L * 1024L))
+
     val validatorPublicKey = opt[String](
       default = None,
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
@@ -254,6 +259,11 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     run.data_dir().resolve("genesis"),
     run.walletsFile.toOption,
     run.standalone()
+  )
+
+  def casperBlockStoreConf: BlockStoreConfig = BlockStoreConfig(
+    run.data_dir().resolve("casper-block-store"),
+    run.casperBlockStoreSize()
   )
 
   verify()

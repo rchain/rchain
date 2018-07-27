@@ -17,13 +17,13 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, WithBlockStore}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with WithBlockStore {
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
   val initState = BlockDag()
 
   "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>

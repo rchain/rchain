@@ -14,7 +14,7 @@ import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
-import coop.rchain.casper.helper.{BlockGenerator, WithBlockStore}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -40,7 +40,7 @@ class ValidateTest
     with Matchers
     with BeforeAndAfterEach
     with BlockGenerator
-    with WithBlockStore {
+    with BlockStoreFixture {
   implicit val log = new LogStub[Id]
   val initState    = BlockDag().copy(currentId = -1)
   val ed25519      = "ed25519"

@@ -15,7 +15,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, WithBlockStore}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -25,7 +25,7 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 
-class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with WithBlockStore {
+class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
   val initState = BlockDag()
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram

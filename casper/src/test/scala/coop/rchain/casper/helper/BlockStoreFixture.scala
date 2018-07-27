@@ -10,10 +10,10 @@ import org.lmdbjava.{Env, EnvFlags}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Suite}
 import coop.rchain.shared.PathOps.RichPath
 
-trait WithBlockStore extends BeforeAndAfter { self: Suite =>
+trait BlockStoreFixture extends BeforeAndAfter { self: Suite =>
   def withStore[R](f: BlockStore[Id] => R): R = {
-    val dir   = BlockStoreFixture.dbDir
-    val store = BlockStoreFixture.create(dir)
+    val dir   = BlockStoreTestFixture.dbDir
+    val store = BlockStoreTestFixture.create(dir)
     try {
       f(store)
     } finally {
@@ -23,7 +23,7 @@ trait WithBlockStore extends BeforeAndAfter { self: Suite =>
   }
 }
 
-object BlockStoreFixture {
+object BlockStoreTestFixture {
   def env(path: Path,
           mapSize: Long,
           flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)): Env[ByteBuffer] =
@@ -35,7 +35,7 @@ object BlockStoreFixture {
       .open(path.toFile, flags: _*)
 
   def dbDir: Path   = Files.createTempDirectory("casper-block-store-test-")
-  val mapSize: Long = 1024L * 1024L * 4096L
+  val mapSize: Long = 1024L * 1024L * 100L
 
   def create(dir: Path): BlockStore[Id] = {
     val environment = env(dir, mapSize)
@@ -44,11 +44,11 @@ object BlockStoreFixture {
   }
 }
 
-trait BlockStoreFixture extends BeforeAndAfterAll { self: Suite =>
+trait BlockStoreTestFixture extends BeforeAndAfterAll { self: Suite =>
 
-  val dir = BlockStoreFixture.dbDir
+  val dir = BlockStoreTestFixture.dbDir
 
-  val store = BlockStoreFixture.create(dir)
+  val store = BlockStoreTestFixture.create(dir)
 
   implicit val blockStore = store
 

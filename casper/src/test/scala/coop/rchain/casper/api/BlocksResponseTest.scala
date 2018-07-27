@@ -13,7 +13,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.Catscontrib
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -22,7 +22,11 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
+class BlocksResponseTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with BlockStoreTestFixture {
   val initState = BlockDag()
   val v1        = ByteString.copyFromUtf8("Validator One")
   val v2        = ByteString.copyFromUtf8("Validator Two")

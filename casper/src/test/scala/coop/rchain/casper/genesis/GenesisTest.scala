@@ -5,8 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.catscontrib._
-import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.BlockDag
+import coop.rchain.casper.protocol.Bond
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
@@ -16,19 +16,11 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import java.io.PrintWriter
 import java.nio.file.Files
 
-import cats.effect.Bracket
-import cats.mtl.MonadState
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.{BlockGenerator, WithBlockStore}
-import coop.rchain.casper.helper.BlockGenerator.StateWithChain
+import coop.rchain.casper.helper.BlockStoreFixture
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
-import scala.collection.immutable.HashMap
-import scala.concurrent.SyncVar
-
-class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with WithBlockStore {
+class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with BlockStoreFixture {
   val storageSize     = 1024L * 1024
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")

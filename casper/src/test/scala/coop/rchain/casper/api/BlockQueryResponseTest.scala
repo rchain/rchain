@@ -1,26 +1,18 @@
 package coop.rchain.casper.api
 
 import cats._
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockGenerator, WithBlockStore}
+import coop.rchain.casper.helper.BlockStoreFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.immutable.{HashMap, HashSet}
-
-class BlockQueryResponseTest extends FlatSpec with Matchers with WithBlockStore {
+class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixture {
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 

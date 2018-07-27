@@ -19,7 +19,7 @@ import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, WithBlockStore}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rholang.collection.LinkedList
@@ -40,7 +40,7 @@ class InterpreterUtilTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockStoreFixture {
+    with BlockStoreTestFixture {
   val initState        = BlockDag().copy(currentId = -1)
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")

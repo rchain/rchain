@@ -41,7 +41,6 @@ class InMemBlockStore[F[_], E] private ()(implicit
 
   def clear(): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter("block-store-put")
       _ <- refF.update { _.empty }
     } yield ()
 

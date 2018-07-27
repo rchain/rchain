@@ -1,11 +1,10 @@
 package coop.rchain.blockstorage
 
 import java.nio.ByteBuffer
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import scala.collection.JavaConverters._
 import scala.language.higherKinds
-
 import cats._
 import cats.effect.{ExitCase, Sync}
 import cats.implicits._
@@ -110,6 +109,8 @@ object LMDBBlockStore {
   def create[F[_]](config: Config)(implicit
                                    syncF: Sync[F],
                                    metricsF: Metrics[F]): LMDBBlockStore[F] = {
+    if (Files.notExists(config.path)) Files.createDirectories(config.path)
+
     val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
     val env = Env
       .create()
