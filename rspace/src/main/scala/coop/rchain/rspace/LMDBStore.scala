@@ -47,8 +47,6 @@ class LMDBStore[C, P, A, K] private (
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
-  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
-
   /* Basic operations */
   private[this] def fetchGNAT(txn: Transaction,
                               channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
@@ -237,7 +235,6 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] def clear(txn: Transaction): Unit = {
     _dbGNATs.drop(txn)
     _dbJoins.drop(txn)
-    eventsCounter.reset()
   }
 
   def close(): Unit = {
