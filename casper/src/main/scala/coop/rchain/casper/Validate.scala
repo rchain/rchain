@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.DagOperations.bfTraverse
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -17,7 +17,6 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
 import monix.execution.Scheduler
 
-import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
 object Validate {
@@ -161,7 +160,7 @@ object Validate {
           r  <- d.raw.toList
         } yield (r.user, r.timestamp)).toSet
 
-        val invalid = bfTraverse[BlockMessage](parents(block).toList)(parents).exists(
+        val repeatBlock = bfTraverse[BlockMessage](parents(block).toList)(parents).find(
           _.body.exists(
             _.newCode.exists(
               _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
@@ -169,15 +168,14 @@ object Validate {
           )
         )
 
-        if (!invalid) {
-          true.pure[F]
-        } else {
-          for {
-            _ <- Log[F].warn(
-                  ignore(
+        repeatBlock match {
+          case Some(b) =>
+            for {
+              _ <- Log[F].warn(ignore(
                     block,
-                    "found deploy by the same (user, millisecond timestamp) produced in the chain"))
-          } yield false
+                    s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"))
+            } yield false
+          case None => true.pure[F]
         }
       }
     }
