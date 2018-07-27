@@ -15,7 +15,6 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
-import scala.util.control.NonFatal
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -102,38 +101,8 @@ object LMDBBlockStore {
 
   def createWithId(env: Env[ByteBuffer], path: Path): BlockStore[Id] = {
     import coop.rchain.metrics.Metrics.MetricsNOP
-    val sync: Sync[Id] =
-      new Sync[Id] {
-        def pure[A](x: A): cats.Id[A] = x
-
-        def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] =
-          try { fa } catch {
-            case e: Exception => f(e)
-          }
-
-        def raiseError[A](e: Throwable): cats.Id[A] = throw e
-
-        def flatMap[A, B](fa: cats.Id[A])(f: A => cats.Id[B]): cats.Id[B] =
-          implicitly[FlatMap[Id]].flatMap(fa)(f)
-        def tailRecM[A, B](a: A)(f: A => cats.Id[Either[A, B]]): cats.Id[B] =
-          implicitly[FlatMap[Id]].tailRecM(a)(f)
-
-        def bracketCase[A, B](acquire: A)(use: A => B)(
-            release: (A, ExitCase[Throwable]) => Unit): B = {
-          var maybeErrorCase: Option[ExitCase[Throwable]] = None
-          try {
-            use(acquire)
-          } catch {
-            case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
-          } finally {
-            release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
-          }
-        }
-
-        def suspend[A](thunk: => A): A = thunk
-      }
-
-    implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(sync)
-    LMDBBlockStore.create(env, path)(sync, metrics)
+    import coop.rchain.catscontrib.effect.implicits._
+    implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
+    LMDBBlockStore.create(env, path)(syncId, metrics)
   }
 }
