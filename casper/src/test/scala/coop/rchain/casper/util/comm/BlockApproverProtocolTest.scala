@@ -61,7 +61,7 @@ object BlockApproverProtocolTest {
 
     val (sk, pk) = Ed25519.newKeyPair
     val genesis  = HashSetCasperTest.createGenesis(Seq(pk))
-    val node     = HashSetCasperTestNode.standalone(genesis, sk)
+    val node     = HashSetCasperTestNode.network(Vector(sk), genesis).head
     import node._
 
     new BlockApproverProtocol[Id](node.validatorId, genesis, requiredSigs) -> node
