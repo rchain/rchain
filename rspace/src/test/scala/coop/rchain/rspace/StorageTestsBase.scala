@@ -9,6 +9,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
+import coop.rchain.shared.PathOps._
 import org.lmdbjava.Txn
 import org.scalatest._
 import scodec.Codec
@@ -66,7 +67,7 @@ class InMemoryStoreTestsBase
   }
 
   override def afterAll(): Unit = {
-    test.recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
     super.afterAll()
   }
 }
@@ -106,5 +107,5 @@ class LMDBStoreTestsBase
   }
 
   override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
 }

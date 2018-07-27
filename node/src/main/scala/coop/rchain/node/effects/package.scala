@@ -13,6 +13,7 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
+import coop.rchain.comm.protocol.routing._
 
 package object effects {
 
@@ -27,15 +28,31 @@ package object effects {
     }
   }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode,
-                                                          timeout: FiniteDuration): Ping[F] =
-    new Ping[F] {
+  def kademliaRPC[F[_]: Monad: Capture: Metrics: TransportLayer](
+      src: PeerNode,
+      timeout: FiniteDuration): KademliaRPC[F] =
+    new KademliaRPC[F] {
       def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = ProtocolHelper.ping(src)
           res <- TransportLayer[F].roundTrip(node, req, timeout)
         } yield res.toOption.isDefined
+
+      def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
+        for {
+          _   <- Metrics[F].incrementCounter("protocol-lookup-send")
+          req = ProtocolHelper.lookup(src, key)
+          r <- TransportLayer[F]
+                .roundTrip(remoteNode, req, timeout)
+                .map(_.toOption
+                  .map {
+                    case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
+                      lr.nodes.map(ProtocolHelper.toPeerNode)
+                    case _ => Seq()
+                  }
+                  .getOrElse(Seq()))
+        } yield r
     }
 
   def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(

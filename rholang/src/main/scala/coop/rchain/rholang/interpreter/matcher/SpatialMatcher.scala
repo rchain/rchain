@@ -206,7 +206,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
               trem match {
                 case Nil => OptionalFreeMapWithCost.pure(acc)
                 case item +: rem =>
-                  if (lft.locallyFree(item).isEmpty)
+                  if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
                     OptionalFreeMapWithCost.emptyMap[Seq[T]]
@@ -308,7 +308,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
               remainder match {
                 case Nil => NonDetFreeMapWithCost.pure(p)
                 case item +: rem =>
-                  if (lf.locallyFree(item).isEmpty)
+                  if (lf.locallyFree(item, 0).isEmpty)
                     foldRemainder(rem, merger(p, item))
                   else if (wildcard)
                     foldRemainder(rem, p)

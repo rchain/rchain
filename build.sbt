@@ -112,7 +112,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.2",
+    version := "0.5.3",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -244,7 +244,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   )
   .dependsOn(rholang)
 
-lazy val roscala_macros = (project in file("roscala/macros"))
+lazy val roscalaMacros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
@@ -261,7 +261,7 @@ lazy val roscala = (project in file("roscala"))
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies
-  ).dependsOn(roscala_macros)
+  ).dependsOn(roscalaMacros)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
