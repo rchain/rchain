@@ -3,17 +3,13 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Applicative, FlatMap, Monad, Parallel, Eval => _}
-import cats.mtl.implicits._
-import cats.mtl.{FunctorTell, MonadState}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
@@ -22,16 +18,14 @@ import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
+import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
-import matcher._
-import OptionalFreeMapWithCost._
-import NonDetFreeMapWithCost._
+
 import scala.collection.immutable.BitSet
 import scala.util.Try
-import Chargeable._
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -64,9 +58,11 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
+        substTerm =>
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(
+            substTerm)
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
@@ -78,9 +74,11 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(cost(term))) *> Sync[M].pure(term)
+        substTerm =>
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(
+            substTerm)
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],

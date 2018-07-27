@@ -8,11 +8,7 @@ trait Chargeable[A] {
   def cost(a: A): Int
 }
 
-trait ChargeableSyntax {
-  def cost[T: Chargeable](a: T): Int = Chargeable[T].cost(a)
-}
-
-object Chargeable extends ChargeableSyntax {
+object Chargeable {
   def apply[T](implicit ev: Chargeable[T]): Chargeable[T] = ev
 
   implicit def fromProtobuf[T <: GeneratedMessage with Message[T]] =

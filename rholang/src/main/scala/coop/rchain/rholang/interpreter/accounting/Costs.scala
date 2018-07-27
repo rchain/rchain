@@ -16,7 +16,6 @@ object Cost {
 }
 
 trait Costs {
-  import Chargeable._
 
   final val BOOLEAN_COST: Cost = Cost(1)
   final val INT_COST: Cost     = Cost(2)
@@ -24,8 +23,9 @@ trait Costs {
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost[T: Chargeable, P: Chargeable](x: T, y: P): Cost =
-    Cost(scala.math.min(cost(x), cost(y)))
+  def equalityCheckCost[T <: GeneratedMessage with Message[T],
+                        P <: GeneratedMessage with Message[P]](x: T, y: P): Cost =
+    Cost(scala.math.min(x.serializedSize, y.serializedSize))
 
   final val BOOLEAN_AND_COST = Cost(2)
   final val BOOLEAN_OR_COST  = Cost(2)
