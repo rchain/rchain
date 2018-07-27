@@ -65,12 +65,12 @@ object RemainderNormalizeMatcher {
         }
     }
 
-  def normalizeMatchProc[M[_]](r: Remainder, knownFree: DebruijnLevelMap[VarSort])(
+  def normalizeMatchProc[M[_]](r: ProcRemainder, knownFree: DebruijnLevelMap[VarSort])(
       implicit err: MonadError[M, InterpreterError]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
     r match {
-      case _: RemainderEmpty => (None: Option[Var], knownFree).pure[M]
-      case r: RemainderVar =>
-        handleProcVar[M](r.procvar_, knownFree)
+      case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[M]
+      case pr: ProcRemainderVar =>
+        handleProcVar[M](pr.procvar_, knownFree)
     }
 
   def normalizeMatchName[M[_]](nr: NameRemainder, knownFree: DebruijnLevelMap[VarSort])(
@@ -138,7 +138,7 @@ object CollectionNormalizeMatcher {
     c match {
       case cl: CollectList =>
         RemainderNormalizeMatcher
-          .normalizeMatchProc[M](cl.remainder_, input.knownFree)
+          .normalizeMatchProc[M](cl.procremainder_, input.knownFree)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               val constructor: Option[Var] => (Seq[Par], BitSet, Boolean) => EList =
@@ -161,7 +161,7 @@ object CollectionNormalizeMatcher {
       case cs: CollectSet =>
         val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
           (pars, locallyFree, connectiveUsed) =>
-            ParSet(SortedParHashSet(pars), connectiveUsed, Coeval.delay(locallyFree))
+            ParSet(pars, connectiveUsed, Coeval.delay(locallyFree))
         foldMatch(input.knownFree, cs.listproc_.toList, constructor)
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
     }
@@ -199,7 +199,7 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(chanNew) => chanNew.get
+            case Some(chanNew) => chanNew
             case _             => Quote(p)
           }
 
