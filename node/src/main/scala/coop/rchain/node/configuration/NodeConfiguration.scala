@@ -6,7 +6,7 @@ import java.nio.file.{Path, Paths}
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.IpChecker
-import coop.rchain.node.configuration.toml.TomlRoot
+import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 
 object NodeConfiguration {
 
@@ -62,7 +62,7 @@ object NodeConfiguration {
 
   def apply(dataDir: Path,
             options: commandline.Options,
-            config: Option[TomlRoot]): Configuration = {
+            config: Option[TomlConfiguration]): Configuration = {
     val command: Command = options.subcommand match {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
@@ -76,10 +76,13 @@ object NodeConfiguration {
       case _                         => Help
     }
 
-    def getOpt[A](fo: commandline.Options => Option[A], fc: TomlRoot => Option[A]): Option[A] =
+    def getOpt[A](fo: commandline.Options => Option[A],
+                  fc: TomlConfiguration => Option[A]): Option[A] =
       fo(options).orElse(config.flatMap(fc))
 
-    def get[A](fo: commandline.Options => Option[A], fc: TomlRoot => Option[A], default: => A): A =
+    def get[A](fo: commandline.Options => Option[A],
+               fc: TomlConfiguration => Option[A],
+               default: => A): A =
       getOpt(fo, fc).getOrElse(default)
 
     // gRPC

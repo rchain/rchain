@@ -39,7 +39,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     """.stripMargin
 
   test("Parse TOML configuration string") {
-    val result: Either[String, TomlRoot] = TomlConfiguration.from(config)
+    val result: Either[String, Configuration] = TomlConfiguration.from(config)
     result.isRight shouldEqual true
     val Right(root) = result
 

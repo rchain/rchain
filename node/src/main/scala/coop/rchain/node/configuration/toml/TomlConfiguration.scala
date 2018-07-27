@@ -36,19 +36,19 @@ object TomlConfiguration {
       Left((List.empty, s"Bool expected, $value provided"))
   }
 
-  def from(toml: String): Either[String, TomlRoot] =
+  def from(toml: String): Either[String, Configuration] =
     Toml.parse(toml) match {
       case Left(error) => Either.left(s"Failed to parse TOML string: $error")
       case Right(ast)  => from(ast)
     }
 
-  def from(ast: Value.Tbl): Either[String, TomlRoot] =
-    Toml.parseAs[TomlRoot](rewriteKeysToCamelCase(ast)) match {
+  def from(ast: Value.Tbl): Either[String, Configuration] =
+    Toml.parseAs[Configuration](rewriteKeysToCamelCase(ast)) match {
       case Left((_, error)) => Either.left(s"Failed to parse TOML AST: $error")
       case Right(root)      => Either.right(root)
     }
 
-  def from(file: File): Either[String, TomlRoot] =
+  def from(file: File): Either[String, Configuration] =
     if (file.exists())
       withResource(Source.fromFile(file))(f => from(f.getLines().mkString("\n")))
     else Either.left(s"File ${file.getAbsolutePath} not found")

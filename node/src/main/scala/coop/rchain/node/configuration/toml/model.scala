@@ -4,14 +4,14 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 
-case class TomlRoot(
-    server: Option[TomlServer],
-    grpcServer: Option[TomlGrpcServer],
-    tls: Option[TomlTls],
-    validators: Option[TomlValidators]
+case class Configuration(
+    server: Option[Server],
+    grpcServer: Option[GrpcServer],
+    tls: Option[Tls],
+    validators: Option[Validators]
 )
 
-case class TomlServer(
+case class Server(
     host: Option[String],
     port: Option[Int],
     metricsPort: Option[Int],
@@ -22,17 +22,17 @@ case class TomlServer(
     mapSize: Option[Long]
 )
 
-case class TomlGrpcServer(
+case class GrpcServer(
     host: Option[String],
     port: Option[Int]
 )
 
-case class TomlTls(
+case class Tls(
     certificate: Option[Path],
     key: Option[Path]
 )
 
-case class TomlValidators(
+case class Validators(
     count: Option[Int],
     bondsFile: Option[String],
     known: Option[String],
