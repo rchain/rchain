@@ -68,14 +68,11 @@ package object effects {
 
   def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.State,
+      connections: TcpTransportLayer.TransportCell[Task],
       log: Log[Task]) =
     new TcpTransportLayer(host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TransportState] = {
-    val state = AtomicAny(TransportState())
-    new AtomicMonadState[F, TransportState](state)
-  }
+  def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
 }
