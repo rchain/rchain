@@ -13,6 +13,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -49,16 +50,22 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   val parentsString                     = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash]  = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
+  val secondBlockSenderString: String   = "3456789101112131415161718192"
+  val secondBlockSender: ByteString     = ProtoUtil.stringToByteString(secondBlockSenderString)
   val secondBlock: BlockMessage =
-    BlockMessage().withBlockHash(blockHash).withHeader(header).withBody(body)
+    BlockMessage()
+      .withBlockHash(blockHash)
+      .withHeader(header)
+      .withBody(body)
+      .withSender(secondBlockSender)
 
   val faultTolerance = -1f
 
   def testCasper[F[_]: Monad: BlockStore]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
+      def addBlock(b: BlockMessage): F[BlockStatus] = BlockStatus.valid.pure[F]
+      def contains(b: BlockMessage): F[Boolean]     = false.pure[F]
+      def deploy(r: Deploy): F[Unit]                = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
       def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
@@ -93,6 +100,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
     blockInfo.faultTolerance should be(faultTolerance)
     blockInfo.mainParentHash should be(genesisHashString)
     blockInfo.parentsHashList should be(parentsString)
+    blockInfo.sender should be(secondBlockSenderString)
   }
 
   "getBlockQueryResponse" should "return error when no block exists" in {

@@ -141,7 +141,9 @@ object RuntimeManager {
   def fromRuntime(active: Runtime): RuntimeManager = {
     active.space.clear()
     active.replaySpace.clear()
-    val hash    = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+    val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+    val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
+    assert(hash == replayHash)
     val runtime = new SyncVar[Runtime]()
     runtime.put(active)
 
