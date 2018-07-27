@@ -14,7 +14,7 @@ package object implicits {
 
       def handleErrorWith[A](fa: cats.Id[A])(f: Throwable => cats.Id[A]): cats.Id[A] =
         try { fa } catch {
-          case e: Exception => f(e)
+          case NonFatal(e) => f(e)
         }
 
       def raiseError[A](e: Throwable): cats.Id[A] = throw e
