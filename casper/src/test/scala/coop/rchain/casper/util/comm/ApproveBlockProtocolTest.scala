@@ -9,6 +9,7 @@ import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances._
@@ -112,6 +113,6 @@ object ApproveBlockProtocolTest {
     val node     = HashSetCasperTestNode.standalone(genesis, sk)
     import node._
 
-    ApproveBlockProtocol.create[Id](ApprovedBlockCandidate(Some(genesis), requiredSigs), duration)
+    ApproveBlockProtocol.create[Id](genesis, requiredSigs, duration)
   }
 }
