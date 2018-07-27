@@ -385,7 +385,7 @@ object SpatialMatcher {
     //Use a type class? A type tag?
     val termsSorted = tlist
 
-    val patternsSorted: Seq[(T, Stream[OptionalFreeMap[T]])] =
+    val patternsSorted: Seq[Pattern] =
       plist.map { p =>
         val candidates: Stream[OptionalFreeMap[T]] =
           if (!lf.connectiveUsed(p))
