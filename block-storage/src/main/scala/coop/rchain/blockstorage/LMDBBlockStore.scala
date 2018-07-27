@@ -36,19 +36,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     }
   }
 
-  private[this] def withWriteTxn(f: Txn[ByteBuffer] => Unit): F[Unit] =
-    syncF.bracketCase(syncF.delay(env.txnWrite())) { txn =>
-      syncF.delay {
-        f(txn)
-        txn.commit()
-      }
-    } {
-      case (txn, ExitCase.Completed) => syncF.delay(txn.close())
-      case (txn, _)                  => syncF.delay { txn.abort(); txn.close() }
-    }
-
-  private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
-    syncF.bracketCase(syncF.delay(env.txnRead())) { txn =>
+  private[this] def withTxn[R](txnThunk: => Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): F[R] =
+    syncF.bracketCase(syncF.delay(txnThunk)) { txn =>
       syncF.delay {
         val r = f(txn)
         txn.commit()
@@ -58,6 +47,12 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       case (txn, ExitCase.Completed) => syncF.delay(txn.close())
       case (txn, _)                  => syncF.delay { txn.abort(); txn.close() }
     }
+
+  private[this] def withWriteTxn(f: Txn[ByteBuffer] => Unit): F[Unit] =
+    withTxn(env.txnWrite())(f)
+
+  private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
+    withTxn(env.txnRead())(f)
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
