@@ -165,7 +165,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   val syncEffect: Sync[Effect] = SyncInstances.syncEffect
-  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
 
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
@@ -189,25 +188,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources(
       implicit
-      nodeDiscovery: NodeDiscovery[Task]): Effect[Resources] =
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect]
+  ): Effect[Resources] =
     for {
-      storeRef   <- storeRefEffect
-      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
-      oracle = {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        SafetyOracle.turanOracle[Effect]
-      }
+      oracle         <- SafetyOracle.turanOracle[Effect].pure[Effect]
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        implicit val oracleEvidence: SafetyOracle[Effect] = oracle
         MultiParentCasperConstructor
           .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
       }
       grpcServer <- {
-        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
         implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
@@ -216,7 +210,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
-      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
@@ -285,7 +278,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram(
       implicit
-      nodeDiscovery: NodeDiscovery[Task]): Effect[Unit] =
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect]
+  ): Effect[Unit] =
     for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
@@ -321,19 +316,24 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def nodeProgram(
       implicit
-      nodeDiscovery: NodeDiscovery[Task]): Effect[Unit] =
-    EitherT[Task, CommError, Unit](unrecoverableNodeProgram(nodeDiscovery).value.onErrorHandleWith {
-      case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-        Log[Task]
-          .error(
-            "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
-      case th =>
-        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
-    } *> exit0.as(Right(())))
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect]
+  ): Effect[Unit] =
+    EitherT[Task, CommError, Unit](
+      unrecoverableNodeProgram(nodeDiscovery, blockStore).value.onErrorHandleWith {
+        case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
+          Log[Task]
+            .error(
+              "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
+        case th =>
+          th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+      } *> exit0.as(Right(())))
 
   val node: Effect[Unit] = for {
-    nodeDiscovery <- new KademliaNodeDiscovery[Task](src, defaultTimeout).pure[Effect]
-    _             <- nodeProgram(nodeDiscovery)
+    storeRef      <- InMemBlockStore.emptyMapRef[Effect]
+    nodeDiscovery = new KademliaNodeDiscovery[Task](src, defaultTimeout)
+    blockStore    = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
+    _             <- nodeProgram(nodeDiscovery, blockStore)
   } yield ()
 
 }
