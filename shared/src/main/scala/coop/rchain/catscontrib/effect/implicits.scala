@@ -3,6 +3,7 @@ package coop.rchain.catscontrib.effect
 import cats._
 import cats.implicits._
 import cats.effect.{ExitCase, Sync}
+import scala.util.{Failure, Success, Try}
 
 import scala.util.control.NonFatal
 
@@ -25,17 +26,16 @@ package object implicits {
       def tailRecM[A, B](a: A)(f: A => cats.Id[Either[A, B]]): cats.Id[B] =
         catsInstancesForId.tailRecM(a)(f)
 
-      def bracketCase[A, B](acquire: A)(use: A => B)(
-          release: (A, ExitCase[Throwable]) => Unit): B = {
-        var maybeErrorCase: Option[ExitCase[Throwable]] = None
-        try {
-          use(acquire)
-        } catch {
-          case NonFatal(e) => maybeErrorCase = Some(ExitCase.error(e)); throw e;
-        } finally {
-          release(acquire, maybeErrorCase.getOrElse(ExitCase.Completed))
+      def bracketCase[A, B](acquire: A)(use: A => B)(release: (A, ExitCase[Throwable]) => Unit): B =
+        Try(use(acquire)) match {
+          case Success(result) =>
+            release(acquire, ExitCase.Completed)
+            result
+
+          case Failure(e) =>
+            release(acquire, ExitCase.error(e))
+            throw e
         }
-      }
 
       def suspend[A](thunk: => A): A = thunk
     }
