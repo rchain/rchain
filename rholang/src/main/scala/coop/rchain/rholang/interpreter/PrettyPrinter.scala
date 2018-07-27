@@ -209,7 +209,8 @@ case class PrettyPrinter(freeShift: Int,
           }
         }._2
 
-      case _ => throw new Error("Attempt to print unknown GeneratedMessage type.")
+      case unsupported =>
+        throw new Error(s"Attempt to print unknown GeneratedMessage type: ${unsupported.getClass}.")
     }
 
   def increment(id: String): String = {
