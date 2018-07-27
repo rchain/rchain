@@ -32,14 +32,6 @@ object Validate {
       "ed25519" -> Ed25519.verify
     )
 
-  def childMapIterator(blockHashSet: Set[BlockHash], internalMap: Map[BlockHash, BlockMessage]) =
-    new Iterator[BlockMessage] {
-      val underlying: Iterator[BlockHash] = blockHashSet.iterator
-      override def hasNext: Boolean       = underlying.hasNext
-
-      override def next(): BlockMessage = internalMap(underlying.next())
-    }
-
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
@@ -163,23 +155,19 @@ object Validate {
         def parents(b: BlockMessage): Iterator[BlockMessage] =
           ProtoUtil.parents(b).iterator.flatMap(internalMap.get)
 
-        val deployKeySet = block.getBody.newCode.map(d => (d.getRaw.user, d.getRaw.timestamp)).toSet
-        val iterator = DagOperations.bfTraverse(Some(genesis))(b =>
-          childMapIterator(dag.childMap.getOrElse(b.blockHash, Set.empty), internalMap))
-        val repeatedBlocks = iterator.filter(it => {
-          it.body.exists(
+        val deployKeySet = (for {
+          bd <- block.body.toList
+          d  <- bd.newCode
+          r  <- d.raw.toList
+        } yield (r.user, r.timestamp)).toSet
+
+        val invalid = bfTraverse[BlockMessage](parents(block).toList)(parents).exists(
+          _.body.exists(
             _.newCode.exists(
               _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
             )
           )
-        })
-        // it is allowed for there to be the same (user, timestamp) transaction in both forks
-        val blockAncestors = new mutable.HashSet[BlockMessage]
-        bfTraverse[BlockMessage](Some(block))(parents).foreach(blockAncestors += _)
-
-        val invalid = repeatedBlocks.exists(b1 => {
-          blockAncestors.contains(b1)
-        })
+        )
 
         if (!invalid) {
           true.pure[F]
