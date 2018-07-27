@@ -172,8 +172,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
   implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
-  implicit val transport: TransportLayer[Task] =
-    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -185,6 +183,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources(
       implicit
+      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]
@@ -224,7 +223,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _ <- GrpcServer.start[Effect](resources.grpcServer)
     } yield ()
 
-  def clearResources(resources: Resources): Unit = {
+  def clearResources(resources: Resources)(implicit
+                                           transport: TransportLayer[Task]): Unit = {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
@@ -253,13 +253,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def addShutdownHook(resources: Resources): Task[Unit] =
+  def addShutdownHook(resources: Resources)(implicit transport: TransportLayer[Task]): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   def handleCommunications(resources: Resources)(
       implicit
+      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
     implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
@@ -272,6 +273,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram(
       implicit
+      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]
@@ -311,23 +313,26 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def nodeProgram(
       implicit
+      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]
   ): Effect[Unit] =
     EitherT[Task, CommError, Unit](
-      unrecoverableNodeProgram(nodeDiscovery, blockStore, oracle).value.onErrorHandleWith {
-        case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-          Log[Task]
-            .error(
-              "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
-        case th =>
-          th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
-      } *> exit0.as(Right(())))
+      unrecoverableNodeProgram(transport, nodeDiscovery, blockStore, oracle).value
+        .onErrorHandleWith {
+          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
+            Log[Task]
+              .error(
+                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
+          case th =>
+            th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+        } *> exit0.as(Right(())))
 
   val node: Effect[Unit] = for {
     storeRef    <- InMemBlockStore.emptyMapRef[Effect]
     sync        = SyncInstances.syncEffect
+    transport   = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
     kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metricsTask, transport)
     nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
                                                                time,
@@ -336,7 +341,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                                kademliaRPC)
     blockStore = InMemBlockStore.create[Effect, CommError](sync, storeRef, metrics)
     oracle     = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    _          <- nodeProgram(nodeDiscovery, blockStore, oracle)
+    _          <- nodeProgram(transport, nodeDiscovery, blockStore, oracle)
   } yield ()
 
 }
