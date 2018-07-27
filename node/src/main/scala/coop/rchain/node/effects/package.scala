@@ -19,6 +19,16 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
+  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      metrics: Metrics[Task],
+      transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task]
+  ): NodeDiscovery[Task] =
+    new KademliaNodeDiscovery[Task](src, defaultTimeout)
+
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
       System.currentTimeMillis

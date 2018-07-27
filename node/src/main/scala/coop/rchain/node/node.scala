@@ -178,8 +178,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
   implicit val kademliaRPCEffect: KademliaRPC[Task] = effects.kademliaRPC(src, defaultTimeout)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
-    new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
@@ -189,7 +187,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        casperConstructor: MultiParentCasperConstructor[Effect],
                        packetHandler: PacketHandler[Effect])
 
-  def acquireResources: Effect[Resources] =
+  def acquireResources(
+      implicit
+      nodeDiscovery: NodeDiscovery[Task]): Effect[Resources] =
     for {
       storeRef   <- storeRefEffect
       blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
@@ -271,7 +271,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
+  def handleCommunications(resources: Resources)(
+      implicit
+      nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
     implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
     (pm: Protocol) =>
@@ -281,7 +283,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
   }
 
-  private def unrecoverableNodeProgram: Effect[Unit] =
+  private def unrecoverableNodeProgram(
+      implicit
+      nodeDiscovery: NodeDiscovery[Task]): Effect[Unit] =
     for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
@@ -315,8 +319,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _ <- exit0.toEffect
     } yield ()
 
-  def nodeProgram: Effect[Unit] =
-    EitherT[Task, CommError, Unit](unrecoverableNodeProgram.value.onErrorHandleWith {
+  def nodeProgram(
+      implicit
+      nodeDiscovery: NodeDiscovery[Task]): Effect[Unit] =
+    EitherT[Task, CommError, Unit](unrecoverableNodeProgram(nodeDiscovery).value.onErrorHandleWith {
       case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
         Log[Task]
           .error(
@@ -324,4 +330,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       case th =>
         th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
+
+  val node: Effect[Unit] = for {
+    nodeDiscovery <- new KademliaNodeDiscovery[Task](src, defaultTimeout).pure[Effect]
+    _             <- nodeProgram(nodeDiscovery)
+  } yield ()
+
 }
