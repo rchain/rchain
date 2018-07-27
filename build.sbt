@@ -35,6 +35,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsEffect,
       catsMtl,
       monix,
       scodecCore,
