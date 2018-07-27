@@ -164,8 +164,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
-
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
@@ -331,6 +329,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   val node: Effect[Unit] = for {
     storeRef      <- InMemBlockStore.emptyMapRef[Effect]
+    syncEffect    = SyncInstances.syncEffect
     nodeDiscovery = new KademliaNodeDiscovery[Task](src, defaultTimeout)
     blockStore    = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
     _             <- nodeProgram(nodeDiscovery, blockStore)
