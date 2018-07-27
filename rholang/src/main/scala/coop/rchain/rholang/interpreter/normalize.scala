@@ -709,11 +709,15 @@ object ProcNormalizeMatcher {
         normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree))
           .map { bodyResult =>
             val foldedNew = bodyResult.par.singleNew() match {
-              case Some(New(count, body, locallyFree)) =>
-                New(newCount + count, body, locallyFree.from(newCount).map(x => x - newCount))
+              case Some(New(count, body, _, locallyFree)) =>
+                New(newCount + count,
+                    body,
+                    Vector.empty,
+                    locallyFree.from(newCount).map(x => x - newCount))
               case _ =>
                 New(newCount,
                     bodyResult.par,
+                    Vector.empty,
                     bodyResult.par.locallyFree.from(newCount).map(x => x - newCount))
             }
             ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)

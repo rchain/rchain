@@ -119,17 +119,17 @@ class SendSubSpec extends FlatSpec with Matchers {
 
   "Send" should "substitute all channels for quoted process in environment" in {
     val chan0        = ChanVar(BoundVar(0))
-    val source: Par  = New(1, Send(chan0, List(Par()), false, BitSet(0)), BitSet())
+    val source: Par  = New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet())
     implicit val env = Env.makeEnv(source)
     val target =
       Send(chan0, List(Send(chan0, List(Par()), false, BitSet(0))), false, BitSet(0))
     val result = substituteSend[Coeval].substitute(target).value
     result should be(
       Send(
-        Quote(New(1, Send(chan0, List(Par()), false, BitSet(0)), BitSet())),
+        Quote(New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet())),
         List(
           Send(
-            Quote(New(1, Send(chan0, List(Par()), false, BitSet(0)), BitSet())),
+            Quote(New(1, Send(chan0, List(Par()), false, BitSet(0)), Vector.empty, BitSet())),
             List(Par()),
             false,
             BitSet()
@@ -147,9 +147,11 @@ class NewSubSpec extends FlatSpec with Matchers {
   "New" should "only substitute body of expression" in {
     val source: Par  = GPrivate()
     implicit val env = Env.makeEnv(source)
-    val target       = New(1, Send(ChanVar(BoundVar(1)), List(Par()), false, BitSet(1)), BitSet(0))
-    val result       = substituteNew[Coeval].substitute(target).value
-    result should be(New(1, Send(Quote(source), List(Par()), false, BitSet()), BitSet()))
+    val target =
+      New(1, Send(ChanVar(BoundVar(1)), List(Par()), false, BitSet(1)), Vector.empty, BitSet(0))
+    val result = substituteNew[Coeval].substitute(target).value
+    result should be(
+      New(1, Send(Quote(source), List(Par()), false, BitSet()), Vector.empty, BitSet()))
   }
 
   "New" should "only substitute all Channels in body of express" in {
@@ -161,6 +163,7 @@ class NewSubSpec extends FlatSpec with Matchers {
                           List(Send(ChanVar(BoundVar(2)), List(Par()), false, BitSet(2))),
                           false,
                           BitSet(2, 3)),
+                     Vector.empty,
                      BitSet(0, 1))
 
     val result = substituteNew[Coeval].substitute(target).value
@@ -171,6 +174,7 @@ class NewSubSpec extends FlatSpec with Matchers {
              List(Send(Quote(source1), List(Par()), false, BitSet())),
              false,
              BitSet()),
+        Vector.empty,
         BitSet()
       ))
   }

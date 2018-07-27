@@ -253,7 +253,7 @@ object Substitute {
       override def substituteNoSort(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
         for {
           newSub <- substitutePar[M].substituteNoSort(term.p.get)(depth, env.shift(term.bindCount))
-          neu    = New(term.bindCount, newSub, term.locallyFree.until(env.shift))
+          neu    = New(term.bindCount, newSub, term.uri, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
         substituteNoSort(term).map(newSub => NewSortMatcher.sortMatch(newSub).term)

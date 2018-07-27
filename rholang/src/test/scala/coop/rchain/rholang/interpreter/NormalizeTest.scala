@@ -614,6 +614,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         Send(ChanVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
           .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
           .prepend(Send(ChanVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
+        Vector.empty,
         BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
@@ -760,10 +761,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         List(
           MatchCase(
             GBool(true),
-            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), BitSet())),
+            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), Vector.empty, BitSet())),
           MatchCase(
             GBool(false),
-            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), BitSet()))
+            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), Vector.empty, BitSet()))
           // TODO: Fill in type error case
         ),
         BitSet()
