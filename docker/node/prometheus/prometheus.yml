@@ -20,7 +20,7 @@ scrape_configs:
 
   - job_name: 'prometheus-pushgateway'
     static_configs:
-      - targets: ['prometheus-pushgateway:9091']
+      - targets: ['localhost:9091']
 
   - job_name: 'rchain-node'
     scrape_interval:     1s
@@ -28,4 +28,4 @@ scrape_configs:
 
     metrics_path: "/"
     static_configs:
-      - targets: ['rchain-node:40403']
+      - targets: ['localhost:40403']
