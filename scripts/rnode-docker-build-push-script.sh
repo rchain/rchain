@@ -63,14 +63,6 @@ apt-get update -yqq
 #  apt-get install default-jdk -yqq # alternate jdk install 
 apt-get install openjdk-8-jdk -yqq
 
-## Build Needed Crypto
-# Build secp 
-apt-get install autoconf libtool -yqq
-
-# Build libsodium
-cd ${PROJECT_ROOT_DIR}
-./scripts/install_sodium.sh
-
 ## Install Haskell Platform
 # ref: https://www.haskell.org/platform/#linux-ubuntu
 # ref: https://www.haskell.org/platform/ # all platforms
