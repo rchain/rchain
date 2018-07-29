@@ -35,6 +35,7 @@
 #include "RblStack.h"
 #include "Table.h"
 #include "Timer.h"
+#include "Export.h"
 
 #include "ModuleInit.h"
 
@@ -723,6 +724,8 @@ void VirtualMachine::execute() {
     pOb result = INVALID;
 
     if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
+    
+    collectExportCode(code);
 
 nextop:
 

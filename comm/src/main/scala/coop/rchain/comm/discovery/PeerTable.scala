@@ -110,19 +110,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
   private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
   private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
-  /** Update the last-seen time of `peer`, possibly adding it to the
-    * routing table.
-    *
-    * If the `peer` is not in the table, it is
-    * added. If the table was already full at that distance, test the
-    * least recently seen peer at that distance. If that peer
-    * responds, discard `peer`; otherwise, discard the older entry and
-    * insert `peer`.
-    *
-    * If `peer` is already in the table, it becomes the most recently
-    * seen entry at its distance.
-    */
-  def observe[F[_]: Monad: Capture: Ping](peer: A): F[Unit] = {
+  def updateLastSeen[F[_]: Monad: Capture: KademliaRPC](peer: A): F[Unit] = {
 
     def bucket: F[Option[mutable.ListBuffer[Entry]]] =
       Capture[F].capture(distance(home.key, peer.key).filter(_ < 8 * width).map(table.apply))
@@ -133,7 +121,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
           ps.find(_.key == peer.key) match {
             case Some(entry) =>
               ps -= entry
-              ps += entry
+              ps += new Entry(peer, _.key)
               None
             case None =>
               if (ps.size < k) {
@@ -154,7 +142,7 @@ final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alp
       }
 
     def pingAndUpdate(ps: mutable.ListBuffer[Entry], older: Entry): F[Unit] =
-      Ping[F].ping(older.entry).map { response =>
+      KademliaRPC[F].ping(older.entry).map { response =>
         val winner = if (response) older else new Entry(peer, _.key)
         ps synchronized {
           ps -= older

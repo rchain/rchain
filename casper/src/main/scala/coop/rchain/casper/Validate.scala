@@ -30,6 +30,11 @@ object Validate {
       "ed25519" -> Ed25519.verify
     )
 
+  def signature(d: Data, sig: protocol.Signature): Boolean =
+    signatureVerifiers.get(sig.algorithm).fold(false) { verify =>
+      verify(d, sig.sig.toByteArray, sig.publicKey.toByteArray)
+    }
+
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 

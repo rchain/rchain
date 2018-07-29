@@ -26,24 +26,11 @@ import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
-  import HashSetCasperTest.blockTuplespaceContents
+  import HashSetCasperTest._
 
   val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val initial                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
-  val storageDirectory            = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-  val storageSize: Long           = 1024L * 1024
-  val activeRuntime               = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
-  val emptyStateHash              = runtimeManager.emptyStateHash
-  val genesis = Genesis.withContracts(
-    initial,
-    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-    Nil,
-    emptyStateHash,
-    runtimeManager)
-  activeRuntime.close()
+  val genesis                     = createGenesis(validators)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -56,6 +43,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     logEff.infos.size should be(1)
     logEff.infos.head.contains("CASPER: Received Deploy") should be(true)
+    node.tearDown()
   }
 
   it should "create blocks based on deploys" in {
@@ -75,6 +63,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     deploys.size should be(1)
     deploys.head should be(deploy)
     storage.contains("@{0}!(0)") should be(true)
+    node.tearDown()
   }
 
   it should "accept signed blocks" in {
@@ -99,6 +88,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     logEff.warns.isEmpty should be(true)
     logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
     MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock))
+    node.tearDown()
   }
 
   it should "be able to create a chain of blocks from different deploys" in {
@@ -121,6 +111,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     ProtoUtil.parents(signedBlock2) should be(Seq(signedBlock1.blockHash))
     MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock2))
     storage.contains("!(12)") should be(true)
+    node.tearDown()
   }
 
   it should "reject unsigned blocks" in {
@@ -134,6 +125,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].addBlock(invalidBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+    node.tearDown()
   }
 
   it should "reject blocks not from bonded validators" in {
@@ -146,6 +138,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].addBlock(signedBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+    node.tearDown()
   }
 
   it should "propose blocks it adds to peers" in {
@@ -160,6 +153,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val received = nodes(1).casperEff.contains(signedBlock)
 
     received should be(true)
+    nodes.foreach(_.tearDown())
   }
 
   it should "add a valid block from peer" in {
@@ -174,6 +168,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).logEff.infos.count(_ startsWith "CASPER: Added") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
+    nodes.foreach(_.tearDown())
   }
 
   it should "ask peers for blocks it is missing" in {
@@ -205,6 +200,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.infos.count(s =>
       (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
       1)
+    nodes.foreach(_.tearDown())
   }
 
   it should "ignore adding equivocation blocks" in {
@@ -219,6 +215,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     node.casperEff.contains(signedBlock1) should be(true)
     node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
+    node.tearDown()
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
@@ -272,6 +269,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
       1f / (1f + 3f + 5f + 7f))
+    nodes.foreach(_.tearDown())
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {
@@ -294,6 +292,33 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(2)
+    nodes.foreach(_.tearDown())
+  }
+
+  it should "handle a long chain of block requests appropriately" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+
+    (0 to 9).foreach { i =>
+      val deploy      = ProtoUtil.basicDeploy(i)
+      val Some(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
+
+      nodes(0).casperEff.addBlock(block)
+      nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
+    }
+    val Some(block) = nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeploy(10)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block)
+
+    (0 to 10).foreach { i =>
+      nodes(1).receive()
+      nodes(0).receive()
+    }
+
+    nodes(1).logEff.infos
+      .count(_ startsWith "CASPER: Beginning request of missing block") should be(10)
+    nodes(0).logEff.infos.count(s =>
+      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
+      10)
   }
 
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
@@ -325,5 +350,24 @@ object HashSetCasperTest {
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
+  }
+
+  def createGenesis(validators: Seq[Array[Byte]]): BlockMessage = {
+    val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
+    val storageSize: Long = 1024L * 1024
+    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
+    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
+    val emptyStateHash    = runtimeManager.emptyStateHash
+    val genesis = Genesis.withContracts(
+      initial,
+      bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+      Nil,
+      emptyStateHash,
+      runtimeManager)
+    activeRuntime.close()
+
+    genesis
   }
 }

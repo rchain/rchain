@@ -24,6 +24,10 @@ trait BlockStore[F[_]] {
     get(blockHash).map(_.isDefined)
 
   def asMap(): F[Map[BlockHash, BlockMessage]]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 }
 
 object BlockStore {
