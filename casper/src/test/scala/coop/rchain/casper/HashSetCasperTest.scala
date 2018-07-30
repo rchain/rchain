@@ -171,6 +171,40 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
+  it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+
+    val deploys = (0 to 2).map(i => ProtoUtil.basicDeploy(i))
+    val deployPrim0 = deploys(1).withRaw(
+      deploys(1).getRaw.withTimestamp(deploys(0).getRaw.timestamp).withUser(deploys(0).getRaw.user)
+    ) // deployPrim0 has the same (user, millisecond timestamp) with deploys(0)
+
+    val Some(signedBlock1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(signedBlock1)
+    nodes(1).receive() // receive block1
+
+    val Some(signedBlock2) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(signedBlock2)
+    nodes(1).receive() // receive block2
+
+    val Some(signedBlock3) = nodes(0).casperEff.deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(signedBlock3)
+    nodes(1).receive() // receive block3
+
+    val Some(signedBlock4) = nodes(1).casperEff
+      .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
+    nodes(1).casperEff.addBlock(signedBlock4) // should fail
+    nodes(0).receive()
+
+    nodes(1).casperEff.contains(signedBlock3) should be(true)
+    nodes(1).casperEff.contains(signedBlock4) should be(false)
+    nodes(0).casperEff.contains(signedBlock4) should be(false)
+
+    nodes(1).logEff.warns
+      .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
+      1)
+  }
+
   it should "ask peers for blocks it is missing" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
     val deploys = Vector(
