@@ -163,9 +163,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   /** Capabilities for Effect */
   // TODO move this to main as well, figure out the metrics instances hell...
-  implicit val jvmMetricsEffect: JvmMetrics[Task] = diagnostics.jvmMetrics
-  implicit val metrics: Metrics[Effect]           = diagnostics.metrics // TODO remove
-  implicit val metricsTask: Metrics[Task]         = diagnostics.metrics
+  implicit val metrics: Metrics[Effect]   = diagnostics.metrics // TODO remove
+  implicit val metricsTask: Metrics[Task] = diagnostics.metrics
 
   case class Resources(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
 
@@ -176,7 +175,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       casperConstructor: MultiParentCasperConstructor[Effect],
-      nodeCoreMetrics: NodeMetrics[Task]
+      nodeCoreMetrics: NodeMetrics[Task],
+      jvmMetrics: JvmMetrics[Task]
   ): Effect[Resources] =
     for {
       grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcPort(), runtime)
@@ -221,7 +221,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync
 
-  def startReportJvmMetrics: Task[Unit] =
+  def startReportJvmMetrics(implicit jvmMetrics: JvmMetrics[Task]): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
@@ -261,7 +261,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
       casperConstructor: MultiParentCasperConstructor[Effect],
-      nodeCoreMetrics: NodeMetrics[Task]
+      nodeCoreMetrics: NodeMetrics[Task],
+      jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] =
     for {
       _ <- Log[Effect].info(
@@ -371,6 +372,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                   Log.eitherTLog(Monad[Task], log),
                                                   ErrorHandler[Effect])
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
+    jvmMetrics      = diagnostics.jvmMetrics[Task]
 
     /** run the node program */
     program = nodeProgram(runtime, casperRuntime)(log,
@@ -381,7 +383,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                   oracle,
                                                   packetHandler,
                                                   casperConstructor,
-                                                  nodeCoreMetrics)
+                                                  nodeCoreMetrics,
+                                                  jvmMetrics)
     _ <- handleUnrecoverableErrors(program)(log)
   } yield ()
 
