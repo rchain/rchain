@@ -64,7 +64,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
     listData.add(new PGround(new GroundInt(7)))
-    val list = new PCollect(new CollectList(listData, new RemainderEmpty()))
+    val list = new PCollect(new CollectList(listData, new ProcRemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value
     result.par should be(
@@ -531,7 +531,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val listBindings = new ListName()
     listBindings.add(
       new NameQuote(
-        new PCollect(new CollectList(new ListProc(), new RemainderVar(new ProcVarVar("a"))))))
+        new PCollect(new CollectList(new ListProc(), new ProcRemainderVar(new ProcVarVar("a"))))))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
       new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
@@ -669,7 +669,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listProc.add(new PVar(new ProcVarVar("y")))
     listProc.add(new PVar(new ProcVarWildcard()))
     listCases.add(
-      new CaseImpl(new PCollect(new CollectList(listProc, new RemainderEmpty())), new PNil()))
+      new CaseImpl(new PCollect(new CollectList(listProc, new ProcRemainderEmpty())), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarWildcard()), new PNil()))
     val pMatch = new PMatch(new PVar(new ProcVarVar("x")), listCases)
 

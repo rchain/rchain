@@ -12,8 +12,9 @@ import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   SyntaxError,
-  UnrecognizedInterpreterError,
-  UnrecognizedNormalizerError
+  TopLevelFreeVariablesNotAllowedError,
+  TopLevelWildcardsNotAllowedError,
+  UnrecognizedInterpreterError
 }
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
@@ -69,14 +70,14 @@ object Interpreter {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
-          err.raiseError(UnrecognizedNormalizerError(
-            s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}."))
+          err.raiseError(
+            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
-          err.raiseError(UnrecognizedNormalizerError(
-            s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}."))
+          err.raiseError(
+            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
         }
       } else normalizedTerm.pure[M]
     }
