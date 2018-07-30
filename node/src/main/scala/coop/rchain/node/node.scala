@@ -160,7 +160,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val time: Time[Task]                         = effects.time
+  // TODO move this to main as well, figure out the metrics instances hell...
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
   implicit val metrics: Metrics[Effect]                 = diagnostics.metrics // TODO remove
   implicit val metricsTask: Metrics[Task]               = diagnostics.metrics
@@ -174,6 +174,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources(runtime: Runtime)(
       implicit
       log: Log[Task],
+      time: Time[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -203,6 +204,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def clearResources(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
       implicit
+      time: Time[Task],
       transport: TransportLayer[Task],
       log: Log[Task],
       blockStore: BlockStore[Effect]): Unit =
@@ -236,6 +238,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def addShutdownHook(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
       log: Log[Task],
+      time: Time[Task],
       blockStore: BlockStore[Effect]): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources, runtime, casperRuntime)))
 
@@ -244,6 +247,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def handleCommunications(resources: Resources)(
       implicit
       log: Log[Task],
+      time: Time[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
     implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
@@ -258,6 +262,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
       implicit
       log: Log[Task],
+      time: Time[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -315,6 +320,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def generateCasperConstructor(runtimeManager: RuntimeManager)(
       implicit
       log: Log[Task],
+      time: Time[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -329,6 +335,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     /** create typeclass instances */
     connectionsState <- effects.connectionsState[Task].pure[Effect]
     log              = effects.log
+    time             = effects.time
     sync             = SyncInstances.syncEffect
     transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
       scheduler,
@@ -347,6 +354,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperConstructor <- generateCasperConstructor(runtimeManager)(log,
+                                                                   time,
                                                                    transport,
                                                                    nodeDiscovery,
                                                                    blockStore,
@@ -354,6 +362,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     /** run the node program */
     program = nodeProgram(runtime, casperRuntime)(log,
+                                                  time,
                                                   transport,
                                                   nodeDiscovery,
                                                   blockStore,
