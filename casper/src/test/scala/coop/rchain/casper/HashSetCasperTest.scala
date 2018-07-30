@@ -157,7 +157,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach { node =>
       node.blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
     }
-
     nodes.foreach(_.tearDown())
   }
 
@@ -177,7 +176,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach { node =>
       node.blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
     }
-
     nodes.foreach(_.tearDown())
   }
 
@@ -219,7 +217,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       node.blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
       node.blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
     }
-
     nodes.foreach(_.tearDown())
   }
 
@@ -275,7 +272,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
     node.blockStore.get(signedBlock1Prime.blockHash) shouldBe None
-
     node.tearDown()
   }
 
@@ -330,6 +326,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
       1f / (1f + 3f + 5f + 7f))
+    nodes(0).blockStore.get(signedBlock1.blockHash) shouldBe None
+    nodes(0).blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+    nodes(1).blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+    nodes(1).blockStore.get(signedBlock4.blockHash) shouldBe Some(signedBlock4)
+    nodes(2).blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+    nodes(2).blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
     nodes.foreach(_.tearDown())
   }
 
@@ -380,8 +382,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).logEff.infos.count(s =>
       (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
       10)
-
-
 
     nodes.foreach(_.tearDown())
   }
