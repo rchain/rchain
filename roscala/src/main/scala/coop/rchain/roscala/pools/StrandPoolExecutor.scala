@@ -1,6 +1,6 @@
 package coop.rchain.roscala.pools
 
-import java.util.concurrent.{ForkJoinPool, LinkedBlockingDeque}
+import java.util.concurrent.{ForkJoinPool, LinkedBlockingDeque, TimeUnit}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Vm
@@ -29,8 +29,10 @@ object StrandPoolExecutor {
 
     def addPool(strandPool: ParallelStrandPool): Unit = pools.addFirst(strandPool)
 
-    override def start(vm: Vm): Unit =
+    override def start(vm: Vm): Unit = {
       executor.invoke(vm)
+      executor.awaitQuiescence(Long.MaxValue, TimeUnit.MILLISECONDS)
+    }
 
     override def instance = new ParallelStrandPool
   }

@@ -1,6 +1,5 @@
 package coop.rchain.roscala.ob.mbox
 
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.{Ctxt, Nil, Niv, Ob}
 

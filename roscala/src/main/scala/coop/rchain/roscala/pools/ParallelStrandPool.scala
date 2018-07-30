@@ -38,6 +38,11 @@ class ParallelStrandPool extends StrandPool {
     scheduledCount.incrementAndGet()
   }
 
+  private def markCompleted(task: Ctxt): Ctxt = {
+    task.pc = task.code.codevec.size
+    task
+  }
+
   override def isEmpty: Boolean = scheduledCount.get() == 0
 
   override def append(task: (Ctxt, GlobalEnv)): Unit =
@@ -49,8 +54,7 @@ class ParallelStrandPool extends StrandPool {
   override def dequeue: Ctxt = {
     scheduledCount.decrementAndGet()
 
-    val vm = queue.take()
-    vm.join()
-    vm.state0.ctxt
+    val task = queue.take().state0.ctxt
+    markCompleted(task.clone())
   }
 }
