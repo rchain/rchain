@@ -4,14 +4,8 @@ import java.io.{File, PrintWriter}
 import java.nio.file.{Files, Paths}
 
 import io.grpc.Server
-import cats._
-import cats.data._
-import cats.implicits._
-import cats.mtl._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import ski._
-import TaskContrib._
+import cats._, cats.data._, cats.implicits._, cats.mtl._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -166,98 +160,74 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val logEffect: Log[Task]                               = effects.log
-  implicit val timeEffect: Time[Task]                             = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]                 = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Effect]                     = diagnostics.metrics
-  implicit val metricsTask: Metrics[Task]                         = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]           = diagnostics.nodeCoreMetrics
-  implicit val connectionsState: MonadState[Task, TransportState] = effects.connectionsState[Task]
-  implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)
-  implicit val kademliaRPCEffect: KademliaRPC[Task] = effects.kademliaRPC(src, defaultTimeout)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
-    new KademliaNodeDiscovery[Task](src, defaultTimeout)
-
-  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
-  implicit val blockStore: BlockStore[Effect] =
-    LMDBBlockStore.create[Effect](conf.casperBlockStoreConf)(syncEffect, metricsEffect)
+  // TODO move this to main as well, figure out the metrics instances hell...
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metrics: Metrics[Effect]                 = diagnostics.metrics // TODO remove
+  implicit val metricsTask: Metrics[Task]               = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
-                       runtime: Runtime,
-                       casperRuntime: Runtime,
-                       casperConstructor: MultiParentCasperConstructor[Effect],
-                       packetHandler: PacketHandler[Effect],
-                       blockStore: BlockStore[Effect])
+                       packetHandler: PacketHandler[Effect])
 
-  def acquireResources: Effect[Resources] =
+  def acquireResources(runtime: Runtime)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      transport: TransportLayer[Task],
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect],
+      casperConstructor: MultiParentCasperConstructor[Effect]
+  ): Effect[Resources] =
     for {
-      _              <- blockStore.clear() // replace with a proper casper init when it's available
-      runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
-      oracle         = SafetyOracle.turanOracle[Effect]
-      casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
-      runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-      casperConstructor <- {
-        implicit val oracleEvidence: SafetyOracle[Effect] = oracle
-        MultiParentCasperConstructor
-          .fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
-      }
-      grpcServer <- {
-        implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
-        implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
-        GrpcServer
-          .acquireServer[Effect](conf.grpcPort(), runtime)
-      }
+      grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcPort(), runtime)
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield {
-      implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
       )
-      Resources(grpcServer,
-                metricsServer,
-                httpServer,
-                runtime,
-                casperRuntime,
-                casperConstructor,
-                packetHandlerEffect,
-                blockStore)
+      Resources(grpcServer, metricsServer, httpServer, packetHandlerEffect)
     }
 
-  def startResources(resources: Resources): Effect[Unit] =
+  def startResources(resources: Resources)(
+      implicit
+      log: Log[Task],
+  ): Effect[Unit] =
     for {
       _ <- resources.httpServer.start.toEffect
       _ <- resources.metricsServer.start.toEffect
       _ <- GrpcServer.start[Effect](resources.grpcServer)
     } yield ()
 
-  def clearResources(resources: Resources): Unit = {
-    println("Shutting down gRPC server...")
-    resources.grpcServer.shutdown()
-    println("Shutting down transport layer, broadcasting DISCONNECT")
-
+  def clearResources(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
+      implicit
+      time: Time[Task],
+      transport: TransportLayer[Task],
+      log: Log[Task],
+      blockStore: BlockStore[Effect]): Unit =
     (for {
-      loc <- transportLayerEffect.local
-      ts  <- timeEffect.currentMillis
+      _   <- log.info("Shutting down gRPC server...")
+      _   <- Task.delay(resources.grpcServer.shutdown())
+      _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
+      loc <- transport.local
+      ts  <- time.currentMillis
       msg = ProtocolHelper.disconnect(loc)
-      _   <- transportLayerEffect.shutdown(msg)
+      _   <- transport.shutdown(msg)
+      _   <- log.info("Shutting down metrics server...")
+      _   <- Task.delay(resources.metricsServer.stop())
+      _   <- log.info("Shutting down HTTP server....")
+      _   <- Task.delay(resources.httpServer.stop())
+      _   <- log.info("Shutting down interpreter runtime ...")
+      _   <- Task.delay(runtime.close)
+      _   <- log.info("Shutting down Casper runtime ...")
+      _   <- Task.delay(casperRuntime.close)
+      _   <- log.info("Bringing BlockStore down ...")
+      _   <- blockStore.close().value
+      _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync
-    println("Shutting down metrics server...")
-    resources.metricsServer.stop()
-    println("Shutting down HTTP server....")
-    resources.httpServer.stop()
-    println("Shutting down interpreter runtime ...")
-    resources.runtime.close()
-    println("Shutting down Casper runtime ...")
-    resources.casperRuntime.close()
-    println("Bringing BlockStore down ...")
-    resources.blockStore.close()
-
-    println("Goodbye.")
-  }
 
   def startReportJvmMetrics: Task[Unit] =
     Task.delay {
@@ -265,12 +235,21 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def addShutdownHook(resources: Resources): Task[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(resources)))
+  def addShutdownHook(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
+      implicit transport: TransportLayer[Task],
+      log: Log[Task],
+      time: Time[Task],
+      blockStore: BlockStore[Effect]): Task[Unit] =
+    Task.delay(sys.addShutdownHook(clearResources(resources, runtime, casperRuntime)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(resources: Resources): Protocol => Effect[CommunicationResponse] = {
+  def handleCommunications(resources: Resources)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      transport: TransportLayer[Task],
+      nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
     implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
 
     (pm: Protocol) =>
@@ -280,13 +259,22 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
   }
 
-  private def unrecoverableNodeProgram: Effect[Unit] =
+  private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      transport: TransportLayer[Task],
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect],
+      casperConstructor: MultiParentCasperConstructor[Effect]
+  ): Effect[Unit] =
     for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
-      resources <- acquireResources
+      resources <- acquireResources(runtime)
       _         <- startResources(resources)
-      _         <- addShutdownHook(resources).toEffect
+      _         <- addShutdownHook(resources, runtime, casperRuntime).toEffect
       _         <- startReportJvmMetrics.toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
@@ -301,7 +289,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                          maxNumOfAttempts = 5,
                                                          defaultTimeout = defaultTimeout)))
       _ <- {
-        implicit val casperEvidence      = resources.casperConstructor
         implicit val packetHandlerEffect = resources.packetHandler
         if (res.isRight)
           MonadOps.forever((i: Int) =>
@@ -314,13 +301,74 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _ <- exit0.toEffect
     } yield ()
 
-  def nodeProgram: Effect[Unit] =
-    EitherT[Task, CommError, Unit](unrecoverableNodeProgram.value.onErrorHandleWith {
-      case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-        Log[Task]
-          .error(
-            "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
-      case th =>
-        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
-    } *> exit0.as(Right(())))
+  /**
+    * Handles unrecoverable errors in program. Those are errors that should not happen in properly
+    * configured enviornment and they mean immediate termination of the program
+    */
+  private def handleUnrecoverableErrors(prog: Effect[Unit])(implicit log: Log[Task]): Effect[Unit] =
+    EitherT[Task, CommError, Unit](
+      prog.value
+        .onErrorHandleWith {
+          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
+            Log[Task]
+              .error(
+                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
+          case th =>
+            th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+        } *> exit0.as(Right(())))
+
+  private def generateCasperConstructor(runtimeManager: RuntimeManager)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      transport: TransportLayer[Task],
+      nodeDiscovery: NodeDiscovery[Task],
+      blockStore: BlockStore[Effect],
+      oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
+    MultiParentCasperConstructor.fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+
+  /**
+    * Main node entry. Will Create instances of typeclasses and run the node program.
+    */
+  val main: Effect[Unit] = for {
+
+    /** create typeclass instances */
+    connectionsState <- effects.connectionsState[Task].pure[Effect]
+    log              = effects.log
+    time             = effects.time
+    sync             = SyncInstances.syncEffect
+    transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
+      scheduler,
+      connectionsState,
+      log)
+    kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metricsTask, transport)
+    nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
+                                                               time,
+                                                               metricsTask,
+                                                               transport,
+                                                               kademliaRPC)
+    blockStore     = LMDBBlockStore.create[Effect](conf.casperBlockStoreConf)(sync, metrics)
+    _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
+    oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
+    runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+    casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
+    runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
+    casperConstructor <- generateCasperConstructor(runtimeManager)(log,
+                                                                   time,
+                                                                   transport,
+                                                                   nodeDiscovery,
+                                                                   blockStore,
+                                                                   oracle)
+
+    /** run the node program */
+    program = nodeProgram(runtime, casperRuntime)(log,
+                                                  time,
+                                                  transport,
+                                                  nodeDiscovery,
+                                                  blockStore,
+                                                  oracle,
+                                                  casperConstructor)
+    _ <- handleUnrecoverableErrors(program)(log)
+  } yield ()
+
 }

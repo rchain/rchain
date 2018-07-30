@@ -5,10 +5,12 @@ import java.nio.file.Files
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GPrivate => _, _}
@@ -948,6 +950,25 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     // format: on
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "eval of a method" should "substitute target before evaluating" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(0)
+    val hexToBytesCall: Expr =
+      EMethod("hexToBytes", Expr(EVarBody(EVar(Var(BoundVar(0))))))
+    val directResult: Par = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
+      val reducer =
+        RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      Await.result(reducer.evalExprToPar(hexToBytesCall).runAsync, 3.seconds)
+    }
+    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
+    directResult should be(expectedResult)
+
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
