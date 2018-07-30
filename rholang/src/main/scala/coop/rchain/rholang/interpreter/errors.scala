@@ -63,6 +63,14 @@ object errors {
   final case class UnexpectedBundleContent(override val toString: String) extends InterpreterError
   final case class UnrecognizedNormalizerError(override val toString: String)
       extends InterpreterError
+  final case class TopLevelWildcardsNotAllowedError(wildcards: String) extends InterpreterError {
+    override def toString: String =
+      s"Top level wildcards are not allowed: $wildcards."
+  }
+  final case class TopLevelFreeVariablesNotAllowedError(freeVars: String) extends InterpreterError {
+    override def toString: String =
+      s"Top level free variables are not allowed: $freeVars."
+  }
   final case class SubstituteError(override val toString: String)     extends InterpreterError
   final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError
   final case class SortMatchError(override val toString: String)      extends InterpreterError
