@@ -153,6 +153,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val received = nodes(1).casperEff.contains(signedBlock)
 
     received should be(true)
+
+    nodes.foreach { node =>
+      node.blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
+    }
+
     nodes.foreach(_.tearDown())
   }
 
@@ -168,6 +173,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).logEff.infos.count(_ startsWith "CASPER: Added") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
+
+    nodes.foreach { node =>
+      node.blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+    }
+
     nodes.foreach(_.tearDown())
   }
 
@@ -203,6 +213,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns
       .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
       1)
+
+    nodes.foreach { node =>
+      node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+      node.blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+      node.blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+    }
+
+    nodes.foreach(_.tearDown())
   }
 
   it should "ask peers for blocks it is missing" in {
@@ -234,6 +252,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.infos.count(s =>
       (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
       1)
+
+    nodes.foreach { node =>
+      node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+      node.blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+    }
     nodes.foreach(_.tearDown())
   }
 
@@ -249,6 +272,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     node.casperEff.contains(signedBlock1) should be(true)
     node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
+
+    node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+    node.blockStore.get(signedBlock1Prime.blockHash) shouldBe None
+
     node.tearDown()
   }
 
@@ -353,6 +380,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).logEff.infos.count(s =>
       (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
       10)
+
+
+
+    nodes.foreach(_.tearDown())
   }
 
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
