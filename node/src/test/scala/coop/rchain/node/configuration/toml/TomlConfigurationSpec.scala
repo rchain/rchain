@@ -19,6 +19,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |bootstrap = "rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400"
       |standalone = true
       |map-size = 200000000
+      |data-dir = "/var/rchain"
       |
       |[grpc-server]
       |host = "grpc"
@@ -58,6 +59,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.server.flatMap(_.bootstrap) shouldEqual Some(bootstrap)
     root.server.flatMap(_.standalone) shouldEqual Some(true)
     root.server.flatMap(_.mapSize) shouldEqual Some(200000000)
+    root.server.flatMap(_.dataDir) shouldEqual Some(Paths.get("/var/rchain"))
 
     // grpc
     root.grpcServer.flatMap(_.host) shouldEqual Some("grpc")

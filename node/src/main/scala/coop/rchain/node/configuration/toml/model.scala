@@ -19,7 +19,8 @@ case class Server(
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
-    mapSize: Option[Long]
+    mapSize: Option[Long],
+    dataDir: Option[Path]
 )
 
 case class GrpcServer(

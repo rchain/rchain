@@ -48,7 +48,7 @@ object NodeConfiguration {
     val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
     println(s"Starting with profile ${profile.name}")
     val dataDir    = options.run.data_dir.getOrElse(profile.dataDir._1())
-    val configFile = dataDir.resolve("rnode.toml").toFile
+    val configFile = options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile
     println(s"Using configuration file: $configFile")
     val config = toml.TomlConfiguration.from(configFile) match {
       case Left(error) =>
@@ -57,7 +57,11 @@ object NodeConfiguration {
       case Right(c) => Some(c)
     }
 
-    apply(dataDir, options, config)
+    val effectiveDataDir =
+      if (options.run.data_dir.isDefined) dataDir
+      else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
+
+    apply(effectiveDataDir, options, config)
   }
 
   def apply(dataDir: Path,

@@ -58,6 +58,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val profile = opt[String](name = "profile",
                             descr = "Which predefined set of defaults to use: default or docker.")
 
+  val configFile = opt[Path](descr = "Path to the configuration file.")
+
   val grpcPort =
     opt[Int](descr = "Port used for gRPC API.")
 
