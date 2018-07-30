@@ -16,7 +16,6 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAl
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
-import coop.rchain.shared.AtomicRefMonadState
 import monix.eval.Task
 
 import scala.collection.immutable
@@ -110,12 +109,10 @@ object Runtime {
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
-    val costStatePure                             = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
-    val costStateReplay                           = AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero)
     val costAccountingPure: CostAccountingAlg[Task] =
-      CostAccountingAlg.monadState(costStatePure)
+      CostAccountingAlg.unsafe(CostAccount.zero)
     val costAccountingReplay: CostAccountingAlg[Task] =
-      CostAccountingAlg.monadState(costStateReplay)
+      CostAccountingAlg.unsafe(CostAccount.zero)
 
     def dispatchTableCreator(
         space: ISpace[Channel,
