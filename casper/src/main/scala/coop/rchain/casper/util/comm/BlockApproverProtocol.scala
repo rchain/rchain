@@ -21,6 +21,10 @@ import coop.rchain.shared._
 
 import scala.util.Try
 
+/**
+  * Validator side of the protocol defined in
+  * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
+  */
 class BlockApproverProtocol[
     F[_]: Capture: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
     validatorId: ValidatorIdentity,

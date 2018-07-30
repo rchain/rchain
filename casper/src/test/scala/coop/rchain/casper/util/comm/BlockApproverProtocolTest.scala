@@ -38,7 +38,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val n                    = 8
     val (approver, node)     = createIdProtocol(n)
     val differentUnapproved1 = createUnapproved(n / 2, node.genesis) //wrong number of signatures
-    val differentUnapproved2 = createUnapproved(n / 2, BlockMessage.defaultInstance) //wrong block
+    val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
 
     approver.unapprovedBlockPacketHandler(node.local)(unapprovedToPacket(differentUnapproved1))
     approver.unapprovedBlockPacketHandler(node.local)(unapprovedToPacket(differentUnapproved2))
