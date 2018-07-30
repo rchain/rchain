@@ -2,8 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.data._
 import cats.implicits._
-import cats.{Eval => _}
-import cats.Foldable
+import cats.{Alternative, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -320,6 +319,16 @@ object SpatialMatcher {
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
+  private[this] def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
+    StateT((s: FreeMap) => {
+      listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false).run(s) match {
+        case Stream.Empty => None
+        case head #:: _   => Some(head)
+      }
+    })
+
   /** This function finds a single matching from a list of patterns and a list of targets.
     * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
     * If both are provided, we prefer to capture terms that can be captured.
@@ -344,128 +353,137 @@ object SpatialMatcher {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
-    if (exactMatch && plen != tlen)
-      StateT.liftF(None)
-    else if (plen > tlen)
-      StateT.liftF(None)
-    // This boundary is very similar to Oleg's once.
-    StateT((s: FreeMap) => {
-      listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty => Stream.Empty
-        case head #:: _   => Stream(head)
-      }
-    })
-  }
 
-  private[this] def listMatchSingle[T](tlist: Seq[T],
-                                       plist: Seq[T],
-                                       merger: (Par, T) => Par,
-                                       varLevel: Option[Int],
-                                       wildcard: Boolean)(
-      implicit lf: HasLocallyFree[T],
-      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
-    StateT((s: FreeMap) => {
-      listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty => None
-        case head #:: _   => Some(head)
-      }
-    })
+    val result: NonDetFreeMap[Unit] =
+      if (exactMatch && plen != tlen)
+        StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
+      else if (plen > tlen)
+        StateT.liftF[Stream, FreeMap, Unit](Stream.Empty)
+      else
+        StateT((s: FreeMap) => {
+          listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
+            case None       => Stream.empty
+            case Some(head) => Stream(head)
+          }
+        })
 
-  private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
-    val (before, after) = haystack.span(x => x != needle)
-    after match {
-      case Nil       => None
-      case _ +: tail => Some(before ++ tail)
-    }
+    result
   }
 
   private[this] def listMatch[T](tlist: Seq[T],
                                  plist: Seq[T],
                                  merger: (Par, T) => Par,
                                  varLevel: Option[Int],
-                                 wildcard: Boolean)(implicit lf: HasLocallyFree[T],
-                                                    sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] =
-    (tlist, plist) match {
-      // Handle the remainder.
-      case (rem, Nil) =>
-        varLevel match {
-          case None =>
-            // If there is a wildcard, we succeed.
-            // We also succeed if there isn't but the remainder is empty.
-            if (wildcard || rem == Nil)
-              StateT.pure(Unit)
-            else
-              // This should be prevented by the length checks.
-              StateT.liftF(Stream.Empty)
-          // If there's a capture variable, we prefer to add things to that rather than throw them
-          // away.
-          case Some(level) => {
-            // This function is essentially an early terminating left fold.
-            @tailrec
-            def foldRemainder(remainder: Seq[T], p: Par): NonDetFreeMap[Par] =
-              remainder match {
-                case Nil => StateT.pure(p)
-                case item +: rem =>
-                  if (lf.locallyFree(item, 0).isEmpty)
-                    foldRemainder(rem, merger(p, item))
-                  else if (wildcard)
-                    foldRemainder(rem, p)
-                  else
-                    StateT.liftF(Stream.Empty)
-              }
-            for {
-              p <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) =>
-                    m.getOrElse(level, VectorPar()))
-              collectPar <- foldRemainder(rem, p)
-              _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
-            } yield Unit
-          }
-        }
-      // Try to find a match for a single pattern.
-      case (targets, pattern +: prem) => {
-        if (!lf.connectiveUsed(pattern)) {
-          possiblyRemove(pattern, targets) match {
-            case None => StateT.liftF(Stream.Empty)
-            case Some(filtered) =>
-              listMatch(filtered, prem, merger, varLevel, wildcard)
-          }
-        } else {
+                                 wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] = {
+
+    type Pattern = (T, Stream[OptionalFreeMap[T]])
+
+    //TODO enforce sorted-ness of targets and patterns.
+    //Correctness of the matching relies on them being sorted.
+    //Use a type class? A type tag?
+    val termsSorted = tlist
+
+    val patternsSorted: Seq[Pattern] =
+      plist.map { p =>
+        val candidates: Stream[OptionalFreeMap[T]] =
+          if (!lf.connectiveUsed(p))
+            termsSorted.toStream.map(t => Alternative[OptionalFreeMap].guard(t == p).map(_ => t))
+          else
+            termsSorted.toStream.map(t => spatialMatch(t, p).map(_ => t))
+
+        (p, candidates)
+      }
+
+    //See https://rchain.atlassian.net/wiki/spaces/RHOL/pages/505937999/Stable+Marriage
+    def matchStableMarriages(remainingPatterns: Seq[Pattern],
+                             matches: Map[T, Pattern]): OptionalFreeMap[Seq[T]] =
+      remainingPatterns match {
+        //all patterns matched -> success, return matched targets
+        case Seq() => StateT.pure(matches.keys.toSeq)
+        //any pattern failed to match -> short-circuit and fail the match
+        case (_, Stream.Empty) +: _ => StateT.liftF[Option, FreeMap, Seq[T]](None)
+        case (pattern, candidate #:: candidates) +: patterns =>
           for {
-            trem        <- listMatchItem(targets, pattern, spatialMatch[T, T])
-            forcedYield <- listMatch(trem, prem, merger, varLevel, wildcard)
-          } yield forcedYield
-        }
+            matchAttempt <- candidate.attempt
+            (newPatterns, newMatches) = matchAttempt match {
+              case Left(_) =>
+                //current candidate didn't match, try with the others
+                ((pattern, candidates) +: patterns, matches)
+              case Right(target) =>
+                val previousMatch = matches.get(target)
+                previousMatch.fold(
+                  //we were first, we claim the target
+                  (patterns, matches + (target -> ((pattern, candidates))))
+                )(
+                  //In the Stable Marriage algorithm, when there's been a prior match
+                  //we should check which pattern is higher in the term's ranking and
+                  //match accordingly.
+                  //
+                  //In our case, the ranking is:
+                  // 1. matching patterns before non-matching
+                  // 2. lowest pattern score first
+                  //
+                  //Since the patterns are sorted by score ascending, we know that
+                  //if there was a prior match, it must've been a higher-ranked pattern.
+                  //Hence we unconditionally yield and try with the other candidates.
+                  _ => ((pattern, candidates) +: patterns, matches)
+                )
+            }
+            matchedTerms <- matchStableMarriages(newPatterns, newMatches)
+          } yield matchedTerms
       }
-    }
 
-  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
-    */
-  private[this] def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
-    vals.tails
-      .foldLeft((Seq[A](), Seq[(Seq[A], A, Seq[A])]())) {
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), Nil) => (head, singled)
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), elem +: tail) =>
-          (elem +: head, (head, elem, tail) +: singled)
-      }
-      ._2
-      .reverse
-
-  private[this] def listMatchItem[T](
-      tlist: Seq[T],
-      pattern: T,
-      matcher: (T, T) => OptionalFreeMap[Unit]): NonDetFreeMap[Seq[T]] =
     for {
-      triple               <- StateT.liftF(singleOut(tlist).toStream)
-      (head, target, tail) = triple
-      forcedYield <- StateT[Stream, FreeMap, Seq[T]]((s: FreeMap) => {
-                      matcher(target, pattern).run(s) match {
-                        case None =>
-                          Stream.Empty
-                        case Some((state, _)) =>
-                          Stream((state, head.reverse ++ tail))
-                      }
-                    })
-    } yield forcedYield
+      matchedTargets   <- matchStableMarriages(patternsSorted, Map.empty)
+      remainderTargets = termsSorted.filterNot(matchedTargets.contains)
+      _ <- varLevel match {
+            case None =>
+              // If there is a wildcard, we succeed.
+              // We also succeed if there isn't but the remainder is empty.
+              if (wildcard || remainderTargets.isEmpty)
+                StateT.pure[Option, FreeMap, Unit](())
+              else
+                // This should be prevented by the length checks.
+                StateT.liftF[Option, FreeMap, Unit](None)
+            // If there's a capture variable, we prefer to add things to that rather than throw them away.
+            case Some(level) => {
+              handleRemainder(remainderTargets, level, merger, wildcard)
+            }
+          }
+    } yield Unit
+  }
+
+  private def handleRemainder[T](rem: Seq[T],
+                                 level: Int,
+                                 merger: (Par, T) => Par,
+                                 wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] = {
+    // This function is essentially an early terminating left fold.
+    @tailrec
+    def foldRemainder(remainder: Seq[T], p: Par): OptionalFreeMap[Par] =
+      remainder match {
+        case Nil => StateT.pure(p)
+        case item +: rem =>
+          if (lf.locallyFree(item, 0).isEmpty)
+            foldRemainder(rem, merger(p, item))
+          else if (wildcard)
+            foldRemainder(rem, p)
+          else
+            StateT.liftF[Option, FreeMap, Par](None)
+      }
+
+    for {
+      p          <- StateT.inspect[Option, FreeMap, Par]((m: FreeMap) => m.getOrElse(level, VectorPar()))
+      collectPar <- foldRemainder(rem, p)
+      //TODO: shouldn't we return sorted terms?
+      //this will make at least 1 test fail:
+      //require(collectPar == ParSortMatcher.sortMatch(collectPar).term)
+      _ <- StateT.modify[Option, FreeMap]((m: FreeMap) => m + (level -> collectPar))
+    } yield Unit
+  }
 
   implicit val parSpatialMatcherInstance: SpatialMatcher[Par, Par] = fromNonDetFunction[Par, Par] {
     (target, pattern) =>
@@ -605,7 +623,7 @@ object SpatialMatcher {
         StateT.liftF(None)
       else
         for {
-          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
+          _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds)
           _ <- spatialMatch(target.body, pattern.body)
         } yield Unit
     }
