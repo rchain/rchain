@@ -25,7 +25,9 @@ trait BlockStore[F[_]] {
 
   def asMap(): F[Map[BlockHash, BlockMessage]]
 
-  private[blockstorage] def clear(): F[Unit]
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 }
 
 object BlockStore {

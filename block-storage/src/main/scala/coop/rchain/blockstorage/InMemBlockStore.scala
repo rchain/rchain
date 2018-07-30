@@ -39,11 +39,12 @@ class InMemBlockStore[F[_], E] private ()(implicit
           }
     } yield ()
 
-  private[blockstorage] def clear(): F[Unit] =
+  def clear(): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter("block-store-put")
       _ <- refF.update { _.empty }
     } yield ()
+
+  override def close(): F[Unit] = monadF.pure(())
 }
 
 object InMemBlockStore {

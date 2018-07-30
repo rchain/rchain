@@ -1,16 +1,11 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
+import java.nio.file.{Files, Paths}
 
 import io.grpc.Server
-import cats._
-import cats.data._
-import cats.implicits._
-import cats.mtl._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import ski._
-import TaskContrib._
+import cats._, cats.data._, cats.implicits._, cats.mtl._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, requestApprovedBlock}
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -29,8 +24,8 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import ThrowableOps._
-import cats.effect.{Bracket, ExitCase, Sync}
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import cats.effect.Sync
+import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
@@ -168,7 +163,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val log: Log[Task]                           = effects.log
   implicit val time: Time[Task]                         = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
-  implicit val metrics: Metrics[Effect]                 = diagnostics.metrics
+  implicit val metrics: Metrics[Effect]                 = diagnostics.metrics // TODO remove
   implicit val metricsTask: Metrics[Task]               = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
 
@@ -178,7 +173,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        runtime: Runtime,
                        casperRuntime: Runtime,
                        casperConstructor: MultiParentCasperConstructor[Effect],
-                       packetHandler: PacketHandler[Effect])
+                       packetHandler: PacketHandler[Effect],
+                       blockStore: BlockStore[Effect])
 
   def acquireResources(
       implicit
@@ -212,7 +208,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                 runtime,
                 casperRuntime,
                 casperConstructor,
-                packetHandlerEffect)
+                packetHandlerEffect,
+                blockStore)
     }
 
   def startResources(resources: Resources): Effect[Unit] =
@@ -242,6 +239,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     resources.runtime.close()
     println("Shutting down Casper runtime ...")
     resources.casperRuntime.close()
+    println("Bringing BlockStore down ...")
+    resources.blockStore.close()
 
     println("Goodbye.")
   }
@@ -330,8 +329,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     * Main node entry. Will Create instances of typeclasses and run the node program.
     */
   val main: Effect[Unit] = for {
-    storeRef         <- InMemBlockStore.emptyMapRef[Effect]
-    sync             = SyncInstances.syncEffect
+    sync             <- Applicative[Effect].pure(SyncInstances.syncEffect)
     connectionsState = effects.connectionsState[Task]
     transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
       scheduler,
@@ -343,7 +341,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                                metricsTask,
                                                                transport,
                                                                kademliaRPC)
-    blockStore = InMemBlockStore.create[Effect, CommError](sync, storeRef, metrics)
+    blockStore = LMDBBlockStore.create[Effect](conf.casperBlockStoreConf)(sync, metrics)
+    _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
     oracle     = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
     _          <- handleUnrecoverableErrors(nodeProgram(transport, nodeDiscovery, blockStore, oracle))
   } yield ()
