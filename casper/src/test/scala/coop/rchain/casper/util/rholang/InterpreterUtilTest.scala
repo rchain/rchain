@@ -21,7 +21,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.RuntimeManager.{DeployError, StateHash}
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Time
@@ -55,7 +55,7 @@ class InterpreterUtilTest
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (StateHash, Set[StateHash]) = {
     val (checkpoint, updatedKnownStateHashes) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
