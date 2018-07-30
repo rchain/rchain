@@ -160,7 +160,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val log: Log[Task]                           = effects.log
   implicit val time: Time[Task]                         = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
   implicit val metrics: Metrics[Effect]                 = diagnostics.metrics // TODO remove
@@ -174,6 +173,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def acquireResources(runtime: Runtime)(
       implicit
+      log: Log[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -191,7 +191,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       Resources(grpcServer, metricsServer, httpServer, packetHandlerEffect)
     }
 
-  def startResources(resources: Resources): Effect[Unit] =
+  def startResources(resources: Resources)(
+      implicit
+      log: Log[Task],
+  ): Effect[Unit] =
     for {
       _ <- resources.httpServer.start.toEffect
       _ <- resources.metricsServer.start.toEffect
@@ -240,6 +243,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   def handleCommunications(resources: Resources)(
       implicit
+      log: Log[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
     implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
@@ -253,6 +257,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
       implicit
+      log: Log[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -295,7 +300,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly
     * configured enviornment and they mean immediate termination of the program
     */
-  private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
+  private def handleUnrecoverableErrors(prog: Effect[Unit])(implicit log: Log[Task]): Effect[Unit] =
     EitherT[Task, CommError, Unit](
       prog.value
         .onErrorHandleWith {
@@ -308,7 +313,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         } *> exit0.as(Right(())))
 
   private def generateCasperConstructor(runtimeManager: RuntimeManager)(
-      implicit transport: TransportLayer[Task],
+      implicit
+      log: Log[Task],
+      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
@@ -321,6 +328,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     /** create typeclass instances */
     connectionsState <- effects.connectionsState[Task].pure[Effect]
+    log              = effects.log
     sync             = SyncInstances.syncEffect
     transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
       scheduler,
@@ -338,18 +346,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
     casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-    casperConstructor <- generateCasperConstructor(runtimeManager)(transport,
+    casperConstructor <- generateCasperConstructor(runtimeManager)(log,
+                                                                   transport,
                                                                    nodeDiscovery,
                                                                    blockStore,
                                                                    oracle)
 
     /** run the node program */
-    program = nodeProgram(runtime, casperRuntime)(transport,
+    program = nodeProgram(runtime, casperRuntime)(log,
+                                                  transport,
                                                   nodeDiscovery,
                                                   blockStore,
                                                   oracle,
                                                   casperConstructor)
-    _ <- handleUnrecoverableErrors(program)
+    _ <- handleUnrecoverableErrors(program)(log)
   } yield ()
 
 }
