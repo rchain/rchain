@@ -1,7 +1,8 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Monad
 import cats.effect.Sync
-import cats.mtl.MonadState
+import cats.effect.concurrent.Ref
 import coop.rchain.rholang.interpreter.accounting
 
 trait CostAccountingAlg[F[_]] {
@@ -14,16 +15,20 @@ trait CostAccountingAlg[F[_]] {
 object CostAccountingAlg {
   def apply[F[_]](implicit ev: CostAccountingAlg[F]): CostAccountingAlg[F] = ev
 
-  def monadState[F[_]](state: MonadState[F, CostAccount])(
-      implicit F: Sync[F]): CostAccountingAlg[F] =
+  def unsafe[F[_]: Monad](initialState: CostAccount)(implicit F: Sync[F]): CostAccountingAlg[F] = {
+    val state = Ref.unsafe[F, CostAccount](initialState)
     new CostAccountingAlg[F] {
 
-      override def modify(f: CostAccount => CostAccount): F[Unit] = F.suspend(state.modify(f))
+      override def modify(f: CostAccount => CostAccount): F[Unit] =
+        F.suspend(state.update(f))
 
-      override def set(cost: CostAccount): F[Unit] = F.suspend(state.set(cost))
+      override def set(cost: CostAccount): F[Unit] =
+        F.suspend(state.set(cost))
 
-      override def charge(cost: accounting.Cost): F[Unit] = state.modify(_ + cost)
+      override def charge(cost: accounting.Cost): F[Unit] =
+        F.suspend(state.update(_ + cost))
 
       override def getTotal: F[CostAccount] = F.suspend(state.get)
     }
+  }
 }

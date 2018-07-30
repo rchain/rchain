@@ -35,6 +35,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsEffect,
       catsMtl,
       monix,
       scodecCore,
@@ -206,7 +207,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -244,7 +245,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   )
   .dependsOn(rholang)
 
-lazy val roscala_macros = (project in file("roscala/macros"))
+lazy val roscalaMacros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
@@ -261,7 +262,7 @@ lazy val roscala = (project in file("roscala"))
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies
-  ).dependsOn(roscala_macros)
+  ).dependsOn(roscalaMacros)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)

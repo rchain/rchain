@@ -2,10 +2,6 @@
 
 `crypto` module provides cryptography functionalities for `node`.
 
-## Before you build it
-
-In order to be able to build `crypto` module, you need to have [The Sodium crypto library](https://github.com/jedisct1/libsodium) installed on your system. For details see [libsodium documentation](https://download.libsodium.org/doc/installation/) where different installation options are described
-
 ## Available functionality
 
 | Feature                                                                       | Description                               |

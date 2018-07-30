@@ -11,11 +11,11 @@ case "$SUBPROJECT" in "rosette")
 
 "core")
 
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage test coverageReport rspace:tut
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage scalafmtCheck test coverageReport rspace:tut
 
-    for sub in casper crypto comm rholang roscala node rspace shared
+    for sub in block-storage casper crypto comm rholang roscala node rspace shared
     do
-        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
+        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F ${sub//-})
     done
     ;;
 
@@ -46,7 +46,7 @@ case "$SUBPROJECT" in "rosette")
 
 "rholang_more_tests")
 
-    # Prep nix 
+    # Prep nix
     nix-env -iA nixpkgs.openjdk8 nixpkgs.sbt
     nix-env -f nix/default.nix -iA rchainPackages
 

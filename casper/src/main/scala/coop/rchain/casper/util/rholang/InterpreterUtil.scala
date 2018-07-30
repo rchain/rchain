@@ -11,8 +11,6 @@ import cats.Id
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.rspace.trace.Event
-import coop.rchain.rspace.trace.Event._
 import coop.rchain.rspace.{trace, Checkpoint}
 import monix.execution.Scheduler
 import scodec.Codec
@@ -20,6 +18,8 @@ import coop.rchain.shared.AttemptOps._
 import scodec.bits.BitVector
 
 import scala.collection.immutable
+
+import RuntimeManager.DeployError
 
 object InterpreterUtil {
 
@@ -37,7 +37,7 @@ object InterpreterUtil {
                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
     val tsHash        = ProtoUtil.tuplespace(b)
-    val serializedLog = b.body.get.commReductions
+    val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
     val (computedCheckpoint, updatedStateHashes) =
       computeBlockCheckpointFromDeploys(b,
@@ -66,7 +66,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (Checkpoint, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents,
@@ -89,7 +89,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -143,7 +143,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (Checkpoint, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)

@@ -36,7 +36,7 @@ case object EquivocationNeglected extends EquivocationDiscoveryStatus
 case object EquivocationDetected  extends EquivocationDiscoveryStatus
 case object EquivocationOblivious extends EquivocationDiscoveryStatus
 
-// This is the sequence number of the equivocator
+// This is the sequence number of the equivocator's base block
 case class EquivocationRecord(equivocator: Validator,
                               equivocationBaseBlockSeqNum: SequenceNumber,
                               equivocationDetectedBlockHashes: Set[BlockHash])

@@ -138,15 +138,15 @@ object Substitute {
           expr.exprInstance match {
             case EVarBody(e) =>
               maybeSubstitute[M](e).map {
-                case Left(_e)    => par.prepend(_e)
+                case Left(_e)    => par.prepend(_e, depth)
                 case Right(_par) => _par ++ par
               }
             case e: EEvalBody =>
               maybeSubstitute[M](e).map {
-                case Left(expr)  => par.prepend(expr)
+                case Left(expr)  => par.prepend(expr, depth)
                 case Right(_par) => _par ++ par
               }
-            case _ => substituteExpr[M].substituteNoSort(expr).map(par.prepend(_))
+            case _ => substituteExpr[M].substituteNoSort(expr).map(par.prepend(_, depth))
           }
         }
 
@@ -155,7 +155,7 @@ object Substitute {
           conn.connectiveInstance match {
             case VarRefBody(v) =>
               maybeSubstitute[M](v).map {
-                case Left(_)       => par.prepend(conn)
+                case Left(_)       => par.prepend(conn, depth)
                 case Right(newPar) => newPar ++ par
               }
             case ConnectiveInstance.Empty => par.pure[M]

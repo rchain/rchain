@@ -19,9 +19,9 @@ import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.RuntimeManager.{DeployError, StateHash}
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Time
@@ -36,16 +36,18 @@ import scala.collection.immutable
 import scala.collection.immutable.HashMap
 import scala.concurrent.SyncVar
 
-class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.createWithId
-  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-  val initState                = BlockDag().copy(currentId = -1)
-  val storageSize              = 1024L * 1024
-  val storageDirectory         = Files.createTempDirectory("casper-interp-util-test")
-  val activeRuntime            = Runtime.create(storageDirectory, storageSize)
-  val runtimeManager           = RuntimeManager.fromRuntime(activeRuntime)
-  val emptyStateHash           = runtimeManager.emptyStateHash
-  val knownStateHashes         = Set[StateHash](emptyStateHash)
+class InterpreterUtilTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with BlockStoreTestFixture {
+  val initState        = BlockDag().copy(currentId = -1)
+  val storageSize      = 1024L * 1024
+  val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+  val activeRuntime    = Runtime.create(storageDirectory, storageSize)
+  val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
+  val emptyStateHash   = runtimeManager.emptyStateHash
+  val knownStateHashes = Set[StateHash](emptyStateHash)
 
   private def computeBlockCheckpoint(
       b: BlockMessage,
@@ -53,7 +55,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (StateHash, Set[StateHash]) = {
     val (checkpoint, updatedKnownStateHashes) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,

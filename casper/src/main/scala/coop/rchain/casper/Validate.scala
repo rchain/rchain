@@ -6,7 +6,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.DagOperations.bfTraverse
+import coop.rchain.casper.util.{ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -29,6 +30,11 @@ object Validate {
     Map(
       "ed25519" -> Ed25519.verify
     )
+
+  def signature(d: Data, sig: protocol.Signature): Boolean =
+    signatureVerifiers.get(sig.algorithm).fold(false) { verify =>
+      verify(d, sig.sig.toByteArray, sig.publicKey.toByteArray)
+    }
 
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
@@ -138,6 +144,44 @@ object Validate {
           _ <- Log[F].debug(
                 s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
         } yield Left(MissingBlocks)
+      }
+    }
+
+  /**
+    * Validate no deploy by the same (user, millisecond timestamp)
+    * has been produced in the chain
+    */
+  def repeatDeploy[F[_]: Monad: Log: BlockStore](block: BlockMessage,
+                                                 genesis: BlockMessage,
+                                                 dag: BlockDag): F[Boolean] =
+    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
+      {
+        def parents(b: BlockMessage): Iterator[BlockMessage] =
+          ProtoUtil.parents(b).iterator.flatMap(internalMap.get)
+
+        val deployKeySet = (for {
+          bd <- block.body.toList
+          d  <- bd.newCode
+          r  <- d.raw.toList
+        } yield (r.user, r.timestamp)).toSet
+
+        val repeatBlock = bfTraverse[BlockMessage](parents(block).toList)(parents).find(
+          _.body.exists(
+            _.newCode.exists(
+              _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+            )
+          )
+        )
+
+        repeatBlock match {
+          case Some(b) =>
+            for {
+              _ <- Log[F].warn(ignore(
+                    block,
+                    s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"))
+            } yield false
+          case None => true.pure[F]
+        }
       }
     }
 
