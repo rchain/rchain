@@ -75,6 +75,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
           _ <- BlockStore[F].put(ProtoUtil.stringToByteString(secondHashString), secondBlock)
         } yield BlockDag()
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
 

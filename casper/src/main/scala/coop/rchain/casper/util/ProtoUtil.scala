@@ -37,6 +37,23 @@ object ProtoUtil {
     }
 
   @tailrec
+  def getMainChainUntilLastFinalized(internalMap: Map[BlockHash, BlockMessage],
+                                     estimate: BlockMessage,
+                                     lastFinalizedBlock: BlockMessage,
+                                     acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
+    val parentsHashes       = ProtoUtil.parents(estimate)
+    val maybeMainParentHash = parentsHashes.headOption
+    maybeMainParentHash flatMap internalMap.get match {
+      case Some(newEstimate) =>
+        getMainChainUntilLastFinalized(internalMap,
+                                       newEstimate,
+                                       lastFinalizedBlock,
+                                       acc :+ estimate)
+      case None => acc :+ estimate
+    }
+  }
+
+  @tailrec
   def getMainChain(internalMap: Map[BlockHash, BlockMessage],
                    estimate: BlockMessage,
                    acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {

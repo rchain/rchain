@@ -88,6 +88,7 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
       def blockDag: F[BlockDag]                                          = chain.pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
   implicit val casperEffect = testCasper[Id]
