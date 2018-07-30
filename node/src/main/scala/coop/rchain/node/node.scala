@@ -15,6 +15,8 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
 import coop.rchain.p2p.effects._
+import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Resources._
 import monix.eval.Task
@@ -166,16 +168,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsTask: Metrics[Task]               = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
 
-  case class Resources(grpcServer: Server,
-                       metricsServer: MetricsServer,
-                       httpServer: HttpServer,
-                       packetHandler: PacketHandler[Effect])
+  case class Resources(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
 
   def acquireResources(runtime: Runtime)(
       implicit
       log: Log[Task],
-      time: Time[Task],
-      transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
@@ -185,12 +182,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcPort(), runtime)
       metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
       httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
-    } yield {
-      val packetHandlerEffect = PacketHandler.pf[Effect](
-        casperPacketHandler[Effect]
-      )
-      Resources(grpcServer, metricsServer, httpServer, packetHandlerEffect)
-    }
+    } yield Resources(grpcServer, metricsServer, httpServer)
 
   def startResources(resources: Resources)(
       implicit
@@ -249,8 +241,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       log: Log[Task],
       time: Time[Task],
       transport: TransportLayer[Task],
-      nodeDiscovery: NodeDiscovery[Task]): Protocol => Effect[CommunicationResponse] = {
-    implicit val packetHandlerEffect: PacketHandler[Effect] = resources.packetHandler
+      nodeDiscovery: NodeDiscovery[Task],
+      packetHandler: PacketHandler[Effect]): Protocol => Effect[CommunicationResponse] = {
 
     (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
@@ -267,6 +259,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
+      packetHandler: PacketHandler[Effect],
       casperConstructor: MultiParentCasperConstructor[Effect]
   ): Effect[Unit] =
     for {
@@ -288,16 +281,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                       Connect.connectToBootstrap[Effect](addr,
                                                          maxNumOfAttempts = 5,
                                                          defaultTimeout = defaultTimeout)))
-      _ <- {
-        implicit val packetHandlerEffect = resources.packetHandler
-        if (res.isRight)
-          MonadOps.forever((i: Int) =>
-                             Connect
-                               .findAndConnect[Effect](defaultTimeout)
-                               .apply(i) <* requestApprovedBlock[Effect],
-                           0)
-        else ().pure[Effect]
-      }
+      _ <- if (res.isRight)
+            MonadOps.forever((i: Int) =>
+                               Connect
+                                 .findAndConnect[Effect](defaultTimeout)
+                                 .apply(i) <* requestApprovedBlock[Effect],
+                             0)
+          else ().pure[Effect]
+
       _ <- exit0.toEffect
     } yield ()
 
@@ -326,6 +317,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
     MultiParentCasperConstructor.fromConfig[Effect, Effect](conf.casperConf, runtimeManager)
+
+  private def generateCasperPacketHandler(implicit
+                                          log: Log[Task],
+                                          time: Time[Task],
+                                          transport: TransportLayer[Task],
+                                          nodeDiscovery: NodeDiscovery[Task],
+                                          blockStore: BlockStore[Effect],
+                                          casperConstructor: MultiParentCasperConstructor[Effect])
+    : PeerNode => PartialFunction[Packet, Effect[Option[Packet]]] =
+    casperPacketHandler[Effect](_)
 
   /**
     * Main node entry. Will Create instances of typeclasses and run the node program.
@@ -359,6 +360,15 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                                    nodeDiscovery,
                                                                    blockStore,
                                                                    oracle)
+    cph = generateCasperPacketHandler(log,
+                                      time,
+                                      transport,
+                                      nodeDiscovery,
+                                      blockStore,
+                                      casperConstructor)
+    packetHandler = PacketHandler.pf[Effect](cph)(Applicative[Effect],
+                                                  Log.eitherTLog(Monad[Task], log),
+                                                  ErrorHandler[Effect])
 
     /** run the node program */
     program = nodeProgram(runtime, casperRuntime)(log,
@@ -367,6 +377,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                   nodeDiscovery,
                                                   blockStore,
                                                   oracle,
+                                                  packetHandler,
                                                   casperConstructor)
     _ <- handleUnrecoverableErrors(program)(log)
   } yield ()
