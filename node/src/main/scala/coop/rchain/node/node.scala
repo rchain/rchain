@@ -267,8 +267,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
       resources <- acquireResources(runtime)
-      _         <- startResources(resources)
       _         <- addShutdownHook(resources, runtime, casperRuntime).toEffect
+      _         <- startResources(resources)
       _         <- startReportJvmMetrics.toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications(resources))
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
