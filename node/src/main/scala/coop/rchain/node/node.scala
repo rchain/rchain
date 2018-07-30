@@ -161,10 +161,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  /** Capabilities for Effect */
-  // TODO move this to main as well, figure out the metrics instances hell...
-  implicit val metricsTask: Metrics[Task] = diagnostics.metrics
-
   case class Resources(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
 
   def acquireResources(runtime: Runtime)(
@@ -220,7 +216,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync
 
-  def startReportJvmMetrics(implicit jvmMetrics: JvmMetrics[Task]): Task[Unit] =
+  def startReportJvmMetrics(implicit metrics: Metrics[Task],
+                            jvmMetrics: JvmMetrics[Task]): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
@@ -239,6 +236,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       implicit
       log: Log[Task],
       time: Time[Task],
+      metrics: Metrics[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       packetHandler: PacketHandler[Effect]): Protocol => Effect[CommunicationResponse] = {
@@ -254,6 +252,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       implicit
       log: Log[Task],
       time: Time[Task],
+      metrics: Metrics[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
@@ -339,17 +338,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     log              = effects.log
     time             = effects.time
     sync             = SyncInstances.syncEffect
+    metrics          = diagnostics.metrics[Task]
     transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
       scheduler,
       connectionsState,
       log)
-    kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metricsTask, transport)
+    kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metrics, transport)
     nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
                                                                time,
-                                                               metricsTask,
+                                                               metrics,
                                                                transport,
                                                                kademliaRPC)
-    blockStore     = LMDBBlockStore.create[Effect](conf.casperBlockStoreConf)(sync, metrics)
+    blockStore = LMDBBlockStore.create[Effect](conf.casperBlockStoreConf)(
+      sync,
+      Metrics.eitherT(Monad[Task], metrics))
     _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
     runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
@@ -376,6 +378,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     /** run the node program */
     program = nodeProgram(runtime, casperRuntime)(log,
                                                   time,
+                                                  metrics,
                                                   transport,
                                                   nodeDiscovery,
                                                   blockStore,
