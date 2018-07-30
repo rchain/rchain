@@ -163,7 +163,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   /** Capabilities for Effect */
   // TODO move this to main as well, figure out the metrics instances hell...
-  implicit val metrics: Metrics[Effect]   = diagnostics.metrics // TODO remove
   implicit val metricsTask: Metrics[Task] = diagnostics.metrics
 
   case class Resources(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
