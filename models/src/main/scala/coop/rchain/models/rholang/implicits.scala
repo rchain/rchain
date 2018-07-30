@@ -178,7 +178,7 @@ object implicits {
     )
   }
 
-  object GPrivate {
+  object GPrivateBuilder {
     def apply(): GPrivate =
       new GPrivate(ByteString.copyFromUtf8(java.util.UUID.randomUUID.toString))
     def apply(s: String): GPrivate     = new GPrivate(ByteString.copyFromUtf8(s))

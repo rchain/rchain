@@ -62,10 +62,10 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
   "Matching a send's channel" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send =
       Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet(), true)
-    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("unforgeable")))
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("unforgeable")))
     val result         = spatialMatch(target, pattern).runS(emptyMap)
     result should be(expectedResult)
     val targetPar: Par  = target
@@ -76,7 +76,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
   "Matching a send's body" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send  = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet(), true)
     val expectedResult = Some(Map[Int, Par](0 -> GInt(7)))
     val result =
@@ -89,7 +89,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
   "Matching a send" should "require arity matching in" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet(), true)
     val result        = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
@@ -116,11 +116,11 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
-      Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, BitSet())
+      Send(Quote(GPrivateBuilder("zero")), List(GInt(7), GPrivateBuilder("one")), false, BitSet())
     val pattern: Par =
       Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
         .withConnectiveUsed(true)
-    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one")))
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("zero"), 1 -> GPrivateBuilder("one")))
     val result         = spatialMatch(sendTarget, pattern).runS(emptyMap)
     result should be(expectedResult)
     val targetPar: Par  = sendTarget
@@ -135,7 +135,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(8)))
       ),
-      Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
       false,
       4
     )
@@ -153,7 +153,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       Some(
         Map[Int, Par](
           0 -> GInt(8),
-          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
+          1 -> Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(expectedResult)
     val targetPar: Par  = target
@@ -255,7 +255,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val target: Bundle = Bundle(
       Par()
         .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
+        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false)))
     val pattern: Bundle = Bundle(
       Par()
         .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false))
@@ -277,7 +277,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val target: Bundle = Bundle(
       Par()
         .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
+        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false)))
 
     val pattern: Par = EVar(FreeVar(0))
 

@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.{Send, _}
-import coop.rchain.models.rholang.implicits.{GPrivate, _}
+import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
@@ -93,7 +93,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   "Par" should "Print" in {
     val source: Par = Par(
       exprs = Seq(GInt(0), GBool(true), GString("2"), GUri("www.3cheese.com")),
-      ids = Seq(GPrivate("4"), GPrivate("5"))
+      ids = Seq(GPrivateBuilder("4"), GPrivateBuilder("5"))
     )
     val result = PrettyPrinter().buildString(source)
     val target = "0 | true | \"2\" | `www.3cheese.com` | Unforgeable(0x34) | Unforgeable(0x35)"
