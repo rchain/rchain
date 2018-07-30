@@ -1,6 +1,5 @@
 package coop.rchain.node
 
-import java.nio.file.{Path, Paths}
 import java.security.Security
 
 import coop.rchain.shared.StringOps._
@@ -14,12 +13,10 @@ import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeploySer
 import coop.rchain.node.effects.{ConsoleIO, GrpcReplClient, ReplClient}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
-import coop.rchain.crypto.codec.Base16
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
 
-import scala.util.{Failure, Success, Try}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Main {
@@ -62,7 +59,7 @@ object Main {
       case Some(conf.showBlocks) =>
         DeployRuntime.showBlocks[Task]()
       case Some(conf.run) =>
-        new NodeRuntime(conf).nodeProgram.value.map {
+        new NodeRuntime(conf).main.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
             println("Node could not connect to bootstrap node.")

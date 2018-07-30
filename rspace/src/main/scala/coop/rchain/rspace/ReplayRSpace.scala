@@ -91,7 +91,6 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                           consumeRef: Consume,
                           comms: Multiset[COMM]): Option[(K, Seq[R])] = {
           consumeCommCounter.increment()
-          store.eventsCounter.registerConsumeCommEvent()
           val commRef = COMM(consumeRef, mats.map(_.datum.source))
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
           mats
@@ -219,7 +218,6 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                                   continuationIndex,
                                   dataCandidates) =>
               produceCommCounter.increment()
-              store.eventsCounter.registerProduceCommEvent()
               val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
               assert(comms.contains(commRef), "COMM Event was not contained in the trace")
               if (!persistK) {

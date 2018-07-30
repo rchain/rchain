@@ -8,6 +8,7 @@ import coop.rchain.rspace.history.{initialize, Branch, LMDBTrieStore}
 import coop.rchain.rspace.internal.{codecGNAT, GNAT}
 import coop.rchain.rspace.test.InMemoryStore
 import coop.rchain.rspace.util._
+import coop.rchain.shared.PathOps._
 import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
@@ -309,7 +310,7 @@ class InMemoryStoreStorageExamplesTestsBase
   }
 
   override def afterAll(): Unit = {
-    test.recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
     super.afterAll()
   }
 }
@@ -342,7 +343,7 @@ class LMDBStoreStorageExamplesTestBase
   }
 
   override def afterAll(): Unit = {
-    test.recursivelyDeletePath(dbDir)
+    dbDir.recursivelyDelete
     super.afterAll()
   }
 }

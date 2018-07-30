@@ -50,11 +50,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     // The second pattern will be checked first because of prepend.
     // It matches both targets, but the first pattern only matches one of the lists.
     val target: Par = EList(List(GInt(7), GInt(8)), BitSet())
-      .prepend(EList(List(GInt(7), GInt(9)), BitSet()))
+      .prepend(EList(List(GInt(7), GInt(9)), BitSet()), 0)
     val pattern: Par = EList(List(EVar(FreeVar(0)).withConnectiveUsed(true), GInt(8)), BitSet())
       .withConnectiveUsed(true)
       .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
-        .withConnectiveUsed(true))
+                 .withConnectiveUsed(true),
+               1)
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(9))))
   }
@@ -95,22 +96,23 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
 
   "Matching extras with free variable" should "work" in {
-    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
-    val pattern: Par = GInt(8).prepend(EVar(FreeVar(0)))
+    val target: Par  = GInt(7).prepend(GInt(8), 0).prepend(GInt(9), 0)
+    val pattern: Par = GInt(8).prepend(EVar(FreeVar(0)), 1)
     val result       = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
+    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), 0))))
   }
   "Matching extras with wildcard" should "work" in {
-    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
-    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())))
+    val target: Par  = GInt(7).prepend(GInt(8), 0).prepend(GInt(9), 0)
+    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())), 1)
     val result       = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map.empty[Int, Par]))
   }
   "Matching extras with wildcard and free variable" should "capture in the free variable" in {
-    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
-    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg()))).prepend(EVar(FreeVar(0)))
-    val result       = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
+    val target: Par = GInt(7).prepend(GInt(8), 0).prepend(GInt(9), 0)
+    val pattern: Par =
+      GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())), 1).prepend(EVar(FreeVar(0)), 1)
+    val result = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), 0))))
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
@@ -182,7 +184,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       New(2,
           Par()
             .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false).withConnectiveUsed(true))
-            .prepend(EVar(Wildcard(WildcardMsg()))))
+            .prepend(EVar(Wildcard(WildcardMsg())), 1))
 
     val expectedResult = Some(Map[Int, Par](0 -> GInt(42)))
     val result         = spatialMatch(target, pattern).runS(emptyMap)
@@ -257,7 +259,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern: Bundle = Bundle(
       Par()
         .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false))
-        .prepend(EVar(Wildcard(WildcardMsg()))))
+        .prepend(EVar(Wildcard(WildcardMsg())), 1))
 
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
@@ -420,6 +422,38 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
     val failResult = spatialMatch(failTarget, pattern).runS(emptyMap)
     failResult should be(None)
+  }
+
+  "Matching a target with var ref and a pattern with a var ref" should "ignore locallyFree" in {
+    val target: Par = New(
+      bindCount = 1,
+      p = Par(
+        receives = List(Receive(
+          binds = List(
+            ReceiveBind(
+              patterns = List(Quote(
+                Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)))),
+              source = Quote(Par()))),
+          body = Par(),
+          persistent = false,
+          bindCount = 0,
+          locallyFree = BitSet(0))),
+        locallyFree = BitSet(0)))
+    val pattern: Par = New(
+      bindCount = 1,
+      p = Par(
+        receives = List(Receive(
+          binds = List(
+            ReceiveBind(
+              patterns = List(Quote(
+                Connective(VarRefBody(VarRef(0, 1))))),
+              source = Quote(Par()))),
+          body = Par(),
+          persistent = false,
+          bindCount = 0))))
+    val expectedResult = Some(Map.empty[Int, Par])
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
   }
 
   "Matching ++" should "work" in {

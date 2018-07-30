@@ -11,8 +11,6 @@ import cats.Id
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.rspace.trace.Event
-import coop.rchain.rspace.trace.Event._
 import coop.rchain.rspace.{trace, Checkpoint}
 import monix.execution.Scheduler
 import scodec.Codec
@@ -37,7 +35,7 @@ object InterpreterUtil {
                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
     val tsHash        = ProtoUtil.tuplespace(b)
-    val serializedLog = b.body.get.commReductions
+    val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
     val (computedCheckpoint, updatedStateHashes) =
       computeBlockCheckpointFromDeploys(b,
