@@ -222,9 +222,12 @@ sealed abstract class MultiParentCasperInstances {
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-          Capture[F].capture {
-            Estimator.tips(_blockDag.get, internalMap, genesis)
-          }
+          for {
+            lastFinalizedBlock <- lastFinalizedBlockContainer.get
+            rankedEstimates <- Capture[F].capture {
+                                Estimator.tips(_blockDag.get, internalMap, lastFinalizedBlock)
+                              }
+          } yield rankedEstimates
         }
 
       /*
