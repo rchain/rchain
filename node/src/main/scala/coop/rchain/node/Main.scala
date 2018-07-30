@@ -62,7 +62,7 @@ object Main {
       case Some(conf.showBlocks) =>
         DeployRuntime.showBlocks[Task]()
       case Some(conf.run) =>
-        new NodeRuntime(conf).node.value.map {
+        new NodeRuntime(conf).main.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
             println("Node could not connect to bootstrap node.")

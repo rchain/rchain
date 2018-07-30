@@ -270,7 +270,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
   }
 
-  private def unrecoverableNodeProgram(
+  private def nodeProgram(
       implicit
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -310,15 +310,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _ <- exit0.toEffect
     } yield ()
 
-  def nodeProgram(
-      implicit
-      transport: TransportLayer[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      blockStore: BlockStore[Effect],
-      oracle: SafetyOracle[Effect]
-  ): Effect[Unit] =
+  /**
+    * Handles unrecoverable errors in program. Those are errors that should not happen in properly
+    * configured enviornment and they mean immediate termination of the program
+    */
+  private def handleUnrecoverableErrors(prog: Effect[Unit]): Effect[Unit] =
     EitherT[Task, CommError, Unit](
-      unrecoverableNodeProgram(transport, nodeDiscovery, blockStore, oracle).value
+      prog.value
         .onErrorHandleWith {
           case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
             Log[Task]
@@ -328,7 +326,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
             th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
         } *> exit0.as(Right(())))
 
-  val node: Effect[Unit] = for {
+  /**
+    * Main node entry. Will Create instances of typeclasses and run the node program.
+    */
+  val main: Effect[Unit] = for {
     storeRef         <- InMemBlockStore.emptyMapRef[Effect]
     sync             = SyncInstances.syncEffect
     connectionsState = effects.connectionsState[Task]
@@ -344,7 +345,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                                                                kademliaRPC)
     blockStore = InMemBlockStore.create[Effect, CommError](sync, storeRef, metrics)
     oracle     = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    _          <- nodeProgram(transport, nodeDiscovery, blockStore, oracle)
+    _          <- handleUnrecoverableErrors(nodeProgram(transport, nodeDiscovery, blockStore, oracle))
   } yield ()
 
 }
