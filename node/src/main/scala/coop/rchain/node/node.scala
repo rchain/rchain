@@ -1,5 +1,8 @@
 package coop.rchain.node
 
+import java.io.{File, PrintWriter}
+import java.nio.file.{Files, Paths}
+
 import io.grpc.Server
 import cats._
 import cats.data._
@@ -27,7 +30,7 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import ThrowableOps._
 import cats.effect.Sync
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
 import coop.rchain.comm.connect.Connect
 import coop.rchain.comm.protocol.routing._
@@ -158,9 +161,6 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
-  val storeRefEffect           = InMemBlockStore.emptyMapRef[Effect]
-
   /** Capabilities for Effect */
   implicit val logEffect: Log[Task]                               = effects.log
   implicit val timeEffect: Time[Task]                             = effects.time
@@ -175,33 +175,32 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] =
     new KademliaNodeDiscovery[Task](src, defaultTimeout)
 
+  val syncEffect: Sync[Effect] = SyncInstances.syncEffect
+  implicit val blockStore: BlockStore[Effect] =
+    LMDBBlockStore.create[Effect](conf.blockstorage)(syncEffect, metricsEffect)
+
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
                        runtime: Runtime,
                        casperRuntime: Runtime,
                        casperConstructor: MultiParentCasperConstructor[Effect],
-                       packetHandler: PacketHandler[Effect])
+                       packetHandler: PacketHandler[Effect],
+                       blockStore: BlockStore[Effect])
 
   def acquireResources: Effect[Resources] =
     for {
-      storeRef   <- storeRefEffect
-      blockStore = InMemBlockStore.create[Effect, CommError](syncEffect, storeRef, metricsEffect)
-      oracle = {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        SafetyOracle.turanOracle[Effect]
-      }
+      _              <- blockStore.clear() // replace with a proper casper init when it's available
       runtime        <- Runtime.create(storagePath, storageSize).pure[Effect]
+      oracle         = SafetyOracle.turanOracle[Effect]
       casperRuntime  <- Runtime.create(casperStoragePath, storageSize).pure[Effect]
       runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
       casperConstructor <- {
-        implicit val blockStoreEvidence: BlockStore[Effect] = blockStore
-        implicit val oracleEvidence: SafetyOracle[Effect]   = oracle
+        implicit val oracleEvidence: SafetyOracle[Effect] = oracle
         MultiParentCasperConstructor
           .fromConfig[Effect, Effect](conf.casper, runtimeManager)
       }
       grpcServer <- {
-        implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
         implicit val oracleEvidence: SafetyOracle[Effect]                 = oracle
         implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
         GrpcServer
@@ -210,7 +209,6 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
       metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
       httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
     } yield {
-      implicit val blockStoreEvidence: BlockStore[Effect]               = blockStore
       implicit val casperEvidence: MultiParentCasperConstructor[Effect] = casperConstructor
       val packetHandlerEffect = PacketHandler.pf[Effect](
         casperPacketHandler[Effect]
@@ -221,7 +219,8 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
                 runtime,
                 casperRuntime,
                 casperConstructor,
-                packetHandlerEffect)
+                packetHandlerEffect,
+                blockStore)
     }
 
   def startResources(resources: Resources): Effect[Unit] =
@@ -250,6 +249,8 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
     resources.runtime.close()
     println("Shutting down Casper runtime ...")
     resources.casperRuntime.close()
+    println("Bringing BlockStore down ...")
+    resources.blockStore.close()
 
     println("Goodbye.")
   }

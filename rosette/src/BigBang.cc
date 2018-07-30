@@ -285,20 +285,6 @@ void BuiltinClass::enter() {
 }
 
 
-class RBLtopenv : public Ob {
-   protected:
-    RBLtopenv(Ob* meta, Ob* parent) : Ob(sizeof(RBLtopenv), meta, parent) {}
-
-   public:
-    static RBLtopenv* create();
-
-    char* typestring() { return "TopEnv"; }
-    const char* asCstring() { return "#top"; }
-    Ob* invoke(Ctxt*) { return NIV; }
-    Ob* lookup(Ob*, Ctxt*) { return ABSENT; }
-    Location lex(Ob*, int) { return LocLimbo; }
-};
-
 
 RBLtopenv* RBLtopenv::create() {
     /*

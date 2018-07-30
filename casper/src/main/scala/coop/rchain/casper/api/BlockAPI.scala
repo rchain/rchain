@@ -1,34 +1,63 @@
 package coop.rchain.casper.api
 
-import cats.{Id, Monad}
+import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.{
-  BlockDag,
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  PrettyPrinter,
-  SafetyOracle
-}
+import coop.rchain.casper._
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.shared.Log
 
-import scala.annotation.tailrec
-
 object BlockAPI {
+
+  def deploy[F[_]: Monad: MultiParentCasperConstructor: Log](
+      d: DeployString): F[DeployServiceResponse] = {
+    def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
+      InterpreterUtil.mkTerm(d.term) match {
+        case Right(term) =>
+          val deploy = Deploy(
+            term = Some(term),
+            raw = Some(d)
+          )
+          for {
+            _ <- MultiParentCasper[F].deploy(deploy)
+          } yield DeployServiceResponse(true, "Success!")
+
+        case Left(err) =>
+          DeployServiceResponse(false, s"Error in parsing term: \n$err").pure[F]
+      }
+
+    MultiParentCasperConstructor
+      .withCasper[F, DeployServiceResponse](
+        casperDeploy(_),
+        DeployServiceResponse(false, s"Error: Casper instance not available"))
+  }
+
   def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[MaybeBlockMessage] =
     MultiParentCasperConstructor.withCasper[F, MaybeBlockMessage](
       _.createBlock.map(MaybeBlockMessage.apply),
       MaybeBlockMessage.defaultInstance)
 
-  def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](b: BlockMessage): F[Empty] =
+  def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](
+      b: BlockMessage): F[DeployServiceResponse] = {
+    def doAddBlock(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
+      for {
+        status <- MultiParentCasper[F].addBlock(b)
+      } yield
+        status match {
+          case _: InvalidBlock => DeployServiceResponse(false, s"Failure! Invalid block: $status")
+          case _: ValidBlock   => DeployServiceResponse(true, s"Success! $status")
+        }
+
     MultiParentCasperConstructor
-      .withCasper[F, Empty](_.addBlock(b).map(_ => Empty.defaultInstance), Empty.defaultInstance)
+      .withCasper[F, DeployServiceResponse](
+        doAddBlock(_),
+        DeployServiceResponse(false, "Error: Casper instance not available"))
+  }
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
     : F[BlocksResponse] = {

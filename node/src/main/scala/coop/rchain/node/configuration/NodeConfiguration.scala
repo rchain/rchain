@@ -3,6 +3,7 @@ package coop.rchain.node.configuration
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
+import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.IpChecker
@@ -23,19 +24,20 @@ object NodeConfiguration {
   val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
-  val DefaultPort                  = 40400
-  val DefaultGrpcPort              = 40401
-  val DefaultHttPort               = 40402
-  val DefaultMetricsPort           = 40403
-  val DefaultGrpcHost              = "localhost"
-  val DefaultNoUpNP                = false
-  val DefaultStandalone            = false
-  val DefaultTimeout               = 1000
-  val DefaultMapSize: Long         = 1024L * 1024L * 1024L
-  val DefaultNumValidators         = 5
-  val DefaultValidatorSigAlgorithm = "ed25519"
-  val DefaultCertificateFileName   = "node.certificate.pem"
-  val DefaultKeyFileName           = "node.key.pem"
+  val DefaultPort                       = 40400
+  val DefaultGrpcPort                   = 40401
+  val DefaultHttPort                    = 40402
+  val DefaultMetricsPort                = 40403
+  val DefaultGrpcHost                   = "localhost"
+  val DefaultNoUpNP                     = false
+  val DefaultStandalone                 = false
+  val DefaultTimeout                    = 1000
+  val DefaultMapSize: Long              = 1024L * 1024L * 1024L
+  val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
+  val DefaultNumValidators              = 5
+  val DefaultValidatorSigAlgorithm      = "ed25519"
+  val DefaultCertificateFileName        = "node.certificate.pem"
+  val DefaultKeyFileName                = "node.key.pem"
 
   val DefaultBootstrapServer: PeerNode = {
     val Right(bs) = PeerNode
@@ -107,6 +109,9 @@ object NodeConfiguration {
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
+                                         _.server.flatMap(_.casperBlockStoreSize),
+                                         DefaultCasperBlockStoreSize)
 
     // TLS
     val certificate: Option[Path] = getOpt(_.run.certificate, _.tls.flatMap(_.certificate))
@@ -162,13 +167,18 @@ object NodeConfiguration {
         walletsFile,
         standalone
       )
+    val blockstorage = LMDBBlockStore.Config(
+      dataDir.resolve("casper-block-store"),
+      casperBlockStoreSize
+    )
 
     new Configuration(
       command,
       server,
       grpcServer,
       tls,
-      casper
+      casper,
+      blockstorage
     ) {
       def printHelp(): Unit = options.printHelp()
 

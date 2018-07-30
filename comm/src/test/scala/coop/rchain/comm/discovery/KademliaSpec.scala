@@ -10,13 +10,12 @@ import coop.rchain.comm._
 import org.scalatest._
 
 class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
-  val endpoint = Endpoint("local", 0, 0)
-  val local    = PeerNode(NodeIdentifier(Seq("00000001".b)), endpoint)
-  val peer0    = PeerNode(NodeIdentifier(Seq("00000010".b)), endpoint)
-  val peer1    = PeerNode(NodeIdentifier(Seq("00001000".b)), endpoint)
-  val peer2    = PeerNode(NodeIdentifier(Seq("00001001".b)), endpoint)
-  val peer3    = PeerNode(NodeIdentifier(Seq("00001010".b)), endpoint)
-  val peer4    = PeerNode(NodeIdentifier(Seq("00001100".b)), endpoint)
+  val local = createPeer("00000001")
+  val peer0 = createPeer("00000010")
+  val peer1 = createPeer("00001000")
+  val peer2 = createPeer("00001001")
+  val peer3 = createPeer("00001010")
+  val peer4 = createPeer("00001100")
 
   val DISTANCE_4 = Some(4)
   val DISTANCE_6 = Some(6)
@@ -27,14 +26,11 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   override def beforeEach(): Unit = {
     table = PeerTable(local, 3)
     pingedPeers = mutable.MutableList.empty[PeerNode]
-
     // peer1-4 distance is 4
     table.distance(peer1) shouldBe DISTANCE_4
     table.distance(peer2) shouldBe DISTANCE_4
     table.distance(peer3) shouldBe DISTANCE_4
     table.distance(peer4) shouldBe DISTANCE_4
-    // peer0 distance is 6
-    table.distance(peer0) shouldBe DISTANCE_6
   }
 
   describe("A PeertTable with 1 byte addresses and k = 3") {
@@ -42,8 +38,9 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       it("should add it to a bucket according to its distance") {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
+        table.distance(peer0) shouldBe DISTANCE_6
         // when
-        table.observe[Id](peer0)
+        table.updateLastSeen[Id](peer0)
         // then
         bucketEntriesAt(DISTANCE_6) shouldEqual Seq(peer0)
       }
@@ -52,7 +49,60 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         // given
         implicit val ping: KademliaRPC[Id] = pingOk
         // when
-        table.observe[Id](peer0)
+        table.updateLastSeen[Id](peer0)
+        // then
+        pingedPeers shouldEqual Seq.empty[PeerNode]
+      }
+    }
+
+    describe("when adding a peer when that peer already exists but with different IP") {
+      it("should replace peer with new entry (the one with new IP)") {
+        // given
+        implicit val ping: KademliaRPC[Id] = pingOk
+        table.updateLastSeen[Id](peer1)
+        // when
+        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
+        table.updateLastSeen[Id](newPeer1)
+        // then
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(newPeer1)
+      }
+
+      it("should move peer to the end of the bucket (meaning it's been seen lately)") {
+        // given
+        implicit val ping: KademliaRPC[Id] = pingOk
+        table.updateLastSeen[Id](peer2)
+        table.updateLastSeen[Id](peer1)
+        table.updateLastSeen[Id](peer3)
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer1, peer3)
+        // when
+        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
+        table.updateLastSeen[Id](newPeer1)
+        // then
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, newPeer1)
+      }
+    }
+
+    describe("when adding a peer to a table, where corresponding bucket is filled but not full") {
+      it("should add peer to the end of the bucket (meaning it's been seen lately)") {
+        // given
+        implicit val ping: KademliaRPC[Id] = pingOk
+        table.updateLastSeen[Id](peer2)
+        table.updateLastSeen[Id](peer3)
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3)
+        // when
+        table.updateLastSeen[Id](peer1)
+        // then
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
+      }
+
+      it("no peers should be pinged") {
+        // given
+        implicit val ping: KademliaRPC[Id] = pingOk
+        table.updateLastSeen[Id](peer2)
+        table.updateLastSeen[Id](peer3)
+        bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3)
+        // when
+        table.updateLastSeen[Id](peer1)
         // then
         pingedPeers shouldEqual Seq.empty[PeerNode]
       }
@@ -64,7 +114,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         implicit val ping: KademliaRPC[Id] = pingOk
         thatBucket4IsFull
         // when
-        table.observe[Id](peer4)
+        table.updateLastSeen[Id](peer4)
         // then
         pingedPeers shouldEqual Seq(peer1)
       }
@@ -75,7 +125,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           implicit val ping: KademliaRPC[Id] = pingOk
           thatBucket4IsFull
           // when
-          table.observe[Id](peer4)
+          table.updateLastSeen[Id](peer4)
           // then
           bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer1)
         }
@@ -86,7 +136,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           implicit val ping: KademliaRPC[Id] = pingFail
           thatBucket4IsFull
           // when
-          table.observe[Id](peer4)
+          table.updateLastSeen[Id](peer4)
           // then
           bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, peer4)
         }
@@ -95,9 +145,9 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   }
 
   private def thatBucket4IsFull(implicit ev: KademliaRPC[Id]): Unit = {
-    table.observe[Id](peer1)
-    table.observe[Id](peer2)
-    table.observe[Id](peer3)
+    table.updateLastSeen[Id](peer1)
+    table.updateLastSeen[Id](peer2)
+    table.updateLastSeen[Id](peer3)
   }
 
   private def bucketEntriesAt(distance: Option[Int]): Seq[PeerNode] =
@@ -114,4 +164,6 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
   }
 
+  private def createPeer(id: String): PeerNode =
+    PeerNode(NodeIdentifier(Seq(id.b)), Endpoint(id, 0, 0))
 }

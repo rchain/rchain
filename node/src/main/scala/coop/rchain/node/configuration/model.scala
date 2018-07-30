@@ -2,6 +2,7 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
+import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
 
@@ -10,7 +11,8 @@ abstract class Configuration(
     val server: Server,
     val grpcServer: GrpcServer,
     val tls: Tls,
-    val casper: CasperConf
+    val casper: CasperConf,
+    val blockstorage: LMDBBlockStore.Config
 ) {
   def printHelp(): Unit
   def fetchHost(externalAddress: Option[String]): String

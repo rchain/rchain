@@ -9,6 +9,11 @@
 #include "Method.h"
 #include "Pattern.h"
 #include "Table.h"
+#include "Vm.h"
+#include "MI.h"
+#include "Cstruct.h"
+#include "Method.h"
+#include "Operation.h"
 
 #include "CommandLine.h"
 #include "Export.h"
@@ -87,13 +92,29 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         }
     }
 
+    pOb meta = INVALID;
+    pOb parent = INVALID;
+    if (ob->has_meta()) {
+        meta = createRosetteObject(ob->mutable_meta());
+    }
+    if (ob->has_parent()) {
+        parent = createRosetteObject(ob->mutable_parent());
+    }
+
     // Create the object by type
     switch(ob->type()) {
 
     case ObjectCodePB::OT_ACTOR: {
         ObjectCodePB::Actor * pbob = ob->mutable_actor();
-        retval = Actor::create();
-        // TODO: extension
+        ObjectCodePB::StdExtension * pbse = pbob->mutable_extension()->mutable_std_extension();
+
+        // An Actor references a StdExtension which is similar to a tuple which is a list of objects.
+        Tuple * tup = Tuple::create(pbse->elements_size(), INVALID);
+        for (int i = 0; i < pbse->elements_size(); i++) {
+            BASE(tup)->setNth( i, createRosetteObject(pbse->mutable_elements(i)) );
+        }
+
+        retval = Actor::create( meta, parent, StdExtension::create( tup ));
         break;
     }
 
@@ -116,53 +137,54 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
 
     case ObjectCodePB::OT_EXPANDED_LOCATION: {
         ObjectCodePB::ExpandedLocation * pbob = ob->mutable_expanded_location();
+        ObjectCodePB::Location *pbloc = pbob->mutable_loc();
         Location loc;
 
-        switch(pbob->type()) {
+        switch(pbloc->type()) {
         case LT_CtxtRegister: {
-            ObjectCodePB::ExpandedLocation::LocCtxt * ctxt = pbob->mutable_ctxt(); 
+            ObjectCodePB::Location::LocCtxt * ctxt = pbloc->mutable_ctxt(); 
             loc = CtxtReg( (CtxtRegName)ctxt->reg() );
             break;
         }
 
         case LT_ArgRegister: {
-            ObjectCodePB::ExpandedLocation::LocArg * arg = pbob->mutable_arg(); 
+            ObjectCodePB::Location::LocArg * arg = pbloc->mutable_arg(); 
             loc = ArgReg( arg->arg() );
             break;
         }
 
         case LT_LexVariable: {
-            ObjectCodePB::ExpandedLocation::LocLexVar * lex = pbob->mutable_lexvar(); 
+            ObjectCodePB::Location::LocLexVar * lex = pbloc->mutable_lexvar(); 
             loc = LexVar( lex->level(), lex->offset(), lex->indirect() );
             break;
         }
 
         case LT_AddrVariable: {
-            ObjectCodePB::ExpandedLocation::LocAddrVar * addr = pbob->mutable_addrvar(); 
+            ObjectCodePB::Location::LocAddrVar * addr = pbloc->mutable_addrvar(); 
             loc = AddrVar( addr->level(), addr->offset(), addr->indirect() );
             break;
         }
 
         case LT_GlobalVariable: {
-            ObjectCodePB::ExpandedLocation::LocGlobalVar * lex = pbob->mutable_globalvar(); 
+            ObjectCodePB::Location::LocGlobalVar * lex = pbloc->mutable_globalvar(); 
             loc = GlobalVar( lex->offset() );
             break;
         }
 
         case LT_BitField: {
-            ObjectCodePB::ExpandedLocation::LocBitField * bf = pbob->mutable_bitfield(); 
+            ObjectCodePB::Location::LocBitField * bf = pbloc->mutable_bitfield(); 
             loc = BitField( bf->level(), bf->offset(), bf->span(), bf->indirect(), bf->signed_() );
             break;
         }
 
         case LT_BitField00: {
-            ObjectCodePB::ExpandedLocation::LocBitField00 * bf = pbob->mutable_bitfield00(); 
+            ObjectCodePB::Location::LocBitField00 * bf = pbloc->mutable_bitfield00(); 
             loc = BitField00( bf->offset(), bf->span(), bf->signed_() );
             break;
         }
 
         case LT_Limbo: {
-            ObjectCodePB::ExpandedLocation::LocLimbo * limbo = pbob->mutable_limbo(); 
+            ObjectCodePB::Location::LocLimbo * limbo = pbloc->mutable_limbo(); 
             loc = LocLimbo;
             break;
         }
@@ -440,9 +462,109 @@ pOb createRosetteObject(ObjectCodePB::Object * ob) {
         break;
     }
 
+    case ObjectCodePB::OT_INDEXED_META: {
+        ObjectCodePB::IndexedMeta * pbob = ob->mutable_indexed_meta();
+
+        // TODO: Figure this out
+        // StdMeta * sm = StdMeta::create( (Tuple *)createRosetteObject( pbob->mutable_extension()) );
+        // retval = 
+
+        break;
+    }
+    case ObjectCodePB::OT_TOP_ENV: {
+        ObjectCodePB::TopEnv * pbob = ob->mutable_top_env();
+        retval = RBLtopenv::create();
+        break;
+    }
+
+    case ObjectCodePB::OT_MI_ACTOR: {
+        ObjectCodePB::MIActor * pbob = ob->mutable_mi_actor();
+
+        // A MIActor has a tuple extension
+        Tuple * tup = Tuple::create( (Tuple *)createRosetteObject(pbob->mutable_extension()) );
+        retval = MIActor::create( tup );
+        break;
+    }
+    
+    case ObjectCodePB::OT_ATOMIC_DESCRIPTOR: {
+        ObjectCodePB::AtomicDescriptor * pbob = ob->mutable_atomic_descriptor();
+
+        AtomicDescriptor * ad = AtomicDescriptor::create();
+        ad->_offset = pbob->_offset();
+        ad->_align_to = pbob->_align_to();
+        ad->_size = pbob->_size();
+        ad->mnemonic = createRosetteObject(pbob->mutable_mnemonic());
+        ad->imported = createRosetteObject(pbob->mutable_imported());
+        ad->freeStructOnGC = createRosetteObject(pbob->mutable_freestructongc());
+        ad->_signed = (RblBool *)createRosetteObject(pbob->mutable__signed());
+
+        retval = ad;
+        break;
+    }
+    
+    case ObjectCodePB::OT_REFLECTIVE_MTHD: {
+        ObjectCodePB::ReflectiveMthd * pbob = ob->mutable_reflective_mthd();
+        retval = ReflectiveMthd::create( (Code *)createRosetteObject(pbob->mutable_code()),
+                                                createRosetteObject(pbob->mutable_id()),
+                                                createRosetteObject(pbob->mutable_source()));
+
+        break;
+    }
+    
+    case ObjectCodePB::OT_PRODUCT_TYPE: {
+        ObjectCodePB::ProductType * pbob = ob->mutable_product_type();
+
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        retval = ProductType::create( tup, NIV );
+        break;
+    }
+    
+    case ObjectCodePB::OT_SUM_TYPE: {
+        ObjectCodePB::SumType * pbob = ob->mutable_sum_type();
+
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            tup->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        retval = SumType::create( tup );
+        break;
+    }
+    
+    case ObjectCodePB::OT_MULTI_METHOD: {
+        ObjectCodePB::MultiMethod * pbob = ob->mutable_multi_method();
+
+        MultiMethod * mm = MultiMethod::create();
+
+        // A StdExtension is similar to a tuple which is a list of objects.
+        Tuple * tup = Tuple::create(pbob->elements_size(), INVALID);
+        for (int i = 0; i < pbob->elements_size(); i++) {
+            BASE(tup)->setNth( i, createRosetteObject(pbob->mutable_elements(i)) );
+        }
+        mm->extension = StdExtension::create( tup );
+
+        retval = mm;
+        break;
+    }
+
+    case ObjectCodePB::OT_STD_OPRN: {
+        ObjectCodePB::StdOprn * pbob = ob->mutable_std_oprn();
+
+        // TODO: fix these parameters
+        retval = StdOprn::create(INVALID, RBLBOOL(false));
+    }
+
     default:
         warning("Import object type=%d not yet implemented!\nObjectPB=\n%s\n", ob->type(), ob->DebugString().c_str());
         assert(false);
+    }
+
+    // Handle meta and parent fields. Not for RblAtom objects.
+    if (retval && TAG(retval) == OTptr) {
+        retval->meta() = meta;
+        retval->parent() = parent;
     }
 
     // Save the result in the objects table so we don't create another next time this object is referenced.
