@@ -701,28 +701,26 @@ object ProcNormalizeMatcher {
       case p: PNew => {
         import scala.collection.JavaConverters._
         // TODO: bindings within a single new shouldn't have overlapping names.
-        val newBindings = p.listnamedecl_.toList.map {
-          case n: NameDeclSimpl => (n.var_, NameSort, n.line_num, n.col_num)
+        val newTaggedBindings = p.listnamedecl_.toVector.map {
+          case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
+          case n: NameDeclUrn   => (Some(n.uri_), n.var_, NameSort, n.line_num, n.col_num)
         }
-        val newEnv   = input.env.newBindings(newBindings)
+        val sortBindings = newTaggedBindings.sortBy(row => row._1)
+        val newBindings = sortBindings.map { row =>
+          (row._2, row._3, row._4, row._5)
+        }
+        val uris     = sortBindings.flatMap(row => row._1)
+        val newEnv   = input.env.newBindings(newBindings.toList)
         val newCount = newEnv.count - input.env.count
         normalizeMatch[M](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree))
           .map { bodyResult =>
-            val foldedNew = bodyResult.par.singleNew() match {
-              case Some(New(count, body, _, locallyFree)) =>
-                New(newCount + count,
-                    body,
-                    Vector.empty,
-                    locallyFree.from(newCount).map(x => x - newCount))
-              case _ =>
-                New(newCount,
-                    bodyResult.par,
-                    Vector.empty,
-                    bodyResult.par.locallyFree.from(newCount).map(x => x - newCount))
-            }
-            ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
+            val resultNew =
+              New(newCount,
+                  bodyResult.par,
+                  uris,
+                  bodyResult.par.locallyFree.from(newCount).map(x => x - newCount))
+            ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)
           }
-
       }
 
       case b: PBundle =>
