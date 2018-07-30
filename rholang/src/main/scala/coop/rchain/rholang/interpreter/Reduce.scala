@@ -441,7 +441,7 @@ object Reduce {
             resultPar <- methodLookup match {
                           case None =>
                             s.raiseError(ReduceError("Unimplemented method: " + method))
-                          case Some(f) => f(target, evaledArgs)(env)
+                          case Some(f) => f(evaledTarget, evaledArgs)(env)
                         }
           } yield resultPar
         }
@@ -687,15 +687,15 @@ object Reduce {
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
+            _            <- costAccountingAlg.charge(METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
             resultPar <- methodLookup match {
                           case None =>
                             s.raiseError(ReduceError("Unimplemented method: " + method))
-                          case Some(f) => f(target, evaledArgs)(env)
+                          case Some(f) => f(evaledTarget, evaledArgs)(env)
                         }
             resultExpr <- evalSingleExpr(resultPar)
-            _          <- costAccountingAlg.charge(METHOD_CALL_COST)
           } yield resultExpr
         }
         case EEvalBody(chan) =>

@@ -80,8 +80,6 @@ trait IStore[C, P, A, K] {
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
 
-  private[rspace] val eventsCounter: StoreEventsCounter
-
   protected val _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]] =
     SyncVarOps.create(Seq.empty)
 

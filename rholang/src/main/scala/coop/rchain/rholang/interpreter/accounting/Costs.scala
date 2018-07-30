@@ -17,9 +17,6 @@ object Cost {
 
 trait Costs {
 
-  final val BOOLEAN_COST: Cost = Cost(1)
-  final val INT_COST: Cost     = Cost(2)
-
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 

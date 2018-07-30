@@ -35,6 +35,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsEffect,
       catsMtl,
       monix,
       scodecCore,
@@ -206,7 +207,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,

@@ -1,25 +1,18 @@
 package coop.rchain.casper.api
 
 import cats._
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.BlockDag.LatestMessages
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
+import coop.rchain.casper.helper.BlockStoreFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.immutable.{HashMap, HashSet}
-
-class BlockQueryResponseTest extends FlatSpec with Matchers {
+class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixture {
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -80,40 +73,40 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
 
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
-  "getBlockQueryResponse" should "return successful block info response" in {
-    implicit val blockStore   = InMemBlockStore.createWithId
-    implicit val casperEffect = testCasper[Id]
-    implicit val logEff       = new LogStub[Id]
-    implicit val constructorEffect =
-      MultiParentCasperConstructor
-        .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-    implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-    val q                                            = BlockQuery(hash = secondBlockQuery)
-    val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
-    val blockInfo                                    = blockQueryResponse.blockInfo.get
-    blockQueryResponse.status should be("Success")
-    blockInfo.blockHash should be(secondHashString)
-    blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-    blockInfo.blockNumber should be(blockNumber)
-    blockInfo.version should be(version)
-    blockInfo.deployCount should be(deployCount)
-    blockInfo.faultTolerance should be(faultTolerance)
-    blockInfo.mainParentHash should be(genesisHashString)
-    blockInfo.parentsHashList should be(parentsString)
-    blockInfo.sender should be(secondBlockSenderString)
+  "getBlockQueryResponse" should "return successful block info response" in withStore {
+    implicit blockStore =>
+      implicit val casperEffect = testCasper[Id]
+      implicit val logEff       = new LogStub[Id]
+      implicit val constructorEffect =
+        MultiParentCasperConstructor
+          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
+      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
+      val q                                            = BlockQuery(hash = secondBlockQuery)
+      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
+      val blockInfo                                    = blockQueryResponse.blockInfo.get
+      blockQueryResponse.status should be("Success")
+      blockInfo.blockHash should be(secondHashString)
+      blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+      blockInfo.blockNumber should be(blockNumber)
+      blockInfo.version should be(version)
+      blockInfo.deployCount should be(deployCount)
+      blockInfo.faultTolerance should be(faultTolerance)
+      blockInfo.mainParentHash should be(genesisHashString)
+      blockInfo.parentsHashList should be(parentsString)
+      blockInfo.sender should be(secondBlockSenderString)
   }
 
-  "getBlockQueryResponse" should "return error when no block exists" in {
-    implicit val blockStore   = InMemBlockStore.createWithId
-    implicit val casperEffect = testCasper[Id]
-    implicit val logEff       = new LogStub[Id]
-    implicit val constructorEffect =
-      MultiParentCasperConstructor
-        .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-    implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-    val q                                            = BlockQuery(hash = badTestHashQuery)
-    val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
-    blockQueryResponse.status should be(
-      s"Error: Failure to find block with hash ${badTestHashQuery}")
+  "getBlockQueryResponse" should "return error when no block exists" in withStore {
+    implicit blockStore =>
+      implicit val casperEffect = testCasper[Id]
+      implicit val logEff       = new LogStub[Id]
+      implicit val constructorEffect =
+        MultiParentCasperConstructor
+          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
+      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
+      val q                                            = BlockQuery(hash = badTestHashQuery)
+      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
+      blockQueryResponse.status should be(
+        s"Error: Failure to find block with hash ${badTestHashQuery}")
   }
 }
