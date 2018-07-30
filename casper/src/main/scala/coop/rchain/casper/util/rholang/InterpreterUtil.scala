@@ -19,6 +19,8 @@ import scodec.bits.BitVector
 
 import scala.collection.immutable
 
+import RuntimeManager.DeployError
+
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
@@ -64,7 +66,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (Checkpoint, Set[StateHash]) = {
     val (postStateHash, updatedStateHashes) =
       computeParentsPostState(parents,
@@ -87,7 +89,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (StateHash, Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
@@ -141,7 +143,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint])
+      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
     : (Checkpoint, Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)

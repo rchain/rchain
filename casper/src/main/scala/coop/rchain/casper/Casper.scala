@@ -556,7 +556,7 @@ sealed abstract class MultiParentCasperInstances {
           case InvalidBondsCache =>
             handleInvalidBlockEffect(status, block)
           case InvalidRepeatDeploy => handleInvalidBlockEffect(status, block)
-          case _ => throw new Error("Should never reach")
+          case _                   => throw new Error("Should never reach")
         }
 
       private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
