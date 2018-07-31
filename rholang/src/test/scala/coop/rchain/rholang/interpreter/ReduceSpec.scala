@@ -5,15 +5,14 @@ import java.nio.file.Files
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
-import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GPrivate => _, _}
+import coop.rchain.rholang.interpreter.Runtime.RhoContext
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.{ReduceError, _}
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -36,10 +35,8 @@ trait PersistentStoreTester {
                 ListChannelWithRandom,
                 ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
-    val dbDir = Files.createTempDirectory("rholang-interpreter-test-")
-    val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
-      dbDir,
-      mapSize = 1024L * 1024L * 1024L)
+    val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
+    val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,
                               BindPattern,
                               ListChannelWithRandom,

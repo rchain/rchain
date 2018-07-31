@@ -2,17 +2,14 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Functor
-import cats.effect.Sync
-import cats.implicits._
 import cats.mtl.FunctorTell
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -20,21 +17,12 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (
-    val reducer: Reduce[Task],
-    val replayReducer: Reduce[Task],
-    val space: ISpace[Channel,
-                      BindPattern,
-                      ListChannelWithRandom,
-                      ListChannelWithRandom,
-                      TaggedContinuation],
-    val replaySpace: ReplayRSpace[Channel,
-                                  BindPattern,
-                                  ListChannelWithRandom,
-                                  ListChannelWithRandom,
-                                  TaggedContinuation],
-    var errorLog: ErrorLog,
-    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
+class Runtime private (val reducer: Reduce[Task],
+                       val replayReducer: Reduce[Task],
+                       val space: RhoISpace,
+                       val replaySpace: RhoReplayRSpace,
+                       var errorLog: ErrorLog,
+                       val context: RhoContext) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def close(): Unit = {
     space.close()
@@ -45,21 +33,26 @@ class Runtime private (
 
 object Runtime {
 
+  type RhoISpace       = CPARK[ISpace]
+  type RhoRSpace       = CPARK[RSpace]
+  type RhoReplayRSpace = CPARK[ReplayRSpace]
+
+  type RhoIStore  = CPAK[IStore]
+  type RhoContext = CPAK[Context]
+
+  private type CPAK[F[_, _, _, _]] =
+    F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
+
+  private type CPARK[F[_, _, _, _, _]] =
+    F[Channel, BindPattern, ListChannelWithRandom, ListChannelWithRandom, TaggedContinuation]
+
   type Name      = String
   type Arity     = Int
   type Remainder = Option[Var]
   type Ref       = Long
 
-  private def introduceSystemProcesses(space: ISpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                                       replaySpace: ISpace[Channel,
-                                                           BindPattern,
-                                                           ListChannelWithRandom,
-                                                           ListChannelWithRandom,
-                                                           TaggedContinuation],
+  private def introduceSystemProcesses(space: RhoISpace,
+                                       replaySpace: RhoISpace,
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.map {
@@ -86,32 +79,20 @@ object Runtime {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
-    val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
+    val context: RhoContext = Context.create(
       dataDir,
       mapSize
     )
 
-    val space = RSpace.create[Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation](context, Branch.MASTER)
+    val space: RhoRSpace = RSpace.create(context, Branch.MASTER)
 
-    val replaySpace = ReplayRSpace.create[Channel,
-                                          BindPattern,
-                                          ListChannelWithRandom,
-                                          ListChannelWithRandom,
-                                          TaggedContinuation](context, Branch.REPLAY)
+    val replaySpace: RhoReplayRSpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     def dispatchTableCreator(
-        space: ISpace[Channel,
-                      BindPattern,
-                      ListChannelWithRandom,
-                      ListChannelWithRandom,
-                      TaggedContinuation],
+        space: RhoISpace,
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
