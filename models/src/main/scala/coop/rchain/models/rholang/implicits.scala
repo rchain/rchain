@@ -264,16 +264,6 @@ object implicits {
         None
       }
 
-    def singleNew(): Option[New] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.news match {
-          case Seq(single) => Some(single)
-          case _           => None
-        }
-      } else {
-        None
-      }
-
     def singleBundle(): Option[Bundle] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
         p.bundles.toList match {
