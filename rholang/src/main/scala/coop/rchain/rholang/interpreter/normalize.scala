@@ -42,8 +42,9 @@ object GroundNormalizeMatcher {
       case gb: GroundBool   => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
       case gi: GroundInt    => GInt(gi.integer_)
       case gs: GroundString => GString(gs.string_)
-      case gu: GroundUri    => GUri(gu.uri_)
+      case gu: GroundUri    => GUri(stripUri(gu.uri_))
     }
+  def stripUri(raw: String): String = raw.substring(1, raw.length - 1)
 }
 
 object RemainderNormalizeMatcher {
@@ -703,7 +704,8 @@ object ProcNormalizeMatcher {
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
-          case n: NameDeclUrn   => (Some(n.uri_), n.var_, NameSort, n.line_num, n.col_num)
+          case n: NameDeclUrn =>
+            (Some(GroundNormalizeMatcher.stripUri(n.uri_)), n.var_, NameSort, n.line_num, n.col_num)
         }
         val sortBindings = newTaggedBindings.sortBy(row => row._1)
         val newBindings = sortBindings.map { row =>

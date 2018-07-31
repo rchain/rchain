@@ -38,7 +38,7 @@ class GroundPrinterSpec extends FlatSpec with Matchers {
   }
 
   "GroundUri" should "Print with back-ticks" in {
-    val gu             = new GroundUri("Uri")
+    val gu             = new GroundUri("`Uri`")
     val target: String = "`" + "Uri" + "`"
     PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gu)) shouldBe target
   }

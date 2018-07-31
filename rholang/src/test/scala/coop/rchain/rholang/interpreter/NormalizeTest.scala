@@ -47,8 +47,8 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
     GroundNormalizeMatcher.normalizeMatch(gs) should be(expectedResult)
   }
   "GroundUri" should "Compile as GUri" in {
-    val gu                   = new GroundUri("Uri")
-    val expectedResult: Expr = GUri("Uri")
+    val gu                   = new GroundUri("`rho:uri`")
+    val expectedResult: Expr = GUri("rho:uri")
     GroundNormalizeMatcher.normalizeMatch(gu) should be(expectedResult)
   }
 }
@@ -624,8 +624,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
     listNameDecl.add(new NameDeclSimpl("y"))
-    listNameDecl.add(new NameDeclUrn("r", "rho:registry"))
-    listNameDecl.add(new NameDeclUrn("out", "rho:stdout"))
+    listNameDecl.add(new NameDeclUrn("r", "`rho:registry`"))
+    listNameDecl.add(new NameDeclUrn("out", "`rho:stdout`"))
     listNameDecl.add(new NameDeclSimpl("z"))
     val listData1 = new ListProc()
     listData1.add(new PGround(new GroundInt(7)))
