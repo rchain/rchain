@@ -14,7 +14,6 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
-import coop.rchain.rholang.interpreter.matcher.StreamT
 import coop.rchain.rholang.interpreter.matcher.StreamT._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
