@@ -17,9 +17,10 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import coop.rchain.models.rholang.implicits._
 
   def assertSpatialMatch[T, P](target: T, pattern: P, expected: Option[FreeMap])(
-      implicit sm: SpatialMatcher[T, P]): Assertion =
-    assert(
-      spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2 == expected)
+      implicit sm: SpatialMatcher[T, P]): Assertion = {
+    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
+    assert(result == expected)
+  }
 
   val wc = Wildcard(Var.WildcardMsg())
   "Matching ground with var" should "work" in {
@@ -400,8 +401,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
           body = Par(),
           persistent = false,
           bindCount = 0))))
-    val expectedResult = Some(Map.empty[Int, Par])
-    assertSpatialMatch(target, pattern, expectedResult)
+    assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
 
   "Matching ++" should "work" in {
