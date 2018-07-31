@@ -10,11 +10,14 @@ import coop.rchain.rholang.interpreter.errors.ReduceError
 import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.storage.implicits._
 
 trait TuplespaceAlg[F[_]] {
-  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[Unit]
-  def consume(binds: Seq[(BindPattern, Quote)], body: ParWithRandom, persistent: Boolean): F[Unit]
+  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[CostAccount]
+  def consume(binds: Seq[(BindPattern, Quote)],
+              body: ParWithRandom,
+              persistent: Boolean): F[CostAccount]
 }
 
 object TuplespaceAlg {
@@ -30,45 +33,58 @@ object TuplespaceAlg {
       P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
     override def produce(channel: Channel,
                          data: ListChannelWithRandom,
-                         persistent: Boolean): F[Unit] = {
+                         persistent: Boolean): F[CostAccount] = {
       // TODO: Handle the environment in the store
-      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[Unit] =
+      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[CostAccount] =
         res
           .map {
             case (continuation, dataList) =>
+              val rspaceMatchCost =
+                dataList
+                  .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
+                  .toList
+                  .combineAll
               if (persistent) {
-                List(dispatcher.dispatch(continuation, dataList),
-                     produce(channel, data, persistent)).parSequence.as(())
+                List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
+                     produce(channel, data, persistent)).parSequence
+                  .map(_.combineAll + rspaceMatchCost)
               } else {
-                dispatcher.dispatch(continuation, dataList)
+                dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
               }
           }
-          .getOrElse(F.unit)
+          .getOrElse(F.pure(CostAccount.zero))
 
       for {
-        res <- pureRSpace.produce(channel, data, persist = persistent)
-        _   <- go(res)
-      } yield ()
+        res  <- pureRSpace.produce(channel, data, persist = persistent)
+        cost <- go(res)
+      } yield cost
     }
 
     override def consume(binds: Seq[(BindPattern, Quote)],
                          body: ParWithRandom,
-                         persistent: Boolean): F[Unit] =
+                         persistent: Boolean): F[CostAccount] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[Unit] =
+          def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[CostAccount] =
             res match {
               case Some((continuation, dataList)) =>
+                val rspaceMatchCost =
+                  dataList
+                    .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
+                    .toList
+                    .combineAll
+
                 dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
-                  List(dispatcher.dispatch(continuation, dataList),
-                       consume(binds, body, persistent)).parSequence.as(())
+                  List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
+                       consume(binds, body, persistent)).parSequence
+                    .map(_.combineAll + rspaceMatchCost)
                 } else {
-                  dispatcher.dispatch(continuation, dataList)
+                  dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
                 }
-              case None => F.unit
+              case None => F.pure(CostAccount.zero)
             }
 
           for {
@@ -76,8 +92,8 @@ object TuplespaceAlg {
                                       patterns.toList,
                                       TaggedContinuation(ParBody(body)),
                                       persist = persistent)
-            _ <- go(res)
-          } yield ()
+            cost <- go(res)
+          } yield cost
       }
   }
 }

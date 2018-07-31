@@ -42,9 +42,16 @@ message Channel {
     }
 }
 
+message PCost {
+    uint64 cost = 1;
+    int32 iterations = 2;
+}
+
 message ListChannelWithRandom {
     repeated Channel channels = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
+    // cost of performing the spatial match
+    PCost cost = 3;
 }
 
 // While we use vars in both positions, when producing the normalized

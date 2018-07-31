@@ -72,8 +72,13 @@ class HashSetCasperTestNode(name: String,
   def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
   def tearDown(): Unit = {
-    blockStore.close()
+    tearDownNode()
     dir.recursivelyDelete()
+  }
+
+  def tearDownNode(): Unit = {
+    activeRuntime.close()
+    blockStore.close()
   }
 }
 

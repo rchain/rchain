@@ -7,7 +7,7 @@ import coop.rchain.comm.protocol.routing._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Cell, Log, LogSource}
 
 import scala.concurrent.duration._
 import scala.util._
@@ -20,7 +20,7 @@ import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
     implicit scheduler: Scheduler,
-    state: TcpTransportLayer.State,
+    cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
     extends TransportLayer[Task] {
 
@@ -68,26 +68,26 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     } yield c
 
   private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    for {
-      s <- state.get
-      _ <- if (s.shutdown && !enforce)
-            Task.raiseError(new RuntimeException("The transport layer has been shut down"))
-          else Task.unit
-      c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-      _ <- state.modify(s => s.copy(connections = s.connections + (peer -> c)))
-    } yield c
+    cell.modify { s =>
+      if (s.shutdown && !enforce)
+        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
+      else
+        for {
+          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
+        } yield s.copy(connections = s.connections + (peer -> c))
+    } >>= kp(cell.read.map(_.connections.apply(peer)))
 
   def disconnect(peer: PeerNode): Task[Unit] =
-    for {
-      _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
-      s <- state.get
-      _ <- s.connections.get(peer) match {
-            case Some(c) => Task.delay(c.shutdown()).attempt.void
-            case _ =>
-              log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
-          }
-      _ <- state.modify(s => s.copy(connections = s.connections - peer))
-    } yield ()
+    cell.modify { s =>
+      for {
+        _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
+        _ <- s.connections.get(peer) match {
+              case Some(c) => Task.delay(c.shutdown()).attempt.void
+              case _ =>
+                log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
+            }
+      } yield s.copy(connections = s.connections - peer)
+    }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
       f: TransportLayerStub => Task[A]): Task[A] =
@@ -167,43 +167,49 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     }
 
   def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
-    for {
-      s <- state.get
-      server <- s.server match {
-                 case Some(_) =>
-                   Task.raiseError(new RuntimeException("TransportLayer server is already started"))
-                 case _ => buildServer(new TransportLayerImpl(dispatch))
-               }
-      _ <- state.modify(_.copy(server = Some(server)))
-    } yield ()
+    cell.modify { s =>
+      for {
+        server <- s.server match {
+                   case Some(_) =>
+                     Task.raiseError(
+                       new RuntimeException("TransportLayer server is already started"))
+                   case _ => buildServer(new TransportLayerImpl(dispatch))
+                 }
+      } yield s.copy(server = Some(server))
 
-  def shutdown(msg: Protocol): Task[Unit] =
-    for {
-      s     <- state.get
-      _     <- log.info("Shutting down server")
-      _     <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
-      _     <- state.modify(_.copy(server = None, shutdown = true))
-      peers = s.connections.keys.toSeq
-      _     <- log.info("Sending shutdown message to all peers")
-      _     <- sendShutdownMessage(peers, msg)
-      _     <- log.info("Disconnecting from all peers")
-      _     <- Task.gatherUnordered(peers.map(disconnect))
-    } yield ()
+    }
 
-  private def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
-    Task
-      .gatherUnordered(
-        peers.map(innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true))
-      )
-      .void
+  def shutdown(msg: Protocol): Task[Unit] = {
+    def shutdownServer: Task[Unit] = cell.modify { s =>
+      for {
+        _ <- log.info("Shutting down server")
+        _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
+      } yield s.copy(server = None, shutdown = true)
 
+    }
+
+    def sendShutdownMessages: Task[Unit] =
+      for {
+        peers <- cell.read.map(_.connections.keys.toSeq)
+        _     <- log.info("Sending shutdown message to all peers")
+        _     <- sendShutdownMessage(peers, msg)
+        _     <- log.info("Disconnecting from all peers")
+        _     <- Task.gatherUnordered(peers.map(disconnect))
+      } yield ()
+
+    def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] = {
+      val createInstruction: PeerNode => Task[Unit] =
+        innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
+      Task.gatherUnordered(peers.map(createInstruction)).void
+    }
+    shutdownServer *> sendShutdownMessages
+  }
 }
 
 object TcpTransportLayer {
-  import cats.mtl.MonadState
-  type Connection  = ManagedChannel
-  type Connections = Map[PeerNode, Connection]
-  type State       = MonadState[Task, TransportState]
+  type Connection          = ManagedChannel
+  type Connections         = Map[PeerNode, Connection]
+  type TransportCell[F[_]] = Cell[F, TransportState]
 }
 
 case class TransportState(
@@ -211,6 +217,10 @@ case class TransportState(
     server: Option[Server] = None,
     shutdown: Boolean = false
 )
+
+object TransportState {
+  def empty: TransportState = TransportState()
+}
 
 class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     implicit scheduler: Scheduler)

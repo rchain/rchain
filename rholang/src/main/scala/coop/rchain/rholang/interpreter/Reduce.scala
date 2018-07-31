@@ -3,17 +3,13 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Applicative, FlatMap, Monad, Parallel, Eval => _}
-import cats.mtl.implicits._
-import cats.mtl.{FunctorTell, MonadState}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
@@ -22,14 +18,14 @@ import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
+import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
-import Chargeable._
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -62,9 +58,11 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
+        substTerm =>
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(
+            substTerm)
       ))
 
   def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: CostAccountingAlg: Sync](
@@ -76,9 +74,11 @@ object Reduce {
       .attempt
       .flatMap(_.fold(
         th => // On error charge for the initial term
-          CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M]
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
             .raiseError[A](th),
-        term => CostAccountingAlg[M].charge(Cost(Chargeable[A].count(term))) *> Sync[M].pure(term)
+        substTerm =>
+          CostAccountingAlg[M].charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(
+            substTerm)
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
@@ -106,7 +106,8 @@ object Reduce {
                         rand: Blake2b512Random): M[Unit] =
       for {
         _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        _ <- costAccountingAlg.modify(_.charge(c))
       } yield ()
 
     /**
@@ -129,7 +130,8 @@ object Reduce {
       val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
         _ <- costAccountingAlg.charge(rspaceCost)
-        _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        _ <- costAccountingAlg.modify(_.charge(c))
       } yield ()
     }
 
@@ -355,12 +357,14 @@ object Reduce {
             case singleCase +: caseRem =>
               for {
                 pattern <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
-                matchResult = SpatialMatcher
+                (cost, matchResult) = SpatialMatcher
                   .spatialMatch(target, pattern)
-                  .runS(SpatialMatcher.emptyMap)
+                  .runWithCost
+                _ <- costAccountingAlg.modify(_.charge(cost))
                 res <- matchResult match {
-                        case None => Applicative[M].pure(Left((target, caseRem)))
-                        case Some(freeMap) =>
+                        case None =>
+                          Applicative[M].pure(Left((target, caseRem)))
+                        case Some((freeMap, _)) =>
                           val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
                           eval(singleCase.source)(newEnv, implicitly).map(Right(_))
                       }
@@ -552,12 +556,13 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
-          } yield
-            (GBool(
-              SpatialMatcher
-                .spatialMatch(substTarget, substPattern)
-                .runS(SpatialMatcher.emptyMap)
-                .isDefined))
+            (cost, matchResult) = SpatialMatcher
+              .spatialMatch(substTarget, substPattern)
+              .runWithCost
+
+            _ <- costAccountingAlg.modify(_.charge(cost))
+          } yield GBool(matchResult.isDefined)
+
         case EPercentPercentBody(EPercentPercent(p1, p2)) =>
           def evalToStringPair(keyExpr: Expr, valueExpr: Expr): M[(String, String)] =
             (keyExpr.exprInstance, valueExpr.exprInstance) match {
@@ -770,7 +775,7 @@ object Reduce {
               for {
                 _           <- costAccountingAlg.charge(hexToByteCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
-                res <- encodingRes.fold(th => s.raiseError(th),
+                res <- encodingRes.fold(th => s.raiseError(decodingError(th)),
                                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba))))
               } yield res
             case _ =>
