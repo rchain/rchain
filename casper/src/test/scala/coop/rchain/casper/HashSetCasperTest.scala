@@ -3,9 +3,8 @@ package coop.rchain.casper
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -17,11 +16,12 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.shared.PathOps.RichPath
 
-import scala.concurrent.SyncVar
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -125,7 +125,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].addBlock(invalidBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
-    node.tearDown()
+    node.tearDownNode()
+    validateBlockStore(node) { blockStore =>
+      blockStore.get(block.blockHash) shouldBe None
+    }
   }
 
   it should "reject blocks not from bonded validators" in {
@@ -138,7 +141,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].addBlock(signedBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
-    node.tearDown()
+    node.tearDownNode()
+    validateBlockStore(node) { blockStore =>
+      blockStore.get(signedBlock.blockHash) shouldBe None
+    }
   }
 
   it should "propose blocks it adds to peers" in {
@@ -154,10 +160,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     received should be(true)
 
+    nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
-      node.blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
+      validateBlockStore(node) { blockStore =>
+        blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
+      }
     }
-    nodes.foreach(_.tearDown())
   }
 
   it should "add a valid block from peer" in {
@@ -173,10 +181,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.infos.count(_ startsWith "CASPER: Added") should be(1)
     nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
 
+    nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
-      node.blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+      validateBlockStore(node) { blockStore =>
+        blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+      }
     }
-    nodes.foreach(_.tearDown())
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
@@ -211,13 +221,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns
       .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
       1)
+    nodes.foreach(_.tearDownNode())
 
     nodes.foreach { node =>
-      node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-      node.blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
-      node.blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+      validateBlockStore(node) { blockStore =>
+        blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+        blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+        blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+      }
     }
-    nodes.foreach(_.tearDown())
   }
 
   it should "ask peers for blocks it is missing" in {
@@ -250,11 +262,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
       1)
 
+    nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
-      node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-      node.blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+      validateBlockStore(node) { blockStore =>
+        blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+        blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+      }
     }
-    nodes.foreach(_.tearDown())
   }
 
   it should "ignore adding equivocation blocks" in {
@@ -270,9 +284,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.casperEff.contains(signedBlock1) should be(true)
     node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
 
-    node.blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-    node.blockStore.get(signedBlock1Prime.blockHash) shouldBe None
-    node.tearDown()
+    node.tearDownNode()
+    validateBlockStore(node) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe None
+    }
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
@@ -326,13 +342,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
       1f / (1f + 3f + 5f + 7f))
-    nodes(0).blockStore.get(signedBlock1.blockHash) shouldBe None
-    nodes(0).blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
-    nodes(1).blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
-    nodes(1).blockStore.get(signedBlock4.blockHash) shouldBe Some(signedBlock4)
-    nodes(2).blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
-    nodes(2).blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
-    nodes.foreach(_.tearDown())
+    nodes.foreach(_.tearDownNode())
+
+    validateBlockStore(nodes(0)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe None
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+    }
+    validateBlockStore(nodes(1)) { blockStore =>
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+      blockStore.get(signedBlock4.blockHash) shouldBe Some(signedBlock4)
+    }
+    validateBlockStore(nodes(2)) { blockStore =>
+      blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+    }
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {
@@ -411,6 +434,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 }
 
 object HashSetCasperTest {
+  def validateBlockStore[R](node: HashSetCasperTestNode)(f: BlockStore[Id] => R) = {
+    val bs = BlockStoreTestFixture.create(node.dir)
+    f(bs)
+    bs.close()
+    node.dir.recursivelyDelete()
+  }
+
   def blockTuplespaceContents(block: BlockMessage)(
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
