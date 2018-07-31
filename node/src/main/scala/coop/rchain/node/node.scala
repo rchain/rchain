@@ -334,15 +334,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   val main: Effect[Unit] = for {
 
     /** create typeclass instances */
-    connectionsState <- effects.connectionsState[Task].pure[Effect]
-    log              = effects.log
-    time             = effects.time
-    sync             = SyncInstances.syncEffect
-    metrics          = diagnostics.metrics[Task]
-    transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(
-      scheduler,
-      connectionsState,
-      log)
+    tcpConnections <- effects.tcpConnections.toEffect
+    log            = effects.log
+    time           = effects.time
+    sync           = SyncInstances.syncEffect
+    metrics        = diagnostics.metrics[Task]
+    transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(scheduler,
+                                                                                     tcpConnections,
+                                                                                     log)
     kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metrics, transport)
     nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
                                                                time,
