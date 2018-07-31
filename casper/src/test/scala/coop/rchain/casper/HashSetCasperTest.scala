@@ -1,10 +1,11 @@
 package coop.rchain.casper
 
-import cats.Id
+import cats.{ApplicativeError, Id}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode, TaskCasper}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -18,6 +19,8 @@ import java.nio.file.Files
 
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
+import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.shared.PathOps.RichPath
@@ -44,6 +47,29 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     logEff.infos.size should be(1)
     logEff.infos.head.contains("CASPER: Received Deploy") should be(true)
     node.tearDown()
+  }
+
+  it should "not allow multiple threads to process the same block" in {
+    val scheduler          = Scheduler.fixedPool("two-threads", 3)
+    val (casperT, cleanUp) = TaskCasper(validatorKeys.head, genesis)(scheduler)
+
+    val deploy = ProtoUtil.basicDeploy(0)
+    val testProgram = for {
+      casper <- casperT
+      _      <- casper.deploy(deploy)
+      block  <- casper.createBlock.map(_.get)
+      race   <- Task.racePair(casper.addBlock(block), casper.addBlock(block))
+      result <- race match {
+                 case Left((statusA, running)) =>
+                   running.join.map(statusA -> _)
+                 case Right((running, statusB)) => running.join.map(_ -> statusB)
+               }
+    } yield result
+    val threadStatuses: (BlockStatus, BlockStatus) =
+      new TaskOps(testProgram)(scheduler).unsafeRunSync
+
+    threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
+    cleanUp()
   }
 
   it should "create blocks based on deploys" in {
