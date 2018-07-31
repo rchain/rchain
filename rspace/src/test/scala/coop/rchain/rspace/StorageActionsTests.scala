@@ -1387,6 +1387,55 @@ trait StorageActionsTests
     check(prop)
   }
 
+  "produce and consume" should "store channel hashes" in withTestSpace { space =>
+    val channels = List("ch1", "ch2")
+    val patterns = List[Pattern](Wildcard, Wildcard)
+    val k        = new StringsCaptor
+    val data     = List("datum1", "datum2")
+
+    space.consume(channels, patterns, k, false)
+
+    space.produce(channels(0), data(0), false)
+
+    space.produce(channels(1), data(1), false)
+
+    val expectedConsume = Consume.create(channels, patterns, k, false)
+
+    expectedConsume.channelsHash shouldBe StableHashProvider.hash(channels)
+
+    val expectedProduce1 = Produce.create(channels(0), data(0), false)
+
+    expectedProduce1.channelsHash shouldBe StableHashProvider.hash(Seq(channels(0)))
+
+    val expectedProduce2 = Produce.create(channels(1), data(1), false)
+
+    expectedProduce2.channelsHash shouldBe StableHashProvider.hash(Seq(channels(1)))
+
+    val commEvent = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
+
+    val Checkpoint(_, log) = space.createCheckpoint()
+
+    log should contain theSameElementsInOrderAs Seq(commEvent,
+                                                    expectedProduce2,
+                                                    expectedProduce1,
+                                                    expectedConsume)
+
+    log match {
+      case COMM(chkCommConsume1: Consume,
+                (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil)
+            :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
+        chkCommConsume1.channelsHash shouldBe expectedConsume.channelsHash
+        chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkCommProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+
+        chkProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+        chkProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkConsume.channelsHash shouldBe expectedConsume.channelsHash
+
+      case _ => fail("unexpected trace log")
+    }
+  }
+
   "consume, produce, produce" should "result in the expected trace log" in withTestSpace { space =>
     val channels = List("ch1", "ch2")
     val patterns = List[Pattern](Wildcard, Wildcard)
