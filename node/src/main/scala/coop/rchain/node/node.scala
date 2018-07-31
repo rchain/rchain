@@ -23,7 +23,7 @@ import coop.rchain.shared._
 import ThrowableOps._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
-import coop.rchain.comm.connect.Connect
+import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 

@@ -1,4 +1,4 @@
-package coop.rchain.comm.connect
+package coop.rchain.comm.rp
 
 import coop.rchain.p2p.effects._
 
