@@ -6,7 +6,9 @@ import coop.rchain.models.rholang.implicits._
 object NewSortMatcher {
   def sortMatch(n: New): ScoredTerm[New] = {
     val sortedPar = ParSortMatcher.sortMatch(n.p)
-    ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term, locallyFree = n.locallyFree),
-               Node(Score.NEW, Leaf(n.bindCount), sortedPar.score))
+    ScoredTerm(
+      New(bindCount = n.bindCount, p = sortedPar.term, uri = n.uri, locallyFree = n.locallyFree),
+      new Node(Leaf(Score.NEW) +: (Leaf(n.bindCount) +: n.uri.map(Leaf.apply) :+ sortedPar.score))
+    )
   }
 }
