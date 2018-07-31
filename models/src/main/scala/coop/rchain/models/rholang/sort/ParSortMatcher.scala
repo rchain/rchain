@@ -4,7 +4,7 @@ import coop.rchain.models.Par
 import ordering._
 import cats.implicits._
 
-object ParSortMatcher {
+object ParSortMatcher extends Sortable[Par] {
   def sortMatch(par: Par): ScoredTerm[Par] = {
     val sends       = par.sends.toList.map(s => SendSortMatcher.sortMatch(s)).sorted
     val receives    = par.receives.toList.map(r => ReceiveSortMatcher.sortMatch(r)).sorted

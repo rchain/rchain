@@ -4,7 +4,7 @@ import coop.rchain.models.Send
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 
-object SendSortMatcher {
+object SendSortMatcher extends Sortable[Send] {
   def sortMatch(s: Send): ScoredTerm[Send] = {
     val sortedChan = ChannelSortMatcher.sortMatch(s.chan)
     val sortedData = s.data.toList.map(ParSortMatcher.sortMatch(_))

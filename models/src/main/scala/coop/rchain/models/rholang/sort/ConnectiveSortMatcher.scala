@@ -12,7 +12,7 @@ import coop.rchain.models.VarRef
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 
-object ConnectiveSortMatcher {
+object ConnectiveSortMatcher extends Sortable[Connective] {
   def sortMatch(c: Connective): ScoredTerm[Connective] =
     c.connectiveInstance match {
       case ConnAndBody(cb) =>
