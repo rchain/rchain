@@ -105,7 +105,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       Await.result(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(ListChannelWithRandom(Seq(Quote(expected)), rand))
+      storeContainsTest(ListChannelWithRandom(Seq(Quote(expected)), rand, Some(PCost(0, 0))))
       clearStore(store, reduce, ackChannel)
     }
   }
@@ -161,7 +161,8 @@ class CryptoChannelsSpec
                         persistent = false,
                         BitSet())
         Await.result(reduce.eval(send).runAsync, 3.seconds)
-        storeContainsTest(ListChannelWithRandom(Seq(Quote(Expr(GBool(true)))), rand))
+        storeContainsTest(
+          ListChannelWithRandom(Seq(Quote(Expr(GBool(true)))), rand, Some(PCost(0, 0))))
         clearStore(store, reduce, ackChannel)
       }
   }
@@ -197,7 +198,8 @@ class CryptoChannelsSpec
                         persistent = false,
                         BitSet())
         Await.result(reduce.eval(send).runAsync, 3.seconds)
-        storeContainsTest(ListChannelWithRandom(List(Quote(Expr(GBool(true)))), rand))
+        storeContainsTest(
+          ListChannelWithRandom(List(Quote(Expr(GBool(true)))), rand, Some(PCost(0, 0))))
         clearStore(store, reduce, ackChannel)
       }
   }

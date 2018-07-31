@@ -22,9 +22,10 @@ object PacketHandler extends PacketHandlerInstances {
         C.handlePacket(peer, packet).liftM[T]
     }
 
-  def pf[F[_]: Applicative: Log](
-      pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
-      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
+  def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
+      implicit ev1: Applicative[F],
+      ev2: Log[F],
+      errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
       def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"

@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
-import coop.rchain.rholang.interpreter.{Reduce, Runtime}
+import coop.rchain.rholang.interpreter.{ErrorLog, Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
 import coop.rchain.rspace.internal.Datum
@@ -16,7 +16,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
-import RuntimeManager.StateHash
+import RuntimeManager.{DeployError, StateHash}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
@@ -31,8 +31,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler): Seq[Par] = {
     val runtime = getResetRuntime(start)
     val deploy  = ProtoUtil.termDeploy(term)
-    val error   = eval(deploy :: Nil, runtime.reducer)
+    val error   = eval(deploy :: Nil, runtime.reducer, runtime.errorLog)
 
+    //TODO: Is better error handling needed here?
     val result = error.fold {
       val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
       runtime.space.getData(returnChannel)
@@ -47,8 +48,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     } yield par
   }
 
-  def replayComputeState(log: trace.Log)(
-      implicit scheduler: Scheduler): (StateHash, Seq[Deploy]) => Either[Throwable, Checkpoint] = {
+  def replayComputeState(log: trace.Log)(implicit scheduler: Scheduler)
+    : (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint] = {
     (hash: StateHash, terms: Seq[Deploy]) =>
       {
         val runtime   = runtimeContainer.take()
@@ -59,8 +60,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             runtimeContainer.put(runtime)
             throw ex
         }
-        val error = eval(terms, riggedRuntime.replayReducer)
-        val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+        val error = eval(terms, riggedRuntime.replayReducer, riggedRuntime.errorLog)
+        val newCheckpoint = error.fold[Either[DeployError, Checkpoint]](
           Right(riggedRuntime.replaySpace.createCheckpoint()))(Left(_))
         runtimeContainer.put(riggedRuntime)
         newCheckpoint
@@ -68,10 +69,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def computeState(hash: StateHash, terms: Seq[Deploy])(
-      implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
+      implicit scheduler: Scheduler): Either[DeployError, Checkpoint] = {
     val resetRuntime: Runtime = getResetRuntime(hash)
-    val error                 = eval(terms, resetRuntime.reducer)
-    val newCheckpoint = error.fold[Either[Throwable, Checkpoint]](
+    val error                 = eval(terms, resetRuntime.reducer, resetRuntime.errorLog)
+    val newCheckpoint = error.fold[Either[DeployError, Checkpoint]](
       Right(resetRuntime.space.createCheckpoint()))(Left(_))
     runtimeContainer.put(resetRuntime)
     newCheckpoint
@@ -121,22 +122,30 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def eval(terms: Seq[Deploy], reducer: Reduce[Task])(
-      implicit scheduler: Scheduler): Option[Throwable] =
+  private def eval(terms: Seq[Deploy], reducer: Reduce[Task], errorLog: ErrorLog)(
+      implicit scheduler: Scheduler): Option[DeployError] =
     terms match {
       case deploy +: rest =>
         implicit val rand: Blake2b512Random = Blake2b512Random(
           DeployString.toByteArray(deploy.raw.get))
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
-          case Success(_)  => eval(rest, reducer)
-          case Failure(ex) => Some(ex)
+          case Success(_) =>
+            val errors = errorLog.readAndClearErrorVector()
+            if (errors.isEmpty)
+              eval(rest, reducer, errorLog)
+            else
+              Some(deploy -> errors)
+          case Failure(ex) =>
+            val otherErrors = errorLog.readAndClearErrorVector()
+            Some(deploy -> (ex +: otherErrors))
         }
       case Nil => None
     }
 }
 
 object RuntimeManager {
-  type StateHash = ByteString
+  type StateHash   = ByteString
+  type DeployError = (Deploy, Vector[Throwable])
 
   def fromRuntime(active: Runtime): RuntimeManager = {
     active.space.clear()

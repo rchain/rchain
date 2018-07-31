@@ -35,6 +35,11 @@ object CommError {
 
   type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
 
+  object ErrorHandler {
+    def apply[F[_]](implicit ev: ApplicativeError_[F, CommError]): ApplicativeError_[F, CommError] =
+      ev
+  }
+
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type CommErr[A]        = Either[CommError, A]
 
