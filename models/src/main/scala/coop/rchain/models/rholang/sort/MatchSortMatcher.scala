@@ -4,7 +4,7 @@ import coop.rchain.models.{Match, MatchCase}
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 
-object MatchSortMatcher {
+object MatchSortMatcher extends Sortable[Match] {
   def sortMatch(m: Match): ScoredTerm[Match] = {
     def sortCase(matchCase: MatchCase): ScoredTerm[MatchCase] = {
       val sortedPattern = ParSortMatcher.sortMatch(matchCase.pattern)

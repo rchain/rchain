@@ -4,7 +4,8 @@ import coop.rchain.models.{Receive, ReceiveBind}
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 
-object ReceiveSortMatcher {
+object ReceiveSortMatcher extends Sortable[Receive] {
+
   def sortBind(bind: ReceiveBind): ScoredTerm[ReceiveBind] = {
     val patterns       = bind.patterns
     val source         = bind.source
@@ -24,7 +25,7 @@ object ReceiveSortMatcher {
 
   // The order of the binds must already be presorted by the time this is called.
   // This function will then sort the insides of the preordered binds.
-  def sortMatch[M[_]](r: Receive): ScoredTerm[Receive] = {
+  def sortMatch(r: Receive): ScoredTerm[Receive] = {
     val sortedBinds     = r.binds.toList.map(bind => sortBind(bind))
     val persistentScore = if (r.persistent) 1 else 0
     val sortedBody      = ParSortMatcher.sortMatch(r.body)

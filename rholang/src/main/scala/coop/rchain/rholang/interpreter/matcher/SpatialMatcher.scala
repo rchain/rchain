@@ -318,7 +318,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
             for {
               p <- StateT.inspect[StreamT[State[CostAccount, ?], ?], FreeMap, Par]((m: FreeMap) =>
                     m.getOrElse(level, VectorPar()))
-              collectPar <- foldRemainder(rem, p)
+              collectPar <- foldRemainder(rem.reverse, p)
               _ <- StateT.modify[StreamT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
                     m + (level -> collectPar))
             } yield Unit
