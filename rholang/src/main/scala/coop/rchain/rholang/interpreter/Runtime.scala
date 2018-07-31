@@ -6,6 +6,7 @@ import cats.Functor
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
+import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -50,7 +51,7 @@ class Runtime private (
 
 object Runtime {
 
-  type Name      = String
+  type Name      = Par
   type Arity     = Int
   type Remainder = Option[Var]
   type Ref       = Long
@@ -70,7 +71,7 @@ object Runtime {
     processes.map {
       case (name, arity, remainder, ref) =>
         space.install(
-          List(Channel(Quote(GString(name)))),
+          List(Channel(Quote(name))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
                         remainder,
@@ -78,7 +79,7 @@ object Runtime {
           TaggedContinuation(ScalaBodyRef(ref))
         )
         replaySpace.install(
-          List(Channel(Quote(GString(name)))),
+          List(Channel(Quote(name))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
                         remainder,
@@ -135,6 +136,13 @@ object Runtime {
       9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
 
+    def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+
+    val urnMap: Map[String, Par] = Map("rho:io:stdout" -> byteName(0),
+                                       "rho:io:stdoutAck" -> byteName(1),
+                                       "rho:io:stderr"    -> byteName(2),
+                                       "rho:io:stderrAck" -> byteName(3))
+
     lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
       dispatchTableCreator(space, dispatcher)
 
@@ -142,24 +150,24 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure, Map.empty)
+      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure, urnMap)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
       RholangAndScalaDispatcher.create(replaySpace,
                                        replayDispatchTable,
                                        costAccountingReplay,
-                                       Map.empty)
+                                       urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
-      ("stdout", 1, None, 0L),
-      ("stdoutAck", 2, None, 1L),
-      ("stderr", 1, None, 2L),
-      ("stderrAck", 2, None, 3L),
-      ("ed25519Verify", 4, None, 4L),
-      ("sha256Hash", 2, None, 5L),
-      ("keccak256Hash", 2, None, 6L),
-      ("blake2b256Hash", 2, None, 7L),
-      ("secp256k1Verify", 4, None, 9L)
+      (byteName(0), 1, None, 0L),
+      (byteName(1), 2, None, 1L),
+      (byteName(2), 1, None, 2L),
+      (byteName(3), 2, None, 3L),
+      (GString("ed25519Verify"), 4, None, 4L),
+      (GString("sha256Hash"), 2, None, 5L),
+      (GString("keccak256Hash"), 2, None, 6L),
+      (GString("blake2b256Hash"), 2, None, 7L),
+      (GString("secp256k1Verify"), 4, None, 9L)
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
