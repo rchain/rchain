@@ -4,7 +4,12 @@ import cats.data.{OptionT, State, StateT}
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Connective.ConnectiveInstance.{ConnAndBody, ConnNotBody, ConnOrBody, VarRefBody}
+import coop.rchain.models.Connective.ConnectiveInstance.{
+  ConnAndBody,
+  ConnNotBody,
+  ConnOrBody,
+  VarRefBody
+}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
@@ -17,7 +22,6 @@ import OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.accounting._
 import NonDetFreeMapWithCost._
 import cats.arrow.FunctionK
-import coop.rchain.rholang.interpreter.SpatialMatcher
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
@@ -216,6 +220,17 @@ object SpatialMatcher extends SpatialMatcherInstances {
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
+  def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
+    listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false)
+      .mapK[OptionT[State[CostAccount, ?], ?]](
+        new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
+          override def apply[A](
+              fa: StreamT[State[CostAccount, ?], A]): OptionT[State[CostAccount, ?], A] =
+            OptionT(fa.value.map(_.headOption))
+        })
+
   /** This function finds a single matching from a list of patterns and a list of targets.
     * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
     * If both are provided, we prefer to capture terms that can be captured.
@@ -255,26 +270,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
             }))
 
     result
-  }
-
-  def listMatchSingle[T](tlist: Seq[T],
-                         plist: Seq[T])(
-      implicit lf: HasLocallyFree[T],
-      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
-    listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false)
-      .mapK[OptionT[State[CostAccount, ?], ?]](
-        new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
-          override def apply[A](
-              fa: StreamT[State[CostAccount, ?], A]): OptionT[State[CostAccount, ?], A] =
-            OptionT(fa.value.map(_.headOption))
-        })
-
-  private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
-    val (before, after) = haystack.span(x => x != needle)
-    after match {
-      case Nil       => None
-      case _ +: tail => Some(before ++ tail)
-    }
   }
 
   def listMatch[T](tlist: Seq[T],
@@ -346,18 +341,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-
-  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
-    */
-  def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
-    vals.tails
-      .foldLeft((Seq[A](), Seq[(Seq[A], A, Seq[A])]())) {
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), Nil) => (head, singled)
-        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), elem +: tail) =>
-          (elem +: head, (head, elem, tail) +: singled)
-      }
-      ._2
-      .reverse
+  private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
+    val (before, after) = haystack.span(x => x != needle)
+    after match {
+      case Nil       => None
+      case _ +: tail => Some(before ++ tail)
+    }
+  }
 
   def listMatchItem[T](
       tlist: Seq[T],
@@ -375,6 +365,18 @@ object SpatialMatcher extends SpatialMatcherInstances {
                             (cost, Stream((state, head.reverse ++ tail)))
                       })))
     } yield forcedYield
+
+  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
+    */
+  def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
+    vals.tails
+      .foldLeft((Seq[A](), Seq[(Seq[A], A, Seq[A])]())) {
+        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), Nil) => (head, singled)
+        case ((head, singled: Seq[(Seq[A], A, Seq[A])]), elem +: tail) =>
+          (elem +: head, (head, elem, tail) +: singled)
+      }
+      ._2
+      .reverse
 
   case class ParCount(sends: Int = 0,
                       receives: Int = 0,
