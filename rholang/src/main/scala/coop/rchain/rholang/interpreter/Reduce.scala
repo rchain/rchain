@@ -82,7 +82,8 @@ object Reduce {
       ))
 
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
-                                        costAccountingAlg: CostAccountingAlg[M])(
+                                        costAccountingAlg: CostAccountingAlg[M],
+                                        private val urnMap: Map[String, Par])(
       implicit
       parallel: cats.Parallel[M, F],
       s: Sync[M],
@@ -389,14 +390,44 @@ object Reduce {
     private def evalExplicit(neu: New)(env: Env[Par], rand: Blake2b512Random): M[Unit] =
       eval(neu)(env, rand)
     private def eval(neu: New)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
-      def alloc(level: Int): Env[Par] =
-        (env /: (0 until level).toList) { (_env, _) =>
+      def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
+        val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
           val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
           _env.put(addr)
         }
+        def addUrn(urn: String, newEnv: Env[Par]): Either[ReduceError, Env[Par]] =
+          urnMap.get(urn) match {
+            case Some(p) => Right(newEnv.put(p))
+            case None    => Left(ReduceError(s"Unknown urn for new: ${urn}"))
+          }
+        // This is non-functional, but it's a self-contained implementation of a
+        // functional early terminating left fold, and the library does the same
+        // thing with vars.
+        def foldLeftEarly[A, B, E](as: Seq[A],
+                                   init: B,
+                                   cata: (A, B) => Either[E, B]): Either[E, B] = {
+          var result: Either[E, B] = Right(init)
+          var acc                  = init
+          for (a <- as) {
+            cata(a, acc) match {
+              case l: Left[E, B] => return l
+              case r @ Right(newAcc) =>
+                result = r
+                acc = newAcc
+            }
+          }
+          return result
+        }
+        foldLeftEarly(urns, simpleNews, addUrn) match {
+          case Right(env) => Applicative[M].pure(env)
+          case Left(e)    => s.raiseError(e)
+        }
+      }
 
       costAccountingAlg.charge(newBindingsCost(neu.bindCount)) *>
-        eval(neu.p)(alloc(neu.bindCount), rand)
+        alloc(neu.bindCount, neu.uri).flatMap { newEnv =>
+          eval(neu.p)(newEnv, rand)
+        }
     }
 
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =

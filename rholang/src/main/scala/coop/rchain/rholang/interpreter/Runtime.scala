@@ -142,10 +142,13 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure)
+      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure, Map.empty)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, costAccountingReplay)
+      RholangAndScalaDispatcher.create(replaySpace,
+                                       replayDispatchTable,
+                                       costAccountingReplay,
+                                       Map.empty)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       ("stdout", 1, None, 0L),

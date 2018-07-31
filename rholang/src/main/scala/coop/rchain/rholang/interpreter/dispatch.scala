@@ -73,7 +73,7 @@ object RholangOnlyDispatcher {
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg, Map.empty)
     dispatcher
   }
 }
@@ -111,7 +111,8 @@ object RholangAndScalaDispatcher {
                          ListChannelWithRandom,
                          TaggedContinuation],
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      costAccountingAlg: CostAccountingAlg[M])(
+      costAccountingAlg: CostAccountingAlg[M],
+      urnMap: Map[String, Par])(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -127,7 +128,7 @@ object RholangAndScalaDispatcher {
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg, urnMap)
     dispatcher
   }
 }
