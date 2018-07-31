@@ -1,49 +1,44 @@
 package coop.rchain.node.configuration
 
-import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
-import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 
 object NodeConfiguration {
 
-  import commandline.Options._
-
-  val dockerProfile =
+  private val dockerProfile =
     Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
 
-  val defaultProfile =
+  private val defaultProfile =
     Profile("default",
             dataDir =
               (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
 
-  val profiles: Map[String, Profile] =
+  private val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
-  val DefaultPort                       = 40400
-  val DefaultGrpcPort                   = 40401
-  val DefaultHttPort                    = 40402
-  val DefaultMetricsPort                = 40403
-  val DefaultGrpcHost                   = "localhost"
-  val DefaultNoUpNP                     = false
-  val DefaultStandalone                 = false
-  val DefaultTimeout                    = 1000
-  val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
-  val DefaultNumValidators              = 5
-  val DefaultValidatorSigAlgorithm      = "ed25519"
-  val DefaultCertificateFileName        = "node.certificate.pem"
-  val DefaultKeyFileName                = "node.key.pem"
+  private val DefaultPort                       = 40400
+  private val DefaultGrpcPort                   = 40401
+  private val DefaultHttPort                    = 40402
+  private val DefaultMetricsPort                = 40403
+  private val DefaultGrpcHost                   = "localhost"
+  private val DefaultNoUpNP                     = false
+  private val DefaultStandalone                 = false
+  private val DefaultTimeout                    = 1000
+  private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
+  private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
+  private val DefaultNumValidators              = 5
+  private val DefaultValidatorSigAlgorithm      = "ed25519"
+  private val DefaultCertificateFileName        = "node.certificate.pem"
+  private val DefaultKeyFileName                = "node.key.pem"
 
-  val DefaultBootstrapServer: PeerNode = {
-    val Right(bs) = PeerNode
-      .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
-    bs
-  }
+  private val DefaultBootstrapServer: PeerNode = PeerNode
+    .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
+    .right
+    .get
 
   def apply(arguments: Seq[String]): Configuration = {
     val options = commandline.Options(arguments)
@@ -66,9 +61,9 @@ object NodeConfiguration {
     apply(effectiveDataDir, options, config)
   }
 
-  def apply(dataDir: Path,
-            options: commandline.Options,
-            config: Option[TomlConfiguration]): Configuration = {
+  private def apply(dataDir: Path,
+                    options: commandline.Options,
+                    config: Option[TomlConfiguration]): Configuration = {
     val command: Command = options.subcommand match {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
@@ -81,6 +76,8 @@ object NodeConfiguration {
       case Some(options.run)         => Run
       case _                         => Help
     }
+
+    import commandline.Options._
 
     def getOpt[A](fo: commandline.Options => Option[A],
                   fc: TomlConfiguration => Option[A]): Option[A] =
@@ -178,40 +175,9 @@ object NodeConfiguration {
       grpcServer,
       tls,
       casper,
-      blockstorage
-    ) {
-      def printHelp(): Unit = options.printHelp()
-
-      def fetchHost(externalAddress: Option[String]): String =
-        server.host match {
-          case Some(h) => h
-          case None    => whoami(port, externalAddress)
-        }
-    }
-  }
-
-  private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
-    Function.unlift(_ => IpChecker.checkFrom(from).map(ip => (source, ip)))
-
-  private def upnpIpCheck(
-      externalAddress: Option[String]): PartialFunction[Unit, (String, String)] =
-    Function.unlift(_ =>
-      externalAddress.map(addy => ("UPnP", InetAddress.getByName(addy).getHostAddress)))
-
-  private def checkAll(externalAddress: Option[String]): (String, String) = {
-    val func: PartialFunction[Unit, (String, String)] =
-      check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
-        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
-        upnpIpCheck(externalAddress) orElse { case _ => ("failed to guess", "localhost") }
-
-    func.apply(())
-  }
-
-  private def whoami(port: Int, externalAddress: Option[String]): String = {
-    println("INFO - flag --host was not provided, guessing your external IP address")
-    val (source, ip) = checkAll(externalAddress)
-    println(s"INFO - guessed $ip from source: $source")
-    ip
+      blockstorage,
+      options
+    )
   }
 
 }

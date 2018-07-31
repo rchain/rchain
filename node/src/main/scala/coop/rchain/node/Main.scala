@@ -41,25 +41,17 @@ object Main {
       case Eval(files) =>
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime().evalProgram[Task](files)
-
       case Repl =>
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime().replProgram[Task].as(())
-
       case Diagnostics =>
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         diagnostics.client.Runtime.diagnosticsProgram[Task]
-
       case Deploy(location) => DeployRuntime.deployFileProgram[Task](location)
-
-      case DeployDemo => DeployRuntime.deployDemoProgram[Task]
-
-      case Propose => DeployRuntime.propose[Task]()
-
-      case ShowBlock(hash) => DeployRuntime.showBlock[Task](hash)
-
-      case ShowBlocks => DeployRuntime.showBlocks[Task]()
-
+      case DeployDemo       => DeployRuntime.deployDemoProgram[Task]
+      case Propose          => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)  => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks       => DeployRuntime.showBlocks[Task]()
       case Run =>
         new NodeRuntime(conf).main.value.map {
           case Right(_) => ()
@@ -67,7 +59,6 @@ object Main {
             println("Node could not connect to bootstrap node.")
           case Left(error) => println(s"Failed! Reason: '$error")
         }
-
       case _ => Task.delay(conf.printHelp())
     }
     exec.unsafeRunSync

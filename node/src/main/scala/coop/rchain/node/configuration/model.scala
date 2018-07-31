@@ -1,21 +1,53 @@
 package coop.rchain.node.configuration
 
+import java.net.InetAddress
 import java.nio.file.Path
 
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.PeerNode
+import coop.rchain.node.IpChecker
 
-abstract class Configuration(
+final class Configuration(
     val command: Command,
     val server: Server,
     val grpcServer: GrpcServer,
     val tls: Tls,
     val casper: CasperConf,
-    val blockstorage: LMDBBlockStore.Config
+    val blockstorage: LMDBBlockStore.Config,
+    private val options: commandline.Options
 ) {
-  def printHelp(): Unit
-  def fetchHost(externalAddress: Option[String]): String
+  def printHelp(): Unit = options.printHelp()
+
+  def fetchHost(externalAddress: Option[String]): String =
+    server.host match {
+      case Some(h) => h
+      case None    => whoami(server.port, externalAddress)
+    }
+
+  private def check(source: String, from: String): PartialFunction[Unit, (String, String)] =
+    Function.unlift(_ => IpChecker.checkFrom(from).map(ip => (source, ip)))
+
+  private def upnpIpCheck(
+      externalAddress: Option[String]): PartialFunction[Unit, (String, String)] =
+    Function.unlift(_ =>
+      externalAddress.map(addy => ("UPnP", InetAddress.getByName(addy).getHostAddress)))
+
+  private def checkAll(externalAddress: Option[String]): (String, String) = {
+    val func: PartialFunction[Unit, (String, String)] =
+      check("AmazonAWS service", "http://checkip.amazonaws.com") orElse
+        check("WhatIsMyIP service", "http://bot.whatismyipaddress.com") orElse
+        upnpIpCheck(externalAddress) orElse { case _ => ("failed to guess", "localhost") }
+
+    func.apply(())
+  }
+
+  private def whoami(port: Int, externalAddress: Option[String]): String = {
+    println("INFO - flag --host was not provided, guessing your external IP address")
+    val (source, ip) = checkAll(externalAddress)
+    println(s"INFO - guessed $ip from source: $source")
+    ip
+  }
 }
 
 case class Server(
