@@ -306,7 +306,7 @@ object Reduce {
       */
     private def eval(valproc: Var)(implicit env: Env[Par],
                                    costAccountingAlg: CostAccountingAlg[M]): M[Par] =
-      costAccountingAlg.charge(VAR_EVAL_COST) *> { //TODO: should variable evaluation depend on the env size?
+      costAccountingAlg.charge(VAR_EVAL_COST) *> {
         valproc.varInstance match {
           case BoundVar(level) =>
             env.get(level) match {
@@ -1060,7 +1060,7 @@ object Reduce {
             )
         }
 
-      //TODO: add cost accounting
+      //TODO(mateusz.gorski): add cost accounting
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {

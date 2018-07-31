@@ -39,7 +39,7 @@ object InterpreterUtil {
     val tsHash        = ProtoUtil.tuplespace(b)
     val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
-    val (computedCheckpoint, updatedStateHashes) =
+    val (computedCheckpoint, updatedStateHashes, cost) =
       computeBlockCheckpointFromDeploys(b,
                                         genesis,
                                         dag,
@@ -66,9 +66,10 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
-    : (Checkpoint, Set[StateHash]) = {
-    val (postStateHash, updatedStateHashes) =
+      computeState: (StateHash,
+                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
+    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
+    val (postStateHash, updatedStateHashes, postStateCost) = //TODO: what to do with the postStateCost -- ignore?
       computeParentsPostState(parents,
                               genesis,
                               dag,
@@ -77,9 +78,9 @@ object InterpreterUtil {
                               knownStateHashes,
                               computeState)
 
-    val Right(postDeploysCheckpoint) = computeState(postStateHash, deploys)
-    val postDeploysStateHash         = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
-    (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash)
+    val Right((postDeploysCheckpoint, deployCost)) = computeState(postStateHash, deploys)
+    val postDeploysStateHash                       = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
+    (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash, deployCost)
   }
 
   private def computeParentsPostState(
@@ -89,20 +90,21 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
-    : (StateHash, Set[StateHash]) = {
+      computeState: (StateHash,
+                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
+    : (StateHash, Set[StateHash], Vector[DeployCost]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
-      (emptyStateHash, knownStateHashes)
+      (emptyStateHash, knownStateHashes, Vector.empty)
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
         "We should have already computed parent state hash when we added the parent to our blockDAG.")
-      (parentStateHash, knownStateHashes)
+      (parentStateHash, knownStateHashes, Vector.empty)
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -129,10 +131,10 @@ object InterpreterUtil {
         .reverse
 
       //TODO: figure out what casper should do with errors in deploys
-      val Right(resultStateCheckpoint) =
+      val Right((resultStateCheckpoint, deployCost)) =
         computeState(gcaStateHash, deploys)
       val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
-      (resultStateHash, knownStateHashes + resultStateHash)
+      (resultStateHash, knownStateHashes + resultStateHash, deployCost)
     }
   }
 
@@ -143,8 +145,9 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
-    : (Checkpoint, Set[StateHash]) = {
+      computeState: (StateHash,
+                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
+    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
     val parents = ProtoUtil
       .parents(b)
       .map(internalMap.apply)

@@ -136,11 +136,17 @@ message Header {
   bytes extraBytes = 8;
 }
 
+message DeployCost {
+    bytes deployHash = 1; //Sha256 hash of the DeployString
+    PCost deployCost = 2;
+}
+
 message Body {
   RChainState     postState = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
   repeated Deploy newCode   = 2; //new rholang code that was added to the state before processing
   repeated Event commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
   bytes extraBytes = 4;
+  repeated DeployCost deployCosts = 5; // costs of rholang code deployed in the block
 }
 
 message Justification {
