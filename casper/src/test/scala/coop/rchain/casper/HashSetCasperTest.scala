@@ -17,7 +17,6 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.EitherOps.zip
 import java.nio.file.Files
 
 import coop.rchain.blockstorage.BlockStore
@@ -64,10 +63,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       result <- EitherT(
                  Task.racePair(casper.addBlock(block).value, casper.addBlock(block).value).flatMap {
                    case Left((statusA, running)) =>
-                     running.join.map(zip(statusA, _))
+                     running.join.map((statusA, _).tupled)
 
                    case Right((running, statusB)) =>
-                     running.join.map(zip(_, statusB))
+                     running.join.map((_, statusB).tupled)
                  })
     } yield result
     val threadStatuses: (BlockStatus, BlockStatus) =
