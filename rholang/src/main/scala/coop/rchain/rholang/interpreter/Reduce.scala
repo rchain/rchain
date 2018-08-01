@@ -474,7 +474,7 @@ object Reduce {
             evaledP <- evalExpr(p)
           } yield evaledP
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
-          val methodLookup = methodTable(method)
+          val methodLookup = methodTable.get(method)
           for {
             _            <- costAccountingAlg.charge(METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
@@ -727,7 +727,7 @@ object Reduce {
           } yield map.copy(ps = SortedParMap(evaledPs))
 
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
-          val methodLookup = methodTable(method)
+          val methodLookup = methodTable.get(method)
           for {
             _            <- costAccountingAlg.charge(METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
@@ -749,7 +749,7 @@ object Reduce {
       }
     }
 
-    abstract class Method() {
+    private abstract class Method() {
       def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                         costAccountingAlg: CostAccountingAlg[M]): M[Par]
     }
@@ -1074,21 +1074,20 @@ object Reduce {
         } yield result
     }
 
-    def methodTable(method: String): Option[Method] =
-      method match {
-        case "nth"         => Some(nth)
-        case "toByteArray" => Some(toByteArray)
-        case "hexToBytes"  => Some(hexToBytes)
-        case "union"       => Some(union)
-        case "diff"        => Some(diff)
-        case "add"         => Some(add)
-        case "delete"      => Some(delete)
-        case "contains"    => Some(contains)
-        case "get"         => Some(get)
-        case "length"      => Some(length)
-        case "slice"       => Some(slice)
-        case _             => None
-      }
+    private val methodTable: Map[String, Method] =
+      Map(
+        "nth"         -> nth,
+        "toByteArray" -> toByteArray,
+        "hexToBytes"  -> hexToBytes,
+        "union"       -> union,
+        "diff"        -> diff,
+        "add"         -> add,
+        "delete"      -> delete,
+        "contains"    -> contains,
+        "get"         -> get,
+        "length"      -> length,
+        "slice"       -> slice
+      )
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par],
                                costAccountingAlg: CostAccountingAlg[M]): M[Expr] =
