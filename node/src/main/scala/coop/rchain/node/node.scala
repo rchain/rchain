@@ -229,7 +229,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     val handleCommunication = (pm: Protocol) =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => HandleMessages.dispatch[Effect](pm, defaultTimeout)
+        case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
         case handled       => handled.pure[Effect]
     }
     for {

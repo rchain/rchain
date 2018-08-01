@@ -21,44 +21,40 @@ object HandleMessages {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def dispatch[
+  def handle[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
       protocol: RoutingProtocol,
-      defaultTimeout: FiniteDuration): F[CommunicationResponse] = {
+      defaultTimeout: FiniteDuration): F[CommunicationResponse] =
+    ProtocolHelper.sender(protocol) match {
+      case None =>
+        Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled(senderNotAvailable))
+      case Some(sender) => handle_[F](protocol, sender, defaultTimeout)
+    }
 
-    def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[CommunicationResponse] =
-      proto.message.upstream
-        .fold(Log[F].error("Upstream not available").as(notHandled(upstreamNotAvailable))) {
-          usmsg =>
-            usmsg.typeUrl match {
-              // TODO interpolate this string to check if class exists
+  private def handle_[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
+      proto: RoutingProtocol,
+      sender: PeerNode,
+      defaultTimeout: FiniteDuration): F[CommunicationResponse] =
+    proto.message.upstream
+      .fold(Log[F].error("Upstream not available").as(notHandled(upstreamNotAvailable))) { usmsg =>
+        usmsg.typeUrl match {
+          // TODO interpolate this string to check if class exists
 
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Heartbeat" =>
-                handleHeartbeat[F](sender, toHeartbeat(proto).toOption)
+          case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Heartbeat" =>
+            handleHeartbeat[F](sender, toHeartbeat(proto).toOption)
 
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
-                handlePacket[F](sender, toPacket(proto).toOption)
+          case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
+            handlePacket[F](sender, toPacket(proto).toOption)
 
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-                handleProtocolHandshake[F](sender,
-                                           toProtocolHandshake(proto).toOption,
-                                           defaultTimeout)
+          case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
+            handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption, defaultTimeout)
 
-              case _ =>
-                Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
-                  unexpectedMessage(usmsg.typeUrl)).pure[F]
-            }
+          case _ =>
+            Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
+              unexpectedMessage(usmsg.typeUrl)).pure[F]
         }
-
-    ProtocolHelper
-      .sender(protocol)
-      .fold(
-        Log[F]
-          .error(s"Sender not present, DROPPING $protocol")
-          .as(notHandled(senderNotAvailable))) { sender =>
-        dispatchForUpstream(protocol, sender)
       }
-  }
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler](
       remote: PeerNode,
@@ -68,7 +64,7 @@ object HandleMessages {
       for {
         _     <- Log[F].error(errorMsg)
         error = unknownCommError(errorMsg)
-        _     <- errorHandler[F].raiseError[Unit](error)
+        _     <- ErrorHandler[F].raiseError[Unit](error)
       } yield notHandled(error)
 
     maybePacket.fold(handleNone)(
@@ -116,8 +112,6 @@ object HandleMessages {
 
   private def getOrError[F[_]: Applicative: ErrorHandler, A](oa: Option[A],
                                                              error: CommError): F[A] =
-    oa.fold[F[A]](errorHandler[F].raiseError[A](error))(_.pure[F])
+    oa.fold[F[A]](ErrorHandler[F].raiseError[A](error))(_.pure[F])
 
-  // TODO remove
-  private def errorHandler[F[_]: ErrorHandler]: ErrorHandler[F] = ApplicativeError_[F, CommError]
 }
