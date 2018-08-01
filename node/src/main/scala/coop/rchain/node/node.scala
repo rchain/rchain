@@ -32,7 +32,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 import coop.rchain.node.configuration.Configuration
 
-class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
+class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -117,20 +117,9 @@ class NodeRuntime(conf: Configuration)(implicit scheduler: Scheduler) {
     publicKeyHash.get
   }
 
-  /**
-    TODO FIX-ME This should not be here. Please fix this when working on rnode-0.5.x
-    This needs to be moved to node program! Part of execution. Effectful!
-    */
-  private val externalAddress = if (conf.server.noUpnp) {
-    None
-  } else {
-    UPnP.assurePortForwarding(Seq(conf.server.port))
-  }
-
   import ApplicativeError_._
 
   /** Configuration */
-  private val host              = conf.fetchHost(externalAddress)
   private val port              = conf.server.port
   private val certificateFile   = conf.tls.certificate.toFile
   private val keyFile           = conf.tls.key.toFile

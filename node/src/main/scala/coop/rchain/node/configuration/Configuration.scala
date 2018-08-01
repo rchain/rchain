@@ -1,13 +1,20 @@
 package coop.rchain.node.configuration
 
+import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{PeerNode, UPnP}
+import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
+import coop.rchain.shared.{Log, LogSource}
+import cats.syntax.either._
 
-object NodeConfiguration {
+import monix.eval.Task
+
+object Configuration {
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private val dockerProfile =
     Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
@@ -40,26 +47,25 @@ object NodeConfiguration {
     .right
     .get
 
-  def apply(arguments: Seq[String]): Configuration = {
-    val options = commandline.Options(arguments)
-    val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
-    println(s"Starting with profile ${profile.name}")
-    val dataDir    = options.run.data_dir.getOrElse(profile.dataDir._1())
-    val configFile = options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile
-    println(s"Using configuration file: $configFile")
-    val config = toml.TomlConfiguration.from(configFile) match {
-      case Left(error) =>
-        println(s"Can't load the configuration file: $error")
-        None
-      case Right(c) => Some(c)
-    }
-
-    val effectiveDataDir =
-      if (options.run.data_dir.isDefined) dataDir
-      else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
-
-    apply(effectiveDataDir, options, config)
-  }
+  def apply(arguments: Seq[String])(implicit log: Log[Task]): Task[Configuration] =
+    for {
+      options    <- Task.delay(commandline.Options(arguments))
+      profile    <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
+      _          <- log.info(s"Starting with profile ${profile.name}")
+      dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+      configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
+      _          <- log.info(s"Using configuration file: $configFile")
+      configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
+      _ <- configE match {
+            case Right(_) => Task.unit
+            case Left(e)  => log.warn(s"Can't load the configuration file: $e")
+          }
+      config <- Task.pure(configE.toOption)
+      effectiveDataDir <- Task.pure(
+                           if (options.run.data_dir.isDefined) dataDir
+                           else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+      result <- Task.pure(apply(effectiveDataDir, options, config))
+    } yield result
 
   private def apply(dataDir: Path,
                     options: commandline.Options,
@@ -180,6 +186,69 @@ object NodeConfiguration {
     )
   }
 
+}
+
+final class Configuration(
+    val command: Command,
+    val server: Server,
+    val grpcServer: GrpcServer,
+    val tls: Tls,
+    val casper: CasperConf,
+    val blockstorage: LMDBBlockStore.Config,
+    private val options: commandline.Options
+) {
+  import coop.rchain.catscontrib.Capture._
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def printHelp(): Task[Unit] = Task.delay(options.printHelp())
+
+  def fetchHost(implicit log: Log[Task]): Task[String] =
+    for {
+      externalAddress <- retriveExternalAddress
+      host            <- fetchHost(externalAddress)
+    } yield host
+
+  private def fetchHost(externalAddress: Option[String])(implicit log: Log[Task]): Task[String] =
+    server.host match {
+      case Some(h) => Task.pure(h)
+      case None    => whoAmI(server.port, externalAddress)
+    }
+
+  private def retriveExternalAddress: Task[Option[String]] =
+    Task.delay {
+      if (server.noUpnp) None
+      else UPnP.assurePortForwarding(Seq(server.port))
+    }
+
+  private def check(source: String, from: String): Task[(String, Option[String])] =
+    IpChecker.checkFrom[Task](from).map((source, _))
+
+  private def checkNext(prev: (String, Option[String]),
+                        next: Task[(String, Option[String])]): Task[(String, Option[String])] =
+    prev._2.fold(next)(_ => Task.pure(prev))
+
+  private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
+    Task.delay(("UPnP", externalAddress.map(InetAddress.getByName(_).getHostAddress)))
+
+  private def checkAll(externalAddress: Option[String]): Task[(String, String)] =
+    for {
+      r1 <- check("AmazonAWS service", "http://checkip.amazonaws.com")
+      r2 <- checkNext(r1, check("WhatIsMyIP service", "http://bot.whatismyipaddress.com"))
+      r3 <- checkNext(r2, upnpIpCheck(externalAddress))
+      r4 <- checkNext(r3, Task.pure("failed to guess", Some("localhost")))
+    } yield {
+      val (s, Some(a)) = r4
+      (s, a)
+    }
+
+  private def whoAmI(port: Int, externalAddress: Option[String])(
+      implicit log: Log[Task]): Task[String] =
+    for {
+      _      <- log.info("flag --host was not provided, guessing your external IP address")
+      r      <- checkAll(externalAddress)
+      (s, a) = r
+      _      <- log.info(s"guessed $a from source: $s")
+    } yield a
 }
 
 case class Profile(name: String, dataDir: (() => Path, String))
