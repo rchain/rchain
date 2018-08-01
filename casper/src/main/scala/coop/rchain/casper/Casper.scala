@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import cats.{Applicative, Id, Monad}
 import cats.implicits._
-import cats.effect.Bracket
+import cats.effect.{Bracket, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.catscontrib.TaskContrib._
@@ -31,6 +31,7 @@ import scala.io.Source
 import scala.util.Try
 import java.nio.file.Path
 
+import cats.effect.concurrent.Ref
 import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
@@ -86,9 +87,8 @@ sealed abstract class MultiParentCasperInstances {
       def storageContents(hash: ByteString): F[String]                   = "".pure[F]
     }
 
-  // TODO: Add Sync as a constraint to ensure stack safe-ness
   def hashSetCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -109,7 +109,7 @@ sealed abstract class MultiParentCasperInstances {
   }
 
   private[this] def createMultiParentCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -151,9 +151,8 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockHash]()
 
       // TODO: Extract hardcoded fault tolerance threshold
-      private val faultToleranceThreshold = 0f
-      private[casper] val lastFinalizedBlockContainer =
-        new AtomicMonadState[F, BlockMessage](AtomicAny(genesis))
+      private val faultToleranceThreshold     = 0f
+      private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
         for {
@@ -184,12 +183,10 @@ sealed abstract class MultiParentCasperInstances {
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-          internalMap        <- BlockStore[F].asMap()
           lastFinalizedBlock <- lastFinalizedBlockContainer.get
-          forkchoice = getMainChainUntilLastFinalized(internalMap,
-                                                      tip,
-                                                      lastFinalizedBlock,
-                                                      IndexedSeq.empty[BlockMessage])
+          forkchoice <- getMainChainUntilLastFinalized[F](tip,
+                                                          lastFinalizedBlock,
+                                                          IndexedSeq.empty[BlockMessage])
           updatedLastFinalizedBlock <- updateLastFinalizedBlock(dag,
                                                                 forkchoice.reverse.toList,
                                                                 lastFinalizedBlock)
@@ -262,10 +259,7 @@ sealed abstract class MultiParentCasperInstances {
         case None => none[BlockMessage].pure[F]
       }
 
-      def lastFinalizedBlock: F[BlockMessage] =
-        for {
-          lastFinalizedBlock <- lastFinalizedBlockContainer.get
-        } yield lastFinalizedBlock
+      def lastFinalizedBlock: F[BlockMessage] = lastFinalizedBlockContainer.get
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
         BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>

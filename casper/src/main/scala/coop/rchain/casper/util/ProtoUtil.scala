@@ -1,7 +1,9 @@
 package coop.rchain.casper.util
 
+import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -36,21 +38,27 @@ object ProtoUtil {
       }
     }
 
-  @tailrec
-  def getMainChainUntilLastFinalized(internalMap: Map[BlockHash, BlockMessage],
-                                     estimate: BlockMessage,
-                                     lastFinalizedBlock: BlockMessage,
-                                     acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
+  def getMainChainUntilLastFinalized[F[_]: Monad: BlockStore](
+      estimate: BlockMessage,
+      lastFinalizedBlock: BlockMessage,
+      acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parents(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash flatMap internalMap.get match {
-      case Some(newEstimate) =>
-        getMainChainUntilLastFinalized(internalMap,
-                                       newEstimate,
-                                       lastFinalizedBlock,
-                                       acc :+ estimate)
-      case None => acc :+ estimate
+    maybeMainParentHash match {
+      case Some(mainParentHash) =>
+        for {
+          maybeMainParent <- BlockStore[F].get(mainParentHash)
+          mainChain <- maybeMainParent match {
+                        case Some(newEstimate) =>
+                          getMainChainUntilLastFinalized[F](newEstimate,
+                                                            lastFinalizedBlock,
+                                                            acc :+ estimate)
+                        case None => (acc :+ estimate).pure[F]
+                      }
+        } yield mainChain
+      case None => acc.pure[F]
     }
+
   }
 
   @tailrec

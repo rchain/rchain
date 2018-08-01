@@ -28,6 +28,9 @@ import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
 
+// TODO: I can't seem to fix the implicit here
+import coop.rchain.catscontrib.effect.implicits._
+
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
