@@ -1602,7 +1602,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return {1, 2, 3}" in {
+  "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return Set(1, 2, 3)" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -1653,7 +1653,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1, 2, 3}.size()" should "return 3" in {
+  "Set(1, 2, 3).size()" should "return 3" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -1673,7 +1673,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1, 2} + 3" should "return {1, 2, 3}" in {
+  "Set(1, 2) + 3" should "return Set(1, 2, 3)" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -1723,7 +1723,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1, 2, 3} - 3" should "return {1, 2}" in {
+  "Set(1, 2, 3) - 3" should "return Set(1, 2)" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -1744,7 +1744,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1, 2} ++ {3, 4}" should "return {1, 2, 3, 4}" in {
+  "Set(1, 2) ++ Set(3, 4)" should "return Set(1, 2, 3, 4)" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -1805,7 +1805,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
-  "{1, 2, 3, 4} -- {1, 2}" should "return {3, 4}" in {
+  "Set(1, 2, 3, 4) -- Set(1, 2)" should "return Set(3, 4)" in {
     implicit val errorLog = new ErrorLog()
     val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
