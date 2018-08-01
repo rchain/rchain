@@ -141,9 +141,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  case class Resources(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
+  case class Servers(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
 
-  def acquireResources(runtime: Runtime)(
+  def acquireServers(runtime: Runtime)(
       implicit
       log: Log[Task],
       nodeDiscovery: NodeDiscovery[Task],
@@ -152,24 +152,24 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       casperConstructor: MultiParentCasperConstructor[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task]
-  ): Effect[Resources] =
+  ): Effect[Servers] =
     for {
       grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcServer.port, runtime)
       metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
       httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
-    } yield Resources(grpcServer, metricsServer, httpServer)
+    } yield Servers(grpcServer, metricsServer, httpServer)
 
-  def startResources(resources: Resources)(
+  def startServers(servers: Servers)(
       implicit
       log: Log[Task],
   ): Effect[Unit] =
     for {
-      _ <- resources.httpServer.start.toEffect
-      _ <- resources.metricsServer.start.toEffect
-      _ <- GrpcServer.start[Effect](resources.grpcServer)
+      _ <- servers.httpServer.start.toEffect
+      _ <- servers.metricsServer.start.toEffect
+      _ <- GrpcServer.start[Effect](servers.grpcServer)
     } yield ()
 
-  def clearResources(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
+  def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
       time: Time[Task],
       transport: TransportLayer[Task],
@@ -177,16 +177,16 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       blockStore: BlockStore[Effect]): Unit =
     (for {
       _   <- log.info("Shutting down gRPC server...")
-      _   <- Task.delay(resources.grpcServer.shutdown())
+      _   <- Task.delay(servers.grpcServer.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- transport.local
       ts  <- time.currentMillis
       msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down metrics server...")
-      _   <- Task.delay(resources.metricsServer.stop())
+      _   <- Task.delay(servers.metricsServer.stop())
       _   <- log.info("Shutting down HTTP server....")
-      _   <- Task.delay(resources.httpServer.stop())
+      _   <- Task.delay(servers.httpServer.stop())
       _   <- log.info("Shutting down interpreter runtime ...")
       _   <- Task.delay(runtime.close)
       _   <- log.info("Shutting down Casper runtime ...")
@@ -203,16 +203,16 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
-  def addShutdownHook(resources: Resources, runtime: Runtime, casperRuntime: Runtime)(
+  def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
       log: Log[Task],
       time: Time[Task],
       blockStore: BlockStore[Effect]): Task[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(resources, runtime, casperRuntime)))
+    Task.delay(sys.addShutdownHook(clearResources(servers, runtime, casperRuntime)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(resources: Resources)(
+  def handleCommunications(
       implicit
       log: Log[Task],
       time: Time[Task],
@@ -243,12 +243,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
-      resources <- acquireResources(runtime)
-      _         <- addShutdownHook(resources, runtime, casperRuntime).toEffect
-      _         <- startResources(resources)
-      _         <- startReportJvmMetrics.toEffect
-      _         <- TransportLayer[Effect].receive(handleCommunications(resources))
-      _         <- Log[Effect].info(s"Listening for traffic on $address.")
+      servers <- acquireServers(runtime)
+      _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
+      _       <- startServers(servers)
+      _       <- startReportJvmMetrics.toEffect
+      _       <- TransportLayer[Effect].receive(handleCommunications())
+      _       <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
               else
