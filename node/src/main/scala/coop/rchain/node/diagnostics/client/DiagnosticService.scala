@@ -1,5 +1,7 @@
 package coop.rchain.node.diagnostics.client
 
+import java.util.concurrent.TimeUnit
+
 import coop.rchain.comm._
 import coop.rchain.node.model.diagnostics._
 
@@ -57,4 +59,6 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
 
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
+
+  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }

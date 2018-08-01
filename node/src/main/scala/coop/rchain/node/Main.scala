@@ -13,6 +13,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.node.configuration._
+import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StringOps._
@@ -41,14 +42,14 @@ object Main {
   }
 
   private def mainProgram(conf: Configuration): Task[Unit] = {
-    implicit val replService: ReplClient[Task] =
+    implicit val replService: GrpcReplClient =
       new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.port)
-    implicit val diagnosticsService: diagnostics.client.DiagnosticsService[Task] =
+    implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcServer.host, conf.grpcServer.port)
-    implicit val deployService: DeployService[Task] =
+    implicit val deployService: GrpcDeployService =
       new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.port)
 
-    conf.command match {
+    val program = conf.command match {
       case Eval(files)      => new ReplRuntime().evalProgram[Task](files)
       case Repl             => new ReplRuntime().replProgram[Task].as(())
       case Diagnostics      => diagnostics.client.Runtime.diagnosticsProgram[Task]
@@ -60,6 +61,13 @@ object Main {
       case Run              => nodeProgram(conf)
       case _                => conf.printHelp()
     }
+
+    program.doOnFinish(_ =>
+      Task.delay {
+        replService.close()
+        diagnosticsService.close()
+        deployService.close()
+    })
   }
 
   private def nodeProgram(conf: Configuration): Task[Unit] =
