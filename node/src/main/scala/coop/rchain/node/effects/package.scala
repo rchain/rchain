@@ -19,6 +19,16 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
+  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(
+      implicit
+      log: Log[Task],
+      time: Time[Task],
+      metrics: Metrics[Task],
+      transport: TransportLayer[Task],
+      kademliaRPC: KademliaRPC[Task]
+  ): NodeDiscovery[Task] =
+    new KademliaNodeDiscovery[Task](src, defaultTimeout)
+
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
       System.currentTimeMillis
@@ -28,22 +38,23 @@ package object effects {
     }
   }
 
-  def kademliaRPC[F[_]: Monad: Capture: Metrics: TransportLayer](
-      src: PeerNode,
-      timeout: FiniteDuration): KademliaRPC[F] =
-    new KademliaRPC[F] {
-      def ping(node: PeerNode): F[Boolean] =
+  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
+      implicit
+      metrics: Metrics[Task],
+      transport: TransportLayer[Task]): KademliaRPC[Task] =
+    new KademliaRPC[Task] {
+      def ping(node: PeerNode): Task[Boolean] =
         for {
-          _   <- Metrics[F].incrementCounter("protocol-ping-sends")
+          _   <- Metrics[Task].incrementCounter("protocol-ping-sends")
           req = ProtocolHelper.ping(src)
-          res <- TransportLayer[F].roundTrip(node, req, timeout)
+          res <- TransportLayer[Task].roundTrip(node, req, timeout)
         } yield res.toOption.isDefined
 
-      def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
+      def lookup(key: Seq[Byte], remoteNode: PeerNode): Task[Seq[PeerNode]] =
         for {
-          _   <- Metrics[F].incrementCounter("protocol-lookup-send")
+          _   <- Metrics[Task].incrementCounter("protocol-lookup-send")
           req = ProtocolHelper.lookup(src, key)
-          r <- TransportLayer[F]
+          r <- TransportLayer[Task]
                 .roundTrip(remoteNode, req, timeout)
                 .map(_.toOption
                   .map {
@@ -57,14 +68,11 @@ package object effects {
 
   def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
       implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.State,
+      connections: TcpTransportLayer.TransportCell[Task],
       log: Log[Task]) =
     new TcpTransportLayer(host, port, cert, key)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def connectionsState[F[_]: Monad: Capture]: MonadState[F, TransportState] = {
-    val state = AtomicAny(TransportState())
-    new AtomicMonadState[F, TransportState](state)
-  }
+  def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
 }

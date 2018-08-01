@@ -5,10 +5,12 @@ import java.nio.file.Files
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GPrivate => _, _}
@@ -18,7 +20,6 @@ import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.shared.AtomicRefMonadState
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -58,10 +59,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle simple addition" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val addExpr      = EPlus(GInt(7), GInt(8))
       implicit val env = Env[Par]()
       val resultTask   = reducer.evalExpr(addExpr)
@@ -75,10 +76,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "leave ground values alone" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val groundExpr   = GInt(7)
       implicit val env = Env[Par]()
       val resultTask   = reducer.evalExpr(groundExpr)
@@ -92,10 +93,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle equality between arbitary processes" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
       implicit val env = Env[Par]()
       val resultTask   = reducer.evalExpr(eqExpr)
@@ -108,10 +109,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "substitute before comparison." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
-      val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val emptyEnv = Env.makeEnv(Par(), Par())
       val eqExpr            = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
       val resultTask        = reducer.evalExpr(eqExpr)
@@ -124,16 +125,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Bundle" should "evaluate contents of bundle" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val result = withTestSpace { space =>
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val bundleSend =
         Bundle(Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet()))
       val interpreter  = reducer
       implicit val env = Env[Par]()
-      val resultTask   = interpreter.eval(bundleSend)(env, splitRand)
+      val resultTask   = interpreter.eval(bundleSend)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- resultTask
       } yield space.store.toMap
@@ -158,8 +159,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "throw an error if names are used against their polarity" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
      */
     val y = GString("y")
@@ -169,7 +170,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val receiveResult = withTestSpace { space =>
       implicit val env = Env[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val task         = reducer.eval(receive).map(_ => space.store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
@@ -185,7 +186,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val sendResult = withTestSpace { space =>
       implicit val env = Env[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val task         = reducer.eval(send).map(_ => space.store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
@@ -196,16 +197,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send" should "place something in the tuplespace." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val result = withTestSpace { space =>
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val send =
         Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
       val interpreter  = reducer
       implicit val env = Env[Par]()
-      val resultTask   = interpreter.eval(send)(env, splitRand)
+      val resultTask   = interpreter.eval(send)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- resultTask
       } yield space.store.toMap
@@ -230,8 +231,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     /* @bundle+ { x } !(7) -> x!(7)
      */
@@ -240,9 +241,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Send(Channel(Quote(Bundle(x, writeFlag = true, readFlag = false))), Seq(Expr(GInt(7))))
 
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
-      val task         = reducer.eval(send)(env, splitRand).map(_ => space.store.toMap)
+      val task         = reducer.eval(send)(env, splitRand, costAccounting).map(_ => space.store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
 
@@ -258,8 +259,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val result = withTestSpace { space =>
       val receive =
@@ -270,10 +271,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 false,
                 3,
                 BitSet())
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val interpreter  = reducer
       implicit val env = Env[Par]()
-      val resultTask   = interpreter.eval(receive)(env, splitRand)
+      val resultTask   = interpreter.eval(receive)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- resultTask
       } yield space.store.toMap
@@ -307,8 +308,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "verify that bundle is readable if receiving on Bundle" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(1)
     /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
      */
@@ -322,9 +323,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                           body = Par())
 
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
-      val task         = reducer.eval(receive)(env, splitRand).map(_ => space.store.toMap)
+      val task         = reducer.eval(receive)(env, splitRand, costAccounting).map(_ => space.store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
 
@@ -348,8 +349,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
@@ -366,11 +367,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       BitSet()
     )
     val sendFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
-        _ <- reducer.eval(send)(env, splitRand0)
-        _ <- reducer.eval(receive)(env, splitRand1)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
@@ -390,14 +391,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(receive)(env, splitRand1)
-        _ <- reducer.eval(send)(env, splitRand0)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -418,8 +419,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of Send | Receive" should "when whole list is bound to list remainder, meet in the tuplespace and proceed. (RHOL-422)" in {
     // for(@[...a] <- @"channel") { … } | @"channel"!([7,8,9])
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
@@ -438,11 +439,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     // format: on
     val sendFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
-        _ <- reducer.eval(send)(env, splitRand0)
-        _ <- reducer.eval(receive)(env, splitRand1)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
@@ -462,14 +463,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(receive)(env, splitRand1)
-        _ <- reducer.eval(send)(env, splitRand0)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -489,8 +490,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
@@ -508,11 +509,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val sendFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
-        _ <- reducer.eval(send)(env, splitRand0)
-        _ <- reducer.eval(receive)(env, splitRand1)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
@@ -532,14 +533,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(receive)(env, splitRand1)
-        _ <- reducer.eval(send)(env, splitRand0)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -558,8 +559,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val baseRand   = rand.splitByte(2)
     val splitRand0 = baseRand.splitByte(0)
     val splitRand1 = baseRand.splitByte(1)
@@ -582,12 +583,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val sendFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val interpreter  = reducer
       implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
-        _ <- interpreter.eval(send)(env, splitRand0)
-        _ <- interpreter.eval(receive)(env, splitRand1)
+        _ <- interpreter.eval(send)(env, splitRand0, costAccounting)
+        _ <- interpreter.eval(receive)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
@@ -613,14 +614,14 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(receive)(env, splitRand1)
-        _ <- reducer.eval(send)(env, splitRand0)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -639,12 +640,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+    Await.result(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val bothResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env, baseRand)
+        _ <- reducer.eval(Par(receives = Seq(receive), sends = Seq(send)))(env,
+                                                                           baseRand,
+                                                                           costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -667,8 +671,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "Simple match" should "capture and add to the environment." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val result = withTestSpace { space =>
       val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet())
@@ -689,8 +693,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         BitSet()
       )
       implicit val env = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
-      val matchTask    = reducer.eval(matchTerm)(env, splitRand)
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val matchTask    = reducer.eval(matchTerm)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- matchTask
       } yield space.store.toMap
@@ -718,8 +722,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val splitRand2 = rand.splitByte(2)
@@ -743,12 +747,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       BitSet()
     )
     val sendFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
-        _ <- reducer.eval(send1)(env, splitRand0)
-        _ <- reducer.eval(send2)(env, splitRand1)
-        _ <- reducer.eval(receive)(env, splitRand2)
+        _ <- reducer.eval(send1)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(send2)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(receive)(env, splitRand2, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
@@ -768,15 +772,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
-        _ <- reducer.eval(receive)(env, splitRand2)
-        _ <- reducer.eval(send1)(env, splitRand0)
-        _ <- reducer.eval(send2)(env, splitRand1)
+        _ <- reducer.eval(receive)(env, splitRand2, costAccounting)
+        _ <- reducer.eval(send1)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(send2)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
@@ -793,15 +797,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
+    Await.ready(costAccounting.setCost(CostAccount.zero).runAsync, 1.second)
 
     val interleavedResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val inspectTaskInterleaved = for {
-        _ <- reducer.eval(send1)(env, splitRand0)
-        _ <- reducer.eval(receive)(env, splitRand2)
-        _ <- reducer.eval(send2)(env, splitRand1)
+        _ <- reducer.eval(send1)(env, splitRand0, costAccounting)
+        _ <- reducer.eval(receive)(env, splitRand2, costAccounting)
+        _ <- reducer.eval(send2)(env, splitRand1, costAccounting)
       } yield space.store.toMap
       Await.result(inspectTaskInterleaved.runAsync, 3.seconds)
     }
@@ -820,8 +824,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send with remainder receive" should "capture the remainder." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
@@ -832,11 +836,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
 
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val task = for {
-        _ <- reducer.eval(receive)(env, splitRand1)
-        _ <- reducer.eval(send)(env, splitRand0)
+        _ <- reducer.eval(receive)(env, splitRand1, costAccounting)
+        _ <- reducer.eval(send)(env, splitRand0, costAccounting)
       } yield space.store.toMap
       Await.result(task.runAsync, 3.seconds)
     }
@@ -860,15 +864,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of nth method" should "pick out the nth item from a list" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val nthCall: Expr =
       EMethod("nth", EList(List(GInt(7), GInt(8), GInt(9), GInt(10))), List[Par](GInt(2)))
     val directResult: Par = withTestSpace { space =>
       implicit val env = Env[Par]()
       val reducer =
-        RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+        RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       Await.result(reducer.evalExprToPar(nthCall).runAsync, 3.seconds)
     }
     val expectedResult: Par = GInt(9)
@@ -883,9 +887,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                      GInt(10))),
               List[Par](GInt(1)))
     val indirectResult = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
-      val nthTask      = reducer.eval(nthCallEvalToSend)(env, splitRand)
+      val nthTask      = reducer.eval(nthCallEvalToSend)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- nthTask
       } yield space.store.toMap
@@ -909,8 +913,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of nth method in send position" should "change what is sent" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     val nthCallEvalToSend: Expr =
       EMethod("nth",
@@ -923,9 +927,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val send: Par =
       Send(Quote(GString("result")), List[Par](nthCallEvalToSend), false, BitSet())
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
-      val nthTask      = reducer.eval(send)(env, splitRand)
+      val nthTask      = reducer.eval(send)(env, splitRand, costAccounting)
       val inspectTask = for {
         _ <- nthTask
       } yield space.store.toMap
@@ -952,10 +956,29 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "eval of a method" should "substitute target before evaluating" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(0)
+    val hexToBytesCall: Expr =
+      EMethod("hexToBytes", Expr(EVarBody(EVar(Var(BoundVar(0))))))
+    val directResult: Par = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
+      val reducer =
+        RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      Await.result(reducer.evalExprToPar(hexToBytesCall).runAsync, 3.seconds)
+    }
+    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))
+    directResult should be(expectedResult)
+
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand = rand.splitByte(0)
     import coop.rchain.models.serialization.implicits._
     val proc = Receive(Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GString("channel")))),
@@ -968,9 +991,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val env         = Env[Par]()
-      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand, costAccounting)
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
@@ -993,8 +1016,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "return an error when `toByteArray` is called with arguments" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
         "toByteArray",
@@ -1002,7 +1025,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List[Par](GInt(1)))
 
     val result = withTestSpace { space =>
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
       val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
       val inspectTask = for {
@@ -1018,8 +1041,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
     import coop.rchain.models.serialization.implicits._
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRand                 = rand.splitByte(0)
     val testString                = "testing testing"
     val base16Repr                = Base16.encode(testString.getBytes)
@@ -1027,9 +1050,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
     def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
     val result = withTestSpace { space =>
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val env         = Env[Par]()
-      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand)
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand, costAccounting)
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
@@ -1053,8 +1076,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "variable references" should "be substituted before being used." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRandResult = rand.splitByte(3)
     val splitRandSrc    = rand.splitByte(3)
     splitRandResult.next()
@@ -1081,11 +1104,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace { space =>
       implicit val errorLog = new ErrorLog()
-      val costAccounting =
-        CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      implicit val costAccounting =
+        CostAccountingAlg.unsafe[Task](CostAccount.zero)
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val env         = Env[Par]()
-      val task        = reducer.eval(proc)(env, splitRandSrc)
+      val task        = reducer.eval(proc)(env, splitRandSrc, costAccounting)
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
@@ -1108,8 +1131,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "be substituted before being used in a match." in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val splitRandResult = rand.splitByte(4)
     val splitRandSrc    = rand.splitByte(4)
     splitRandResult.next()
@@ -1125,11 +1148,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace { space =>
       implicit val errorLog = new ErrorLog()
-      val costAccounting =
-        CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      implicit val costAccounting =
+        CostAccountingAlg.unsafe[Task](CostAccount.zero)
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val env         = Env[Par]()
-      val task        = reducer.eval(proc)(env, splitRandSrc)
+      val task        = reducer.eval(proc)(env, splitRandSrc, costAccounting)
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
@@ -1152,8 +1175,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "reference a variable that comes from a match in tuplespace" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val baseRand   = rand.splitByte(7)
     val splitRand0 = baseRand.splitByte(0)
     val splitRand1 = baseRand.splitByte(1)
@@ -1182,11 +1205,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val result = withTestSpace { space =>
       implicit val errorLog = new ErrorLog()
-      val costAccounting =
-        CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      implicit val costAccounting =
+        CostAccountingAlg.unsafe[Task](CostAccount.zero)
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val env         = Env[Par]()
-      val task        = reducer.eval(proc)(env, baseRand)
+      val task        = reducer.eval(proc)(env, baseRand, costAccounting)
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
@@ -1209,11 +1232,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches 1" should "return true" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), GInt(1)))
 
@@ -1226,11 +1249,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches 0" should "return false" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), GInt(0)))
 
@@ -1243,11 +1266,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches _" should "return true" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), EVar(Wildcard(Var.WildcardMsg()))))
 
@@ -1260,12 +1283,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "x matches 1" should "return true when x is bound to 1" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par](GInt(1))
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(EVar(BoundVar(0)), GInt(1)))
 
@@ -1278,12 +1301,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "1 matches =x" should "return true when x is bound to 1" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par](GInt(1))
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMatches(GInt(1), Connective(VarRefBody(VarRef(0, 1)))))
 
@@ -1296,12 +1319,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "'abc'.length()" should "return the length of the string" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(EMethodBody(EMethod("length", GString("abc"))))
 
@@ -1313,12 +1336,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "'abcabac'.slice(3, 6)" should "return 'aba'" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("slice", GString("abcabac"), List(GInt(3), GInt(6))))
@@ -1332,12 +1355,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "'Hello, ${name}!' % {'name': 'Alice'}" should "return 'Hello, Alice!" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(
         EPercentPercentBody(
@@ -1356,12 +1379,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "'abc' ++ 'def'" should "return 'abcdef" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(
         EPlusPlusBody(
@@ -1380,12 +1403,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "'${a} ${b}' % {'a': '1 ${b}', 'b': '2 ${a}'" should "return '1 ${b} 2 ${a}" in {
     implicit val errorLog = new ErrorLog()
-    val costAccounting =
-      CostAccountingAlg.monadState(AtomicRefMonadState.of[Task, CostAccount](CostAccount.zero))
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       implicit val env = Env.makeEnv[Par]()
 
-      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val inspectTask = reducer.evalExpr(
         EPercentPercentBody(

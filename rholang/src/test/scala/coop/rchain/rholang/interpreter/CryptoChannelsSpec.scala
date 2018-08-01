@@ -16,6 +16,7 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.{IStore, Serialize}
 import coop.rchain.shared.PathOps._
@@ -37,6 +38,8 @@ class CryptoChannelsSpec
   behavior of "Crypto channels"
 
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+  implicit val costAccountingAlg: CostAccountingAlg[Task] =
+    CostAccountingAlg.unsafe[Task](CostAccount.zero)
   type Store = IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
@@ -105,7 +108,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       Await.result(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(ListChannelWithRandom(Seq(Quote(expected)), rand))
+      storeContainsTest(ListChannelWithRandom(Seq(Quote(expected)), rand, Some(PCost(0, 0))))
       clearStore(store, reduce, ackChannel)
     }
   }
@@ -161,7 +164,8 @@ class CryptoChannelsSpec
                         persistent = false,
                         BitSet())
         Await.result(reduce.eval(send).runAsync, 3.seconds)
-        storeContainsTest(ListChannelWithRandom(Seq(Quote(Expr(GBool(true)))), rand))
+        storeContainsTest(
+          ListChannelWithRandom(Seq(Quote(Expr(GBool(true)))), rand, Some(PCost(0, 0))))
         clearStore(store, reduce, ackChannel)
       }
   }
@@ -197,7 +201,8 @@ class CryptoChannelsSpec
                         persistent = false,
                         BitSet())
         Await.result(reduce.eval(send).runAsync, 3.seconds)
-        storeContainsTest(ListChannelWithRandom(List(Quote(Expr(GBool(true)))), rand))
+        storeContainsTest(
+          ListChannelWithRandom(List(Quote(Expr(GBool(true)))), rand, Some(PCost(0, 0))))
         clearStore(store, reduce, ackChannel)
       }
   }

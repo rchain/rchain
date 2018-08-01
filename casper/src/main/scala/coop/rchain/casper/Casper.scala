@@ -153,8 +153,10 @@ sealed abstract class MultiParentCasperInstances {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
+          validDeploy <- Validate.repeatDeploy[F](b, genesis, dag)
           attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
+                    else if (!validDeploy) InvalidRepeatDeploy.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case MissingBlocks => ().pure[F]
@@ -167,6 +169,7 @@ sealed abstract class MultiParentCasperInstances {
                 case MissingBlocks           => ().pure[F]
                 case IgnorableEquivocation   => ().pure[F]
                 case InvalidUnslashableBlock => ().pure[F]
+                case InvalidRepeatDeploy     => ().pure[F]
                 case _ =>
                   reAttemptBuffer // reAttempt for any status that resulted in the adding of the block into the view
               }
@@ -230,7 +233,7 @@ sealed abstract class MultiParentCasperInstances {
             DagOperations
               .bfTraverse(p)(parents(_).iterator.map(internalMap))
               .foreach(b => {
-                b.body.foreach(_.newCode.foreach(result -= _))
+                b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
               })
             result.toSeq
           }
@@ -242,8 +245,8 @@ sealed abstract class MultiParentCasperInstances {
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Set[StateHash])](
+          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
+            .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
@@ -261,7 +264,7 @@ sealed abstract class MultiParentCasperInstances {
             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
           body = Body()
             .withPostState(postState)
-            .withNewCode(r)
+            .withNewCode(deployWithCost)
             .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)
@@ -552,7 +555,8 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidBondsCache =>
             handleInvalidBlockEffect(status, block)
-          case _ => throw new Error("Should never reach")
+          case InvalidRepeatDeploy => handleInvalidBlockEffect(status, block)
+          case _                   => throw new Error("Should never reach")
         }
 
       private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =

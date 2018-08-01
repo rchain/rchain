@@ -13,27 +13,28 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
-import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.Catscontrib
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.collection.immutable.{HashMap, HashSet}
+import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.createWithId
-  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-  val initState                = BlockDag()
-
-  val v1     = ByteString.copyFromUtf8("Validator One")
-  val v2     = ByteString.copyFromUtf8("Validator Two")
-  val v3     = ByteString.copyFromUtf8("Validator Three")
-  val v1Bond = Bond(v1, 25)
-  val v2Bond = Bond(v2, 20)
-  val v3Bond = Bond(v3, 15)
-  val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+class BlocksResponseTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with BlockStoreTestFixture {
+  val initState = BlockDag()
+  val v1        = ByteString.copyFromUtf8("Validator One")
+  val v2        = ByteString.copyFromUtf8("Validator Two")
+  val v3        = ByteString.copyFromUtf8("Validator Three")
+  val v1Bond    = Bond(v1, 25)
+  val v2Bond    = Bond(v2, 20)
+  val v3Bond    = Bond(v3, 15)
+  val bonds     = Seq(v1Bond, v2Bond, v3Bond)
   val createChain =
     for {
       genesis <- createBlock[StateWithChain](Seq(), ByteString.EMPTY, bonds)

@@ -1,7 +1,5 @@
 package coop.rchain.casper.helper
 
-import java.nio.file.Files
-
 import cats._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
@@ -14,31 +12,26 @@ import coop.rchain.casper.{
 }
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
-import coop.rchain.comm.connect.Connect.dispatch
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.comm.connect.Connect.dispatch
-import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.BlockGenerator.StateWithChain
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
+import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
-                            genesis: BlockMessage,
+                            val genesis: BlockMessage,
                             sk: Array[Byte],
                             storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 
@@ -52,8 +45,9 @@ class HashSetCasperTestNode(name: String,
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
-  implicit val blockStore        = InMemBlockStore.createWithId
-  // pre-population removed from internals of Casper`
+  val dir                        = BlockStoreTestFixture.dbDir
+  implicit val blockStore        = BlockStoreTestFixture.create(dir)
+  // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
@@ -77,6 +71,15 @@ class HashSetCasperTestNode(name: String,
 
   def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
+  def tearDown(): Unit = {
+    tearDownNode()
+    dir.recursivelyDelete()
+  }
+
+  def tearDownNode(): Unit = {
+    activeRuntime.close()
+    blockStore.close()
+  }
 }
 
 object HashSetCasperTestNode {

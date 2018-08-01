@@ -18,6 +18,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val activeRuntime    = Runtime.create(storageDirectory, storageSize)
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
+  "computeState" should "catpure rholang errors" in {
+    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val deploy     = ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get)
+    val result     = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+
+    result.isLeft should be(true)
+  }
+
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
     val purseValue     = "37"
     val captureChannel = "__PURSEVALUE__"
@@ -26,8 +34,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(ProtoUtil.termDeploy(_))
 
-    val Right(checkpoint) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
-    val hash              = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val Right((checkpoint, _)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
+    val hash                   = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil

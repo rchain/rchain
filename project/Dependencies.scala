@@ -27,7 +27,7 @@ object Dependencies {
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
   val jline               = ("org.scala-lang"             % "jline"                      % "2.10.7").exclude("org.fusesource.jansi", "jansi")
-  val kalium              = "org.abstractj.kalium"        % "kalium"                    % "0.7.0"
+  val kalium              = "coop.rchain"                 % "kalium"                    % "0.8.1-SNAPSHOT"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
@@ -55,6 +55,7 @@ object Dependencies {
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
   val secp256k1Java       = "coop.rchain"                 % "secp256k1-java"            % "0.1-SNAPSHOT"
+  val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
 
   // format: on
 

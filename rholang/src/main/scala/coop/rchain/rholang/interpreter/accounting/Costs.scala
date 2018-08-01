@@ -1,24 +1,27 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import coop.rchain.models.Par
+import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
-//TODO: Adjust the costs of operations
+//TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: BigInt) extends AnyVal {
   def *(other: Cost): Cost = Cost(value * other.value)
   def *(other: Int): Cost  = Cost(value * other)
   def +(other: Cost): Cost = Cost(value + other.value)
 }
 
-trait Costs {
+object Cost {
+  implicit val costNumeric: Numeric[Cost] =
+    NumericOps.by[Cost, BigInt](_.value, Cost(_))
+}
 
-  final val BOOLEAN_COST: Cost = Cost(1)
-  final val INT_COST: Cost     = Cost(2)
+trait Costs {
 
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost(x: Par, y: Par): Cost =
+  def equalityCheckCost[T <: GeneratedMessage with Message[T],
+                        P <: GeneratedMessage with Message[P]](x: T, y: P): Cost =
     Cost(scala.math.min(x.serializedSize, y.serializedSize))
 
   final val BOOLEAN_AND_COST = Cost(2)
@@ -44,7 +47,7 @@ trait Costs {
       implicit comp: GeneratedMessageCompanion[T]): Cost =
     Cost(a.serializedSize)
 
-  //TODO: adjust the cost of the nth method call.
+  //TODO(mateusz.gorski): adjust the cost of the nth method call.
   def nthMethodCost(nth: Int): Cost = Cost(nth)
 
   final val METHOD_CALL_COST  = Cost(10)

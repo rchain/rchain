@@ -5,7 +5,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski.kp
 import coop.rchain.node.effects.{ConsoleIO, ReplClient}
 
-class ReplRuntime(conf: Conf) {
+class ReplRuntime() {
 
   private val logo: String =
     """
