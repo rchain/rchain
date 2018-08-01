@@ -43,7 +43,7 @@ object COMM {
 
 sealed trait IOEvent extends Event
 
-class Produce private (val channelsHash: Blake2b256Hash, val hash: Blake2b256Hash) extends IOEvent {
+case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case produce: Produce => produce.hash == hash
@@ -52,7 +52,8 @@ class Produce private (val channelsHash: Blake2b256Hash, val hash: Blake2b256Has
 
   override def hashCode(): Int = hash.hashCode()
 
-  override def toString: String = s"Produce(hash: ${hash.toString})"
+  override def toString: String =
+    s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
 
 }
 
@@ -60,8 +61,6 @@ object Produce {
 
   def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
     Some((arg.channelsHash, arg.hash))
-
-  val length: Int = 32
 
   def create[C, A](channel: C, datum: A, persist: Boolean)(implicit
                                                            serializeC: Serialize[C],
@@ -76,7 +75,7 @@ object Produce {
     (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Produce]
 }
 
-class Consume private (val channelsHash: Blake2b256Hash, val hash: Blake2b256Hash) extends IOEvent {
+case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case consume: Consume => consume.hash == hash
@@ -85,12 +84,11 @@ class Consume private (val channelsHash: Blake2b256Hash, val hash: Blake2b256Has
 
   override def hashCode(): Int = hash.hashCode()
 
-  override def toString: String = s"Consume(hash: ${hash.toString})"
+  override def toString: String =
+    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
 }
 
 object Consume {
-
-  val length: Int = 32
 
   def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash)] =
     Some((arg.channelsHash, arg.hash))
