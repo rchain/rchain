@@ -172,6 +172,7 @@ message Expr {
         EMatches e_matches_body = 27;
         EPercentPercent e_percent_percent_body = 28;
         EPlusPlus e_plus_plus_body = 29;
+        EMinusMinus e_minus_minus_body = 30;
     }
 }
 
@@ -300,6 +301,11 @@ message EPercentPercent {
 }
 
 message EPlusPlus {
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
+}
+
+message EMinusMinus {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
 }

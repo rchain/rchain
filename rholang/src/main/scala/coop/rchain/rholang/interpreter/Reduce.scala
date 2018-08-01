@@ -723,6 +723,30 @@ object Reduce {
                          )
                      }
           } yield result
+        case EMinusMinusBody(EMinusMinus(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- diff(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: ESetBody, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `--` expected Set but got ${other.typ}"
+                           )
+                         )
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `--` is not defined on ${other.typ}"
+                           )
+                         )
+                     }
+          } yield result
         case EVarBody(EVar(v)) =>
           for {
             p       <- eval(v)

@@ -51,6 +51,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " ++ " + buildString(p2)).wrapWithBraces
       case EMinusBody(EMinus(p1, p2)) =>
         (buildString(p1) + " - " + buildString(p2)).wrapWithBraces
+      case EMinusMinusBody(EMinusMinus(p1, p2)) =>
+        (buildString(p1) + " -- " + buildString(p2)).wrapWithBraces
       case EAndBody(EAnd(p1, p2)) =>
         (buildString(p1) + " && " + buildString(p2)).wrapWithBraces
       case EOrBody(EOr(p1, p2)) =>

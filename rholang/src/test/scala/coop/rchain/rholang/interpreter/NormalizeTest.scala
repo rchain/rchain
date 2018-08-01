@@ -302,6 +302,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  "PMinusMinus" should "Delegate" in {
+    val pMinusMinus = new PMinusMinus(
+      new PGround(new GroundString("abc")),
+      new PGround(new GroundString("def"))
+    )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinusMinus, inputs).value
+    result.par should be(inputs.par.prepend(EMinusMinus(GString("abc"), GString("def")), 0))
+    result.knownFree should be(inputs.knownFree)
+  }
+
   "PSend" should "handle a basic send" in {
     val sentData = new ListProc()
     sentData.add(new PGround(new GroundInt(7)))

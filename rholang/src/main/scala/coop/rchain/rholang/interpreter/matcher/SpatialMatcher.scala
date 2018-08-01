@@ -716,6 +716,11 @@ trait SpatialMatcherInstances {
             _ <- spatialMatch(t1, p1)
             _ <- spatialMatch(t2, p2)
           } yield Unit
+        case (EMinusMinusBody(EMinusMinus(t1, t2)), EMinusMinusBody(EMinusMinus(p1, p2))) =>
+          for {
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
+          } yield Unit
         case (EEvalBody(chan1), EEvalBody(chan2)) =>
           spatialMatch(chan1, chan2)
         case _ => OptionalFreeMapWithCost.emptyMap[Unit]
