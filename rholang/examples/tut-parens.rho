@@ -1,5 +1,7 @@
-@"stdout"!((2,)) |
-@"stdout"!(2 * (3 + 5)) |
-@"stdout"!(1 + 3) |
-@(3,)!(2 + 4) |
-@"stdout"!(3 * (1 + (2 / 2)))
+new stdout(`rho:io:stdout`) in {
+  stdout!((2,)) |
+  stdout!(2 * (3 + 5)) |
+  stdout!(1 + 3) |
+  @(3,)!(2 + 4) |
+  stdout!(3 * (1 + (2 / 2)))
+}
