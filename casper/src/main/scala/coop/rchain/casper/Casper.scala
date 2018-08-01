@@ -233,7 +233,7 @@ sealed abstract class MultiParentCasperInstances {
             DagOperations
               .bfTraverse(p)(parents(_).iterator.map(internalMap))
               .foreach(b => {
-                b.body.foreach(_.newCode.foreach(result -= _))
+                b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
               })
             result.toSeq
           }
@@ -245,7 +245,7 @@ sealed abstract class MultiParentCasperInstances {
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _, deployCost)) = knownStateHashesContainer
+          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
             .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
@@ -264,8 +264,7 @@ sealed abstract class MultiParentCasperInstances {
             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
           body = Body()
             .withPostState(postState)
-            .withNewCode(r)
-            .withDeployCosts(deployCost)
+            .withNewCode(deployWithCost)
             .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)
