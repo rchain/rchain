@@ -8,10 +8,16 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.Sortable
-import coop.rchain.rholang.interpreter.accounting.CostAccount
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, SyntaxError, TopLevelFreeVariablesNotAllowedError, TopLevelWildcardsNotAllowedError, UnrecognizedInterpreterError}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.errors.{
+  InterpreterError,
+  SyntaxError,
+  TopLevelFreeVariablesNotAllowedError,
+  TopLevelWildcardsNotAllowedError,
+  UnrecognizedInterpreterError
+}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {
@@ -89,9 +95,10 @@ object Interpreter {
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand = Blake2b512Random(128)
     for {
-      _      <- runtime.reducer.inj(normalizedTerm)
-      errors <- Task.now(runtime.readAndClearErrorVector)
-      cost   <- runtime.getCost()
+      costAccounting <- CostAccountingAlg[Task](CostAccount.zero)
+      _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
+      errors         <- Task.now(runtime.readAndClearErrorVector)
+      cost           <- costAccounting.getCost()
     } yield EvaluateResult(cost, errors)
   }
 

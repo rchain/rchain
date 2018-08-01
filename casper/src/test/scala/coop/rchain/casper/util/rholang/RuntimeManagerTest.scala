@@ -34,8 +34,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(ProtoUtil.termDeploy(_))
 
-    val Right(checkpoint) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
-    val hash              = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val Right((checkpoint, _)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
+    val hash                   = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
