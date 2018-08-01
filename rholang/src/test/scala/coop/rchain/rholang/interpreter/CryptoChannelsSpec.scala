@@ -16,6 +16,7 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.{IStore, Serialize}
 import coop.rchain.shared.PathOps._
@@ -37,6 +38,8 @@ class CryptoChannelsSpec
   behavior of "Crypto channels"
 
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+  implicit val costAccountingAlg: CostAccountingAlg[Task] =
+    CostAccountingAlg.unsafe[Task](CostAccount.zero)
   type Store = IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel

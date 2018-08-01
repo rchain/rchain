@@ -33,13 +33,9 @@ class Runtime private (
                                   ListChannelWithRandom,
                                   ListChannelWithRandom,
                                   TaggedContinuation],
-    val costAccountingPure: CostAccountingAlg[Task],
-    val costAccountingReplay: CostAccountingAlg[Task],
     var errorLog: ErrorLog,
     val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def getCost(): Task[CostAccount]                 = costAccountingPure.getTotal
-  def getCostReplay(): Task[CostAccount]           = costAccountingReplay.getTotal
   def close(): Unit = {
     space.close()
     replaySpace.close()
@@ -109,10 +105,6 @@ object Runtime {
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
-    val costAccountingPure: CostAccountingAlg[Task] =
-      CostAccountingAlg.unsafe(CostAccount.zero)
-    val costAccountingReplay: CostAccountingAlg[Task] =
-      CostAccountingAlg.unsafe(CostAccount.zero)
 
     def dispatchTableCreator(
         space: ISpace[Channel,
@@ -139,10 +131,10 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure)
+      RholangAndScalaDispatcher.create(space, dispatchTable)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, costAccountingReplay)
+      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       ("stdout", 1, None, 0L),
@@ -161,13 +153,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer,
-                replayDispatcher.reducer,
-                space,
-                replaySpace,
-                costAccountingPure,
-                costAccountingReplay,
-                errorLog,
-                context)
+    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
   }
 }
