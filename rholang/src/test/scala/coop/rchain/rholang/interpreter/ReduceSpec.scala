@@ -1014,6 +1014,41 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  it should "substitute before serialization" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(0)
+    val unsubProc: Par =
+      New(bindCount = 1, p = EVar(BoundVar(1)), locallyFree = BitSet(0))
+    val subProc: Par =
+      New(bindCount = 1, p = GPrivate("zero"), locallyFree = BitSet())
+    val serializedProcess         = subProc.toByteString
+    val toByteArrayCall: Par      = EMethod("toByteArray", unsubProc, List[Par]())
+    def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
+
+    val result = withTestSpace { space =>
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env         = Env.makeEnv[Par](GPrivate("one"), GPrivate("zero"))
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand, costAccounting)
+      val inspectTask = for { _ <- task } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val channel = Channel(Quote(GString("result")))
+    result should be(
+      HashMap(
+        List(channel) ->
+          Row(List(
+                Datum.create(channel,
+                             ListChannelWithRandom(Seq(Quote(Expr(GByteArray(serializedProcess)))),
+                                                   splitRand),
+                             persist = false)),
+              List())
+      )
+    )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   it should "return an error when `toByteArray` is called with arguments" in {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =
