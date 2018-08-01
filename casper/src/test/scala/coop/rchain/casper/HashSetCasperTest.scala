@@ -15,6 +15,7 @@ import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
@@ -90,7 +91,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val Some(block) = MultiParentCasper[Id].createBlock
     val parents     = ProtoUtil.parents(block)
-    val deploys     = block.body.get.newCode
+    val deploys     = block.body.get.newCode.flatMap(_.deploy)
     val storage     = blockTuplespaceContents(block)
 
     parents.size should be(1)
@@ -394,14 +395,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "prepare to slash an block that includes a invalid block pointer" in {
-    val nodes   = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
-    val deploys = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
+    val nodes           = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
+    val deploys         = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
+    val deploysWithCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(10L, 1)))
 
     val Some(signedBlock)  = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
     val signedInvalidBlock = signedBlock.withSeqNum(-2) // Invalid seq num
 
     val blockWithInvalidJustification =
-      buildBlockWithInvalidJustification(nodes, deploys, signedInvalidBlock)
+      buildBlockWithInvalidJustification(nodes, deploysWithCost, signedInvalidBlock)
 
     nodes(1).casperEff.addBlock(blockWithInvalidJustification)
     nodes(0).transportLayerEff
@@ -445,7 +447,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
-                                                 deploys: immutable.IndexedSeq[Deploy],
+                                                 deploys: immutable.IndexedSeq[DeployCost],
                                                  signedInvalidBlock: BlockMessage) = {
     val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
     val postStateHash = Blake2b256.hash(postState.toByteArray)

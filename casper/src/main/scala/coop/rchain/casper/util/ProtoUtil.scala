@@ -9,7 +9,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models.Par
+import coop.rchain.models.{PCost, Par}
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -115,7 +115,7 @@ object ProtoUtil {
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
   def deploys(b: BlockMessage): Seq[Deploy] =
-    b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+    b.body.map(_.newCode.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
 
   def tuplespace(b: BlockMessage): Option[ByteString] =
     for {
@@ -265,6 +265,11 @@ object ProtoUtil {
       raw = Some(d)
     )
   }
+
+  def basicDeployCost(id: Int): DeployCost =
+    DeployCost()
+      .withDeploy(basicDeploy(id))
+      .withCost(PCost(1L, 1))
 
   def termDeploy(term: Par): Deploy = {
     //TODO this should be removed once we assign the deploy with exact user

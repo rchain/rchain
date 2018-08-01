@@ -1,12 +1,9 @@
 package coop.rchain.models
 
 import coop.rchain.models.Expr.ExprInstance.{ESetBody, GInt}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Var.VarInstance.BoundVar
-import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort.ParSortMatcher
-import coop.rchain.models.rholang.sort.ordering._
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
