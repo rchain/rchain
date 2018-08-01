@@ -38,10 +38,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     val evalRes           = eval(deploy :: Nil, runtime.reducer, runtime.errorLog, costAccountingAlg)
 
     //TODO: Is better error handling needed here?
-    //    val result = error.fold {
-    //      val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
-    //      runtime.space.getData(returnChannel) // This is `None` case which is now `Right`
-    //    }(_ => Nil) // This was `Some(_)` case which is now `Left`
     val result: Seq[Datum[ListChannelWithRandom]] = evalRes.fold(
       {
         case (erroredTerm, errors, costAcc) =>
