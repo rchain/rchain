@@ -1495,4 +1495,313 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(Seq(Expr(EListBody(resultList))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
+
+  "{1: 'a', 2: 'b'}.getOrElse(1, 'c')" should "return 'a'" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("getOrElse", map, List(GInt(1), GString("c"))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("a"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b'}.getOrElse(3, 'c')" should "return 'c'" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("getOrElse", map, List(GInt(3), GString("c"))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GString("c"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b'}.set(3, 'c')" should "return {1: 'a', 2: 'b', 3: 'c'}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("set", map, List(GInt(3), GString("c"))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultMap = EMapBody(ParMap(
+      List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c"))),
+      false,
+      BitSet()
+    ))
+    result.exprs should be(Seq(Expr(resultMap)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b'}.set(2, 'c')" should "return {1: 'a', 2: 'c'}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("set", map, List(GInt(2), GString("c"))))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultMap = EMapBody(ParMap(
+      List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("c"))),
+      false,
+      BitSet()
+    ))
+    result.exprs should be(Seq(Expr(resultMap)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b', 3: 'c'}.keys()" should "return {1, 2, 3}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("keys", map))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultSet = ESetBody(ParSet(
+      List[Par](GInt(1), GInt(2), GInt(3))
+    ))
+    result.exprs should be(Seq(Expr(resultSet)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b', 3: 'c'}.size()" should "return 3" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("size", map))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GInt(3))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1, 2, 3}.size()" should "return 3" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val set = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+      val inspectTask = reducer.evalExpr(
+        EMethodBody(EMethod("size", set))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GInt(3))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1, 2} + 3" should "return {1, 2, 3}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val set = ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+      val inspectTask = reducer.evalExpr(
+        EPlusBody(EPlus(set, GInt(3)))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+    result.exprs should be(Seq(Expr(resultSet)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b', 3: 'c'} - 3" should "return {1: 'a', 2: 'b'}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EMinusBody(EMinus(map, GInt(3)))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultMap = EMapBody(ParMap(
+      List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+      false,
+      BitSet()
+    ))
+    result.exprs should be(Seq(Expr(resultMap)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1, 2, 3} - 3" should "return {1, 2}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val set = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+      val inspectTask = reducer.evalExpr(
+        EMinusBody(EMinus(set, GInt(3)))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+    result.exprs should be(Seq(Expr(resultSet)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1, 2} ++ {3, 4}" should "return {1, 2, 3, 4}" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val lhsSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+      val rhsSet = ESetBody(ParSet(List[Par](GInt(3), GInt(4))))
+      val inspectTask = reducer.evalExpr(
+        EPlusPlusBody(EPlusPlus(lhsSet, rhsSet))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3), GInt(4))))
+    result.exprs should be(Seq(Expr(resultSet)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "{1: 'a', 2: 'b'} ++ {3: 'c', 4: 'd'}" should "return union" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val lhsMap = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+        false,
+        BitSet()
+      ))
+      val rhsMap = EMapBody(ParMap(
+        List[(Par, Par)]((GInt(3), GString("c")), (GInt(4), GString("d"))),
+        false,
+        BitSet()
+      ))
+      val inspectTask = reducer.evalExpr(
+        EPlusPlusBody(EPlusPlus(lhsMap, rhsMap))
+      )
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    val resultMap = EMapBody(ParMap(
+      List[(Par, Par)](
+        (GInt(1), GString("a")),
+        (GInt(2), GString("b")),
+        (GInt(3), GString("c")),
+        (GInt(4), GString("d"))
+      ),
+      false,
+      BitSet()
+    ))
+    result.exprs should be(Seq(Expr(resultMap)))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
 }

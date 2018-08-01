@@ -503,16 +503,53 @@ object Reduce {
           } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
-            _  <- costAccountingAlg.charge(SUM_COST)
-          } yield GInt(v1 + v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(SUM_COST)
+                         } yield Expr(GInt(lhs + rhs))
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           resultPar <- add(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         s.raiseError(
+                           ReduceError(s"Error: Operator `+` expected Int but got ${other.typ}"))
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(s"Error: Operator `+` is not defined on ${other.typ}"))
+                     }
+          } yield result
         case EMinusBody(EMinus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
-            _  <- costAccountingAlg.charge(SUBTRACTION_COST)
-          } yield GInt(v1 - v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(SUBTRACTION_COST)
+                         } yield Expr(GInt(lhs - rhs))
+                       case (lhs: EMapBody, rhs) =>
+                         for {
+                           resultPar <- delete(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           resultPar <- delete(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         s.raiseError(
+                           ReduceError(s"Error: Operator `-` expected Int but got ${other.typ}"))
+                       case (other, _) =>
+                         s.raiseError(
+                           ReduceError(s"Error: Operator `-` is not defined on ${other.typ}"))
+                     }
+          } yield result
         case ELtBody(ELt(p1, p2)) =>
           relop(p1, p2, (_ < _), (_ < _), (_ < _)) <* costAccountingAlg.charge(COMPARISON_COST)
         case ELteBody(ELte(p1, p2)) =>
@@ -644,10 +681,38 @@ object Reduce {
                              lhs.connectiveUsed || rhs.connectiveUsed
                            )
                          )
+                       case (lhs: EMapBody, rhs: EMapBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))(env)
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
                        case (_: GString, other) =>
                          s.raiseError(
                            ReduceError(
                              s"Error: Operator `++` expected String but got ${other.typ}"
+                           )
+                         )
+                       case (_: EListBody, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` expected List but got ${other.typ}"
+                           )
+                         )
+                       case (_: EMapBody, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` expected Map but got ${other.typ}"
+                           )
+                         )
+                       case (_: ESetBody, other) =>
+                         s.raiseError(
+                           ReduceError(
+                             s"Error: Operator `++` expected Set but got ${other.typ}"
                            )
                          )
                        case (other, _) =>
@@ -965,6 +1030,82 @@ object Reduce {
       }
     }
 
+    private[this] def getOrElse: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def getOrElse(baseExpr: Expr, key: Par, default: Par): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](basePs.getOrElse(key, default))
+          case other =>
+            s.raiseError(ReduceError(s"Error: Method `getOrElse` is not defined on ${other.typ}."))
+        }
+
+      method("getOrElse", 2, args) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          key      <- evalExpr(args(0))(env)
+          default  <- evalExpr(args(1))(env)
+          result   <- getOrElse(baseExpr, key, default)
+          _        <- costAccountingAlg.charge(LOOKUP_COST)
+        } yield result
+      }
+    }
+
+    private[this] def set: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
+          case other =>
+            s.raiseError(ReduceError(s"Error: Method `set` is not defined on ${other.typ}."))
+        }
+
+      method("set", 2, args) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          key      <- evalExpr(args(0))(env)
+          value    <- evalExpr(args(1))(env)
+          result   <- set(baseExpr, key, value)
+          _        <- costAccountingAlg.charge(ADD_COST)
+        } yield result
+      }
+    }
+
+    private[this] def keys: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def keys(baseExpr: Expr): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](ParSet(basePs.keys.toSeq))
+          case other =>
+            s.raiseError(ReduceError(s"Error: Method `keys` is not defined on ${other.typ}."))
+        }
+
+      method("keys", 0, args) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          result   <- keys(baseExpr)
+        } yield result
+      }
+    }
+
+    private[this] def size: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def size(baseExpr: Expr): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](GInt(basePs.size))
+          case ESetBody(ParSet(ps, _, _)) =>
+            Applicative[M].pure[Par](GInt(ps.size))
+          case other =>
+            s.raiseError(ReduceError(s"Error: Method `size` is not defined on ${other.typ}."))
+        }
+
+      method("size", 0, args) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          result   <- size(baseExpr)
+        } yield result
+      }
+    }
+
     private[this] def length: MethodType =
       (p: Par, args: Seq[Par]) =>
         (env: Env[Par]) => {
@@ -1033,6 +1174,10 @@ object Reduce {
         case "delete"      => Some(delete)
         case "contains"    => Some(contains)
         case "get"         => Some(get)
+        case "getOrElse"   => Some(getOrElse)
+        case "set"         => Some(set)
+        case "keys"        => Some(keys)
+        case "size"        => Some(size)
         case "length"      => Some(length)
         case "slice"       => Some(slice)
         case _             => None
