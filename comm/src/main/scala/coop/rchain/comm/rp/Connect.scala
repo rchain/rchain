@@ -47,7 +47,7 @@ object Connect {
     def connectAttempt(attempt: Int, timeout: FiniteDuration, bootstrapAddr: PeerNode): F[Unit] =
       if (attempt > maxNumOfAttempts) for {
         _ <- Log[F].error("Failed to connect to bootstrap node, exiting...")
-        _ <- errorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
+        _ <- ErrorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
       } yield ()
       else
         for {
@@ -83,7 +83,7 @@ object Connect {
       _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
       local    <- TransportLayer[F].local
       ph       = protocolHandshake(local)
-      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= errorHandler[F].fromEither
+      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
       _   <- NodeDiscovery[F].addNode(peer)
@@ -91,5 +91,4 @@ object Connect {
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
 
-  private def errorHandler[F[_]: ErrorHandler]: ErrorHandler[F] = ApplicativeError_[F, CommError]
 }
