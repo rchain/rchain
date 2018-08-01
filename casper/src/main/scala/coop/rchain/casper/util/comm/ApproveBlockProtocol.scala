@@ -24,6 +24,10 @@ import monix.execution.atomic.AtomicAny
 
 import scala.util.Try
 
+/**
+  * Bootstrap side of the protocol defined in
+  * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
+  */
 class ApproveBlockProtocol[
     F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler] private (
     val block: BlockMessage,

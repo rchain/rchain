@@ -7,17 +7,11 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
-import coop.rchain.models.rholang.sort.ParSortMatcher
+import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
-import coop.rchain.rholang.interpreter.errors.{
-  InterpreterError,
-  SyntaxError,
-  TopLevelFreeVariablesNotAllowedError,
-  TopLevelWildcardsNotAllowedError,
-  UnrecognizedInterpreterError
-}
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, SyntaxError, TopLevelFreeVariablesNotAllowedError, TopLevelWildcardsNotAllowedError, UnrecognizedInterpreterError}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {
@@ -41,7 +35,7 @@ object Interpreter {
         inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
         par <- Coeval.delay(
-                ParSortMatcher
+                Sortable
                   .sortMatch(outputs.par)
                   .term)
       } yield par

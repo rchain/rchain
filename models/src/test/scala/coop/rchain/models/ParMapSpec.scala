@@ -3,9 +3,8 @@ package coop.rchain.models
 import coop.rchain.models.Channel.ChannelInstance.ChanVar
 import coop.rchain.models.Expr.ExprInstance.{EEvalBody, EMapBody, GInt, GString}
 import coop.rchain.models.Var.VarInstance.BoundVar
-import coop.rchain.models.rholang.sort.ParSortMatcher
-import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.rholang.implicits._
+import org.scalatest.{FlatSpec, Matchers}
 
 class ParMapSpec extends FlatSpec with Matchers {
 

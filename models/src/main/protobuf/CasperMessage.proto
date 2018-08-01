@@ -176,11 +176,13 @@ message Event {
 }
 
 message ProduceEvent {
-  bytes hash = 1;
+  bytes channelsHash = 1;
+  bytes hash = 2;
 }
 
 message ConsumeEvent {
-  bytes hash = 1;
+  bytes channelsHash = 1;
+  bytes hash = 2;
 }
 
 message CommEvent {

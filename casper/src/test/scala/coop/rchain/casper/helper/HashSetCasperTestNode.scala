@@ -31,7 +31,7 @@ import scala.util.Random
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
-                            genesis: BlockMessage,
+                            val genesis: BlockMessage,
                             sk: Array[Byte],
                             storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 
@@ -72,8 +72,13 @@ class HashSetCasperTestNode(name: String,
   def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
 
   def tearDown(): Unit = {
-    blockStore.close()
+    tearDownNode()
     dir.recursivelyDelete()
+  }
+
+  def tearDownNode(): Unit = {
+    activeRuntime.close()
+    blockStore.close()
   }
 }
 
