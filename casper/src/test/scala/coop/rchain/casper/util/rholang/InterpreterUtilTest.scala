@@ -55,9 +55,10 @@ class InterpreterUtilTest
       dag: BlockDag,
       defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash, Seq[Deploy]) => Either[DeployError, Checkpoint])
-    : (StateHash, Set[StateHash]) = {
-    val (checkpoint, updatedKnownStateHashes) =
+      computeState: (StateHash,
+                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
+    : (StateHash, Set[StateHash], Vector[DeployCost]) = {
+    val (checkpoint, updatedKnownStateHashes, deployCost) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
                                                         genesis,
                                                         dag,
@@ -66,7 +67,7 @@ class InterpreterUtilTest
                                                         knownStateHashes,
                                                         computeState)
     val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    (blockStateHash, updatedKnownStateHashes)
+    (blockStateHash, updatedKnownStateHashes, deployCost)
   }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
@@ -109,7 +110,7 @@ class InterpreterUtilTest
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
-    val (postGenStateHash, postGenKnownStateHashes) =
+    val (postGenStateHash, postGenKnownStateHashes, postGenDeployCost) =
       computeBlockCheckpoint(genesis,
                              genesis,
                              chain,
@@ -123,7 +124,7 @@ class InterpreterUtilTest
     genPostState.contains("@{123}!(5)") should be(true)
 
     val b1 = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes) =
+    val (postB1StateHash, postB1KnownStateHashes, postB1DeployCost) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
@@ -137,7 +138,7 @@ class InterpreterUtilTest
     b1PostState.contains("@{456}!(10)") should be(true)
 
     val b2 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes) =
+    val (postB2StateHash, postB2KnownStateHashes, postB2DeployCost) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
@@ -147,7 +148,7 @@ class InterpreterUtilTest
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
 
     val b3 = chainWithUpdatedB2.idToBlocks(3)
-    val (postb3StateHash, _) =
+    val (postb3StateHash, _, _) =
       computeBlockCheckpoint(b3,
                              genesis,
                              chainWithUpdatedB2,
@@ -209,7 +210,7 @@ class InterpreterUtilTest
       } yield b3
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
-    val (postGenStateHash, postGenKnownStateHashes) =
+    val (postGenStateHash, postGenKnownStateHashes, postGenDeployCost) =
       computeBlockCheckpoint(genesis,
                              genesis,
                              chain,
@@ -218,7 +219,7 @@ class InterpreterUtilTest
                              runtimeManager.computeState)
     val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
     val b1                  = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes) =
+    val (postB1StateHash, postB1KnownStateHashes, postB1DeployCost) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
@@ -227,7 +228,7 @@ class InterpreterUtilTest
                              runtimeManager.computeState)
     val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
     val b2                 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes) =
+    val (postB2StateHash, postB2KnownStateHashes, postB2DeployCost) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
@@ -237,7 +238,7 @@ class InterpreterUtilTest
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
     val updatedGenesis     = chainWithUpdatedB2.idToBlocks(0)
     val b3                 = chainWithUpdatedB2.idToBlocks(3)
-    val (postb3StateHash, _) =
+    val (postb3StateHash, _, postB3DeployCost) =
       computeBlockCheckpoint(b3,
                              updatedGenesis,
                              chainWithUpdatedB2,
@@ -252,7 +253,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
     val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val (computedTsCheckpoint, _) =
+    val (computedTsCheckpoint, _, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
@@ -296,7 +297,7 @@ class InterpreterUtilTest
              "for (@x <- @2) { @3!(x) }")
         .flatMap(mkTerm(_).toOption)
         .map(ProtoUtil.termDeploy)
-    val (computedTsCheckpoint, _) =
+    val (computedTsCheckpoint, _, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
@@ -353,7 +354,7 @@ class InterpreterUtilTest
         |@"recursionTest"!([1,2])
       """.stripMargin
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
-    val (computedTsCheckpoint, _) =
+    val (computedTsCheckpoint, _, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
@@ -414,7 +415,7 @@ class InterpreterUtilTest
              }
           """)
         .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
-    val (computedTsCheckpoint, _) =
+    val (computedTsCheckpoint, _, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
@@ -472,7 +473,7 @@ class InterpreterUtilTest
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
       ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
-    val (computedTsCheckpoint, _) =
+    val (computedTsCheckpoint, _, _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
