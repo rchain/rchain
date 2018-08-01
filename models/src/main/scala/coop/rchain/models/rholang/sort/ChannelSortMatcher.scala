@@ -8,10 +8,10 @@ object ChannelSortMatcher extends Sortable[Channel] {
   def sortMatch(channel: Channel): ScoredTerm[Channel] =
     channel.channelInstance match {
       case Quote(par) =>
-        val sortedPar = ParSortMatcher.sortMatch(par)
+        val sortedPar = Sortable.sortMatch(par)
         ScoredTerm(Quote(sortedPar.term.get), Node(Score.QUOTE, sortedPar.score))
       case ChanVar(par) =>
-        val sortedVar = VarSortMatcher.sortMatch(par)
+        val sortedVar = Sortable.sortMatch(par)
         ScoredTerm(ChanVar(sortedVar.term), Node(Score.CHAN_VAR, sortedVar.score))
       case Empty =>
         ScoredTerm(Empty, Leaf(Score.ABSENT))
