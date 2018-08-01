@@ -14,7 +14,7 @@ class MboxOb extends Ob {
 
   def schedule(ctxt: Ctxt, state: State): Unit = {
     MboxOb.logger.debug(s"Schedule $ctxt from $this")
-    state.strandPool.append((ctxt, state.globalEnv))
+    ctxt.scheduleStrand(state)
   }
 }
 

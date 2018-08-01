@@ -1,12 +1,12 @@
 package coop.rchain.roscala
 
-import java.util.concurrent.{ForkJoinPool, RecursiveAction, TimeUnit}
+import java.util.concurrent.RecursiveAction
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Location._
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
-import coop.rchain.roscala.pools.{ParallelStrandPool, StrandPool, StrandPoolExecutor}
+import coop.rchain.roscala.pools.{StrandPool, StrandPoolExecutor}
 import coop.rchain.roscala.prim.Prim
 
 object Vm {
@@ -25,7 +25,7 @@ object Vm {
                          var nextOpFlag: Boolean = false,
                          var pc: Int = 0,
                          var vmErrorFlag: Boolean = false,
-                         globalEnv: GlobalEnv)(val strandPool: StrandPool) {}
+                         globalEnv: GlobalEnv)(val strandPool: StrandPool)
 
   def run[E: StrandPoolExecutor](ctxt: Ctxt, state: StrandPool => State): Unit = {
     val strandPool = StrandPoolExecutor.instance[E]
@@ -187,7 +187,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
         logger.debug(s"Fork: Schedule cloned ctxt ($newCtxt)")
-        state.strandPool.prepend((newCtxt, globalEnv))
+        state.strandPool.prepend((newCtxt, state))
         state.nextOpFlag = true
 
       /**

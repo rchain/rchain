@@ -20,21 +20,19 @@ object StrandPoolExecutor {
   def instance[E: StrandPoolExecutor](implicit ev: StrandPoolExecutor[E]): ev.Tpe = ev.instance
 
   implicit val parallelExecutor = new StrandPoolExecutor[ParallelStrandPool] {
+    private val pool     = new ParallelStrandPool
     private val executor = new ForkJoinPool(Runtime.getRuntime.availableProcessors())
-    private val pools    = new LinkedBlockingDeque[ParallelStrandPool]()
 
     override type Tpe = ParallelStrandPool
 
     val logger = Logger("StrandPool")
-
-    def addPool(strandPool: ParallelStrandPool): Unit = pools.addFirst(strandPool)
 
     override def start(vm: Vm): Unit = {
       executor.invoke(vm)
       executor.awaitQuiescence(Long.MaxValue, TimeUnit.MILLISECONDS)
     }
 
-    override def instance = new ParallelStrandPool
+    override def instance = pool
   }
 
   implicit val simpleExecutor = new StrandPoolExecutor[SimpleStrandPool] {

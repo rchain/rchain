@@ -1,6 +1,5 @@
 package coop.rchain.roscala.pools
 import com.typesafe.scalalogging.Logger
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.Ctxt
 
@@ -10,9 +9,9 @@ class SimpleStrandPool extends StrandPool {
   private val queue  = mutable.Buffer[Ctxt]()
   private val logger = Logger("SimpleStrandPool")
 
-  override def append(task: (Ctxt, GlobalEnv)): Unit = queue.append(task._1)
+  override def append(task: Task): Unit = queue.append(task._1)
 
-  override def prepend(task: (Ctxt, GlobalEnv)): Unit = queue.prepend(task._1)
+  override def prepend(task: Task): Unit = queue.prepend(task._1)
 
   override def getNextStrand(state: State): Boolean =
     if (queue.isEmpty) {
