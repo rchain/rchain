@@ -49,23 +49,73 @@ object Configuration {
 
   def apply(arguments: Seq[String])(implicit log: Log[Task]): Task[Configuration] =
     for {
-      options    <- Task.delay(commandline.Options(arguments))
-      profile    <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
-      _          <- log.info(s"Starting with profile ${profile.name}")
-      dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
-      configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
-      _          <- log.info(s"Using configuration file: $configFile")
-      configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
-      _ <- configE match {
-            case Right(_) => Task.unit
-            case Left(e)  => log.warn(s"Can't load the configuration file: $e")
-          }
-      config <- Task.pure(configE.toOption)
-      effectiveDataDir <- Task.pure(
-                           if (options.run.data_dir.isDefined) dataDir
-                           else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
-      result <- Task.pure(apply(effectiveDataDir, options, config))
+      options <- Task.delay(commandline.Options(arguments))
+      profile <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
+      _       <- log.info(s"Starting with profile ${profile.name}")
+      result  <- apply(options, subcommand(options), profile)
     } yield result
+
+  private def apply(options: commandline.Options, command: Command, profile: Profile)(
+      implicit log: Log[Task]): Task[Configuration] =
+    if (command == Run) {
+      for {
+        dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
+        _          <- log.info(s"Using configuration file: $configFile")
+        configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
+        _ <- configE match {
+              case Right(_) => Task.unit
+              case Left(e)  => log.warn(s"Can't load the configuration file: $e")
+            }
+        config <- Task.pure(configE.toOption)
+        effectiveDataDir <- Task.pure(
+                             if (options.run.data_dir.isDefined) dataDir
+                             else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+        result <- Task.pure(apply(effectiveDataDir, options, config))
+      } yield result
+    } else {
+      val dataDir = profile.dataDir._1()
+      Task.pure(
+        new Configuration(
+          command,
+          Server(
+            None,
+            DefaultPort,
+            DefaultHttPort,
+            DefaultMetricsPort,
+            DefaultNoUpNP,
+            DefaultTimeout,
+            DefaultBootstrapServer,
+            DefaultStandalone,
+            dataDir,
+            DefaultMapSize
+          ),
+          GrpcServer(
+            options.grpcHost.getOrElse(DefaultGrpcHost),
+            options.grpcPort.getOrElse(DefaultGrpcPort)
+          ),
+          Tls(
+            dataDir.resolve(DefaultCertificateFileName),
+            Paths.get(DefaultKeyFileName),
+            customCertificateLocation = false,
+            customKeyLocation = false
+          ),
+          CasperConf(
+            None,
+            None,
+            DefaultValidatorSigAlgorithm,
+            None,
+            None,
+            DefaultNumValidators,
+            dataDir.resolve("genesis"),
+            None,
+            createGenesis = false
+          ),
+          LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
+          options
+        )
+      )
+    }
 
   private def apply(dataDir: Path,
                     options: commandline.Options,
@@ -186,6 +236,19 @@ object Configuration {
     )
   }
 
+  private def subcommand(options: commandline.Options): Command =
+    options.subcommand match {
+      case Some(options.eval)        => Eval(options.eval.fileNames())
+      case Some(options.repl)        => Repl
+      case Some(options.diagnostics) => Diagnostics
+      case Some(options.deploy)      => Deploy(options.deploy.location())
+      case Some(options.deployDemo)  => DeployDemo
+      case Some(options.propose)     => Propose
+      case Some(options.showBlock)   => ShowBlock(options.showBlock.hash())
+      case Some(options.showBlocks)  => ShowBlocks
+      case Some(options.run)         => Run
+      case _                         => Help
+    }
 }
 
 final class Configuration(
