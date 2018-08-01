@@ -69,7 +69,9 @@ object InterpreterUtil {
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
     : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
-    val (postStateHash, updatedStateHashes, postStateCost) = //TODO: what to do with the postStateCost -- ignore?
+    //TODO: Revisit how the deployment cost should be handled for multiparent blocks
+    //for time being we ignore the `postStateCost`
+    val (postStateHash, updatedStateHashes, postStateCost) =
       computeParentsPostState(parents,
                               genesis,
                               dag,
