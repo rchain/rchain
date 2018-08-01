@@ -58,7 +58,7 @@ object Main {
       case ShowBlock(hash)  => DeployRuntime.showBlock[Task](hash)
       case ShowBlocks       => DeployRuntime.showBlocks[Task]()
       case Run              => nodeProgram(conf)
-      case _                => Task.delay(conf.printHelp())
+      case _                => conf.printHelp()
     }
   }
 
