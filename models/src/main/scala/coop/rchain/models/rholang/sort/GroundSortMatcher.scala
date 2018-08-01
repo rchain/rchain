@@ -9,7 +9,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ParMap, ParSet}
 import coop.rchain.models.rholang.sort.ordering._
 
-object GroundSortMatcher {
+object GroundSortMatcher extends Sortable[ExprInstance] {
   def sortMatch(g: ExprInstance): ScoredTerm[ExprInstance] =
     g match {
       case gb: GBool   => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score)

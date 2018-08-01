@@ -7,6 +7,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
+import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import org.scalatest._
 
@@ -16,10 +17,20 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
-  def assertSpatialMatch[T, P](target: T, pattern: P, expected: Option[FreeMap])(
-      implicit sm: SpatialMatcher[T, P]): Assertion =
-    assert(
-      spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2 == expected)
+  def assertSpatialMatch[T: Sortable, P: Sortable](
+      target: T,
+      pattern: P,
+      expected: Option[FreeMap])(implicit sm: SpatialMatcher[T, P]): Assertion = {
+    assertSorted(target, "target")
+    assertSorted(pattern, "pattern")
+    expected.foreach(_.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
+    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
+    assert(result == expected)
+  }
+
+  private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
+    assert(term == Sortable[T].sortMatch(term).term, s"Invalid test case - ${termName} is not sorted")
+  }
 
   val wc = Wildcard(Var.WildcardMsg())
   "Matching ground with var" should "work" in {
@@ -43,13 +54,13 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching 2 lists in parallel" should "work" in {
     // The second pattern will be checked first because of prepend.
     // It matches both targets, but the first pattern only matches one of the lists.
-    val target: Par = EList(List(GInt(7), GInt(8)), BitSet())
-      .prepend(EList(List(GInt(7), GInt(9)), BitSet()), 0)
-    val pattern: Par = EList(List(EVar(FreeVar(0)).withConnectiveUsed(true), GInt(8)), BitSet())
+    val target: Par = EList(List(GInt(7), GInt(9)), BitSet())
+      .prepend(EList(List(GInt(7), GInt(8)), BitSet()), 0)
+    val pattern: Par = EList(List(EVar(FreeVar(0)).withConnectiveUsed(true), GInt(9)), BitSet())
       .withConnectiveUsed(true)
       .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
         .withConnectiveUsed(true), depth = 1)
-    assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(9))))
+    assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(8))))
   }
 
   "Matching a send's channel" should "work" in {
@@ -82,18 +93,19 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
 
   "Matching extras with free variable" should "work" in {
-    val target: Par  = GInt(7).prepend(GInt(8), depth = 0).prepend(GInt(9), depth = 0)
-    val pattern: Par = GInt(8).prepend(EVar(FreeVar(0)), depth = 1)
+    val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
+    val pattern: Par = EVar(FreeVar(0)).prepend(GInt(8), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
   }
   "Matching extras with wildcard" should "work" in {
-    val target: Par  = GInt(7).prepend(GInt(8), depth = 0).prepend(GInt(9), depth = 0)
-    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())), depth = 1)
+    val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
+    val pattern: Par = EVar(Wildcard(Var.WildcardMsg())).prepend(GInt(8), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
   "Matching extras with wildcard and free variable" should "capture in the free variable" in {
-    val target: Par  = GInt(7).prepend(GInt(8), depth = 0).prepend(GInt(9), depth = 0)
-    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())), depth = 1).prepend(EVar(FreeVar(0)), depth = 1)
+    val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
+    val pattern: Par =
+      EVar(Wildcard(Var.WildcardMsg())).prepend(EVar(FreeVar(0)), depth = 1).prepend(GInt(8), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
@@ -154,8 +166,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val target: New =
       New(2,
           Par()
-            .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
-            .prepend(Send(ChanVar(BoundVar(0)), Seq(GInt(43)), false, locallyFree = BitSet(0))))
+            .prepend(Send(ChanVar(BoundVar(0)), Seq(GInt(43)), false, locallyFree = BitSet(0)))
+            .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false)))
     val pattern: New =
       New(2,
           Par()
@@ -224,8 +236,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching inside bundles" should "not be possible" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false))
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false)))
     val pattern: Bundle = Bundle(
       Par()
         .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false))
@@ -245,8 +257,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   it should "be possible to match on entire bundle" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false))
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false)))
 
     val pattern: Par = EVar(FreeVar(0))
 
@@ -351,22 +363,22 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         Par()
           .addConnectives(nonNullConn, nonNullConn)
           .withConnectiveUsed(true)))
-    // ~{ ~Nil | ~Nil } & ~Nil
-    val prime: Connective = Connective(
-      ConnAndBody(
-        ConnectiveBody(Seq(nonNull, Par().addConnectives(singleFactor).withConnectiveUsed(true)))))
     // x /\ y!(7)
     val capture: Connective =
       Connective(
         ConnAndBody(ConnectiveBody(
           Seq(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), Seq(GInt(7))).withConnectiveUsed(true)))))
+    // ~{ ~Nil | ~Nil } & ~Nil
+    val prime: Connective = Connective(
+      ConnAndBody(
+        ConnectiveBody(Seq(nonNull, Par().addConnectives(singleFactor).withConnectiveUsed(true)))))
     // x!(7) \/ x!(8)
     val alternative: Connective = Connective(
       ConnOrBody(
         ConnectiveBody(Seq(Send(ChanVar(FreeVar(0)), Seq(GInt(7))).withConnectiveUsed(true),
                            Send(ChanVar(FreeVar(0)), Seq(GInt(8))).withConnectiveUsed(true)))))
-    // ~{ ~Nil | ~Nil } & ~Nil | x /\ y!(7) | x!(7) \/ x!(8)
-    val pattern: Par   = Par().addConnectives(prime, capture, alternative).withConnectiveUsed(true)
+    // x /\ y!(7) | ~{ ~Nil | ~Nil } & ~Nil | x!(7) \/ x!(8)
+    val pattern: Par   = Par().addConnectives(capture, prime, alternative).withConnectiveUsed(true)
     val expectedResult = Some(Map[Int, Par](0 -> Send(Quote(GInt(2)), Seq(GInt(7))), 1 -> GInt(2)))
     assertSpatialMatch(target, pattern, expectedResult)
 
@@ -400,8 +412,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
           body = Par(),
           persistent = false,
           bindCount = 0))))
-    val expectedResult = Some(Map.empty[Int, Par])
-    assertSpatialMatch(target, pattern, expectedResult)
+    assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
 
   "Matching ++" should "work" in {

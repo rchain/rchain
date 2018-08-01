@@ -754,7 +754,6 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
-      val datum        = "datum1"
 
       val emptyPoint = space.createCheckpoint()
 
@@ -791,7 +790,6 @@ class ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       val channels     = List("ch1")
       val patterns     = List(Wildcard)
       val continuation = "continuation"
-      val datum        = "datum1"
 
       val emptyPoint = space.createCheckpoint()
 
