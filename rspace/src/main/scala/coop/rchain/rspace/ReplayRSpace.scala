@@ -303,9 +303,9 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
     // create a set of the "new" IOEvents
     val newStuff: Set[Event] = log.filter {
-      case Produce(_) => true
-      case Consume(_) => true
-      case _          => false
+      case Produce(_, _) => true
+      case Consume(_, _) => true
+      case _             => false
     }.toSet
     // create and prepare the ReplayData table
     val rigs: ReplayData = ReplayData.empty
