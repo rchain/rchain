@@ -52,8 +52,8 @@ object Genesis {
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
     val Right((checkpoint, _)) = runtimeManager.computeState(startHash, blessedTerms)
-    val stateHash                       = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    val reductionLog                    = checkpoint.log.map(EventConverter.toCasperEvent)
+    val stateHash              = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val reductionLog           = checkpoint.log.map(EventConverter.toCasperEvent)
 
     val stateWithContracts = for {
       bd <- initial.body

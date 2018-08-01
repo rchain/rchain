@@ -137,8 +137,8 @@ message Header {
 }
 
 message DeployCost {
-    bytes deployHash = 1; //Sha256 hash of the DeployString
-    PCost deployCost = 2;
+    Deploy deploy = 1; //Sha256 hash of the DeployString
+    PCost Cost = 2 ;
 }
 
 message Body {

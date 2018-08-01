@@ -151,20 +151,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         implicit val costAlgebra = costAlg
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
           case Success(_) =>
-            val errors         = errorLog.readAndClearErrorVector()
-            val cost           = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
-            val deployHash     = ByteString.copyFrom(Blake2b256.hash(deploy.raw.get.toByteArray))
-            val deployWithCost = DeployCost(deployHash, Some(cost))
+            val errors     = errorLog.readAndClearErrorVector()
+            val cost       = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+            val deployCost = DeployCost().withDeploy(deploy).withCost(cost)
             if (errors.isEmpty)
-              eval(rest, reducer, errorLog, costAlg, deployWithCost +: accCost)
+              eval(rest, reducer, errorLog, costAlg, deployCost +: accCost)
             else
               Left((deploy, errors, accCost))
           case Failure(ex) =>
-            val otherErrors    = errorLog.readAndClearErrorVector()
-            val cost           = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
-            val deployHash     = ByteString.copyFrom(Blake2b256.hash(deploy.raw.get.toByteArray))
-            val deployWithCost = DeployCost(deployHash, Some(cost))
-            Left((deploy, ex +: otherErrors, deployWithCost +: accCost))
+            val otherErrors = errorLog.readAndClearErrorVector()
+            val cost        = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+            val deployCost  = DeployCost().withDeploy(deploy).withCost(cost)
+            Left((deploy, ex +: otherErrors, deployCost +: accCost))
         }
       case Nil => Right(accCost)
     }
