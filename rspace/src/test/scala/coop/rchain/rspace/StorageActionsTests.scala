@@ -968,7 +968,6 @@ trait StorageActionsTests
       val store    = space.store
       val key      = List("ch1")
       val patterns = List(Wildcard)
-      val keyHash  = store.hashChannels(key)
 
       val r = space.consume(key, patterns, new StringsCaptor, persist = false)
 

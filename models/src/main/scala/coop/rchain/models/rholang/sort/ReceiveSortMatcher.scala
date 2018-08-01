@@ -1,19 +1,17 @@
 package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.{Receive, ReceiveBind}
-import cats.implicits._
-import coop.rchain.models.rholang.implicits._
 
 object ReceiveSortMatcher extends Sortable[Receive] {
 
   def sortBind(bind: ReceiveBind): ScoredTerm[ReceiveBind] = {
     val patterns       = bind.patterns
     val source         = bind.source
-    val sortedPatterns = patterns.toList.map(channel => ChannelSortMatcher.sortMatch(channel))
-    val sortedChannel  = ChannelSortMatcher.sortMatch(source)
+    val sortedPatterns = patterns.toList.map(channel => Sortable.sortMatch(channel))
+    val sortedChannel  = Sortable.sortMatch(source)
     val sortedRemainder = bind.remainder match {
       case Some(bindRemainder) =>
-        val scoredVar = VarSortMatcher.sortMatch(bindRemainder)
+        val scoredVar = Sortable.sortMatch(bindRemainder)
         ScoredTerm(Some(scoredVar.term), scoredVar.score)
       case None => ScoredTerm(None, Leaf(Score.ABSENT))
     }
@@ -28,7 +26,7 @@ object ReceiveSortMatcher extends Sortable[Receive] {
   def sortMatch(r: Receive): ScoredTerm[Receive] = {
     val sortedBinds     = r.binds.toList.map(bind => sortBind(bind))
     val persistentScore = if (r.persistent) 1 else 0
-    val sortedBody      = ParSortMatcher.sortMatch(r.body)
+    val sortedBody      = Sortable.sortMatch(r.body)
     ScoredTerm(
       Receive(sortedBinds.map(_.term),
               sortedBody.term,
