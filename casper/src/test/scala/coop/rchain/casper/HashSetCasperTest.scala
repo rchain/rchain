@@ -1,11 +1,12 @@
 package coop.rchain.casper
 
 import cats.{ApplicativeError, Id}
+import cats.data.EitherT
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode, TaskCasper}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -50,23 +51,31 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "not allow multiple threads to process the same block" in {
-    val scheduler          = Scheduler.fixedPool("two-threads", 3)
-    val (casperT, cleanUp) = TaskCasper(validatorKeys.head, genesis)(scheduler)
+    val scheduler            = Scheduler.fixedPool("two-threads", 3)
+    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
+
+    def zip[A, B, C](x: Either[A, B], y: Either[A, C]): Either[A, (B, C)] =
+      for {
+        a <- x
+        b <- y
+      } yield (a, b)
 
     val deploy = ProtoUtil.basicDeploy(0)
     val testProgram = for {
-      casper <- casperT
+      casper <- casperEff
       _      <- casper.deploy(deploy)
       block  <- casper.createBlock.map(_.get)
-      race   <- Task.racePair(casper.addBlock(block), casper.addBlock(block))
-      result <- race match {
-                 case Left((statusA, running)) =>
-                   running.join.map(statusA -> _)
-                 case Right((running, statusB)) => running.join.map(_ -> statusB)
-               }
+      result <- EitherT(
+                 Task.racePair(casper.addBlock(block).value, casper.addBlock(block).value).flatMap {
+                   case Left((statusA, running)) =>
+                     running.join.map(zip(statusA, _))
+
+                   case Right((running, statusB)) =>
+                     running.join.map(zip(_, statusB))
+                 })
     } yield result
     val threadStatuses: (BlockStatus, BlockStatus) =
-      new TaskOps(testProgram)(scheduler).unsafeRunSync
+      new TaskOps(testProgram.value)(scheduler).unsafeRunSync.right.get
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
     cleanUp()

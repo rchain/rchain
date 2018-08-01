@@ -337,8 +337,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     tcpConnections <- effects.tcpConnections.toEffect
     log            = effects.log
     time           = effects.time
-    sync           = SyncInstances.syncEffect
-    metrics        = diagnostics.metrics[Task]
+    sync = SyncInstances.syncEffect[CommError](commError => {
+      new Exception(s"CommError: $commError")
+    }, e => { UnknownCommError(e.getMessage) })
+    metrics = diagnostics.metrics[Task]
     transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(src)(scheduler,
                                                                                      tcpConnections,
                                                                                      log)
