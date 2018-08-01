@@ -29,7 +29,7 @@ object Converter {
     def parse(s: List[(String, List[String])]): Either[String, Option[Flag]] =
       flagConverter.parse(s).map(_.map(flag))
 
-    val argType: ArgType.V = ArgType.SINGLE
+    val argType: ArgType.V = ArgType.FLAG
   }
 }
 

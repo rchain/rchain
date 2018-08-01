@@ -9,7 +9,6 @@ import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
-import cats.syntax.either._
 
 import monix.eval.Task
 

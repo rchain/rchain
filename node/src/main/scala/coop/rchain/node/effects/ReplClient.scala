@@ -1,9 +1,12 @@
 package coop.rchain.node.effects
 
 import java.nio.file.{Files, Path, Paths}
+import java.util.concurrent.TimeUnit
 
 import cats.implicits._
+
 import coop.rchain.node.model.repl._
+
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -41,4 +44,6 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] {
 
   private def readContent(filePath: Path): String =
     new String(Files.readAllBytes(filePath))
+
+  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }
