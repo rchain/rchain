@@ -263,6 +263,18 @@ class InterpreterUtilTest
     b3PostState.contains("@{6}!(6)") should be(true)
   }
 
+  def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
+    val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
+                                                deploy,
+                                                BlockMessage(),
+                                                initState,
+                                                BlockStore[Id].asMap(),
+                                                emptyStateHash,
+                                                knownStateHashes,
+                                                runtimeManager.computeState)
+    cost
+  }
+
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in {
     //reference costs
     //deploy each Rholang program separately and record its cost
@@ -270,18 +282,6 @@ class InterpreterUtilTest
     val deploy2 = ProtoUtil.termDeploy(mkTerm("@3!([1,2,3,4])").toOption.get)
     val deploy3 =
       ProtoUtil.termDeploy(mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get)
-
-    def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
-      val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
-                                                  deploy,
-                                                  BlockMessage(),
-                                                  initState,
-                                                  BlockStore[Id].asMap(),
-                                                  emptyStateHash,
-                                                  knownStateHashes,
-                                                  runtimeManager.computeState)
-      cost
-    }
 
     val cost1 = computeSingleDeployCost(deploy1)
     val cost2 = computeSingleDeployCost(deploy2)
@@ -301,18 +301,6 @@ class InterpreterUtilTest
       //deploy each Rholang program separately and record its cost
       val deploy1 = ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get)
       val deploy2 = ProtoUtil.termDeploy(mkTerm("@2!([1,2,3,4])").toOption.get)
-
-      def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
-        val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
-                                                    deploy,
-                                                    BlockMessage(),
-                                                    initState,
-                                                    BlockStore[Id].asMap(),
-                                                    emptyStateHash,
-                                                    knownStateHashes,
-                                                    runtimeManager.computeState)
-        cost
-      }
 
       val cost1 = computeSingleDeployCost(deploy1)
       val cost2 = computeSingleDeployCost(deploy2)

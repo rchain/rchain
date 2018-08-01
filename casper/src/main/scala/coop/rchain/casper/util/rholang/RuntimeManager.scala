@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Bond, Deploy, DeployCost, DeployString}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Sha256}
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
