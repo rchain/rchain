@@ -2,7 +2,7 @@ package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.{Match, MatchCase}
 
-object MatchSortMatcher extends Sortable[Match] {
+private[sort] object MatchSortMatcher extends Sortable[Match] {
   def sortMatch(m: Match): ScoredTerm[Match] = {
     def sortCase(matchCase: MatchCase): ScoredTerm[MatchCase] = {
       val sortedPattern = Sortable.sortMatch(matchCase.pattern)

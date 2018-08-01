@@ -2,7 +2,7 @@ package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.Par
 
-object ParSortMatcher extends Sortable[Par] {
+private[sort] object ParSortMatcher extends Sortable[Par] {
   def sortMatch(par: Par): ScoredTerm[Par] = {
     val sends       = par.sends.toList.map(s => Sortable.sortMatch(s)).sorted
     val receives    = par.receives.toList.map(r => Sortable.sortMatch(r)).sorted

@@ -5,7 +5,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, Empty, FreeVar, Wildcard}
 import cats.implicits._
 import cats.syntax._
 
-object VarSortMatcher extends Sortable[Var] {
+private[sort] object VarSortMatcher extends Sortable[Var] {
   def sortMatch(v: Var): ScoredTerm[Var] =
     v.varInstance match {
       case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level))

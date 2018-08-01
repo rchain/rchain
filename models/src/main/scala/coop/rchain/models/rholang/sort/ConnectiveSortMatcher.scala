@@ -4,7 +4,7 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.{Connective, VarRef}
 import coop.rchain.models.rholang.implicits._
 
-object ConnectiveSortMatcher extends Sortable[Connective] {
+private[sort] object ConnectiveSortMatcher extends Sortable[Connective] {
   def sortMatch(c: Connective): ScoredTerm[Connective] =
     c.connectiveInstance match {
       case ConnAndBody(cb) =>

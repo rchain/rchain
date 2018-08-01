@@ -3,7 +3,7 @@ package coop.rchain.models.rholang.sort
 import coop.rchain.models.Send
 import coop.rchain.models.rholang.implicits._
 
-object SendSortMatcher extends Sortable[Send] {
+private[sort] object SendSortMatcher extends Sortable[Send] {
   def sortMatch(s: Send): ScoredTerm[Send] = {
     val sortedChan = Sortable.sortMatch(s.chan)
     val sortedData = s.data.toList.map(Sortable.sortMatch(_))

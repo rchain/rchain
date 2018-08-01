@@ -5,7 +5,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 
-object ExprSortMatcher extends Sortable[Expr] {
+private[sort] object ExprSortMatcher extends Sortable[Expr] {
   private def sortBinaryOperation(p1: Par, p2: Par): (ScoredTerm[Par], ScoredTerm[Par]) =
     (Sortable.sortMatch(p1), Sortable.sortMatch(p2))
 

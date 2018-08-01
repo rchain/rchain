@@ -5,7 +5,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Par, ParMap, ParSet, SortedParHashSet}
 
-object GroundSortMatcher extends Sortable[ExprInstance] {
+private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
   def sortMatch(g: ExprInstance): ScoredTerm[ExprInstance] =
     g match {
       case gb: GBool   => ScoredTerm(g, Sortable.sortMatch(gb).score)
