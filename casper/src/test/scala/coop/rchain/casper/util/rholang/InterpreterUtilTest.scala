@@ -251,6 +251,68 @@ class InterpreterUtilTest
     b3PostState.contains("@{6}!(6)") should be(true)
   }
 
+  "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in {
+    //reference costs
+    //deploy each Rholang program separately and record its cost
+    val deploy1 = ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get)
+    val deploy2 = ProtoUtil.termDeploy(mkTerm("@3!([1,2,3,4])").toOption.get)
+    val deploy3 = ProtoUtil.termDeploy(mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get)
+
+    def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
+      val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
+        deploy,
+        BlockMessage(),
+        initState,
+        BlockStore[Id].asMap(),
+        emptyStateHash,
+        knownStateHashes,
+        runtimeManager.computeState)
+      cost
+    }
+
+    val cost1 = computeSingleDeployCost(deploy1)
+    val cost2 = computeSingleDeployCost(deploy2)
+    val cost3 = computeSingleDeployCost(deploy3)
+
+    val accCostsSep = cost1 ++ cost2 ++ cost3
+
+    //cost within the block should be the same as sum of deploying all programs separately
+    val singleDeploy = Seq(deploy1, deploy2, deploy3)
+    val accCostBatch = computeSingleDeployCost(singleDeploy:_*)
+
+    accCostBatch should contain theSameElementsAs (accCostsSep)
+  }
+
+  it should "return cost of deploying even if one of the programs withing the deployment throws an error" in {
+    //reference costs
+    //deploy each Rholang program separately and record its cost
+    val deploy1 = ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get)
+    val deploy2 = ProtoUtil.termDeploy(mkTerm("@2!([1,2,3,4])").toOption.get)
+
+    def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
+      val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
+        deploy,
+        BlockMessage(),
+        initState,
+        BlockStore[Id].asMap(),
+        emptyStateHash,
+        knownStateHashes,
+        runtimeManager.computeState)
+      cost
+    }
+
+    val cost1 = computeSingleDeployCost(deploy1)
+    val cost2 = computeSingleDeployCost(deploy2)
+
+    val accCostsSep = cost1 ++ cost2
+
+    val deployErr = ProtoUtil.termDeploy(mkTerm("@3!(\"a\" + 3)").toOption.get)
+    val batchDeploy = Seq(deploy1, deploy2, deployErr)
+    val accCostBatch = computeSingleDeployCost(batchDeploy:_*)
+
+    accCostBatch should contain theSameElementsAs (accCostsSep)
+  }
+
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
     val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
     val (computedTsCheckpoint, _, _) =
