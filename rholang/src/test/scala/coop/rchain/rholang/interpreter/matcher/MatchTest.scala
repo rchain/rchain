@@ -443,7 +443,6 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     // x -- y
     val pattern        = Expr(EMinusMinusBody(EMinusMinus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
     val expectedResult = Some(Map[Int, Par](0 -> lhsSet, 1 -> rhsSet))
-    val result         = spatialMatch(target, pattern).runS(emptyMap)
     assertSpatialMatch(target, pattern, expectedResult)
   }
 }
