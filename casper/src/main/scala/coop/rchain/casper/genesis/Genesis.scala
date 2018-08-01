@@ -51,8 +51,7 @@ object Genesis {
                     initial: BlockMessage,
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-    //TODO: ignore `deployCost` of blessed contracts?
-    val Right((checkpoint, deployCost)) = runtimeManager.computeState(startHash, blessedTerms)
+    val Right((checkpoint, _)) = runtimeManager.computeState(startHash, blessedTerms)
     val stateHash                       = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     val reductionLog                    = checkpoint.log.map(EventConverter.toCasperEvent)
 
