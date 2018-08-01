@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Bond, Deploy, DeployCost, DeployString}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.hash.{Blake2b512Random, Sha256}
+import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Sha256}
 import coop.rchain.models._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -157,7 +157,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case Success(_) =>
             val errors         = errorLog.readAndClearErrorVector()
             val cost           = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
-            val deployHash     = ByteString.copyFrom(Sha256.hash(deploy.raw.get.toByteArray))
+            val deployHash     = ByteString.copyFrom(Blake2b256.hash(deploy.raw.get.toByteArray))
             val deployWithCost = DeployCost(deployHash, Some(cost))
             if (errors.isEmpty)
               eval(rest, reducer, errorLog, costAlg, deployWithCost +: accCost)
@@ -166,7 +166,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           case Failure(ex) =>
             val otherErrors    = errorLog.readAndClearErrorVector()
             val cost           = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
-            val deployHash     = ByteString.copyFrom(Sha256.hash(deploy.raw.get.toByteArray))
+            val deployHash     = ByteString.copyFrom(Blake2b256.hash(deploy.raw.get.toByteArray))
             val deployWithCost = DeployCost(deployHash, Some(cost))
             Left((deploy, ex +: otherErrors, deployWithCost +: accCost))
         }
