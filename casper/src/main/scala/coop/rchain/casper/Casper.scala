@@ -172,7 +172,11 @@ sealed abstract class MultiParentCasperInstances {
                      case Right((_, true)) =>
                        internalAddBlock(b).flatMap(status =>
                          Capture[F].capture { processingBlocks.update(_ - b.blockHash); status })
-                     case Left(ex) => BlockStatus.exception(ex).pure[F]
+                     case Left(ex) =>
+                       Log[F]
+                         .warn(
+                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} encounted an exception during processing: ${ex.getMessage}")
+                         .map(_ => BlockStatus.exception(ex))
                    }
         } yield result
 
