@@ -23,7 +23,7 @@ import coop.rchain.shared._
 import ThrowableOps._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
-import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 
@@ -212,20 +212,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  def handleCommunications(
-      implicit
-      log: Log[Task],
-      time: Time[Task],
-      metrics: Metrics[Task],
-      transport: TransportLayer[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      packetHandler: PacketHandler[Effect]): Protocol => Effect[CommunicationResponse] = { pm =>
-    NodeDiscovery[Effect].handleCommunications(pm) >>= {
-      case NotHandled(_) => Connect.dispatch[Effect](pm, defaultTimeout)
-      case handled       => handled.pure[Effect]
-    }
-  }
-
   private def nodeProgram(runtime: Runtime, casperRuntime: Runtime)(
       implicit
       log: Log[Task],
@@ -239,7 +225,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       casperConstructor: MultiParentCasperConstructor[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task]
-  ): Effect[Unit] =
+  ): Effect[Unit] = {
+
+    val handleCommunication = (pm: Protocol) =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case NotHandled(_) => HandleMessages.dispatch[Effect](pm, defaultTimeout)
+        case handled       => handled.pure[Effect]
+    }
     for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
@@ -247,7 +239,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(handleCommunications())
+      _       <- TransportLayer[Effect].receive(handleCommunication)
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
@@ -264,6 +256,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
           else ().pure[Effect]
       _ <- exit0.toEffect
     } yield ()
+
+  }
 
   /**
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly

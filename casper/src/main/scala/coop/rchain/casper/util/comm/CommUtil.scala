@@ -10,7 +10,7 @@ import coop.rchain.comm.{PeerNode, ProtocolHelper}
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
-import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp._
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.{PacketType, TransportLayer}
 import coop.rchain.comm.transport.CommMessages.{packet, toPacket}
@@ -86,7 +86,7 @@ object CommUtil {
 
                       (maybeSender, maybePacket) match {
                         case (Some(sender), Some(_)) =>
-                          Connect
+                          HandleMessages
                             .handlePacket[F](sender, maybePacket)
                             .flatMap(_ => {
                               MultiParentCasperConstructor[F].lastApprovedBlock.flatMap {
