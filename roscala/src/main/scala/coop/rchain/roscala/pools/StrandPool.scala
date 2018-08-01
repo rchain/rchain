@@ -1,6 +1,7 @@
 package coop.rchain.roscala.pools
 
 import coop.rchain.roscala.GlobalEnv
+import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.Ctxt
 
 trait StrandPool {
@@ -8,7 +9,5 @@ trait StrandPool {
 
   def prepend(task: (Ctxt, GlobalEnv)): Unit
 
-  def dequeue: Ctxt
-
-  def isEmpty: Boolean
+  def getNextStrand(state: State): Boolean
 }

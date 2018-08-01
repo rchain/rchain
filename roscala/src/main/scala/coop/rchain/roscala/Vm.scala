@@ -625,31 +625,12 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
 
   def executeFlags(state: Vm.State): Unit =
     if (state.doNextThreadFlag) {
-      if (getNextStrand(state))
+      if (state.strandPool.getNextStrand(state))
         state.exitFlag = true
       else {
         state.nextOpFlag = true
         state.doNextThreadFlag = false
       }
-    }
-
-  def getNextStrand(state: State): Boolean =
-    if (state.strandPool.isEmpty) {
-      logger.debug("Empty strandPool")
-      true
-    } else {
-      logger.debug(s"Waiting for a Ctxt to complete")
-
-      val ctxt = state.strandPool.dequeue
-
-      logger.debug(s"Ctxt completed. Install $ctxt")
-
-      // Install `ctxt`
-      state.ctxt = ctxt
-      state.code = ctxt.code
-      state.pc = ctxt.pc
-
-      false
     }
 
   /**
