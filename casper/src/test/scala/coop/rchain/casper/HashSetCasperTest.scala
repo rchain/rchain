@@ -17,6 +17,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.shared.EitherOps.zip
 import java.nio.file.Files
 
 import coop.rchain.blockstorage.BlockStore
@@ -52,14 +53,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "not allow multiple threads to process the same block" in {
-    val scheduler            = Scheduler.fixedPool("two-threads", 3)
+    val scheduler            = Scheduler.fixedPool("three-threads", 3)
     val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
-
-    def zip[A, B, C](x: Either[A, B], y: Either[A, C]): Either[A, (B, C)] =
-      for {
-        a <- x
-        b <- y
-      } yield (a, b)
 
     val deploy = ProtoUtil.basicDeploy(0)
     val testProgram = for {
