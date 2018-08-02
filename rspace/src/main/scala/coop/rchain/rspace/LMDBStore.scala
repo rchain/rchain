@@ -179,7 +179,7 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).foreach { gnat =>
-      insertGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
+      installGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }

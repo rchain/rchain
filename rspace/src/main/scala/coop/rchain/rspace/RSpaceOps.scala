@@ -51,7 +51,6 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
                      |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
-    installs.update(_.updated(channels, Install(patterns, continuation, m)))
 
     /*
      * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -72,6 +71,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     options match {
       case None =>
         store.removeAll(txn, channels)
+        installs.update(_.updated(channels, Install(patterns, continuation, m)))
         store.installWaitingContinuation(
           txn,
           channels,
