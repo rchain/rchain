@@ -83,24 +83,27 @@ object HandleMessages {
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration
-  ): F[CommunicationResponse] =
+  ): F[CommunicationResponse] = {
+
+    def notHandledHandshake(error: CommError): F[CommunicationResponse] =
+      Log[F]
+        .warn(s"Not adding. Could receive Pong message back from $peer, reason: $error")
+        .as(notHandled(error))
+
+    def handledHandshake(local: PeerNode): F[CommunicationResponse] =
+      for {
+        _ <- NodeDiscovery[F].addNode(peer)
+        _ <- ConnectionsCell[F].modify(cs => (cs + peer).pure[F])
+        _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
+      } yield handledWithMessage(protocolHandshakeResponse(local))
+
     for {
-      local  <- TransportLayer[F].local
-      _      <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      hbrErr <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
-      commResponse <- hbrErr.fold(
-                       error =>
-                         Log[F]
-                           .warn(
-                             s"Not adding. Could receive Pong message back from $peer, reason: $error")
-                           .as(notHandled(error)),
-                       _ =>
-                         NodeDiscovery[F].addNode(peer) *>
-                           Log[F]
-                             .info(s"Responded to protocol handshake request from $peer")
-                             .as(handledWithMessage(protocolHandshakeResponse(local)))
-                     )
+      local        <- TransportLayer[F].local
+      _            <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
+      commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
+  }
 
   def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler](
       peer: PeerNode,
