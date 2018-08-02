@@ -55,23 +55,17 @@ object Runtime {
                                        replaySpace: RhoISpace,
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-    processes.map {
+    processes.flatMap {
       case (name, arity, remainder, ref) =>
-        space.install(
-          List(Channel(Quote(GString(name)))),
-          List(
-            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                        remainder,
-                        freeCount = arity)),
-          TaggedContinuation(ScalaBodyRef(ref))
-        )
-        replaySpace.install(
-          List(Channel(Quote(GString(name)))),
-          List(
-            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                        remainder,
-                        freeCount = arity)),
-          TaggedContinuation(ScalaBodyRef(ref))
+        val channels = List(Channel(Quote(GString(name))))
+        val patterns = List(
+          BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+                      remainder,
+                      freeCount = arity))
+        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        Seq(
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }
 
