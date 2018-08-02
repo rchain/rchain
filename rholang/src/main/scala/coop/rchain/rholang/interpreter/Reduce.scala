@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Foldable, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -433,7 +433,7 @@ object Reduce {
           val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
           _env.put(addr)
         }
-        def addUrn(urn: String, newEnv: Env[Par]): Either[ReduceError, Env[Par]] =
+        def addUrn(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
           urnMap.get(urn) match {
             case Some(p) => Right(newEnv.put(p))
             case None    => Left(ReduceError(s"Unknown urn for new: ${urn}"))
@@ -441,22 +441,11 @@ object Reduce {
         // This is non-functional, but it's a self-contained implementation of a
         // functional early terminating left fold, and the library does the same
         // thing with vars.
-        def foldLeftEarly[A, B, E](as: Seq[A],
-                                   init: B,
-                                   cata: (A, B) => Either[E, B]): Either[E, B] = {
-          var result: Either[E, B] = Right(init)
-          var acc                  = init
-          for (a <- as) {
-            cata(a, acc) match {
-              case l: Left[E, B] => return l
-              case r @ Right(newAcc) =>
-                result = r
-                acc = newAcc
-            }
-          }
-          return result
-        }
-        foldLeftEarly(urns, simpleNews, addUrn) match {
+        def foldLeftEarly[A, B, E](init: B,
+                                   as: Seq[A],
+                                   cata: (B, A) => Either[E, B]): Either[E, B] =
+          Foldable[List].foldM(as.toList, init)(cata)
+        foldLeftEarly(simpleNews, urns, addUrn) match {
           case Right(env) => Applicative[M].pure(env)
           case Left(e)    => s.raiseError(e)
         }
