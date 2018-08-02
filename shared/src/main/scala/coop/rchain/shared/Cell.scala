@@ -25,6 +25,11 @@ object Cell extends CellInstances0 {
         def read: Task[S] = mvar.read
       }
     }
+
+  def const[F[_]: Applicative, S](const: S): Cell[F, S] = new Cell[F, S] {
+    def modify(f: S => F[S]): F[Unit] = ().pure[F]
+    def read: F[S]                    = const.pure[F]
+  }
 }
 
 trait CellInstances0 {

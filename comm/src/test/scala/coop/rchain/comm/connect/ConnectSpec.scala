@@ -28,6 +28,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect](src)
   implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
+  implicit val connectionsCell   = Cell.const(Connect.Connections.empty)
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()
