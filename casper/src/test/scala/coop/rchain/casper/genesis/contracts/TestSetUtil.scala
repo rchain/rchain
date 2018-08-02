@@ -8,9 +8,10 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.unittest.TestSet
-
 import java.nio.file.Files
 
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.io.Source
@@ -24,11 +25,13 @@ object TestSetUtil {
   }
 
   def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler,
-                                             rand: Blake2b512Random): Unit =
+                                             rand: Blake2b512Random,
+                                             costAccountingAlg: CostAccountingAlg[Task]): Unit =
     runtime.reducer.inj(term).unsafeRunSync
 
   def eval(code: String, runtime: Runtime)(implicit scheduler: Scheduler,
-                                           rand: Blake2b512Random): Unit =
+                                           rand: Blake2b512Random,
+                                           costAccountingAlg: CostAccountingAlg[Task]): Unit =
     mkTerm(code) match {
       case Right(term) => eval_term(term, runtime)
       case Left(ex)    => throw ex
@@ -37,16 +40,20 @@ object TestSetUtil {
   def runTests(tests: Par, otherLibs: Seq[Par], runtime: Runtime)(
       implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
-    val rand = Blake2b512Random(128)
-    eval_term(LinkedList.term, runtime)(implicitly, rand.splitShort(0))
-    eval_term(TestSet.term, runtime)(implicitly, rand.splitShort(1))
+    val rand              = Blake2b512Random(128)
+    val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    eval_term(LinkedList.term, runtime)(implicitly, rand.splitShort(0), costAccountingAlg)
+    eval_term(TestSet.term, runtime)(implicitly, rand.splitShort(1), costAccountingAlg)
 
     //load "libraries" required for this particular set of tests
     otherLibs.zipWithIndex.foreach {
-      case (lib, idx) => eval_term(lib, runtime)(implicitly, rand.splitShort((idx + 2).toShort))
+      case (lib, idx) =>
+        eval_term(lib, runtime)(implicitly, rand.splitShort((idx + 2).toShort), costAccountingAlg)
     }
 
-    eval_term(tests, runtime)(implicitly, rand.splitShort((otherLibs.length + 2).toShort))
+    eval_term(tests, runtime)(implicitly,
+                              rand.splitShort((otherLibs.length + 2).toShort),
+                              costAccountingAlg)
   }
 
   /**

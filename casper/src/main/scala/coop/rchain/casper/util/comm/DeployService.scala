@@ -1,11 +1,13 @@
 package coop.rchain.casper.util.comm
 
+import java.util.concurrent.TimeUnit
+
 import cats.implicits._
 
 import com.google.protobuf.empty.Empty
-
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployServiceGrpc, DeployString}
+
 import monix.eval.Task
 
 trait DeployService[F[_]] {
@@ -53,4 +55,6 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] {
     val response = blockingStub.addBlock(b)
     (response.success, response.message)
   }
+
+  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }

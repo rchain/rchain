@@ -126,7 +126,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
   "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
     implicit blockStore =>
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val deploys                  = (0 until 6).map(basicDeploy)
+      val deploys                  = (0 until 6).map(basicDeployCost)
 
       def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {

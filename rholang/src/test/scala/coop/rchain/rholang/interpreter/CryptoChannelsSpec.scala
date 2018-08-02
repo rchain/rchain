@@ -3,9 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
@@ -13,11 +11,13 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.RhoIStore
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.internal.{Datum, Row}
-import coop.rchain.rspace.{IStore, Serialize}
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -37,8 +37,8 @@ class CryptoChannelsSpec
   behavior of "Crypto channels"
 
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-  type Store = IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
-
+  implicit val costAccountingAlg: CostAccountingAlg[Task] =
+    CostAccountingAlg.unsafe[Task](CostAccount.zero)
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[ListChannelWithRandom] =
     storage.implicits.serializeChannels
@@ -51,7 +51,7 @@ class CryptoChannelsSpec
   val parToExpr: Par => Expr                           = parToByteString andThen byteStringToExpr
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
-  def clearStore(store: Store,
+  def clearStore(store: RhoIStore,
                  reduce: Reduce[Task],
                  ackChannel: Par,
                  timeout: Duration = 3.seconds)(implicit env: Env[Par]): Unit = {
@@ -62,7 +62,7 @@ class CryptoChannelsSpec
     Await.ready(reduce.eval(consume).runAsync, 3.seconds)
   }
 
-  def assertStoreContains(store: Store)(ackChannel: GString)(data: ListChannelWithRandom)(
+  def assertStoreContains(store: RhoIStore)(ackChannel: GString)(data: ListChannelWithRandom)(
       implicit
       serializeChannel: Serialize[Channel],
       serializeChannels: Serialize[ListChannelWithRandom]): Assertion = {
@@ -221,6 +221,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (Reduce[Task], Store)
+  override type FixtureParam = (Reduce[Task], RhoIStore)
 
 }

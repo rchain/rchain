@@ -50,7 +50,7 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[Deploy] = Seq.empty[Deploy],
+      deploys: Seq[DeployCost] = Seq.empty[DeployCost],
       tsHash: ByteString = ByteString.EMPTY,
       tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
     for {

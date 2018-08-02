@@ -2,80 +2,94 @@ package coop.rchain.node
 
 import java.security.Security
 
-import coop.rchain.shared.StringOps._
-import cats.implicits._
-
+import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-import scala.collection.JavaConverters._
-import coop.rchain.comm._
-import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeployService}
-import coop.rchain.node.effects.{ConsoleIO, GrpcReplClient, ReplClient}
-import coop.rchain.catscontrib.TaskContrib._
+
+import cats.implicits._
+
+import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm._
+import coop.rchain.node.configuration._
+import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
+import coop.rchain.node.effects._
+import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.StringOps._
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Main {
 
-  def main(args: Array[String]): Unit = {
-    val conf = Conf(args)
-    println(s"Starting with profile ${conf.profile.toOption.map(_.name).getOrElse("unknown")}")
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val log: Log[Task]       = effects.log
+  private implicit val io: SchedulerService = Scheduler.io("repl-io")
 
+  def main(args: Array[String]): Unit = {
     Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
-    implicit val io: SchedulerService = Scheduler.io("repl-io")
+    val exec: Task[Unit] =
+      for {
+        conf <- Configuration(args)
+        _    <- mainProgram(conf)
+      } yield ()
 
-    implicit val replService: ReplClient[Task] =
-      new GrpcReplClient(conf.grpcHost(), conf.grpcPort())
-    implicit val diagnosticsService: diagnostics.client.DiagnosticsService[Task] =
-      new diagnostics.client.GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
-    implicit val deployService: DeployService[Task] =
-      new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
-
-    val exec: Task[Unit] = conf.subcommand match {
-      case Some(conf.eval) => {
-        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        new ReplRuntime(conf).evalProgram[Task](conf.eval.fileNames.toOption.get)
-      }
-      case Some(conf.repl) => {
-        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        new ReplRuntime(conf).replProgram[Task].as(())
-      }
-      case Some(conf.diagnostics) => {
-        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        diagnostics.client.Runtime.diagnosticsProgram[Task]
-      }
-      case Some(conf.deploy) =>
-        DeployRuntime.deployFileProgram[Task](conf.deploy.location.toOption.get)
-
-      case Some(conf.deployDemo) => DeployRuntime.deployDemoProgram[Task]
-      case Some(conf.propose)    => DeployRuntime.propose[Task]()
-      case Some(conf.showBlock) =>
-        DeployRuntime.showBlock[Task](conf.showBlock.hash.toOption.get)
-      case Some(conf.showBlocks) =>
-        DeployRuntime.showBlocks[Task]()
-      case Some(conf.run) =>
-        new NodeRuntime(conf).main.value.map {
-          case Right(_) => ()
-          case Left(CouldNotConnectToBootstrap) =>
-            println("Node could not connect to bootstrap node.")
-          case Left(error) => println(s"Failed! Reason: '$error")
-        }
-      case _ => Task.delay(conf.printHelp())
-    }
     exec.unsafeRunSync
   }
 
-  private def createConsole: ConsoleReader = {
+  private def mainProgram(conf: Configuration): Task[Unit] = {
+    implicit val replService: GrpcReplClient =
+      new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.port)
+    implicit val diagnosticsService: GrpcDiagnosticsService =
+      new diagnostics.client.GrpcDiagnosticsService(conf.grpcServer.host, conf.grpcServer.port)
+    implicit val deployService: GrpcDeployService =
+      new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.port)
+
+    val program = conf.command match {
+      case Eval(files)      => new ReplRuntime().evalProgram[Task](files)
+      case Repl             => new ReplRuntime().replProgram[Task].as(())
+      case Diagnostics      => diagnostics.client.Runtime.diagnosticsProgram[Task]
+      case Deploy(location) => DeployRuntime.deployFileProgram[Task](location)
+      case DeployDemo       => DeployRuntime.deployDemoProgram[Task]
+      case Propose          => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)  => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks       => DeployRuntime.showBlocks[Task]()
+      case Run              => nodeProgram(conf)
+      case _                => conf.printHelp()
+    }
+
+    program.doOnFinish(_ =>
+      Task.delay {
+        replService.close()
+        diagnosticsService.close()
+        deployService.close()
+    })
+  }
+
+  private def nodeProgram(conf: Configuration): Task[Unit] =
+    for {
+      host   <- conf.fetchHost
+      result <- new NodeRuntime(conf, host).main.value
+      _ <- result match {
+            case Right(_) =>
+              Task.unit
+            case Left(CouldNotConnectToBootstrap) =>
+              log.error("Node could not connect to bootstrap node.")
+            case Left(error) =>
+              log.error(s"Failed! Reason: '$error")
+          }
+    } yield ()
+
+  implicit private def consoleIO: ConsoleIO[Task] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
     console.setPrompt("rholang $ ".green)
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
-    console
+    effects.consoleIO(console)
   }
 
 }
