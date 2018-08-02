@@ -440,6 +440,7 @@ object ProcNormalizeMatcher {
       case p: PAdd            => binaryExp(p.proc_1, p.proc_2, input, EPlus.apply)
       case p: PMinus          => binaryExp(p.proc_1, p.proc_2, input, EMinus.apply)
       case p: PPlusPlus       => binaryExp(p.proc_1, p.proc_2, input, EPlusPlus.apply)
+      case p: PMinusMinus     => binaryExp(p.proc_1, p.proc_2, input, EMinusMinus.apply)
 
       case p: PLt  => binaryExp(p.proc_1, p.proc_2, input, ELt.apply)
       case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELte.apply)

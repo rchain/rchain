@@ -2,10 +2,10 @@ package coop.rchain.roscala.ob
 
 import com.typesafe.scalalogging.Logger
 
-import coop.rchain.roscala.ob.Ob.logger
+import Ob.logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
-
+import coop.rchain.roscala.ob.Ob.logger
 import coop.rchain.roscala.ob.mbox.MboxOb
 import coop.rchain.roscala.util.Slot
 
@@ -18,9 +18,9 @@ abstract class Ob {
 
   def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
 
-  def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
+  def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = Niv
 
-  def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State, globalEnv: GlobalEnv): Ob = Niv
+  def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = Niv
 
   def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
     if (keyMeta == NilMeta)
@@ -34,24 +34,24 @@ abstract class Ob {
     *
     * `ctxt.trgt` contains the key.
     */
-  def lookupAndInvoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
-    val fn = meta.lookupObo(this, ctxt.trgt)(globalEnv)
+  def lookupAndInvoke(ctxt: Ctxt, state: State): Ob = {
+    val fn = meta.lookupObo(this, ctxt.trgt, state.globalEnv)
     logger.debug(s"Lookup and invoke $fn")
-    fn.invoke(ctxt, state, globalEnv)
+    fn.invoke(ctxt, state, state.globalEnv)
   }
 
-  def lookup(key: Ob)(globalEnv: GlobalEnv): Ob = {
+  def lookup(key: Ob, globalEnv: GlobalEnv): Ob = {
     logger.debug(s"Lookup for $key in $this")
     val me     = this
-    val result = meta.get(me, key)(globalEnv)
+    val result = meta.get(me, key, globalEnv)
 
     if (result == Absent)
-      parent.lookup(key)(globalEnv)
+      parent.lookup(key, globalEnv)
     else
       result
   }
 
-  def update(enabledSetProvided: Boolean, ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob = {
+  def update(enabledSetProvided: Boolean, ctxt: Ctxt, state: State): Ob = {
     val keyStart = if (enabledSetProvided) 1 else 0
     val me       = this
     val rslt     = this
@@ -71,7 +71,7 @@ abstract class Ob {
         .toList
         .takeWhile { pair =>
           logger.debug(s"Set ${pair(0)} -> ${pair(1)} in $this")
-          meta.set(this, pair(0), pair(1), ctxt)(globalEnv) == me
+          meta.set(this, pair(0), pair(1), ctxt, state.globalEnv) == me
         }
     }
 

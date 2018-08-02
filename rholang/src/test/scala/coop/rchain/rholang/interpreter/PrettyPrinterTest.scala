@@ -125,6 +125,21 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe target
   }
 
+  "EMinusMinus" should "Print" in {
+    val source: Par = Par(
+      exprs = Seq(
+        EMinusMinusBody(
+          EMinusMinus(
+            ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3)))),
+            ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+          )
+        ))
+    )
+    val result = PrettyPrinter().buildString(source)
+    val target = "(Set(1, 2, 3) -- Set(1, 2))"
+    result shouldBe target
+  }
+
   "Send" should "Print" in {
     val source: Par =
       Par(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))

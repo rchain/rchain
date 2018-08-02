@@ -565,16 +565,52 @@ object Reduce {
           } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
-            _  <- costAccountingAlg.charge(SUM_COST)
-          } yield GInt(v1 + v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(SUM_COST)
+                         } yield Expr(GInt(lhs + rhs))
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           resultPar <- add(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         s.raiseError(OperatorExpectedError("+", "Int", other.typ))
+                       case (other, _) =>
+                         s.raiseError(OperatorNotDefined("+", other.typ))
+                     }
+          } yield result
         case EMinusBody(EMinus(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
-            _  <- costAccountingAlg.charge(SUBTRACTION_COST)
-          } yield GInt(v1 - v2)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (GInt(lhs), GInt(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(SUBTRACTION_COST)
+                         } yield Expr(GInt(lhs - rhs))
+                       case (lhs: EMapBody, rhs) =>
+                         for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           resultPar <- delete(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs) =>
+                         for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
+                           resultPar <- delete(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: GInt, other) =>
+                         s.raiseError(OperatorExpectedError("-", "Int", other.typ))
+                       case (other, _) =>
+                         s.raiseError(OperatorNotDefined("-", other.typ))
+                     }
+          } yield result
         case ELtBody(ELt(p1, p2)) =>
           relop(p1, p2, (_ < _), (_ < _), (_ < _)) <* costAccountingAlg.charge(COMPARISON_COST)
         case ELteBody(ELte(p1, p2)) =>
@@ -661,55 +697,95 @@ object Reduce {
             result.toString
           }
           for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
-                         rhs.iterator
-                           .map {
-                             case (k, v) =>
-                               for {
-                                 keyExpr   <- evalSingleExpr(k)
-                                 valueExpr <- evalSingleExpr(v)
-                                 result    <- evalToStringPair(keyExpr, valueExpr)
-                               } yield result
-                           }
-                           .toList
-                           .sequence[M, (String, String)]
-                           .map(keyValuePairs => GString(interpolate(lhs, keyValuePairs)))
+                         for {
+                           result <- rhs.iterator
+                                      .map {
+                                        case (k, v) =>
+                                          for {
+                                            keyExpr   <- evalSingleExpr(k)
+                                            valueExpr <- evalSingleExpr(v)
+                                            result    <- evalToStringPair(keyExpr, valueExpr)
+                                          } yield result
+                                      }
+                                      .toList
+                                      .sequence[M, (String, String)]
+                                      .map(keyValuePairs =>
+                                        GString(interpolate(lhs, keyValuePairs)))
+                           _ <- costAccountingAlg.charge(LOOKUP_COST * lhs.length)
+                         } yield result
                        case (_: GString, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `%%` expected Map but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `%%` is not defined on ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorNotDefined("%%", other.typ))
                      }
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
           for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
-                         Applicative[M].pure[Expr](GString(lhs + rhs))
+                         for {
+                           _ <- costAccountingAlg.charge(
+                                 STRING_APPEND_COST * (lhs.length + rhs.length)
+                               )
+                         } yield Expr(GString(lhs + rhs))
+                       case (EListBody(lhs), EListBody(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(PREPEND_COST * lhs.ps.length)
+                         } yield
+                           Expr(
+                             EListBody(
+                               EList(
+                                 lhs.ps ++ rhs.ps,
+                                 lhs.locallyFree union rhs.locallyFree,
+                                 lhs.connectiveUsed || rhs.connectiveUsed
+                               )
+                             )
+                           )
+                       case (lhs: EMapBody, rhs: EMapBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- union(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
                        case (_: GString, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` expected String but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("++", "String", other.typ))
+                       case (_: EListBody, other) =>
+                         s.raiseError(OperatorExpectedError("++", "List", other.typ))
+                       case (_: EMapBody, other) =>
+                         s.raiseError(OperatorExpectedError("++", "Map", other.typ))
+                       case (_: ESetBody, other) =>
+                         s.raiseError(OperatorExpectedError("++", "Set", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` is not defined on ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorNotDefined("++", other.typ))
+                     }
+          } yield result
+        case EMinusMinusBody(EMinusMinus(p1, p2)) =>
+          for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
+            v1 <- evalSingleExpr(p1)
+            v2 <- evalSingleExpr(p2)
+            result <- (v1.exprInstance, v2.exprInstance) match {
+                       case (lhs: ESetBody, rhs: ESetBody) =>
+                         for {
+                           resultPar <- diff(lhs, List[Par](rhs))
+                           resultExp <- evalSingleExpr(resultPar)
+                         } yield resultExp
+                       case (_: ESetBody, other) =>
+                         s.raiseError(OperatorExpectedError("--", "Set", other.typ))
+                       case (other, _) =>
+                         s.raiseError(OperatorNotDefined("--", other.typ))
                      }
           } yield result
         case EVarBody(EVar(v)) =>
@@ -852,7 +928,7 @@ object Reduce {
     private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
         thunk: => M[Par]): M[Par] =
       if (args.length != expectedArgsLength) {
-        s.raiseError(ReduceError(s"Error: $methodName expects $expectedArgsLength Par argument(s)"))
+        s.raiseError(MethodArgumentNumberMismatch(methodName, expectedArgsLength, args.length))
       } else {
         thunk
       }
@@ -879,19 +955,15 @@ object Reduce {
                          locallyFreeUnion(base.locallyFree, other.locallyFree))
                 )
               )
-          case _ =>
-            s.raiseError(
-              ReduceError(
-                "Error: union applied to something that wasn't a set or a map"
-              ))
-
+          case (other, _) =>
+            s.raiseError(MethodNotDefined("union", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: union expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("union", 1, args.length))
               else Applicative[M].unit
           baseExpr  <- evalSingleExpr(p)
           otherExpr <- evalSingleExpr(args(0))
@@ -920,15 +992,15 @@ object Reduce {
               Applicative[M].pure[Expr](
                 EMapBody(ParMap(newMap))
               )
-          case _ =>
-            s.raiseError(ReduceError("Error: diff can be called on Map or Set."))
+          case (other, _) =>
+            s.raiseError(MethodNotDefined("diff", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: diff expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("diff", 1, args.length))
               else Applicative[M].unit
           baseExpr  <- evalSingleExpr(p)
           otherExpr <- evalSingleExpr(args(0))
@@ -947,15 +1019,15 @@ object Reduce {
                        base.locallyFree.map(b => b | par.locallyFree))))
           //TODO(mateusz.gorski): think whether cost accounting for addition should be dependend on the operands
 
-          case _ =>
-            s.raiseError(ReduceError("Error: add can be called only with one Par as argument."))
+          case other =>
+            s.raiseError(MethodNotDefined("add", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: add expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("add", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -979,15 +1051,15 @@ object Reduce {
                 ParMap(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree))))
-          case _ =>
-            s.raiseError(ReduceError("Error: add can be called only on Map and Set."))
+          case other =>
+            s.raiseError(MethodNotDefined("delete", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: delete expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("delete", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -1003,15 +1075,15 @@ object Reduce {
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
-          case _ =>
-            s.raiseError(ReduceError("Error: contains can be called only on Map and Set."))
+          case other =>
+            s.raiseError(MethodNotDefined("contains", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: contains expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("contains", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           element  <- evalExpr(args(0))
@@ -1025,15 +1097,15 @@ object Reduce {
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
-          case _ =>
-            s.raiseError(ReduceError("Error: get can be called only on Maps as argument."))
+          case other =>
+            s.raiseError(MethodNotDefined("get", other.typ))
         }
 
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
-                s.raiseError(ReduceError(s"Error: get expects single argument."))
+                s.raiseError(MethodArgumentNumberMismatch("get", 1, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           key      <- evalExpr(args(0))
@@ -1042,25 +1114,110 @@ object Reduce {
         } yield result
     }
 
+    private[this] val getOrElse: Method = new Method {
+      def getOrElse(baseExpr: Expr, key: Par, default: Par): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](basePs.getOrElse(key, default))
+          case other =>
+            s.raiseError(MethodNotDefined("getOrElse", other.typ))
+        }
+
+      override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
+                                                 costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        for {
+          _ <- if (args.length != 2)
+                s.raiseError(MethodArgumentNumberMismatch("getOrElse", 2, args.length))
+              else Applicative[M].unit
+          baseExpr <- evalSingleExpr(p)
+          key      <- evalExpr(args(0))
+          default  <- evalExpr(args(1))
+          result   <- getOrElse(baseExpr, key, default)
+          _        <- costAccountingAlg.charge(LOOKUP_COST)
+        } yield result
+    }
+
+    private[this] val set: Method = new Method() {
+      def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
+          case other =>
+            s.raiseError(MethodNotDefined("set", other.typ))
+        }
+
+      override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
+                                                 costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        for {
+          _ <- if (args.length != 2)
+                s.raiseError(MethodArgumentNumberMismatch("set", 2, args.length))
+              else Applicative[M].unit
+          baseExpr <- evalSingleExpr(p)
+          key      <- evalExpr(args(0))
+          value    <- evalExpr(args(1))
+          result   <- set(baseExpr, key, value)
+          _        <- costAccountingAlg.charge(ADD_COST)
+        } yield result
+    }
+
+    private[this] val keys: Method = new Method() {
+      def keys(baseExpr: Expr): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](ParSet(basePs.keys.toSeq))
+          case other =>
+            s.raiseError(MethodNotDefined("keys", other.typ))
+        }
+
+      override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
+                                                 costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        for {
+          _ <- if (args.length != 0)
+                s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
+              else Applicative[M].unit
+          baseExpr <- evalSingleExpr(p)
+          result   <- keys(baseExpr)
+        } yield result
+    }
+
+    private[this] val size: Method = new Method() {
+      def size(baseExpr: Expr): M[Par] =
+        baseExpr.exprInstance match {
+          case EMapBody(ParMap(basePs, _, _)) =>
+            Applicative[M].pure[Par](GInt(basePs.size))
+          case ESetBody(ParSet(ps, _, _)) =>
+            Applicative[M].pure[Par](GInt(ps.size))
+          case other =>
+            s.raiseError(MethodNotDefined("size", other.typ))
+        }
+
+      override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
+                                                 costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        for {
+          _ <- if (args.length != 0)
+                s.raiseError(MethodArgumentNumberMismatch("size", 0, args.length))
+              else Applicative[M].unit
+          baseExpr <- evalSingleExpr(p)
+          result   <- size(baseExpr)
+        } yield result
+    }
+
     private[this] val length: Method = new Method() {
       def length(baseExpr: Expr): M[Expr] =
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Expr](GInt(string.length))
+          case EListBody(EList(ps, _, _, _)) =>
+            Applicative[M].pure[Expr](GInt(ps.length))
           case other =>
-            s.raiseError(
-              ReduceError(
-                s"Error: Method `length` is not defined on ${other.typ}."
-              )
-            )
+            s.raiseError(MethodNotDefined("length", other.typ))
         }
-
       //TODO(mateusz.gorski): add cost accounting
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(ReduceError(s"Error: length expects no arguments."))
+                s.raiseError(MethodArgumentNumberMismatch("length", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- length(baseExpr)
@@ -1072,20 +1229,24 @@ object Reduce {
         baseExpr.exprInstance match {
           case GString(string) =>
             Applicative[M].pure[Par](GString(string.slice(from, until)))
-          case other =>
-            s.raiseError(
-              ReduceError(
-                s"Error: Method `slice` is not defined on ${other.typ}."
+          case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
+            Applicative[M].pure[Par](
+              EList(
+                ps.slice(from, until),
+                locallyFree,
+                connectiveUsed,
+                remainder
               )
             )
+          case other =>
+            s.raiseError(MethodNotDefined("slice", other.typ))
         }
-
       //TODO(mateusz.gorski): add cost accounting
       override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par],
                                                  costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 2)
-                s.raiseError(ReduceError(s"Error: slice expects two arguments."))
+                s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           fromArg  <- evalToInt(args(0))
@@ -1105,6 +1266,10 @@ object Reduce {
         "delete"      -> delete,
         "contains"    -> contains,
         "get"         -> get,
+        "getOrElse"   -> getOrElse,
+        "set"         -> set,
+        "keys"        -> keys,
+        "size"        -> size,
         "length"      -> length,
         "slice"       -> slice
       )

@@ -434,4 +434,15 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val expectedResult = Some(Map[Int, Par](0 -> GString("${name}"), 1 -> map))
     assertSpatialMatch(target, pattern, expectedResult)
   }
+
+  "Matching --" should "work" in {
+    val lhsSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+    val rhsSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+    // "${1, 2, 3}" -- {1, 2}
+    val target = Expr(EMinusMinusBody(EMinusMinus(lhsSet, rhsSet)))
+    // x -- y
+    val pattern        = Expr(EMinusMinusBody(EMinusMinus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
+    val expectedResult = Some(Map[Int, Par](0 -> lhsSet, 1 -> rhsSet))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
 }

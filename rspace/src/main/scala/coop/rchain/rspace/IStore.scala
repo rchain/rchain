@@ -60,8 +60,6 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]]
 
-  private[rspace] def removeAll(txn: Transaction, channels: Seq[C]): Unit
-
   private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit
 
   private[rspace] def getJoin(txn: Transaction, channel: C): Seq[Seq[C]]

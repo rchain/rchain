@@ -1,0 +1,40 @@
+new testResult in {
+    testResult!(
+        // String methods
+        "abc".length() == 3 and
+        "abcabac".slice(3, 6) == "aba" and
+        "abc" ++ "defgh" == "abcdefgh" and
+        "Hello, ${name}" %% {"name": "Joe"} == "Hello, Joe" and
+        // List methods
+        [1, 2, 3, 4, 5].length() == 5 and
+        [2, 9, 7, 1, 3, 6].slice(2, 5) == [7, 1, 3] and
+        [9, 2, 1] ++ [1, 7] == [9, 2, 1, 1, 7] and
+        // Set methods
+        Set(1, 9, 2, 3).size() == 4 and
+        Set("a", "c", "b", "d", "e").contains("c") and
+        not Set("a", "c", "b", "d", "e").contains("f") and
+        Set("a", "b").add("c") == Set("a", "b", "c") and
+        Set(1, 2, 3).delete(2) == Set(1, 3) and
+        Set(1, 2, 3, 4).union(Set(3, 5, 6)) == Set(1, 2, 3, 4, 5, 6) and
+        Set(1, 2, 3, 4).diff(Set(2, 3)) == Set(1, 4) and
+        Set(1, 2, 3, 4) ++ Set(3, 5, 6) == Set(1, 2, 3, 4, 5, 6) and
+        Set(1, 2, 3, 4) -- Set(2, 3) == Set(1, 4) and
+        Set(1, 2, 3) + 4 == Set(1, 2, 3, 4) and
+        Set("a", "b", "c", "d") - "b" == Set("a", "c", "d") and
+        // Map methods
+        {1: "a", 2: "b", 3: "c"}.size() == 3 and
+        {1: "a", 2: "b", 3: "c"}.get(2) == "b" and
+        {1: "a", 2: "b", 3: "c"}.getOrElse(2, "d") == "b" and
+        {1: "a", 2: "b", 3: "c"}.getOrElse(4, "d") == "d" and
+        {1: "a", 2: "b"}.set(2, "d") == {1: "a", 2: "d"} and
+        {1: "a", 2: "b"}.set(4, "d") == {1: "a", 2: "b", 4: "d"} and
+        {1: "a", 2: "b", 3: "c"}.contains(2) and
+        not {1: "a", 2: "b", 3: "c"}.contains(4) and
+        {1: "a", 2: "b", 4: "d"}.delete(2) == {1: "a", 4: "d"} and
+        {1: "a", 2: "b", 4: "d"}.keys() == Set(1, 2, 4) and
+        {1: "a", 2: "b"}.union({3: "c", 4: "d"}) == {1: "a", 2: "b", 3: "c", 4: "d"} and
+        {1: "a", 2: "b"}.diff({2: "b", 4: "d"}) == {1: "a"} and
+        {1: "a", 2: "b"} ++ {3: "c", 4: "d"} == {1: "a", 2: "b", 3: "c", 4: "d"} and
+        {1: "a", 2: "b", 4: "d"} - 2 == {1: "a", 4: "d"}
+    )
+}

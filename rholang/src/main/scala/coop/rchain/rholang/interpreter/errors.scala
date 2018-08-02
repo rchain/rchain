@@ -4,6 +4,8 @@ import cats.{Monad, MonadError}
 import monix.eval.{Coeval, Task}
 import monix.eval.Task.catsAsync
 import cats.implicits._
+import coop.rchain.models.Expr.ExprInstance
+import coop.rchain.models.rholang.implicits._
 
 object errors {
   type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
@@ -75,6 +77,30 @@ object errors {
   final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError
   final case class SortMatchError(override val toString: String)      extends InterpreterError
   final case class ReduceError(override val toString: String)         extends InterpreterError
+  final case class MethodNotDefined(method: String, otherType: String) extends InterpreterError {
+    override def toString: String =
+      s"Error: Method `$method` is not defined on $otherType."
+  }
+  final case class MethodArgumentNumberMismatch(
+      method: String,
+      expected: Int,
+      actual: Int
+  ) extends InterpreterError {
+    override def toString: String =
+      s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s)."
+  }
+  final case class OperatorNotDefined(op: String, otherType: String) extends InterpreterError {
+    override def toString: String =
+      s"Error: Operator `$op` is not defined on $otherType."
+  }
+  final case class OperatorExpectedError(
+      op: String,
+      expected: String,
+      otherType: String
+  ) extends InterpreterError {
+    override def toString: String =
+      s"Error: Operator `$op` expected $expected but got $otherType."
+  }
 
   implicit val monadErrorTask: MonadError[Task, InterpreterError] =
     new MonadError[Task, InterpreterError] {

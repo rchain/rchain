@@ -127,6 +127,10 @@ object implicits {
     new Expr(exprInstance = EPlusPlusBody(e))
   implicit def fromEPlusPlus(e: EPlusPlus): Expr = apply(e)
 
+  def apply(e: EMinusMinus): Expr =
+    new Expr(exprInstance = EMinusMinusBody(e))
+  implicit def fromEMinusMinus(e: EMinusMinus): Expr = apply(e)
+
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
@@ -344,6 +348,7 @@ object implicits {
         case EMatchesBody(EMatches(target, pattern @ _))  => target.connectiveUsed
         case EPercentPercentBody(EPercentPercent(p1, p2)) => p1.connectiveUsed || p2.connectiveUsed
         case EPlusPlusBody(EPlusPlus(p1, p2))             => p1.connectiveUsed || p2.connectiveUsed
+        case EMinusMinusBody(EMinusMinus(p1, p2))         => p1.connectiveUsed || p2.connectiveUsed
         case ExprInstance.Empty                           => false
       }
 
@@ -378,6 +383,7 @@ object implicits {
         case EMatchesBody(EMatches(target, pattern))      => target.locallyFree | pattern.locallyFree
         case EPercentPercentBody(EPercentPercent(p1, p2)) => p1.locallyFree | p2.locallyFree
         case EPlusPlusBody(EPlusPlus(p1, p2))             => p1.locallyFree | p2.locallyFree
+        case EMinusMinusBody(EMinusMinus(p1, p2))         => p1.locallyFree | p2.locallyFree
         case ExprInstance.Empty                           => BitSet()
       }
   }
