@@ -29,6 +29,14 @@ object StrandPoolExecutor {
 
     override def start(vm: Vm): Unit = {
       executor.invoke(vm)
+
+      /**
+        * It will forever wait for completion.
+        *
+        * According to [[java.util.concurrent]] doc:
+        * All methods that accept timeout parameters treat values less than or equal to zero to mean not to wait at all.
+        * To wait "forever", you can use a value of Long.MAX_VALUE.
+        */
       executor.awaitQuiescence(Long.MaxValue, TimeUnit.MILLISECONDS)
     }
 

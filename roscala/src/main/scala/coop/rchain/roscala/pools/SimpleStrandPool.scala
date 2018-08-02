@@ -20,7 +20,7 @@ class SimpleStrandPool extends StrandPool {
     } else {
       val ctxt = queue.remove(queue.size - 1)
 
-      logger.debug(s"Ctxt completed. Install $ctxt")
+      logger.debug(s"Install ctxt: $ctxt")
 
       // Install `ctxt`
       state.ctxt = ctxt
