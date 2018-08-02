@@ -895,8 +895,9 @@ object Reduce {
         } else {
           for {
             exprEvaled <- evalExpr(p)
-            _          <- costAccountingAlg.charge(toByteArrayCost(exprEvaled))
-            ba         <- s.fromEither(serialize(exprEvaled))
+            exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env, costAccountingAlg)
+            _          <- costAccountingAlg.charge(toByteArrayCost(exprSubst))
+            ba         <- s.fromEither(serialize(exprSubst))
           } yield Expr(GByteArray(ByteString.copyFrom(ba)))
         }
     }
