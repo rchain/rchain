@@ -25,10 +25,10 @@ message DeployData {
   int64  timestamp    = 3; //millisecond timestamp
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
-  string from         = 6; //purse address which will be used to pay for the deployment
+  string from         = 6; //wallet address which will be used to pay for the deployment
   int32 phloPrice     = 7; //phlo price
   int32 phloLimit     = 8; //phlo limit for the deployment
-  int32 nonce         = 9; //nonce of the deployment
+  int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 
 message BlockRequest {

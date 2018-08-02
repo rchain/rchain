@@ -188,7 +188,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val phloPrice = opt[Int](
-      descr = "The price of gas for this transaction in phlo."
+      descr = "The price of phlo for this transaction in units dust/phlo."
     )
 
     val nonce = opt[Int](
