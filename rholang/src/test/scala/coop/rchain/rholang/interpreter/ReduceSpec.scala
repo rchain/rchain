@@ -11,7 +11,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{GPrivate => _, _}
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoContext
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors._
@@ -906,6 +906,60 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "eval of New" should "use deterministic names and provide urn-based resources" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(42)
+    val resultRand = rand.splitByte(42)
+    val chosenName = resultRand.next
+    val result0Rand = resultRand.splitByte(0)
+    val result1Rand = resultRand.splitByte(1)
+    val newProc: New =
+      New(
+        bindCount = 2,
+        uri = List("rho:test:foo"),
+        p = Par(
+          sends = List(
+            Send(Quote(GString("result0")), List(EVar(BoundVar(0))), locallyFree = BitSet(0)),
+            Send(Quote(GString("result1")), List(EVar(BoundVar(1))), locallyFree = BitSet(1))),
+          locallyFree = BitSet(0, 1)))
+
+    val result = withTestSpace { space =>
+      def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42))).reducer
+      implicit val env = Env[Par]()
+      val nthTask      = reducer.eval(newProc)(env, splitRand, costAccounting)
+      val inspectTask = for {
+        _ <- nthTask
+      } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel0 = Channel(Quote(GString("result0")))
+    val channel1 = Channel(Quote(GString("result1")))
+    result should be(
+      HashMap(
+        List(channel0) ->
+          Row(
+            List(
+              Datum.create(
+                channel0,
+                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(Array[Byte](42))))), result0Rand),
+                false)),
+            List()),
+        List(channel1) ->
+          Row(
+            List(
+              Datum.create(
+                channel1,
+                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(chosenName)))), result1Rand),
+                false)),
+            List())
+      )
+    )
   }
 
   "eval of nth method in send position" should "change what is sent" in {

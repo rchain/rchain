@@ -67,7 +67,8 @@ object RholangOnlyDispatcher {
                                             BindPattern,
                                             ListChannelWithRandom,
                                             ListChannelWithRandom,
-                                            TaggedContinuation])(
+                                            TaggedContinuation],
+                         urnMap: Map[String, Par] = Map.empty)(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -83,7 +84,7 @@ object RholangOnlyDispatcher {
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, Map.empty)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
     dispatcher
   }
 }
