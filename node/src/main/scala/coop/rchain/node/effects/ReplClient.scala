@@ -1,5 +1,6 @@
 package coop.rchain.node.effects
 
+import java.io.Closeable
 import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.TimeUnit
 
@@ -19,7 +20,7 @@ object ReplClient {
   def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] {
+class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Closeable {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build

@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.comm
 
+import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
 import cats.implicits._
@@ -25,7 +26,7 @@ object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService(host: String, port: Int) extends DeployService[Task] {
+class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
