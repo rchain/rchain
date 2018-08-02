@@ -15,6 +15,7 @@ case class Server(
     host: Option[String],
     port: Option[Int],
     metricsPort: Option[Int],
+    httpPort: Option[Int],
     noUpnp: Option[Boolean],
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
