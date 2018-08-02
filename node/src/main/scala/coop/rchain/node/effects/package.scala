@@ -76,5 +76,5 @@ package object effects {
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
-  def rpConnections: Task[ConnectionsCell[Task]]       = Cell.mvarCell(Connections.empty)
+  def rpConnections: Task[ConnectionsCell[Task]]       = Cell.const(Connections.empty).pure[Task] // noop for now
 }
