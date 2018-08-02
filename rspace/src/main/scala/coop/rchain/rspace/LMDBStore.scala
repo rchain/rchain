@@ -131,12 +131,7 @@ class LMDBStore[C, P, A, K] private (
                                                  channels: Seq[C],
                                                  continuation: WaitingContinuation[P, K]): Unit = {
     val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash) match {
-      case Some(gnat @ GNAT(_, _, currContinuations)) =>
-        installGNAT(txn, channelsHash, gnat.copy(wks = continuation +: currContinuations))
-      case None =>
-        installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
-    }
+    installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
   }
 
   private[rspace] def putWaitingContinuation(txn: Transaction,
@@ -174,14 +169,6 @@ class LMDBStore[C, P, A, K] private (
       case None =>
         throw new Exception("Attempted to remove a continuation from a value that doesn't exist")
     }
-  }
-
-  private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
-    val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash).foreach { gnat =>
-      installGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
-    }
-    for (c <- channels) removeJoin(txn, c, channels)
   }
 
   /* Joins */
