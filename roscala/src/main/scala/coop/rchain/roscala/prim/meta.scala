@@ -21,7 +21,7 @@ object meta {
       val client = ctxt.argvec(1)
       val key    = ctxt.argvec(2)
 
-      meta.get(client, key)(globalEnv)
+      meta.get(client, key, globalEnv)
     }
   }
 }

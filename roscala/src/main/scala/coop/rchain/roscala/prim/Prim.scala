@@ -26,7 +26,7 @@ abstract class Prim extends Ob {
   val minArgs: Int
   val maxArgs: Int
 
-  def fn(ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob =
+  def fn(ctxt: Ctxt, state: State): Ob =
     fnSimple(ctxt) match {
       case Right(m)              => m
       case Left(e: TypeMismatch) => Prim.mismatch(ctxt, e.argNum, e.typeName)
@@ -35,16 +35,16 @@ abstract class Prim extends Ob {
 
   def fnSimple(ctxt: Ctxt): Either[PrimError, Ob]
 
-  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
+  def dispatchHelper(state: State): Ob = {
     val n = state.ctxt.nargs
     if (minArgs <= n && n <= maxArgs)
-      fn(state.ctxt)(state, globalEnv)
+      fn(state.ctxt, state)
     else
       Prim.mismatchArgs(state, minArgs, maxArgs)
   }
 
   override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
-    val result = dispatchHelper(state, globalEnv)
+    val result = dispatchHelper(state)
 
     if (result != Invalid && result != Upcall && result != Deadthread) {
       state.ctxt.ret(result, state)
