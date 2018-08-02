@@ -1024,8 +1024,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val subProc: Par =
       New(bindCount = 1, p = GPrivate("zero"), locallyFree = BitSet())
     val serializedProcess         = subProc.toByteString
-    val toByteArrayCall: Par      = EMethod("toByteArray", unsubProc, List[Par]())
-    def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
+    val toByteArrayCall: Par      = EMethod("toByteArray", unsubProc, List[Par](), BitSet(0))
+    val channel                   = Channel(Quote(GString("result")))
+    def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), false, p.locallyFree)
 
     val result = withTestSpace { space =>
       val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -1034,7 +1035,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val inspectTask = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
-    val channel = Channel(Quote(GString("result")))
     result should be(
       HashMap(
         List(channel) ->
