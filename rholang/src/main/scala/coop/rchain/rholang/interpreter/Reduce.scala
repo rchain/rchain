@@ -516,11 +516,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GInt, other) =>
-                         s.raiseError(
-                           ReduceError(s"Error: Operator `+` expected Int but got ${other.typ}"))
+                         s.raiseError(OperatorExpectedError("+", "Int", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(s"Error: Operator `+` is not defined on ${other.typ}"))
+                         s.raiseError(OperatorNotDefined("+", other.typ))
                      }
           } yield result
         case EMinusBody(EMinus(p1, p2)) =>
@@ -543,11 +541,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GInt, other) =>
-                         s.raiseError(
-                           ReduceError(s"Error: Operator `-` expected Int but got ${other.typ}"))
+                         s.raiseError(OperatorExpectedError("-", "Int", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(s"Error: Operator `-` is not defined on ${other.typ}"))
+                         s.raiseError(OperatorNotDefined("-", other.typ))
                      }
           } yield result
         case ELtBody(ELt(p1, p2)) =>
@@ -653,17 +649,9 @@ object Reduce {
                            .sequence[M, (String, String)]
                            .map(keyValuePairs => GString(interpolate(lhs, keyValuePairs)))
                        case (_: GString, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `%%` expected Map but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `%%` is not defined on ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorNotDefined("%%", other.typ))
                      }
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
@@ -692,35 +680,15 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: GString, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` expected String but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("++", "String", other.typ))
                        case (_: EListBody, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` expected List but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("++", "List", other.typ))
                        case (_: EMapBody, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` expected Map but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("++", "Map", other.typ))
                        case (_: ESetBody, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` expected Set but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("++", "Set", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `++` is not defined on ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorNotDefined("++", other.typ))
                      }
           } yield result
         case EMinusMinusBody(EMinusMinus(p1, p2)) =>
@@ -734,17 +702,9 @@ object Reduce {
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (_: ESetBody, other) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `--` expected Set but got ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorExpectedError("--", "Set", other.typ))
                        case (other, _) =>
-                         s.raiseError(
-                           ReduceError(
-                             s"Error: Operator `--` is not defined on ${other.typ}"
-                           )
-                         )
+                         s.raiseError(OperatorNotDefined("--", other.typ))
                      }
           } yield result
         case EVarBody(EVar(v)) =>
@@ -885,7 +845,7 @@ object Reduce {
     private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
         thunk: => M[Par]): M[Par] =
       if (args.length != expectedArgsLength) {
-        s.raiseError(ReduceError(s"Error: $methodName expects $expectedArgsLength Par argument(s)"))
+        s.raiseError(MethodArgumentNumberMismatch(methodName, expectedArgsLength, args.length))
       } else {
         thunk
       }
@@ -911,12 +871,8 @@ object Reduce {
                          locallyFreeUnion(base.locallyFree, other.locallyFree))
                 )
               )
-          case _ =>
-            s.raiseError(
-              ReduceError(
-                "Error: union applied to something that wasn't a set or a map"
-              ))
-
+          case (other, _) =>
+            s.raiseError(MethodNotDefined("union", other.typ))
         }
 
       method("union", 1, args) {
@@ -949,8 +905,8 @@ object Reduce {
               Applicative[M].pure[Expr](
                 EMapBody(ParMap(newMap))
               )
-          case _ =>
-            s.raiseError(ReduceError("Error: diff can be called on Map or Set."))
+          case (other, _) =>
+            s.raiseError(MethodNotDefined("diff", other.typ))
         }
       method("diff", 1, args) {
         for {
@@ -971,8 +927,8 @@ object Reduce {
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree))))
 
-          case _ =>
-            s.raiseError(ReduceError("Error: add can be called only with one Par as argument."))
+          case other =>
+            s.raiseError(MethodNotDefined("add", other.typ))
         }
 
       method("add", 1, args) {
@@ -1000,8 +956,8 @@ object Reduce {
                 ParMap(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree))))
-          case _ =>
-            s.raiseError(ReduceError("Error: add can be called only on Map and Set."))
+          case other =>
+            s.raiseError(MethodNotDefined("delete", other.typ))
         }
 
       method("delete", 1, args) {
@@ -1021,8 +977,8 @@ object Reduce {
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
-          case _ =>
-            s.raiseError(ReduceError("Error: contains can be called only on Map and Set."))
+          case other =>
+            s.raiseError(MethodNotDefined("contains", other.typ))
         }
 
       method("contains", 1, args) {
@@ -1040,8 +996,8 @@ object Reduce {
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
-          case _ =>
-            s.raiseError(ReduceError("Error: get can be called only on Maps as argument."))
+          case other =>
+            s.raiseError(MethodNotDefined("get", other.typ))
         }
 
       method("get", 1, args) {
@@ -1060,7 +1016,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, default))
           case other =>
-            s.raiseError(ReduceError(s"Error: Method `getOrElse` is not defined on ${other.typ}."))
+            s.raiseError(MethodNotDefined("getOrElse", other.typ))
         }
 
       method("getOrElse", 2, args) {
@@ -1080,7 +1036,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
           case other =>
-            s.raiseError(ReduceError(s"Error: Method `set` is not defined on ${other.typ}."))
+            s.raiseError(MethodNotDefined("set", other.typ))
         }
 
       method("set", 2, args) {
@@ -1100,7 +1056,7 @@ object Reduce {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](ParSet(basePs.keys.toSeq))
           case other =>
-            s.raiseError(ReduceError(s"Error: Method `keys` is not defined on ${other.typ}."))
+            s.raiseError(MethodNotDefined("keys", other.typ))
         }
 
       method("keys", 0, args) {
@@ -1119,7 +1075,7 @@ object Reduce {
           case ESetBody(ParSet(ps, _, _)) =>
             Applicative[M].pure[Par](GInt(ps.size))
           case other =>
-            s.raiseError(ReduceError(s"Error: Method `size` is not defined on ${other.typ}."))
+            s.raiseError(MethodNotDefined("size", other.typ))
         }
 
       method("size", 0, args) {
@@ -1140,11 +1096,7 @@ object Reduce {
               case EListBody(EList(ps, _, _, _)) =>
                 Applicative[M].pure[Expr](GInt(ps.length))
               case other =>
-                s.raiseError(
-                  ReduceError(
-                    s"Error: Method `length` is not defined on ${other.typ}."
-                  )
-                )
+                s.raiseError(MethodNotDefined("length", other.typ))
             }
           method("length", 0, args) {
             for {
@@ -1171,11 +1123,7 @@ object Reduce {
                   )
                 )
               case other =>
-                s.raiseError(
-                  ReduceError(
-                    s"Error: Method `slice` is not defined on ${other.typ}."
-                  )
-                )
+                s.raiseError(MethodNotDefined("slice", other.typ))
             }
           method("slice", 2, args) {
             for {
