@@ -15,7 +15,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
-import coop.rchain.rholang.interpreter.errors.{ReduceError, _}
+import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -1845,5 +1845,48 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val resultSet = ESetBody(ParSet(List[Par](GInt(3), GInt(4))))
     result.exprs should be(Seq(Expr(resultSet)))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "Set(1, 2, 3).get(1)" should "not work" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val set         = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+      val inspectTask = reducer.eval(EMethodBody(EMethod("get", set, List(GInt(1)))))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    errorLog.readAndClearErrorVector should be(
+      Vector(MethodNotDefined("get", "Set"))
+    )
+  }
+
+  "{1: 'a', 2: 'b'}.add(1)" should "not work" in {
+    implicit val errorLog = new ErrorLog()
+    val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    withTestSpace { space =>
+      implicit val env = Env.makeEnv[Par]()
+
+      val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space, costAccounting).reducer
+
+      val map = EMapBody(
+        ParMap(
+          List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b"))),
+          false,
+          BitSet()
+        ))
+      val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1)))))
+
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    errorLog.readAndClearErrorVector should be(
+      Vector(MethodNotDefined("add", "Map"))
+    )
   }
 }
