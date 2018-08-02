@@ -183,28 +183,50 @@ sealed abstract class MultiParentCasperInstances {
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-          lastFinalizedBlock <- lastFinalizedBlockContainer.get
-          forkchoice <- getMainChainUntilLastFinalized[F](tip,
-                                                          lastFinalizedBlock,
-                                                          IndexedSeq.empty[BlockMessage])
-          updatedLastFinalizedBlock <- updateLastFinalizedBlock(dag,
-                                                                forkchoice.reverse.toList,
-                                                                lastFinalizedBlock)
-          _ <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
+          lastFinalizedBlock        <- lastFinalizedBlockContainer.get
+          updatedLastFinalizedBlock <- updateLastFinalizedBlock(dag, lastFinalizedBlock)
+          _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
         } yield attempt
 
       def updateLastFinalizedBlock(dag: BlockDag,
-                                   forkchoice: List[BlockMessage],
-                                   lastFinalizedBlock: BlockMessage): F[BlockMessage] =
-        forkchoice match {
+                                   lastFinalizedBlock: BlockMessage): F[BlockMessage] = {
+        val maybeFinalizedBlockChildren = dag.childMap.get(lastFinalizedBlock.blockHash)
+        maybeFinalizedBlockChildren match {
+          case Some(finalizedBlockChildren) =>
+            updateLastFinalizedBlockAux(dag, lastFinalizedBlock, finalizedBlockChildren.toSeq)
+          case None => lastFinalizedBlock.pure[F]
+        }
+      }
+
+      def updateLastFinalizedBlockAux(
+          dag: BlockDag,
+          lastFinalizedBlock: BlockMessage,
+          finalizedBlockCandidatesHashes: Seq[BlockHash]): F[BlockMessage] =
+        finalizedBlockCandidatesHashes match {
           case Nil => lastFinalizedBlock.pure[F]
-          case block :: rem =>
+          case blockHash +: rem =>
             for {
-              normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
-              updatedLastFinalizedBlock <- if (normalizedFaultTolerance > faultToleranceThreshold) {
-                                            updateLastFinalizedBlock(dag, rem, block)
-                                          } else {
-                                            lastFinalizedBlock.pure[F]
+              maybeBlock <- BlockStore[F].get(blockHash)
+              updatedLastFinalizedBlock <- maybeBlock match {
+                                            case Some(block) =>
+                                              for {
+                                                normalizedFaultTolerance <- SafetyOracle[F]
+                                                                             .normalizedFaultTolerance(
+                                                                               dag,
+                                                                               block)
+                                                updatedLastFinalizedBlock <- if (normalizedFaultTolerance > faultToleranceThreshold) {
+                                                                              updateLastFinalizedBlock(
+                                                                                dag,
+                                                                                block)
+                                                                            } else {
+                                                                              updateLastFinalizedBlockAux(
+                                                                                dag,
+                                                                                lastFinalizedBlock,
+                                                                                rem)
+                                                                            }
+                                              } yield updatedLastFinalizedBlock
+                                            case None =>
+                                              lastFinalizedBlock.pure[F]
                                           }
             } yield updatedLastFinalizedBlock
         }

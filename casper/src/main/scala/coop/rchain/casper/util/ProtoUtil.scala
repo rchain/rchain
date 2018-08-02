@@ -38,29 +38,6 @@ object ProtoUtil {
       }
     }
 
-  def getMainChainUntilLastFinalized[F[_]: Monad: BlockStore](
-      estimate: BlockMessage,
-      lastFinalizedBlock: BlockMessage,
-      acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = ProtoUtil.parents(estimate)
-    val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash match {
-      case Some(mainParentHash) =>
-        for {
-          maybeMainParent <- BlockStore[F].get(mainParentHash)
-          mainChain <- maybeMainParent match {
-                        case Some(newEstimate) =>
-                          getMainChainUntilLastFinalized[F](newEstimate,
-                                                            lastFinalizedBlock,
-                                                            acc :+ estimate)
-                        case None => (acc :+ estimate).pure[F]
-                      }
-        } yield mainChain
-      case None => acc.pure[F]
-    }
-
-  }
-
   @tailrec
   def getMainChain(internalMap: Map[BlockHash, BlockMessage],
                    estimate: BlockMessage,
