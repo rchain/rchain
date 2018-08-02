@@ -554,6 +554,7 @@ object Reduce {
                          } yield Expr(GInt(lhs + rhs))
                        case (lhs: ESetBody, rhs) =>
                          for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
                            resultPar <- add(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
@@ -574,11 +575,13 @@ object Reduce {
                          } yield Expr(GInt(lhs - rhs))
                        case (lhs: EMapBody, rhs) =>
                          for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
                            resultPar <- delete(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
                        case (lhs: ESetBody, rhs) =>
                          for {
+                           _         <- costAccountingAlg.charge(OP_CALL_COST)
                            resultPar <- delete(lhs, List[Par](rhs))
                            resultExp <- evalSingleExpr(resultPar)
                          } yield resultExp
@@ -674,22 +677,27 @@ object Reduce {
             result.toString
           }
           for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
-                         rhs.iterator
-                           .map {
-                             case (k, v) =>
-                               for {
-                                 keyExpr   <- evalSingleExpr(k)
-                                 valueExpr <- evalSingleExpr(v)
-                                 result    <- evalToStringPair(keyExpr, valueExpr)
-                               } yield result
-                           }
-                           .toList
-                           .sequence[M, (String, String)]
-                           .map(keyValuePairs => GString(interpolate(lhs, keyValuePairs)))
+                         for {
+                           result <- rhs.iterator
+                                      .map {
+                                        case (k, v) =>
+                                          for {
+                                            keyExpr   <- evalSingleExpr(k)
+                                            valueExpr <- evalSingleExpr(v)
+                                            result    <- evalToStringPair(keyExpr, valueExpr)
+                                          } yield result
+                                      }
+                                      .toList
+                                      .sequence[M, (String, String)]
+                                      .map(keyValuePairs =>
+                                        GString(interpolate(lhs, keyValuePairs)))
+                           _ <- costAccountingAlg.charge(LOOKUP_COST * lhs.length)
+                         } yield result
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
@@ -698,19 +706,29 @@ object Reduce {
           } yield result
         case EPlusPlusBody(EPlusPlus(p1, p2)) =>
           for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), GString(rhs)) =>
-                         Applicative[M].pure[Expr](GString(lhs + rhs))
+                         for {
+                           _ <- costAccountingAlg.charge(
+                                 STRING_APPEND_COST * (lhs.length + rhs.length)
+                               )
+                         } yield Expr(GString(lhs + rhs))
                        case (EListBody(lhs), EListBody(rhs)) =>
-                         Applicative[M].pure[Expr](
-                           EList(
-                             lhs.ps ++ rhs.ps,
-                             lhs.locallyFree union rhs.locallyFree,
-                             lhs.connectiveUsed || rhs.connectiveUsed
+                         for {
+                           _ <- costAccountingAlg.charge(PREPEND_COST * lhs.ps.length)
+                         } yield
+                           Expr(
+                             EListBody(
+                               EList(
+                                 lhs.ps ++ rhs.ps,
+                                 lhs.locallyFree union rhs.locallyFree,
+                                 lhs.connectiveUsed || rhs.connectiveUsed
+                               )
+                             )
                            )
-                         )
                        case (lhs: EMapBody, rhs: EMapBody) =>
                          for {
                            resultPar <- union(lhs, List[Par](rhs))
@@ -735,6 +753,7 @@ object Reduce {
           } yield result
         case EMinusMinusBody(EMinusMinus(p1, p2)) =>
           for {
+            _  <- costAccountingAlg.charge(OP_CALL_COST)
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
