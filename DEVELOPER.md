@@ -31,7 +31,7 @@ sudo apt-get update
 sudo apt-get install sbt
 
 sudo apt-get install libsodium23
-sudo apt-get intsall jflex
+sudo apt-get install jflex
 sudo apt-get install haskell-platform
 ```
 
