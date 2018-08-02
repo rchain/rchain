@@ -44,6 +44,8 @@ object GroundNormalizeMatcher {
       case gs: GroundString => GString(gs.string_)
       case gu: GroundUri    => GUri(stripUri(gu.uri_))
     }
+  // This is necessary to remove the backticks. We don't use a regular
+  // expression because they're always there.
   def stripUri(raw: String): String = raw.substring(1, raw.length - 1)
 }
 
@@ -707,6 +709,8 @@ object ProcNormalizeMatcher {
           case n: NameDeclUrn =>
             (Some(GroundNormalizeMatcher.stripUri(n.uri_)), n.var_, NameSort, n.line_num, n.col_num)
         }
+        // This sorts the None's first, and the uris by lexicographical order.
+        // We do this here because the sorting affects the numbering of variables inside the body.
         val sortBindings = newTaggedBindings.sortBy(row => row._1)
         val newBindings = sortBindings.map { row =>
           (row._2, row._3, row._4, row._5)
