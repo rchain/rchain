@@ -1,7 +1,7 @@
 package coop.rchain.comm.rp
 
+import Connect.ConnectionsCell
 import coop.rchain.p2p.effects._
-
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
@@ -10,7 +10,6 @@ import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
-
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
@@ -22,7 +21,7 @@ object HandleMessages {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def handle[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell](
       protocol: RoutingProtocol,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
     ProtocolHelper.sender(protocol) match {
@@ -32,7 +31,7 @@ object HandleMessages {
     }
 
   private def handle_[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell](
       proto: RoutingProtocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
@@ -79,7 +78,8 @@ object HandleMessages {
             handledWithMessage(m)))
   }
 
-  def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler](
+  def handleProtocolHandshake[
+      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler: ConnectionsCell](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration
