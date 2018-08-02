@@ -148,7 +148,39 @@ sealed abstract class MultiParentCasperInstances {
       private val invalidBlockTracker: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
 
+      private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
+
       def addBlock(b: BlockMessage): F[BlockStatus] =
+        for {
+          acquire <- Capture[F].capture {
+                      processingBlocks.mapAndUpdate[(Set[BlockHash], Boolean)](
+                        blocks => {
+                          if (blocks.contains(b.blockHash)) blocks -> false
+                          else blocks                              -> true
+                        }, {
+                          case (blocks, false) => blocks
+                          case (blocks, true)  => blocks + b.blockHash
+                        }
+                      )
+                    }
+          result <- acquire match {
+                     case Right((_, false)) =>
+                       Log[F]
+                         .info(
+                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
+                         .map(_ => BlockStatus.processing)
+                     case Right((_, true)) =>
+                       internalAddBlock(b).flatMap(status =>
+                         Capture[F].capture { processingBlocks.update(_ - b.blockHash); status })
+                     case Left(ex) =>
+                       Log[F]
+                         .warn(
+                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}")
+                         .map(_ => BlockStatus.exception(ex))
+                   }
+        } yield result
+
+      def internalAddBlock(b: BlockMessage): F[BlockStatus] =
         for {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
