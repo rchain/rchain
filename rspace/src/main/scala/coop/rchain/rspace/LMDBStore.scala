@@ -52,11 +52,6 @@ class LMDBStore[C, P, A, K] private (
                               channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
     _dbGNATs.get(txn, channelsHash)(codecGNAT[C, P, A, K])
 
-  private[this] def installGNAT(txn: Transaction,
-                                channelsHash: Blake2b256Hash,
-                                gnat: GNAT[C, P, A, K]): Unit =
-    _dbGNATs.put(txn, channelsHash, gnat)
-
   private[this] def insertGNAT(txn: Transaction,
                                channelsHash: Blake2b256Hash,
                                gnat: GNAT[C, P, A, K]): Unit = {
@@ -129,10 +124,10 @@ class LMDBStore[C, P, A, K] private (
 
   private[rspace] def installWaitingContinuation(txn: Transaction,
                                                  channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit = {
-    val channelsHash = hashChannels(channels)
-    installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
-  }
+                                                 continuation: WaitingContinuation[P, K]): Unit =
+    _dbGNATs.put(txn,
+                 hashChannels(channels),
+                 GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation)))
 
   private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
