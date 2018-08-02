@@ -57,5 +57,5 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
     (response.success, response.message)
   }
 
-  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }

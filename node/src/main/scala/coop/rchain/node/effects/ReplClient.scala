@@ -46,5 +46,5 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Clos
   private def readContent(filePath: Path): String =
     new String(Files.readAllBytes(filePath))
 
-  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }

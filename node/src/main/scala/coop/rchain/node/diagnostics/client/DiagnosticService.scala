@@ -63,5 +63,5 @@ class GrpcDiagnosticsService(host: String, port: Int)
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
 
-  def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }
