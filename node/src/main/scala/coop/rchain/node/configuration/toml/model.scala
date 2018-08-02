@@ -26,7 +26,8 @@ case class Server(
 
 case class GrpcServer(
     host: Option[String],
-    port: Option[Int]
+    port: Option[Int],
+    portInternal: Option[Int]
 )
 
 case class Tls(

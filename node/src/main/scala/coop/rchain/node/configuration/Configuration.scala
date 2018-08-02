@@ -27,9 +27,10 @@ object Configuration {
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
   private val DefaultPort                       = 40400
-  private val DefaultGrpcPort                   = 40401
+  private val DefaultGrpcPortExternal           = 40401
   private val DefaultHttPort                    = 40402
   private val DefaultMetricsPort                = 40403
+  private val DefaultGrpcPortInternal           = 40404
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
@@ -91,7 +92,8 @@ object Configuration {
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
-            options.grpcPort.getOrElse(DefaultGrpcPort)
+            options.grpcPort.getOrElse(DefaultGrpcPortExternal),
+            options.grpcPortInternal.getOrElse(DefaultGrpcPortInternal)
           ),
           Tls(
             dataDir.resolve(DefaultCertificateFileName),
@@ -145,7 +147,10 @@ object Configuration {
 
     // gRPC
     val grpcHost: String = get(_.grpcHost, _.grpcServer.flatMap(_.host), DefaultGrpcHost)
-    val grpcPort: Int    = get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPort)
+    val grpcPortExternal: Int =
+      get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPortExternal)
+    val grpcPortInternal: Int =
+      get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
     // Server
     val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
@@ -199,7 +204,8 @@ object Configuration {
     )
     val grpcServer = GrpcServer(
       grpcHost,
-      grpcPort
+      grpcPortExternal,
+      grpcPortInternal
     )
     val tls = Tls(
       certificatePath,

@@ -19,7 +19,8 @@ case class Server(
 
 case class GrpcServer(
     host: String,
-    port: Int
+    portExternal: Int,
+    portInternal: Int
 )
 
 case class Tls(
