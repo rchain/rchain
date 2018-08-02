@@ -123,13 +123,15 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      => Deploy(options.deploy.location())
-      case Some(options.deployDemo)  => DeployDemo
-      case Some(options.propose)     => Propose
-      case Some(options.showBlock)   => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks)  => ShowBlocks
-      case Some(options.run)         => Run
-      case _                         => Help
+      case Some(options.deploy) =>
+        import options.deploy._
+        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+      case Some(options.deployDemo) => DeployDemo
+      case Some(options.propose)    => Propose
+      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.run)        => Run
+      case _                        => Help
     }
 
     import commandline.Options._
@@ -240,13 +242,15 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      => Deploy(options.deploy.location())
-      case Some(options.deployDemo)  => DeployDemo
-      case Some(options.propose)     => Propose
-      case Some(options.showBlock)   => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks)  => ShowBlocks
-      case Some(options.run)         => Run
-      case _                         => Help
+      case Some(options.deploy) =>
+        import options.deploy._
+        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+      case Some(options.deployDemo) => DeployDemo
+      case Some(options.propose)    => Propose
+      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.run)        => Run
+      case _                        => Help
     }
 }
 
