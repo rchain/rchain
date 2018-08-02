@@ -8,6 +8,7 @@ import coop.rchain.roscala.Location._
 import coop.rchain.roscala.Vm.State
 import Ctxt.logger
 
+//TODO make access to various fields thread safe
 class Ctxt(var tag: Location,
            var nargs: Int,
            val outstanding: AtomicInteger = new AtomicInteger(0),
