@@ -16,7 +16,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.connect.Connect.dispatch
+import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
@@ -69,7 +69,7 @@ class HashSetCasperTestNode(name: String,
     casperPacketHandler[Id]
   )
 
-  def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
+  def receive(): Unit = tle.receive(p => handle[Id](p, defaultTimeout))
 
   def tearDown(): Unit = {
     tearDownNode()

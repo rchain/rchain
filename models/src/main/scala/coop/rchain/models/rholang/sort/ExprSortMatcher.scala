@@ -87,6 +87,10 @@ private[sort] object ExprSortMatcher extends Sortable[Expr] {
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
         constructExpr(EPlusPlusBody(EPlusPlus(sortedPar1.term, sortedPar2.term)),
                       Node(Score.EPLUSPLUS, sortedPar1.score, sortedPar2.score))
+      case EMinusMinusBody(ep) =>
+        val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
+        constructExpr(EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
+                      Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score))
       case EMethodBody(em) =>
         val args         = em.arguments.toList.map(par => Sortable.sortMatch(par))
         val sortedTarget = Sortable.sortMatch(em.target)

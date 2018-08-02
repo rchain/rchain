@@ -1,12 +1,11 @@
 package coop.rchain.roscala.ob.mbox
 
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.{Ctxt, Nil, Niv, Ob}
 
 class LockedMbox extends Ob {
-  override def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
-    MboxOb.logger.debug(s"$this receives message")
+  override def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = {
+    MboxOb.logger.debug("Locked mailbox receives message")
 
     val newMbox = QueueMbox(Nil)
     newMbox.enqueue(task)
@@ -23,10 +22,7 @@ class LockedMbox extends Ob {
     * already got processed. Therefore all that needs to be done here
     * is to change the client's mailbox to an `EmptyMbox`.
     */
-  override def nextMsg(client: MboxOb,
-                       newEnabledSet: Ob,
-                       state: State,
-                       globalEnv: GlobalEnv): Ob = {
+  override def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = {
     MboxOb.logger.debug(s"Next message received on $this")
 
     if (newEnabledSet == Nil)

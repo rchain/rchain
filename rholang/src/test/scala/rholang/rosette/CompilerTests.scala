@@ -20,11 +20,11 @@ class CompilerTests extends FunSuite {
 
   def runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
-  val testFiles: Iterable[Path] =
-    Files.newDirectoryStream(Paths.get("tests")).asScala
+  val testFiles: Iterator[Path] =
+    Files.walk(Paths.get("tests")).iterator().asScala
 
-  val failureTestFiles: Iterable[Path] =
-    Files.newDirectoryStream(Paths.get("failure_tests")).asScala
+  val failureTestFiles: Iterator[Path] =
+    Files.walk(Paths.get("failure_tests")).iterator().asScala
 
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString) {

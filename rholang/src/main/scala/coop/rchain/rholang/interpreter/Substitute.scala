@@ -296,6 +296,8 @@ object Substitute {
             s2(par1.get, par2.get)(EMinus(_, _))
           case EPlusPlusBody(EPlusPlus(par1, par2)) =>
             s2(par1, par2)(EPlusPlus(_, _))
+          case EMinusMinusBody(EMinusMinus(par1, par2)) =>
+            s2(par1, par2)(EMinusMinus(_, _))
           case ELtBody(ELt(par1, par2)) =>
             s2(par1.get, par2.get)(ELt(_, _))
           case ELteBody(ELte(par1, par2)) =>
