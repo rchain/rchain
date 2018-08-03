@@ -4,6 +4,8 @@ port = 44010
 metrics-port = 44011
 no-upnp = false
 default-timeout = 5000
+# to choose right address please read:
+# https://rchain.atlassian.net/wiki/spaces/CORE/pages/501842019/RNode+bootstrap+addresses
 bootstrap = "rnode://c61769b39d368cbcbc9499634e030386c79d5b02@52.119.8.108:40400"
 standalone = true
 data-dir = "C:/RChain/data"
