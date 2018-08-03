@@ -51,6 +51,12 @@ object BlockAPI {
         status match {
           case _: InvalidBlock => DeployServiceResponse(false, s"Failure! Invalid block: $status")
           case _: ValidBlock   => DeployServiceResponse(true, s"Success! $status")
+          case BlockException(ex) =>
+            DeployServiceResponse(false, s"Error during block processing: $ex")
+          case Processing =>
+            DeployServiceResponse(
+              false,
+              s"No action taken since another thread is already processing the block.")
         }
 
     MultiParentCasperConstructor

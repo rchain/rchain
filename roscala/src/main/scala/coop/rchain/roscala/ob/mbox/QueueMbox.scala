@@ -1,20 +1,19 @@
 package coop.rchain.roscala.ob.mbox
 
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.{Ctxt, Invalid, Nil, Niv, Ob}
 
 class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
   var lockVal: Boolean = true
 
-  override def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
-    MboxOb.logger.debug(s"$this receives message")
+  override def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = {
+    MboxOb.logger.debug("Queue mailbox receives message")
 
     if (isLocked || !enabledSet.accepts(task))
       queue.enqueue(task)
     else {
       lock()
-      client.schedule(task, state, globalEnv)
+      client.schedule(task, state)
     }
 
     Niv
@@ -28,10 +27,7 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
     * In the case of a `QueueMbox` the mailbox gets the next message
     * from the `MboxQueue` which then gets scheduled.
     */
-  override def nextMsg(client: MboxOb,
-                       newEnabledSet: Ob,
-                       state: State,
-                       globalEnv: GlobalEnv): Ob = {
+  override def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = {
     MboxOb.logger.debug(s"Next message received on $this")
 
     if (!isLocked) {
@@ -69,7 +65,7 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
       else
         this.enabledSet = newEnabledSet
 
-      client.schedule(task.asInstanceOf[Ctxt], state, globalEnv)
+      client.schedule(task.asInstanceOf[Ctxt], state)
     }
 
     Niv
