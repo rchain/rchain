@@ -30,7 +30,7 @@ volume = client.volumes.create()
 
 # Run rnode repl loader with replwrap
 cmd = "sudo docker run --rm -it -v {}:/var/lib/rnode --cpus=.5 --memory=1024m --name rnode-repl.{} --network {} coop.rchain/rnode --grpc-host node0.testnet1.rchain repl".format(volume.name, args.network, args.network)
-repl_cmds = ['5', '@"stdout"!("foo")']
+repl_cmds = ['5', new s(`rho:io:stdout`) in { s!("foo") }']
 conn = replwrap.REPLWrapper(cmd, args.prompt, None)
 for i in range(args.repeat):
     for repl_cmd in repl_cmds:

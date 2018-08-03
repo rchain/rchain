@@ -1,12 +1,12 @@
-new helloAgain in {
+new helloAgain, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
   contract helloAgain(_) = {
     new chan in {
       chan!("Hello again, world!") |
       for (@text <- chan) {
         new ack in {
-          @"stdoutAck"!(text, *ack) |
+          stdoutAck!(text, *ack) |
           for (_ <- ack) {
-            @"stdout"!("\n")
+            stdout!("\n")
           }
         }
       }

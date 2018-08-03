@@ -1,40 +1,42 @@
-@"north"!("knife") |
-@"south"!("spoon") |
-for (@knf <- @"north"; @spn <- @"south") {
-  new ack in {
-    @"stdoutAck"!("Philosopher 1 Utensils: ", *ack) |
-    for (_ <- ack) {
-      @"stdoutAck"!(knf, *ack) |
+new stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  @"north"!("knife") |
+  @"south"!("spoon") |
+  for (@knf <- @"north"; @spn <- @"south") {
+    new ack in {
+      stdoutAck!("Philosopher 1 Utensils: ", *ack) |
       for (_ <- ack) {
-        @"stdoutAck"!(", ", *ack) |
+        stdoutAck!(knf, *ack) |
         for (_ <- ack) {
-          @"stdoutAck"!(spn, *ack) |
+          stdoutAck!(", ", *ack) |
           for (_ <- ack) {
-            @"stdout"!("\n")
+            stdoutAck!(spn, *ack) |
+            for (_ <- ack) {
+              stdout!("\n")
+            }
           }
         }
       }
-    }
+    } |
+    @"north"!(knf) |
+    @"south"!(spn)
   } |
-  @"north"!(knf) |
-  @"south"!(spn)
-} |
-for (@spn <- @"south"; @knf <- @"north") {
-  new ack in {
-    @"stdoutAck"!("Philosopher 2 Utensils: ", *ack) |
-    for (_ <- ack) {
-      @"stdoutAck"!(knf, *ack) |
+  for (@spn <- @"south"; @knf <- @"north") {
+    new ack in {
+      stdoutAck!("Philosopher 2 Utensils: ", *ack) |
       for (_ <- ack) {
-        @"stdoutAck"!(", ", *ack) |
+        stdoutAck!(knf, *ack) |
         for (_ <- ack) {
-          @"stdoutAck"!(spn, *ack) |
+          stdoutAck!(", ", *ack) |
           for (_ <- ack) {
-            @"stdout"!("\n")
+            stdoutAck!(spn, *ack) |
+            for (_ <- ack) {
+              stdout!("\n")
+            }
           }
         }
       }
-    }
-  } |
-  @"north"!(knf) |
-  @"south"!(spn)
+    } |
+    @"north"!(knf) |
+    @"south"!(spn)
+  }
 }

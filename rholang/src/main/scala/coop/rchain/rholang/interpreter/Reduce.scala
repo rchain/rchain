@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorTell
-import cats.{Applicative, FlatMap, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Foldable, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -14,7 +14,7 @@ import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
-import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
+import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
@@ -85,7 +85,8 @@ object Reduce {
           costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
       ))
 
-  class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M])(
+  class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
+                                        private val urnMap: Map[String, Par])(
       implicit
       parallel: cats.Parallel[M, F],
       s: Sync[M],
@@ -427,14 +428,30 @@ object Reduce {
     private def eval(neu: New)(implicit env: Env[Par],
                                rand: Blake2b512Random,
                                costAccountingAlg: CostAccountingAlg[M]): M[Unit] = {
-      def alloc(level: Int): Env[Par] =
-        (env /: (0 until level).toList) { (_env, _) =>
+      def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
+        val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
           val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
           _env.put(addr)
         }
+        def addUrn(newEnv: Env[Par], urn: String): Either[ReduceError, Env[Par]] =
+          urnMap.get(urn) match {
+            case Some(p) => Right(newEnv.put(p))
+            case None    => Left(ReduceError(s"Unknown urn for new: ${urn}"))
+          }
+        def foldLeftEarly[A, B, E](init: B,
+                                   as: Seq[A],
+                                   cata: (B, A) => Either[E, B]): Either[E, B] =
+          Foldable[List].foldM(as.toList, init)(cata)
+        foldLeftEarly(simpleNews, urns, addUrn) match {
+          case Right(env) => Applicative[M].pure(env)
+          case Left(e)    => s.raiseError(e)
+        }
+      }
 
       costAccountingAlg.charge(newBindingsCost(neu.bindCount)) *>
-        eval(neu.p)(alloc(neu.bindCount), rand, costAccountingAlg)
+        alloc(neu.bindCount, neu.uri).flatMap { newEnv =>
+          eval(neu.p)(newEnv, rand, costAccountingAlg)
+        }
     }
 
     private[this] def unbundleReceive(rb: ReceiveBind)(

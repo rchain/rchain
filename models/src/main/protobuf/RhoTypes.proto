@@ -118,8 +118,11 @@ message Receive {
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 message New {
+    // Includes any uris listed below. This makes it easier to substitute or walk a term.
     sint32 bindCount = 1;
     Par p = 2 [(scalapb.field).no_box = true];
+    // For normalization, uri-referenced variables come at the end, and in lexicographical order.
+    repeated string uri = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
 }
 

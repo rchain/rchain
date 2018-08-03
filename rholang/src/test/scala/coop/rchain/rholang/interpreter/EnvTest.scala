@@ -8,11 +8,11 @@ import coop.rchain.models.Par
 
 class EnvSpec extends FlatSpec with Matchers {
 
-  val source0: Par = GPrivate()
-  val source1: Par = GPrivate()
-  val source2: Par = GPrivate()
-  val source3: Par = GPrivate()
-  val source4: Par = GPrivate()
+  val source0: Par = GPrivateBuilder()
+  val source1: Par = GPrivateBuilder()
+  val source2: Par = GPrivateBuilder()
+  val source3: Par = GPrivateBuilder()
+  val source4: Par = GPrivateBuilder()
 
   "Data" should "always be inserted at the next available level index" in {
     val result: Env[Par] = Env().put(source0, source1, source2)
