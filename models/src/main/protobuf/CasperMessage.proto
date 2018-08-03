@@ -116,7 +116,6 @@ message ApprovedBlockRequest {
 // ------- End Signing Protocol --------
 
 // --------- Core Protocol  --------
-// TODO: Include non-body BlockMessage fields into blockhash (See RHOL-546)
 message BlockMessage {
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
   Header                 header         = 2;
