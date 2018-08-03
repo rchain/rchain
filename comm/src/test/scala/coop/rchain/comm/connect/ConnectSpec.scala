@@ -1,5 +1,6 @@
 package coop.rchain.comm.rp
 
+import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
@@ -28,7 +29,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect](src)
   implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
-  implicit val connectionsCell   = Cell.const(Connect.Connections.empty)
+  implicit val connectionsCell   = Cell.const[Effect, Connections](Connect.Connections.empty)
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()

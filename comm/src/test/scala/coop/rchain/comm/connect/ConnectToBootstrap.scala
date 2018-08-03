@@ -1,5 +1,6 @@
 package coop.rchain.comm.rp
 
+import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
 import com.google.common.io.BaseEncoding
@@ -30,6 +31,7 @@ class ConnectToBootstrapSpec
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect](src)
+  implicit val connectionsCell   = Cell.const[Effect, Connections](Connect.Connections.empty)
 
   override def beforeEach(): Unit = {
     logEff.reset()
