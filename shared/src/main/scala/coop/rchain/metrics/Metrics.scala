@@ -49,6 +49,6 @@ object Metrics extends MetricsInstances {
 }
 
 sealed abstract class MetricsInstances {
-  implicit def eitherTMetrics[E, F[_]: Monad: Metrics[?[_]]]: Metrics[EitherT[F, E, ?]] =
+  implicit def eitherT[E, F[_]: Monad: Metrics[?[_]]]: Metrics[EitherT[F, E, ?]] =
     Metrics.forTrans[F, EitherT[?[_], E, ?]]
 }

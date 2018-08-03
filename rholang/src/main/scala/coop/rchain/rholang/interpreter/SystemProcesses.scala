@@ -19,7 +19,7 @@ object SystemProcesses {
   private val prettyPrinter = PrettyPrinter()
 
   def stdout: Seq[ListChannelWithRandom] => Task[Unit] = {
-    case (Seq(ListChannelWithRandom(Seq(arg), _))) =>
+    case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
       Task(Console.println(prettyPrinter.buildString(arg)))
   }
 
@@ -30,18 +30,18 @@ object SystemProcesses {
                               TaggedContinuation],
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(arg, ack), rand)) =>
+    case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
       Task(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand),
+                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
                    false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
   def stderr: Seq[ListChannelWithRandom] => Task[Unit] = {
-    case (Seq(ListChannelWithRandom(Seq(arg), _))) =>
+    case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
       Task(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
@@ -52,11 +52,11 @@ object SystemProcesses {
                               TaggedContinuation],
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(arg, ack), rand)) =>
+    case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
       Task(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand),
+                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
                    false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -85,11 +85,12 @@ object SystemProcesses {
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
         ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-                              rand)) =>
+                              rand,
+                              cost)) =>
       Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand),
+                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
                    false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -104,11 +105,12 @@ object SystemProcesses {
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
         ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-                              rand)) =>
+                              rand,
+                              cost)) =>
       Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand),
+                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
                    false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -124,13 +126,14 @@ object SystemProcesses {
                                TaggedContinuation],
                  dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand)) =>
+    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -145,13 +148,14 @@ object SystemProcesses {
                                   TaggedContinuation],
                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand)) =>
+    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -166,13 +170,14 @@ object SystemProcesses {
                                    TaggedContinuation],
                      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand)) =>
+    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand),
+                                  rand,
+                                  cost),
             false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }

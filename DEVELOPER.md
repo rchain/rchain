@@ -30,8 +30,8 @@ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89
 sudo apt-get update
 sudo apt-get install sbt
 
-sudo apt-get libsodium18
-sudo apt-get jflex
+sudo apt-get install libsodium23
+sudo apt-get install jflex
 sudo apt-get install haskell-platform
 ```
 

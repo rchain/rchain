@@ -141,27 +141,28 @@ trait ScoreTree {
     final val WILDCARD  = 52
 
     // Expr
-    final val EVAR      = 100
-    final val ENEG      = 101
-    final val EMULT     = 102
-    final val EDIV      = 103
-    final val EPLUS     = 104
-    final val EMINUS    = 105
-    final val ELT       = 106
-    final val ELTE      = 107
-    final val EGT       = 108
-    final val EGTE      = 109
-    final val EEQ       = 110
-    final val ENEQ      = 111
-    final val ENOT      = 112
-    final val EAND      = 113
-    final val EOR       = 114
-    final val EMETHOD   = 115
-    final val EBYTEARR  = 116
-    final val EEVAL     = 117
-    final val EMATCHES  = 118
-    final val EPERCENT  = 119
-    final val EPLUSPLUS = 120
+    final val EVAR        = 100
+    final val ENEG        = 101
+    final val EMULT       = 102
+    final val EDIV        = 103
+    final val EPLUS       = 104
+    final val EMINUS      = 105
+    final val ELT         = 106
+    final val ELTE        = 107
+    final val EGT         = 108
+    final val EGTE        = 109
+    final val EEQ         = 110
+    final val ENEQ        = 111
+    final val ENOT        = 112
+    final val EAND        = 113
+    final val EOR         = 114
+    final val EMETHOD     = 115
+    final val EBYTEARR    = 116
+    final val EEVAL       = 117
+    final val EMATCHES    = 118
+    final val EPERCENT    = 119
+    final val EPLUSPLUS   = 120
+    final val EMINUSMINUS = 121
 
     // Other
     final val QUOTE    = 203

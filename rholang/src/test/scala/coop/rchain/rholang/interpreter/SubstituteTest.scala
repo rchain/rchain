@@ -291,4 +291,14 @@ class OpSubSpec extends FlatSpec with Matchers {
     val expectedResult = EPercentPercentBody(EPercentPercent(source, EVar(BoundVar(1))))
     result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
   }
+
+  "EMinusMinus" should "be substituted correctly" in {
+    val source: Par            = Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))
+    implicit val env: Env[Par] = Env.makeEnv(source)
+    val target =
+      EMinusMinusBody(EMinusMinus(EVar(BoundVar(0)), EVar(BoundVar(1))))
+    val result         = substitutePar[Coeval].substitute(target).value
+    val expectedResult = EMinusMinusBody(EMinusMinus(source, EVar(BoundVar(1))))
+    result should be(Par(exprs = List(expectedResult), locallyFree = BitSet(0, 1)))
+  }
 }

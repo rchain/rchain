@@ -149,12 +149,44 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[EquivocationRecord]()
       private val invalidBlockTracker: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
-
+      
       // TODO: Extract hardcoded fault tolerance threshold
       private val faultToleranceThreshold     = 0f
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
+      
+      private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
+        for {
+          acquire <- Capture[F].capture {
+                      processingBlocks.mapAndUpdate[(Set[BlockHash], Boolean)](
+                        blocks => {
+                          if (blocks.contains(b.blockHash)) blocks -> false
+                          else blocks                              -> true
+                        }, {
+                          case (blocks, false) => blocks
+                          case (blocks, true)  => blocks + b.blockHash
+                        }
+                      )
+                    }
+          result <- acquire match {
+                     case Right((_, false)) =>
+                       Log[F]
+                         .info(
+                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
+                         .map(_ => BlockStatus.processing)
+                     case Right((_, true)) =>
+                       internalAddBlock(b).flatMap(status =>
+                         Capture[F].capture { processingBlocks.update(_ - b.blockHash); status })
+                     case Left(ex) =>
+                       Log[F]
+                         .warn(
+                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}")
+                         .map(_ => BlockStatus.exception(ex))
+                   }
+        } yield result
+
+      def internalAddBlock(b: BlockMessage): F[BlockStatus] =
         for {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
@@ -290,7 +322,7 @@ sealed abstract class MultiParentCasperInstances {
             DagOperations
               .bfTraverse(p)(parents(_).iterator.map(internalMap))
               .foreach(b => {
-                b.body.foreach(_.newCode.foreach(result -= _))
+                b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
               })
             result.toSeq
           }
@@ -302,8 +334,8 @@ sealed abstract class MultiParentCasperInstances {
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Set[StateHash])](
+          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
+            .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
@@ -321,7 +353,7 @@ sealed abstract class MultiParentCasperInstances {
             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
           body = Body()
             .withPostState(postState)
-            .withNewCode(r)
+            .withNewCode(deployWithCost)
             .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications)

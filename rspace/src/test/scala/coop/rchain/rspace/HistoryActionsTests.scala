@@ -481,6 +481,25 @@ class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryAction
     emptyCheckpoint.root shouldBe checkpoint.root
   }
 
+  it should "not be persisted to the history trie after second install" in withTestSpace { space =>
+    val key      = List("ch1")
+    val patterns = List(Wildcard)
+
+    val emptyCheckpoint = space.createCheckpoint()
+    space.install(key, patterns, new StringsCaptor)
+
+    val checkpoint = space.createCheckpoint()
+
+    checkpoint.log shouldBe empty
+    emptyCheckpoint.root shouldBe checkpoint.root
+
+    space.install(key, patterns, new StringsCaptor)
+
+    val checkpoint2 = space.createCheckpoint()
+    checkpoint2.log shouldBe empty
+    emptyCheckpoint.root shouldBe checkpoint2.root
+  }
+
   it should "be available after resetting to a checkpoint" in withTestSpace { space =>
     val channel      = "ch1"
     val datum        = "datum1"

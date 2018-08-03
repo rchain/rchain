@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.Txn.NotReadyException
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -43,7 +44,18 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       }
     } {
       case (txn, ExitCase.Completed) => syncF.delay(txn.close())
-      case (txn, _)                  => syncF.delay { txn.abort(); txn.close() }
+      case (txn, _) =>
+        syncF.delay {
+          try {
+            txn.abort()
+          } catch {
+            case ex: NotReadyException =>
+              ex.printStackTrace()
+              TxnOps.manuallyAbortTxn(txn)
+            // vide: rchain/rspace/src/main/scala/coop/rchain/rspace/LMDBOps.scala
+          }
+          txn.close()
+        }
     }
 
   private[this] def withWriteTxn(f: Txn[ByteBuffer] => Unit): F[Unit] =

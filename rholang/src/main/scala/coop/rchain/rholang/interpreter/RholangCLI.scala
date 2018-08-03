@@ -6,10 +6,10 @@ import java.util.concurrent.TimeoutException
 
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Interpreter.EvaluateResult
+import coop.rchain.rholang.interpreter.Runtime.RhoIStore
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.IStore
 import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
@@ -71,8 +71,7 @@ object RholangCLI {
     Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  private def printStorageContents(
-      store: IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]): Unit = {
+  private def printStorageContents(store: RhoIStore): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }

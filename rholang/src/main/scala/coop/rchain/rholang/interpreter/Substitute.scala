@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.implicits._
-import cats.mtl.MonadState
 import cats.{Applicative, Monad}
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
@@ -11,11 +10,9 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
-import coop.rchain.models.rholang.implicits._
-import errors._
-import coop.rchain.models.rholang.sort.ordering._
 
 trait Substitute[M[_], A] {
   def substitute(term: A)(implicit depth: Int, env: Env[Par]): M[A]
@@ -128,7 +125,7 @@ object Substitute {
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        substituteNoSort(term).map(channelSubst => ChannelSortMatcher.sortMatch(channelSubst).term)
+        substituteNoSort(term).map(channelSubst => Sortable.sortMatch(channelSubst).term)
     }
 
   implicit def substitutePar[M[_]: Sync]: Substitute[M, Par] =
@@ -197,7 +194,7 @@ object Substitute {
             )
         } yield par
       override def substitute(term: Par)(implicit depth: Int, env: Env[Par]): M[Par] =
-        substituteNoSort(term).map(par => ParSortMatcher.sortMatch(par).term)
+        substituteNoSort(term).map(par => Sortable.sortMatch(par).term)
     }
 
   implicit def substituteSend[M[_]: Sync]: Substitute[M, Send] =
@@ -215,7 +212,7 @@ object Substitute {
           )
         } yield send
       override def substitute(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
-        substituteNoSort(term).map(send => SendSortMatcher.sortMatch(send).term)
+        substituteNoSort(term).map(send => Sortable.sortMatch(send).term)
     }
 
   implicit def substituteReceive[M[_]: Sync]: Substitute[M, Receive] =
@@ -244,7 +241,7 @@ object Substitute {
           )
         } yield rec
       override def substitute(term: Receive)(implicit depth: Int, env: Env[Par]): M[Receive] =
-        substituteNoSort(term).map(rec => ReceiveSortMatcher.sortMatch(rec).term)
+        substituteNoSort(term).map(rec => Sortable.sortMatch(rec).term)
 
     }
 
@@ -256,7 +253,7 @@ object Substitute {
           neu    = New(term.bindCount, newSub, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
-        substituteNoSort(term).map(newSub => NewSortMatcher.sortMatch(newSub).term)
+        substituteNoSort(term).map(newSub => Sortable.sortMatch(newSub).term)
     }
 
   implicit def substituteMatch[M[_]: Sync]: Substitute[M, Match] =
@@ -275,7 +272,7 @@ object Substitute {
           mat = Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed)
         } yield mat
       override def substitute(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
-        substituteNoSort(term).map(mat => MatchSortMatcher.sortMatch(mat).term)
+        substituteNoSort(term).map(mat => Sortable.sortMatch(mat).term)
     }
 
   implicit def substituteExpr[M[_]: Sync]: Substitute[M, Expr] =
@@ -299,6 +296,8 @@ object Substitute {
             s2(par1.get, par2.get)(EMinus(_, _))
           case EPlusPlusBody(EPlusPlus(par1, par2)) =>
             s2(par1, par2)(EPlusPlus(_, _))
+          case EMinusMinusBody(EMinusMinus(par1, par2)) =>
+            s2(par1, par2)(EMinusMinus(_, _))
           case ELtBody(ELt(par1, par2)) =>
             s2(par1.get, par2.get)(ELt(_, _))
           case ELteBody(ELte(par1, par2)) =>

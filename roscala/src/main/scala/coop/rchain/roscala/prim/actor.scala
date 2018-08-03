@@ -11,8 +11,8 @@ object actor {
     override val minArgs: Int = 0
     override val maxArgs: Int = MaxArgs
 
-    override def fn(ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob =
-      ctxt.self2.update(false, ctxt)(state, globalEnv)
+    override def fn(ctxt: Ctxt, state: State): Ob =
+      ctxt.self2.update(enabledSetProvided = false, ctxt, state)
 
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Ob] = ???
   }
