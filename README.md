@@ -25,8 +25,8 @@ Assuming you have Docker running on your system, use the following command to fe
 08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 08:30:32.799 [main] INFO  logger - gRPC server started, listening on
 08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:40400.
-08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}.
-08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}
+08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}.
+08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}
 [...]
 ```
 
