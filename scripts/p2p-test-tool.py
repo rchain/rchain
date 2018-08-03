@@ -80,7 +80,7 @@ parser.add_argument("--repl-commands",
                     type=str,
                     nargs='+',
                     default=['5',
-                        'new s(`rho:io:stdout`) in { s!("foo")' },
+                        'new s(`rho:io:stdout`) in { s!("foo") }',
                         '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { new s(`rho:io:stdout` in { s!(a) } } } }'],
                     help="set repl commands to run as a list")
 parser.add_argument("--repl-load-repetitions",
