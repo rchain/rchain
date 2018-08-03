@@ -438,9 +438,6 @@ object Reduce {
             case Some(p) => Right(newEnv.put(p))
             case None    => Left(ReduceError(s"Unknown urn for new: ${urn}"))
           }
-        // This is non-functional, but it's a self-contained implementation of a
-        // functional early terminating left fold, and the library does the same
-        // thing with vars.
         def foldLeftEarly[A, B, E](init: B,
                                    as: Seq[A],
                                    cata: (B, A) => Either[E, B]): Either[E, B] =
