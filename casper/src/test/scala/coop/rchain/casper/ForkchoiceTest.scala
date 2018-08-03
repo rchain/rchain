@@ -79,10 +79,13 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       val latestBlocks = HashMap[Validator, BlockHash](v1 -> b8.blockHash, v2 -> b6.blockHash)
 
-      val forkchoice =
-        Estimator.tips(chain.copy(latestMessages = latestBlocks), BlockStore[Id].asMap(), genesis)
-      forkchoice.head should be(b6)
-      forkchoice(1) should be(b8)
+      def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
+        for {
+          forkchoice <- Estimator.tips[F](chain.copy(latestMessages = latestBlocks), genesis)
+          _          = forkchoice.head should be(b6)
+          _          = forkchoice(1) should be(b8)
+        } yield ()
+      checkForkchoice[Id]
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
@@ -143,9 +146,13 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val latestBlocks =
         HashMap[Validator, BlockHash](v1 -> b6.blockHash, v2 -> b8.blockHash, v3 -> b7.blockHash)
 
-      val forkchoice =
-        Estimator.tips(chain.copy(latestMessages = latestBlocks), BlockStore[Id].asMap(), genesis)
-      forkchoice.head should be(b8)
-      forkchoice(1) should be(b7)
+      def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
+        for {
+          forkchoice <- Estimator.tips[F](chain.copy(latestMessages = latestBlocks), genesis)
+          _          = forkchoice.head should be(b8)
+          _          = forkchoice(1) should be(b7)
+        } yield ()
+
+      checkForkchoice[Id]
   }
 }

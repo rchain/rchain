@@ -78,22 +78,22 @@ class BlocksResponseTest
   val chain: BlockDag = createChain.runS(initState)
   val genesis         = chain.idToBlocks(1)
 
-  def testCasper[F[_]: Applicative]: MultiParentCasper[F] =
+  def testCasper[F[_]: Monad: BlockStore]: MultiParentCasper[F] =
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[BlockStatus] =
         BlockStatus.valid.pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
-      def estimator: F[IndexedSeq[BlockMessage]] =
-        Estimator.tips(chain, BlockStore[Id].asMap(), genesis).pure[F]
+      def contains(b: BlockMessage): F[Boolean]                          = false.pure[F]
+      def deploy(r: Deploy): F[Unit]                                     = ().pure[F]
+      def estimator: F[IndexedSeq[BlockMessage]]                         = Estimator.tips[F](chain, genesis)
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
       def blockDag: F[BlockDag]                                          = chain.pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
-  implicit val casperEffect = testCasper[Id]
-  implicit val logEff       = new LogStub[Id]
+  implicit val blockStoreEffect = BlockStore[Id]
+  implicit val casperEffect     = testCasper[Id]
+  implicit val logEff           = new LogStub[Id]
   implicit val constructorEffect =
     MultiParentCasperConstructor
       .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)

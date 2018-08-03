@@ -296,18 +296,22 @@ object Validate {
           .foldLeft(Map.empty[Validator, BlockHash]) {
             case (map, Justification(v, hash)) => map.updated(v, hash)
           }
-        val viewDag  = dag.copy(latestMessages = latestMessages)
-        val estimate = Estimator.tips(viewDag, internalMap, genesis)
-        val trueParents =
-          ProtoUtil.chooseNonConflicting(estimate, genesis, dag, internalMap).map(_.blockHash)
-
-        if (bParents == trueParents)
-          Applicative[F].pure(Right(Valid))
-        else
-          for {
-            _ <- Log[F].warn(
-                  ignore(b, "block parents did not match estimate based on justification."))
-          } yield Left(InvalidParents)
+        // TODO: Double check logic here
+        val viewDag = dag.copy(latestMessages = latestMessages)
+        for {
+          estimate <- Estimator.tips[F](viewDag, genesis)
+          trueParents = ProtoUtil
+            .chooseNonConflicting(estimate, genesis, dag, internalMap)
+            .map(_.blockHash)
+          status <- if (bParents == trueParents)
+                     Applicative[F].pure(Right(Valid))
+                   else
+                     for {
+                       _ <- Log[F].warn(
+                             ignore(b,
+                                    "block parents did not match estimate based on justification."))
+                     } yield Left(InvalidParents)
+        } yield status
       }
     }
 
