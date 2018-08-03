@@ -38,8 +38,8 @@ The build artifacts will be located in the node/target/universal/stage directory
 Follow official user guide:
 https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376065/User+guide+for+running+RNode#UserguideforrunningRNode-Bootstrapnode
 
-## 8. You can create your own config, or prepare a .toml file
-See also rnode.toml example
+## 8. Prepare a command line or a .toml file
+See also [rnode.toml](/rnode.toml) example
 
 ## 9. Start rnode
 For easy start you can use rnode.bat start file generated during build. For example:
