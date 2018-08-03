@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
@@ -38,18 +38,33 @@ object ProtoUtil {
       }
     }
 
-  @tailrec
-  def getMainChain(internalMap: Map[BlockHash, BlockMessage],
-                   estimate: BlockMessage,
-                   acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
+  def getMainChain[F[_]: Monad: BlockStore](
+      estimate: BlockMessage,
+      acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parents(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash flatMap internalMap.get match {
-      case Some(newEstimate) =>
-        getMainChain(internalMap, newEstimate, acc :+ estimate)
-      case None => acc :+ estimate
-    }
+    for {
+      mainChain <- maybeMainParentHash match {
+                    case Some(mainParentHash) =>
+                      for {
+                        updatedEstimate <- getBlock[F](mainParentHash)
+                        mainChain       <- getMainChain[F](updatedEstimate, acc :+ estimate)
+                      } yield mainChain
+                    case None => (acc :+ estimate).pure[F]
+                  }
+    } yield mainChain
   }
+
+  def getBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+    for {
+      maybeBlock <- BlockStore[F].get(hash)
+      block = maybeBlock match {
+        case Some(block) =>
+          block
+        case None =>
+          throw new Error(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+      }
+    } yield block
 
   @tailrec
   def findJustificationParentWithSeqNum(b: BlockMessage,

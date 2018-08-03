@@ -69,12 +69,9 @@ object BlockAPI {
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        estimates   <- MultiParentCasper[F].estimator
-        tip         = estimates.head
-        internalMap <- BlockStore[F].asMap()
-        mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(internalMap,
-                                                                     tip,
-                                                                     IndexedSeq.empty[BlockMessage])
+        estimates  <- MultiParentCasper[F].estimator
+        tip        = estimates.head
+        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
         blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
