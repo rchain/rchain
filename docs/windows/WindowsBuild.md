@@ -41,7 +41,7 @@ https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376065/User+guide+for+run
 ## 8. Prepare a command line or a .toml file
 See also [rnode.toml](rnode.toml) example
 
-## 9. Start rnode
+## 9. Start RNode
 For easy start you can use rnode.bat start file generated during build. For example:
 ```
 rnode.bat run --data_dir C:\RChain\data
