@@ -4,11 +4,11 @@ Currently some errors inside coop.rchain.kalium-0.8.1-SNAPSHOT.jar blocks starti
 
 ## 1. Install Haskell Platform
 https://www.haskell.org/platform/
-make sure that ghc compiler and cabal are available from PATH
+	make sure that ghc compiler and cabal are available from PATH
 
 ## 2. Download and build BNFC
 https://github.com/BNFC/bnfc
-Read BNFC build instructions for details.
+	Read BNFC build instructions for details.
 
 ## 3. Install cup
 http://www2.cs.tum.edu/projects/cup/install.php
@@ -26,11 +26,12 @@ bnfc:generate
 ```
 ## 6. From sbt shell build node
 
-You can follow the rnode build instruction (see https://github.com/rchain/rchain/blob/master/node/README.md), but on windows it might be easier to work with stage build, with all jars in the same folder:
-In sbt shell:
+You can follow the rnode build instruction (see https://github.com/rchain/rchain/blob/master/node/README.md), but on windows it might be easier to work with stage build, with all jars in the same folder buy running:
 ```
 node/universal:stage
 ```
+from the sbt shell.
+
 The build artifacts will be located in the node/target/universal/stage directory if the build is successful.
 
 ## 7. Prepare certificates, keys, etc.
