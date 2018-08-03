@@ -37,33 +37,28 @@ object BlockAPI {
         DeployServiceResponse(false, s"Error: Casper instance not available"))
   }
 
-  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[MaybeBlockMessage] =
-    MultiParentCasperConstructor.withCasper[F, MaybeBlockMessage](
-      _.createBlock.map(MaybeBlockMessage.apply),
-      MaybeBlockMessage.defaultInstance)
-
-  def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](
-      b: BlockMessage): F[DeployServiceResponse] = {
-    def doAddBlock(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
-      for {
-        status <- MultiParentCasper[F].addBlock(b)
-      } yield
-        status match {
-          case _: InvalidBlock => DeployServiceResponse(false, s"Failure! Invalid block: $status")
-          case _: ValidBlock   => DeployServiceResponse(true, s"Success! $status")
-          case BlockException(ex) =>
-            DeployServiceResponse(false, s"Error during block processing: $ex")
-          case Processing =>
-            DeployServiceResponse(
-              false,
-              s"No action taken since another thread is already processing the block.")
-        }
-
-    MultiParentCasperConstructor
-      .withCasper[F, DeployServiceResponse](
-        doAddBlock(_),
-        DeployServiceResponse(false, "Error: Casper instance not available"))
-  }
+  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[DeployServiceResponse] =
+    MultiParentCasperConstructor.withCasper[F, DeployServiceResponse](
+      casper =>
+        for {
+          maybeBlock <- casper.createBlock
+          status     <- maybeBlock.traverse(casper.addBlock(_))
+        } yield
+          status match {
+            case Some(_: InvalidBlock) =>
+              DeployServiceResponse(false, s"Failure! Invalid block: $status")
+            case Some(_: ValidBlock) =>
+              DeployServiceResponse(true, s"Success! Block created and added.")
+            case Some(BlockException(ex)) =>
+              DeployServiceResponse(false, s"Error during block processing: $ex")
+            case Some(Processing) =>
+              DeployServiceResponse(
+                false,
+                "No action taken since other thread if already processing the block.")
+            case None => DeployServiceResponse(false, "No block was created.")
+        },
+      DeployServiceResponse(false, "Error: Casper instance not available")
+    )
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
     : F[BlocksResponse] = {

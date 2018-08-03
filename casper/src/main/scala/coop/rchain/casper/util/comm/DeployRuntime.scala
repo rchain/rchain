@@ -12,19 +12,10 @@ import scala.util.{Failure, Success, Try}
 object DeployRuntime {
 
   def propose[F[_]: Monad: Capture: DeployService](): F[Unit] =
-    DeployService[F].createBlock().flatMap {
-      case Some(block) =>
-        for {
-          _        <- Capture[F].capture { println(s"Response: Successfully created block") }
-          response <- DeployService[F].addBlock(block)
-          _        <- Capture[F].capture { println(s"Response: ${response._2}") }
-        } yield ()
-
-      case None =>
-        Capture[F].capture {
-          println(s"Response: Failure! Did not create block")
-        }
-    }
+    for {
+      response <- DeployService[F].createBlock()
+      _        <- Capture[F].capture { println(s"Response: ${response._2}") }
+    } yield ()
 
   def showBlock[F[_]: Functor: DeployService](hash: String): F[Unit] =
     DeployService[F].showBlock(BlockQuery(hash)).map(println(_))
