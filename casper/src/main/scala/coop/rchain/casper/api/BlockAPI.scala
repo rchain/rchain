@@ -15,7 +15,7 @@ import coop.rchain.shared.Log
 object BlockAPI {
 
   def deploy[F[_]: Monad: MultiParentCasperConstructor: Log](
-      d: DeployString): F[DeployServiceResponse] = {
+      d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       InterpreterUtil.mkTerm(d.term) match {
         case Right(term) =>
