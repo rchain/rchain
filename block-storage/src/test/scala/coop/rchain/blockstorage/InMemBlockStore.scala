@@ -1,7 +1,5 @@
 package coop.rchain.blockstorage
 
-import scala.language.higherKinds
-
 import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
@@ -9,6 +7,8 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
+
+import scala.language.higherKinds
 
 class InMemBlockStore[F[_], E] private ()(implicit
                                           monadF: Monad[F],
@@ -29,6 +29,12 @@ class InMemBlockStore[F[_], E] private ()(implicit
       _     <- metricsF.incrementCounter("block-store-as-map")
       state <- refF.get
     } yield state
+
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+    for {
+      _     <- metricsF.incrementCounter("block-store-find")
+      state <- refF.get
+    } yield state.toSeq.filter { case (k, _) => p(k) }
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
@@ -55,8 +61,8 @@ object InMemBlockStore {
     new InMemBlockStore()
 
   def createWithId: BlockStore[Id] = {
-    import coop.rchain.metrics.Metrics.MetricsNOP
     import coop.rchain.catscontrib.effect.implicits._
+    import coop.rchain.metrics.Metrics.MetricsNOP
     val refId                         = emptyMapRef[Id](syncId)
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
     InMemBlockStore.create(syncId, refId, metrics)

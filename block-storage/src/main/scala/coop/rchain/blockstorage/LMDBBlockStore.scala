@@ -84,6 +84,25 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+    for {
+      _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
+      ret <- withReadTxn { txn =>
+              blocks
+                .iterate(txn)
+                .iterable()
+                .asScala
+                .withFilter(kv => p(ByteString.copyFrom(kv.key())))
+                .map { kv =>
+                  val hash = ByteString.copyFrom(kv.key())
+                  val msg  = BlockMessage.parseFrom(ByteString.copyFrom(kv.`val`()).newCodedInput())
+                  (hash, msg)
+                }
+            }
+    } yield ret.toSeq
+
+  @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
+              since = "0.5")
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
