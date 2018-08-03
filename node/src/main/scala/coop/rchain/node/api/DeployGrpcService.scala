@@ -18,11 +18,8 @@ private[api] class DeployGrpcService[
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
     BlockAPI.deploy[F](d).toFuture
 
-  override def createBlock(e: Empty): Future[MaybeBlockMessage] =
+  override def createBlock(e: Empty): Future[DeployServiceResponse] =
     BlockAPI.createBlock[F].toFuture
-
-  override def addBlock(b: BlockMessage): Future[DeployServiceResponse] =
-    BlockAPI.addBlock[F](b).toFuture
 
   override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
     BlockAPI.getBlockQueryResponse[F](q).toFuture
