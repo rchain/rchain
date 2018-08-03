@@ -11,6 +11,7 @@ import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectToBootstrapSpec
