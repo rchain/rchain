@@ -90,7 +90,6 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       ret <- withReadTxn { txn =>
               blocks
                 .iterate(txn)
-                .iterable()
                 .asScala
                 .withFilter(kv => p(ByteString.copyFrom(kv.key())))
                 .map { kv =>
