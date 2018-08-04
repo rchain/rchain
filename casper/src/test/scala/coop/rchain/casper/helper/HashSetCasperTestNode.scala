@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
-import cats._
+import cats.{Applicative, ApplicativeError, Id}
+import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
@@ -27,6 +28,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.Cell
 
 class HashSetCasperTestNode(name: String,

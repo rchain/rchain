@@ -70,7 +70,6 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         estimates   <- MultiParentCasper[F].estimator
-        dag         <- MultiParentCasper[F].blockDag
         tip         = estimates.head
         internalMap <- BlockStore[F].asMap()
         mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(internalMap,
