@@ -80,8 +80,8 @@ parser.add_argument("--repl-commands",
                     type=str,
                     nargs='+',
                     default=['5',
-                        '@"stdout"!("foo")',
-                        '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'],
+                        'new s(`rho:io:stdout`) in { s!("foo") }',
+                        '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { new s(`rho:io:stdout` in { s!(a) } } } }'],
                     help="set repl commands to run as a list")
 parser.add_argument("--repl-load-repetitions",
                     dest='repl_load_repetitions',
@@ -118,7 +118,6 @@ parser.add_argument("-T", "--tests-to-run",
 if len(sys.argv)==1:
     parser.print_help(sys.stderr)
     sys.exit(1)
-
 
 # Define globals
 args = parser.parse_args()
@@ -269,7 +268,7 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy ${i}; done'
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done'
         try:
             r = container.exec_run(['sh', '-c', cmd])
             for line in r.output.decode('utf-8').splitlines():
@@ -403,13 +402,13 @@ def test_performance():
     print('Run parent script with "-p 1" if you only want deploy/propose to run from a single node to network nodes')
     print("=====================================================================================")
     print("Grab metrics on peer0 container via:")
-    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403'")
-    print("sudo docker exec -it peer0.rchain.coop bash -c './bin/rnode diagnostics'")
+    print("sudo docker exec -it peer0.{args.network} bash -c 'curl 127.0.0.1:40403'")
+    print("sudo docker exec -it peer0.{args.network} bash -c './bin/rnode diagnostics'")
     print("=====================================================================================")
     print("Quick and dirty comparative script. Shows metric lines changed and the values.")
     print("Run last command to see changes from start /tmp/1")
-    print("sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403' > /tmp/1")
-    print("""sudo docker exec -it peer0.rchain.coop bash -c 'curl 127.0.0.1:40403' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
+    print("sudo docker exec -it peer0.{args.network} bash -c 'curl 127.0.0.1:40403' > /tmp/1")
+    print("""sudo docker exec -it peer0.{args.network} bash -c 'curl 127.0.0.1:40403' > /tmp/2 && diff -y --suppress-common-lines /tmp/1 /tmp/2 | tr -d '\\t\\r\\f'  | awk '{print $1" | " $2" | "$4}'""")
     print("=====================================================================================")
     time.sleep(10)
     while True:
@@ -418,7 +417,7 @@ def test_performance():
                 print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
                 # Deploy example contracts using 3 random example files
-                cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy ${i}; done"
+                cmd = "for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done"
                 try: 
                     r = container.exec_run(['sh', '-c', cmd])
                     for line in r.output.decode('utf-8').splitlines():

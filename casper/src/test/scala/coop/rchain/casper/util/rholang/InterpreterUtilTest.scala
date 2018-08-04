@@ -525,7 +525,7 @@ class InterpreterUtilTest
     val deploys =
       Vector(
         """
-          |new loop, primeCheck in {
+          |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
           |  contract loop(@x) = {
           |    match x {
           |      [] => Nil
@@ -540,9 +540,9 @@ class InterpreterUtilTest
           |  } |
           |  contract primeCheck(@x, ret) = {
           |    match x {
-          |      Nil => @"stdoutAck"!("Nil", *ret)
-          |      ~{~Nil | ~Nil} => @"stdoutAck"!("Prime", *ret)
-          |      _ => @"stdoutAck"!("Composite", *ret)
+          |      Nil => stdoutAck!("Nil", *ret)
+          |      ~{~Nil | ~Nil} => stdoutAck!("Prime", *ret)
+          |      _ => stdoutAck!("Composite", *ret)
           |    }
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])

@@ -42,7 +42,7 @@ object Configuration {
   private val DefaultKeyFileName                = "node.key.pem"
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
-    .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
+    .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
     .get
 

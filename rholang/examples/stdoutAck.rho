@@ -1,6 +1,6 @@
-new ack in {
-  @"stdoutAck"!("hello, world!", *ack) |
+new ack, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  stdoutAck!("hello, world!", *ack) |
   for (_ <- ack) {
-    @"stdout"!("received")
+    stdout!("received")
   }
 }
