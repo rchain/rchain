@@ -133,6 +133,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
+    val maxNumOfConnections =
+      opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
