@@ -1,0 +1,333 @@
+new BallotFactory, LockoutFactory, PostOfficeFactory in {
+  // create: create a ballot
+  //
+  //  Set<bytearray> pubKeySet: set of public keys allowed to vote on this ballot
+  //  integer voteQuorumSize: 0 < voteQuorumSize < pubKeySet.size() required for candidate to win
+  //  integer cancelQuorumSize: 0 < cancelQuorumSize < pubKeySet.size() required for election to be canceled
+  //  name winnerOut: send winning candidate on this
+  //  name ballotOut: send resulting ballot on this
+  //
+  // TODO(pyrocto): Need to track whether there are enough outstanding votes to get a quorum.  If not, fail.
+  contract @[*BallotFactory, "create"](@pubKeySet, @voteQuorumSize, @cancelQuorumSize, winnerOut, ballotOut) = {
+    new ballot, votedSetStore, voteMapStore, canceledSetStore, doneStore, 
+        verify/*(`rho:crypto:ed25519Verify`)*/, ret in {
+      @[*r, "register"]!(`rho:uuid`, bundle+{*ballot}, *ret) |
+      for (@[uuid, unregisterBallotToken] <- ret) {
+        ballotOut!(*ballot) |
+      
+        // Stores set of keys that have voted
+        votedSetStore!(Set()) |
+        // Stores map of candidate to count
+        // TODO: when there's a method to get the set of keys from the map, use that instead of votedsStore
+        voteMapStore!({}) |
+        // Stores set of keys that have canceled
+        canceledSetStore!(Set()) |
+        // Whether the ballot has completed
+        doneStore!(false) |
+    
+        // vote: records the vote of the given public key for the given candidate on this ballot
+        //
+        //  bytearray pubKey: the public key to vote with
+        //  any canditate: the candidate to vote for
+        //  name statusOut: send success/failure notification on this
+        //  bytearray sig: signature of [*ballot, candidate, *statusOut].toByteArray()
+        contract @[*ballot, "vote"](@pubKey, @candidate, statusOut, @sig) = {
+          for (@done <- doneStore; @votedSet <- votedSetStore) {
+            if (done) {
+              votedSetStore!(votedSet) |
+              doneStore!(true) |
+              statusOut!(["fail", "Already done."])
+            } else {
+              // check that the pubkey is in the list
+              if (not pubKeySet.has(pubKey)) {
+                votedSetStore!(votedSet) |
+                doneStore!(false) |
+                statusOut!(["fail", "Invalid key."])
+              } else {
+                if (votedSet.has(pubKey)) {
+                  votedSetStore!(votedSet) |
+                  doneStore!(done) |
+                  statusOut!(["fail", "Already voted."])
+                } else {
+                  // check the signature
+                  new ret in {
+                    verify!([*ballot, candidate, *statusOut].toByteArray(), sig, pubKey, *ret) |
+                    for (@verifyResult <- ret) {
+                      if (not verifyResult) {
+                        votedSetStore!(votedSet) |
+                        doneStore!(false) |
+                        statusOut!(["fail", "Invalid signature."])
+                      } else {
+                        votedSetStore!(votedSet.add(pubKey)) |
+                        new currentCountOut, newCountOut in {
+                          // Increment the candidate's vote count
+                          for (@voteMap <- voteMapStore) {
+                            currentCountOut!(voteMap.get(candidate)) |
+                            for (@currentCount <- currentCountOut) {
+                              if (currentCount == Nil) {
+                                voteMapStore!(voteMap.set(candidate, 1)) |
+                                newCountOut!(1)
+                              } else {
+                                voteMapStore!(voteMap.set(candidate, currentCount + 1)) |
+                                newCountOut!(currentCount + 1)
+                              } |
+                              for (@newCount <- newCountOut) {
+                                // Check quorum size
+                                if (newCount < voteQuorumSize) {
+                                  statusOut!(["success", false]) |
+                                  doneStore!(false)
+                                } else {
+                                  // Remove ballot from the registry so it can be garbage collected
+                                  @[*r, "unregister"]!(unregisterBallotToken, Nil) |
+                                  winnerOut!(candidate) |
+                                  statusOut!(["success", true]) |
+                                  doneStore!(true)
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } |
+    
+        // cancel: votes to cancel the ballot instead of waiting for remaining keys to vote
+        //
+        //  bytearray pubKey: the public key to vote with
+        //  name statusOut: send success/failure notification on this
+        //  bytearray sig: signature of [*ballot, *statusOut].toByteArray()
+        contract @[*ballot, "cancel"](@pubKey, statusOut, @sig) = {
+          for (@done <- doneStore; @canceledSet <- canceledSetStore) {
+            if (done) {
+              canceledSetStore!(canceledSet) |
+              doneStore!(done) |
+              statusOut!(["fail", "Already done."])
+            } else {
+              // check that the pubkey is in the list
+              if (not pubKeySet.has(pubKey)) {
+                canceledSetStore!(canceledSet) |
+                doneStore!(done) |
+                statusOut!(["fail", "Invalid key."])
+              } else {
+                // check that it hasn't already cast its vote to cancel
+                if (canceledSet.has(pubKey)) {
+                  canceledSetStore!(canceledSet) |
+                  doneStore!(done) |
+                  statusOut!(["fail", "Already canceled."])
+                } else {
+                  // check the signature
+                  new ret in {
+                    verify!([*ballot, *statusOut].toByteArray(), sig, pubKey, *ret) |
+                    for (@verifyResult <- ret) {
+                      if (not verifyResult) {
+                        canceledSetStore!(canceledSet) |
+                        doneStore!(done) |
+                        statusOut!(["fail", "Invalid signature."])
+                      } else {
+                        // Add the public key to the set of cancelers
+                        // TODO(pyrocto): verify that this can be simplified to just
+                        //   canceledSetStore!(canceledSet.add(pubKey)) |
+                        //   if (canceledSet.size() + 1 < cancelQuorumSize) { ... } else { ... }
+                        //   (i.e. make sure set methods return a new set instead of modifying an existing one)
+                        new proceed in {
+                          proceed!(canceledSet.add(pubKey)) |
+                          for (@canceledSet <- proceed) {
+                            canceledSetStore!(canceledSet) |
+                            if (canceledSet.size() < cancelQuorumSize) {
+                              statusOut!(["success"]) |
+                              doneStore!(done)
+                            } else {
+                              // Remove ballot from the registry so it can be garbage collected
+                              @[*r, "unregister"]!(unregisterBallotToken, Nil) |
+                              statusOut!(["success"]) |
+                              doneStore!(true)
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+
+  // create: makes a lockout.
+  //
+  //   ret: sends [LockoutClient, LockoutAdmin]
+  contract @[*LockoutFactory, "create"](ret) = {
+    new LockoutClient, LockoutAdmin, lockSetStore, addMutex in {
+      // acquire: add a lock to the lockout
+      //
+      //   keyOut: channel on which the key to remove the new lock is sent.
+      contract @[*LockoutClient, "acquire"](keyOut) = {
+        for (@lockSet <- lockSetStore; _ <- addMutex) {
+          new key in {
+            lockSetStore!(lockSet.add(*key)) |
+            addMutex!(Nil) |
+            keyOut!(*key)
+          }
+        }
+      } |
+    
+      // release: remove the lock for the given key
+      //
+      //   keyIn: key for lock to remove
+      //   ack: sends on this channel when operation is complete
+      contract @[*LockoutClient, "release"](@keyIn, ack) = {
+        for (@lockSet <- lockSetStore) {
+          lockSetStore!(lockSet.delete(keyIn)) |
+          ack!(Nil)
+        }
+      } |
+    
+      // blockAcquire: prevent adding locks to the lockout.  Clients attempting
+      //     to acquire will block.
+      //
+      //   ack: sends on this channel when operation is complete
+      contract @[*LockoutAdmin, "blockAcquire"](ack) = {
+        for (_ <- addMutex) {
+          ack!(Nil)
+        }
+      } |
+    
+      contract @[*LockoutAdmin, "unblockAcquire"](ack) = {
+        addMutex!(Nil) |
+        ack!(Nil)
+      } |
+    
+      // whenEmpty: sends on ack when lockout is empty.  Note that you must
+      //     blockAcquire() before invoking this method to be sure that something
+      //     doesn't acquire the lockout between the check and the notification.
+      //
+      //   ack: sends on this channel when lockout is empty
+      contract @[*LockoutAdmin, "whenEmpty"](ack) = {
+          for (@Set() <- lockSetStore) {
+              lockSetStore!(Set()) |
+              ack!(Nil)
+          }
+      } |
+    
+      // breakLocks: breaks all locks.  Obviously dangerous, only to be used in
+      //     recovery situations.
+      //
+      //   ack: sends on this channel when operation is complete
+      //
+      // TODO: notify keyholders?
+      contract @[*LockoutAdmin, "breakLocks"](ack) = {
+          for (_ <- lockSetStore) {
+              lockSetStore!(Set()) |
+              ack!(Nil)
+          }
+      } |
+    
+      ret!([*LockoutClient, *LockoutAdmin])
+    } 
+  } |
+
+
+  contract @[*PostOfficeFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, postOfficeOut) = {
+    new PostOfficeClient, PostOfficeAdmin, pubKeySetStore, sendQuorumSizeStore, cancelQuorumSizeStore,
+        r/*(`rho:registry`)*/ in {
+      postOfficeOut!([*PostOfficeClient, *PostOfficeAdmin]) |
+      pubKeySetStore!(pubKeySet) |
+      sendQuorumSizeStore!(sendQuorumSize) |
+      cancelQuorumSizeStore!(cancelQuorumSize) |
+      
+      // send: doesn't actually send the message cross shard---the off-chain
+      //       PostOffice owners notice sends to this address and deal with that.
+      //       This method sets up the contract that gets the status message back
+      //       from them.
+      //
+      //  any message: process to send cross chain.
+      //  purse purse: purse to pay for the send
+      //  name statusOut: name on which to send a succeed/fail message
+      // TODO(pyrocto): check the balance, drain the purse.  Send fail message if not enough.
+      contract @[*PostOfficeClient, "send"](@message, @purse, statusOut) = {
+        // Get the current params
+        for (@pubKeySet <- pubKeySetStore; 
+             @sendQuorumSize <- sendQuorumSizeStore; 
+             @cancelQuorumSize <- cancelQuorumSizeStore) {
+          // Make a ballot with those params to receive
+          // the response from the other shard
+          new ballotOut, ballotStatusOut in {
+            @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *ballotStatusOut, *ballotOut) |
+            for (@statusBallot <- ballotOut) {
+              // Publish the ballot so that owners can send to it from off-chain
+              new infoOut in {
+                @[*r, "register"]!(`rho:uuid`, bundle+{statusBallot}, *infoOut) |
+                for (@[statusBallotUUID, unregisterStatusBallotToken] <- infoOut) {
+                  // Once the status is received, unregister the ballot so it can be garbage
+                  // collected and forward the result to the client
+                  for (@ballotStatus <- ballotStatusOut) {
+                    statusOut!(ballotStatus) |
+                    @[*r, "unregister"]!(unregisterStatusBallotToken)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+      
+      contract @[*PostOfficeClient, "receive"]() ={
+        
+      } |
+      
+      contract @[*PostOfficeAdmin, "updateParams"]() = {
+        
+      }
+    }
+  }
+}
+
+
+
+/*
+
+Validators v1-vn set up a shard.
+Create Post Office in child and parent.
+Contract "Alice" in child wants to deploy code in parent.
+Sends purse, code, statusOut to post office.
+Post office drains purse.  If enough money's there, decides to forward message.
+  PO acquires the key from the lockout service.
+  PO creates notifier at public name in child shard.
+Validators wait for finalization; with honest behavior,
+  each one deploys some code in the parent that looks up the post office
+  and delivers a copy of [pk, lockoutKey, codeToDeploy, sig(lockoutKey, codeToDeploy)]
+  The kth validator triggers deployment of codeToDeploy.  
+  PostOffice pays back validators in parent for their messages and the deployment.
+  Validators wait for finalization of the kth deployment; with honest behavior,
+    each one deploys some code that looks up the notifier and sends it a status message
+    The kth validator triggers sending the agreed-on status message to Alice and
+        releases the lock
+
+Potential failure modes:
+There's some small incentive not to bother sending the message and hope that some
+    other quorum does the job.  If too many decide not to send, then the message
+    never gets delivered and the Post Office gets a bad rep. (Prisoner's dilemma.)
+Under network partition, there may not be a quorum able to deliver the message.
+If it takes long enough, storage fees for the notifier run out, it gets archived, and Alice never gets notified.
+
+*/
+
+
+
+
+
+
+
+
+
+
+
+
