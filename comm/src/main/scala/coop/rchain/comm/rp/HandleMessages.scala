@@ -1,6 +1,7 @@
 package coop.rchain.comm.rp
 
-import Connect.ConnectionsCell
+import Connect.{Connections, ConnectionsCell}, Connections._
+
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
@@ -93,7 +94,7 @@ object HandleMessages {
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
         _ <- NodeDiscovery[F].addNode(peer)
-        _ <- ConnectionsCell[F].modify(cs => (cs + peer).pure[F])
+        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(protocolHandshakeResponse(local))
 

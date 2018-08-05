@@ -1,7 +1,6 @@
 package coop.rchain.comm.rp
 
 import coop.rchain.p2p.effects._
-
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
 import com.google.protobuf.any.{Any => AnyProto}
@@ -27,7 +26,12 @@ object Connect {
   }
   object Connections {
     def empty: Connections = Set.empty[Connection]
+    implicit class ConnectionsOps(connections: Connections) {
+      def addConn[F[_]: Applicative](connection: Connection): F[Connections] =
+        (connections + connection).pure[F]
+    }
   }
+  import Connections._
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -97,7 +101,7 @@ object Connect {
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
       _   <- NodeDiscovery[F].addNode(peer)
-      _   <- ConnectionsCell[F].modify(cs => (cs + peer).pure[F])
+      _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
