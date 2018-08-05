@@ -14,7 +14,7 @@ import scala.collection.mutable
 
 object DagOperations {
 
-  def bfTraverseF[F[_]: Monad, A](start: List[A])(neighbours: A => F[List[A]]): F[StreamT[F, A]] = {
+  def bfTraverseF[F[_]: Monad, A](start: List[A])(neighbours: A => F[List[A]]): StreamT[F, A] = {
     def build(q: Queue[A], prevVisited: HashSet[A]): F[StreamT[F, A]] =
       if (q.isEmpty) StreamT.empty[F, A].pure[F]
       else {
@@ -25,10 +25,10 @@ object DagOperations {
             ns      <- neighbours(curr)
             visited = prevVisited + curr
             newQ    = rest.enqueue[A](ns.filterNot(visited))
-          } yield StreamT.cons(curr, Eval.later(build(newQ, visited)))
+          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
       }
 
-    build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])
+    StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
   }
 
   def bfTraverse[A](start: Iterable[A])(neighbours: (A) => Iterator[A]): Iterator[A] =
