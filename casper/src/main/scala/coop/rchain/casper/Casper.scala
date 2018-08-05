@@ -220,6 +220,8 @@ sealed abstract class MultiParentCasperInstances {
           _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
         } yield attempt
 
+      // TODO: Replace with findM when it gets merged into cats.
+      // See https://github.com/rchain/rchain/pull/1214#discussion_r207578410
       def updateLastFinalizedBlock(dag: BlockDag,
                                    lastFinalizedBlock: BlockMessage): F[BlockMessage] = {
         val maybeFinalizedBlockChildren = dag.childMap.get(lastFinalizedBlock.blockHash)

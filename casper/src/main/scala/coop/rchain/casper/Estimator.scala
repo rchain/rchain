@@ -1,16 +1,18 @@
 package coop.rchain.casper
 
-import cats.Monad
+import cats.{Foldable, Monad}
 import cats.implicits._
+import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
-import coop.rchain.casper.util.ProtoUtil.{parents, weightFromValidator}
+import coop.rchain.casper.util.ProtoUtil.{getBlock, parents, weightFromValidator}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
 import coop.rchain.catscontrib.ListContrib
+import coop.rchain.shared.StreamT
 
 object Estimator {
   type BlockHash = ByteString
@@ -63,32 +65,31 @@ object Estimator {
   }
 
   def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Int]] = {
-    def hashParents(internalMap: Map[BlockHash, BlockMessage],
-                    hash: BlockHash): Iterator[BlockHash] = {
-      val b = internalMap(hash)
-      parents(b).iterator
-    }
+    def hashParents(hash: BlockHash): F[List[BlockHash]] =
+      for {
+        b <- getBlock[F](hash)
+      } yield parents(b).toList
 
     def addValidatorWeightDownSupportingChain(scoreMap: Map[BlockHash, Int],
-                                              internalMap: Map[BlockHash, BlockMessage],
                                               validator: Validator,
-                                              latestBlockHash: BlockHash): Map[BlockHash, Int] =
-      DagOperations
-        .bfTraverse[BlockHash](Some(latestBlockHash))(hashParents(internalMap, _))
-        .foldLeft(scoreMap) {
-          case (acc, hash) =>
-            val b               = internalMap(hash)
-            val currScore       = acc.getOrElse(hash, 0)
-            val validatorWeight = weightFromValidator(b, validator, internalMap)
-            acc.updated(hash, currScore + validatorWeight)
-        }
+                                              latestBlockHash: BlockHash): F[Map[BlockHash, Int]] =
+      for {
+        dag <- DagOperations.bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents).toList
+        updatedScoreMap <- Foldable[List].foldM(dag, scoreMap) {
+                            case (acc, hash) =>
+                              for {
+                                b               <- getBlock[F](hash)
+                                currScore       = acc.getOrElse(hash, 0)
+                                validatorWeight <- weightFromValidator[F](b, validator)
+                              } yield acc.updated(hash, currScore + validatorWeight)
+                          }
+      } yield updatedScoreMap
 
     for {
-      internalMap <- BlockStore[F].asMap()
-      scoresMap = blockDag.latestMessages.foldLeft(Map.empty[BlockHash, Int]) {
-        case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
-          addValidatorWeightDownSupportingChain(acc, internalMap, validator, latestBlockHash)
-      }
+      scoresMap <- Foldable[List].foldM(blockDag.latestMessages.toList, Map.empty[BlockHash, Int]) {
+                    case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
+                      addValidatorWeightDownSupportingChain(acc, validator, latestBlockHash)
+                  }
     } yield scoresMap
   }
 }

@@ -94,19 +94,20 @@ object Validate {
   def blockSender[F[_]: Monad: Log: BlockStore](b: BlockMessage,
                                                 genesis: BlockMessage,
                                                 dag: BlockDag): F[Boolean] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      if (b == genesis) {
-        true.pure[F] //genesis block has a valid sender
-      } else {
-        val weight = ProtoUtil.weightFromSender(b, internalMap)
-        if (weight > 0)
-          true.pure[F]
-        else
-          for {
-            _ <- Log[F].warn(
-                  ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."))
-          } yield false
-      }
+    if (b == genesis) {
+      true.pure[F] //genesis block has a valid sender
+    } else {
+      for {
+        weight <- ProtoUtil.weightFromSender[F](b)
+        result <- if (weight > 0) true.pure[F]
+                 else
+                   for {
+                     _ <- Log[F].warn(
+                           ignore(
+                             b,
+                             s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."))
+                   } yield false
+      } yield result
     }
 
   /*

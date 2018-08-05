@@ -8,6 +8,7 @@ import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil.mainParent
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -21,20 +22,22 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  @tailrec
-  def isInMainChain(internalMap: Map[BlockHash, BlockMessage],
-                    candidate: BlockMessage,
-                    target: BlockMessage): Boolean =
+  def isInMainChain[F[_]: Monad: BlockStore](candidate: BlockMessage,
+                                             target: BlockMessage): F[Boolean] =
     if (candidate == target) {
-      true
+      true.pure[F]
     } else {
-      (for {
-        hdr        <- target.header
-        parentHash <- hdr.parentsHashList.headOption
-        mainParent <- internalMap.get(parentHash)
-      } yield mainParent) match {
-        case Some(parent) => isInMainChain(internalMap, candidate, parent)
-        case None         => false
+      val maybeMainParentHash = ProtoUtil.parents(target).headOption
+      maybeMainParentHash match {
+        case Some(mainParentHash) =>
+          for {
+            mainParent <- BlockStore[F].get(mainParentHash)
+            isInMainChain <- mainParent match {
+                              case Some(parent) => isInMainChain[F](candidate, parent)
+                              case None         => false.pure[F]
+                            }
+          } yield isInMainChain
+        case None => false.pure[F]
       }
     }
 
@@ -59,8 +62,7 @@ object ProtoUtil {
     for {
       maybeBlock <- BlockStore[F].get(hash)
       block = maybeBlock match {
-        case Some(block) =>
-          block
+        case Some(b) => b
         case None =>
           throw new Error(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
       }
@@ -110,23 +112,27 @@ object ProtoUtil {
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
-  def mainParent(internalMap: Map[BlockHash, BlockMessage],
-                 blockMessage: BlockMessage): Option[BlockMessage] =
-    for {
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
+    val maybeParentHash = for {
       hdr        <- blockMessage.header
       parentHash <- hdr.parentsHashList.headOption
-      mainParent <- internalMap.get(parentHash)
-    } yield mainParent
+    } yield parentHash
+    maybeParentHash match {
+      case Some(parentHash) => BlockStore[F].get(parentHash)
+      case None             => none[BlockMessage].pure[F]
+    }
+  }
 
-  def weightFromValidator(b: BlockMessage,
-                          validator: ByteString,
-                          internalMap: Map[BlockHash, BlockMessage]): Int =
-    mainParent(internalMap, b)
-      .map(weightMap(_).getOrElse(validator, 0))
-      .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage, validator: ByteString): F[Int] =
+    for {
+      maybeMainParent <- mainParent[F](b)
+      weightFromValidator = maybeMainParent
+        .map(weightMap(_).getOrElse(validator, 0))
+        .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+    } yield weightFromValidator
 
-  def weightFromSender(b: BlockMessage, internalMap: Map[BlockHash, BlockMessage]): Int =
-    weightFromValidator(b, b.sender, internalMap)
+  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Int] =
+    weightFromValidator[F](b, b.sender)
 
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
