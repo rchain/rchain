@@ -194,9 +194,9 @@ object ProtoUtil {
     protoSeqHash(protoSeq)
 
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
-    hashBytes(protoSeq.map(_.toByteArray): _*)
+    hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
-  def hashBytes(items: Array[Byte]*): ByteString =
+  def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   def blockHeader(body: Body,
@@ -226,13 +226,11 @@ object ProtoUtil {
 
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
-    hashBytes(items: _*)
+    hashByteArrays(items: _*)
   }
 
-  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int) = {
-    val headerBytes = header.toByteArray
-    hashBytes(headerBytes, sender.toByteArray, sigAlgorithm.getBytes, Array(seqNum.toByte))
-  }
+  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int) =
+    hashByteArrays(header.toByteArray, sender.toByteArray, sigAlgorithm.getBytes, Array(seqNum.toByte))
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
@@ -242,7 +240,8 @@ object ProtoUtil {
                 signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
 
     val header = {
-      //TODO refactor casper code to avoid the usage of Option fields in the block datastructures https://rchain.atlassian.net/browse/RHOL-572
+      //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
+      // https://rchain.atlassian.net/browse/RHOL-572
       assert(block.header.isDefined, "A block without a header doesn't make sense")
       block.header.get
     }
