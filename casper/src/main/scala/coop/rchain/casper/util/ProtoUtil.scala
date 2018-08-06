@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import cats.Monad
 import cats.implicits._
-import com.google.protobuf.ByteString
+import com.google.protobuf.{ByteString, StringValue, Int32Value}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -224,13 +224,6 @@ object ProtoUtil {
       .withJustifications(justifications)
   }
 
-  def int32ToByteArray(i: Int): Array[Byte] = {
-    val size   = 4
-    val buffer = java.nio.ByteBuffer.allocate(size)
-    buffer.putInt(i)
-    buffer.array()
-  }
-
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
@@ -239,8 +232,8 @@ object ProtoUtil {
   def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int) =
     hashByteArrays(header.toByteArray,
                    sender.toByteArray,
-                   sigAlgorithm.getBytes,
-                   int32ToByteArray(seqNum))
+                   StringValue.of(sigAlgorithm).toByteArray,
+                   Int32Value.of(seqNum).toByteArray)
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,

@@ -149,11 +149,11 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[EquivocationRecord]()
       private val invalidBlockTracker: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
-      
+
       // TODO: Extract hardcoded fault tolerance threshold
       private val faultToleranceThreshold     = 0f
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
-      
+
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
