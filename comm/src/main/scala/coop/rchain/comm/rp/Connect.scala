@@ -12,6 +12,7 @@ import coop.rchain.metrics.Metrics
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats.mtl._
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
 import coop.rchain.shared._
 import coop.rchain.comm.CommError._
@@ -33,7 +34,23 @@ object Connect {
   }
   import Connections._
 
+  type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+  object RPConfAsk {
+    def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
+  }
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk]: F[Int] = {
+
+    def clear: F[Int] = 0.pure[F]
+
+    for {
+      connections <- ConnectionsCell[F].read
+      max         <- RPConfAsk[F].reader(_.maxNumOfConnections)
+      cleared     <- if (connections.size > (max / 2)) clear else 0.pure[F]
+    } yield cleared
+  }
 
   def findAndConnect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](

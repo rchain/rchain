@@ -78,4 +78,6 @@ package object effects {
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.const[Task, Connections](Connections.empty).pure[Task] // noop for now
+
+  def rpConfAsk(conf: RPConf): ApplicativeAsk[Task, RPConf] = new ConstApplicativeAsk[Task, RPConf](conf)
 }
