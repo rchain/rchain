@@ -152,7 +152,7 @@ object Configuration {
 
     // Server
     val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(_.run.httpPort, _ => None, DefaultHttPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val metricsPort: Int =
       get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
