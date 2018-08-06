@@ -1,4 +1,4 @@
-new BallotFactory, LockoutFactory, PostOfficeFactory in {
+new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
   // create: create a ballot
   //
   //  Set<bytearray> pubKeySet: set of public keys allowed to vote on this ballot
@@ -358,6 +358,7 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
           } |
           
           // METHOD DEFINED HERE
+          // TODO(pyrocto): register the post office somewhere? 
           contract @[*PostOfficeAdmin, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
             // Get & replace current ballot
             for (@ballot <- updateParamsStore) {
@@ -370,39 +371,67 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
       }
     }
   } |
+
+  /* @[*PostOfficeFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, postOfficeOut) |
+  for (@[PostOfficeClient, PostOfficeAdmin] <- postOfficeOut) {
+    
+  }
+  */
+  contract @[*DepositoryFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositoryPurse, depoOut) = {
+    new Depository, postOfficeOut in {
+      depoOut!(*Depository) |
+      
+      contract @[*Depository, "sendToChild"](@purse, @targetPubKey, statusOut) = {
+        
+      } |
+      
+      contract @[*Depository, "withdraw"](@pubKey, @amount, @targetPubKey, statusOut, @sig) = {
+        
+      } |
+      
+      contract @[*Depository, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+        
+      }
+    }
+  } |
   
+  contract @[*MintFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositoryAmount, mintOut) = {
+    new Mint, postOfficeOut in {
+      mintOut!(*Mint) |
+      
+      contract @[*Mint, "sendToParent"](@purse, @targetPubKey, statusOut) = {
+        
+      } |
+      
+      contract @[*Mint, "mint"](@pubKey, @amount, @targetPubKey, statusOut, @sig) = {
+        
+      } |
+      
+      contract @[*Mint, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+        
+      }
+    }
+  }
   // Add a lock to a lockout/tagout system to prevent changing parameters on the parent for the purpose of sending Rev
 }
 
 
 
-/*
 
-Validators v1-vn set up a shard.
-Create Post Office in child and parent.
-Contract "Alice" in child wants to deploy code in parent.
-Sends purse, code, statusOut to post office.
-Post office drains purse.  If enough money's there, decides to forward message.
-  PO acquires the key from the lockout service.
-  PO creates notifier at public name in child shard.
-Validators wait for finalization; with honest behavior,
-  each one deploys some code in the parent that looks up the post office
-  and delivers a copy of [pk, lockoutKey, codeToDeploy, sig(lockoutKey, codeToDeploy)]
-  The kth validator triggers deployment of codeToDeploy.  
-  PostOffice pays back validators in parent for their messages and the deployment.
-  Validators wait for finalization of the kth deployment; with honest behavior,
-    each one deploys some code that looks up the notifier and sends it a status message
-    The kth validator triggers sending the agreed-on status message to Alice and
-        releases the lock
 
-Potential failure modes:
-There's some small incentive not to bother sending the message and hope that some
-    other quorum does the job.  If too many decide not to send, then the message
-    never gets delivered and the Post Office gets a bad rep. (Prisoner's dilemma.)
-Under network partition, there may not be a quorum able to deliver the message.
-If it takes long enough, storage fees for the notifier run out, it gets archived, and Alice never gets notified.
 
-*/
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
