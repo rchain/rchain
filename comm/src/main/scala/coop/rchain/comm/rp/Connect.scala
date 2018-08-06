@@ -20,16 +20,16 @@ import coop.rchain.comm.CommError._
 object Connect {
 
   type Connection            = PeerNode
-  type Connections           = Set[Connection]
+  type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
   }
   object Connections {
-    def empty: Connections = Set.empty[Connection]
+    def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
       def addConn[F[_]: Applicative](connection: Connection): F[Connections] =
-        (connections + connection).pure[F]
+        (connection :: connections).pure[F]
     }
   }
   import Connections._
@@ -41,14 +41,26 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk]: F[Int] = {
+  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer]: F[Int] = {
 
-    def clear: F[Int] = 0.pure[F]
+    def clear(connections: Connections): F[Int] =
+      for {
+        numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
+        toPing                 = connections.take(numOfConnectionsPinged)
+        local                  <- TransportLayer[F].local
+        timeout                <- RPConfAsk[F].reader(_.defaultTimeout)
+        hb                     = heartbeat(local)
+        results <- toPing.traverse(peer =>
+                    TransportLayer[F].roundTrip(peer, hb, timeout).map(r => (peer, r)))
+        successfulPeers = results.filter(_._2.isRight).map(_._1)
+        _ <- ConnectionsCell[F]
+              .modify(p => (p.filter(conn => !toPing.contains(conn)) ++ successfulPeers).pure[F])
+      } yield results.size
 
     for {
       connections <- ConnectionsCell[F].read
       max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
-      cleared     <- if (connections.size > ((max * 2) / 3)) clear else 0.pure[F]
+      cleared     <- if (connections.size > ((max * 2) / 3)) clear(connections) else 0.pure[F]
     } yield cleared
   }
 

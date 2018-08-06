@@ -1,13 +1,15 @@
 package coop.rchain.comm.rp
 
 import Connect._, Connections._
-import coop.rchain.comm._
-
+import coop.rchain.comm._, CommError._, protocol.routing._
+import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
+import scala.concurrent.duration._
 import org.scalatest._
 import org.scalatest.enablers.Containing
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.shared._
+import coop.rchain.comm.transport._, CommMessages._
 
 class ClearConnectionsSpec
     extends FunSpec
@@ -17,13 +19,21 @@ class ClearConnectionsSpec
 
   import ScalaTestCats._
 
+  val src: PeerNode      = peer("src")
+  implicit val transport = new TransportLayerStub[Id](src)
+
+  override def beforeEach(): Unit = {
+    transport.reset()
+    transport.setResponses(kp(alwaysSuccess))
+  }
+
   describe("Node when called to clear connectios") {
     describe(
       "if number of connectons is smaller or equal to 2/3 of number of maximum connectons allowed") {
       it("should not clear any of existing connections") {
         // given
         implicit val connections = mkConnections(peer("A"), peer("B"))
-        implicit val max         = maxNumOfConnections(5)
+        implicit val max         = conf(maxNumOfConnections = 5)
         // when
         Connect.clearConnections[Id]
         // then
@@ -34,7 +44,7 @@ class ClearConnectionsSpec
       it("should report that 0 connections were cleared") {
         // given
         implicit val connections = mkConnections(peer("A"), peer("B"))
-        implicit val max         = maxNumOfConnections(5)
+        implicit val max         = conf(maxNumOfConnections = 5)
         // when
         val cleared = Connect.clearConnections[Id]
         // then
@@ -42,19 +52,73 @@ class ClearConnectionsSpec
       }
     }
 
-    describe("if number of connectons is bigger then 2/3 of number of maximum connectons allowed") {}
+    describe("if number of connectons is bigger then 2/3 of number of maximum connectons allowed") {
+      it("should ping first few nodes with heartbeat") {
+        // given
+        implicit val connections = mkConnections(peer("A"), peer("B"), peer("C"), peer("D"))
+        implicit val max         = conf(maxNumOfConnections = 5, numOfConnectionsPinged = 2)
+
+        // when
+        Connect.clearConnections[Id]
+        // tehn
+        transport.requests.size shouldBe (2)
+        transport.requests.map(_.peer) should contain(peer("A"))
+        transport.requests.map(_.peer) should contain(peer("B"))
+      }
+
+      it("should remove connections of peers that did not respond to heartbeat") {
+        // given
+        implicit val connections = mkConnections(peer("A"), peer("B"), peer("C"), peer("D"))
+        implicit val max         = conf(maxNumOfConnections = 5, numOfConnectionsPinged = 2)
+        transport.setResponses({
+          case p if (p == peer("A")) => alwaysFail
+          case _                     => alwaysSuccess
+        })
+        // when
+        Connect.clearConnections[Id]
+        // tehn
+        connections.read.size shouldBe (3)
+        connections.read should not contain (peer("A"))
+        connections.read should contain(peer("B"))
+        connections.read should contain(peer("C"))
+        connections.read should contain(peer("D"))
+      }
+
+      it("should put the peers that responded to heartbeat to the end of the list") {
+        // given
+        implicit val connections = mkConnections(peer("A"), peer("B"), peer("C"), peer("D"))
+        implicit val max         = conf(maxNumOfConnections = 5, numOfConnectionsPinged = 3)
+        transport.setResponses({
+          case p if (p == peer("A")) => alwaysFail
+          case _                     => alwaysSuccess
+        })
+        // when
+        Connect.clearConnections[Id]
+        // tehn
+        connections.read.size shouldBe (3)
+        connections.read shouldEqual (List(peer("D"), peer("B"), peer("C")))
+      }
+    }
   }
 
   private def peer(name: String): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
-    Cell.const[Id, Connections](peers.foldLeft(Connections.empty) {
+    Cell.id[Connections](peers.reverse.foldLeft(Connections.empty) {
       case (acc, el) => acc.addConn[Id](el)
     })
 
-  private def maxNumOfConnections(num: Int): RPConfAsk[Id] =
+  private def conf(maxNumOfConnections: Int, numOfConnectionsPinged: Int = 5): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(ClearConnetionsConf(maxNumOfConnections = 5, numOfConnectionsPinged = num)))
+      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+             defaultTimeout = FiniteDuration(1, MILLISECONDS))
+    )
+
+  def alwaysSuccess: Protocol => CommErr[Protocol] =
+    kp(Right(heartbeat(src)))
+
+  def alwaysFail: Protocol => CommErr[Protocol] =
+    kp(Left(timeout))
 
 }
