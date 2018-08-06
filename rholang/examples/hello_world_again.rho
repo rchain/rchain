@@ -1,9 +1,9 @@
 // A simple HelloWorld contract demonstrating a contract being rerun
 
-new helloworld in {
+new helloworld, stdout(`rho:io:stdout`) in {
     contract helloworld( world ) = {
         for( @msg <- world ) {
-            @"stdout"!(msg)
+            stdout!(msg)
         }
     } |
     new world, world2 in {

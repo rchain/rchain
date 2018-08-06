@@ -22,7 +22,8 @@ case class Server(
     standalone: Option[Boolean],
     mapSize: Option[Long],
     casperBlockStoreSize: Option[Long],
-    dataDir: Option[Path]
+    dataDir: Option[Path],
+    maxNumOfConnections: Option[Int]
 )
 
 case class GrpcServer(

@@ -1,7 +1,9 @@
 package coop.rchain.casper.util
 
+import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -245,13 +247,13 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeployString(id: Int): DeployString = {
+  def basicDeployString(id: Int): DeployData = {
     //TODO this should be removed once we assign the deploy with exact user
     Thread.sleep(1)
     val timestamp = System.currentTimeMillis()
     val term      = s"@${id}!($id)"
 
-    DeployString()
+    DeployData()
       .withUser(ByteString.EMPTY)
       .withTimestamp(timestamp)
       .withTerm(term)
@@ -277,8 +279,8 @@ object ProtoUtil {
     val timestamp = System.currentTimeMillis()
     Deploy(
       term = Some(term),
-      raw = Some(
-        DeployString(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
+      raw =
+        Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
   }
 }

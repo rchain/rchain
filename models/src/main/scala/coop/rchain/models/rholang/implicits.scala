@@ -182,7 +182,7 @@ object implicits {
     )
   }
 
-  object GPrivate {
+  object GPrivateBuilder {
     def apply(): GPrivate =
       new GPrivate(ByteString.copyFromUtf8(java.util.UUID.randomUUID.toString))
     def apply(s: String): GPrivate     = new GPrivate(ByteString.copyFromUtf8(s))
@@ -261,16 +261,6 @@ object implicits {
     def singleExpr(): Option[Expr] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
         p.exprs match {
-          case Seq(single) => Some(single)
-          case _           => None
-        }
-      } else {
-        None
-      }
-
-    def singleNew(): Option[New] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.news match {
           case Seq(single) => Some(single)
           case _           => None
         }

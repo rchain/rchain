@@ -18,7 +18,6 @@ import cats.effect.Bracket
 import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.{DeployError, StateHash}
@@ -525,7 +524,7 @@ class InterpreterUtilTest
     val deploys =
       Vector(
         """
-          |new loop, primeCheck in {
+          |new loop, primeCheck, stdoutAck(`rho:io:stdoutAck`) in {
           |  contract loop(@x) = {
           |    match x {
           |      [] => Nil
@@ -540,9 +539,9 @@ class InterpreterUtilTest
           |  } |
           |  contract primeCheck(@x, ret) = {
           |    match x {
-          |      Nil => @"stdoutAck"!("Nil", *ret)
-          |      ~{~Nil | ~Nil} => @"stdoutAck"!("Prime", *ret)
-          |      _ => @"stdoutAck"!("Composite", *ret)
+          |      Nil => stdoutAck!("Nil", *ret)
+          |      ~{~Nil | ~Nil} => stdoutAck!("Prime", *ret)
+          |      _ => stdoutAck!("Composite", *ret)
           |    }
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])

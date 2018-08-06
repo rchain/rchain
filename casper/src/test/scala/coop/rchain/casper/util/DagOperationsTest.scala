@@ -4,14 +4,9 @@ import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
-import cats.data.State
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import cats.mtl.implicits._
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
@@ -22,6 +17,11 @@ class DagOperationsTest
     with BlockGenerator
     with BlockStoreTestFixture {
   val initState = BlockDag().copy(currentId = -1)
+
+  "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
+    val stream = DagOperations.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))
+    stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
+  }
 
   "Greatest common ancestor" should "be computed properly" in {
     /*

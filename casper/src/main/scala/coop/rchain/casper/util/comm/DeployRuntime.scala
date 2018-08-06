@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.{Functor, Monad}
 import cats.implicits._
-import coop.rchain.casper.protocol.{BlockQuery, DeployString}
+import coop.rchain.casper.protocol.{BlockQuery, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.{Capture, IOUtil, MonadOps}
 
@@ -33,13 +33,23 @@ object DeployRuntime {
     DeployService[F].showBlocks.map(println(_))
 
   //Accepts a Rholang source file and deploys it to Casper
-  def deployFileProgram[F[_]: Monad: Capture: DeployService](file: String): F[Unit] =
+  def deployFileProgram[F[_]: Monad: Capture: DeployService](purseAddress: String,
+                                                             phloLimit: Int,
+                                                             phloPrice: Int,
+                                                             nonce: Int,
+                                                             file: String): F[Unit] =
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         for {
           timestamp <- Capture[F].capture { System.currentTimeMillis() }
           //TODO: allow user to specify their public key
-          d        = DeployString().withTimestamp(timestamp).withTerm(code)
+          d = DeployData()
+            .withTimestamp(timestamp)
+            .withTerm(code)
+            .withFrom(purseAddress)
+            .withPhloLimit(phloLimit)
+            .withPhloPrice(phloPrice)
+            .withNonce(nonce)
           response <- DeployService[F].deploy(d)
           _ <- Capture[F].capture {
                 println(s"Response: ${response._2}")

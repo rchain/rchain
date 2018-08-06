@@ -8,9 +8,8 @@ import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}

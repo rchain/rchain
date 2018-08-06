@@ -106,6 +106,23 @@ trait BlockStoreTest
     }
   }
 
+  it should "discover keys by predicate" in {
+    withStore { store =>
+      forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
+        val items = blockStoreElements
+        items.foreach(store.put(_))
+        items.foreach {
+          case (k, v) =>
+            val w = store.find(_ == ByteString.copyFrom(k.getBytes()))
+            w should have size 1
+            w.head._2 shouldBe v
+        }
+        store.asMap().size shouldEqual items.size
+        store.clear()
+      }
+    }
+  }
+
   it should "overwrite existing value" in
     withStore { store =>
       forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>

@@ -19,10 +19,20 @@ import coop.rchain.comm.CommError._
 
 object Connect {
 
+  type Connection            = PeerNode
+  type Connections           = Set[Connection]
+  type ConnectionsCell[F[_]] = Cell[F, Connections]
+  object ConnectionsCell {
+    def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
+  }
+  object Connections {
+    def empty: Connections = Set.empty[Connection]
+  }
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
       defaultTimeout: FiniteDuration): Int => F[Int] =
     (lastCount: Int) =>
       for {
@@ -39,7 +49,7 @@ object Connect {
       } yield thisCount
 
   def connectToBootstrap[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
       bootstrap: PeerNode,
       maxNumOfAttempts: Int = 5,
       defaultTimeout: FiniteDuration): F[Unit] = {
@@ -72,7 +82,7 @@ object Connect {
   }
 
   def connect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
       peer: PeerNode,
       timeout: FiniteDuration): F[Unit] =
     for {
@@ -87,6 +97,7 @@ object Connect {
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
       _   <- NodeDiscovery[F].addNode(peer)
+      _   <- ConnectionsCell[F].modify(cs => (cs + peer).pure[F])
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
