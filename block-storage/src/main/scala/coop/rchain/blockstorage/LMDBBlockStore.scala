@@ -15,6 +15,7 @@ import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
+import coop.rchain.shared.Resources.withResource
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -88,17 +89,19 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
       ret <- withReadTxn { txn =>
-              blocks
-                .iterate(txn)
-                .asScala
-                .withFilter(kv => p(ByteString.copyFrom(kv.key())))
-                .map { kv =>
-                  val hash = ByteString.copyFrom(kv.key())
-                  val msg  = BlockMessage.parseFrom(ByteString.copyFrom(kv.`val`()).newCodedInput())
-                  (hash, msg)
-                }
+              withResource(blocks.iterate(txn)) { iterator =>
+                iterator.asScala
+                  .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                  .withFilter { case (key, _) => p(key) }
+                  .map {
+                    case (key, value) =>
+                      val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
+                      (key, msg)
+                  }
+                  .toList
+              }
             }
-    } yield ret.toSeq
+    } yield ret
 
   @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
               since = "0.5")
