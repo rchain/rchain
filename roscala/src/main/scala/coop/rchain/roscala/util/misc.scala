@@ -21,25 +21,6 @@ object misc {
     }
   }
 
-  def indent(value: Int, opcode: Opcode): Int = {
-    def ifNext(next: Boolean) = if (next) 0 else value
-
-    opcode match {
-      case OpPush | OpPushAlloc(_)  => value + 1
-      case OpPop                    => value - 1
-      case OpRtn(next)              => ifNext(next)
-      case OpRtnArg(next, _)        => ifNext(next)
-      case OpRtnReg(next, _)        => ifNext(next)
-      case OpRtnTag(next, _)        => ifNext(next)
-      case OpXmit(_, next, _)       => ifNext(next)
-      case OpXmitArg(_, next, _, _) => ifNext(next)
-      case OpXmitReg(_, next, _, _) => ifNext(next)
-      case OpXmitTag(_, next, _, _) => ifNext(next)
-      case _                        => value
-    }
-
-  }
-
   def createGlobalEnv(entries: Map[RSymbol, Ob]): (GlobalEnv, SymbolOffsets) = {
     val globalEnv = new GlobalEnv()
 
@@ -55,5 +36,33 @@ object misc {
 
   implicit class SymbolOps(sym: Symbol) {
     def global(implicit symbolOffsets: SymbolOffsets): Int = symbolOffsets(sym)
+  }
+
+  class OpcodePrettyPrinter {
+    var debugIndent = 0
+
+    def print(pc: Int, opcode: Opcode): String = {
+      val s = ("  " * debugIndent) + pc + ": " + opcode.toString
+      debugIndent = indent(debugIndent, opcode)
+      s
+    }
+
+    private def indent(value: Int, opcode: Opcode): Int = {
+      def ifNext(next: Boolean) = if (next) 0 else value
+
+      opcode match {
+        case OpPush | OpPushAlloc(_)  => value + 1
+        case OpPop                    => value - 1
+        case OpRtn(next)              => ifNext(next)
+        case OpRtnArg(next, _)        => ifNext(next)
+        case OpRtnReg(next, _)        => ifNext(next)
+        case OpRtnTag(next, _)        => ifNext(next)
+        case OpXmit(_, next, _)       => ifNext(next)
+        case OpXmitArg(_, next, _, _) => ifNext(next)
+        case OpXmitReg(_, next, _, _) => ifNext(next)
+        case OpXmitTag(_, next, _, _) => ifNext(next)
+        case _                        => value
+      }
+    }
   }
 }

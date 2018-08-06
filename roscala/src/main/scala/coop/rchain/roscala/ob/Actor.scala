@@ -47,6 +47,7 @@ class Actor extends MboxOb {
     if (ctxt.nargs > keyStart)
       result = super.update(enabledSetProvided, ctxt, state)
 
+    logger.debug(s"Looking for remaining messages in $mbox")
     mbox.nextMsg(this, newEnabledSet, state)
 
     result

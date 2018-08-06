@@ -12,7 +12,7 @@ import coop.rchain.roscala.prim.ob.objectIndexedSize
 import coop.rchain.roscala.util.misc.{createGlobalEnv, SymbolOffsets, SymbolOps}
 import coop.rchain.roscala.prim.tuple.{tplConcat, tplHead, tplTail}
 
-class EnabledSpec extends VmSpecUtils {
+class EnabledSetSpec extends VmSpecUtils {
 
   override def runBehaviour[S](implicit ex: StrandPoolExecutor[S]): Unit = {
 
@@ -640,7 +640,7 @@ class EnabledSpec extends VmSpecUtils {
     }
 
     "Removing a method from the enabled set" should
-      "result in not processing corresponding messages anymore" inMode [SimpleStrandPool] {
+      "result in not processing corresponding messages anymore" inMultimode {
 
       /** (seq (enq fifo 1) (enq fifo 2) (enq fifo 3) (enq fifo 4))
         *
