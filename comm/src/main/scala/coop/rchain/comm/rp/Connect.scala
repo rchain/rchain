@@ -53,9 +53,10 @@ object Connect {
         results <- toPing.traverse(peer =>
                     TransportLayer[F].roundTrip(peer, hb, timeout).map(r => (peer, r)))
         successfulPeers = results.filter(_._2.isRight).map(_._1)
+        failedPeers     = results.filter(_._2.isLeft).map(_._1)
         _ <- ConnectionsCell[F]
               .modify(p => (p.filter(conn => !toPing.contains(conn)) ++ successfulPeers).pure[F])
-      } yield results.size
+      } yield failedPeers.size
 
     for {
       connections <- ConnectionsCell[F].read

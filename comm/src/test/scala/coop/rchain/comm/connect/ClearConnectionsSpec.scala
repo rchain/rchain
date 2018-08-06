@@ -98,6 +98,20 @@ class ClearConnectionsSpec
         connections.read.size shouldBe (3)
         connections.read shouldEqual (List(peer("D"), peer("B"), peer("C")))
       }
+
+      it("should report number of connections that were removed") {
+        // given
+        implicit val connections = mkConnections(peer("A"), peer("B"), peer("C"), peer("D"))
+        implicit val max         = conf(maxNumOfConnections = 5, numOfConnectionsPinged = 3)
+        transport.setResponses({
+          case p if (p == peer("A")) => alwaysFail
+          case _                     => alwaysSuccess
+        })
+        // when
+        val cleared = Connect.clearConnections[Id]
+        // tehn
+        cleared shouldBe (1)
+      }
     }
   }
 
