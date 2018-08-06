@@ -36,18 +36,18 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
             if (done) {
               votedSetStore!(votedSet) |
               doneStore!(true) |
-              statusOut!(["fail", "Already done."])
+              statusOut!(["failure", "Already done."])
             } else {
               // check that the pubkey is in the list
               if (not pubKeySet.has(pubKey)) {
                 votedSetStore!(votedSet) |
                 doneStore!(false) |
-                statusOut!(["fail", "Invalid key."])
+                statusOut!(["failure", "Invalid key."])
               } else {
                 if (votedSet.has(pubKey)) {
                   votedSetStore!(votedSet) |
                   doneStore!(done) |
-                  statusOut!(["fail", "Already voted."])
+                  statusOut!(["failure", "Already voted."])
                 } else {
                   // check the signature
                   new ret in {
@@ -56,7 +56,7 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
                       if (not verifyResult) {
                         votedSetStore!(votedSet) |
                         doneStore!(false) |
-                        statusOut!(["fail", "Invalid signature."])
+                        statusOut!(["failure", "Invalid signature."])
                       } else {
                         votedSetStore!(votedSet.add(pubKey)) |
                         new currentCountOut, newCountOut in {
@@ -237,11 +237,14 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
 
   contract @[*PostOfficeFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, postOfficeOut) = {
     new PostOfficeClient, PostOfficeAdmin, pubKeySetStore, sendQuorumSizeStore, cancelQuorumSizeStore,
-        r/*(`rho:registry`)*/ in {
+        receiveMapStore, r/*(`rho:registry`)*/ in {
       postOfficeOut!([*PostOfficeClient, *PostOfficeAdmin]) |
       pubKeySetStore!(pubKeySet) |
       sendQuorumSizeStore!(sendQuorumSize) |
       cancelQuorumSizeStore!(cancelQuorumSize) |
+      // Maps uuid of status ballot in source to receiving ballot in target.
+      // Populated on first message received.
+      receiveMapStore({}) |
       
       // send: doesn't actually send the message cross shard---the off-chain
       //       PostOffice owners notice sends to this address and deal with that.
@@ -250,26 +253,26 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
       //
       //  any message: process to send cross chain.
       //  purse purse: purse to pay for the send
-      //  name statusOut: name on which to send a succeed/fail message
+      //  name statusOut: name on which to send a succeed/fail message back to caller
       // TODO(pyrocto): check the balance, drain the purse.  Send fail message if not enough.
       contract @[*PostOfficeClient, "send"](@message, @purse, statusOut) = {
         // Get the current params
         for (@pubKeySet <- pubKeySetStore; 
              @sendQuorumSize <- sendQuorumSizeStore; 
              @cancelQuorumSize <- cancelQuorumSizeStore) {
-          // Make a ballot with those params to receive
-          // the response from the other shard
-          new ballotOut, ballotStatusOut in {
-            @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *ballotStatusOut, *ballotOut) |
+          // Make a ballot with those params to receive the response from the other shard
+          // The winner will be the result of the attempt to send and will be sent on statusOut
+          new ballotOut, winnerOut in {
+            @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut) |
             for (@statusBallot <- ballotOut) {
               // Publish the ballot so that owners can send to it from off-chain
               new infoOut in {
                 @[*r, "register"]!(`rho:uuid`, bundle+{statusBallot}, *infoOut) |
                 for (@[statusBallotUUID, unregisterStatusBallotToken] <- infoOut) {
-                  // Once the status is received, unregister the ballot so it can be garbage
+                  // Once the winner is received, unregister the ballot so it can be garbage
                   // collected and forward the result to the client
-                  for (@ballotStatus <- ballotStatusOut) {
-                    statusOut!(ballotStatus) |
+                  for (@winner <- winnerOut) {
+                    statusOut!(winner) |
                     @[*r, "unregister"]!(unregisterStatusBallotToken)
                   }
                 }
@@ -279,15 +282,63 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
         }
       } |
       
-      contract @[*PostOfficeClient, "receive"]() ={
-        
+      // Receive basically *is* a ballot, but it needs to change as the parameters are updated.
+      // When sending a message above, we get to create a new ballot per send.
+      // When receiving a message, capture the current stats and use them for the whole ballot
+      // 
+      // verify!([*ballot, candidate, *statusOut].toByteArray(), sig, pubKey, *ret) |
+      contract @[*PostOfficeClient, "receive"](@pubKey, @uuid, @message, statusOut, @sig) = {
+        // Look up target ballot to find list of public keys
+        for (receiveMap <- receiveMapStore) {
+          new ballotOut, proceed in {
+            ballotOut!(receiveMap.get(uuid)) |
+            for (@ballot <- ballotOut) {
+              if (ballot != Nil) {
+                // First message.  Get & replace current list of parameters.
+                for (@pubKeySet <- pubKeySetStore; 
+                     @sendQuorumSize <- sendQuorumSizeStore; 
+                     @cancelQuorumSize <- cancelQuorumSizeStore) {
+                  pubKeySetStore!(pubKeySet) |
+                  sendQuorumSizeStore!(sendQuorumSize) |
+                  cancelQuorumSizeStore!(cancelQuorumSize) |
+
+                  // Create the ballot with the parameters
+                  new ballotOut, winnerOut in {
+                    @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut) |
+                    for (@ballot <- ballotOut) {
+                      // Add the new ballot to the map
+                      receiveMapStore!(receiveMap.set(uuid, ballot)) |
+                      proceed!(ballot) |
+                      // "winner" here is the winning message.
+                      // The PostOffice simply deploys the message.
+                      // TODO(pyrocto): figure out how to remove the reference to the ballot from the map
+                      for (@winner <- winnerOut; @receiveMap <- receiveMapStore) {
+                        winner
+                      }
+                    }
+                  }
+                }
+              } else {
+                // Subsequent messages.
+                receiveMapStore!(receiveMap) |
+                proceed!(ballot)
+              } |
+              // Now that we have a valid ballot, forward to it.
+              for (@ballot <- proceed) {
+                @[ballot, "vote"](pubKey, message, *statusOut, sig)
+              }
+            }
+          }
+        }
       } |
       
       contract @[*PostOfficeAdmin, "updateParams"]() = {
         
       }
     }
-  }
+  } |
+  
+  // Add a lock to a lockout/tagout system to prevent changing parameters on the parent for the purpose of sending Rev
 }
 
 
