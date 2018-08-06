@@ -224,13 +224,23 @@ object ProtoUtil {
       .withJustifications(justifications)
   }
 
+  def int32ToByteArray(i: Int): Array[Byte] = {
+    val size   = 4
+    val buffer = java.nio.ByteBuffer.allocate(size)
+    buffer.putInt(i)
+    buffer.array()
+  }
+
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
   }
 
   def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int) =
-    hashByteArrays(header.toByteArray, sender.toByteArray, sigAlgorithm.getBytes, Array(seqNum.toByte))
+    hashByteArrays(header.toByteArray,
+                   sender.toByteArray,
+                   sigAlgorithm.getBytes,
+                   int32ToByteArray(seqNum))
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
