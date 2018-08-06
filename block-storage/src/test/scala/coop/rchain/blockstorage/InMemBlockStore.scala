@@ -34,7 +34,7 @@ class InMemBlockStore[F[_], E] private ()(implicit
     for {
       _     <- metricsF.incrementCounter("block-store-find")
       state <- refF.get
-    } yield state.toSeq.filter { case (k, _) => p(k) }
+    } yield state.filterKeys(p(_)).toSeq
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
