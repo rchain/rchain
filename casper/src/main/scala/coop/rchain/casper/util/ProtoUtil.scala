@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import cats.Monad
 import cats.implicits._
-import com.google.protobuf.{ByteString, StringValue, Int32Value}
+import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -229,11 +229,12 @@ object ProtoUtil {
     hashByteArrays(items: _*)
   }
 
-  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int) =
+  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int, extraBytes: ByteString) =
     hashByteArrays(header.toByteArray,
                    sender.toByteArray,
                    StringValue.of(sigAlgorithm).toByteArray,
-                   Int32Value.of(seqNum).toByteArray)
+                   Int32Value.of(seqNum).toByteArray,
+                   extraBytes.toByteArray )
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
@@ -252,7 +253,7 @@ object ProtoUtil {
     val sender = ByteString.copyFrom(pk)
     val seqNum = dag.currentSeqNum.getOrElse(sender, -1) + 1
 
-    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum)
+    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, block.extraBytes)
 
     val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
 
