@@ -6,7 +6,7 @@ import coop.rchain.roscala._
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.ob.expr.TupleExpr
 import coop.rchain.roscala.ob.mbox.{EmptyMbox, QueueMbox}
-import coop.rchain.roscala.pools.StrandPoolExecutor
+import coop.rchain.roscala.pools.{SimpleStrandPool, StrandPoolExecutor}
 import coop.rchain.roscala.prim.fixnum.{fxEq, fxLt, fxMinus}
 import coop.rchain.roscala.prim.ob.objectIndexedSize
 import coop.rchain.roscala.util.misc.{createGlobalEnv, SymbolOffsets, SymbolOps}
@@ -28,25 +28,25 @@ class EnabledSpec extends VmSpecUtils {
         * is not empty.
         *
         * (defActor Fifo (slots& buf [] lim 3)
-        * (local (empty) [[enq]])
-        * (local (full) [[deq]])
-        * (local (partial) [[enq] [deq]])
+        *   (local (empty) [[enq]])
+        *   (local (full) [[deq]])
+        *   (local (partial) [[enq] [deq]])
         *
-        * (method (enq item)
-        * (next
-        * (if (< (size buf) (- lim 1)) (partial) (full))
-        * buf (concat buf [item])
-        * )
-        * ['newbuf (concat buf [item])]
-        * )
+        *   (method (enq item)
+        *     (next
+        *       (if (< (size buf) (- lim 1)) (partial) (full))
+        *       buf (concat buf [item])
+        *     )
+        *     ['newbuf (concat buf [item])]
+        *   )
         *
-        * (method (deq)
-        * (next
-        * (if (<= (size buf) 1) (empty) (partial))
-        * buf (tail buf)
-        * )
-        * ['dequeued (head buf) 'newbuf (tail buf)]
-        * )
+        *   (method (deq)
+        *     (next
+        *       (if (<= (size buf) 1) (empty) (partial))
+        *       buf (tail buf)
+        *     )
+        *     ['dequeued (head buf) 'newbuf (tail buf)]
+        *   )
         * )
         */
       val fifo = new Actor
@@ -88,18 +88,18 @@ class EnabledSpec extends VmSpecUtils {
       /** `empty` method
         *
         * litvec:
-        * 0:   {StdMthd}
-        * 1:   {Template}
+        *   0:   {StdMthd}
+        *   1:   {Template}
         * codevec:
-        * 0:   extend 1
-        * 1:   alloc 1
-        * 2:   outstanding 9,1
-        * 4:   push/alloc 1
-        * 5:   xfer global[enq],arg[0]
-        * 7:   xfer argvec,rslt
-        * 8:   rtn/nxt arg[0]
-        * 9:   xfer argvec,rslt
-        * 10:   rtn/nxt
+        *   0:   extend 1
+        *   1:   alloc 1
+        *   2:   outstanding 9,1
+        *   4:   push/alloc 1
+        *   5:   xfer global[enq],arg[0]
+        *   7:   xfer argvec,rslt
+        *   8:   rtn/nxt arg[0]
+        *   9:   xfer argvec,rslt
+        *   10:  rtn/nxt
         */
       val keyMetaEmpty = Meta(extensible = false)
       keyMetaEmpty.map.update(Symbol("#self"), LexVariable(0, 0, indirect = false))
@@ -130,18 +130,18 @@ class EnabledSpec extends VmSpecUtils {
       /** `full` method
         *
         * litvec:
-        * 0:   {StdMthd}
-        * 1:   {Template}
+        *   0:   {StdMthd}
+        *   1:   {Template}
         * codevec:
-        * 0:   extend 1
-        * 1:   alloc 1
-        * 2:   outstanding 9,1
-        * 4:   push/alloc 1
-        * 5:   xfer global[deq],arg[0]
-        * 7:   xfer argvec,rslt
-        * 8:   rtn/nxt arg[0]
-        * 9:   xfer argvec,rslt
-        * 10:   rtn/nxt
+        *   0:   extend 1
+        *   1:   alloc 1
+        *   2:   outstanding 9,1
+        *   4:   push/alloc 1
+        *   5:   xfer global[deq],arg[0]
+        *   7:   xfer argvec,rslt
+        *   8:   rtn/nxt arg[0]
+        *   9:   xfer argvec,rslt
+        *   10:  rtn/nxt
         */
       val keyMetaFull = Meta(extensible = false)
       keyMetaFull.map.update(Symbol("#self"), LexVariable(0, 0, indirect = false))
@@ -172,23 +172,23 @@ class EnabledSpec extends VmSpecUtils {
       /** `partial` method
         *
         * litvec:
-        * 0:   {StdMthd}
-        * 1:   {Template}
+        *   0:   {StdMthd}
+        *   1:   {Template}
         * codevec:
-        * 0:   extend 1
-        * 1:   alloc 2
-        * 2:   outstanding 15,2
-        * 4:   push/alloc 1
-        * 5:   xfer global[deq],arg[0]
-        * 7:   xfer argvec,rslt
-        * 8:   rtn arg[1]
-        * 9:   pop
-        * 10:   push/alloc 1
-        * 11:   xfer global[enq],arg[0]
-        * 13:   xfer argvec,rslt
-        * 14:   rtn/nxt arg[0]
-        * 15:   xfer argvec,rslt
-        * 16:   rtn/nxt
+        *   0:   extend 1
+        *   1:   alloc 2
+        *   2:   outstanding 15,2
+        *   4:   push/alloc 1
+        *   5:   xfer global[deq],arg[0]
+        *   7:   xfer argvec,rslt
+        *   8:   rtn arg[1]
+        *   9:   pop
+        *   10:  push/alloc 1
+        *   11:  xfer global[enq],arg[0]
+        *   13:  xfer argvec,rslt
+        *   14:  rtn/nxt arg[0]
+        *   15:  xfer argvec,rslt
+        *   16:  rtn/nxt
         */
       val keyMetaPartial = Meta(extensible = false)
       keyMetaPartial.map.update(Symbol("#self"), LexVariable(0, 0, indirect = false))
@@ -224,126 +224,126 @@ class EnabledSpec extends VmSpecUtils {
       /** `enq` method
         *
         * litvec:
-        * 0:   {StdMthd}
-        * 1:   {Template}
-        * 2:   'buf
-        * 3:   'newbuf
-        * 4:   'partial
-        * 5:   'full
+        *   0:   {StdMthd}
+        *   1:   {Template}
+        *   2:   'buf
+        *   3:   'newbuf
+        *   4:   'partial
+        *   5:   'full
         * codevec:
-        * 0:   extend 1
-        * 1:   fork 38 => 30
+        *   0:   extend 1
+        *   1:   fork 38 => 30
         *
-        * The call to `next!` needs three arguments:
-        * 1) The key to the value that we want to update
-        * 2) The new value
-        * 3) The enabled set
+        *        The call to `next!` needs three arguments:
+        *        1) The key to the value that we want to update
+        *        2) The new value
+        *        3) The enabled set
         *
-        * 2:   alloc 3
+        *   2:   alloc 3
         *
-        * 1) Load key into `arg[1]`.
-        * 3:   liti 2,arg[1]
+        *        1) Load key into `arg[1]`.
+        *   3:   liti 2,arg[1]
         *
-        * Once we are done with 2) and 3), xmit `next!`.
-        * 4:   outstanding 59,2 => 48
+        *        Once we are done with 2) and 3), xmit `next!`.
+        *   4:   outstanding 59,2 => 48
         *
-        * 2) and 3) are missing at this point.
-        * 6:   push/alloc 2
-        * Load `buf` into `arg[0]`
-        * 7:     xfer lex[1,(0)],arg[0]
-        * 8:     xfer global[concat],trgt
+        *        2) and 3) are missing at this point.
+        *   6:   push/alloc 2
+        *          Load `buf` into `arg[0]`
+        *   7:     xfer lex[1,(0)],arg[0]
+        *   8:     xfer global[concat],trgt
         *
-        * Once done with the following, xmit `concat` and put
-        * result into `arg[2]` of outer ctxt.
-        * 10:     outstanding 52,1 => 41
+        *          Once done with the following, xmit `concat` and put
+        *          result into `arg[2]` of outer ctxt.
+        *   10:    outstanding 52,1 => 41
         *
-        * `ctxt.argvec` will be a tuple with one element.
-        * 12:     push/alloc 1
+        *          `ctxt.argvec` will be a tuple with one element.
+        *   12:    push/alloc 1
         *
-        * Get `item` value.
-        * 13:       xfer lex[0,1],arg[0]
-        * 14:       xfer argvec,rslt
+        *             Get `item` value.
+        *   13:       xfer lex[0,1],arg[0]
+        *   14:       xfer argvec,rslt
         *
-        * Make `item` a tuple and return it into `arg[1]`
-        * of parent ctxt.
-        * At this point (in the parent ctxt):
-        * `trgt` = `concat`,
-        * `arg[0]` = `buf`,
-        * `arg[1]` = `[item]`
-        * `rtn` will schedule the parent ctxt which will
-        * continues at line 52.
-        * (At line 52 we xmit `concat` which puts the new
-        * `buf` value into `arg[2]` of the initial ctxt).
-        * We scheduled the work necessary for 2)
-        * 15:       rtn arg[1]
-        * 16:       pop
-        * 17:     pop
+        *             Make `item` a tuple and return it into `arg[1]`
+        *             of parent ctxt.
+        *             At this point (in the parent ctxt):
+        *               `trgt` = `concat`,
+        *               `arg[0]` = `buf`,
+        *               `arg[1]` = `[item]`
+        *             `rtn` will schedule the parent ctxt which will
+        *             continues at line 52.
+        *             (At line 52 we xmit `concat` which puts the new
+        *             `buf` value into `arg[2]` of the initial ctxt).
+        *             We scheduled the work necessary for 2)
+        *   15:       rtn arg[1]
+        *   16:       pop
+        *   17:     pop
         *
-        * At this point:
-        * `arg[1]` = 'buf
-        * `arg[2]` = new `buf` value (once the scheduled ctxt has
-        * actually computed the new `buf` value).
+        *           At this point:
+        *             `arg[1]` = 'buf
+        *             `arg[2]` = new `buf` value (once the scheduled ctxt has
+        *             actually computed the new `buf` value).
         *
-        * The enabled set is still missing and will go into `arg[0]`.
+        *         The enabled set is still missing and will go into `arg[0]`.
         *
-        * Throws away `ctxt.pc`, `ctxt.outstanding`,
-        * `ctxt.argvec` but keeps things like `ctxt.code` and
-        * also keeps the initial ctxt as its continuation.
-        * 18:   push
+        *         Throws away `ctxt.pc`, `ctxt.outstanding`,
+        *         `ctxt.argvec` but keeps things like `ctxt.code` and
+        *         also keeps the initial ctxt as its continuation.
+        *   18:   push
         *
-        * Once we are done with the following, either return
-        * `(partial)` or `(full)`.
-        * 19:     outstanding 54,1 => 43
-        * 21:     push/alloc 2
-        * 22:       xfer global[<],trgt
-        * 24:       outstanding 53,2 => 42
-        * 26:       push/alloc 2
-        * 27:         xfer lex[1,(1)],arg[0]
-        * 28:         lit 1,arg[1]
-        * 29:         xfer global[-],trgt
-        * 31:         xmit 2,arg[1]
-        * 32:         pop
-        * 33:       push/alloc 1
-        * 34:         xfer lex[1,(0)],arg[0]
-        * 35:         xfer global[size],trgt
-        * 37:         xmit/nxt 1,arg[0]
+        *           Once we are done with the following, either return
+        *           `(partial)` or `(full)`.
+        *   19:     outstanding 54,1 => 43
+        *   21:     push/alloc 2
+        *   22:       xfer global[<],trgt
+        *   24:       outstanding 53,2 => 42
+        *   26:       push/alloc 2
+        *   27:         xfer lex[1,(1)],arg[0]
+        *   28:         lit 1,arg[1]
+        *   29:         xfer global[-],trgt
+        *   31:         xmit 2,arg[1]
+        *   32:         pop
+        *   33:       push/alloc 1
+        *   34:         xfer lex[1,(0)],arg[0]
+        *   35:         xfer global[size],trgt
+        *   37:         xmit/nxt 1,arg[0]
         *
-        * Create the result tuple and put it into the `rslt`
+        *   Create the result tuple and put it into the `rslt`
         *   register. Then return it at line 63.
         *
-        * 38:   alloc 2
-        * 39:   liti 3,arg[0]
-        * 40:   outstanding 63,1 => 50
-        * 42:   push/alloc 2
+        *   38:   alloc 2
+        *   39:   liti 3,arg[0]
+        *   40:   outstanding 63,1 => 50
+        *   42:   push/alloc 2
         *
-        * Get `item`
-        * 43:     xfer lex[1,(0)],arg[0]
-        * 44:     xfer global[concat],trgt
-        * 46:     outstanding 62,1 => 49
-        * 48:     push/alloc 1
-        * 49:       xfer lex[0,1],arg[0]
-        * 50:       xfer argvec,rslt
-        * 51:       rtn/nxt arg[1]
+        *           Get `item`
+        *   43:     xfer lex[1,(0)],arg[0]
+        *   44:     xfer global[concat],trgt
+        *   46:     outstanding 62,1 => 49
+        *   48:     push/alloc 1
+        *   49:       xfer lex[0,1],arg[0]
+        *   50:       xfer argvec,rslt
+        *   51:       rtn/nxt arg[1]
         *
-        * 52:   xmit/nxt 2,arg[2]
-        * 53:   xmit/nxt 2,rslt
+        *   52:   xmit/nxt 2,arg[2]
+        *   53:   xmit/nxt 2,rslt
         *
-        * If `rslt` == `RblFalse` (result of if-statement), go to
-        * line 57.
-        * 54:   jf 57 => 46
+        *         If `rslt` == `RblFalse` (result of if-statement), go to
+        *         line 57.
+        *   54:   jf 57 => 46
         *
-        * Lookup the value for `'partial` which is a method.
-        * 55:   lookup 4,trgt
+        *         Lookup the value for `'partial` which is a method.
+        *   55:   lookup 4,trgt
         *
-        * Return the result of running `(partial)` to `arg[0]` in the
-        * initial ctxt (this should schedule the initial ctxt).
-        * 56:   xmit/nxt 0,arg[0]
-        * 57:   lookup 5,trgt
-        * 58:   xmit/nxt 0,arg[0]
-        * 59:   next!/nxt 3
-        * 62:   xmit/nxt 2,arg[1]
-        * 63:   xfer argvec,rslt
-        * 64:   rtn/nxt
+        *         Return the result of running `(partial)` to `arg[0]` in the
+        *         initial ctxt (this should schedule the initial ctxt).
+        *   56:   xmit/nxt 0,arg[0]
+        *   57:   lookup 5,trgt
+        *   58:   xmit/nxt 0,arg[0]
+        *   59:   next!/nxt 3
+        *   62:   xmit/nxt 2,arg[1]
+        *   63:   xfer argvec,rslt
+        *   64:   rtn/nxt
         */
       val keyMetaEnq = Meta(extensible = false)
       keyMetaEnq.map.update(Symbol("#self"), LexVariable(0, 0, indirect = false))
@@ -369,9 +369,9 @@ class EnabledSpec extends VmSpecUtils {
           OpFork(pc = 30),
           /**
             * The call to `next!` needs three arguments:
-            * 1) The key to the value that we want to update
-            * 2) The new value
-            * 3) The enabled set
+            *   1) The key to the value that we want to update
+            *   2) The new value
+            *   3) The enabled set
             */
           OpAlloc(n = 3),
           // 1) Load key into `arg[1]`
@@ -397,9 +397,9 @@ class EnabledSpec extends VmSpecUtils {
             * Make `item` a tuple and return it into `arg[1]` of parent
             * ctxt.
             * At this point (in the parent ctxt):
-            * `trgt` = `concat`,
-            * `arg[0]` = `buf`,
-            * `arg[1]` = `[item]`
+            *   `trgt` = `concat`,
+            *   `arg[0]` = `buf`,
+            *   `arg[1]` = `[item]`
             * `rtn` will schedule the parent ctxt which will continues
             * at line 52 (at line 52 we xmit `concat` which puts the
             * new `buf` value into `arg[2]` of the initial ctxt).
@@ -411,8 +411,8 @@ class EnabledSpec extends VmSpecUtils {
           OpPop,
           /**
             * At this point:
-            * `arg[1]` = 'buf
-            * `arg[2]` = new `buf` value (once the scheduled ctxt has
+            *   `arg[1]` = 'buf
+            *   `arg[2]` = new `buf` value (once the scheduled ctxt has
             * actually computed the new `buf` value)
             *
             * The enabled set is still missing and will go into `arg[0]`.
@@ -485,56 +485,56 @@ class EnabledSpec extends VmSpecUtils {
       /** `deq` method
         *
         * litvec:
-        * 0:   {StdMthd}
-        * 1:   {Template}
-        * 2:   'buf
-        * 3:   'dequeued
-        * 4:   'newbuf
-        * 5:   'empty
-        * 6:   'partial
+        *   0:   {StdMthd}
+        *   1:   {Template}
+        *   2:   'buf
+        *   3:   'dequeued
+        *   4:   'newbuf
+        *   5:   'empty
+        *   6:   'partial
         * codevec:
-        * 0:   extend 1
-        * 1:   fork 26
-        * 2:   alloc 3
-        * 3:   liti 2,arg[1]
-        * 4:   outstanding 48,2
-        * 6:   push/alloc 1
-        * 7:   xfer lex[1,(0)],arg[0]
-        * 8:   xfer global[tail],trgt
-        * 10:   xmit 1,arg[2]
-        * 11:   pop
-        * 12:   push
-        * 13:   outstanding 43,1
-        * 15:   push/alloc 2
-        * 16:   lit 1,arg[1]
-        * 17:   xfer global[=],trgt
-        * 19:   outstanding 42,1
-        * 21:   push/alloc 1
-        * 22:   xfer lex[1,(0)],arg[0]
-        * 23:   xfer global[size],trgt
-        * 25:   xmit/nxt 1,arg[0]
-        * 26:   alloc 4
-        * 27:   liti 3,arg[0]
-        * 28:   liti 4,arg[2]
-        * 29:   outstanding 51,2
-        * 31:   push/alloc 1
-        * 32:   xfer lex[1,(0)],arg[0]
-        * 33:   xfer global[tail],trgt
-        * 35:   xmit 1,arg[3]
-        * 36:   pop
-        * 37:   push/alloc 1
-        * 38:   xfer lex[1,(0)],arg[0]
-        * 39:   xfer global[head],trgt
-        * 41:   xmit/nxt 1,arg[1]
-        * 42:   xmit/nxt 2,rslt
-        * 43:   jf 46
-        * 44:   lookup 5,trgt
-        * 45:   xmit/nxt 0,arg[0]
-        * 46:   lookup 6,trgt
-        * 47:   xmit/nxt 0,arg[0]
-        * 48:   next!/nxt 3
-        * 51:   xfer argvec,rslt
-        * 52:   rtn/nxt
+        *   0:   extend 1
+        *   1:   fork 26
+        *   2:   alloc 3
+        *   3:   liti 2,arg[1]
+        *   4:   outstanding 48,2
+        *   6:   push/alloc 1
+        *   7:   xfer lex[1,(0)],arg[0]
+        *   8:   xfer global[tail],trgt
+        *   10:  xmit 1,arg[2]
+        *   11:  pop
+        *   12:  push
+        *   13:  outstanding 43,1
+        *   15:  push/alloc 2
+        *   16:  lit 1,arg[1]
+        *   17:  xfer global[=],trgt
+        *   19:  outstanding 42,1
+        *   21:  push/alloc 1
+        *   22:  xfer lex[1,(0)],arg[0]
+        *   23:  xfer global[size],trgt
+        *   25:  xmit/nxt 1,arg[0]
+        *   26:  alloc 4
+        *   27:  liti 3,arg[0]
+        *   28:  liti 4,arg[2]
+        *   29:  outstanding 51,2
+        *   31:  push/alloc 1
+        *   32:  xfer lex[1,(0)],arg[0]
+        *   33:  xfer global[tail],trgt
+        *   35:  xmit 1,arg[3]
+        *   36:  pop
+        *   37:  push/alloc 1
+        *   38:  xfer lex[1,(0)],arg[0]
+        *   39:  xfer global[head],trgt
+        *   41:  xmit/nxt 1,arg[1]
+        *   42:  xmit/nxt 2,rslt
+        *   43:  jf 46
+        *   44:  lookup 5,trgt
+        *   45:  xmit/nxt 0,arg[0]
+        *   46:  lookup 6,trgt
+        *   47:  xmit/nxt 0,arg[0]
+        *   48:  next!/nxt 3
+        *   51:  xfer argvec,rslt
+        *   52:  rtn/nxt
         */
       val keyMetaDeq = Meta(extensible = false)
       keyMetaDeq.map.update(Symbol("#self"), LexVariable(0, 0, indirect = false))
@@ -640,7 +640,7 @@ class EnabledSpec extends VmSpecUtils {
     }
 
     "Removing a method from the enabled set" should
-      "result in not processing corresponding messages anymore" inMultimode {
+      "result in not processing corresponding messages anymore" inMode [SimpleStrandPool] {
 
       /** (seq (enq fifo 1) (enq fifo 2) (enq fifo 3) (enq fifo 4))
         *

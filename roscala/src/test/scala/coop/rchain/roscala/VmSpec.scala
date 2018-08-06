@@ -30,14 +30,14 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {IfExpr}
+        *   0:  {IfExpr}
         * codevec:
-        * 0:   lit #t,rslt
-        * 1:   jf 4
-        * 2:   lit 1,rslt
-        * 3:   rtn/nxt
-        * 4:   lit 2,rslt
-        * 5:   rtn/nxt
+        *   0:  lit #t,rslt
+        *   1:  jf 4
+        *   2:  lit 1,rslt
+        *   3:  rtn/nxt
+        *   4:  lit 2,rslt
+        *   5:  rtn/nxt
         */
       val codevec = Seq(
         OpImmediateLitToReg(literal = `#t`, reg = rslt),
@@ -63,14 +63,14 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {IfExpr}
+        *   0:  {IfExpr}
         * codevec:
-        * 0:   lit #f,rslt
-        * 1:   jf 4
-        * 2:   lit 1,rslt
-        * 3:   rtn/nxt
-        * 4:   lit 2,rslt
-        * 5:   rtn/nxt
+        *   0:  lit #f,rslt
+        *   1:  jf 4
+        *   2:  lit 1,rslt
+        *   3:  rtn/nxt
+        *   4:  lit 2,rslt
+        *   5:  rtn/nxt
         */
       val codevec = Seq(
         OpImmediateLitToReg(literal = `#f`, reg = rslt),
@@ -114,19 +114,19 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {BlockExpr}
+        *   0:  {BlockExpr}
         * codevec:
-        * 0:   fork 7
-        * 1:   alloc 2
-        * 2:   lit 1,arg[0]
-        * 3:   lit 2,arg[1]
-        * 4:   xfer global[+],trgt
-        * 6:   xmit/nxt 2
-        * 7:   alloc 2
-        * 8:   lit 3,arg[0]
-        * 9:   lit 4,arg[1]
-        * 10:  xfer global[+],trgt
-        * 12:  xmit/nxt 2
+        *   0:  fork 7
+        *   1:  alloc 2
+        *   2:  lit 1,arg[0]
+        *   3:  lit 2,arg[1]
+        *   4:  xfer global[+],trgt
+        *   6:  xmit/nxt 2
+        *   7:  alloc 2
+        *   8:  lit 3,arg[0]
+        *   9:  lit 4,arg[1]
+        *   10: xfer global[+],trgt
+        *   12: xmit/nxt 2
         */
       val codevec = Seq(
         OpFork(6),
@@ -156,18 +156,18 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {RequestExpr}
+        *   0:   {RequestExpr}
         * codevec:
-        * 0:   alloc 2
-        * 1:   lit 1,arg[0]
-        * 2:   xfer global[+],trgt
-        * 4:   outstanding 12,1
-        * 6:   push/alloc 2
-        * 7:   lit 2,arg[0]
-        * 8:   lit 3,arg[1]
-        * 9:   xfer global[+],trgt
-        * 11:  xmit/nxt 2,arg[1]
-        * 12:  xmit/nxt 2
+        *   0:  alloc 2
+        *   1:  lit 1,arg[0]
+        *   2:  xfer global[+],trgt
+        *   4:  outstanding 12,1
+        *   6:  push/alloc 2
+        *   7:  lit 2,arg[0]
+        *   8:  lit 3,arg[1]
+        *   9:  xfer global[+],trgt
+        *   11: xmit/nxt 2,arg[1]
+        *   12: xmit/nxt 2
         */
       val codevec = Seq(
         OpAlloc(2),
@@ -196,23 +196,23 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {RequestExpr}
+        *   0:   {RequestExpr}
         * codevec:
-        * 0:   alloc 2
-        * 1:   lit 1,arg[0]
-        * 2:   xfer global[+],trgt
-        * 4:   outstanding 14,1
-        * 6:   push/alloc 2
-        * 7:   lit 2,arg[0]
-        * 8:   xfer global[+],trgt
-        * 10:   outstanding 13,1
-        * 12:   push/alloc 2
-        * 13:   lit 3,arg[0]
-        * 14:   lit 4,arg[1]
-        * 15:   xfer global[+],trgt
-        * 17:   xmit/nxt 2,arg[1]
-        * 18:   xmit/nxt 2,arg[1]
-        * 19:   xmit/nxt 2
+        *   0:  alloc 2
+        *   1:  lit 1,arg[0]
+        *   2:  xfer global[+],trgt
+        *   4:  outstanding 14,1
+        *   6:  push/alloc 2
+        *   7:  lit 2,arg[0]
+        *   8:  xfer global[+],trgt
+        *   10: outstanding 13,1
+        *   12: push/alloc 2
+        *   13: lit 3,arg[0]
+        *   14: lit 4,arg[1]
+        *   15: xfer global[+],trgt
+        *   17: xmit/nxt 2,arg[1]
+        *   18: xmit/nxt 2,arg[1]
+        *   19: xmit/nxt 2
         */
       val codevec = Seq(
         OpAlloc(2),
@@ -246,19 +246,19 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {LetExpr}
-        * 1:   {Template}
+        *   0:   {LetExpr}
+        *   1:   {Template}
         * codevec:
-        * 0:   alloc 2
-        * 1:   lit 1,arg[0]
-        * 2:   lit 2,arg[1]
-        * 3:   nargs 2
-        * 4:   extend 1
-        * 5:   alloc 2
-        * 6:   xfer lex[0,0],arg[0]
-        * 7:   xfer lex[0,1],arg[1]
-        * 8:   xfer global[+],trgt
-        * 10:  xmit/nxt 2
+        *   0:   alloc 2
+        *   1:   lit 1,arg[0]
+        *   2:   lit 2,arg[1]
+        *   3:   nargs 2
+        *   4:   extend 1
+        *   5:   alloc 2
+        *   6:   xfer lex[0,0],arg[0]
+        *   7:   xfer lex[0,1],arg[1]
+        *   8:   xfer global[+],trgt
+        *   10:  xmit/nxt 2
         */
       val codevec = Seq(
         OpAlloc(2),
@@ -300,22 +300,22 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {LetExpr}
-        * 1:   {Template}
-        * 2:   {Loc lex[0,0]}
+        *   0:   {LetExpr}
+        *   1:   {Template}
+        *   2:   {Loc lex[0,0]}
         * codevec:
-        * 0:   alloc 1
-        * 1:   lit #t,arg[0]
-        * 2:   nargs 1
-        * 3:   extend 1
-        * 4:   xfer lex[0,0],rslt
-        * 5:   jf 10
-        * 6:   lit #f,rslt
-        * 7:   xfer rslt,lex[0,0]
-        * 8:   xfer lex[0,0],rslt
-        * 9:   jmp 4
-        * 10:   lit 5,rslt
-        * 11:   rtn/nxt
+        *   0:   alloc 1
+        *   1:   lit #t,arg[0]
+        *   2:   nargs 1
+        *   3:   extend 1
+        *   4:   xfer lex[0,0],rslt
+        *   5:   jf 10
+        *   6:   lit #f,rslt
+        *   7:   xfer rslt,lex[0,0]
+        *   8:   xfer lex[0,0],rslt
+        *   9:   jmp 4
+        *   10:  lit 5,rslt
+        *   11:  rtn/nxt
         */
       val codevec = Seq(
         OpAlloc(1),
@@ -359,22 +359,22 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {LetExpr}
-        * 1:   {Template}
-        * 2:   {Loc lex[0,0]}
+        *   0:   {LetExpr}
+        *   1:   {Template}
+        *   2:   {Loc lex[0,0]}
         * codevec:
-        * 0:   alloc 1
-        * 1:   lit #t,arg[0]
-        * 2:   nargs 1
-        * 3:   extend 1
-        * 4:   xfer lex[0,0],rslt
-        * 5:   jf 10
-        * 6:   lit #f,rslt
-        * 7:   xfer rslt,lex[0,0]
-        * 8:   xfer lex[0,0],rslt
-        * 9:   jmp 4
-        * 10:   xfer lex[0,0],rslt
-        * 11:   rtn/nxt
+        *   0:   alloc 1
+        *   1:   lit #t,arg[0]
+        *   2:   nargs 1
+        *   3:   extend 1
+        *   4:   xfer lex[0,0],rslt
+        *   5:   jf 10
+        *   6:   lit #f,rslt
+        *   7:   xfer rslt,lex[0,0]
+        *   8:   xfer lex[0,0],rslt
+        *   9:   jmp 4
+        *   10:  xfer lex[0,0],rslt
+        *   11:  rtn/nxt
         */
       val codevec = Seq(
         OpAlloc(1),
@@ -418,15 +418,15 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {RequestExpr}
-        * 1:   1.1
-        * 2:   2.2
+        *   0:   {RequestExpr}
+        *   1:   1.1
+        *   2:   2.2
         * codevec:
-        * 0:   alloc 2
-        * 1:   liti 1,arg[0]
-        * 2:   liti 2,arg[1]
-        * 3:   xfer global[+],trgt
-        * 5:   xmit/nxt 2
+        *   0:   alloc 2
+        *   1:   liti 1,arg[0]
+        *   2:   liti 2,arg[1]
+        *   3:   xfer global[+],trgt
+        *   5:   xmit/nxt 2
         */
       val codevec = Seq(
         OpAlloc(2),
@@ -450,15 +450,15 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {RequestExpr}
+        *   0:   {RequestExpr}
         * codevec:
-        * 0:   alloc 2
-        * 1:   lit 2,arg[0]
-        * 2:   lit 3,arg[1]
-        * 3:   fx+ 2,arg[1]
-        * 5:   lit 1,arg[0]
-        * 6:   fx+ 2,rslt
-        * 8:   rtn/nxt
+        *   0:   alloc 2
+        *   1:   lit 2,arg[0]
+        *   2:   lit 3,arg[1]
+        *   3:   fx+ 2,arg[1]
+        *   5:   lit 1,arg[0]
+        *   6:   fx+ 2,rslt
+        *   8:   rtn/nxt
         */
       val codevec = Seq(
         OpAlloc(2),
@@ -484,10 +484,10 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   100
+        *   0:   100
         * codevec:
-        * 0:   liti 0,rslt
-        * 1:   rtn/nxt
+        *   0:   liti 0,rslt
+        *   1:   rtn/nxt
         */
       val codevec = Seq(
         OpIndLitToRslt(lit = 0),
@@ -511,20 +511,20 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (let [[x 1]] (set! x (fx+ 7 5)))
         *
         * litvec:
-        * 0:	{LetExpr}
-        * 1:	{Template}
-        * 2:	{Loc lex[0,0]}
+        *   0:	{LetExpr}
+        *   1:	{Template}
+        *   2:	{Loc lex[0,0]}
         * codevec:
-        * 0:	alloc 1
-        * 1:	lit 1,arg[0]
-        * 2:	nargs 1
-        * 3:	extend 1
-        * 4:	alloc 2
-        * 5:	lit 7,arg[0]
-        * 6:	lit 5,arg[1]
-        * 7:	fx+ 2,lex[0,0]
-        * 9:	xfer lex[0,0],rslt
-        * 10:	rtn/nxt
+        *   0:	alloc 1
+        *   1:	lit 1,arg[0]
+        *   2:	nargs 1
+        *   3:	extend 1
+        *   4:	alloc 2
+        *   5:	lit 7,arg[0]
+        *   6:	lit 5,arg[1]
+        *   7:	fx+ 2,lex[0,0]
+        *   9:	xfer lex[0,0],rslt
+        *   10:	rtn/nxt
         */
       val codevec = Seq(
         OpAlloc(n = 1),
@@ -568,13 +568,13 @@ class VmSpec extends VmSpecUtils {
         * This opcode sequence will be generated by the RBL
         * compiler with the expression: (send fx+ 1)
         * litvec:
-        * 0:	{SendExpr}
+        *   0:	{SendExpr}
         * codevec:
-        * 0:	alloc 1
-        * 1:	lit 1,arg[0]
-        * 2:	fx+ 1
-        * 4:	lit #niv,rslt
-        * 5:	rtn/nxt
+        *   0:	alloc 1
+        *   1:	lit 1,arg[0]
+        *   2:	fx+ 1
+        *   4:	lit #niv,rslt
+        *   5:	rtn/nxt
         *
         * OpApplyCmd runs a primitive without saving its result.
         * Therefore the successful execution of a primitive through
@@ -604,22 +604,22 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (and (+ 2 2) (+ 2 1))
         *
         * litvec:
-        * 0:	{IfExpr}
+        *   0:	{IfExpr}
         * codevec:
-        * 0:	outstanding 8,1
-        * 2:	push/alloc 2
-        * 3:	lit 2,arg[0]
-        * 4:	lit 2,arg[1]
-        * 5:	xfer global[+],trgt
-        * 7:	xmit/nxt 2,rslt
-        * 8:	jf 15
-        * 9:	alloc 2
-        * 10:	lit 2,arg[0]
-        * 11:	lit 1,arg[1]
-        * 12:	xfer global[+],trgt
-        * 14:	xmit/nxt 2
-        * 15:	lit #f,rslt
-        * 16:	rtn/nxt
+        *   0:	outstanding 8,1
+        *   2:	push/alloc 2
+        *   3:	lit 2,arg[0]
+        *   4:	lit 2,arg[1]
+        *   5:	xfer global[+],trgt
+        *   7:	xmit/nxt 2,rslt
+        *   8:	jf 15
+        *   9:	alloc 2
+        *   10:	lit 2,arg[0]
+        *   11:	lit 1,arg[1]
+        *   12:	xfer global[+],trgt
+        *   14:	xmit/nxt 2
+        *   15:	lit #f,rslt
+        *   16:	rtn/nxt
         */
       val codevec = Seq(
         OpOutstanding(pc = 6, n = 1),
@@ -654,23 +654,23 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (+ (+ 2 2) (+ 2 1))
         *
         * litvec:
-        * 0:	{RequestExpr}
+        *   0:	{RequestExpr}
         * codevec:
-        * 0:	alloc 2
-        * 1:	xfer global[+],trgt
-        * 3:	outstanding 18,2
-        * 5:	push/alloc 2
-        * 6:	lit 2,arg[0]
-        * 7:	lit 1,arg[1]
-        * 8:	xfer global[+],trgt
-        * 10:	xmit 2,arg[1]
-        * 11:	pop
-        * 12:	push/alloc 2
-        * 13:	lit 2,arg[0]
-        * 14:	lit 2,arg[1]
-        * 15:	xfer global[+],trgt
-        * 17:	xmit/nxt 2,arg[0]
-        * 18:	xmit/nxt 2
+        *   0:	alloc 2
+        *   1:	xfer global[+],trgt
+        *   3:	outstanding 18,2
+        *   5:	push/alloc 2
+        *   6:	lit 2,arg[0]
+        *   7:	lit 1,arg[1]
+        *   8:	xfer global[+],trgt
+        *   10:	xmit 2,arg[1]
+        *   11:	pop
+        *   12:	push/alloc 2
+        *   13:	lit 2,arg[0]
+        *   14:	lit 2,arg[1]
+        *   15:	xfer global[+],trgt
+        *   17:	xmit/nxt 2,arg[0]
+        *   18:	xmit/nxt 2
         */
       val codevec = Seq(
         OpAlloc(n = 2),
@@ -707,22 +707,22 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (let [[x 1]] (set! x (+ 7 5)))
         *
         * litvec:
-        * 0:	{LetExpr}
-        * 1:	{Template}
-        * 2:	{Loc lex[0,0]}
+        *   0:	{LetExpr}
+        *   1:	{Template}
+        *   2:	{Loc lex[0,0]}
         * codevec:
-        * 0:	alloc 1
-        * 1:	lit 1,arg[0]
-        * 2:	nargs 1
-        * 3:	extend 1
-        * 4:	outstanding 12,1
-        * 6:	push/alloc 2
-        * 7:	lit 1,arg[0]
-        * 8:	lit 1,arg[1]
-        * 9:	xfer global[+],trgt
-        * 11:	xmit/tag/nxt 2,lex[0,0]
-        * 12:	xfer lex[0,0],rslt
-        * 13:	rtn/nxt
+        *   0:	alloc 1
+        *   1:	lit 1,arg[0]
+        *   2:	nargs 1
+        *   3:	extend 1
+        *   4:	outstanding 12,1
+        *   6:	push/alloc 2
+        *   7:	lit 1,arg[0]
+        *   8:	lit 1,arg[1]
+        *   9:	xfer global[+],trgt
+        *   11:	xmit/tag/nxt 2,lex[0,0]
+        *   12:	xfer lex[0,0],rslt
+        *   13:	rtn/nxt
         *
         */
       val codevec = Seq(
@@ -770,13 +770,13 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (cat 1)
         *
         * litvec:
-        * 0:	{RequestExpr}
-        * 1:	'cat
+        *   0:	{RequestExpr}
+        *   1:	'cat
         * codevec:
-        * 0:	alloc 1
-        * 1:	lit 1,arg[0]
-        * 2:	lookup 1,trgt
-        * 3:	xmit/nxt 1
+        *   0:	alloc 1
+        *   1:	lit 1,arg[0]
+        *   2:	lookup 1,trgt
+        *   3:	xmit/nxt 1
         *
         *
         * this use case will go through the `absent` branch of `OpLookUpReg`, and the successful use case should be:
@@ -821,29 +821,29 @@ class VmSpec extends VmSpecUtils {
 
       /**
         * litvec:
-        * 0:   {RequestExpr}
+        *   0:   {RequestExpr}
         * codevec:
-        * 0:   alloc 3
-        * 1:   xfer global[+],trgt
-        * 3:   outstanding 25,3
-        * 5:   push/alloc 2
-        * 6:   lit 5,arg[0]
-        * 7:   lit 6,arg[1]
-        * 8:   xfer global[+],trgt
-        * 10:   xmit 2,arg[2]
-        * 11:   pop
-        * 12:   push/alloc 2
-        * 13:   lit 3,arg[0]
-        * 14:   lit 4,arg[1]
-        * 15:   xfer global[+],trgt
-        * 17:   xmit 2,arg[1]
-        * 18:   pop
-        * 19:   push/alloc 2
-        * 20:   lit 1,arg[0]
-        * 21:   lit 2,arg[1]
-        * 22:   xfer global[+],trgt
-        * 24:   xmit/nxt 2,arg[0]
-        * 25:   xmit/nxt 3
+        *   0:  alloc 3
+        *   1:  xfer global[+],trgt
+        *   3:  outstanding 25,3
+        *   5:  push/alloc 2
+        *   6:  lit 5,arg[0]
+        *   7:  lit 6,arg[1]
+        *   8:  xfer global[+],trgt
+        *   10: xmit 2,arg[2]
+        *   11: pop
+        *   12: push/alloc 2
+        *   13: lit 3,arg[0]
+        *   14: lit 4,arg[1]
+        *   15: xfer global[+],trgt
+        *   17: xmit 2,arg[1]
+        *   18: pop
+        *   19: push/alloc 2
+        *   20: lit 1,arg[0]
+        *   21: lit 2,arg[1]
+        *   22: xfer global[+],trgt
+        *   24: xmit/nxt 2,arg[0]
+        *   25: xmit/nxt 3
         *
         * Notice: In Roscala opcode positions are not influenced by
         * the size of an opcode. Every opcode just counts `1`.
@@ -891,14 +891,14 @@ class VmSpec extends VmSpecUtils {
         * compiler with the expression: (+ cat 1)
         *
         * litvec:
-        * 0:	{RequestExpr}
-        * 1:	'cat
+        *   0:	{RequestExpr}
+        *   1:	'cat
         * codevec:
-        * 0:	alloc 2
-        * 1:	lookup 1,arg[0]
-        * 2:	lit 1,arg[1]
-        * 3:	xfer global[+],trgt
-        * 5:	xmit/nxt 2
+        *   0:	alloc 2
+        *   1:	lookup 1,arg[0]
+        *   2:	lit 1,arg[1]
+        *   3:	xfer global[+],trgt
+        *   5:	xmit/nxt 2
         *
         *
         * this use case will go through the `absent` branch of `OpLookUpArg`, and the successful use case should be:
