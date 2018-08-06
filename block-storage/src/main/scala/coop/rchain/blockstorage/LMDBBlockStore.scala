@@ -15,6 +15,7 @@ import coop.rchain.metrics.Metrics
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
+import coop.rchain.shared.Resources.withResource
 
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
@@ -84,6 +85,26 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+    for {
+      _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
+      ret <- withReadTxn { txn =>
+              withResource(blocks.iterate(txn)) { iterator =>
+                iterator.asScala
+                  .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                  .withFilter { case (key, _) => p(key) }
+                  .map {
+                    case (key, value) =>
+                      val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
+                      (key, msg)
+                  }
+                  .toList
+              }
+            }
+    } yield ret
+
+  @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
+              since = "0.5")
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")

@@ -4,7 +4,6 @@ import cats.{Applicative, Id, Monad}
 import cats.implicits._
 import cats.effect.{Bracket, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
