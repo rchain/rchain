@@ -14,7 +14,8 @@ case class Server(
     bootstrap: PeerNode,
     standalone: Boolean,
     dataDir: Path,
-    mapSize: Long
+    mapSize: Long,
+    maxNumOfConnections: Int
 )
 
 case class GrpcServer(
@@ -33,10 +34,11 @@ sealed trait Command
 case class Eval(files: List[String]) extends Command
 case object Repl                     extends Command
 case object Diagnostics              extends Command
-case class Deploy(location: String)  extends Command
-case object DeployDemo               extends Command
-case object Propose                  extends Command
-case class ShowBlock(hash: String)   extends Command
-case object ShowBlocks               extends Command
-case object Run                      extends Command
-case object Help                     extends Command
+case class Deploy(address: String, phlo: Int, phloPrice: Int, nonce: Int, location: String)
+    extends Command
+case object DeployDemo             extends Command
+case object Propose                extends Command
+case class ShowBlock(hash: String) extends Command
+case object ShowBlocks             extends Command
+case object Run                    extends Command
+case object Help                   extends Command

@@ -133,6 +133,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
+    val maxNumOfConnections =
+      opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
 
@@ -175,6 +178,26 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "Deploy a Rholang source file to Casper on an existing running node. " +
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance.")
+
+    val addressCheck: String => Boolean = addr =>
+      addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
+    val from = opt[String](
+      descr = "Purse address that will be used to pay for the deployment.",
+      validate = addressCheck
+    )
+
+    val phloLimit = opt[Int](
+      descr = "The amount of phlo to use for the transaction (unused phlo is refunded)."
+    )
+
+    val phloPrice = opt[Int](
+      descr = "The price of phlo for this transaction in units dust/phlo."
+    )
+
+    val nonce = opt[Int](
+      descr = "This allows to overwrite your own pending transactions that use the same nonce."
+    )
+
     val location = trailArg[String](required = true)
   }
   addSubcommand(deploy)

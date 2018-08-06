@@ -1,2 +1,4 @@
-@"stdout"!(1 matches 1) |
-@"stdout"!(1 matches _)
+new stdout(`rho:io:stdout`) in {
+  stdout!(1 matches 1) |
+  stdout!(1 matches _)
+}

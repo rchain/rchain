@@ -14,6 +14,7 @@ import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp._, Connect._
 
 package object effects {
 
@@ -75,4 +76,6 @@ package object effects {
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
+  def rpConnections: Task[ConnectionsCell[Task]] =
+    Cell.const[Task, Connections](Connections.empty).pure[Task] // noop for now
 }

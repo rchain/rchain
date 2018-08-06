@@ -13,10 +13,10 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 ## Sending and receiving data
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   HelloWorld!("Hello, world!") |
     3   for (@text <- HelloWorld) {
-    4     @"stdout"!(text)
+    4     stdout!(text)
     5   }
     6 }
 
@@ -26,7 +26,7 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 3) This `for` production creates a process that waits for a single message to be sent on the channel whose name is stored in the variable `HelloWorld`.  The pattern `@text` gets matched against the serialized process, binding the process-valued variable `text` to the original process that was sent.
 
-4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
+4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we use new with the urn `rho:io:stdout` to request a channel where sent messages get printed to a console.
 
 ### Name Equivalence
 
@@ -54,9 +54,9 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Replicated receive
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   for (@text <= HelloWorld) {
-    3     @"stdout"!(text)
+    3     stdout!(text)
     4   } |
     5   HelloWorld!("Hello, world!") |
     6   HelloWorld!("Hola, mundo!")
@@ -68,9 +68,9 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Contracts as sugar for replicated receive
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   contract HelloWorld(@text) = {
-    3     @"stdout"!(text)
+    3     stdout!(text)
     4   } |
     5   HelloWorld!("Hello, world!") |
     6   HelloWorld!("Hola, mundo!")
@@ -80,13 +80,13 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Replicated send
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`), stderr(`rho:io:stderr`) in {
     2   HelloWorld!!("Hello, world!") |
     3   for (@text <- HelloWorld) {
-    4     @"stdout"!(text)
+    4     stdout!(text)
     5   } |
     6   for (@text <- HelloWorld) {
-    7     @"stderr"!(text)
+    7     stderr!(text)
     8   }
     9 }
 
@@ -98,13 +98,13 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 In order to have one message follow after another is known to have been received, we must use an acknowledgement message.
 
-    1 new chan, ack in {
+    1 new chan, ack, stdoutAck(`rho:io:stdoutAck`) in {
     2   chan!(0) |
     3   for (_ <- ack) {
     4     chan!(1)
     5   } |
     6   for (@num <= chan) {
-    7     @"stdoutAck"(num, *ack)
+    7     stdoutAck(num, *ack)
     8   }
     9 }
 
@@ -116,20 +116,20 @@ In order to have one message follow after another is known to have been received
 
 ## Sending and receiving multiple processes
 
-     1 new chan in {
+     1 new chan, stdout(`rho:io:stdout`) in {
      2   chan!(1,2,3) |
      3   chan!((4,5,6)) |
      4   chan!(7,8) |
      5   chan!([9, 10], 11) |
      6   chan!(12 | 13) |
      7   for (@x, @y, @z <= chan) { 
-     8     @"stdout"!(["three", x, y, z])
+     8     stdout!(["three", x, y, z])
      9   } |
     10   for (@a, @b <= chan) {
-    11     @"stdout"!(["two", a, b])
+    11     stdout!(["two", a, b])
     12   } |
     13   for (@a <= chan) {
-    14     @"stdout"!(["one", a])
+    14     stdout!(["one", a])
     15   }
     16 }
 
@@ -222,14 +222,14 @@ Patterns let us implement structured queries on data.  Suppose that we send lots
 
 Then we can think of the name `people` as a table in a database and query it.  A rough translation of the SQL statement `SELECT age, name FROM people WHERE age > 35` in the context of the data above would be
 
-     1 new people in {
+     1 new people, stdout(`rho:io:stdout`) in {
      2   people!(@"name"!("Joe") | @"age"!(20) | @"eyes"!("blue") | @"seq"!(0)) |
      3   people!(@"name"!("Julie") | @"age"!(30) | @"eyes"!("brown") | @"seq"!(0)) |
      4   people!(@"name"!("Jane") | @"age"!(40) | @"eyes"!("green") | @"seq"!(0)) |
      5   people!(@"name"!("Jack") | @"age"!(50) | @"eyes"!("grey") | @"seq"!(0))|
      6   for (@{@"seq"!(0) | {row /\ {@"name"!(name) | @"age"!(age) | _}}} <= people) {
      7     if (age > 35) {
-     8       @"stdout"!([name, age])
+     8       stdout!([name, age])
      9     } |
     10     people!(row | @"seq"!(1))
     11   }
@@ -569,7 +569,7 @@ Hashing functions are exposed as channels which expect two arguments:
 #### Example usage:
 
 ```rholang
-new x,y in {
+new x, y, stdout(`rho:io:stdout`) in {
     x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
         for (@r <- x) {
             @"keccak256Hash"!(r.toByteArray(), *y) // hash the program from (1)
@@ -578,7 +578,7 @@ new x,y in {
             // The h here is the hash of the rholang term we sent to the hash channel.
             // We can do anything we want with it, but we choose to just print it.
             // Rholang prints byte arrays in hexadecimal.
-            @"stdout"!(h)  // print out the keccak256 hash
+            stdout!(h)  // print out the keccak256 hash
         }
 }
 ```
@@ -589,10 +589,10 @@ new x,y in {
 1. Let's hash a rholang program and print out it in base16. In rholang:
 
   ```rholang
-  new x,y in { 
+  new x, y, stdout(`rho:io:stdout`) in { 
      x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
      for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
-     for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
+     for (@h <- y) { stdout!(h) }  // print out the keccak256 hash
   }
   ```
 
@@ -631,9 +631,9 @@ new x,y in {
 
   So, in rholang we run:
   ```
-  new x in { 
+  new x, stdout(`rho:io:stdout`) in { 
     @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-    for (@v <- x) { @"stdout"!(v) } 
+    for (@v <- x) { stdout!(v) } 
   } 
 
   ```
@@ -646,9 +646,9 @@ new x,y in {
 
   If we, for example, pass in a corrupted hash, changing the initial 'a' to a 'b':
   ```
-  new x in { 
+  new x, stdout(`rho:io:stdout`) in { 
      @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-     for (@v <- x) { @"stdout"!(v) } 
+     for (@v <- x) { stdout!(v) } 
   } 
   ```
 

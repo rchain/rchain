@@ -23,7 +23,7 @@ import coop.rchain.shared._
 import ThrowableOps._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.node.api._
-import coop.rchain.comm.rp._
+import coop.rchain.comm.rp._, Connect.ConnectionsCell
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 
@@ -219,6 +219,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       nodeDiscovery: NodeDiscovery[Task],
+      rpConnectons: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
       packetHandler: PacketHandler[Effect],
@@ -302,6 +303,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     /** create typeclass instances */
     tcpConnections <- effects.tcpConnections.toEffect
+    rpConnections  <- effects.rpConnections.toEffect
     log            = effects.log
     time           = effects.time
     sync = SyncInstances.syncEffect[CommError](commError => {
@@ -349,6 +351,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                                   metrics,
                                                   transport,
                                                   nodeDiscovery,
+                                                  rpConnections,
                                                   blockStore,
                                                   oracle,
                                                   packetHandler,

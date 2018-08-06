@@ -116,6 +116,7 @@ separator nonempty Case "" ;
 -- Name Declarations.
 -- Eventually will have IOPairs.
 NameDeclSimpl. NameDecl ::= Var ;
+NameDeclUrn. NameDecl ::= Var "(" Uri ")" ;
 separator nonempty NameDecl "," ;
 
 -- Booleans:

@@ -50,16 +50,17 @@ object Main {
       new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.port)
 
     val program = conf.command match {
-      case Eval(files)      => new ReplRuntime().evalProgram[Task](files)
-      case Repl             => new ReplRuntime().replProgram[Task].as(())
-      case Diagnostics      => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Deploy(location) => DeployRuntime.deployFileProgram[Task](location)
-      case DeployDemo       => DeployRuntime.deployDemoProgram[Task]
-      case Propose          => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)  => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks       => DeployRuntime.showBlocks[Task]()
-      case Run              => nodeProgram(conf)
-      case _                => conf.printHelp()
+      case Eval(files) => new ReplRuntime().evalProgram[Task](files)
+      case Repl        => new ReplRuntime().replProgram[Task].as(())
+      case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
+      case Deploy(address, phlo, phloPrice, nonce, location) =>
+        DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
+      case DeployDemo      => DeployRuntime.deployDemoProgram[Task]
+      case Propose         => DeployRuntime.propose[Task]()
+      case ShowBlock(hash) => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks      => DeployRuntime.showBlocks[Task]()
+      case Run             => nodeProgram(conf)
+      case _               => conf.printHelp()
     }
 
     program.doOnFinish(_ =>
