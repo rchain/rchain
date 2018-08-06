@@ -332,8 +332,41 @@ new BallotFactory, LockoutFactory, PostOfficeFactory in {
         }
       } |
       
-      contract @[*PostOfficeAdmin, "updateParams"]() = {
-        
+      // updateParams is a ballot that replaces itself
+      new updateParamsStore, ballotOut, winnerOut in {
+        // Create an initial ballot
+        @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut) |
+        // Read repeatedly; this name will be reused
+        for (@ballot <= ballotOut) {
+          // Store the latest ballot
+          updateParamsStore!(ballot) |
+          // When there are new parameters
+          for (@[pubKeySet, sendQuorumSize, cancelQuorumSize] <= winnerOut) {
+            // Throw away the old values and the old ballot
+            for (_ <- pubKeySetStore; 
+                 _ <- sendQuorumSizeStore; 
+                 _ <- cancelQuorumSizeStore;
+                 _ <- updateParamsStore) {
+              // Set the new parameters
+              pubKeySetStore!(pubKeySet) |
+              sendQuorumSizeStore!(sendQuorumSize) |
+              cancelQuorumSizeStore!(cancelQuorumSize) |
+              // Create a new ballot using the same output names so when the ballot is sent on ballotOut,
+              // it gets stored in the same way the initial one did above.
+              @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut)
+            }
+          } |
+          
+          // METHOD DEFINED HERE
+          contract @[*PostOfficeAdmin, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+            // Get & replace current ballot
+            for (@ballot <- updateParamsStore) {
+              updateParamsStore!(ballot) |
+              // Pass on the info
+              @[ballot, "vote"](pubKey, [pubKeySet, sendQuorumSize, cancelQuorumSize], *statusOut, sig)
+            }
+          }
+        }
       }
     }
   } |
