@@ -18,7 +18,8 @@ class ClearConnectionsSpec
   import ScalaTestCats._
 
   describe("Node when called to clear connectios") {
-    describe("if number of connectons is smaller or equal to 2/3 of number of maximum connectons allowed") {
+    describe(
+      "if number of connectons is smaller or equal to 2/3 of number of maximum connectons allowed") {
       it("should not clear any of existing connections") {
         // given
         implicit val connections = mkConnections(peer("A"), peer("B"))
@@ -41,9 +42,7 @@ class ClearConnectionsSpec
       }
     }
 
-    describe("if number of connectons is bigger then 2/3 of number of maximum connectons allowed") {
-
-    }
+    describe("if number of connectons is bigger then 2/3 of number of maximum connectons allowed") {}
   }
 
   private def peer(name: String): PeerNode =
@@ -55,6 +54,7 @@ class ClearConnectionsSpec
     })
 
   private def maxNumOfConnections(num: Int): RPConfAsk[Id] =
-    new ConstApplicativeAsk(RPConf(maxNumOfConnections = 5))
+    new ConstApplicativeAsk(
+      RPConf(ClearConnetionsConf(maxNumOfConnections = 5, numOfConnectionsPinged = num)))
 
 }

@@ -47,7 +47,7 @@ object Connect {
 
     for {
       connections <- ConnectionsCell[F].read
-      max         <- RPConfAsk[F].reader(_.maxNumOfConnections)
+      max         <- RPConfAsk[F].reader(_.clearConnections.maxNumOfConnections)
       cleared     <- if (connections.size > ((max * 2) / 3)) clear else 0.pure[F]
     } yield cleared
   }

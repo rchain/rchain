@@ -303,7 +303,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     /** create typeclass instances */
     tcpConnections <- effects.tcpConnections.toEffect
-    rpConfAsk = effects.rpConfAsk(RPConf(conf.server.maxNumOfConnections)).toEffect
+    rpConfAsk      = effects.rpConfAsk(RPConf(ClearConnetionsConf(
+      conf.server.maxNumOfConnections,
+      numOfConnectionsPinged = 10) // TODO read from conf
+    )).toEffect
     rpConnections  <- effects.rpConnections.toEffect
     log            = effects.log
     time           = effects.time
