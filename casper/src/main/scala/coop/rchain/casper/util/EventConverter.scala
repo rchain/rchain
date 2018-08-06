@@ -13,34 +13,39 @@ import coop.rchain.rspace.trace.{
 import scala.collection.immutable.Seq
 
 object EventConverter {
+  implicit def byteStringToBlake2b256Hash(hash: ByteString): Blake2b256Hash =
+    Blake2b256Hash.fromByteArray(hash.toByteArray)
+
+  implicit def blake2b256HashToByteString(hash: Blake2b256Hash): ByteString =
+    ByteString.copyFrom(hash.bytes.toArray)
+
   def toCasperEvent(event: RspaceEvent): Event = event match {
-    case RspaceProduce(produce) =>
-      Event(Produce(ProduceEvent(ByteString.copyFrom(produce.bytes.toArray))))
-    case RspaceConsume(consume) =>
-      Event(Consume(ConsumeEvent(ByteString.copyFrom(consume.bytes.toArray))))
+    case produce: RspaceProduce =>
+      Event(Produce(ProduceEvent(produce.channelsHash, produce.hash)))
+    case consume: RspaceConsume =>
+      Event(Consume(ConsumeEvent(consume.channelsHash, consume.hash)))
     case RspaceComm(rspaceConsume, rspaceProduces) =>
       Event(
         Comm(
           CommEvent(
-            Some(ConsumeEvent(ByteString.copyFrom(rspaceConsume.hash.bytes.toArray))),
+            Some(ConsumeEvent(rspaceConsume.channelsHash, rspaceConsume.hash)),
             rspaceProduces.map(rspaceProduce =>
-              ProduceEvent(ByteString.copyFrom(rspaceProduce.hash.bytes.toArray)))
-          )))
+              ProduceEvent(rspaceProduce.channelsHash, rspaceProduce.hash))
+          )
+        ))
   }
 
   def toRspaceEvent(event: Event): RspaceEvent = event match {
-    case Event(Produce(ProduceEvent(produce))) =>
-      RspaceProduce.fromHash(Blake2b256Hash.fromByteArray(produce.toByteArray))
-    case Event(Consume(ConsumeEvent(consume))) =>
-      RspaceConsume.fromHash(Blake2b256Hash.fromByteArray(consume.toByteArray))
-    case Event(Comm(CommEvent(Some(ConsumeEvent(consume)), produces))) =>
-      val rspaceProduces: Seq[RspaceProduce] = produces.map {
-        case ProduceEvent(produce) =>
-          val rspaceProduce: RspaceProduce =
-            RspaceProduce.fromHash(Blake2b256Hash.fromByteArray(produce.toByteArray))
-          rspaceProduce
+    case Event(Produce(produce: ProduceEvent)) =>
+      RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+    case Event(Consume(consume: ConsumeEvent)) =>
+      RspaceConsume.fromHash(consume.channelsHash, consume.hash)
+    case Event(Comm(CommEvent(Some(consume: ConsumeEvent), produces))) =>
+      val rspaceProduces: Seq[RspaceProduce] = produces.map { produce =>
+        val rspaceProduce: RspaceProduce =
+          RspaceProduce.fromHash(produce.channelsHash, produce.hash)
+        rspaceProduce
       }.toList
-      RspaceComm(RspaceConsume.fromHash(Blake2b256Hash.fromByteArray(consume.toByteArray)),
-                 rspaceProduces)
+      RspaceComm(RspaceConsume.fromHash(consume.channelsHash, consume.hash), rspaceProduces)
   }
 }

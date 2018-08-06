@@ -55,6 +55,7 @@ object Dependencies {
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
   val secp256k1Java       = "coop.rchain"                 % "secp256k1-java"            % "0.1-SNAPSHOT"
+  val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
 
   // format: on
 

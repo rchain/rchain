@@ -2,17 +2,15 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Functor
-import cats.effect.Sync
-import cats.implicits._
 import cats.mtl.FunctorTell
+import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -20,26 +18,13 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (
-    val reducer: Reduce[Task],
-    val replayReducer: Reduce[Task],
-    val space: ISpace[Channel,
-                      BindPattern,
-                      ListChannelWithRandom,
-                      ListChannelWithRandom,
-                      TaggedContinuation],
-    val replaySpace: ReplayRSpace[Channel,
-                                  BindPattern,
-                                  ListChannelWithRandom,
-                                  ListChannelWithRandom,
-                                  TaggedContinuation],
-    val costAccountingPure: CostAccountingAlg[Task],
-    val costAccountingReplay: CostAccountingAlg[Task],
-    var errorLog: ErrorLog,
-    val context: Context[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]) {
+class Runtime private (val reducer: Reduce[Task],
+                       val replayReducer: Reduce[Task],
+                       val space: RhoISpace,
+                       val replaySpace: RhoReplayRSpace,
+                       var errorLog: ErrorLog,
+                       val context: RhoContext) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
-  def getCost(): Task[CostAccount]                 = costAccountingPure.getTotal
-  def getCostReplay(): Task[CostAccount]           = costAccountingReplay.getTotal
   def close(): Unit = {
     space.close()
     replaySpace.close()
@@ -49,40 +34,39 @@ class Runtime private (
 
 object Runtime {
 
-  type Name      = String
+  type RhoISpace       = CPARK[ISpace]
+  type RhoRSpace       = CPARK[RSpace]
+  type RhoReplayRSpace = CPARK[ReplayRSpace]
+
+  type RhoIStore  = CPAK[IStore]
+  type RhoContext = CPAK[Context]
+
+  private type CPAK[F[_, _, _, _]] =
+    F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
+
+  private type CPARK[F[_, _, _, _, _]] =
+    F[Channel, BindPattern, ListChannelWithRandom, ListChannelWithRandom, TaggedContinuation]
+
+  type Name      = Par
   type Arity     = Int
   type Remainder = Option[Var]
   type Ref       = Long
 
-  private def introduceSystemProcesses(space: ISpace[Channel,
-                                                     BindPattern,
-                                                     ListChannelWithRandom,
-                                                     ListChannelWithRandom,
-                                                     TaggedContinuation],
-                                       replaySpace: ISpace[Channel,
-                                                           BindPattern,
-                                                           ListChannelWithRandom,
-                                                           ListChannelWithRandom,
-                                                           TaggedContinuation],
+  private def introduceSystemProcesses(space: RhoISpace,
+                                       replaySpace: RhoISpace,
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-    processes.map {
+    processes.flatMap {
       case (name, arity, remainder, ref) =>
-        space.install(
-          List(Channel(Quote(GString(name)))),
-          List(
-            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                        remainder,
-                        freeCount = arity)),
-          TaggedContinuation(ScalaBodyRef(ref))
-        )
-        replaySpace.install(
-          List(Channel(Quote(GString(name)))),
-          List(
-            BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                        remainder,
-                        freeCount = arity)),
-          TaggedContinuation(ScalaBodyRef(ref))
+        val channels = List(Channel(Quote(name)))
+        val patterns = List(
+          BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+                      remainder,
+                      freeCount = arity))
+        val continuation = TaggedContinuation(ScalaBodyRef(ref))
+        Seq(
+          space.install(channels, patterns, continuation),
+          replaySpace.install(channels, patterns, continuation)
         )
     }
 
@@ -90,36 +74,20 @@ object Runtime {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
-    val context = Context.create[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation](
+    val context: RhoContext = Context.create(
       dataDir,
       mapSize
     )
 
-    val space = RSpace.create[Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation](context, Branch.MASTER)
+    val space: RhoRSpace = RSpace.create(context, Branch.MASTER)
 
-    val replaySpace = ReplayRSpace.create[Channel,
-                                          BindPattern,
-                                          ListChannelWithRandom,
-                                          ListChannelWithRandom,
-                                          TaggedContinuation](context, Branch.REPLAY)
+    val replaySpace: RhoReplayRSpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
-    val costAccountingPure: CostAccountingAlg[Task] =
-      CostAccountingAlg.unsafe(CostAccount.zero)
-    val costAccountingReplay: CostAccountingAlg[Task] =
-      CostAccountingAlg.unsafe(CostAccount.zero)
 
     def dispatchTableCreator(
-        space: ISpace[Channel,
-                      BindPattern,
-                      ListChannelWithRandom,
-                      ListChannelWithRandom,
-                      TaggedContinuation],
+        space: RhoISpace,
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
@@ -132,6 +100,13 @@ object Runtime {
       9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
     )
 
+    def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+
+    val urnMap: Map[String, Par] = Map("rho:io:stdout" -> byteName(0),
+                                       "rho:io:stdoutAck" -> byteName(1),
+                                       "rho:io:stderr"    -> byteName(2),
+                                       "rho:io:stderrAck" -> byteName(3))
+
     lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
       dispatchTableCreator(space, dispatcher)
 
@@ -139,21 +114,21 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable, costAccountingPure)
+      RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, costAccountingReplay)
+      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
-      ("stdout", 1, None, 0L),
-      ("stdoutAck", 2, None, 1L),
-      ("stderr", 1, None, 2L),
-      ("stderrAck", 2, None, 3L),
-      ("ed25519Verify", 4, None, 4L),
-      ("sha256Hash", 2, None, 5L),
-      ("keccak256Hash", 2, None, 6L),
-      ("blake2b256Hash", 2, None, 7L),
-      ("secp256k1Verify", 4, None, 9L)
+      (byteName(0), 1, None, 0L),
+      (byteName(1), 2, None, 1L),
+      (byteName(2), 1, None, 2L),
+      (byteName(3), 2, None, 3L),
+      (GString("ed25519Verify"), 4, None, 4L),
+      (GString("sha256Hash"), 2, None, 5L),
+      (GString("keccak256Hash"), 2, None, 6L),
+      (GString("blake2b256Hash"), 2, None, 7L),
+      (GString("secp256k1Verify"), 4, None, 9L)
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
@@ -161,13 +136,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer,
-                replayDispatcher.reducer,
-                space,
-                replaySpace,
-                costAccountingPure,
-                costAccountingReplay,
-                errorLog,
-                context)
+    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
   }
 }

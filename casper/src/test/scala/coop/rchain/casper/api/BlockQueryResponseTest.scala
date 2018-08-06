@@ -32,19 +32,20 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
-  val secondHashString                  = "123456789101112131415161718192"
-  val blockHash: BlockHash              = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber                       = 1L
-  val timestamp                         = 1527191665L
-  val ps: RChainState                   = RChainState().withBlockNumber(blockNumber)
-  val deployCount                       = 10
-  val randomDeploys: IndexedSeq[Deploy] = (0 until deployCount).map(_ => Deploy.defaultInstance)
-  val body: Body                        = Body().withPostState(ps).withNewCode(randomDeploys)
-  val parentsString                     = List(genesisHashString, "0000000001")
-  val parentsHashList: List[BlockHash]  = parentsString.map(ProtoUtil.stringToByteString)
-  val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val secondBlockSenderString: String   = "3456789101112131415161718192"
-  val secondBlockSender: ByteString     = ProtoUtil.stringToByteString(secondBlockSenderString)
+  val secondHashString     = "123456789101112131415161718192"
+  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
+  val blockNumber          = 1L
+  val timestamp            = 1527191665L
+  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
+  val deployCount          = 10
+  val randomDeploys: IndexedSeq[DeployCost] =
+    (0 until deployCount).map(_ => DeployCost.defaultInstance)
+  val body: Body                       = Body().withPostState(ps).withNewCode(randomDeploys)
+  val parentsString                    = List(genesisHashString, "0000000001")
+  val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
+  val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
+  val secondBlockSenderString: String  = "3456789101112131415161718192"
+  val secondBlockSender: ByteString    = ProtoUtil.stringToByteString(secondBlockSenderString)
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)
@@ -68,6 +69,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
           _ <- BlockStore[F].put(ProtoUtil.stringToByteString(secondHashString), secondBlock)
         } yield BlockDag()
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
 

@@ -5,17 +5,22 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import scalapb.{GeneratedMessage, Message}
 
 trait Chargeable[A] {
-  def count(a: A): Int
+  def cost(a: A): Int
 }
 
 object Chargeable {
-  def apply[A](implicit ev: Chargeable[A]): Chargeable[A] = ev
+  def apply[T](implicit ev: Chargeable[T]): Chargeable[T] = ev
+
   implicit def fromProtobuf[T <: GeneratedMessage with Message[T]] =
     new Chargeable[T] {
-      override def count(a: T): Int = a.serializedSize
+      override def cost(a: T): Int = a.serializedSize
     }
 
   implicit val chargeableQuote: Chargeable[Quote] = new Chargeable[Quote] {
-    override def count(a: Quote): Int = Channel(a).serializedSize
+    override def cost(a: Quote): Int = Channel(a).serializedSize
+  }
+
+  implicit val chargeableChannel: Chargeable[Channel] = new Chargeable[Channel] {
+    override def cost(a: Channel): Int = a.serializedSize
   }
 }

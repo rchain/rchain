@@ -8,9 +8,8 @@ import cats.implicits._
 import cats.mtl.MonadState
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
@@ -282,7 +281,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeploy(0)),
+          deploys = Seq(ProtoUtil.basicDeployCost(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -351,7 +350,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeploy(0)),
+          deploys = Seq(ProtoUtil.basicDeployCost(0)),
           justifications = latestMessages(justifications)
         )
 

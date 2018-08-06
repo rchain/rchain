@@ -47,8 +47,8 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
     GroundNormalizeMatcher.normalizeMatch(gs) should be(expectedResult)
   }
   "GroundUri" should "Compile as GUri" in {
-    val gu                   = new GroundUri("Uri")
-    val expectedResult: Expr = GUri("Uri")
+    val gu                   = new GroundUri("`rho:uri`")
+    val expectedResult: Expr = GUri("rho:uri")
     GroundNormalizeMatcher.normalizeMatch(gu) should be(expectedResult)
   }
 }
@@ -299,6 +299,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
     result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def")), 0))
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PMinusMinus" should "Delegate" in {
+    val pMinusMinus = new PMinusMinus(
+      new PGround(new GroundString("abc")),
+      new PGround(new GroundString("def"))
+    )
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinusMinus, inputs).value
+    result.par should be(inputs.par.prepend(EMinusMinus(GString("abc"), GString("def")), 0))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -614,9 +624,56 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         Send(ChanVar(BoundVar(2)), List[Par](GInt(7)), false, BitSet(2))
           .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false, BitSet(1)))
           .prepend(Send(ChanVar(BoundVar(0)), List[Par](GInt(9)), false, BitSet(0))),
+        Vector.empty,
         BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
+  }
+
+  "PNew" should "Sort URI's and place them at the end" in {
+    val listNameDecl = new ListNameDecl()
+    listNameDecl.add(new NameDeclSimpl("x"))
+    listNameDecl.add(new NameDeclSimpl("y"))
+    listNameDecl.add(new NameDeclUrn("r", "`rho:registry`"))
+    listNameDecl.add(new NameDeclUrn("out", "`rho:stdout`"))
+    listNameDecl.add(new NameDeclSimpl("z"))
+    val listData1 = new ListProc()
+    listData1.add(new PGround(new GroundInt(7)))
+    val listData2 = new ListProc()
+    listData2.add(new PGround(new GroundInt(8)))
+    val listData3 = new ListProc()
+    listData3.add(new PGround(new GroundInt(9)))
+    val listData4 = new ListProc()
+    listData4.add(new PGround(new GroundInt(10)))
+    val listData5 = new ListProc()
+    listData5.add(new PGround(new GroundInt(11)))
+
+    val pNew = new PNew(
+      listNameDecl,
+      new PPar(
+        new PPar(
+          new PPar(
+            new PPar(
+              new PSend(new NameVar("x"), new SendSingle(), listData1),
+              new PSend(new NameVar("y"), new SendSingle(), listData2)),
+            new PSend(new NameVar("r"), new SendSingle(), listData3)),
+          new PSend(new NameVar("out"), new SendSingle(), listData4)),
+        new PSend(new NameVar("z"), new SendSingle(), listData5)))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pNew, inputs).value
+    result.par should be(
+      inputs.par.prepend(New(
+        5,
+        Send(ChanVar(BoundVar(4)), List[Par](GInt(7)), false, BitSet(4))
+          .prepend(Send(ChanVar(BoundVar(3)), List[Par](GInt(8)), false, BitSet(3)))
+          .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(9)), false, BitSet(1)))
+          .prepend(Send(ChanVar(BoundVar(0)), List[Par](GInt(10)), false, BitSet(0)))
+          .prepend(Send(ChanVar(BoundVar(2)), List[Par](GInt(11)), false, BitSet(2))),
+        Vector("rho:registry", "rho:stdout"),
+        BitSet()
+      )))
+    result.par.news(0).p.sends.map(x => x.locallyFree.get) should be(List(BitSet(2), BitSet(0), BitSet(1), BitSet(3), BitSet(4)))
+    result.par.news(0).p.locallyFree.get should be(BitSet(0, 1, 2 ,3, 4))
   }
 
   "PMatch" should "Handle a match inside a for comprehension" in {
@@ -760,10 +817,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         List(
           MatchCase(
             GBool(true),
-            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), BitSet())),
+            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), Vector.empty, BitSet())),
           MatchCase(
             GBool(false),
-            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), BitSet()))
+            New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, BitSet(0)), Vector.empty, BitSet()))
           // TODO: Fill in type error case
         ),
         BitSet()

@@ -12,7 +12,7 @@ import com.google.protobuf.empty.Empty
 import coop.rchain.casper.{MultiParentCasperConstructor, PrettyPrinter, SafetyOracle}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
+import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.catscontrib._
 import Catscontrib._

@@ -42,9 +42,16 @@ message Channel {
     }
 }
 
+message PCost {
+    uint64 cost = 1;
+    int32 iterations = 2;
+}
+
 message ListChannelWithRandom {
     repeated Channel channels = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
+    // cost of performing the spatial match
+    PCost cost = 3;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -111,8 +118,11 @@ message Receive {
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 message New {
+    // Includes any uris listed below. This makes it easier to substitute or walk a term.
     sint32 bindCount = 1;
     Par p = 2 [(scalapb.field).no_box = true];
+    // For normalization, uri-referenced variables come at the end, and in lexicographical order.
+    repeated string uri = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
 }
 
@@ -165,6 +175,7 @@ message Expr {
         EMatches e_matches_body = 27;
         EPercentPercent e_percent_percent_body = 28;
         EPlusPlus e_plus_plus_body = 29;
+        EMinusMinus e_minus_minus_body = 30;
     }
 }
 
@@ -293,6 +304,11 @@ message EPercentPercent {
 }
 
 message EPlusPlus {
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
+}
+
+message EMinusMinus {
     Par p1 = 1 [(scalapb.field).no_box = true];
     Par p2 = 2 [(scalapb.field).no_box = true];
 }

@@ -1,14 +1,15 @@
 package coop.rchain.roscala
 
+import java.util.concurrent.RecursiveAction
+
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Location._
+import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
+import coop.rchain.roscala.pools.{StrandPool, StrandPoolExecutor}
 import coop.rchain.roscala.prim.Prim
 
-import scala.collection.mutable
-
 object Vm {
-  val logger = Logger("Vm")
 
   /**
     * `State` holds the currently installed `Ctxt` and `Code`.
@@ -17,14 +18,27 @@ object Vm {
     * `code` usually equals to `ctxt.code` and `pc` is initially
     * set to `ctxt.pc`.
     */
-  final case class State(strandPool: mutable.Buffer[Ctxt] = mutable.Buffer(),
-                         var code: Code = null,
+  final case class State(var code: Code = null,
                          var ctxt: Ctxt = null,
                          var doNextThreadFlag: Boolean = false,
                          var exitFlag: Boolean = false,
                          var nextOpFlag: Boolean = false,
                          var pc: Int = 0,
-                         var vmErrorFlag: Boolean = false)
+                         var vmErrorFlag: Boolean = false,
+                         globalEnv: GlobalEnv)(val strandPool: StrandPool)
+
+  def run[E: StrandPoolExecutor](ctxt: Ctxt, state: StrandPool => State): Unit = {
+    val strandPool = StrandPoolExecutor.instance[E]
+    val vm         = new Vm(ctxt, state(strandPool))
+    StrandPoolExecutor.start(vm)
+    vm.logger.debug("Exiting the VM")
+  }
+}
+
+class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
+  val logger = Logger("Vm")
+
+  override def compute(): Unit = run(ctxt0, state0)
 
   /**
     * Install a `Ctxt` and runs `Ctxt.code`
@@ -33,7 +47,7 @@ object Vm {
     * Runs until `doExitFlag` is set or there are no more opcodes.
     * Also tries to fetch new work from `state.strandPool`
     */
-  def run(ctxt: Ctxt, globalEnv: GlobalEnv, state: State): Unit = {
+  private def run(ctxt: Ctxt, state: State): Unit = {
     // Install `ctxt`
     state.ctxt = ctxt
     state.code = ctxt.code
@@ -41,13 +55,15 @@ object Vm {
 
     while (state.pc < state.code.codevec.size && !state.exitFlag) {
       val opcode = state.code.codevec(state.pc)
-      logger.debug(opcode.toString)
+      logger.debug(s"${state.pc}:${opcode.toString}")
       state.pc += 1
 
       // execute `opcode`
-      execute(opcode, globalEnv, state)
-      executeFlags(globalEnv, state)
+      execute(opcode, state.globalEnv, state)
+      executeFlags(state)
     }
+
+    logger.debug("Exiting run method")
   }
 
   /**
@@ -159,7 +175,7 @@ object Vm {
         */
       case OpOutstanding(pc, n) =>
         state.ctxt.pc = pc
-        state.ctxt.outstanding = n
+        state.ctxt.outstanding.set(n)
         state.nextOpFlag = true
 
       /**
@@ -171,7 +187,7 @@ object Vm {
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
         logger.debug(s"Fork: Schedule cloned ctxt ($newCtxt)")
-        state.strandPool.prepend(newCtxt)
+        state.strandPool.prepend((newCtxt, state))
         state.nextOpFlag = true
 
       /**
@@ -245,7 +261,7 @@ object Vm {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
         val location = state.ctxt.code.litvec(lit).asInstanceOf[Location]
 
         if (result == Deadthread)
@@ -268,7 +284,7 @@ object Vm {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -289,7 +305,7 @@ object Vm {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -308,7 +324,7 @@ object Vm {
         val prim = Prim.nthPrim(primNum)
         val result =
           if (unwind) unwindAndApplyPrim(prim, state, globalEnv)
-          else prim.dispatchHelper(state, globalEnv)
+          else prim.dispatchHelper(state)
 
         if (result == Deadthread)
           state.doNextThreadFlag = true
@@ -421,7 +437,7 @@ object Vm {
         */
       case OpLookupToArg(lit, arg) =>
         val key   = state.code.litvec(lit)
-        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
+        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key, globalEnv)
 
         if (value == Upcall) {
           state.ctxt.pc = state.pc
@@ -441,7 +457,7 @@ object Vm {
         */
       case OpLookupToReg(lit, reg) =>
         val key   = state.code.litvec(lit)
-        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key)(globalEnv)
+        val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key, globalEnv)
 
         if (value == Upcall) {
           state.ctxt.pc = state.pc
@@ -607,30 +623,14 @@ object Vm {
         state.nextOpFlag = true
     }
 
-  def executeFlags(env: GlobalEnv, state: Vm.State): Unit =
+  def executeFlags(state: Vm.State): Unit =
     if (state.doNextThreadFlag) {
-      if (getNextStrand(state))
+      if (state.strandPool.getNextStrand(state))
         state.exitFlag = true
       else {
         state.nextOpFlag = true
         state.doNextThreadFlag = false
       }
-    }
-
-  def getNextStrand(state: State): Boolean =
-    if (state.strandPool.isEmpty) {
-      logger.debug("Empty strandPool - exiting VM")
-      true
-    } else {
-      val ctxt = state.strandPool.remove(state.strandPool.size - 1)
-      logger.debug(s"Get next ctxt ($ctxt) and install it")
-
-      // Install `ctxt`
-      state.ctxt = ctxt
-      state.code = ctxt.code
-      state.pc = ctxt.pc
-
-      false
     }
 
   /**
@@ -691,7 +691,7 @@ object Vm {
     state.ctxt.argvec = newArgvec
     state.ctxt.nargs = newArgvec.numberOfElements()
 
-    val result = prim.dispatchHelper(state, globalEnv)
+    val result = prim.dispatchHelper(state)
     state.ctxt.argvec = oldArgvec
     state.ctxt.nargs = oldNargs
     result

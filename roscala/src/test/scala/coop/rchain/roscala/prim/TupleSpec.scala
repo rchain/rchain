@@ -10,10 +10,7 @@ class TupleSpec extends FlatSpec with Matchers {
   val ctxt = new Ctxt(
     tag = null,
     nargs = 1,
-    outstanding = 0,
     pc = 0,
-    rslt = null,
-    trgt = null,
     argvec = Tuple(Fixnum(1)),
     env = null,
     code = null,
@@ -23,6 +20,9 @@ class TupleSpec extends FlatSpec with Matchers {
     rcvr = null,
     monitor = null,
   )
+
+  ctxt.rslt = null
+  ctxt.trgt = null
 
   def reAssignCtxtArgs(ctxt: Ctxt, nargs: Int, args: Tuple): Ctxt = {
     val newCtxt = ctxt.clone()

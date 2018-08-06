@@ -1,9 +1,13 @@
 package coop.rchain.node.effects
 
+import java.io.Closeable
 import java.nio.file.{Files, Path, Paths}
+import java.util.concurrent.TimeUnit
 
 import cats.implicits._
+
 import coop.rchain.node.model.repl._
+
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -16,7 +20,7 @@ object ReplClient {
   def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] {
+class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Closeable {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
@@ -41,4 +45,6 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] {
 
   private def readContent(filePath: Path): String =
     new String(Files.readAllBytes(filePath))
+
+  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }
