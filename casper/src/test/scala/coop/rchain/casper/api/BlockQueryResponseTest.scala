@@ -45,12 +45,14 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
   val header: Header                    = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
   val secondBlockSenderString: String   = "3456789101112131415161718192"
   val secondBlockSender: ByteString     = ProtoUtil.stringToByteString(secondBlockSenderString)
+  val shardId: String                   = "abcdefgh"
   val secondBlock: BlockMessage =
     BlockMessage()
       .withBlockHash(blockHash)
       .withHeader(header)
       .withBody(body)
       .withSender(secondBlockSender)
+      .withShardId(shardId)
 
   val faultTolerance = -1f
 
@@ -94,6 +96,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
       blockInfo.mainParentHash should be(genesisHashString)
       blockInfo.parentsHashList should be(parentsString)
       blockInfo.sender should be(secondBlockSenderString)
+      blockInfo.shardId should be(shardId)
   }
 
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
