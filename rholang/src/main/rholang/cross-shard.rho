@@ -1,4 +1,4 @@
-new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
+new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactory, r/*(`rho:registry`)*/ in {
   // create: create a ballot
   //
   //  Set<bytearray> pubKeySet: set of public keys allowed to vote on this ballot
@@ -235,27 +235,25 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
   } |
 
 
-  contract @[*PostOfficeFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, postOfficeOut) = {
-    new PostOfficeClient, PostOfficeAdmin, pubKeySetStore, sendQuorumSizeStore, cancelQuorumSizeStore,
-        receiveMapStore, r/*(`rho:registry`)*/ in {
-      postOfficeOut!([*PostOfficeClient, *PostOfficeAdmin]) |
+  contract @[*MailBoxFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, recipient, mailBoxOut) = {
+    new MailBoxClient, MailBoxAdmin, pubKeySetStore, sendQuorumSizeStore, cancelQuorumSizeStore,
+        receiveMapStore in {
+      mailBoxOut!([*MailBoxClient, *MailBoxAdmin]) |
       pubKeySetStore!(pubKeySet) |
       sendQuorumSizeStore!(sendQuorumSize) |
       cancelQuorumSizeStore!(cancelQuorumSize) |
       // Maps uuid of status ballot in source to receiving ballot in target.
       // Populated on first message received.
-      receiveMapStore({}) |
+      receiveMapStore!({}) |
       
       // send: doesn't actually send the message cross shard---the off-chain
-      //       PostOffice owners notice sends to this address and deal with that.
+      //       MailBox owners notice sends to this address and deal with that.
       //       This method sets up the contract that gets the status message back
       //       from them.
       //
       //  any message: process to send cross chain.
-      //  purse purse: purse to pay for the send
       //  name statusOut: name on which to send a succeed/fail message back to caller
-      // TODO(pyrocto): check the balance, drain the purse.  Send fail message if not enough.
-      contract @[*PostOfficeClient, "send"](@message, @purse, statusOut) = {
+      contract @[*MailBoxClient, "send"](@message, statusOut) = {
         // Get the current params
         for (@pubKeySet <- pubKeySetStore; 
              @sendQuorumSize <- sendQuorumSizeStore; 
@@ -287,9 +285,9 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
       // When receiving a message, capture the current stats and use them for the whole ballot
       // 
       // verify!([*ballot, candidate, *statusOut].toByteArray(), sig, pubKey, *ret) |
-      contract @[*PostOfficeClient, "receive"](@pubKey, @uuid, @message, statusOut, @sig) = {
+      contract @[*MailBoxClient, "receive"](@pubKey, @uuid, @message, statusOut, @sig) = {
         // Look up target ballot to find list of public keys
-        for (receiveMap <- receiveMapStore) {
+        for (@receiveMap <- receiveMapStore) {
           new ballotOut, proceed in {
             ballotOut!(receiveMap.get(uuid)) |
             for (@ballot <- ballotOut) {
@@ -309,11 +307,13 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
                       // Add the new ballot to the map
                       receiveMapStore!(receiveMap.set(uuid, ballot)) |
                       proceed!(ballot) |
-                      // "winner" here is the winning message.
-                      // The PostOffice simply deploys the message.
-                      // TODO(pyrocto): figure out how to remove the reference to the ballot from the map
-                      for (@winner <- winnerOut; @receiveMap <- receiveMapStore) {
-                        winner
+                      // Forward the winner to the recipient.  
+                      // TODO(pyrocto): If that's all we were doing, we could
+                      // just use recipient instead of winnerOut above, but we want to
+                      // figure out how to remove the reference to the ballot from the map
+                      for (@winner <- winnerOut/*; @receiveMap <- receiveMapStore*/) {
+                        recipient!(winner)
+                        // ???
                       }
                     }
                   }
@@ -325,14 +325,14 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
               } |
               // Now that we have a valid ballot, forward to it.
               for (@ballot <- proceed) {
-                @[ballot, "vote"](pubKey, message, *statusOut, sig)
+                @[ballot, "vote"]!(pubKey, message, *statusOut, sig)
               }
             }
           }
         }
       } |
       
-      // updateParams is a ballot that replaces itself
+      // updateParams is a ballot that replaces itself when the parameters get updated
       new updateParamsStore, ballotOut, winnerOut in {
         // Create an initial ballot
         @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut) |
@@ -359,12 +359,12 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
           
           // METHOD DEFINED HERE
           // TODO(pyrocto): register the post office somewhere? 
-          contract @[*PostOfficeAdmin, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+          contract @[*MailBoxAdmin, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
             // Get & replace current ballot
             for (@ballot <- updateParamsStore) {
               updateParamsStore!(ballot) |
               // Pass on the info
-              @[ballot, "vote"](pubKey, [pubKeySet, sendQuorumSize, cancelQuorumSize], *statusOut, sig)
+              @[ballot, "vote"]!(pubKey, [pubKeySet, sendQuorumSize, cancelQuorumSize], *statusOut, sig)
             }
           }
         }
@@ -372,47 +372,100 @@ new BallotFactory, LockoutFactory, PostOfficeFactory, RevFactory in {
     }
   } |
 
-  /* @[*PostOfficeFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, postOfficeOut) |
-  for (@[PostOfficeClient, PostOfficeAdmin] <- postOfficeOut) {
-    
-  }
-  */
-  contract @[*DepositoryFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositoryPurse, depoOut) = {
-    new Depository, postOfficeOut in {
+  contract @[*DepositoryFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositoryPurse, @depositFee, depoOut) = {
+    new Depository, withdrawInternal, mailBoxOut in {
       depoOut!(*Depository) |
-      
-      contract @[*Depository, "sendToChild"](@purse, @targetPubKey, statusOut) = {
+      @[*MailBoxFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *withdrawInternal, *mailBoxOut) |
+      for (@[mailBoxClient, mailBoxAdmin] <- mailBoxOut) {
+
+        contract @[*Depository, "sendToChild"](@purse, @targetPubKey, statusOut) = {
+          new return in {
+            // Find out how much this purse has.
+            @[purse, "getBalance"]!(*return) |
+            for (@balance <- return) {
+              new successCh in {
+                // Deposit all of it to the depository.
+                @[depositoryPurse, "deposit"]!(balance, purse, *successCh) |
+                for (@success <- successCh) {
+                  if (not success) {
+                    statusOut!(["failure", "Could not deposit funds."])
+                  } else {
+                    if (balance < depositFee) {
+                      statusOut!(["failure", "Not enough funds to pay the fee."])
+                    } else {
+                      // Tell child to mint a wallet containing (balance - depositFee) guarded by @targetPubKey
+                      @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } |
         
-      } |
-      
-      contract @[*Depository, "withdraw"](@pubKey, @amount, @targetPubKey, statusOut, @sig) = {
+        contract @[*Depository, "withdraw"](@pubKey, @uuid, @amount, @targetPubKey, statusOut, @sig) = {
+          @[mailBoxClient, "receive"]!(pubKey, uuid, [amount, targetPubKey], *statusOut, sig)
+        } |
+
+        contract @[*Depository, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+          @[mailBoxAdmin, "updateParams"]!(pubKey, pubKeySet, sendQuorumSize, cancelQuorumSize, *statusOut, sig)
+        } |
         
-      } |
-      
-      contract @[*Depository, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
-        
+        contract withdrawInternal(@[amount, targetPubKey]) = {
+          // create wallet from depository for amount at a new uuid guarded by the public key
+          Nil
+        }
       }
     }
   } |
   
-  contract @[*MintFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositoryAmount, mintOut) = {
-    new Mint, postOfficeOut in {
+  contract @[*MintFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositFee, mintOut) = {
+    new Mint, mintInternal, mailBoxOut in {
       mintOut!(*Mint) |
+      @[*MailBoxFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *mintInternal, *mailBoxOut) |
       
-      contract @[*Mint, "sendToParent"](@purse, @targetPubKey, statusOut) = {
+      for (@[mailBoxClient, mailBoxAdmin] <- mailBoxOut) {
+
+        contract @[*Mint, "sendToChild"](@purse, @targetPubKey, statusOut) = {
+          new return in {
+            // Find out how much this purse has.
+            @[purse, "getBalance"]!(*return) |
+            for (@balance <- return) {
+              new successCh in {
+                // Mint new wallet.
+                Nil |
+                for (@success <- successCh) {
+                  if (not success) {
+                    statusOut!(["failure", "Could not deposit funds."])
+                  } else {
+                    if (balance < depositFee) {
+                      statusOut!(["failure", "Not enough funds to pay the fee."])
+                    } else {
+                      // Tell parent to withdraw (balance - depositFee) from depository to a wallet guarded by @targetPubKey
+                      @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } |
         
-      } |
-      
-      contract @[*Mint, "mint"](@pubKey, @amount, @targetPubKey, statusOut, @sig) = {
+        contract @[*Mint, "mint"](@pubKey, @uuid, @amount, @targetPubKey, statusOut, @sig) = {
+          @[mailBoxClient, "receive"]!(pubKey, uuid, [amount, targetPubKey], *statusOut, sig)
+        } |
+
+        contract @[*Mint, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
+          @[mailBoxAdmin, "updateParams"]!(pubKey, pubKeySet, sendQuorumSize, cancelQuorumSize, *statusOut, sig)
+        } |
         
-      } |
-      
-      contract @[*Mint, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
-        
+        contract mintInternal(@[amount, targetPubKey]) = {
+          // create wallet for amount at a new uuid guarded by the public key
+          Nil
+        }
       }
     }
   }
-  // Add a lock to a lockout/tagout system to prevent changing parameters on the parent for the purpose of sending Rev
 }
 
 
