@@ -3,7 +3,7 @@ package coop.rchain.node
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl.MonadState
+import cats._, cats.data._, cats.implicits._, cats.mtl._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
 import monix.execution.atomic._

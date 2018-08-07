@@ -306,7 +306,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
     rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
                                           numOfConnectionsPinged = 10) // TODO read from conf
-    rpConfAsk     = effects.rpConfAsk(RPConf(defaultTimeout, rpClearConnConf)).toEffect
+    rpConfAsk     = effects.rpConfAsk(RPConf(defaultTimeout, rpClearConnConf))
     rpConnections <- effects.rpConnections.toEffect
     log           = effects.log
     time          = effects.time
