@@ -162,7 +162,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             val otherErrors = errorLog.readAndClearErrorVector()
             val cost        = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
             val deployCost  = DeployCost().withDeploy(deploy).withCost(cost)
-            Left((deploy, ex +: otherErrors, accCost :+ deployCost))
+            Left((deploy, otherErrors :+ ex, accCost :+ deployCost))
         }
       case Nil => Right(accCost)
     }
