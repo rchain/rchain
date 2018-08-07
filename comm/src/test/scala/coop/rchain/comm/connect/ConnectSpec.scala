@@ -45,7 +45,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0)
+        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
         upstream.unpack(ProtocolHandshake)
       }
       it("should then add remote node to communication layer") {
