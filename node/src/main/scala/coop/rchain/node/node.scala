@@ -318,11 +318,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                                                                      tcpConnections,
                                                                                      log)
     kademliaRPC = effects.kademliaRPC(src, defaultTimeout)(metrics, transport)
-    nodeDiscovery = effects.nodeDiscovery(src, defaultTimeout)(log,
-                                                               time,
-                                                               metrics,
-                                                               transport,
-                                                               kademliaRPC)
+    nodeDiscovery <- effects
+                      .nodeDiscovery(src, defaultTimeout)(log,
+                                                          time,
+                                                          metrics,
+                                                          transport,
+                                                          kademliaRPC)
+                      .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       sync,
       Metrics.eitherT(Monad[Task], metrics))
