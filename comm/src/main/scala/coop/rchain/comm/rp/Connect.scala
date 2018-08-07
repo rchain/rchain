@@ -43,21 +43,21 @@ object Connect {
 
   def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer]: F[Int] = {
 
+    def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
+      for {
+        local   <- TransportLayer[F].local
+        timeout <- RPConfAsk[F].reader(_.defaultTimeout)
+        hb      = heartbeat(local)
+        res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
+      } yield (peer, res)
+
     def clear(connections: Connections): F[Int] =
       for {
         numOfConnectionsPinged <- RPConfAsk[F].reader(_.clearConnections.numOfConnectionsPinged)
         toPing                 = connections.take(numOfConnectionsPinged)
-        local                  <- TransportLayer[F].local
-        timeout                <- RPConfAsk[F].reader(_.defaultTimeout)
-        hb                     = heartbeat(local)
-        results <- toPing.traverse(peer =>
-                    TransportLayer[F].roundTrip(peer, hb, timeout).map(r => (peer, r)))
-        successfulPeers = results.collect {
-          case (peer, Right(_)) => peer
-        }
-        failedPeers = results.collect {
-          case (peer, Left(_)) => peer
-        }
+        results                <- toPing.traverse(sendHeartbeat(_))
+        successfulPeers        = results.collect { case (peer, Right(_)) => peer }
+        failedPeers            = results.collect { case (peer, Left(_)) => peer }
         _ <- ConnectionsCell[F]
               .modify(p => (p.filter(conn => !toPing.contains(conn)) ++ successfulPeers).pure[F])
       } yield failedPeers.size
