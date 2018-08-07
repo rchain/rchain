@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import cats.Monad
 import cats.implicits._
-import com.google.protobuf.ByteString
+import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -190,15 +190,14 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def protoHash[A <: { def toByteArray: Array[Byte] }](proto: A): ByteString =
-    ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
+  def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
+    protoSeqHash(protoSeq)
 
-  def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString = {
-    val bytes = protoSeq.foldLeft(Array.empty[Byte]) {
-      case (acc, proto) => acc ++ proto.toByteArray
-    }
-    ByteString.copyFrom(Blake2b256.hash(bytes))
-  }
+  def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
+    hashByteArrays(protoSeq.map(_.toByteArray): _*)
+
+  def hashByteArrays(items: Array[Byte]*): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   def blockHeader(body: Body,
                   parentHashes: Seq[ByteString],
@@ -215,12 +214,27 @@ object ProtoUtil {
 
   def unsignedBlockProto(body: Body,
                          header: Header,
-                         justifications: Seq[Justification]): BlockMessage =
+                         justifications: Seq[Justification]): BlockMessage = {
+    val hash = hashUnsignedBlock(header, justifications)
+
     BlockMessage()
-      .withBlockHash(protoHash(header))
+      .withBlockHash(hash)
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
+  }
+
+  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
+    val items = header.toByteArray +: justifications.map(_.toByteArray)
+    hashByteArrays(items: _*)
+  }
+
+  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int, extraBytes: ByteString) =
+    hashByteArrays(header.toByteArray,
+                   sender.toByteArray,
+                   StringValue.of(sigAlgorithm).toByteArray,
+                   Int32Value.of(seqNum).toByteArray,
+                   extraBytes.toByteArray )
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
@@ -228,16 +242,27 @@ object ProtoUtil {
                 sk: Array[Byte],
                 sigAlgorithm: String,
                 signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
-    val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
-    val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
-    val sender            = ByteString.copyFrom(pk)
-    val sig               = ByteString.copyFrom(signFunction(sigData, sk))
-    val currSeqNum        = dag.currentSeqNum.getOrElse(sender, -1)
+
+    val header = {
+      //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
+      // https://rchain.atlassian.net/browse/RHOL-572
+      assert(block.header.isDefined, "A block without a header doesn't make sense")
+      block.header.get
+    }
+
+    val sender = ByteString.copyFrom(pk)
+    val seqNum = dag.currentSeqNum.getOrElse(sender, -1) + 1
+
+    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, block.extraBytes)
+
+    val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
+
     val signedBlock = block
       .withSender(sender)
       .withSig(sig)
-      .withSeqNum(currSeqNum + 1)
+      .withSeqNum(seqNum)
       .withSigAlgorithm(sigAlgorithm)
+      .withBlockHash(blockHash)
 
     signedBlock
   }

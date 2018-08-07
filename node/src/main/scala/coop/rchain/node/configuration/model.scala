@@ -14,7 +14,8 @@ case class Server(
     bootstrap: PeerNode,
     standalone: Boolean,
     dataDir: Path,
-    mapSize: Long
+    mapSize: Long,
+    maxNumOfConnections: Int
 )
 
 case class GrpcServer(

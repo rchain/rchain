@@ -37,6 +37,9 @@ object BlockGenerator {
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
 
+      override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+        Monad[F].pure(idBs.find(p))
+
       override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
       override def close(): F[Unit] = Monad[F].pure(idBs.close())
     }

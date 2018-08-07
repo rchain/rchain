@@ -1,6 +1,8 @@
 import sbt._
 import Keys._
 import scala.sys.process._
+import java.io.File
+import java.nio.file.{Files, StandardCopyOption}
 
 object BNFC {
 
@@ -13,8 +15,21 @@ object BNFC {
   lazy val cleanDocs      = taskKey[Unit]("Cleans BNFC-generated LaTeX files")
   lazy val generateDocs   = taskKey[Unit]("Generates LaTeX files from BNFC grammar files")
 
-  def cleanDir(dir: File): Unit =
-    Process(s"rm -rf $dir") !
+  def cleanDir(path: File): Unit =
+    if (path.exists) {
+      if (path.isDirectory) {
+        path.listFiles.foreach(f => cleanDir(f))
+      }
+      if (!path.delete) {
+        throw new Error(s"Failed to delete $path")
+      }
+    }
+
+  def moveFile(source: String, target: String): Unit = {
+    val srcPath = new File(source).toPath
+    val targetPath = new File(target).toPath
+    Files.move(srcPath, targetPath, StandardCopyOption.REPLACE_EXISTING)
+  }
 
   def nsToPath(ns: String): String =
     ns.replaceAll("\\.", "/")
@@ -25,15 +40,37 @@ object BNFC {
   def makeOutputPath(grammarFile: File, outputDir: File, namespace: String): String =
     s"$outputDir/${nsToPath(namespace)}/${stripSuffix(grammarFile.getName)}"
 
+  def process(cmd: String) : Unit = {
+    println(s"sys call: $cmd")
+    val res = Process(cmd).!
+    if(res != 0)
+      throw new Error(s"sys call failed: $cmd finished with $res")
+  }
+
   def bnfcGenerateSources(fullClasspath: Seq[Attributed[File]], grammarFile: File, outputDir: File, namespace: String): Unit = {
-    val classpath: String = fullClasspath.map(e => e.data).mkString(":")
     val targPath: String  = makeOutputPath(grammarFile, outputDir, namespace)
-    val bnfcCmd: String   = s"bnfc -l --java --jflex -o ${outputDir.getAbsolutePath} -p $namespace $grammarFile"
-    val jlexCmd: String   = s"jflex $targPath/Yylex"
-    val renameDefaultCmd: String = s"mv $targPath/_cup.cup $targPath/${stripSuffix(grammarFile.getName)}.cup"
-    val cupCmd: String    = s"java -cp $classpath java_cup.Main -locations -expect 100 $targPath/${stripSuffix(grammarFile.getName)}.cup" // TODO: Figure out naming behind _cup.cup
-    val mvCmd: String     = s"mv sym.java parser.java $targPath"
-    Process(bnfcCmd) #&& Process(jlexCmd) #&& Process(renameDefaultCmd) #&& Process(cupCmd) #&& Process(mvCmd) !
+    val bnfcCmd: String =
+      s"bnfc -l --java --jflex -o ${outputDir.getAbsolutePath} -p $namespace $grammarFile"
+
+    val (classPathSeparator: String, jlexCmd: String) = Detector.detect(Seq("fedora")).osName match {
+      case "windows" => (";", s"jflex.bat $targPath/Yylex")
+      case _ => (":", s"jflex $targPath/Yylex")
+    }
+
+    val classpath: String = fullClasspath.map(e => e.data).mkString(classPathSeparator)
+
+    val cupCmd: String =
+      s"java -cp $classpath java_cup.Main -locations -expect 100 $targPath/${stripSuffix(grammarFile.getName)}.cup" // TODO: Figure out naming behind _cup.cup
+
+    process(bnfcCmd)
+    process(jlexCmd)
+    //renaming default _cup
+    moveFile(s"$targPath/_cup.cup", s"$targPath/${stripSuffix(grammarFile.getName)}.cup")
+
+    process(cupCmd)
+
+    moveFile("sym.java", s"$targPath/sym.java")
+    moveFile("parser.java", s"$targPath/parser.java")
   }
 
   def bnfcGenerateLaTeX(grammarFile: File, outputDir: File): Unit = {
@@ -43,22 +80,24 @@ object BNFC {
 
   def bnfcFiles(base: File): Seq[File] = (base * "*.cf").get
 
-  lazy val bnfcSettings = inConfig(BNFCConfig)(Defaults.configSettings ++ Seq(
-    javaSource     := (javaSource in Compile).value,
-    scalaSource    := (javaSource in Compile).value,
-    bnfcNamespace  := "coop.rchain.rholang.syntax",
-    bnfcGrammarDir := baseDirectory.value / "src" / "main" / "bnfc",
-    bnfcOutputDir  := (javaSource in Compile).value,
-    bnfcDocDir     := baseDirectory.value / "doc" / "bnfc",
-    clean          := cleanDir(bnfcOutputDir.value / nsToPath(bnfcNamespace.value)),
-    generate       := {
-      val fullCP = (fullClasspath in BNFCConfig).value
-      bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
-        bnfcGenerateSources(fullCP, f, bnfcOutputDir.value, bnfcNamespace.value)
-      }
-    },
-    cleanDocs      := cleanDir(bnfcDocDir.value),
-    generateDocs   := bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
-      bnfcGenerateLaTeX(f, bnfcDocDir.value)
-    }))
+  lazy val bnfcSettings = {
+    inConfig(BNFCConfig)(Defaults.configSettings ++ Seq(
+      javaSource     := (javaSource in Compile).value,
+      scalaSource    := (javaSource in Compile).value,
+      bnfcNamespace  := "coop.rchain.rholang.syntax",
+      bnfcGrammarDir := baseDirectory.value / "src" / "main" / "bnfc",
+      bnfcOutputDir  := (javaSource in Compile).value,
+      bnfcDocDir     := baseDirectory.value / "doc" / "bnfc",
+      clean          := cleanDir(bnfcOutputDir.value / nsToPath(bnfcNamespace.value)),
+      generate       := {
+        val fullCP = (fullClasspath in BNFCConfig).value
+        bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
+          bnfcGenerateSources(fullCP, f, bnfcOutputDir.value, bnfcNamespace.value)
+        }
+      },
+      cleanDocs      := cleanDir(bnfcDocDir.value),
+      generateDocs   := bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
+        bnfcGenerateLaTeX(f, bnfcDocDir.value)
+      }))
+  }
 }

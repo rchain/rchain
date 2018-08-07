@@ -4,7 +4,6 @@ import cats.{Applicative, Id, Monad}
 import cats.implicits._
 import cats.effect.{Bracket, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -149,11 +148,11 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[EquivocationRecord]()
       private val invalidBlockTracker: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
-      
+
       // TODO: Extract hardcoded fault tolerance threshold
       private val faultToleranceThreshold     = 0f
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
-      
+
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
 
       def addBlock(b: BlockMessage): F[BlockStatus] =

@@ -40,7 +40,7 @@ object Configuration {
   private val DefaultValidatorSigAlgorithm      = "ed25519"
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
-
+  private val DefaultMaxNumOfConnections        = 500
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
@@ -87,7 +87,8 @@ object Configuration {
             DefaultBootstrapServer,
             DefaultStandalone,
             dataDir,
-            DefaultMapSize
+            DefaultMapSize,
+            DefaultMaxNumOfConnections
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -151,7 +152,7 @@ object Configuration {
 
     // Server
     val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(_.run.httpPort, _ => None, DefaultHttPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val metricsPort: Int =
       get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
@@ -186,6 +187,9 @@ object Configuration {
                                     _.validators.flatMap(_.sigAlgorithm),
                                     DefaultValidatorSigAlgorithm)
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val maxNumOfConnections = get(_.run.maxNumOfConnections,
+                                  _.server.flatMap(_.maxNumOfConnections),
+                                  DefaultMaxNumOfConnections)
 
     val server = Server(
       host,
@@ -197,7 +201,8 @@ object Configuration {
       bootstrap,
       standalone,
       dataDir,
-      mapSize
+      mapSize,
+      maxNumOfConnections
     )
     val grpcServer = GrpcServer(
       grpcHost,
@@ -209,6 +214,7 @@ object Configuration {
       certificate.isDefined,
       key.isDefined
     )
+
     val casper =
       CasperConf(
         validatorPublicKey,

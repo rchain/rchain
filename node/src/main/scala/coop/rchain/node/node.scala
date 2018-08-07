@@ -128,7 +128,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
-  private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
+  private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -303,9 +303,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     /** create typeclass instances */
     tcpConnections <- effects.tcpConnections.toEffect
-    rpConnections  <- effects.rpConnections.toEffect
-    log            = effects.log
-    time           = effects.time
+    defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
+    rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
+                                          numOfConnectionsPinged = 10) // TODO read from conf
+    rpConfAsk     = effects.rpConfAsk(RPConf(defaultTimeout, rpClearConnConf))
+    rpConnections <- effects.rpConnections.toEffect
+    log           = effects.log
+    time          = effects.time
     sync = SyncInstances.syncEffect[CommError](commError => {
       new Exception(s"CommError: $commError")
     }, e => { UnknownCommError(e.getMessage) })
