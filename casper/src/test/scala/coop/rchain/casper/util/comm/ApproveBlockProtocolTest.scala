@@ -27,7 +27,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val cancelToken = abp.run().fork.runAsync
     abp.currentSigs.unsafeRunSync.size should be(0)
     abp.addApproval(a).unsafeRunSync
-    ctx.tick()
+    ctx.tick(1.millisecond)
     abp.currentSigs.unsafeRunSync.size should be(1)
     cancelToken.cancel()
   }
@@ -41,10 +41,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val cancelToken = abp.run().fork.runAsync
     abp.currentSigs.unsafeRunSync.size should be(0)
     abp.addApproval(a).unsafeRunSync
-    ctx.tick()
+    ctx.tick(1.millisecond)
     abp.currentSigs.unsafeRunSync.size should be(1)
     abp.addApproval(a).unsafeRunSync
-    ctx.tick()
+    ctx.tick(1.millisecond)
     abp.currentSigs.unsafeRunSync.size should be(1)
     cancelToken.cancel()
   }
@@ -56,10 +56,10 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     val a             = ApproveBlockProtocolTest.invalidApproval(abp.candidate)
 
     val cancelToken = abp.run().fork.runAsync
-    ctx.tick()
+    ctx.tick(1.millisecond)
     abp.currentSigs.unsafeRunSync.size should be(0)
     abp.addApproval(a).unsafeRunSync
-    ctx.tick()
+    ctx.tick(1.millisecond)
     abp.currentSigs.unsafeRunSync.size should be(0)
     cancelToken.cancel()
   }
