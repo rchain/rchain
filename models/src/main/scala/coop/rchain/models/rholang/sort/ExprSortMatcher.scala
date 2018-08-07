@@ -4,11 +4,10 @@ import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import cats.implicits._
 
-object ExprSortMatcher extends Sortable[Expr] {
+private[sort] object ExprSortMatcher extends Sortable[Expr] {
   private def sortBinaryOperation(p1: Par, p2: Par): (ScoredTerm[Par], ScoredTerm[Par]) =
-    (ParSortMatcher.sortMatch(p1), ParSortMatcher.sortMatch(p2))
+    (Sortable.sortMatch(p1), Sortable.sortMatch(p2))
 
   def sortMatch(e: Expr): ScoredTerm[Expr] = {
     def constructExpr(exprInstance: ExprInstance, score: Tree[ScoreAtom]) =
@@ -16,16 +15,16 @@ object ExprSortMatcher extends Sortable[Expr] {
 
     e.exprInstance match {
       case ENegBody(en) =>
-        val sortedPar = ParSortMatcher.sortMatch(en.p)
+        val sortedPar = Sortable.sortMatch(en.p)
         constructExpr(ENegBody(ENeg(sortedPar.term)), Node(Score.ENEG, sortedPar.score))
       case EVarBody(ev) =>
-        val sortedVar = VarSortMatcher.sortMatch(ev.v)
+        val sortedVar = Sortable.sortMatch(ev.v)
         constructExpr(EVarBody(EVar(sortedVar.term)), Node(Score.EVAR, sortedVar.score))
       case EEvalBody(chan) =>
-        val sortedChan = ChannelSortMatcher.sortMatch(chan)
+        val sortedChan = Sortable.sortMatch(chan)
         constructExpr(EEvalBody(sortedChan.term), Node(Score.EEVAL, sortedChan.score))
       case ENotBody(en) =>
-        val sortedPar = ParSortMatcher.sortMatch(en.p)
+        val sortedPar = Sortable.sortMatch(en.p)
         constructExpr(ENotBody(ENot(sortedPar.term)), Node(Score.ENOT, sortedPar.score))
       case EMultBody(em) =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(em.p1, em.p2)
@@ -88,16 +87,20 @@ object ExprSortMatcher extends Sortable[Expr] {
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
         constructExpr(EPlusPlusBody(EPlusPlus(sortedPar1.term, sortedPar2.term)),
                       Node(Score.EPLUSPLUS, sortedPar1.score, sortedPar2.score))
+      case EMinusMinusBody(ep) =>
+        val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
+        constructExpr(EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
+                      Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score))
       case EMethodBody(em) =>
-        val args         = em.arguments.toList.map(par => ParSortMatcher.sortMatch(par))
-        val sortedTarget = ParSortMatcher.sortMatch(em.target)
+        val args         = em.arguments.toList.map(par => Sortable.sortMatch(par))
+        val sortedTarget = Sortable.sortMatch(em.target)
         constructExpr(
           EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
           Node(
             Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score))
         )
       case eg =>
-        val sortedGround = GroundSortMatcher.sortMatch(eg)
+        val sortedGround = Sortable.sortMatch(eg)
         constructExpr(sortedGround.term, sortedGround.score)
     }
   }

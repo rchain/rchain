@@ -43,7 +43,7 @@ object COMM {
 
 sealed trait IOEvent extends Event
 
-class Produce private (val hash: Blake2b256Hash) extends IOEvent {
+case class Produce private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case produce: Produce => produce.hash == hash
@@ -52,28 +52,30 @@ class Produce private (val hash: Blake2b256Hash) extends IOEvent {
 
   override def hashCode(): Int = hash.hashCode()
 
-  override def toString: String = s"Produce(hash: ${hash.toString})"
+  override def toString: String =
+    s"Produce(channels: ${channelsHash.toString}, hash: ${hash.toString})"
 
 }
 
 object Produce {
 
-  def unapply(arg: Produce): Option[Blake2b256Hash] = Some(arg.hash)
-
-  val length: Int = 32
+  def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
+    Some((arg.channelsHash, arg.hash))
 
   def create[C, A](channel: C, datum: A, persist: Boolean)(implicit
                                                            serializeC: Serialize[C],
                                                            serializeA: Serialize[A]): Produce =
-    new Produce(StableHashProvider.hash(channel, datum, persist))
+    new Produce(StableHashProvider.hash(Seq(channel))(serializeC.toCodec),
+                StableHashProvider.hash(channel, datum, persist))
 
-  def fromHash(hash: Blake2b256Hash): Produce = new Produce(hash)
+  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Produce =
+    new Produce(channelsHash, hash)
 
   implicit val codecProduce: Codec[Produce] =
-    Codec[Blake2b256Hash].as[Produce]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Produce]
 }
 
-class Consume private (val hash: Blake2b256Hash) extends IOEvent {
+case class Consume private (channelsHash: Blake2b256Hash, hash: Blake2b256Hash) extends IOEvent {
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case consume: Consume => consume.hash == hash
@@ -82,24 +84,26 @@ class Consume private (val hash: Blake2b256Hash) extends IOEvent {
 
   override def hashCode(): Int = hash.hashCode()
 
-  override def toString: String = s"Consume(hash: ${hash.toString})"
+  override def toString: String =
+    s"Consume(channels: ${channelsHash.toString}, hash: ${hash.toString})"
 }
 
 object Consume {
 
-  val length: Int = 32
-
-  def unapply(arg: Consume): Option[Blake2b256Hash] = Some(arg.hash)
+  def unapply(arg: Consume): Option[(Blake2b256Hash, Blake2b256Hash)] =
+    Some((arg.channelsHash, arg.hash))
 
   def create[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeK: Serialize[K]): Consume =
-    new Consume(StableHashProvider.hash(channels, patterns, continuation, persist))
+    new Consume(StableHashProvider.hash(channels)(serializeC.toCodec),
+                StableHashProvider.hash(channels, patterns, continuation, persist))
 
-  def fromHash(hash: Blake2b256Hash): Consume = new Consume(hash)
+  def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Consume =
+    new Consume(channelsHash, hash)
 
   implicit val codecConsume: Codec[Consume] =
-    Codec[Blake2b256Hash].as[Consume]
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash]).as[Consume]
 }

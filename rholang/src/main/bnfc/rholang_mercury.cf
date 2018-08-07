@@ -41,6 +41,7 @@ PPercentPercent. Proc9  ::= Proc9 "%%" Proc10 ;
 PAdd.            Proc8  ::= Proc8 "+" Proc9 ;
 PMinus.          Proc8  ::= Proc8 "-" Proc9 ;
 PPlusPlus.       Proc8  ::= Proc8 "++" Proc9 ;
+PMinusMinus.     Proc8  ::= Proc8 "--" Proc9 ;
 PLt.             Proc7  ::= Proc7 "<" Proc8 ;
 PLte.            Proc7  ::= Proc7 "<=" Proc8 ;
 PGt.             Proc7  ::= Proc7 ">" Proc8 ;
@@ -115,6 +116,7 @@ separator nonempty Case "" ;
 -- Name Declarations.
 -- Eventually will have IOPairs.
 NameDeclSimpl. NameDecl ::= Var ;
+NameDeclUrn. NameDecl ::= Var "(" Uri ")" ;
 separator nonempty NameDecl "," ;
 
 -- Booleans:

@@ -1,9 +1,9 @@
 1. Let's hash some rholang program and print out it in base16. In rholang:
 ```
-new x,y in { 
+new x, y, stdout(`rho:io:stdout`) in { 
    x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
    for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
-   for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
+   for (@h <- y) { stdout!(h) }  // print out the keccak256 hash
 }
 ```
 This will print the hash of our program `(1)` : 
@@ -38,9 +38,9 @@ val base16Repr = Base16.encode(signature)
 
 So, in rholang:
 ```
-new x in { 
+new x, stdout(`rho:io:stdout`) in { 
   @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-  for (@v <- x) { @"stdout"!(v) } 
+  for (@v <- x) { stdout!(v) } 
 } 
 
 ```
@@ -53,9 +53,9 @@ which means that our hash and signature match with public key.
 
 If we for example pass in corrupted hash (the change is emphasized with ** - 71 changed to 61):
 ```
-new x in { 
+new x, stdout(`rho:io:stdout`) in { 
    @"ed25519Verify"!("a6da46a1dc7ed**61**5d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-   for (@v <- x) { @"stdout"!(v) } 
+   for (@v <- x) { stdout!(v) } 
 } 
 ```
 

@@ -1,15 +1,36 @@
 package coop.rchain.casper.util
 
-import cats.Id
+import cats.{Eval, Monad}
+import cats.implicits._
+
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.shared.StreamT
 
 import scala.annotation.tailrec
-import scala.collection.immutable.HashSet
+import scala.collection.immutable.{HashSet, Queue}
 import scala.collection.mutable
 
 object DagOperations {
+
+  def bfTraverseF[F[_]: Monad, A](start: List[A])(neighbours: A => F[List[A]]): StreamT[F, A] = {
+    def build(q: Queue[A], prevVisited: HashSet[A]): F[StreamT[F, A]] =
+      if (q.isEmpty) StreamT.empty[F, A].pure[F]
+      else {
+        val (curr, rest) = q.dequeue
+        if (prevVisited(curr)) build(rest, prevVisited)
+        else
+          for {
+            ns      <- neighbours(curr)
+            visited = prevVisited + curr
+            newQ    = rest.enqueue[A](ns.filterNot(visited))
+          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
+      }
+
+    StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
+  }
+
   def bfTraverse[A](start: Iterable[A])(neighbours: (A) => Iterator[A]): Iterator[A] =
     new Iterator[A] {
       private val visited    = new mutable.HashSet[A]()

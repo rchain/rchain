@@ -247,13 +247,6 @@ class InMemoryStore[C, P, A, K](
       gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
     }
 
-  private[rspace] def removeAll(txn: Transaction, channels: Seq[C]): Unit = {
-    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
-      gnatOpt.map(_.copy(wks = Seq.empty, channels = Seq.empty))
-    }
-    for (c <- channels) removeJoin(txn, c, channels)
-  }
-
   private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit =
     txn.readState { state =>
       val gnatOpt = state.dbGNATs.get(hashChannels(channels))

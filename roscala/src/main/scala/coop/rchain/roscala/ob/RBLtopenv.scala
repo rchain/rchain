@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import coop.rchain.roscala.GlobalEnv
 
 class RBLtopenv extends Ob {
-  override def lookup(key: Ob)(globalEnv: GlobalEnv): Ob = Absent
+  override def lookup(key: Ob, globalEnv: GlobalEnv): Ob = Absent
 }
 
 object RBLtopenv {

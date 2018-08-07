@@ -10,6 +10,8 @@ trait Sortable[T] {
 object Sortable {
   def apply[T](implicit ev: Sortable[T]) = ev
 
+  def sortMatch[T: Sortable](term: T): ScoredTerm[T] = Sortable[T].sortMatch(term)
+
   implicit val boolSortable: Sortable[GBool]            = BoolSortMatcher
   implicit val bundleSortable: Sortable[Bundle]         = BundleSortMatcher
   implicit val channelSortable: Sortable[Channel]       = ChannelSortMatcher

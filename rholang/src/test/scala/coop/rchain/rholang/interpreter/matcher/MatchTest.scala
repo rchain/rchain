@@ -65,10 +65,10 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
   "Matching a send's channel" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send =
       Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet(), true)
-    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("unforgeable")))
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("unforgeable")))
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
     val patternPar: Par = pattern
@@ -77,7 +77,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
   "Matching a send's body" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send  = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet(), true)
     val expectedResult = Some(Map[Int, Par](0 -> GInt(7)))
     assertSpatialMatch(target, pattern, expectedResult)
@@ -87,7 +87,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
   "Matching a send" should "require arity matching in" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet(), true)
     assertSpatialMatch(target, pattern, None)
   }
@@ -110,11 +110,11 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
-      Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, BitSet())
+      Send(Quote(GPrivateBuilder("zero")), List(GInt(7), GPrivateBuilder("one")), false, BitSet())
     val pattern: Par =
       Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
         .withConnectiveUsed(true)
-    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one")))
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("zero"), 1 -> GPrivateBuilder("one")))
     assertSpatialMatch(sendTarget, pattern, expectedResult)
     val targetPar: Par  = sendTarget
     val patternPar: Par = pattern
@@ -127,7 +127,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(8)))
       ),
-      Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
+      Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
       false,
       4
     )
@@ -145,7 +145,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       Some(
         Map[Int, Par](
           0 -> GInt(8),
-          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
+          1 -> Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
     val patternPar: Par = pattern
@@ -236,7 +236,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching inside bundles" should "not be possible" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false))
+        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false))
         .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false)))
     val pattern: Bundle = Bundle(
       Par()
@@ -257,7 +257,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   it should "be possible to match on entire bundle" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false))
+        .prepend(Send(Quote(GPrivateBuilder("0")), Seq(GInt(43)), persistent = false))
         .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false)))
 
     val pattern: Par = EVar(FreeVar(0))
@@ -432,6 +432,17 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     // x %% y
     val pattern        = Expr(EPercentPercentBody(EPercentPercent(EVar(FreeVar(0)), EVar(FreeVar(1)))))
     val expectedResult = Some(Map[Int, Par](0 -> GString("${name}"), 1 -> map))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
+  "Matching --" should "work" in {
+    val lhsSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2), GInt(3))))
+    val rhsSet = ESetBody(ParSet(List[Par](GInt(1), GInt(2))))
+    // "${1, 2, 3}" -- {1, 2}
+    val target = Expr(EMinusMinusBody(EMinusMinus(lhsSet, rhsSet)))
+    // x -- y
+    val pattern        = Expr(EMinusMinusBody(EMinusMinus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
+    val expectedResult = Some(Map[Int, Par](0 -> lhsSet, 1 -> rhsSet))
     assertSpatialMatch(target, pattern, expectedResult)
   }
 }

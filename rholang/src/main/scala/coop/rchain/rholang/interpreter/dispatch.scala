@@ -7,9 +7,10 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.CostAccountingAlg
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.ISpace
+import cats.implicits._
 import coop.rchain.rspace.pure.PureRSpace
 
 trait Dispatch[M[_], A, K] {
@@ -38,16 +39,26 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: S
   val reducer: Reduce[M] = _reducer
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
-    continuation.taggedCont match {
-      case ParBody(parWithRand) =>
-        val env     = Dispatch.buildEnv(dataList)
-        val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-        reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
-      case ScalaBodyRef(_) =>
-        s.unit
-      case Empty =>
-        s.unit
-    }
+    for {
+      costAccountingAlg <- CostAccountingAlg(
+                            dataList
+                              .flatMap(_.cost)
+                              .map(CostAccount.fromProto(_))
+                              .toList
+                              .combineAll)
+      res <- continuation.taggedCont match {
+              case ParBody(parWithRand) =>
+                val env     = Dispatch.buildEnv(dataList)
+                val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
+                reducer.eval(parWithRand.body)(env,
+                                               Blake2b512Random.merge(randoms),
+                                               costAccountingAlg)
+              case ScalaBodyRef(_) =>
+                s.unit
+              case Empty =>
+                s.unit
+            }
+    } yield res
 }
 
 object RholangOnlyDispatcher {
@@ -57,7 +68,7 @@ object RholangOnlyDispatcher {
                                             ListChannelWithRandom,
                                             ListChannelWithRandom,
                                             TaggedContinuation],
-                         costAccountingAlg: CostAccountingAlg[M])(
+                         urnMap: Map[String, Par] = Map.empty)(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -73,7 +84,7 @@ object RholangOnlyDispatcher {
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
     dispatcher
   }
 }
@@ -87,19 +98,30 @@ class RholangAndScalaDispatcher[M[_]] private (
   val reducer: Reduce[M] = _reducer
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
-    continuation.taggedCont match {
-      case ParBody(parWithRand) =>
-        val env     = Dispatch.buildEnv(dataList)
-        val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-        reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
-      case ScalaBodyRef(ref) =>
-        _dispatchTable.get(ref) match {
-          case Some(f) => f(dataList)
-          case None    => s.raiseError(new Exception(s"dispatch: no function for $ref"))
-        }
-      case Empty =>
-        s.unit
-    }
+    for {
+      costAccountingAlg <- CostAccountingAlg(
+                            dataList
+                              .flatMap(_.cost)
+                              .map(CostAccount.fromProto(_))
+                              .toList
+                              .combineAll)
+      res <- continuation.taggedCont match {
+              case ParBody(parWithRand) =>
+                val env     = Dispatch.buildEnv(dataList)
+                val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
+                reducer.eval(parWithRand.body)(env,
+                                               Blake2b512Random.merge(randoms),
+                                               costAccountingAlg)
+              case ScalaBodyRef(ref) =>
+                _dispatchTable.get(ref) match {
+                  case Some(f) => f(dataList)
+                  case None    => s.raiseError(new Exception(s"dispatch: no function for $ref"))
+                }
+              case Empty =>
+                s.unit
+            }
+    } yield res
+
 }
 
 object RholangAndScalaDispatcher {
@@ -111,7 +133,7 @@ object RholangAndScalaDispatcher {
                          ListChannelWithRandom,
                          TaggedContinuation],
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      costAccountingAlg: CostAccountingAlg[M])(
+      urnMap: Map[String, Par])(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -127,7 +149,7 @@ object RholangAndScalaDispatcher {
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, costAccountingAlg)
+      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
     dispatcher
   }
 }

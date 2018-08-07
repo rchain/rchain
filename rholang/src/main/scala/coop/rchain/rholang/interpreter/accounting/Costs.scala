@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
-//TODO: Adjust the costs of operations
+//TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: BigInt) extends AnyVal {
   def *(other: Cost): Cost = Cost(value * other.value)
   def *(other: Int): Cost  = Cost(value * other)
@@ -31,11 +31,15 @@ trait Costs {
   final val MULTIPLICATION_COST: Cost = Cost(9)
   final val DIVISION_COST: Cost       = Cost(9)
 
+  final val STRING_APPEND_COST = Cost(3)
+
   // operations on collections
   // source: https://docs.scala-lang.org/overviews/collections/performance-characteristics.html
   final val LOOKUP_COST = Cost(3) // map/set lookup is eC
   final val REMOVE_COST = Cost(3) // map/set remove is eC
   final val ADD_COST    = Cost(3) // map/set add is eC
+
+  final val PREPEND_COST = Cost(2) // list prepend is C
 
   // decoding to bytes is linear with respect to the length of the string
   def hexToByteCost(str: String): Cost = Cost(str.size)
@@ -47,10 +51,11 @@ trait Costs {
       implicit comp: GeneratedMessageCompanion[T]): Cost =
     Cost(a.serializedSize)
 
-  //TODO: adjust the cost of the nth method call.
+  //TODO(mateusz.gorski): adjust the cost of the nth method call.
   def nthMethodCost(nth: Int): Cost = Cost(nth)
 
   final val METHOD_CALL_COST  = Cost(10)
+  final val OP_CALL_COST      = Cost(10)
   final val VAR_EVAL_COST     = Cost(10)
   final val SEND_EVAL_COST    = Cost(11)
   final val RECEIVE_EVAL_COST = Cost(11)

@@ -1,15 +1,11 @@
 package coop.rchain.roscala.ob
 
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import coop.rchain.roscala._
 import coop.rchain.roscala.Location._
+import coop.rchain.roscala._
 import coop.rchain.roscala.util.LockedMap
 import coop.rchain.roscala.util.syntax._
-
-import scala.collection.mutable
 
 /** Meta objects map keys to locations that point to values
   *
@@ -61,7 +57,7 @@ class Meta(val refCount: AtomicInteger, var extensible: Boolean) extends Ob {
   /**
     * Get value for `key` in `client`
     */
-  def get(client: Ob, key: Ob)(globalEnv: GlobalEnv): Ob = {
+  def get(client: Ob, key: Ob, globalEnv: GlobalEnv): Ob = {
     val lock = map.lock
 
     lock.readLock().withLock {
@@ -86,7 +82,7 @@ class Meta(val refCount: AtomicInteger, var extensible: Boolean) extends Ob {
     }
   }
 
-  def set(client: Ob, key: Ob, value: Ob, ctxt: Ctxt)(globalEnv: GlobalEnv): Ob = {
+  def set(client: Ob, key: Ob, value: Ob, ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
     val lock = map.lock
 
     lock.writeLock().withLock {
@@ -102,11 +98,11 @@ class Meta(val refCount: AtomicInteger, var extensible: Boolean) extends Ob {
     }
   }
 
-  def lookupObo(client: Ob, key: Ob)(globalEnv: GlobalEnv): Ob = {
-    val result = get(client, key)(globalEnv)
+  def lookupObo(client: Ob, key: Ob, globalEnv: GlobalEnv): Ob = {
+    val result = get(client, key, globalEnv)
 
     if (result == Absent)
-      client.parent.lookup(key)(globalEnv)
+      client.parent.lookup(key, globalEnv)
     else
       result
   }

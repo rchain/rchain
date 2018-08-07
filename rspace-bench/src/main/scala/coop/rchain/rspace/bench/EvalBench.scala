@@ -28,7 +28,7 @@ class EvalBench {
   def createTest(state: MVCEPPBenchState): Task[Vector[Throwable]] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholand term"))
     state.runtime.reducer
-      .inj(par)(state.rand)
+      .inj(par)(state.rand, state.costAccountAlg)
       .map(_ => state.runtime.readAndClearErrorVector())
   }
 

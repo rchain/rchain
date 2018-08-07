@@ -1,6 +1,7 @@
 package coop.rchain.casper.helper
 
-import cats._
+import cats.{Applicative, ApplicativeError, Id}
+import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
@@ -16,7 +17,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.connect.Connect.dispatch
+import coop.rchain.comm.rp.{Connect, HandleMessages}, HandleMessages.handle, Connect._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
@@ -27,6 +28,8 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
+import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.shared.Cell
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
@@ -50,6 +53,7 @@ class HashSetCasperTestNode(name: String,
   // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
+  implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
@@ -69,7 +73,7 @@ class HashSetCasperTestNode(name: String,
     casperPacketHandler[Id]
   )
 
-  def receive(): Unit = tle.receive(p => dispatch[Id](p, defaultTimeout))
+  def receive(): Unit = tle.receive(p => handle[Id](p, defaultTimeout))
 
   def tearDown(): Unit = {
     tearDownNode()

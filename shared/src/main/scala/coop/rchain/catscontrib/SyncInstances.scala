@@ -1,18 +1,15 @@
-package coop.rchain.node
+package coop.rchain.catscontrib
 
 import cats.data.EitherT
 import cats.effect.{ExitCase, Sync}
 import cats.{Applicative, FlatMap}
-import coop.rchain.comm.{CommError, UnknownCommError}
 import monix.eval.Task
 
-//TODO investigate if this can be extracted to shared, the problem is errors
-//ATM the project does not have a notion of shared base error which this could require
 object SyncInstances {
-  type CommErrT[F[_], A] = EitherT[F, CommError, A]
-  type Effect[A]         = CommErrT[Task, A]
 
-  def syncEffect: Sync[Effect] =
+  def syncEffect[E](toThrowable: E => Throwable,
+                    fromThrowable: Throwable => E): Sync[EitherT[Task, E, ?]] = {
+    type Effect[A] = EitherT[Task, E, A]
     new Sync[Effect] {
       def suspend[A](thunk: => Effect[A]): Effect[A] =
         EitherT(Task.defer(thunk.value))
@@ -24,7 +21,7 @@ object SyncInstances {
         implicitly[FlatMap[Effect]].tailRecM(a)(f)
 
       def raiseError[A](e: Throwable): Effect[A] =
-        EitherT.left(Task.pure(UnknownCommError(e.getMessage)))
+        EitherT.left(Task.pure(fromThrowable(e)))
 
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
@@ -42,8 +39,9 @@ object SyncInstances {
 
       def handleErrorWith[A](fa: Effect[A])(f: Throwable => Effect[A]): Effect[A] =
         EitherT(fa.value flatMap {
-          case Left(commError)        => f(new Exception(s"CommError: $commError")).value
-          case r: Right[CommError, A] => Task.pure(r)
+          case Left(e)        => f(toThrowable(e)).value
+          case r: Right[E, A] => Task.pure(r)
         })
     }
+  }
 }

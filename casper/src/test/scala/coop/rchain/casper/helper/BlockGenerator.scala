@@ -37,6 +37,9 @@ object BlockGenerator {
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
 
+      override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+        Monad[F].pure(idBs.find(p))
+
       override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
       override def close(): F[Unit] = Monad[F].pure(idBs.close())
     }
@@ -50,7 +53,7 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[Deploy] = Seq.empty[Deploy],
+      deploys: Seq[DeployCost] = Seq.empty[DeployCost],
       tsHash: ByteString = ByteString.EMPTY,
       tsLog: Seq[Event] = Seq.empty[Event],
       shardId: String = ""): F[BlockMessage] =
