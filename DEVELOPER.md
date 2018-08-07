@@ -44,6 +44,24 @@ sudo dnf install jflex
 sudo dnf install haskell-platform
 ```
 
+#### Development environment on ArchLinux
+You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
+```
+sudo pacman -S stack ghc # for building BNFC
+sudo pacman -S jdk8-openjdk sbt libsodium
+trizen -S jflex
+```
+
+#### Building BNFC with [`stack`](https://docs.haskellstack.org)
+```
+git clone https://github.com/BNFC/bnfc
+cd bnfc
+stack init
+stack install
+cd -
+export PATH="$HOME/.local/bin:$HOME"
+```
+
 #### Building and running
 Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
 
