@@ -49,7 +49,7 @@ object CommUtil {
     } yield ()
   }
 
-  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time](
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {

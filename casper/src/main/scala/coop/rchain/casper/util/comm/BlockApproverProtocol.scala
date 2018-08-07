@@ -40,7 +40,7 @@ class BlockApproverProtocol[
 
   def unapprovedBlockPacketHandler(peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
-      .unlift(BlockApproverProtocol.packetToUnpprovedBlock)
+      .unlift(BlockApproverProtocol.packetToUnapprovedBlock)
       .andThen {
         case u: UnapprovedBlock =>
           if (u.candidate.contains(expectedCandidate))
@@ -57,7 +57,7 @@ class BlockApproverProtocol[
 }
 
 object BlockApproverProtocol {
-  def packetToUnpprovedBlock(msg: Packet): Option[UnapprovedBlock] =
+  def packetToUnapprovedBlock(msg: Packet): Option[UnapprovedBlock] =
     if (msg.typeId == transport.UnapprovedBlock.id)
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
