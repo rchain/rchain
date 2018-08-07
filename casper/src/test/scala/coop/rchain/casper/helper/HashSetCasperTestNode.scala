@@ -59,7 +59,7 @@ class HashSetCasperTestNode(name: String,
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519", genesis.shardId)
 
   implicit val casperEff =
     MultiParentCasper

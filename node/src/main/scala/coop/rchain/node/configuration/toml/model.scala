@@ -43,5 +43,6 @@ case class Validators(
     publicKey: Option[String],
     privateKey: Option[String],
     sigAlgorithm: Option[String],
-    walletsFile: Option[String]
+    walletsFile: Option[String],
+    shardId: Option[String]
 )

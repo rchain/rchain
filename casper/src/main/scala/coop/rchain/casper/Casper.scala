@@ -293,7 +293,7 @@ sealed abstract class MultiParentCasperInstances {
        *  -Else None
        */
       def createBlock: F[Option[BlockMessage]] = validatorId match {
-        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
+        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm, shardId)) =>
           for {
             orderedHeads   <- estimator
             dag            <- blockDag
@@ -302,7 +302,7 @@ sealed abstract class MultiParentCasperInstances {
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
             proposal <- if (r.nonEmpty || p.length > 1) {
-                         createProposal(p, r, justifications)
+                         createProposal(p, r, justifications, shardId)
                        } else {
                          none[BlockMessage].pure[F]
                        }
@@ -329,7 +329,8 @@ sealed abstract class MultiParentCasperInstances {
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
-                                 justifications: Seq[Justification]): F[Option[BlockMessage]] =
+                                 justifications: Seq[Justification],
+                                 shardId: String): F[Option[BlockMessage]] =
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
@@ -355,7 +356,7 @@ sealed abstract class MultiParentCasperInstances {
             .withNewCode(deployWithCost)
             .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
-          block  = unsignedBlockProto(body, header, justifications)
+          block  = unsignedBlockProto(body, header, justifications, shardId)
         } yield Some(block)
 
       def blockDag: F[BlockDag] = Capture[F].capture {

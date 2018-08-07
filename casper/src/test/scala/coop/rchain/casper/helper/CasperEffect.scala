@@ -54,7 +54,7 @@ object CasperEffect {
 
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-    val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
+    val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519", genesis.shardId)
 
     val casperTask = for {
       _        <- blockStoreEff.put(genesis.blockHash, genesis)

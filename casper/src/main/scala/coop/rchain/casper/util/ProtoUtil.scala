@@ -214,7 +214,8 @@ object ProtoUtil {
 
   def unsignedBlockProto(body: Body,
                          header: Header,
-                         justifications: Seq[Justification]): BlockMessage = {
+                         justifications: Seq[Justification],
+                         shardId: String): BlockMessage = {
     val hash = hashUnsignedBlock(header, justifications)
 
     BlockMessage()
@@ -222,6 +223,7 @@ object ProtoUtil {
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
+      .withShardId(shardId)
   }
 
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {

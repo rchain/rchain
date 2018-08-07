@@ -109,7 +109,8 @@ sealed abstract class MultiParentCasperConstructorInstances {
                                              conf.numValidators,
                                              conf.genesisPath,
                                              conf.walletsFile,
-                                             runtimeManager)
+                                             runtimeManager,
+                                             conf.shardId)
         candidate   = ApprovedBlockCandidate(block = Some(genesis), requiredSigs = 0)
         approved    = ApprovedBlock(candidate = Some(candidate)) //TODO: do actual approval protocol
         validatorId <- ValidatorIdentity.fromConfig[G](conf)
