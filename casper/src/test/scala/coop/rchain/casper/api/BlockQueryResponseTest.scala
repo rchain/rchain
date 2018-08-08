@@ -9,6 +9,9 @@ import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockStoreFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -71,6 +74,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
+      def getRuntimeManager: F[Option[RuntimeManager]]                   = none[RuntimeManager].pure[F]
     }
 
   // TODO: Test tsCheckpoint:

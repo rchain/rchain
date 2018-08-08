@@ -38,6 +38,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.models.Par
 import coop.rchain.rspace.{trace, Checkpoint}
 import coop.rchain.rspace.trace.{COMM, Event}
 import coop.rchain.rspace.trace.Event.codecLog
@@ -63,6 +64,8 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
+  // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
+  def getRuntimeManager: F[Option[RuntimeManager]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -85,6 +88,7 @@ sealed abstract class MultiParentCasperInstances {
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: ByteString): F[String]                   = "".pure[F]
+      def getRuntimeManager: F[Option[RuntimeManager]]                   = none[RuntimeManager].pure[F]
     }
 
   def hashSetCasper[
@@ -720,5 +724,7 @@ sealed abstract class MultiParentCasperInstances {
                     }) *> reAttemptBuffer
               }
         } yield ()
+
+      def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
     }
 }

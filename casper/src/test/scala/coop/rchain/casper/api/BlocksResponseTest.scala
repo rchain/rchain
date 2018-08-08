@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -85,6 +86,7 @@ class BlocksResponseTest
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
       def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
+      def getRuntimeManager: F[Option[RuntimeManager]]                   = none[RuntimeManager].pure[F]
     }
   implicit val casperEffect = testCasper[Id]
   implicit val logEff       = new LogStub[Id]
