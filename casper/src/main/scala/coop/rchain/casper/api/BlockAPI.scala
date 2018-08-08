@@ -25,16 +25,16 @@ object BlockAPI {
           )
           for {
             _ <- MultiParentCasper[F].deploy(deploy)
-          } yield DeployServiceResponse(true, "Success!")
+          } yield DeployServiceResponse(success = true, "Success!")
 
         case Left(err) =>
-          DeployServiceResponse(false, s"Error in parsing term: \n$err").pure[F]
+          DeployServiceResponse(success = false, s"Error in parsing term: \n$err").pure[F]
       }
 
     MultiParentCasperConstructor
       .withCasper[F, DeployServiceResponse](
         casperDeploy(_),
-        DeployServiceResponse(false, s"Error: Casper instance not available"))
+        DeployServiceResponse(success = false, s"Error: Casper instance not available"))
   }
 
   def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](
@@ -44,7 +44,7 @@ object BlockAPI {
         for {
           status <- casper.addBlock(b)
         } yield addResponse(status.some, b.some),
-      DeployServiceResponse(false, "Error: Casper instance not available")
+      DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
   def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[DeployServiceResponse] =
@@ -52,9 +52,9 @@ object BlockAPI {
       casper =>
         for {
           maybeBlock <- casper.createBlock
-          status     <- maybeBlock.traverse(casper.addBlock(_))
+          status     <- maybeBlock.traverse(casper.addBlock)
         } yield addResponse(status, maybeBlock),
-      DeployServiceResponse(false, "Error: Casper instance not available")
+      DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
@@ -84,13 +84,12 @@ object BlockAPI {
         dag        <- MultiParentCasper[F].blockDag
         maybeBlock <- getBlock[F](q, dag)
         blockQueryResponse <- maybeBlock match {
-                               case Some(block) => {
+                               case Some(block) =>
                                  for {
                                    blockInfo <- getBlockInfo[F](block)
                                  } yield
                                    BlockQueryResponse(status = "Success",
                                                       blockInfo = Some(blockInfo))
-                               }
                                case None =>
                                  BlockQueryResponse(
                                    status = s"Error: Failure to find block with hash ${q.hash}")
@@ -151,15 +150,15 @@ object BlockAPI {
   private def addResponse(status: Option[BlockStatus],
                           maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {
     case Some(_: InvalidBlock) =>
-      DeployServiceResponse(false, s"Failure! Invalid block: $status")
+      DeployServiceResponse(success = false, s"Failure! Invalid block: $status")
     case Some(_: ValidBlock) =>
       val hash = PrettyPrinter.buildString(maybeBlock.get.blockHash)
-      DeployServiceResponse(true, s"Success! Block ${hash} created and added.")
+      DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
     case Some(BlockException(ex)) =>
-      DeployServiceResponse(false, s"Error during block processing: $ex")
+      DeployServiceResponse(success = false, s"Error during block processing: $ex")
     case Some(Processing) =>
-      DeployServiceResponse(false,
+      DeployServiceResponse(success = false,
                             "No action taken since other thread is already processing the block.")
-    case None => DeployServiceResponse(false, "No block was created.")
+    case None => DeployServiceResponse(success = false, "No block was created.")
   }
 }
