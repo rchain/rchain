@@ -26,7 +26,7 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 	-v "$PROJECT_ROOT_DIR":/app \
     --name ${BUILDER_DOCKER_NAME} ubuntu:16.04
 # Copy and run build and push docker script in docker builder container from above.
-docker cp rnode-docker-build-script.sh ${BUILDER_DOCKER_NAME}:/ 
+docker cp "$(dirname "$0")"/rnode-docker-build-script.sh ${BUILDER_DOCKER_NAME}:/ 
 docker exec -it ${BUILDER_DOCKER_NAME} bash -c "./rnode-docker-build-script.sh"
 
 # Clean Up
