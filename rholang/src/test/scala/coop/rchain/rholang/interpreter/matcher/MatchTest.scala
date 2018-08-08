@@ -8,8 +8,10 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort.Sortable
+import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import org.scalatest._
+import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
@@ -17,15 +19,35 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
-  def assertSpatialMatch[T: Sortable, P: Sortable](
+  def assertSpatialMatch[T <: GeneratedMessage, P <: GeneratedMessage](
       target: T,
       pattern: P,
-      expected: Option[FreeMap])(implicit sm: SpatialMatcher[T, P]): Assertion = {
+      expectedCaptures: Option[FreeMap])(implicit sm: SpatialMatcher[T, P],
+                                         ts: Sortable[T],
+                                         ps: Sortable[P]): Assertion = {
+    println(explainMatch(target, pattern, expectedCaptures))
     assertSorted(target, "target")
     assertSorted(pattern, "pattern")
-    expected.foreach(_.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
+    expectedCaptures.foreach(
+      _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
     val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
-    assert(result == expected)
+    assert(result == expectedCaptures)
+  }
+
+  private def explainMatch[P <: GeneratedMessage, T <: GeneratedMessage](
+      target: T,
+      pattern: P,
+      expectedCaptures: Option[FreeMap]): String = {
+    val printer        = PrettyPrinter()
+    val targetString   = printer.buildString(target)
+    val patternString  = printer.buildString(pattern)
+    val capturesString = expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
+
+    s"""
+       |     Matching:  $patternString
+       |           to:  $targetString
+       | should yield:  $capturesString
+       |""".stripMargin
   }
 
   private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
