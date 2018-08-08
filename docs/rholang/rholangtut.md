@@ -13,6 +13,58 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 * __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
 * __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
 
+## Summary of the language constructs
+Rholang has two kinds of values: processes and names.
+
+### Names
+A name represents a communication channel. You can sent messages to a name or you can receive a message from a name. 
+
+The names are created with the construct
+ 
+    1 new someName in {
+    2 //... code using someName
+    3 }
+
+In the above example, the name `someName` is private. By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  
+
+If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  
+
+We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
+
+Receiving messages over a channel is done using the `for` construction
+
+    1 for( x <- channel1, y <- channel2) {
+    2 ...
+    3 }
+
+### Processes
+In Rholang everything is a process. Values like strings, booleans or numbers are also processes. 
+The processes can be aggregated using the operator '|'. Below are a few examples:
+
+    1 1
+    2 true
+    3 1 + 1
+    4 new myName in {...}
+    5 someName ! ("hello")
+    6 for( x <- someChannel) { ... }
+    7 p | q
+
+### Primitive values
+Rholang currently supports integers, strings, booleans, tuples, lists, sets, maps
+
+### Expressions
+The expressions are special because they are evaluated before sending the result to a channel. 
+
+The following operators are used for building expressions: 
+
+#### Arithmetic operators
+The supported arithmetic operators are: `+`, `-`, `/`, `*`
+
+#### Relational operators
+The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`
+
+#### Logical operators
+The supported logical operators are: `and`, `or`, `not`
 ## Sending and receiving data
 
     1 new HelloWorld, stdout(`rho:io:stdout`) in {
@@ -22,7 +74,7 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
     5   }
     6 }
 
-1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
+1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  
 
 2) Every name is of the form `@P`, where `P` is a rholang process.  The `!` production takes a name `n` on its left and a process `P` on its right, then sends `@P` over the channel named `n`.  Line 2 forms the name `@"Hello, world"` and sends it on the channel whose name is stored in the variable `HelloWorld`.
 
