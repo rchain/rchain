@@ -69,7 +69,7 @@ message CapturedResultsAcrossBlocksResponse {
 }
 
 message CapturedResultWithBlockInfo {
-  string capturedResult = 1;
+  repeated string capturedResult = 1;
   BlockInfo blocks = 2;
 }
 
