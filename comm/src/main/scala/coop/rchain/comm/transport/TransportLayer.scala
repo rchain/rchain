@@ -8,11 +8,9 @@ import coop.rchain.comm.{PeerNode, ProtocolHelper}
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
+// TODO TransportLayer should be parametized by type of messages it is able to send
 trait TransportLayer[F[_]] {
-  // TODO return PeerNode, do we still neeed it?
-  def local: F[PeerNode]
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
-  // TODO remove ProtocolMessage, use raw messages from protocol
   def send(peer: PeerNode, msg: Protocol): F[Unit]
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit]
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
@@ -34,9 +32,6 @@ sealed abstract class TransportLayerInstances {
   implicit def eitherTTransportLayer[F[_]: Monad: Log](
       implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, CommError, ?]] =
     new TransportLayer[EitherT[F, CommError, ?]] {
-
-      def local: EitherT[F, CommError, PeerNode] =
-        EitherT.liftF(evF.local)
 
       def roundTrip(peer: PeerNode,
                     msg: Protocol,

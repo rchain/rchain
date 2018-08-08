@@ -27,9 +27,10 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val timeEff           = new LogicalTime[Effect]
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
-  implicit val transportLayerEff = new TransportLayerStub[Effect](src)
+  implicit val transportLayerEff = new TransportLayerStub[Effect]
   implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
   implicit val connectionsCell   = Cell.const[Effect, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()

@@ -27,8 +27,8 @@ package object effects {
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
-  ): NodeDiscovery[Task] =
-    new KademliaNodeDiscovery[Task](src, defaultTimeout)
+  ): Task[NodeDiscovery[Task]] =
+    KademliaNodeDiscovery.create[Task, Task](src, defaultTimeout)
 
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
@@ -67,11 +67,11 @@ package object effects {
         } yield r
     }
 
-  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
+  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       implicit scheduler: Scheduler,
       connections: TcpTransportLayer.TransportCell[Task],
       log: Log[Task]) =
-    new TcpTransportLayer(host, port, cert, key)(src)
+    new TcpTransportLayer(host, port, cert, key)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 

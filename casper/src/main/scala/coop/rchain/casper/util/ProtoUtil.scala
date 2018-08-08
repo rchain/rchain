@@ -229,12 +229,16 @@ object ProtoUtil {
     hashByteArrays(items: _*)
   }
 
-  def hashSignedBlock(header: Header, sender: ByteString, sigAlgorithm: String, seqNum: Int, extraBytes: ByteString) =
+  def hashSignedBlock(header: Header,
+                      sender: ByteString,
+                      sigAlgorithm: String,
+                      seqNum: Int,
+                      extraBytes: ByteString) =
     hashByteArrays(header.toByteArray,
                    sender.toByteArray,
                    StringValue.of(sigAlgorithm).toByteArray,
                    Int32Value.of(seqNum).toByteArray,
-                   extraBytes.toByteArray )
+                   extraBytes.toByteArray)
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,

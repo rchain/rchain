@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.comm
 
 import com.google.protobuf.ByteString
-
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import cats.{Applicative, Monad}
 import cats.implicits._
 
@@ -26,7 +26,7 @@ import scala.util.Try
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
 class BlockApproverProtocol[
-    F[_]: Capture: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+    F[_]: Capture: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
     validatorId: ValidatorIdentity,
     block: BlockMessage,
     requiredSigs: Int) {
@@ -45,7 +45,7 @@ class BlockApproverProtocol[
         case u: UnapprovedBlock =>
           if (u.candidate.contains(expectedCandidate))
             for {
-              local <- TransportLayer[F].local
+              local <- RPConfAsk[F].reader(_.local)
               msg   = packet(local, transport.BlockApproval, serializedApproval)
               send  <- TransportLayer[F].send(peer, msg)
               _ <- Log[F].info(

@@ -59,6 +59,7 @@ class HashSetCasperTestNode(name: String,
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
   implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk         = createRPConfAsk[Id](local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)

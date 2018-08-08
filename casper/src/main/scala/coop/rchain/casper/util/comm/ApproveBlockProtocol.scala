@@ -1,5 +1,8 @@
 package coop.rchain.casper.util.comm
 
+import coop.rchain.comm.rp.Connect.RPConfAsk
+import com.google.protobuf.ByteString
+
 import cats.Monad
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Sync, Timer}
@@ -22,7 +25,8 @@ import scala.util.Try
   * Bootstrap side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
-class ApproveBlockProtocol[F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: Timer] private (
+class ApproveBlockProtocol[
+    F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: Timer: RPConfAsk] private (
     val block: BlockMessage,
     val requiredSigs: Int,
     val start: Long,
@@ -91,7 +95,8 @@ object ApproveBlockProtocol {
 
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
-  def create[F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: Timer: Concurrent](
+  def create[
+      F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: Timer: Concurrent: RPConfAsk](
       block: BlockMessage,
       requiredSigs: Int,
       duration: FiniteDuration,

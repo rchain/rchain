@@ -11,6 +11,14 @@ import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
+object KademliaNodeDiscovery {
+  def create[G[_]: Applicative,
+             F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
+      src: PeerNode,
+      defaultTimeout: FiniteDuration): G[KademliaNodeDiscovery[F]] =
+    (new KademliaNodeDiscovery[F](src, defaultTimeout)).pure[G]
+}
+
 class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
     src: PeerNode,
     timeout: FiniteDuration)

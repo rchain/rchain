@@ -170,9 +170,9 @@ object ApproveBlockProtocolTest {
     implicit val nodeDiscovery  = new NodeDiscoveryStub[Task]()
     implicit val nopLog         = new NOPLog[Task]()
     val src: PeerNode           = peerNode("src", 40400)
-    implicit val transportLayer = new TransportLayerStub[Task](src)
-
-    implicit val ctx = monix.execution.Scheduler.Implicits.global
+    implicit val transportLayer = new TransportLayerStub[Task]
+    implicit val rpConfAsk      = createRPConfAsk[Task](src)
+    implicit val ctx            = monix.execution.Scheduler.Implicits.global
 
     val (sk, pk) = Ed25519.newKeyPair
     val genesis  = HashSetCasperTest.createGenesis(Seq(pk))

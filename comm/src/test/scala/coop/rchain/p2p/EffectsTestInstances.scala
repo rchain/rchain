@@ -5,6 +5,7 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import cats._
 import cats.implicits._
 
+import coop.rchain.comm.rp._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
@@ -52,7 +53,13 @@ object EffectsTestInstances {
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 
-  class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
+  def createRPConfAsk[F[_]: Applicative](
+      local: PeerNode,
+      defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
+      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)) =
+    new ConstApplicativeAsk[F, RPConf](RPConf(local, defaultTimeout, clearConnections))
+
+  class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Protocol]
     var reqresp: Option[Responses] = None
@@ -72,7 +79,6 @@ object EffectsTestInstances {
         reqresp.get.apply(peer).apply(msg)
       }
 
-    def local: F[PeerNode] = src.pure[F]
     def send(peer: PeerNode, msg: Protocol): F[Unit] =
       Capture[F].capture {
         requests = requests :+ Request(peer, msg)

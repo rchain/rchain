@@ -45,7 +45,7 @@ object Connect {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {
-        local   <- TransportLayer[F].local
+        local   <- RPConfAsk[F].reader(_.local)
         timeout <- RPConfAsk[F].reader(_.defaultTimeout)
         hb      = heartbeat(local)
         res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
@@ -70,7 +70,7 @@ object Connect {
   }
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       defaultTimeout: FiniteDuration): Int => F[Int] =
     (lastCount: Int) =>
       for {
@@ -87,7 +87,7 @@ object Connect {
       } yield thisCount
 
   def connectToBootstrap[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       bootstrap: PeerNode,
       maxNumOfAttempts: Int = 5,
       defaultTimeout: FiniteDuration): F[Unit] = {
@@ -120,7 +120,7 @@ object Connect {
   }
 
   def connect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
       timeout: FiniteDuration): F[Unit] =
     for {
@@ -129,7 +129,7 @@ object Connect {
       _        <- Log[F].debug(s"Connecting to $peerAddr")
       _        <- Metrics[F].incrementCounter("connects")
       _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
-      local    <- TransportLayer[F].local
+      local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
       phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
