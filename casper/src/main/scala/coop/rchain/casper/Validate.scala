@@ -77,11 +77,7 @@ object Validate {
     signatureVerifiers
       .get(b.sigAlgorithm)
       .map(verify => {
-        val justificationHash = ProtoUtil.protoSeqHash(b.justifications)
-        val sigData =
-          Blake2b256.hash(justificationHash.toByteArray ++ b.blockHash.toByteArray)
-
-        Try(verify(sigData, b.sig.toByteArray, b.sender.toByteArray)) match {
+        Try(verify(b.blockHash.toByteArray, b.sig.toByteArray, b.sender.toByteArray)) match {
           case Success(true) => true.pure[F]
           case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
         }

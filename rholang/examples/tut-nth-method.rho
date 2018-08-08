@@ -1,4 +1,6 @@
 // nth method takes as input index of an list/tuple
 // extracts that element from the collection
 // element of the list can by any Par
-@"stdout"!([1,2,3].nth(1))
+new stdout(`rho:io:stdout`) in {
+  stdout!([1,2,3].nth(1))
+}

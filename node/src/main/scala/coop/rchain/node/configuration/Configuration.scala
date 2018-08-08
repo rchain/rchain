@@ -41,9 +41,9 @@ object Configuration {
   private val DefaultValidatorSigAlgorithm      = "ed25519"
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
-
+  private val DefaultMaxNumOfConnections        = 500
   private val DefaultBootstrapServer: PeerNode = PeerNode
-    .parse("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@52.119.8.109:40400")
+    .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
     .get
 
@@ -88,7 +88,8 @@ object Configuration {
             DefaultBootstrapServer,
             DefaultStandalone,
             dataDir,
-            DefaultMapSize
+            DefaultMapSize,
+            DefaultMaxNumOfConnections
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -125,13 +126,15 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      => Deploy(options.deploy.location())
-      case Some(options.deployDemo)  => DeployDemo
-      case Some(options.propose)     => Propose
-      case Some(options.showBlock)   => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks)  => ShowBlocks
-      case Some(options.run)         => Run
-      case _                         => Help
+      case Some(options.deploy) =>
+        import options.deploy._
+        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+      case Some(options.deployDemo) => DeployDemo
+      case Some(options.propose)    => Propose
+      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.run)        => Run
+      case _                        => Help
     }
 
     import commandline.Options._
@@ -154,7 +157,7 @@ object Configuration {
 
     // Server
     val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(_.run.httpPort, _ => None, DefaultHttPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val metricsPort: Int =
       get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
@@ -189,6 +192,9 @@ object Configuration {
                                     _.validators.flatMap(_.sigAlgorithm),
                                     DefaultValidatorSigAlgorithm)
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val maxNumOfConnections = get(_.run.maxNumOfConnections,
+                                  _.server.flatMap(_.maxNumOfConnections),
+                                  DefaultMaxNumOfConnections)
 
     val server = Server(
       host,
@@ -200,7 +206,8 @@ object Configuration {
       bootstrap,
       standalone,
       dataDir,
-      mapSize
+      mapSize,
+      maxNumOfConnections
     )
     val grpcServer = GrpcServer(
       grpcHost,
@@ -213,6 +220,7 @@ object Configuration {
       certificate.isDefined,
       key.isDefined
     )
+
     val casper =
       CasperConf(
         validatorPublicKey,
@@ -246,13 +254,15 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      => Deploy(options.deploy.location())
-      case Some(options.deployDemo)  => DeployDemo
-      case Some(options.propose)     => Propose
-      case Some(options.showBlock)   => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks)  => ShowBlocks
-      case Some(options.run)         => Run
-      case _                         => Help
+      case Some(options.deploy) =>
+        import options.deploy._
+        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+      case Some(options.deployDemo) => DeployDemo
+      case Some(options.propose)    => Propose
+      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
+      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.run)        => Run
+      case _                        => Help
     }
 }
 

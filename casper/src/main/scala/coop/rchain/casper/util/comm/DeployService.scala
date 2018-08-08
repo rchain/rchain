@@ -7,19 +7,16 @@ import cats.implicits._
 
 import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployServiceGrpc, DeployString}
+import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployData, DeployServiceGrpc}
 
 import monix.eval.Task
 
 trait DeployService[F[_]] {
-  def deploy(d: DeployString): F[(Boolean, String)]
-  //Attempt to create a new block. Note: block is
-  //returned UNSIGNED so it is up to the client to
-  //add the appropriate values of the sender, sig and sigAlgorithm fields.
-  def createBlock(): F[Option[BlockMessage]]
+  def deploy(d: DeployData): F[(Boolean, String)]
+  def createBlock(): F[(Boolean, String)] //create block and add to Casper internal state
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
-  def addBlock(b: BlockMessage): F[(Boolean, String)] //add a block to Casper internal state
+  def addBlock(b: BlockMessage): F[(Boolean, String)]
 }
 
 object DeployService {
@@ -32,14 +29,15 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
   private val blockingStub = DeployServiceGrpc.blockingStub(channel)
 
-  def deploy(d: DeployString): Task[(Boolean, String)] = Task.delay {
+  def deploy(d: DeployData): Task[(Boolean, String)] = Task.delay {
     val response = blockingStub.doDeploy(d)
     (response.success, response.message)
   }
 
-  def createBlock(): Task[Option[BlockMessage]] =
+  def createBlock(): Task[(Boolean, String)] =
     Task.delay {
-      blockingStub.createBlock(Empty()).block
+      val response = blockingStub.createBlock(Empty())
+      (response.success, response.message)
     }
 
   def showBlock(q: BlockQuery): Task[String] = Task.delay {

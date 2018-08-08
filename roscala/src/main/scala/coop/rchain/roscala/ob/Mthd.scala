@@ -17,7 +17,7 @@ class Mthd(code: Code, id: Ob, source: Ob) extends Ob {
     ctxt.rslt = Niv
     ctxt.pc = 0
 
-    state.strandPool.prepend(ctxt)
+    ctxt.scheduleStrand(state)
     Suspended
   }
 

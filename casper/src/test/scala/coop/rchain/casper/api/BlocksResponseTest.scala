@@ -1,21 +1,15 @@
 package coop.rchain.casper.api
 
 import cats._
-import cats.data.State
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.catscontrib.Catscontrib
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -89,6 +83,7 @@ class BlocksResponseTest
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
       def blockDag: F[BlockDag]                                          = chain.pure[F]
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
+      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
       def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
     }
   implicit val casperEffect = testCasper[Id]

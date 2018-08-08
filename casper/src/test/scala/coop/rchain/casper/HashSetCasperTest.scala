@@ -1,10 +1,12 @@
 package coop.rchain.casper
 
-import cats.Id
+import cats.{ApplicativeError, Id}
+import cats.data.EitherT
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -13,12 +15,14 @@ import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
-import coop.rchain.models.PCost
+import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.shared.PathOps.RichPath
@@ -29,9 +33,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   import HashSetCasperTest._
 
-  val (otherSk, _)                = Ed25519.newKeyPair
-  val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  val genesis                     = createGenesis(validators)
+  private val (otherSk, _)                = Ed25519.newKeyPair
+  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val genesis                     = createGenesis(validators)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -45,6 +49,31 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     logEff.infos.size should be(1)
     logEff.infos.head.contains("CASPER: Received Deploy") should be(true)
     node.tearDown()
+  }
+
+  it should "not allow multiple threads to process the same block" in {
+    val scheduler            = Scheduler.fixedPool("three-threads", 3)
+    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
+
+    val deploy = ProtoUtil.basicDeploy(0)
+    val testProgram = for {
+      casper <- casperEff
+      _      <- casper.deploy(deploy)
+      block  <- casper.createBlock.map(_.get)
+      result <- EitherT(
+                 Task.racePair(casper.addBlock(block).value, casper.addBlock(block).value).flatMap {
+                   case Left((statusA, running)) =>
+                     running.join.map((statusA, _).tupled)
+
+                   case Right((running, statusB)) =>
+                     running.join.map((_, statusB).tupled)
+                 })
+    } yield result
+    val threadStatuses: (BlockStatus, BlockStatus) =
+      new TaskOps(testProgram.value)(scheduler).unsafeRunSync.right.get
+
+    threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
+    cleanUp()
   }
 
   it should "create blocks based on deploys" in {
@@ -112,6 +141,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     ProtoUtil.parents(signedBlock2) should be(Seq(signedBlock1.blockHash))
     MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock2))
     storage.contains("!(12)") should be(true)
+    node.tearDown()
+  }
+
+  it should "allow multiple deploys in a single block" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node._
+
+    val term    = InterpreterUtil.mkTerm(" for(@x <- @0){ @0!(x) } | @0!(0) ").right.get
+    val deploys = ProtoUtil.termDeploy(term) #:: ProtoUtil.termDeploy(term) #:: Stream.empty[Deploy]
+    deploys.foreach(MultiParentCasper[Id].deploy(_))
+    val block = MultiParentCasper[Id].createBlock.get
+    val _     = MultiParentCasper[Id].addBlock(block)
+
+    MultiParentCasper[Id].contains(block) shouldBe true
     node.tearDown()
   }
 
@@ -411,6 +454,64 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
+  it should "increment last finalized block as appropriate in round robin" in {
+    val stake                 = 10
+    val equalBonds            = validators.zipWithIndex.map { case (v, _) => v -> stake }.toMap
+    val genesisWithEqualBonds = buildGenesis(equalBonds)
+    val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
+    val deploys               = (0 to 7).map(i => ProtoUtil.basicDeploy(i))
+
+    val Some(block1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block1)
+    nodes(1).receive()
+    nodes(2).receive()
+
+    val Some(block2) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    nodes(1).casperEff.addBlock(block2)
+    nodes(0).receive()
+    nodes(2).receive()
+
+    val Some(block3) = nodes(2).casperEff.deploy(deploys(2)) *> nodes(2).casperEff.createBlock
+    nodes(2).casperEff.addBlock(block3)
+    nodes(0).receive()
+    nodes(1).receive()
+
+    val Some(block4) = nodes(0).casperEff.deploy(deploys(3)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block4)
+    nodes(1).receive()
+    nodes(2).receive()
+
+    val Some(block5) = nodes(1).casperEff.deploy(deploys(4)) *> nodes(1).casperEff.createBlock
+    nodes(1).casperEff.addBlock(block5)
+    nodes(0).receive()
+    nodes(2).receive()
+
+    nodes(0).casperEff.lastFinalizedBlock should be(genesisWithEqualBonds)
+
+    val Some(block6) = nodes(2).casperEff.deploy(deploys(5)) *> nodes(2).casperEff.createBlock
+    nodes(2).casperEff.addBlock(block6)
+    nodes(0).receive()
+    nodes(1).receive()
+
+    nodes(0).casperEff.lastFinalizedBlock should be(block1)
+
+    val Some(block7) = nodes(0).casperEff.deploy(deploys(6)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block7)
+    nodes(1).receive()
+    nodes(2).receive()
+
+    nodes(0).casperEff.lastFinalizedBlock should be(block2)
+
+    val Some(block8) = nodes(1).casperEff.deploy(deploys(7)) *> nodes(1).casperEff.createBlock
+    nodes(1).casperEff.addBlock(block8)
+    nodes(0).receive()
+    nodes(2).receive()
+
+    nodes(0).casperEff.lastFinalizedBlock should be(block3)
+
+    nodes.foreach(_.tearDown())
+  }
+
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
                                                  deploys: immutable.IndexedSeq[DeployCost],
                                                  signedInvalidBlock: BlockMessage) = {
@@ -450,7 +551,11 @@ object HashSetCasperTest {
   }
 
   def createGenesis(validators: Seq[Array[Byte]]): BlockMessage = {
-    val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+    val bonds = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+    buildGenesis(bonds)
+  }
+
+  def buildGenesis(bonds: Map[Array[Byte], Int]): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
@@ -464,7 +569,6 @@ object HashSetCasperTest {
       emptyStateHash,
       runtimeManager)
     activeRuntime.close()
-
     genesis
   }
 }

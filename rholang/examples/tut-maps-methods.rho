@@ -1,17 +1,19 @@
 // all methods modifying the underlying collection return new Map
 // prints 1
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.get("one")) |
-// if element is not present in the map will return Nil -- prints Nil
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.get("four")) |
-// prints false
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.contains("four")) |
-// prints true
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.contains("three")) |
-// prints @{{"three" : 3, "two" : 2}}
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.delete("one")) |
-// doesn't change the collection, prints @{{"one" : 1, "three" : 3, "two" : 2}}
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.delete("four")) |
-// returns new map which is a result of subtracting elements of second map from the base map
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.diff({"one" : 1, "four": 4})) |
-// merges two maps -- returns @{{"four" : 4, "one" : 1, "three" : 3, "two" : 2}}
-@"stdout"!({"one" : 1, "two" : 2, "three" : 3}.union({"one" : 1, "four": 4}))
+new stdout(`rho:io:stdout`) in {
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.get("one")) |
+  // if element is not present in the map will return Nil -- prints Nil
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.get("four")) |
+  // prints false
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.contains("four")) |
+  // prints true
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.contains("three")) |
+  // prints @{{"three" : 3, "two" : 2}}
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.delete("one")) |
+  // doesn't change the collection, prints @{{"one" : 1, "three" : 3, "two" : 2}}
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.delete("four")) |
+  // returns new map which is a result of subtracting elements of second map from the base map
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.diff({"one" : 1, "four": 4})) |
+  // merges two maps -- returns @{{"four" : 4, "one" : 1, "three" : 3, "two" : 2}}
+  stdout!({"one" : 1, "two" : 2, "three" : 3}.union({"one" : 1, "four": 4}))
+}

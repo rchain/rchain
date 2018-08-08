@@ -30,8 +30,8 @@ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89
 sudo apt-get update
 sudo apt-get install sbt
 
-sudo apt-get libsodium18
-sudo apt-get jflex
+sudo apt-get install libsodium23
+sudo apt-get install jflex
 sudo apt-get install haskell-platform
 ```
 
@@ -42,6 +42,24 @@ sudo dnf --enablerepo=bintray--sbt-rpm install sbt
 sudo dnf install libsodium
 sudo dnf install jflex
 sudo dnf install haskell-platform
+```
+
+#### Development environment on ArchLinux
+You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
+```
+sudo pacman -S stack ghc # for building BNFC
+sudo pacman -S jdk8-openjdk sbt libsodium
+trizen -S jflex
+```
+
+#### Building BNFC with [`stack`](https://docs.haskellstack.org)
+```
+git clone https://github.com/BNFC/bnfc
+cd bnfc
+stack init
+stack install
+cd -
+export PATH="$HOME/.local/bin:$HOME"
 ```
 
 #### Building and running

@@ -11,7 +11,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.{GPrivate => _, _}
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoContext
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors._
@@ -94,7 +94,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val result = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-      val eqExpr       = EEq(GPrivate("private_name"), GPrivate("private_name"))
+      val eqExpr       = EEq(GPrivateBuilder("private_name"), GPrivateBuilder("private_name"))
       implicit val env = Env[Par]()
       val resultTask   = reducer.evalExpr(eqExpr)
       Await.result(resultTask.runAsync, 3.seconds)
@@ -689,7 +689,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )),
         BitSet()
       )
-      implicit val env = Env.makeEnv[Par](GPrivate("one"), GPrivate("zero"))
+      implicit val env = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val matchTask    = reducer.eval(matchTerm)(env, splitRand, costAccounting)
       val inspectTask = for {
@@ -706,8 +706,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(
             List(
               Datum.create(channel,
-                           ListChannelWithRandom(Seq(Quote(GPrivate("one")),
-                                                     Quote(GPrivate("zero"))),
+                           ListChannelWithRandom(Seq(Quote(GPrivateBuilder("one")),
+                                                     Quote(GPrivateBuilder("zero"))),
                                                  splitRand),
                            false)),
             List()
@@ -908,6 +908,60 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "eval of New" should "use deterministic names and provide urn-based resources" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(42)
+    val resultRand = rand.splitByte(42)
+    val chosenName = resultRand.next
+    val result0Rand = resultRand.splitByte(0)
+    val result1Rand = resultRand.splitByte(1)
+    val newProc: New =
+      New(
+        bindCount = 2,
+        uri = List("rho:test:foo"),
+        p = Par(
+          sends = List(
+            Send(Quote(GString("result0")), List(EVar(BoundVar(0))), locallyFree = BitSet(0)),
+            Send(Quote(GString("result1")), List(EVar(BoundVar(1))), locallyFree = BitSet(1))),
+          locallyFree = BitSet(0, 1)))
+
+    val result = withTestSpace { space =>
+      def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42))).reducer
+      implicit val env = Env[Par]()
+      val nthTask      = reducer.eval(newProc)(env, splitRand, costAccounting)
+      val inspectTask = for {
+        _ <- nthTask
+      } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel0 = Channel(Quote(GString("result0")))
+    val channel1 = Channel(Quote(GString("result1")))
+    result should be(
+      HashMap(
+        List(channel0) ->
+          Row(
+            List(
+              Datum.create(
+                channel0,
+                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(Array[Byte](42))))), result0Rand),
+                false)),
+            List()),
+        List(channel1) ->
+          Row(
+            List(
+              Datum.create(
+                channel1,
+                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(chosenName)))), result1Rand),
+                false)),
+            List())
+      )
+    )
+  }
+
   "eval of nth method in send position" should "change what is sent" in {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =
@@ -997,6 +1051,41 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel = Channel(Quote(GString("result")))
 
+    result should be(
+      HashMap(
+        List(channel) ->
+          Row(List(
+                Datum.create(channel,
+                             ListChannelWithRandom(Seq(Quote(Expr(GByteArray(serializedProcess)))),
+                                                   splitRand),
+                             persist = false)),
+              List())
+      )
+    )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  it should "substitute before serialization" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val splitRand = rand.splitByte(0)
+    val unsubProc: Par =
+      New(bindCount = 1, p = EVar(BoundVar(1)), locallyFree = BitSet(0))
+    val subProc: Par =
+      New(bindCount = 1, p = GPrivateBuilder("zero"), locallyFree = BitSet())
+    val serializedProcess         = subProc.toByteString
+    val toByteArrayCall: Par      = EMethod("toByteArray", unsubProc, List[Par](), BitSet(0))
+    val channel                   = Channel(Quote(GString("result")))
+    def wrapWithSend(p: Par): Par = Send(channel, List[Par](p), false, p.locallyFree)
+
+    val result = withTestSpace { space =>
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env         = Env.makeEnv[Par](GPrivateBuilder("one"), GPrivateBuilder("zero"))
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env, splitRand, costAccounting)
+      val inspectTask = for { _ <- task } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
     result should be(
       HashMap(
         List(channel) ->

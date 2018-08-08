@@ -12,19 +12,23 @@ option (scalapb.options) = {
 
 // --------- DeployService  --------
 service DeployService {
-  rpc DoDeploy(DeployString) returns (DeployServiceResponse) {}
-  rpc createBlock(google.protobuf.Empty) returns (MaybeBlockMessage) {}
+  rpc DoDeploy(DeployData) returns (DeployServiceResponse) {}
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
+  rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
 }
 
-message DeployString {
+message DeployData {
   bytes  user         = 1; //public key
   string term         = 2; //rholang source code to deploy (will be parsed into `Par`)
   int64  timestamp    = 3; //millisecond timestamp
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
+  string from         = 6; //wallet address which will be used to pay for the deployment
+  int32 phloPrice     = 7; //phlo price
+  int32 phloLimit     = 8; //phlo limit for the deployment
+  int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 
 message BlockRequest {
@@ -112,7 +116,6 @@ message ApprovedBlockRequest {
 // ------- End Signing Protocol --------
 
 // --------- Core Protocol  --------
-// TODO: Include non-body BlockMessage fields into blockhash (See RHOL-546)
 message BlockMessage {
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
   Header                 header         = 2;
@@ -137,7 +140,7 @@ message Header {
 }
 
 message DeployCost {
-    Deploy deploy = 1; //Sha256 hash of the DeployString
+    Deploy deploy = 1; //Sha256 hash of the DeployData
     PCost Cost = 2 ;
 }
 
@@ -164,7 +167,7 @@ message RChainState {
 
 message Deploy {
   Par          term  = 1; //rholang term to deploy
-  DeployString raw   = 2; //raw deploy, before parsing the rholang
+  DeployData   raw   = 2;
 }
 
 message Event {

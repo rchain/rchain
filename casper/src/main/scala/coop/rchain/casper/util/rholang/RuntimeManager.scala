@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Bond, Deploy, DeployCost, DeployString}
+import coop.rchain.casper.protocol.{Bond, Deploy, DeployCost, DeployData}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
@@ -147,7 +147,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     terms match {
       case deploy +: rest =>
         implicit val rand: Blake2b512Random = Blake2b512Random(
-          DeployString.toByteArray(deploy.raw.get))
+          DeployData.toByteArray(deploy.raw.get))
         implicit val costAlgebra = costAlg
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
           case Success(_) =>
@@ -155,14 +155,14 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             val cost       = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
             val deployCost = DeployCost().withDeploy(deploy).withCost(cost)
             if (errors.isEmpty)
-              eval(rest, reducer, errorLog, costAlg, deployCost +: accCost)
+              eval(rest, reducer, errorLog, costAlg, accCost :+ deployCost)
             else
-              Left((deploy, errors, accCost))
+              Left((deploy, errors, accCost :+ deployCost))
           case Failure(ex) =>
             val otherErrors = errorLog.readAndClearErrorVector()
             val cost        = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
             val deployCost  = DeployCost().withDeploy(deploy).withCost(cost)
-            Left((deploy, ex +: otherErrors, deployCost +: accCost))
+            Left((deploy, otherErrors :+ ex, accCost :+ deployCost))
         }
       case Nil => Right(accCost)
     }

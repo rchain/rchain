@@ -1,7 +1,9 @@
 package coop.rchain.casper
 
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import cats.implicits._
 import cats.{Applicative, Monad}
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.BlockHash
@@ -55,7 +57,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
     }
 
   def awaitApprovedBlock[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString])(implicit scheduler: Scheduler): MultiParentCasperConstructor[F] =
@@ -98,7 +100,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
     }
 
   def fromConfig[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore,
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk,
       G[_]: Monad: Capture: Log: Time: BlockStore](conf: CasperConf,
                                                    runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): G[MultiParentCasperConstructor[F]] =

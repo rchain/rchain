@@ -1,5 +1,6 @@
 package coop.rchain.comm.rp
 
+import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
 import com.google.common.io.BaseEncoding
@@ -10,6 +11,7 @@ import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class ConnectToBootstrapSpec
@@ -21,7 +23,6 @@ class ConnectToBootstrapSpec
   val timeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
 
   type Effect[A] = CommErrT[Id, A]
-
   val src: PeerNode    = peerNode("src", 40400)
   val remote: PeerNode = peerNode("remote", 40401)
 
@@ -29,7 +30,9 @@ class ConnectToBootstrapSpec
   implicit val timeEff           = new LogicalTime[Effect]
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
-  implicit val transportLayerEff = new TransportLayerStub[Effect](src)
+  implicit val transportLayerEff = new TransportLayerStub[Effect]
+  implicit val connectionsCell   = Cell.const[Effect, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {
     logEff.reset()

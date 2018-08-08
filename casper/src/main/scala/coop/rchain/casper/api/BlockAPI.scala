@@ -15,7 +15,7 @@ import coop.rchain.shared.Log
 object BlockAPI {
 
   def deploy[F[_]: Monad: MultiParentCasperConstructor: Log](
-      d: DeployString): F[DeployServiceResponse] = {
+      d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       InterpreterUtil.mkTerm(d.term) match {
         case Right(term) =>
@@ -37,34 +37,31 @@ object BlockAPI {
         DeployServiceResponse(false, s"Error: Casper instance not available"))
   }
 
-  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[MaybeBlockMessage] =
-    MultiParentCasperConstructor.withCasper[F, MaybeBlockMessage](
-      _.createBlock.map(MaybeBlockMessage.apply),
-      MaybeBlockMessage.defaultInstance)
-
   def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](
-      b: BlockMessage): F[DeployServiceResponse] = {
-    def doAddBlock(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
-      for {
-        status <- MultiParentCasper[F].addBlock(b)
-      } yield
-        status match {
-          case _: InvalidBlock => DeployServiceResponse(false, s"Failure! Invalid block: $status")
-          case _: ValidBlock   => DeployServiceResponse(true, s"Success! $status")
-        }
+      b: BlockMessage): F[DeployServiceResponse] =
+    MultiParentCasperConstructor.withCasper[F, DeployServiceResponse](
+      casper =>
+        for {
+          status <- casper.addBlock(b)
+        } yield addResponse(status.some, b.some),
+      DeployServiceResponse(false, "Error: Casper instance not available")
+    )
 
-    MultiParentCasperConstructor
-      .withCasper[F, DeployServiceResponse](
-        doAddBlock(_),
-        DeployServiceResponse(false, "Error: Casper instance not available"))
-  }
+  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[DeployServiceResponse] =
+    MultiParentCasperConstructor.withCasper[F, DeployServiceResponse](
+      casper =>
+        for {
+          maybeBlock <- casper.createBlock
+          status     <- maybeBlock.traverse(casper.addBlock(_))
+        } yield addResponse(status, maybeBlock),
+      DeployServiceResponse(false, "Error: Casper instance not available")
+    )
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         estimates   <- MultiParentCasper[F].estimator
-        dag         <- MultiParentCasper[F].blockDag
         tip         = estimates.head
         internalMap <- BlockStore[F].asMap()
         mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(internalMap,
@@ -150,4 +147,19 @@ object BlockAPI {
         })
       fullHash.map(h => internalMap(h))
     }
+
+  private def addResponse(status: Option[BlockStatus],
+                          maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {
+    case Some(_: InvalidBlock) =>
+      DeployServiceResponse(false, s"Failure! Invalid block: $status")
+    case Some(_: ValidBlock) =>
+      val hash = PrettyPrinter.buildString(maybeBlock.get.blockHash)
+      DeployServiceResponse(true, s"Success! Block ${hash} created and added.")
+    case Some(BlockException(ex)) =>
+      DeployServiceResponse(false, s"Error during block processing: $ex")
+    case Some(Processing) =>
+      DeployServiceResponse(false,
+                            "No action taken since other thread is already processing the block.")
+    case None => DeployServiceResponse(false, "No block was created.")
+  }
 }

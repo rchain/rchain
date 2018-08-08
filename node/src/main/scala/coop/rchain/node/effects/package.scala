@@ -3,7 +3,7 @@ package coop.rchain.node
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl.MonadState
+import cats._, cats.data._, cats.implicits._, cats.mtl._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
 import monix.execution.atomic._
@@ -14,6 +14,7 @@ import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp._, Connect._
 
 package object effects {
 
@@ -26,8 +27,8 @@ package object effects {
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
-  ): NodeDiscovery[Task] =
-    new KademliaNodeDiscovery[Task](src, defaultTimeout)
+  ): Task[NodeDiscovery[Task]] =
+    KademliaNodeDiscovery.create[Task, Task](src, defaultTimeout)
 
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
@@ -66,13 +67,18 @@ package object effects {
         } yield r
     }
 
-  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
+  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       implicit scheduler: Scheduler,
       connections: TcpTransportLayer.TransportCell[Task],
       log: Log[Task]) =
-    new TcpTransportLayer(host, port, cert, key)(src)
+    new TcpTransportLayer(host, port, cert, key)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
+  def rpConnections: Task[ConnectionsCell[Task]] =
+    Cell.const[Task, Connections](Connections.empty).pure[Task] // noop for now
+
+  def rpConfAsk(conf: RPConf): ApplicativeAsk[Task, RPConf] =
+    new ConstApplicativeAsk[Task, RPConf](conf)
 }

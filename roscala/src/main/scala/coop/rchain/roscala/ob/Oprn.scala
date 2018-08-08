@@ -9,7 +9,7 @@ class Oprn extends Actor {
   override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob =
     if (state.ctxt.nargs > 0) {
       logger.debug(s"Dispatch to ${ctxt.arg(0)}")
-      ctxt.arg(0).lookupAndInvoke(ctxt, state, globalEnv)
+      ctxt.arg(0).lookupAndInvoke(ctxt, state)
     } else
       // TODO: Runtime error
       Niv
