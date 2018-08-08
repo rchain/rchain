@@ -57,6 +57,32 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
+  def getCapturedResultsAcrossBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](q: CaptureResultsQuery)
+  : F[CapturedResultsAcrossBlocksResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      for {
+        estimates   <- casper.estimator
+        tip         = estimates.head
+        internalMap <- BlockStore[F].asMap()
+        mainChain = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
+        maybeRuntimeManager <- casper.getRuntimeManager
+        runtimeManager = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
+        blockResults <- mainChain.toList.traverse {
+          block =>
+            for {
+              blockInfo <- getBlockInfo[F](block)
+              stateHash = ProtoUtil.tuplespace(block).get
+              results = runtimeManager.captureResults(stateHash, InterpreterUtil.mkTerm(q.queryTerm).right.get, q.resultName)
+            } yield CapturedResultWithBlockInfo(results.map(PrettyPrinter.buildString), Some(blockInfo))
+        }
+      } yield
+        CapturedResultsAcrossBlocksResponse(status = "Success", blockResults = blockResults, length = blockResults.length.toLong)
+
+    MultiParentCasperConstructor.withCasper[F, CapturedResultsAcrossBlocksResponse](
+      casperResponse(_),
+      CapturedResultsAcrossBlocksResponse(status = "Error: Casper instance not available"))
+  }
+
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
