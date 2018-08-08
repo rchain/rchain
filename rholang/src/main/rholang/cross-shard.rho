@@ -39,12 +39,12 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
               statusOut!(["failure", "Already done."])
             } else {
               // check that the pubkey is in the list
-              if (not pubKeySet.has(pubKey)) {
+              if (not pubKeySet.contains(pubKey)) {
                 votedSetStore!(votedSet) |
                 doneStore!(false) |
                 statusOut!(["failure", "Invalid key."])
               } else {
-                if (votedSet.has(pubKey)) {
+                if (votedSet.contains(pubKey)) {
                   votedSetStore!(votedSet) |
                   doneStore!(done) |
                   statusOut!(["failure", "Already voted."])
@@ -109,13 +109,13 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
               statusOut!(["fail", "Already done."])
             } else {
               // check that the pubkey is in the list
-              if (not pubKeySet.has(pubKey)) {
+              if (not pubKeySet.contains(pubKey)) {
                 canceledSetStore!(canceledSet) |
                 doneStore!(done) |
                 statusOut!(["fail", "Invalid key."])
               } else {
                 // check that it hasn't already cast its vote to cancel
-                if (canceledSet.has(pubKey)) {
+                if (canceledSet.contains(pubKey)) {
                   canceledSetStore!(canceledSet) |
                   doneStore!(done) |
                   statusOut!(["fail", "Already canceled."])
