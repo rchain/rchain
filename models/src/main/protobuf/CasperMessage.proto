@@ -70,7 +70,7 @@ message CapturedResultsAcrossBlocksResponse {
 
 message CapturedResultWithBlockInfo {
   repeated string capturedResult = 1;
-  BlockInfo blocks = 2;
+  BlockInfo block = 2;
 }
 
 message BlocksResponse {
