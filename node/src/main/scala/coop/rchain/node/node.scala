@@ -144,7 +144,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  case class Servers(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
+  case class Servers(
+      grpcServerExternal: Server,
+      grpcServerInternal: Server,
+      metricsServer: MetricsServer,
+      httpServer: HttpServer
+  )
 
   def acquireServers(runtime: Runtime)(
       implicit
@@ -157,10 +162,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Servers] =
     for {
-      grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcServer.port, runtime)
+      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
+      grpcServerInternal <- GrpcServer
+                             .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
       metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
       httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
-    } yield Servers(grpcServer, metricsServer, httpServer)
+    } yield Servers(grpcServerExternal, grpcServerInternal, metricsServer, httpServer)
 
   def startServers(servers: Servers)(
       implicit
@@ -169,7 +176,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     for {
       _ <- servers.httpServer.start.toEffect
       _ <- servers.metricsServer.start.toEffect
-      _ <- GrpcServer.start[Effect](servers.grpcServer)
+      _ <- GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
     } yield ()
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -181,8 +188,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       rpConfAsk: RPConfAsk[Task]
   ): Unit =
     (for {
-      _   <- log.info("Shutting down gRPC server...")
-      _   <- Task.delay(servers.grpcServer.shutdown())
+      _   <- log.info("Shutting down gRPC servers...")
+      _   <- Task.delay(servers.grpcServerExternal.shutdown())
+      _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       ts  <- time.currentMillis
