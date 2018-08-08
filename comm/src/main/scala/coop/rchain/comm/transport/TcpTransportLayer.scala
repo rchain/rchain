@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
@@ -18,7 +18,7 @@ import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
+class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(src: PeerNode)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
@@ -28,10 +28,13 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
 
   val local: Task[PeerNode] = src.pure[Task]
 
+  private val certInputStream = new ByteArrayInputStream(cert.getBytes())
+  private val keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
   private lazy val serverSslContext: SslContext =
     try {
       GrpcSslContexts
-        .forServer(cert, key)
+        .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
         .trustManager(HostnameTrustManagerFactory.Instance)
         .clientAuth(ClientAuth.REQUIRE)
         .build()
@@ -45,7 +48,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     try {
       val builder = GrpcSslContexts.forClient
       builder.trustManager(HostnameTrustManagerFactory.Instance)
-      builder.keyManager(cert, key)
+      builder.keyManager(certInputStream, keyInputStream)
       builder.build
     } catch {
       case e: Throwable =>
@@ -123,7 +126,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
-        case _: TimeoutException => TimeOut
+        case _: TimeoutException => CommError.timeout
         case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
           peerUnavailable(peer)
         case e => protocolException(e)

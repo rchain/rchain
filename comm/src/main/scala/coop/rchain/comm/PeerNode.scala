@@ -26,19 +26,27 @@ final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 }
 
 // TODO: Add Show instance
-final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
+final class PeerNode(val id: NodeIdentifier, val endpoint: Endpoint) {
 
-  def key  = id.key
-  val sKey = id.toString
+  def key: Seq[Byte] = id.key
+  val sKey: String   = id.toString
 
-  override def toString = toAddress
+  override def toString: String = toAddress
 
-  def toAddress: String =
+  val toAddress: String =
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
+
+  override def equals(obj: scala.Any): Boolean =
+    obj.isInstanceOf[PeerNode] &&
+      obj.asInstanceOf[PeerNode].toAddress == this.toAddress
+
+  override lazy val hashCode: Int = toAddress.hashCode
 
 }
 
 object PeerNode {
+
+  def apply(id: NodeIdentifier, endpoint: Endpoint): PeerNode = new PeerNode(id, endpoint)
 
   final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
 
