@@ -280,11 +280,16 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
         }
       } |
       
-      // Receive basically *is* a ballot, but it needs to change as the parameters are updated.
-      // When sending a message above, we get to create a new ballot per send.
-      // When receiving a message, capture the current stats and use them for the whole ballot
+      // receive: basically *is* a ballot, but it needs to change as the parameters are updated.
+      //    When sending a message above, we get to create a new ballot per send.
+      //    When receiving a message, capture the current stats and use them for the whole ballot.
       // 
-      // verify!([*ballot, candidate, *statusOut].toByteArray(), sig, pubKey, *ret) |
+      //  bytearray pubkey: the public key of the owner, one of a quorum
+      //  string uuid: the uuid of the contract on the other shard listening for the response.
+      //      Also serves as a convenient session id.
+      //  any message: the message being sent on behalf of the contract in the other shard
+      //  name statusOut: a channel on which the success/failure of this invocation will be sent
+      //  bytearray sig: signature over [uuid, message, *statusOut]
       contract @[*MailBoxClient, "receive"](@pubKey, @uuid, @message, statusOut, @sig) = {
         // Look up target ballot to find list of public keys
         for (@receiveMap <- receiveMapStore) {
@@ -358,7 +363,16 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
           } |
           
           // METHOD DEFINED HERE
-          // TODO(pyrocto): register the post office somewhere? 
+          // TODO(pyrocto): register the mailbox somewhere? 
+          //
+          // updateParams: changes the set of public keys and the quorum sizes
+          //
+          //  bytearray pubKey: the key of the owner making this request
+          //  Set(bytearray) pubKeySet: the new set of owners
+          //  int sendQuorumSize: the new quorum size needed to pass a vote
+          //  int cancelQuorumSize: the new quorum size needed to cancel a vote
+          //  name statusOut: a channel on which the success/failure of this invocation will be sent
+          //  bytearray sig: signature over [pubKeySet, sendQuorumSize, cancelQuorumSize]
           contract @[*MailBoxAdmin, "updateParams"](@pubKey, @pubKeySet, @sendQuorumSize, @cancelQuorumSize, statusOut, @sig) = {
             // Get & replace current ballot
             for (@ballot <- updateParamsStore) {
