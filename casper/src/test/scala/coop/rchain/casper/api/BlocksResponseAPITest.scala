@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-class BlocksResponseTest
+class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator

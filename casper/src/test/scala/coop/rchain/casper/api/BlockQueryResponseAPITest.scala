@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
-class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixture {
+class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
