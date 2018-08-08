@@ -386,16 +386,15 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
               new successCh in {
                 // Deposit all of it to the depository.
                 @[depositoryPurse, "deposit"]!(balance, purse, *successCh) |
-                for (@success <- successCh) {
-                  if (not success) {
-                    statusOut!(["failure", "Could not deposit funds."])
+                for (@false <- successCh) {
+                  statusOut!(["failure", "Could not deposit funds."])
+                } |
+                for (@true <- successCh) {
+                  if (balance < depositFee) {
+                    statusOut!(["failure", "Not enough funds to pay the fee."])
                   } else {
-                    if (balance < depositFee) {
-                      statusOut!(["failure", "Not enough funds to pay the fee."])
-                    } else {
-                      // Tell child to mint a wallet containing (balance - depositFee) guarded by @targetPubKey
-                      @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
-                    }
+                    // Tell child to mint a wallet containing (balance - depositFee) guarded by @targetPubKey
+                    @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
                   }
                 }
               }
@@ -411,39 +410,52 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
           @[mailBoxAdmin, "updateParams"]!(pubKey, pubKeySet, sendQuorumSize, cancelQuorumSize, *statusOut, sig)
         } |
         
-        contract withdrawInternal(@[amount, targetPubKey]) = {
+        contract withdrawInternal(@[amount, algorithm, targetPubKey]) = {
           // create wallet from depository for amount at a new uuid guarded by the public key
-          Nil
+          new splitPurseOut in {
+            @[depositoryPurse, "split"]!(amount, *splitPurseOut) |
+            // TODO(pyrocto): failure case?
+            for (@[purse] <- splitPurseOut) {
+              new walletOut in {
+                // TODO(pyrocto): make algorithm parametric
+                @"BasicWallet"!(purse, "ed25519", targetPubKey, *walletOut) |
+                for (@wallet <- walletOut) {
+                  @[*r, "register"]!(`rho:uuid`, bundle+{wallet}, Nil)
+                }
+              }
+            }
+          }
         }
       }
     }
   } |
   
   contract @[*MintFactory, "create"](@pubKeySet, @sendQuorumSize, @cancelQuorumSize, @depositFee, mintOut) = {
-    new Mint, mintInternal, mailBoxOut in {
+    new Mint, mintInternal, mailBoxOut, underlyingMintOut in {
       mintOut!(*Mint) |
+      @"MakeMint"!(*underlyingMintOut) |
       @[*MailBoxFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *mintInternal, *mailBoxOut) |
       
       for (@[mailBoxClient, mailBoxAdmin] <- mailBoxOut) {
 
-        contract @[*Mint, "sendToChild"](@purse, @targetPubKey, statusOut) = {
+        contract @[*Mint, "sendToParent"](@purse, @targetPubKey, statusOut) = {
           new return in {
             // Find out how much this purse has.
             @[purse, "getBalance"]!(*return) |
             for (@balance <- return) {
-              new successCh in {
-                // Mint new wallet.
-                Nil |
-                for (@success <- successCh) {
-                  if (not success) {
-                    statusOut!(["failure", "Could not deposit funds."])
+              new splitPurseOut in {
+                // Create new wallet, transfer funds
+                @[purse, "split"]!(balance, *splitPurseOut) |
+                for (@[] <- splitPurseOut) {
+                  statusOut!(["failure", "Could not deposit funds."])
+                } |
+                // Throw away the resulting purse.
+                for (@[_] <- splitPurseOut) {
+                  if (balance < depositFee) {
+                    statusOut!(["failure", "Not enough funds to pay the fee."])
                   } else {
-                    if (balance < depositFee) {
-                      statusOut!(["failure", "Not enough funds to pay the fee."])
-                    } else {
-                      // Tell parent to withdraw (balance - depositFee) from depository to a wallet guarded by @targetPubKey
-                      @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
-                    }
+                    // Tell parent to withdraw (balance - depositFee) from depository to a wallet guarded by @targetPubKey
+                    @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
                   }
                 }
               }
@@ -459,9 +471,22 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
           @[mailBoxAdmin, "updateParams"]!(pubKey, pubKeySet, sendQuorumSize, cancelQuorumSize, *statusOut, sig)
         } |
         
-        contract mintInternal(@[amount, targetPubKey]) = {
-          // create wallet for amount at a new uuid guarded by the public key
-          Nil
+        for (@underlyingMint <- underlyingMintOut) {
+          contract mintInternal(@[amount, targetPubKey]) = {
+            // create wallet for amount at a new uuid guarded by the public key
+            new purseOut in {
+              @[underlyingMint, "makePurse"]!(amount, *purseOut) |
+              for (@purse <- purseOut) {
+                new walletOut in {
+                  // TODO(pyrocto): make algorithm parametric
+                  @"BasicWallet"!(purse, "ed25519", targetPubKey, *walletOut) |
+                  for (@wallet <- walletOut) {
+                    @[*r, "register"]!(`rho:uuid`, bundle+{wallet}, Nil)
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
