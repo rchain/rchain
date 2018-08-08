@@ -43,9 +43,8 @@ message BlockQuery {
   string hash = 1;
 }
 
-message CaptureResultsQuery {
-  string queryTerm = 1;
-  string resultName = 2;
+message ListeningNameQuery {
+  Channel channel = 1;
 }
 
 message DeployServiceResponse {
@@ -62,14 +61,14 @@ message BlockQueryResponse {
   BlockInfo blockInfo = 2;
 }
 
-message CapturedResultsAcrossBlocksResponse {
+message ListeningNameResponse {
   string status = 1;
-  repeated CapturedResultWithBlockInfo blockResults = 2;
+  repeated DataWithBlockInfo blockResults = 2;
   int64 length = 3;
 }
 
-message CapturedResultWithBlockInfo {
-  repeated string capturedResult = 1;
+message DataWithBlockInfo {
+  repeated string datum = 1;
   BlockInfo block = 2;
 }
 
