@@ -43,6 +43,11 @@ message BlockQuery {
   string hash = 1;
 }
 
+message CaptureResultsQuery {
+  string queryTerm = 1;
+  string resultName = 2;
+}
+
 message DeployServiceResponse {
   bool   success = 1;
   string message = 2;
