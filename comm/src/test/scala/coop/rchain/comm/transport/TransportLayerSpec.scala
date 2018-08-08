@@ -61,7 +61,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
               protocol1.message shouldBe 'pong
           }
 
-          received.length shouldEqual 1
+          received should have length 1
           val protocol2 = received.head
           val sender    = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
@@ -184,8 +184,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
 
         val resultF =
           for {
-            e1  <- createEnvironment(41001)
-            e2  <- createEnvironment(41002)
+            e1  <- createEnvironment(41011)
+            e2  <- createEnvironment(41012)
             tl1 <- createTransportLayer(e1)
             tl2 <- createTransportLayer(e2)
             _   <- tl1.receive(dispatch(e1.peer))
@@ -206,7 +206,32 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
       }
 
       "not wait for a response" in {
-        pending
+        val latch     = new java.util.concurrent.CountDownLatch(1)
+        var processed = 0L
+
+        def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
+          p => {
+            latch.countDown()
+            processed = System.currentTimeMillis()
+            CommunicationResponse.handledWitoutMessage.pure[F]
+          }
+
+        val resultF =
+          for {
+            e1  <- createEnvironment(41013)
+            e2  <- createEnvironment(41014)
+            tl1 <- createTransportLayer(e1)
+            tl2 <- createTransportLayer(e2)
+            _   <- tl1.receive(dispatch(e1.peer))
+            _   <- tl2.send(e1.peer, ProtocolHelper.ping(e2.peer))
+            t   = System.currentTimeMillis()
+            _   = latch.await(1, TimeUnit.SECONDS)
+            _   <- tl1.shutdown(ProtocolHelper.disconnect(e1.peer))
+            _   <- tl2.shutdown(ProtocolHelper.disconnect(e2.peer))
+          } yield t
+
+        val sent = extract(resultF)
+        sent should be < processed
       }
 
       "wait for message being delivered" in {

@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 import scala.util._
 import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
