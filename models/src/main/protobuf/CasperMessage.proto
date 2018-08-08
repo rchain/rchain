@@ -57,6 +57,17 @@ message BlockQueryResponse {
   BlockInfo blockInfo = 2;
 }
 
+message CapturedResultsAcrossBlocksResponse {
+  string status = 1;
+  repeated CapturedResultWithBlockInfo blockResults = 2;
+  int64 length = 3;
+}
+
+message CapturedResultWithBlockInfo {
+  string capturedResult = 1;
+  BlockInfo blocks = 2;
+}
+
 message BlocksResponse {
   string status = 1;
   repeated BlockInfo blocks = 2;
