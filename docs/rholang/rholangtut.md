@@ -65,6 +65,17 @@ The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`
 
 #### Logical operators
 The supported logical operators are: `and`, `or`, `not`
+ 
+#### Matches expression
+The `p matches q` expression is similar to  
+
+    1 match p {
+    2   q -> true
+    3   _ -> false
+    4 }
+    
+The difference between `matches` and the above is that the former is an expression.
+
 ## Sending and receiving data
 
     1 new HelloWorld, stdout(`rho:io:stdout`) in {
