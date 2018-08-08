@@ -144,6 +144,20 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
+  it should "allow multiple deploys in a single block" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node._
+
+    val term    = InterpreterUtil.mkTerm(" for(@x <- @0){ @0!(x) } | @0!(0) ").right.get
+    val deploys = ProtoUtil.termDeploy(term) #:: ProtoUtil.termDeploy(term) #:: Stream.empty[Deploy]
+    deploys.foreach(MultiParentCasper[Id].deploy(_))
+    val block = MultiParentCasper[Id].createBlock.get
+    val _     = MultiParentCasper[Id].addBlock(block)
+
+    MultiParentCasper[Id].contains(block) shouldBe true
+    node.tearDown()
+  }
+
   it should "reject unsigned blocks" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
