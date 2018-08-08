@@ -51,7 +51,7 @@ object CommUtil {
     } yield ()
   }
 
-  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: RPConfAsk](
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
