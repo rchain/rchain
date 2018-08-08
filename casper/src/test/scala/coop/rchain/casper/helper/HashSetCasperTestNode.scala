@@ -17,19 +17,24 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.rp.{Connect, HandleMessages}, HandleMessages.handle, Connect._
+import coop.rchain.comm.rp.{Connect, HandleMessages}
+import HandleMessages.handle
+import Connect._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
+
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
+
 import scala.util.Random
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.Cell
+import monix.eval.Task
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
