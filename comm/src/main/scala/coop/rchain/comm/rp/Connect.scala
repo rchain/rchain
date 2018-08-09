@@ -29,7 +29,7 @@ object Connect {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
       def addConn[F[_]: Applicative](connection: Connection): F[Connections] =
-        (connection :: connections).pure[F]
+        (if (connections.contains(connection)) connections else (connection :: connections)).pure[F]
     }
   }
   import Connections._
@@ -75,14 +75,15 @@ object Connect {
   ): F[List[PeerNode]] =
     for {
       connections      <- ConnectionsCell[F].read
-      timeout          <- RPConfAsk[F].reader(_.defaultTimeout)
+      tout             <- RPConfAsk[F].reader(_.defaultTimeout)
       peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
-      responses        <- peers.traverse(conn(_, timeout).attempt)
+      responses        <- peers.traverse(conn(_, tout).attempt)
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
               Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-            case (_, Right(_)) => ().pure[F]
+            case (peer, Right(_)) =>
+              Log[F].info(s"Connected to ${peer.toAddress}.")
           }
     } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
@@ -98,7 +99,7 @@ object Connect {
       _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
-      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= ErrorHandler[F].fromEither
+      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
       _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
