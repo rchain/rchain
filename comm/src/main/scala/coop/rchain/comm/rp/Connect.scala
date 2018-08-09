@@ -70,54 +70,21 @@ object Connect {
   }
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      defaultTimeout: FiniteDuration): Int => F[Int] =
-    (lastCount: Int) =>
-      for {
-        _         <- IOUtil.sleep[F](5000L)
-        peers     <- NodeDiscovery[F].findMorePeers(10).map(_.toList)
-        responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
-        _ <- peers.zip(responses).traverse {
-              case (peer, Left(error)) =>
-                Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-              case (_, Right(_)) => ().pure[F]
-            }
-        thisCount <- NodeDiscovery[F].peers.map(_.size)
-        _         <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
-      } yield thisCount
-
-  def connectToBootstrap[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      bootstrap: PeerNode,
-      maxNumOfAttempts: Int = 5,
-      defaultTimeout: FiniteDuration): F[Unit] = {
-
-    def connectAttempt(attempt: Int, timeout: FiniteDuration, bootstrapAddr: PeerNode): F[Unit] =
-      if (attempt > maxNumOfAttempts) for {
-        _ <- Log[F].error("Failed to connect to bootstrap node, exiting...")
-        _ <- ErrorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
-      } yield ()
-      else
-        for {
-          res <- connect[F](bootstrapAddr, timeout).attempt
-          _ <- res match {
-                case Left(error) =>
-                  val msg =
-                    "Failed to connect to bootstrap " +
-                      s"(attempt $attempt / $maxNumOfAttempts). Reason: ${error.message}"
-                  Log[F].warn(msg) *> connectAttempt(attempt + 1,
-                                                     timeout + defaultTimeout,
-                                                     bootstrapAddr)
-                case Right(_) => ().pure[F]
-              }
-        } yield ()
-
+      F[_]: Capture: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+      conn: (PeerNode, FiniteDuration) => F[Unit]
+  ): F[List[PeerNode]] =
     for {
-      _ <- Log[F].info(s"Bootstrapping from ${bootstrap.toAddress}.")
-      _ <- connectAttempt(attempt = 1, defaultTimeout, bootstrap)
-      _ <- Log[F].info(s"Connected ${bootstrap.toAddress}.")
-    } yield ()
-  }
+      connections      <- ConnectionsCell[F].read
+      timeout          <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers            <- NodeDiscovery[F].peers.map(_.toList)
+      responses        <- peers.traverse(conn(_, timeout).attempt)
+      peersAndResonses = peers.zip(responses)
+      _ <- peersAndResonses.traverse {
+            case (peer, Left(error)) =>
+              Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+            case (_, Right(_)) => ().pure[F]
+          }
+    } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
@@ -134,7 +101,6 @@ object Connect {
       phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-      _   <- NodeDiscovery[F].addNode(peer)
       _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)

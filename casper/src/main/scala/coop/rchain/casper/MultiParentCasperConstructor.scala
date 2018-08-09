@@ -95,8 +95,10 @@ sealed abstract class MultiParentCasperConstructorInstances {
             "No valid ApprovedBlock has been received to instantiate a Casper instance!")))(
           _.toEither)
 
-      override def lastApprovedBlock: F[Option[ApprovedBlock]] =
-        genesisPromise.future.value.flatMap(_.toOption.map(_._1)).pure[F]
+      override def lastApprovedBlock: F[Option[ApprovedBlock]] = Capture[F].capture {
+        genesisPromise.future.value.flatMap(_.toOption.map(_._1))
+      }
+
     }
 
   def fromConfig[

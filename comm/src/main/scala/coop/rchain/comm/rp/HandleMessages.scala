@@ -92,7 +92,6 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- NodeDiscovery[F].addNode(peer)
         _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(protocolHandshakeResponse(local))

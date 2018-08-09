@@ -20,7 +20,7 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(
+  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
       log: Log[Task],
       time: Time[Task],
@@ -28,7 +28,7 @@ package object effects {
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
-    KademliaNodeDiscovery.create[Task, Task](src, defaultTimeout)
+    KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
 
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
@@ -36,6 +36,10 @@ package object effects {
     }
     def nanoTime: Task[Long] = Task.delay {
       System.nanoTime
+    }
+
+    def sleep(millis: Int): Task[Unit] = Task.delay {
+      Thread.sleep(millis.toLong)
     }
   }
 
