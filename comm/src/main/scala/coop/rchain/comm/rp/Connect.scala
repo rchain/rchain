@@ -76,7 +76,7 @@ object Connect {
     for {
       connections      <- ConnectionsCell[F].read
       timeout          <- RPConfAsk[F].reader(_.defaultTimeout)
-      peers            <- NodeDiscovery[F].peers.map(_.toList)
+      peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
       responses        <- peers.traverse(conn(_, timeout).attempt)
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {

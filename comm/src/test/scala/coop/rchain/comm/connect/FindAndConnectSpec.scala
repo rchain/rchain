@@ -45,7 +45,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
     describe("and there are no connections yet") {
       it("should ask NodeDiscovery for the list of peers and try to connect to it") {
         // given
-        implicit val connections = mkConnections(List.empty[PeerNode])
+        implicit val connections = mkConnections()
         // when
         Connect.findAndConnect[Effect](connect)
         // then
@@ -57,7 +57,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
       it("should report peers it connected to successfully") {
         // given
-        implicit val connections = mkConnections(List.empty[PeerNode])
+        implicit val connections = mkConnections()
         willConnectSuccessfully = List(peer("A"), peer("C"))
         // when
         val result = Connect.findAndConnect[Effect](connect).value.right.get
@@ -69,14 +69,40 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
       }
     }
 
-    describe("and there already are some connections") {}
+    describe("and there already are some connections") {
+      it(
+        "should ask NodeDiscovery for the list of peers and try to the one he is not connected yet") {
+        // given
+        implicit val connections = mkConnections(peer("B"))
+        // when
+        Connect.findAndConnect[Effect](connect)
+        // then
+        connectCalled.size shouldBe (2)
+        connectCalled should contain(peer("A"))
+        connectCalled should contain(peer("C"))
+      }
+
+      it("should report peers it connected to successfully") {
+        // given
+        implicit val connections = mkConnections(peer("B"))
+        willConnectSuccessfully = List(peer("A"))
+        // when
+        val result = Connect.findAndConnect[Effect](connect).value.right.get
+        // then
+        result.size shouldBe (1)
+        result should contain(peer("A"))
+        result should not contain (peer("B"))
+        result should not contain (peer("C"))
+      }
+
+    }
 
   }
 
   private def peer(name: String): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
 
-  private def mkConnections(peers: List[PeerNode]): ConnectionsCell[Id] =
+  private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
     Cell.id[Connections](peers.reverse.foldLeft(Connections.empty) {
       case (acc, el) => acc.addConn[Id](el)
     })
