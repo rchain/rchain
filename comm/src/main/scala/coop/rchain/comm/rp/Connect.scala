@@ -28,8 +28,17 @@ object Connect {
   object Connections {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
-      def addConn[F[_]: Applicative](connection: Connection): F[Connections] =
-        (if (connections.contains(connection)) connections else (connection :: connections)).pure[F]
+      def addConn[F[_]: Applicative: Log](connection: Connection): F[Connections] =
+        connections
+          .contains(connection)
+          .fold(
+            connections.pure[F],
+            Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections)
+          )
+      def removeAndAddAtEnd[F[_]: Applicative: Log](toRemove: List[PeerNode], toAddAtEnd: List[PeerNode]): F[Connections] = for {
+        result <-   (connections.filter(conn => !toRemove.contains(conn)) ++ toAddAtEnd).pure[F]
+        _ <- Log[F].info(s"Peers: ${result.size}.")
+      } yield result
     }
   }
   import Connections._
@@ -58,8 +67,7 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat(_))
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
-        _ <- ConnectionsCell[F]
-              .modify(p => (p.filter(conn => !toPing.contains(conn)) ++ successfulPeers).pure[F])
+        _ <- ConnectionsCell[F].modify(_.removeAndAddAtEnd(toPing, successfulPeers))
       } yield failedPeers.size
 
     for {
