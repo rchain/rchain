@@ -328,49 +328,45 @@ class rnode:
     show_blocks_cmd = binary + " show-blocks"
 
 def test_integration1(container):
+    """
+    This test represents an integration test that deploys a contract and then checks
+    if all the nodes have received the block containing the contract.
+    """
     def run_cmd(cmd):
         print (f"{container.name}: Execute {cmd}")
         r = container.exec_run(['sh', '-c', cmd])
         out = r.output.decode('utf-8').splitlines()
-        return (r.exit_code, out)
+        print(f"{container.name}: Output: {out}")
 
     expected_string = "Joe"
 
     hello_rho = '/opt/docker/examples/tut-hello.rho'
 
-    retval = -1
     print(f"Running integration1 tests after deploy using on container {container.name}.")
 
     print(f"Propose on {container.name}")
 
     try:
-        (_exit_code, out) = run_cmd(rnode.deploy_cmd(hello_rho))
-        print(f"{out}\n")
+        run_cmd(rnode.deploy_cmd(hello_rho))
 
-        # Propose blocks from example contracts
         print("Propose to blockchain previously deployed smart contracts.")
 
-        (_exit_code, _out) = run_cmd(rnode.propose_cmd)
+        run_cmd(rnode.propose_cmd)
 
         print("Allow for logs to fill out from last propose if needed")
         time.sleep(5)
-        
-        (_exit_code, out) = run_cmd(rnode.show_blocks_cmd)
-        # if [line for line in out if expected_string in line]:
-        #     print(f"String {expected_string} found in output. Success!")
-        #     retval=0
-        # else:
-        #     print(f"String {expected_string} NOT found in output. FAILURE!")
-        #     retval=1
+
+        run_cmd(rnode.show_blocks_cmd)
     except Exception as e:
         print(e)
 
+    retval=0
+
     print(f"Check all peer logs for blocks containing {expected_string}")
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-        lines = container.logs().decode('utf-8').splitlines()
-        if [line for line in lines if expected_string in lines]:
+        logs = container.logs().decode('utf-8')
+        if expected_string in logs:
             print(f"Container: {container.name}: String {expected_string} found in output. Success!")
-            retval=0
         else:
             print(f"Container: {container.name}: String {expected_string} NOT found in output. FAILURE!")
             retval= retval + 1
