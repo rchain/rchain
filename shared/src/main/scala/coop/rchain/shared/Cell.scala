@@ -17,9 +17,11 @@ object Cell extends CellInstances0 {
       new Cell[Task, S] {
         def modify(f: S => Task[S]): Task[Unit] =
           for {
-            s  <- mvar.take
-            ns <- f(s)
-            _  <- mvar.put(ns)
+            s <- mvar.take
+            _ <- f(s).transformWith(
+                  ns => mvar.put(ns),
+                  e => mvar.put(s).flatMap(_ => Task.raiseError(e))
+                )
           } yield ()
 
         def read: Task[S] = mvar.read
