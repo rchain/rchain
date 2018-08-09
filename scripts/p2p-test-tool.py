@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 # This is a simple script to help with p2p network boot/testing.
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
@@ -210,6 +210,12 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
             time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
+        if test == "integration1":
+            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+                if test_integration1(container) == 0:
+                    notices['pass'].append(f"{container.name}: Integration test 1 worked.")
+                else:
+                    notices['fail'].append(f"{container.name}: Integration test 1 failed.")
 
     print("=======================SHOW LOGS===========================")
     print("Dumping logs from nodes in 3 seconds.")
@@ -311,6 +317,66 @@ def test_propose(container):
 
     return retval
 
+class rnode:
+    binary='/opt/docker/bin/rnode'
+
+    @staticmethod
+    def deploy_cmd(f):
+        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
+
+    propose_cmd = binary + " propose"
+
+    show_blocks_cmd = binary + " show-blocks"
+
+def test_integration1(container):
+    def run_cmd(cmd):
+        print (f"{container.name}: Execute {cmd}")
+        r = container.exec_run(['sh', '-c', cmd])
+        out = r.output.decode('utf-8').splitlines()
+        return (r.exit_code, out)
+
+    expected_string = "Joe"
+
+    hello_rho = '/opt/docker/examples/tut-hello.rho'
+
+    retval = -1
+    print(f"Running integration1 tests after deploy using on container {container.name}.")
+
+    print(f"Propose on {container.name}")
+
+    try:
+        (_exit_code, out) = run_cmd(rnode.deploy_cmd(hello_rho))
+        print(f"{out}\n")
+
+        # Propose blocks from example contracts
+        print("Propose to blockchain previously deployed smart contracts.")
+
+        (_exit_code, _out) = run_cmd(rnode.propose_cmd)
+
+        print("Allow for logs to fill out from last propose if needed")
+        time.sleep(5)
+        
+        (_exit_code, out) = run_cmd(rnode.show_blocks_cmd)
+        # if [line for line in out if expected_string in line]:
+        #     print(f"String {expected_string} found in output. Success!")
+        #     retval=0
+        # else:
+        #     print(f"String {expected_string} NOT found in output. FAILURE!")
+        #     retval=1
+    except Exception as e:
+        print(e)
+
+    print(f"Check all peer logs for blocks containing {expected_string}")
+    for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+        lines = container.logs().decode('utf-8').splitlines()
+        if [line for line in lines if expected_string in lines]:
+            print(f"Container: {container.name}: String {expected_string} found in output. Success!")
+            retval=0
+        else:
+            print(f"Container: {container.name}: String {expected_string} NOT found in output. FAILURE!")
+            retval= retval + 1
+
+    return retval
 
 def show_logs():
     print("=============================SHOW LOGS==========================")
