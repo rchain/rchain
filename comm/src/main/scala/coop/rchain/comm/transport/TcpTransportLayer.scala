@@ -188,7 +188,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(src:
         _ <- log.info("Shutting down server")
         _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
       } yield s.copy(server = None, shutdown = true)
-
     }
 
     def sendShutdownMessages: Task[Unit] =
@@ -205,7 +204,11 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(src:
         innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
       Task.gatherUnordered(peers.map(createInstruction)).void
     }
-    shutdownServer *> sendShutdownMessages
+
+    cell.read.flatMap { s =>
+      if (s.shutdown) Task.unit
+      else shutdownServer *> sendShutdownMessages
+    }
   }
 }
 
