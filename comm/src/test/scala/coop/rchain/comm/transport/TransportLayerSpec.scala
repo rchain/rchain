@@ -11,6 +11,7 @@ import cats.implicits._
 
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.CommError.CommErr
 
 import org.scalatest._
 
@@ -34,9 +35,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
               CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)).pure[F]
             }
 
-          val (local, remote, result) = twoNodes(dispatch) { (tl, local, remote) =>
-            tl.roundTrip(remote, ProtocolHelper.ping(local), 1.second)
-          }
+          val (local, remote, result) = twoNodes(dispatch)(roundTripWithPing)
 
           inside(result) {
             case Right(protocol1) =>
@@ -64,9 +63,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
               CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)).pure[F]
             }
 
-          val (_, _, result) = twoNodes(dispatch) { (tl, local, remote) =>
-            tl.roundTrip(remote, ProtocolHelper.ping(local), 100.millis)
-          }
+          val (_, _, result) = twoNodes(dispatch)(roundTripWithPingAndTimeout(_, _, _, 100.millis))
 
           result shouldBe 'left
           val error = result.left.get
@@ -78,13 +75,9 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
         "fail with a communication error" in {
 
           def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
-            _ => {
-              CommunicationResponse.handledWitoutMessage.pure[F]
-            }
+            _ => CommunicationResponse.handledWitoutMessage.pure[F]
 
-          val (_, _, result) = twoNodes(dispatch) { (tl, local, remote) =>
-            tl.roundTrip(remote, ProtocolHelper.ping(local), 1.second)
-          }
+          val (_, _, result) = twoNodes(dispatch)(roundTripWithPing)
 
           result shouldBe 'left
           val error = result.left.get
@@ -95,9 +88,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
       "peer is not listening" should {
         "fail with peer unavailable error" in {
 
-          val (_, remote, result) = twoNodesRemoteDead { (tl, local, remote) =>
-            tl.roundTrip(remote, ProtocolHelper.ping(local), 1.second)
-          }
+          val (_, remote, result) = twoNodesRemoteDead(roundTripWithPing)
 
           result shouldBe 'left
           val error = result.left.get
@@ -109,13 +100,9 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
         "fail with an internal communication error" in {
 
           def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
-            _ => {
-              CommunicationResponse.notHandled(InternalCommunicationError("Test")).pure[F]
-            }
+            _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")).pure[F]
 
-          val (_, _, result) = twoNodes(dispatch) { (tl, local, remote) =>
-            tl.roundTrip(remote, ProtocolHelper.ping(local), 1.second)
-          }
+          val (_, _, result) = twoNodes(dispatch)(roundTripWithPing)
 
           result shouldBe 'left
           val error = result.left.get
@@ -140,7 +127,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
 
         val (local, _, _) = twoNodes(dispatch) { (tl, local, remote) =>
           for {
-            r <- tl.send(remote, ProtocolHelper.ping(local))
+            r <- sendPing(tl, local, remote)
             _ = latch.await(1, TimeUnit.SECONDS)
           } yield r
         }
@@ -167,7 +154,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
 
         val (_, _, sent) = twoNodes(dispatch) { (tl, local, remote) =>
           for {
-            _ <- tl.send(remote, ProtocolHelper.ping(local))
+            _ <- sendPing(tl, local, remote)
             t = System.currentTimeMillis()
             _ = latch.await(1, TimeUnit.SECONDS)
           } yield t
@@ -198,7 +185,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
 
         val (local, remote1, remote2, _) = threeNodes(dispatch) { (tl, local, remote1, remote2) =>
           for {
-            r <- tl.broadcast(Seq(remote1, remote2), ProtocolHelper.ping(local))
+            r <- broadcastPing(tl, local, remote1, remote2)
             _ = latch.await(1, TimeUnit.SECONDS)
           } yield r
         }
@@ -233,7 +220,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
           val (_, _, result) = twoNodes(dispatch) { (tl, local, remote) =>
             for {
               _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- tl.roundTrip(remote, ProtocolHelper.ping(local), 1.second)
+              r <- roundTripWithPing(tl, local, remote)
             } yield r
           }
 
@@ -262,7 +249,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
           twoNodes(dispatch) { (tl, local, remote) =>
             for {
               _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- tl.send(remote, ProtocolHelper.ping(local))
+              r <- sendPing(tl, local, remote)
               _ = latch.await(1, TimeUnit.SECONDS)
             } yield r
           }
@@ -287,7 +274,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
           threeNodes(dispatch) { (tl, local, remote1, remote2) =>
             for {
               _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- tl.broadcast(Seq(remote1, remote2), ProtocolHelper.ping(local))
+              r <- broadcastPing(tl, local, remote1, remote2)
               _ = latch.await(1, TimeUnit.SECONDS)
             } yield r
           }
@@ -305,6 +292,28 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
   def createTransportLayer(env: E): F[TransportLayer[F]]
 
   def extract[A](fa: F[A]): A
+
+  private def roundTripWithPing(transportLayer: TransportLayer[F],
+                                local: PeerNode,
+                                remote: PeerNode): F[CommErr[Protocol]] =
+    roundTripWithPingAndTimeout(transportLayer, local, remote)
+
+  private def roundTripWithPingAndTimeout(
+      transportLayer: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode,
+      timeout: FiniteDuration = 1.second): F[CommErr[Protocol]] =
+    transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
+
+  private def sendPing(transportLayer: TransportLayer[F],
+                       local: PeerNode,
+                       remote: PeerNode): F[Unit] =
+    transportLayer.send(remote, ProtocolHelper.ping(local))
+
+  private def broadcastPing(transportLayer: TransportLayer[F],
+                            local: PeerNode,
+                            remotes: PeerNode*): F[Unit] =
+    transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
 
   private def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
     for {
