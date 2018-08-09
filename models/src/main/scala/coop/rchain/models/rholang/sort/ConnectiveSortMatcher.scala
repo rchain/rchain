@@ -21,6 +21,16 @@ private[sort] object ConnectiveSortMatcher extends Sortable[Connective] {
                    Node(Score.CONNECTIVE_NOT, scoredPar.score))
       case v @ VarRefBody(VarRef(index, depth)) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth))
+      case v @ ConnBool(_) =>
+        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_BOOL))
+      case v @ ConnInt(_) =>
+        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_INT))
+      case v @ ConnString(_) =>
+        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_STRING))
+      case v @ ConnUri(_) =>
+        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_URI))
+      case v @ ConnByteArray(_) =>
+        ScoredTerm(Connective(v), Leaf(Score.CONNECTIVE_BYTEARRAY))
       case Empty =>
         ScoredTerm(Connective(Empty), Leaf(Score.ABSENT))
     }
