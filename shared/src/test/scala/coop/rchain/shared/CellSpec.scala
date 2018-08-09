@@ -24,7 +24,7 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           _   <- f2.join
           _   <- f3.join
           res <- cell.read
-          _   <- Task.delay(res shouldBe (3))
+          _   <- Task.delay(res shouldBe 3)
         } yield ())
     }
 
@@ -45,9 +45,20 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           _   <- f2.join
           _   <- f3.join
           res <- cell.read
-          _   <- Task.delay(res shouldBe (3))
+          _   <- Task.delay(res shouldBe 3)
           _   <- Task.delay(external.keys should contain allOf ("worker1", "worker2", "worker3"))
           _   <- Task.delay(external.values should contain allOf (1, 2, 3))
+        } yield ())
+    }
+
+    it("should restore state after a failed modify") {
+      run(cell =>
+        for {
+          _   <- justIncrement(cell)
+          _   <- failWithError(cell).attempt
+          _   <- justIncrement(cell)
+          res <- cell.read
+          _   <- Task.delay(res shouldBe 2)
         } yield ())
     }
   }
@@ -73,5 +84,8 @@ class CellSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       } yield newI)
 
   private val increment: Int => Task[Int] = (i: Int) => Task.delay(i + 1)
+
+  private def failWithError(cell: Cell[Task, Int]): Task[Unit] =
+    cell.modify(_ => Task.raiseError(new RuntimeException))
 
 }

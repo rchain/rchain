@@ -18,15 +18,13 @@ import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(src: PeerNode)(
+class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
     extends TransportLayer[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-
-  val local: Task[PeerNode] = src.pure[Task]
 
   private val certInputStream = new ByteArrayInputStream(cert.getBytes())
   private val keyInputStream  = new ByteArrayInputStream(key.getBytes())
