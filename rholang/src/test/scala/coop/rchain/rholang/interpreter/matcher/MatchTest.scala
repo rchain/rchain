@@ -9,7 +9,7 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import org.scalatest._
 import scalapb.GeneratedMessage
 
@@ -30,7 +30,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
+    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost._2.map(_._1)
     assert(result == expectedCaptures)
   }
 
