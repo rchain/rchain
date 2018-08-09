@@ -20,7 +20,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   val src: PeerNode              = peer("src")
   val deftimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
-  implicit val log               = new Log.NOPLog[Effect]
+  implicit val log               = new Log.NOPLog[Id]
   implicit val time              = new LogicalTime[Effect]
   implicit val metric            = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscovery     = new NodeDiscoveryStub[Effect]()

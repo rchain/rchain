@@ -21,7 +21,7 @@ object HandleMessages {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def handle[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: RoutingProtocol,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
     ProtocolHelper.sender(protocol) match {
@@ -31,7 +31,7 @@ object HandleMessages {
     }
 
   private def handle_[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: RoutingProtocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
@@ -79,7 +79,7 @@ object HandleMessages {
   }
 
   def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration

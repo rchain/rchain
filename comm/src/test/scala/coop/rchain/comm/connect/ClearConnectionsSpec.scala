@@ -21,6 +21,7 @@ class ClearConnectionsSpec
 
   val src: PeerNode      = peer("src")
   implicit val transport = new TransportLayerStub[Id]
+  implicit val log       = new Log.NOPLog[Id]
 
   override def beforeEach(): Unit = {
     transport.reset()

@@ -1,5 +1,7 @@
 package coop.rchain.casper.helper
 
+import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.shared._
 import cats.{Applicative, ApplicativeError, Id}
 import cats.implicits._
 import coop.rchain.casper.protocol._
@@ -49,7 +51,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val logEff            = new LogStub[Id]
   implicit val timeEff           = new LogicalTime[Id]
-  implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
+  implicit val connectionsCell   = Cell.id[Connections](Connect.Connections.empty)
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
@@ -58,7 +60,6 @@ class HashSetCasperTestNode(name: String,
   // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
-  implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
   implicit val rpConfAsk         = createRPConfAsk[Id](local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
@@ -117,13 +118,14 @@ object HashSetCasperTestNode {
           new HashSetCasperTestNode(n, p, tle, genesis, sk)
       }
 
+    import Connections._
     //make sure all nodes know about each other
     for {
       n <- nodes
       m <- nodes
       if n.local != m.local
     } {
-      n.nodeDiscoveryEff.addNode(m.local)
+      n.connectionsCell.modify(_.addConn[Id](m.local)(Applicative[Id], n.logEff))
     }
 
     nodes

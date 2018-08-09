@@ -13,7 +13,7 @@ import coop.rchain.shared._
 import scala.concurrent.Future
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
+    F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
     BlockAPI.deploy[F](d).toFuture

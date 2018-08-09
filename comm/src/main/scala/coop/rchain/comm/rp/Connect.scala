@@ -35,10 +35,12 @@ object Connect {
             connections.pure[F],
             Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections)
           )
-      def removeAndAddAtEnd[F[_]: Applicative: Log](toRemove: List[PeerNode], toAddAtEnd: List[PeerNode]): F[Connections] = for {
-        result <-   (connections.filter(conn => !toRemove.contains(conn)) ++ toAddAtEnd).pure[F]
-        _ <- Log[F].info(s"Peers: ${result.size}.")
-      } yield result
+      def removeAndAddAtEnd[F[_]: Monad: Log](toRemove: List[PeerNode],
+                                              toAddAtEnd: List[PeerNode]): F[Connections] =
+        for {
+          result <- (connections.filter(conn => !toRemove.contains(conn)) ++ toAddAtEnd).pure[F]
+          _      <- Log[F].info(s"Peers: ${result.size}.")
+        } yield result
     }
   }
   import Connections._
@@ -50,7 +52,8 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer]: F[Int] = {
+  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log]
+    : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {
@@ -67,7 +70,7 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat(_))
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
-        _ <- ConnectionsCell[F].modify(_.removeAndAddAtEnd(toPing, successfulPeers))
+        _                      <- ConnectionsCell[F].modify(_.removeAndAddAtEnd[F](toPing, successfulPeers))
       } yield failedPeers.size
 
     for {

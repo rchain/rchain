@@ -258,10 +258,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     } yield ()
 
     val loop: Effect[Unit] = for {
-      _ <- time.sleep(5000).toEffect
       _ <- Connect.clearConnections[Effect]
       _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
       _ <- requestApprovedBlock[Effect]
+      _ <- time.sleep(5000).toEffect
     } yield ()
 
     for {
@@ -299,7 +299,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       time: Time[Task],
       rpConfAsk: RPConfAsk[Task],
       transport: TransportLayer[Task],
-      nodeDiscovery: NodeDiscovery[Task],
+      connections: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
     MultiParentCasperConstructor.fromConfig[Effect, Effect](conf.casper, runtimeManager)
@@ -309,7 +309,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                           time: Time[Task],
                                           rpConfAsk: RPConfAsk[Task],
                                           transport: TransportLayer[Task],
-                                          nodeDiscovery: NodeDiscovery[Task],
+                                          connections: ConnectionsCell[Task],
                                           blockStore: BlockStore[Effect],
                                           casperConstructor: MultiParentCasperConstructor[Effect])
     : PeerNode => PartialFunction[Packet, Effect[Option[Packet]]] =
@@ -361,14 +361,14 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                                                    time,
                                                                    rpConfAsk,
                                                                    transport,
-                                                                   nodeDiscovery,
+                                                                   rpConnections,
                                                                    blockStore,
                                                                    oracle)
     cph = generateCasperPacketHandler(log,
                                       time,
                                       rpConfAsk,
                                       transport,
-                                      nodeDiscovery,
+                                      rpConnections,
                                       blockStore,
                                       casperConstructor)
     packetHandler = PacketHandler.pf[Effect](cph)(Applicative[Effect],
