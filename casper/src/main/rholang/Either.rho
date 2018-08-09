@@ -26,12 +26,12 @@ contract @["Either", "map"](@either, f, return) = {
   }
 } |
 
-//Composes a LinkedList of functions returning Either into a
+//Composes a list of functions returning Either into a
 //single result by using flatMap. Similar to following Scala code:
 //for {
 //  r0 <- Right(input)
-//  r1 <- f1(x)
-//  r2 <- f2(y)
+//  r1 <- f1(r0)
+//  r2 <- f2(r1)
 //  ...
 //} yield fn
 contract @["Either", "compose"](@input, @functions, return) = {
