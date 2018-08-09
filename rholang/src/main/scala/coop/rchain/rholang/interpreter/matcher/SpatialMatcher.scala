@@ -313,7 +313,31 @@ object SpatialMatcher extends SpatialMatcherInstances {
                 OptionalFreeMapWithCost.emptyMap
             // If there's a capture variable, we prefer to add things to that rather than throw them away.
             case Some(level) => {
-              handleRemainder(remainderTargets, level, merger, wildcard)
+              /*
+              Matching a single variable with a single term has so far been handled
+              by matching a list of 0 patterns with a list of 1 target, with a remainder present.
+
+              In general, matching remainders requires combining/merging all terms matched to the remainder
+              on a single capture variable. E.g. `1 | 2 | 3 matches 2 | x` would return x = 1 | 3.
+              See the `handleReminder` method below and notice that initial state for the fold is taken from
+              previous matches.
+
+              Matching a single variable using that mechanism (e.g. [1] matches [x]) was OK so far, since
+              overriding the match state (FreeMap entry) for a given variable never happened in the previous algo.
+
+              We don't have a proof it was impossible. What we know for sure though is:
+              none of the tests added for the new algo - which revealed this problem - have failed on the old algo.
+
+              Since we've started modifying the var assignment during the MBM algorithm, the case of matching a var
+              to a single term must be handled separately, without merging the prior match state.
+              */
+              if (patternsSorted.isEmpty && remainderTargets.length == 1 &&
+                  lf.locallyFree(remainderTargets.head, 0).isEmpty) {
+                StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
+                  m + (level -> merger(VectorPar(), remainderTargets.head)))
+              } else {
+                handleRemainder(remainderTargets, level, merger, wildcard)
+              }
             }
           }
     } yield Unit
