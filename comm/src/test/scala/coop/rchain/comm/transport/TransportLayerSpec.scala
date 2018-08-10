@@ -1,9 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-
-import scala.collection.mutable
 import scala.concurrent.duration._
 
 import cats._
@@ -15,8 +11,9 @@ import coop.rchain.comm.CommError.CommErr
 
 import org.scalatest._
 
-abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
-    extends WordSpec
+abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
+    extends TransportLayerRuntime[F, E]
+    with WordSpecLike
     with Matchers
     with Inside {
 
@@ -25,103 +22,135 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
   transportLayerName when {
     "doing a round trip to remote peer" when {
       "everything is fine" should {
-        "send and receive the message" in {
-          val dispatcher              = pongDispatcher
-          val (local, remote, result) = twoNodes(dispatcher.dispatch)(roundTripWithPing)
+        "send and receive the message" in
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              roundTripWithPing(transportLayer, local, remote)
 
-          inside(result) {
-            case Right(protocol1) =>
-              val sender = ProtocolHelper.sender(protocol1)
-              sender shouldBe 'defined
-              sender.get shouldEqual remote
-              protocol1.message shouldBe 'pong
+            val result: TwoNodesResult = run()
+
+            inside(result()) {
+              case Right(protocol1) =>
+                val sender = ProtocolHelper.sender(protocol1)
+                sender shouldBe 'defined
+                sender.get shouldEqual result.remoteNode
+                protocol1.message shouldBe 'pong
+            }
+
+            result.receivedMessages should have length 1
+            val (_, protocol2)           = result.receivedMessages.head
+            val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
+            sender shouldBe 'defined
+            sender.get shouldEqual result.localNode
+            protocol2.message shouldBe 'ping
           }
-
-          dispatcher.received should have length 1
-          val (_, protocol2) = dispatcher.received.head
-          val sender         = ProtocolHelper.sender(protocol2)
-          sender shouldBe 'defined
-          sender.get shouldEqual local
-          protocol2.message shouldBe 'ping
-        }
       }
 
       "response takes to long" should {
-        "fail with a timeout" in {
-          val dispatcher = pongDispatcherWithDelay(500)
-          val (_, _, result) =
-            twoNodes(dispatcher.dispatch)(roundTripWithPingAndTimeout(_, _, _, 100.millis))
+        "fail with a timeout" in
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcherWithDelay(500)) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              roundTripWithPingAndTimeout(transportLayer, local, remote, 200.millis)
 
-          result shouldBe 'left
-          val error = result.left.get
-          error shouldEqual TimeOut
-        }
+            val result: TwoNodesResult = run()
+
+            result() shouldBe 'left
+            val error: CommError = result().left.get
+            error shouldEqual TimeOut
+          }
       }
 
-      "there is no response body" should {
-        "fail with a communication error" in {
-          val dispatcher     = withoutMessageDispatcher
-          val (_, _, result) = twoNodes(dispatcher.dispatch)(roundTripWithPing)
+      "there is no respon se body" should {
+        "fail with a communication error" in
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.withoutMessageDispatcher) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              roundTripWithPing(transportLayer, local, remote)
 
-          result shouldBe 'left
-          val error = result.left.get
-          error shouldEqual InternalCommunicationError("Was expecting message, nothing arrived")
-        }
+            val result: TwoNodesResult = run()
+
+            result() shouldBe 'left
+            val error: CommError = result().left.get
+            error shouldEqual InternalCommunicationError("Was expecting message, nothing arrived")
+          }
       }
 
       "peer is not listening" should {
-        "fail with peer unavailable error" in {
-          val (_, remote, result) = twoNodesRemoteDead(roundTripWithPing)
+        "fail with peer unavailable error" in
+          new TwoNodesRemoteDeadRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              roundTripWithPing(transportLayer, local, remote)
 
-          result shouldBe 'left
-          val error = result.left.get
-          error shouldEqual PeerUnavailable(remote)
-        }
+            val result: TwoNodesResult = run()
+
+            result() shouldBe 'left
+            val error: CommError = result().left.get
+            error shouldEqual PeerUnavailable(result.remoteNode)
+          }
       }
 
       "there was a peer-side error" should {
-        "fail with an internal communication error" in {
-          val dispatcher     = internalCommunicationErrorDispatcher
-          val (_, _, result) = twoNodes(dispatcher.dispatch)(roundTripWithPing)
+        "fail with an internal communication error" in
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.internalCommunicationErrorDispatcher[F]) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              roundTripWithPing(transportLayer, local, remote)
 
-          result shouldBe 'left
-          val error = result.left.get
-          error shouldEqual InternalCommunicationError(
-            "Got response: Internal communication error. Test")
-        }
+            val result: TwoNodesResult = run()
+
+            result() shouldBe 'left
+            val error: CommError = result().left.get
+            error shouldEqual InternalCommunicationError(
+              "Got response: Internal communication error. Test")
+          }
       }
     }
 
     "sending a message" should {
-      "deliver the message" in {
-        val dispatcher = dispatcherWithLatch()
-        val (local, _, _) = twoNodes(dispatcher.dispatch) { (tl, local, remote) =>
-          for {
-            r <- sendPing(tl, local, remote)
-            _ = dispatcher.await()
-          } yield r
+      "deliver the message" in
+        new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+          def execute(transportLayer: TransportLayer[F],
+                      local: PeerNode,
+                      remote: PeerNode): F[Unit] =
+            for {
+              r <- sendPing(transportLayer, local, remote)
+              _ = await()
+            } yield r
+
+          val result: TwoNodesResult = run()
+
+          result.receivedMessages should have length 1
+          val (_, protocol2)           = result.receivedMessages.head
+          val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
+          sender shouldBe 'defined
+          sender.get shouldEqual result.localNode
+          protocol2.message shouldBe 'ping
         }
 
-        dispatcher.received should have length 1
-        val (_, protocol2) = dispatcher.received.head
-        val sender         = ProtocolHelper.sender(protocol2)
-        sender shouldBe 'defined
-        sender.get shouldEqual local
-        protocol2.message shouldBe 'ping
-      }
+      "not wait for a response" in
+        new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
+          def execute(transportLayer: TransportLayer[F],
+                      local: PeerNode,
+                      remote: PeerNode): F[Long] =
+            for {
+              _ <- sendPing(transportLayer, local, remote)
+              t = System.currentTimeMillis()
+              _ = await()
+            } yield t
 
-      "not wait for a response" in {
-        val dispatcher = dispatcherWithLatch()
-        val (_, _, sent) = twoNodes(dispatcher.dispatch) { (tl, local, remote) =>
-          for {
-            _ <- sendPing(tl, local, remote)
-            t = System.currentTimeMillis()
-            _ = dispatcher.await()
-          } yield t
+          val result: TwoNodesResult = run()
+
+          val sent = result()
+          sent should be < result.lastProcessedMessageTimestamp
         }
-
-        sent should be < dispatcher.lastProcessedTimestamp
-      }
 
       "wait for message being delivered" in {
         // future feature, not yet implemented
@@ -130,226 +159,93 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
     }
 
     "broadcasting a message" should {
-      "send the message to all peers" in {
-        val dispatcher = dispatcherWithLatch(2)
-        val (local, remote1, remote2, _) = threeNodes(dispatcher.dispatch) {
-          (tl, local, remote1, remote2) =>
+      "send the message to all peers" in
+        new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+          def execute(transportLayer: TransportLayer[F],
+                      local: PeerNode,
+                      remote1: PeerNode,
+                      remote2: PeerNode): F[Unit] =
             for {
-              r <- broadcastPing(tl, local, remote1, remote2)
-              _ = dispatcher.await()
+              r <- broadcastPing(transportLayer, local, remote1, remote2)
+              _ = await()
             } yield r
-        }
 
-        dispatcher.received should have length 2
-        val Seq((r1, p1), (r2, p2)) = dispatcher.received
-        val sender1                 = ProtocolHelper.sender(p1)
-        val sender2                 = ProtocolHelper.sender(p2)
-        sender1 shouldBe 'defined
-        sender2 shouldBe 'defined
-        sender1.get shouldEqual local
-        sender2.get shouldEqual local
-        p1.message shouldBe 'ping
-        p2.message shouldBe 'ping
-        r1 should (equal(remote1) or equal(remote2))
-        r2 should (equal(remote1) or equal(remote2))
-      }
+          val result: ThreeNodesResult = run()
+
+          result.receivedMessages should have length 2
+          val Seq((r1, p1), (r2, p2))   = result.receivedMessages
+          val sender1: Option[PeerNode] = ProtocolHelper.sender(p1)
+          val sender2: Option[PeerNode] = ProtocolHelper.sender(p2)
+          sender1 shouldBe 'defined
+          sender2 shouldBe 'defined
+          sender1.get shouldEqual result.localNode
+          sender2.get shouldEqual result.localNode
+          p1.message shouldBe 'ping
+          p2.message shouldBe 'ping
+          r1 should (equal(result.remoteNode1) or equal(result.remoteNode2))
+          r2 should (equal(result.remoteNode1) or equal(result.remoteNode2))
+        }
     }
 
     "shutting down" when {
       "doing a round trip" should {
-        "not send the message" in {
-          val dispatcher = pongDispatcher
-          val (_, _, result) = twoNodes(dispatcher.dispatch) { (tl, local, remote) =>
-            for {
-              _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- roundTripWithPing(tl, local, remote)
-            } yield r
-          }
+        "not send the message" in
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[CommErr[Protocol]] =
+              for {
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                r <- roundTripWithPing(transportLayer, local, remote)
+              } yield r
 
-          inside(result) {
-            case Left(ProtocolException(e)) =>
-              e.getMessage shouldEqual "The transport layer has been shut down"
-          }
+            val result: TwoNodesResult = run()
 
-          dispatcher.received shouldBe 'empty
-        }
+            inside(result()) {
+              case Left(ProtocolException(e)) =>
+                e.getMessage shouldEqual "The transport layer has been shut down"
+            }
+
+            result.receivedMessages shouldBe 'empty
+          }
       }
 
       "sending a message" should {
-        "not send the message" in {
-          val dispatcher = dispatcherWithLatch()
-          twoNodes(dispatcher.dispatch) { (tl, local, remote) =>
-            for {
-              _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- sendPing(tl, local, remote)
-              _ = dispatcher.await()
-            } yield r
-          }
+        "not send the message" in
+          new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote: PeerNode): F[Unit] =
+              for {
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                r <- sendPing(transportLayer, local, remote)
+                _ = await()
+              } yield r
 
-          dispatcher.received shouldBe 'empty
-        }
+            val result: TwoNodesResult = run()
+
+            result.receivedMessages shouldBe 'empty
+          }
       }
 
       "broadcasting a message" should {
-        "not send any messages" in {
-          val dispatcher = dispatcherWithLatch(2)
-          threeNodes(dispatcher.dispatch) { (tl, local, remote1, remote2) =>
-            for {
-              _ <- tl.shutdown(ProtocolHelper.disconnect(local))
-              r <- broadcastPing(tl, local, remote1, remote2)
-              _ = dispatcher.await()
-            } yield r
-          }
+        "not send any messages" in
+          new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+            def execute(transportLayer: TransportLayer[F],
+                        local: PeerNode,
+                        remote1: PeerNode,
+                        remote2: PeerNode): F[Unit] =
+              for {
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                r <- broadcastPing(transportLayer, local, remote1, remote2)
+                _ = await()
+              } yield r
 
-          dispatcher.received shouldBe 'empty
-        }
+            val result: ThreeNodesResult = run()
+
+            result.receivedMessages shouldBe 'empty
+          }
       }
     }
   }
-
-  val nextPort = new AtomicInteger(41000)
-
-  def createEnvironment(port: Int): F[E]
-
-  def createTransportLayer(env: E): F[TransportLayer[F]]
-
-  def extract[A](fa: F[A]): A
-
-  private final class Dispatcher(
-    response: PeerNode => CommunicationResponse,
-    latch: Option[java.util.concurrent.CountDownLatch] = None,
-    delay: Option[Long] = None
-  ) {
-    def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
-      p => {
-        processed = System.currentTimeMillis()
-        latch.foreach(_.countDown())
-        delay.foreach(Thread.sleep)
-        receivedMessages.synchronized(receivedMessages += ((peer, p)))
-        response(peer).pure[F]
-      }
-    def received: Seq[(PeerNode, Protocol)] = receivedMessages
-    def lastProcessedTimestamp: Long = processed
-    def await(): Unit = latch.foreach(_.await(2, TimeUnit.SECONDS))
-    private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
-    private var processed = 0L
-  }
-
-  private def pongDispatcher: Dispatcher =
-    new Dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
-
-  private def pongDispatcherWithDelay(delay: Long): Dispatcher =
-    new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)),
-      delay = Some(delay)
-    )
-
-  private def dispatcherWithLatch(countDown: Int = 1): Dispatcher =
-    new Dispatcher(
-      peer => CommunicationResponse.handledWithoutMessage,
-      latch = Some(new java.util.concurrent.CountDownLatch(countDown))
-    )
-
-  private def withoutMessageDispatcher: Dispatcher =
-    new Dispatcher(_ => CommunicationResponse.handledWithoutMessage)
-
-  private def internalCommunicationErrorDispatcher: Dispatcher =
-    new Dispatcher(_ => CommunicationResponse.notHandled(InternalCommunicationError("Test")))
-
-  private def roundTripWithPing(transportLayer: TransportLayer[F],
-                                local: PeerNode,
-                                remote: PeerNode): F[CommErr[Protocol]] =
-    roundTripWithPingAndTimeout(transportLayer, local, remote)
-
-  private def roundTripWithPingAndTimeout(
-      transportLayer: TransportLayer[F],
-      local: PeerNode,
-      remote: PeerNode,
-      timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
-    transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
-
-  private def sendPing(transportLayer: TransportLayer[F],
-                       local: PeerNode,
-                       remote: PeerNode): F[Unit] =
-    transportLayer.send(remote, ProtocolHelper.ping(local))
-
-  private def broadcastPing(transportLayer: TransportLayer[F],
-                            local: PeerNode,
-                            remotes: PeerNode*): F[Unit] =
-    transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
-
-  private def twoNodesEnvironment[A](block: (E, E) => F[A]): F[A] =
-    for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
-      r  <- block(e1, e2)
-    } yield r
-
-  private def threeNodesEnvironment[A](block: (E, E, E) => F[A]): F[A] =
-    for {
-      e1 <- createEnvironment(nextPort.incrementAndGet())
-      e2 <- createEnvironment(nextPort.incrementAndGet())
-      e3 <- createEnvironment(nextPort.incrementAndGet())
-      r  <- block(e1, e2, e3)
-    } yield r
-
-  private def twoNodes[A](dispatch: PeerNode => Protocol => F[CommunicationResponse])(
-      block: (TransportLayer[F], PeerNode, PeerNode) => F[A]
-  ): (PeerNode, PeerNode, A) =
-    extract(
-      twoNodesEnvironment { (e1, e2) =>
-        for {
-          localTl  <- createTransportLayer(e1)
-          remoteTl <- createTransportLayer(e2)
-          local    = e1.peer
-          remote   = e2.peer
-          _        <- remoteTl.receive(dispatch(remote))
-          r        <- block(localTl, local, remote)
-          _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-          _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
-        } yield (local, remote, r)
-      }
-    )
-
-  private def twoNodesRemoteDead[A](
-      block: (TransportLayer[F], PeerNode, PeerNode) => F[A]): (PeerNode, PeerNode, A) =
-    extract(
-      twoNodesEnvironment { (e1, e2) =>
-        for {
-          localTl <- createTransportLayer(e1)
-          local   = e1.peer
-          remote  = e2.peer
-          r       <- block(localTl, local, remote)
-          _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
-        } yield (local, remote, r)
-      }
-    )
-
-  private def threeNodes[A](dispatch: PeerNode => Protocol => F[CommunicationResponse])(
-      block: (TransportLayer[F], PeerNode, PeerNode, PeerNode) => F[A]
-  ): (PeerNode, PeerNode, PeerNode, A) =
-    extract(
-      threeNodesEnvironment { (e1, e2, e3) =>
-        for {
-          localTl   <- createTransportLayer(e1)
-          remoteTl1 <- createTransportLayer(e2)
-          remoteTl2 <- createTransportLayer(e3)
-          local     = e1.peer
-          remote1   = e2.peer
-          remote2   = e3.peer
-          _         <- remoteTl1.receive(dispatch(remote1))
-          _         <- remoteTl2.receive(dispatch(remote2))
-          r         <- block(localTl, local, remote1, remote2)
-          _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-          _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-          _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
-        } yield (local, remote1, remote2, r)
-      }
-    )
-}
-
-trait Environment {
-  def peer: PeerNode
-  def host: String
-  def port: Int
 }
