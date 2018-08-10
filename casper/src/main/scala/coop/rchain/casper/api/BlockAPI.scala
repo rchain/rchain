@@ -82,9 +82,10 @@ object BlockAPI {
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       for {
-                                        blockInfo     <- getBlockInfo[F](block)
-                                        serializedLog = block.body.get.commReductions // TODO: For some reason .fold(Seq.empty[Event])(_.commReductions) doesn't work
-                                        log           = serializedLog.map(EventConverter.toRspaceEvent).toList
+                                        blockInfo <- getBlockInfoWithoutTuplespace[F](block)
+                                        serializedLog = block.body.fold(Seq.empty[Event])(
+                                          _.commReductions)
+                                        log = serializedLog.map(EventConverter.toRspaceEvent).toList
                                         listeningNameReduced = log.exists {
                                           case Produce(channelHash, _) =>
                                             channelHash == StableHashProvider.hash(
@@ -193,6 +194,39 @@ object BlockAPI {
         deployCount = deployCount,
         tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         tupleSpaceDump = tsDesc,
+        timestamp = timestamp,
+        faultTolerance = normalizedFaultTolerance - initialFault,
+        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
+        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+        sender = PrettyPrinter.buildStringNoLimit(block.sender)
+      )
+    }
+
+  private def getBlockInfoWithoutTuplespace[
+      F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
+      block: BlockMessage): F[BlockInfoWithoutTuplespace] =
+    for {
+      header      <- block.header.getOrElse(Header.defaultInstance).pure[F]
+      version     <- header.version.pure[F]
+      deployCount <- header.deployCount.pure[F]
+      tsHash <- {
+        val ps = block.body.flatMap(_.postState)
+        ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
+      }
+      timestamp                <- header.timestamp.pure[F]
+      mainParent               <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
+      parentsHashList          <- header.parentsHashList.pure[F]
+      dag                      <- MultiParentCasper[F].blockDag
+      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
+      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+    } yield {
+      BlockInfoWithoutTuplespace(
+        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+        blockSize = block.serializedSize.toString,
+        blockNumber = ProtoUtil.blockNumber(block),
+        version = version,
+        deployCount = deployCount,
+        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
         timestamp = timestamp,
         faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),

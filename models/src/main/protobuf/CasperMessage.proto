@@ -70,13 +70,27 @@ message ListeningNameResponse {
 
 message DataWithBlockInfo {
   repeated Par postBlockData = 1;
-  BlockInfo block = 2;
+  BlockInfoWithoutTuplespace block = 2;
 }
 
 message BlocksResponse {
   string status = 1;
   repeated BlockInfo blocks = 2;
   int64 length = 3;
+}
+
+message BlockInfoWithoutTuplespace {
+  string blockHash = 1;
+  string blockSize = 2;
+  int64 blockNumber = 3;
+  int64 version = 4;
+  int32 deployCount = 5;
+  string tupleSpaceHash = 6; // Same as postStateHash of BlockMessage
+  int64 timestamp = 7;
+  float faultTolerance = 8;
+  string mainParentHash = 9;
+  repeated string parentsHashList = 10;
+  string sender = 11;
 }
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation
