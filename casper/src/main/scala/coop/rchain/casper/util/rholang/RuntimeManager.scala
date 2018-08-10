@@ -17,6 +17,7 @@ import monix.execution.Scheduler
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.{DeployError, StateHash}
+import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
@@ -124,6 +125,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
         }.toList
       case Channel(_) => throw new Error("Should never happen")
+    }
+  }
+
+  def getData(hash: ByteString, channel: Channel): Seq[Channel] = {
+    val resetRuntime                              = getResetRuntime(hash)
+    val result: Seq[Datum[ListChannelWithRandom]] = resetRuntime.space.getData(channel)
+    runtimeContainer.put(resetRuntime)
+    result.flatMap {
+      case Datum(a, persist, source) =>
+        a.channels
     }
   }
 

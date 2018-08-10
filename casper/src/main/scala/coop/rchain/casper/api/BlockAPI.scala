@@ -6,13 +6,19 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Channel
+import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.shared.Log
+import coop.rchain.models.serialization.implicits.serializeChannel
+import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
+import scodec.Codec
 
-import monix.execution.Scheduler
+import scala.collection.immutable.Seq
 
 object BlockAPI {
 
@@ -59,38 +65,64 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def getCapturedResultsAcrossBlocksResponse[
+  def getListeningNameResponse[
       F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
-      q: CaptureResultsQuery)(
-      implicit scheduler: Scheduler): F[CapturedResultsAcrossBlocksResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      q: ListeningNameQuery): F[ListeningNameResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
+        listeningName <- q.channel match {
+                          case Some(channel) => channel.pure[F]
+                          case None          => throw new Error("No channel provided.")
+                        }
         estimates           <- casper.estimator
         tip                 = estimates.head
         internalMap         <- BlockStore[F].asMap()
         mainChain           = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        blockResults <- mainChain.toList.traverse { block =>
-                         for {
-                           blockInfo <- getBlockInfo[F](block)
-                           stateHash = ProtoUtil.tuplespace(block).get
-                           results = runtimeManager.captureResults(
-                             stateHash,
-                             InterpreterUtil.mkTerm(q.queryTerm).right.get,
-                             q.resultName)
-                         } yield
-                           CapturedResultWithBlockInfo(results.map(PrettyPrinter.buildString),
-                                                       Some(blockInfo))
-                       }
+        maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
+                                      for {
+                                        blockInfo     <- getBlockInfo[F](block)
+                                        serializedLog = block.body.get.commReductions // TODO: For some reason .fold(Seq.empty[Event])(_.commReductions) doesn't work
+                                        log           = serializedLog.map(EventConverter.toRspaceEvent).toList
+                                        listeningNameReduced = log.exists {
+                                          case Produce(channelHash, _) =>
+                                            channelHash == StableHashProvider.hash(
+                                              Seq(listeningName))
+                                          case Consume(channelHash, _) =>
+                                            channelHash == StableHashProvider.hash(
+                                              Seq(listeningName))
+                                          case _ => false
+                                        }
+                                        dataWithBlockInfo <- if (listeningNameReduced) {
+                                                              val stateHash =
+                                                                ProtoUtil.tuplespace(block).get
+                                                              val data =
+                                                                runtimeManager.getData(
+                                                                  stateHash,
+                                                                  listeningName)
+                                                              val prettyPrintedData =
+                                                                data.map(
+                                                                  RholangPrettyPrinter().buildString)
+                                                              Option[DataWithBlockInfo](
+                                                                DataWithBlockInfo(prettyPrintedData,
+                                                                                  Some(blockInfo)))
+                                                                .pure[F]
+                                                            } else {
+                                                              none[DataWithBlockInfo].pure[F]
+                                                            }
+                                      } yield dataWithBlockInfo
+                                    }
+        blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield
-        CapturedResultsAcrossBlocksResponse(status = "Success",
-                                            blockResults = blockResults,
-                                            length = blockResults.length.toLong)
+        ListeningNameResponse(status = "Success",
+                              blockResults = blocksWithActiveName,
+                              length = blocksWithActiveName.length.toLong)
 
-    MultiParentCasperConstructor.withCasper[F, CapturedResultsAcrossBlocksResponse](
-      casperResponse(_),
-      CapturedResultsAcrossBlocksResponse(status = "Error: Casper instance not available"))
+    implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
+    MultiParentCasperConstructor.withCasper[F, ListeningNameResponse](
+      casperResponse(_, channelCodec),
+      ListeningNameResponse(status = "Error: Casper instance not available"))
   }
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
