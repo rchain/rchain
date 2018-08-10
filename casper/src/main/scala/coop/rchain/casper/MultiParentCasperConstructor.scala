@@ -80,7 +80,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
         }
 
       override def receive(a: ApprovedBlock): F[Boolean] =
-        Capture[F].capture(genesisPromise.isCompleted) >>= (completed => {
+        Sync[F].delay(genesisPromise.isCompleted) >>= (completed => {
           if (completed) false.pure[F]
           else
             for {
@@ -91,7 +91,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
                     _           <- BlockStore[F].put(genesis.blockHash, genesis)
                     internalMap <- BlockStore[F].asMap()
                     _           <- Log[F].info(s"receive: a - ${a.hashCode}")
-                    _           <- Capture[F].capture(genesisPromise.success((a, internalMap)))
+                    _           <- Sync[F].delay(genesisPromise.success((a, internalMap)))
                   } yield ()
                   else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
             } yield isValid
@@ -100,14 +100,14 @@ sealed abstract class MultiParentCasperConstructorInstances {
 
       //TODO: Allow update to more recent ApprovedBlock
 
-      override def casperInstance: F[Either[Throwable, MultiParentCasper[F]]] = Capture[F].capture {
+      override def casperInstance: F[Either[Throwable, MultiParentCasper[F]]] = Sync[F].delay {
         casper.value.fold[Either[Throwable, MultiParentCasper[F]]](
           Left(new Exception(
             "No valid ApprovedBlock has been received to instantiate a Casper instance!")))(
           _.toEither)
       }
 
-      override def lastApprovedBlock: F[Option[ApprovedBlock]] = Capture[F].capture {
+      override def lastApprovedBlock: F[Option[ApprovedBlock]] = Sync[F].delay {
         genesisPromise.future.value.flatMap(_.toOption.map(_._1))
       }
 
