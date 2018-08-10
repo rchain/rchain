@@ -69,7 +69,7 @@ message ListeningNameResponse {
 }
 
 message DataWithBlockInfo {
-  repeated string datum = 1;
+  repeated Channel data = 1;
   BlockInfo block = 2;
 }
 

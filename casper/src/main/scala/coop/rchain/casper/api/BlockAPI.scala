@@ -101,11 +101,8 @@ object BlockAPI {
                                                                 runtimeManager.getData(
                                                                   stateHash,
                                                                   listeningName)
-                                                              val prettyPrintedData =
-                                                                data.map(
-                                                                  RholangPrettyPrinter().buildString)
                                                               Option[DataWithBlockInfo](
-                                                                DataWithBlockInfo(prettyPrintedData,
+                                                                DataWithBlockInfo(data,
                                                                                   Some(blockInfo)))
                                                                 .pure[F]
                                                             } else {
