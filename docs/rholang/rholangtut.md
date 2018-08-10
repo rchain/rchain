@@ -21,9 +21,9 @@ A name represents a communication channel. You can sent messages to a name or yo
 
 The names are created with the construct
  
-    1 new someName in {
-    2 //... code using someName
-    3 }
+    new someName in {
+    //... code using someName
+    }
 
 In the above example, the name `someName` is private. By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  
 
@@ -33,38 +33,38 @@ We sometimes use the term "unforgeable" to describe these names when we want to 
 
 Receiving messages over a channel is done using the `for` construction
 
-    1 for( x <- channel1, y <- channel2) {
-    2 ...
-    3 }
+    for( x <- channel1, y <- channel2) {
+    ...
+    }
 
 ### Processes
 In Rholang everything is a process. Values like strings, booleans or numbers are also processes. 
 The processes can be aggregated using the operator '|'. Below are a few examples:
 
-    1 1
-    2 true
-    3 1 + 1
-    4 new myName in {...}
-    5 someName ! ("hello")
-    6 for( x <- someChannel) { ... }
-    7 p | q
+    1
+    true
+    1 + 1
+    new myName in {...}
+    someName ! ("hello")
+    for( x <- someChannel) { ... }
+    p | q
 
 ### Primitive values
-Rholang currently supports integers, strings, booleans, tuples, lists, sets, maps
+Rholang currently supports integers, strings, booleans, tuples, lists, sets and maps.
 
 ### Expressions
-The expressions are special because they are evaluated before sending the result to a channel. 
+Expressions are special because they are evaluated before sending the result to a channel. 
 
 The following operators are used for building expressions: 
 
 #### Arithmetic operators
-The supported arithmetic operators are: `+`, `-`, `/`, `*`
+The supported arithmetic operators are: `+`, `-`, `/`, `*`.
 
 #### Relational operators
-The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`
+The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`.
 
 #### Logical operators
-The supported logical operators are: `and`, `or`, `not`
+The supported logical operators are: `and`, `or`, `not`.
  
 #### Matches expression
 The `p matches q` expression is similar to  
