@@ -118,5 +118,5 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
-    } yield handledWitoutMessage
+    } yield handledWithoutMessage
 }
