@@ -81,35 +81,29 @@ object BlockAPI {
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      for {
-                                        blockInfo <- getBlockInfoWithoutTuplespace[F](block)
-                                        serializedLog = block.body.fold(Seq.empty[Event])(
-                                          _.commReductions)
-                                        log = serializedLog.map(EventConverter.toRspaceEvent).toList
-                                        listeningNameReduced = log.exists {
-                                          case Produce(channelHash, _) =>
-                                            channelHash == StableHashProvider.hash(
-                                              Seq(listeningName))
-                                          case Consume(channelHash, _) =>
-                                            channelHash == StableHashProvider.hash(
-                                              Seq(listeningName))
-                                          case _ => false
-                                        }
-                                        dataWithBlockInfo <- if (listeningNameReduced) {
-                                                              val stateHash =
-                                                                ProtoUtil.tuplespace(block).get
-                                                              val data =
-                                                                runtimeManager.getData(
-                                                                  stateHash,
-                                                                  listeningName)
-                                                              Option[DataWithBlockInfo](
-                                                                DataWithBlockInfo(data,
-                                                                                  Some(blockInfo)))
-                                                                .pure[F]
-                                                            } else {
-                                                              none[DataWithBlockInfo].pure[F]
-                                                            }
-                                      } yield dataWithBlockInfo
+                                      val serializedLog = block.body.get.commReductions // TODO: For some reason .fold(Seq.empty[Event])(_.commReductions) doesn't work
+                                      val log =
+                                        serializedLog.map(EventConverter.toRspaceEvent).toList
+                                      val listeningNameReduced = log.exists {
+                                        case Produce(channelHash, _) =>
+                                          channelHash == StableHashProvider.hash(Seq(listeningName))
+                                        case Consume(channelHash, _) =>
+                                          channelHash == StableHashProvider.hash(Seq(listeningName))
+                                        case _ => false
+                                      }
+                                      if (listeningNameReduced) {
+                                        val stateHash =
+                                          ProtoUtil.tuplespace(block).get
+                                        val data =
+                                          runtimeManager.getData(stateHash, listeningName)
+                                        for {
+                                          blockInfo <- getBlockInfoWithoutTuplespace[F](block)
+                                        } yield
+                                          Option[DataWithBlockInfo](
+                                            DataWithBlockInfo(data, Some(blockInfo)))
+                                      } else {
+                                        none[DataWithBlockInfo].pure[F]
+                                      }
                                     }
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield
