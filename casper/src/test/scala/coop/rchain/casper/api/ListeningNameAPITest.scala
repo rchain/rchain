@@ -52,14 +52,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
   private val genesis                     = createGenesis(validators)
 
   "getListeningNameResponse" should "return listening names across a chain" in {
-    val stake                 = 10
-    val equalBonds            = validators.zipWithIndex.map { case (v, _) => v -> stake }.toMap
-    val genesisWithEqualBonds = buildGenesis(equalBonds)
-    val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
-    implicit val nodeZeroConstructor = MultiParentCasperConstructor
-      .successCasperConstructor[Id](
-        ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
-        nodes(0).casperEff)
+    val nodes                               = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
+    implicit val nodeZeroConstructor        = nodes(0).constructor
     implicit val nodeZeroSafetyOracleEffect = nodes(0).turanOracleEffect
     implicit val nodeZeroLogEffect          = nodes(0).logEff
     implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
