@@ -14,7 +14,7 @@ case class State[K, V](_dbTrie: Map[Blake2b256Hash, Trie[K, V]],
   def changeRoot(newRoot: Map[Branch, Blake2b256Hash]): State[K, V] =
     State(_dbTrie, newRoot, _dbPastRoots)
 
-  def chnagePastRoot(newPastRoots: Map[Branch, Seq[Blake2b256Hash]]): State[K, V] =
+  def changePastRoots(newPastRoots: Map[Branch, Seq[Blake2b256Hash]]): State[K, V] =
     State(_dbTrie, _dbRoot, newPastRoots)
 }
 
@@ -50,7 +50,7 @@ class InMemoryTrieStore[K, V]
       .map {
         case (currentRoot, updatedPastRoots) =>
           txn.writeState(state =>
-            (state.chnagePastRoot(state._dbPastRoots + (branch -> updatedPastRoots)), ()))
+            (state.changePastRoots(state._dbPastRoots + (branch -> updatedPastRoots)), ()))
           currentRoot
       }
 
@@ -89,7 +89,7 @@ class InMemoryTrieStore[K, V]
             blake
           }
       }
-      .getOrElse(throw new Exception(s"Unknown root."))
+      .orElse(throw new Exception(s"Unknown root."))
 
   override private[rspace] def put(txn: InMemTransaction[State[K, V]],
                                    key: Blake2b256Hash,
