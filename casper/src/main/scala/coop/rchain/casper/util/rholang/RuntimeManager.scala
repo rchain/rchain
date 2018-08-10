@@ -128,14 +128,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  def getData(hash: ByteString, channel: Channel): Seq[Channel] = {
+  def getData(hash: ByteString, channel: Channel): Seq[Par] = {
     val resetRuntime                              = getResetRuntime(hash)
     val result: Seq[Datum[ListChannelWithRandom]] = resetRuntime.space.getData(channel)
     runtimeContainer.put(resetRuntime)
-    result.flatMap {
-      case Datum(a, persist, source) =>
-        a.channels
-    }
+    for {
+      datum   <- result
+      channel <- datum.a.channels
+      par     <- channel.channelInstance.quote
+    } yield par
   }
 
   private def getResetRuntime(hash: StateHash) = {
