@@ -1,6 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.util.concurrent
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -34,7 +33,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
             case Right(protocol1) =>
               val sender = ProtocolHelper.sender(protocol1)
               sender shouldBe 'defined
-              sender.get.toAddress shouldEqual remote.toAddress
+              sender.get shouldEqual remote
               protocol1.message shouldBe 'pong
           }
 
@@ -42,7 +41,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
           val (_, protocol2) = dispatcher.received.head
           val sender         = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
-          sender.get.toAddress shouldEqual local.toAddress
+          sender.get shouldEqual local
           protocol2.message shouldBe 'ping
         }
       }
@@ -107,7 +106,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
         val (_, protocol2) = dispatcher.received.head
         val sender         = ProtocolHelper.sender(protocol2)
         sender shouldBe 'defined
-        sender.get.toAddress shouldEqual local.toAddress
+        sender.get shouldEqual local
         protocol2.message shouldBe 'ping
       }
 
@@ -147,8 +146,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
         val sender2                 = ProtocolHelper.sender(p2)
         sender1 shouldBe 'defined
         sender2 shouldBe 'defined
-        sender1.get.toAddress shouldEqual local.toAddress
-        sender2.get.toAddress shouldEqual local.toAddress
+        sender1.get shouldEqual local
+        sender2.get shouldEqual local
         p1.message shouldBe 'ping
         p2.message shouldBe 'ping
         r1 should (equal(remote1) or equal(remote2))
@@ -216,42 +215,46 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]()
 
   def extract[A](fa: F[A]): A
 
-  private def dispatcher(
-      response: PeerNode => CommunicationResponse,
-      latch: Option[java.util.concurrent.CountDownLatch] = None,
-      delay: Option[Long] = None
-  ): DispatcherWithLatch[F] =
-    new DispatcherWithLatch[F] {
-      private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
-      def received: Seq[(PeerNode, Protocol)] = receivedMessages
-      def delayPeriod: Option[Long]           = delay
-      protected def addToReceived(peerNode: PeerNode, protocol: Protocol): Unit =
-        receivedMessages.synchronized(receivedMessages += ((peerNode, protocol)))
-      protected def communicationResponse(peerNode: PeerNode): F[CommunicationResponse] =
-        response(peerNode).pure[F]
-      protected def countDownLatch: Option[concurrent.CountDownLatch] = latch
-    }
+  private final class Dispatcher(
+    response: PeerNode => CommunicationResponse,
+    latch: Option[java.util.concurrent.CountDownLatch] = None,
+    delay: Option[Long] = None
+  ) {
+    def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
+      p => {
+        processed = System.currentTimeMillis()
+        latch.foreach(_.countDown())
+        delay.foreach(Thread.sleep)
+        receivedMessages.synchronized(receivedMessages += ((peer, p)))
+        response(peer).pure[F]
+      }
+    def received: Seq[(PeerNode, Protocol)] = receivedMessages
+    def lastProcessedTimestamp: Long = processed
+    def await(): Unit = latch.foreach(_.await(2, TimeUnit.SECONDS))
+    private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
+    private var processed = 0L
+  }
 
-  private def pongDispatcher: Dispatcher[F] =
-    dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
+  private def pongDispatcher: Dispatcher =
+    new Dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
 
-  private def pongDispatcherWithDelay(delay: Long): Dispatcher[F] =
-    dispatcher(
+  private def pongDispatcherWithDelay(delay: Long): Dispatcher =
+    new Dispatcher(
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)),
       delay = Some(delay)
     )
 
-  private def dispatcherWithLatch(countDown: Int = 1): DispatcherWithLatch[F] =
-    dispatcher(
+  private def dispatcherWithLatch(countDown: Int = 1): Dispatcher =
+    new Dispatcher(
       peer => CommunicationResponse.handledWithoutMessage,
       latch = Some(new java.util.concurrent.CountDownLatch(countDown))
     )
 
-  private def withoutMessageDispatcher: Dispatcher[F] =
-    dispatcher(_ => CommunicationResponse.handledWithoutMessage)
+  private def withoutMessageDispatcher: Dispatcher =
+    new Dispatcher(_ => CommunicationResponse.handledWithoutMessage)
 
-  private def internalCommunicationErrorDispatcher: Dispatcher[F] =
-    dispatcher(_ => CommunicationResponse.notHandled(InternalCommunicationError("Test")))
+  private def internalCommunicationErrorDispatcher: Dispatcher =
+    new Dispatcher(_ => CommunicationResponse.notHandled(InternalCommunicationError("Test")))
 
   private def roundTripWithPing(transportLayer: TransportLayer[F],
                                 local: PeerNode,
@@ -349,26 +352,4 @@ trait Environment {
   def peer: PeerNode
   def host: String
   def port: Int
-}
-
-trait Dispatcher[F[_]] {
-  def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
-    p => {
-      processed = System.currentTimeMillis()
-      countDownLatch.foreach(_.countDown())
-      delayPeriod.foreach(Thread.sleep)
-      addToReceived(peer, p)
-      communicationResponse(peer)
-    }
-  def received: Seq[(PeerNode, Protocol)]
-  def lastProcessedTimestamp: Long = processed
-  protected def addToReceived(peerNode: PeerNode, protocol: Protocol): Unit
-  protected def delayPeriod: Option[Long] // milliseconds
-  protected def communicationResponse(peerNode: PeerNode): F[CommunicationResponse]
-  protected def countDownLatch: Option[java.util.concurrent.CountDownLatch]
-  private var processed = 0L
-}
-
-trait DispatcherWithLatch[F[_]] extends Dispatcher[F] {
-  def await(): Unit = countDownLatch.foreach(_.await(2, TimeUnit.SECONDS))
 }
