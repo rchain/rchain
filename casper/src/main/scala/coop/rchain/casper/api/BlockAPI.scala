@@ -18,7 +18,7 @@ import coop.rchain.models.serialization.implicits.serializeChannel
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import scodec.Codec
 
-import scala.collection.immutable.Seq
+import scala.collection.immutable
 
 object BlockAPI {
 
@@ -81,14 +81,17 @@ object BlockAPI {
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      val serializedLog = block.body.get.commReductions // TODO: For some reason .fold(Seq.empty[Event])(_.commReductions) doesn't work
+                                      val serializedLog =
+                                        block.body.fold(Seq.empty[Event])(_.commReductions)
                                       val log =
                                         serializedLog.map(EventConverter.toRspaceEvent).toList
                                       val listeningNameReduced = log.exists {
                                         case Produce(channelHash, _) =>
-                                          channelHash == StableHashProvider.hash(Seq(listeningName))
+                                          channelHash == StableHashProvider.hash(
+                                            immutable.Seq(listeningName))
                                         case Consume(channelHash, _) =>
-                                          channelHash == StableHashProvider.hash(Seq(listeningName))
+                                          channelHash == StableHashProvider.hash(
+                                            immutable.Seq(listeningName))
                                         case _ => false
                                       }
                                       if (listeningNameReduced) {
