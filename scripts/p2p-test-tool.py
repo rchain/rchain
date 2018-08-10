@@ -16,6 +16,7 @@ import re
 import time
 import sys
 import random
+import string
 
 
 parser = argparse.ArgumentParser(
@@ -334,20 +335,27 @@ def test_integration1(container):
     if all the nodes have received the block containing the contract.
     """
     def run_cmd(cmd):
-        print (f"{container.name}: Execute {cmd}")
+        print (f"{container.name}: Execute <{cmd}>")
         r = container.exec_run(['sh', '-c', cmd])
-        out = r.output.decode('utf-8').splitlines()
-        print(f"{container.name}: Output: {out}")
+        out_lines = r.output.decode('utf-8').splitlines()
 
-    expected_string = "Joe"
+        print (f"{container.name}: Finish <{cmd}>. Exit Code: {r.exit_code}")
+        (r.exit_code, out_lines)
+
+    random_length = 20
+    random_string = ''.join(random.choice(string.ascii_letters) for m in range(random_length))
+    expected_string = f"[{container.name}:{random_string}]"
 
     hello_rho = '/opt/docker/examples/tut-hello.rho'
 
-    print(f"Running integration1 tests after deploy using on container {container.name}.")
+    sed_cmd = f"sed -i -e 's/Joe/{expected_string}/g' {hello_rho}"
 
-    print(f"Propose on {container.name}")
+
+    print(f"Running integration1 tests on container {container.name}. Expected string: {expected_string}")
 
     try:
+        run_cmd(sed_cmd)
+
         run_cmd(rnode.deploy_cmd(hello_rho))
 
         print("Propose to blockchain previously deployed smart contracts.")
