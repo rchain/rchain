@@ -68,7 +68,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val listeningName = Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(0))))))
     val resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
-      BlockAPI.getListeningNameResponse[Id](ListeningNameQuery(Some(listeningName)))
+      BlockAPI.getListeningNameResponse[Id](listeningName)
     val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
     val blocks1 = listeningNameResponse1.blockResults.map(_.block)
     data1 should be(List(List(resultData)))
@@ -91,7 +91,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     nodes(2).receive()
 
     val listeningNameResponse2 =
-      BlockAPI.getListeningNameResponse[Id](ListeningNameQuery(Some(listeningName)))
+      BlockAPI.getListeningNameResponse[Id](listeningName)
     val data2   = listeningNameResponse2.blockResults.map(_.postBlockData)
     val blocks2 = listeningNameResponse2.blockResults.map(_.block)
     data2 should be(
@@ -118,7 +118,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     nodes(2).receive()
 
     val listeningNameResponse3 =
-      BlockAPI.getListeningNameResponse[Id](ListeningNameQuery(Some(listeningName)))
+      BlockAPI.getListeningNameResponse[Id](listeningName)
     val data3   = listeningNameResponse3.blockResults.map(_.postBlockData)
     val blocks3 = listeningNameResponse3.blockResults.map(_.block)
     data3 should be(

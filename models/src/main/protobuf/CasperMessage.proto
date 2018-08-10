@@ -17,7 +17,7 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
-  rpc listenForName(ListeningNameQuery) returns (ListeningNameResponse) {}
+  rpc listenForName(Channel) returns (ListeningNameResponse) {}
 }
 
 message DeployData {
@@ -42,10 +42,6 @@ message BlockRequest {
 
 message BlockQuery {
   string hash = 1;
-}
-
-message ListeningNameQuery {
-  Channel channel = 1;
 }
 
 message DeployServiceResponse {

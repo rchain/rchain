@@ -67,13 +67,9 @@ object BlockAPI {
 
   def getListeningNameResponse[
       F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
-      q: ListeningNameQuery): F[ListeningNameResponse] = {
+      listeningName: Channel): F[ListeningNameResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
-        listeningName <- q.channel match {
-                          case Some(channel) => channel.pure[F]
-                          case None          => throw new Error("No channel provided.")
-                        }
         estimates           <- casper.estimator
         tip                 = estimates.head
         internalMap         <- BlockStore[F].asMap()
