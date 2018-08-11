@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 import coop.rchain.shared.SyncVarOps._
@@ -11,9 +11,7 @@ import scodec.Codec
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 
 class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
@@ -193,6 +191,23 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K]): RSpace[C, P, A, R, K] = {
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
+    create(mainStore, branch)
+  }
+
+  def createInMemory[C, P, A, R, K](
+      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
+                            Blake2b256Hash,
+                            GNAT[C, P, A, K]],
+      branch: Branch)(implicit
+                      sc: Serialize[C],
+                      sp: Serialize[P],
+                      sa: Serialize[A],
+                      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
+
+    val mainStore = InMemoryStore
+      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        branch)
     create(mainStore, branch)
   }
 
