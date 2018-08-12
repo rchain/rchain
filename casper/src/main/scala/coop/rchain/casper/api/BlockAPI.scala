@@ -11,11 +11,13 @@ import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel
+import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.serializeChannel
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
+import coop.rchain.models.rholang.sort.Sortable._
 import scodec.Codec
 
 import scala.collection.immutable
@@ -68,7 +70,8 @@ object BlockAPI {
   def getListeningNameResponse[
       F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
       listeningName: Channel): F[ListeningNameResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
+    def casperResponse(implicit casper: MultiParentCasper[F],
+                       channelCodec: Codec[Channel]) =
       for {
         estimates           <- casper.estimator
         tip                 = estimates.head
@@ -76,6 +79,7 @@ object BlockAPI {
         mainChain           = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
+        sortedListeningName = channelSortable.sortMatch(listeningName).term
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       val serializedLog =
                                         block.body.fold(Seq.empty[Event])(_.commReductions)
@@ -84,10 +88,10 @@ object BlockAPI {
                                       val listeningNameReduced = log.exists {
                                         case Produce(channelHash, _) =>
                                           channelHash == StableHashProvider.hash(
-                                            immutable.Seq(listeningName))
+                                            immutable.Seq(sortedListeningName))
                                         case Consume(channelHash, _) =>
                                           channelHash == StableHashProvider.hash(
-                                            immutable.Seq(listeningName))
+                                            immutable.Seq(sortedListeningName))
                                         case _ => false
                                       }
                                       if (listeningNameReduced) {
