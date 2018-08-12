@@ -2,16 +2,16 @@ package coop.rchain.casper
 
 import cats.Monad
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.shared.{Log, LogSource}
-
 import java.nio.file.Path
 
+import coop.rchain.casper.CasperConf.CasperMode
+
+import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -24,13 +24,19 @@ case class CasperConf(
     numValidators: Int,
     genesisPath: Path,
     walletsFile: Option[String],
-    createGenesis: Boolean
+    mode: CasperMode
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
   val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)
 }
 
 object CasperConf {
+  sealed trait CasperMode
+  final case class Standalone(requiredSigs: Int, duration: FiniteDuration, interval: FiniteDuration)
+      extends CasperMode
+  final case class GenesisValidator(requiredSigs: Int) extends CasperMode
+  case object Bootstrap                                extends CasperMode
+
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def parseValidatorsFile[F[_]: Monad: Capture: Log](

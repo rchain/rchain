@@ -111,7 +111,7 @@ object Configuration {
             DefaultNumValidators,
             dataDir.resolve("genesis"),
             None,
-            createGenesis = false
+            mode = ???
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -231,7 +231,7 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
-        standalone
+        ???
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),
