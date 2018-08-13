@@ -35,7 +35,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def storageContents() =
     StoragePrinter.prettyPrint(runtime.space.store)
 
-
   private def success(rho: String): Unit =
     execute(rho).swap.foreach(error => fail(s"""Execution failed for: $rho
                                                |Cause:
