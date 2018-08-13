@@ -76,8 +76,8 @@ class BlocksResponseTest
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[BlockStatus] =
         BlockStatus.valid.pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
+      def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
+      def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
       def estimator: F[IndexedSeq[BlockMessage]] =
         Estimator.tips(chain, BlockStore[Id].asMap(), genesis).pure[F]
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)

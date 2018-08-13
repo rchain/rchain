@@ -38,12 +38,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy = ProtoUtil.termDeploy(LinkedList.term)
+    val llDeploy = ProtoUtil.sourceDeploy(LinkedList.code)
     val deploys = Vector(
       "@[\"LinkedList\", \"fromList\"]!([2, 3, 5, 7], \"primes\")",
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "for(@primes <- @\"primes\"){ @\"primes\"!(primes) | @[\"LinkedList\", \"map\"]!(primes, \"double\", \"dprimes\") }"
-    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    ).map(ProtoUtil.sourceDeploy)
 
     val Some(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
       deploys.traverse(MultiParentCasper[Id].deploy) *>
