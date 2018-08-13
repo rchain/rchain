@@ -1,5 +1,7 @@
 package coop.rchain.casper.helper
 
+import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.shared._
 import cats.{Applicative, ApplicativeError, FlatMap}
 import cats.data.EitherT
 import cats.effect.{ExitCase, Sync}
@@ -36,12 +38,12 @@ object CasperEffect {
 
   def apply(sk: Array[Byte], genesis: BlockMessage)(
       implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
-    val blockStoreDir             = BlockStoreTestFixture.dbDir
-    val runtimeDir                = BlockStoreTestFixture.dbDir
-    val local                     = HashSetCasperTestNode.peerNode("taskNode", 40400)
-    implicit val logEff           = new LogStub[Effect]
-    implicit val timeEff          = new LogicalTime[Effect]
-    implicit val nodeDiscoveryEff = new NodeDiscoveryStub[Effect]()
+    val blockStoreDir            = BlockStoreTestFixture.dbDir
+    val runtimeDir               = BlockStoreTestFixture.dbDir
+    val local                    = HashSetCasperTestNode.peerNode("taskNode", 40400)
+    implicit val logEff          = new LogStub[Effect]
+    implicit val timeEff         = new LogicalTime[Effect]
+    implicit val connectionsCell = Cell.const[Effect, Connections](Connect.Connections.empty)
     implicit val transportLayerEff =
       new TransportLayerTestImpl[Effect](local, Map.empty[PeerNode, mutable.Queue[Protocol]])
     implicit val metricEff = new Metrics.MetricsNOP[Effect]

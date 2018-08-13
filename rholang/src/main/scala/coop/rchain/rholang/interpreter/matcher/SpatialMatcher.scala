@@ -260,6 +260,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
         NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen > tlen)
         NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
+      else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
+        NonDetFreeMapWithCost.pure(())
       else
         listMatch(tlist, plist, merger, varLevel, wildcard)
           .transformF[StreamT[State[CostAccount, ?], ?], Unit, FreeMap](streamT =>

@@ -10,6 +10,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.shared._
 import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.metrics.Metrics
 
 class ClearConnectionsSpec
     extends FunSpec
@@ -21,6 +22,8 @@ class ClearConnectionsSpec
 
   val src: PeerNode      = peer("src")
   implicit val transport = new TransportLayerStub[Id]
+  implicit val log       = new Log.NOPLog[Id]
+  implicit val metric    = new Metrics.MetricsNOP[Id]
 
   override def beforeEach(): Unit = {
     transport.reset()
