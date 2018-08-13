@@ -4,10 +4,11 @@ import cats._
 import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.protocol.{DeployServiceGrpc, DeployServiceResponse, DeployData, _}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
+import coop.rchain.models.Channel
 import coop.rchain.shared._
 
 import scala.concurrent.Future
@@ -29,4 +30,7 @@ private[api] class DeployGrpcService[
 
   override def showBlocks(e: Empty): Future[BlocksResponse] =
     BlockAPI.getBlocksResponse[F].toFuture
+
+  override def listenForName(listeningName: Channel): Future[ListeningNameResponse] =
+    BlockAPI.getListeningNameResponse[F](listeningName).toFuture
 }
