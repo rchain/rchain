@@ -17,7 +17,8 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
-  rpc listenForName(Channel) returns (ListeningNameResponse) {}
+  rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
+  rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
 }
 
 message DeployData {
@@ -44,6 +45,10 @@ message BlockQuery {
   string hash = 1;
 }
 
+message Channels {
+  repeated Channel channels = 1;
+}
+
 message DeployServiceResponse {
   bool   success = 1;
   string message = 2;
@@ -58,15 +63,31 @@ message BlockQueryResponse {
   BlockInfo blockInfo = 2;
 }
 
-message ListeningNameResponse {
+message ListeningNameDataResponse {
   string status = 1;
   repeated DataWithBlockInfo blockResults = 2;
+  int64 length = 3;
+}
+
+message ListeningNameContinuationResponse {
+  string status = 1;
+  repeated ContinuationsWithBlockInfo blockResults = 2;
   int64 length = 3;
 }
 
 message DataWithBlockInfo {
   repeated Par postBlockData = 1;
   BlockInfoWithoutTuplespace block = 2;
+}
+
+message ContinuationsWithBlockInfo {
+  repeated WaitingContinuationInfo postBlockContinuations = 1;
+  BlockInfoWithoutTuplespace block = 2;
+}
+
+message WaitingContinuationInfo {
+  repeated BindPattern postBlockPatterns = 1;
+  Par postBlockContinuation = 2;
 }
 
 message BlocksResponse {
