@@ -152,7 +152,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
       val d = DeployData()
         .withUser(ByteString.EMPTY)
         .withTimestamp(timestamp)
-        .withTerm("for (@0 <- @{ 3 | 2 | 1 }) { 0 }")
+        .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
       val term = InterpreterUtil.mkTerm(d.term).right.get
       Deploy(
         term = Some(term),
@@ -163,19 +163,39 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val Some(block) = node.casperEff.deploy(basicDeploy) *> node.casperEff.createBlock
     node.casperEff.addBlock(block)
 
-    val listeningNames =
+    val listeningNamesShuffled1 =
       Channels(
-        Seq(Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))))
+        Seq(
+          Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))))),
+          Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
+        ))
     val result = WaitingContinuationInfo(
-      List(BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(0))))))), None, 0)),
+      List(
+        BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(1))))))), None, 0),
+        BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(0))))))), None, 0)
+      ),
       Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
     )
     val listeningNameResponse1 =
-      BlockAPI.getListeningNameContinuationResponse[Id](listeningNames)
+      BlockAPI.getListeningNameContinuationResponse[Id](listeningNamesShuffled1)
     val continuations1 = listeningNameResponse1.blockResults.map(_.postBlockContinuations)
     val blocks1        = listeningNameResponse1.blockResults.map(_.block)
     continuations1 should be(List(List(result)))
     blocks1.length should be(1)
     listeningNameResponse1.length should be(1)
+
+    val listeningNamesShuffled2 =
+      Channels(
+        Seq(
+          Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))))),
+          Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))))
+        ))
+    val listeningNameResponse2 =
+      BlockAPI.getListeningNameContinuationResponse[Id](listeningNamesShuffled2)
+    val continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)
+    val blocks2        = listeningNameResponse2.blockResults.map(_.block)
+    continuations2 should be(List(List(result)))
+    blocks2.length should be(1)
+    listeningNameResponse2.length should be(1)
   }
 }
