@@ -58,7 +58,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     } yield par
   }
 
-  def replayComputeState(log: trace.Log)(implicit scheduler: Scheduler)
+  def replayComputeState(log: trace.Log)
     : (StateHash, Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])] = {
     (hash: StateHash, terms: Seq[Deploy]) =>
       {
@@ -82,8 +82,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       }
   }
 
-  def computeState(hash: StateHash, terms: Seq[Deploy])(
-      implicit scheduler: Scheduler): Either[DeployError, (Checkpoint, Vector[DeployCost])] = {
+  def computeState(hash: StateHash,
+                   terms: Seq[Deploy]): Either[DeployError, (Checkpoint, Vector[DeployCost])] = {
     val resetRuntime: Runtime = getResetRuntime(hash)
     val costAccountingAlg     = CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val error                 = eval(terms, resetRuntime.reducer, resetRuntime.errorLog, costAccountingAlg)
@@ -138,17 +138,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def eval(terms: Seq[Deploy],
-                   reducer: Reduce[Task],
-                   errorLog: ErrorLog,
-                   costAlg: CostAccountingAlg[Task],
-                   accCost: Vector[DeployCost] = Vector.empty)(
-      implicit scheduler: Scheduler): Either[DeployError, Vector[DeployCost]] =
+  private def eval(
+      terms: Seq[Deploy],
+      reducer: Reduce[Task],
+      errorLog: ErrorLog,
+      costAlg: CostAccountingAlg[Task],
+      accCost: Vector[DeployCost] = Vector.empty): Either[DeployError, Vector[DeployCost]] =
     terms match {
       case deploy +: rest =>
         implicit val rand: Blake2b512Random = Blake2b512Random(
           DeployData.toByteArray(deploy.raw.get))
         implicit val costAlgebra = costAlg
+        import monix.execution.Scheduler.Implicits.global
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
           case Success(_) =>
             val errors     = errorLog.readAndClearErrorVector()

@@ -4,8 +4,8 @@ import cats._
 import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.protocol.{DeployServiceGrpc, DeployServiceResponse, DeployData, _}
-import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
+import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
+import coop.rchain.casper.{MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.shared._
@@ -13,7 +13,7 @@ import coop.rchain.shared._
 import scala.concurrent.Future
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
+    F[_]: Monad: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore]
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
     BlockAPI.deploy[F](d).toFuture

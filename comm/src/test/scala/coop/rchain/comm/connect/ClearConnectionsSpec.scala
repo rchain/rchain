@@ -1,15 +1,25 @@
 package coop.rchain.comm.rp
 
-import Connect._, Connections._
-import coop.rchain.comm._, CommError._, protocol.routing._
-import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
+import Connect._
+import Connections._
+import coop.rchain.comm._
+import CommError._
+import protocol.routing._
+import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
+
 import scala.concurrent.duration._
 import org.scalatest._
 import org.scalatest.enablers.Containing
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
 import coop.rchain.shared._
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport._
+import CommMessages._
+import coop.rchain.metrics.Metrics
 
 class ClearConnectionsSpec
     extends FunSpec
@@ -21,6 +31,9 @@ class ClearConnectionsSpec
 
   val src: PeerNode      = peer("src")
   implicit val transport = new TransportLayerStub[Id]
+  implicit val log       = new Log.NOPLog[Id]
+  implicit val metric    = new Metrics.MetricsNOP[Id]
+  implicit val time      = new LogicalTime[Id]
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -131,7 +144,7 @@ class ClearConnectionsSpec
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(heartbeat(peer("src"))))
+    kp(Right(heartbeat(peer("src"), System.currentTimeMillis())))
 
   def alwaysFail: Protocol => CommErr[Protocol] =
     kp(Left(timeout))

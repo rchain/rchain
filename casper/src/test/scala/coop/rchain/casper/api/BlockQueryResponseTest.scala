@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.catscontrib.effect.implicits.syncId
 
 class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixture {
   val secondBlockQuery = "1234"
@@ -77,15 +78,22 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = testCasper[Id]
-      implicit val logEff       = new LogStub[Id]
-      implicit val constructorEffect =
-        MultiParentCasperConstructor
-          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-      val q                                            = BlockQuery(hash = secondBlockQuery)
-      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
-      val blockInfo                                    = blockQueryResponse.blockInfo.get
+      implicit val casperEffect = testCasper[Id](syncId, blockStore)
+      implicit val logEff       = new LogStub[Id]()(syncId)
+      implicit val casperRef = {
+        val tmp = MultiParentCasperRef.of[Id]
+        tmp.set(casperEffect)
+        tmp
+      }
+      implicit val turanOracleEffect: SafetyOracle[Id] =
+        SafetyOracle.turanOracle[Id](syncId, blockStore)
+      val q = BlockQuery(hash = secondBlockQuery)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
+                                                                     casperRef,
+                                                                     logEff,
+                                                                     turanOracleEffect,
+                                                                     blockStore)
+      val blockInfo = blockQueryResponse.blockInfo.get
       blockQueryResponse.status should be("Success")
       blockInfo.blockHash should be(secondHashString)
       blockInfo.blockSize should be(secondBlock.serializedSize.toString)
@@ -100,14 +108,21 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
 
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = testCasper[Id]
-      implicit val logEff       = new LogStub[Id]
-      implicit val constructorEffect =
-        MultiParentCasperConstructor
-          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-      val q                                            = BlockQuery(hash = badTestHashQuery)
-      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
+      implicit val casperEffect = testCasper[Id](syncId, blockStore)
+      implicit val logEff       = new LogStub[Id]()(syncId)
+      implicit val casperRef = {
+        val tmp = MultiParentCasperRef.of[Id]
+        tmp.set(casperEffect)
+        tmp
+      }
+      implicit val turanOracleEffect: SafetyOracle[Id] =
+        SafetyOracle.turanOracle[Id](syncId, blockStore)
+      val q = BlockQuery(hash = badTestHashQuery)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
+                                                                     casperRef,
+                                                                     logEff,
+                                                                     turanOracleEffect,
+                                                                     blockStore)
       blockQueryResponse.status should be(
         s"Error: Failure to find block with hash ${badTestHashQuery}")
   }

@@ -418,7 +418,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .msgQueues(nodes(0).local)
       .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
     val signedInvalidBlockPacketMessage =
-      packet(nodes(1).local, transport.BlockMessage, signedInvalidBlock.toByteString)
+      packet(nodes(1).local,
+             transport.BlockMessage,
+             signedInvalidBlock.toByteString,
+             System.currentTimeMillis())
     nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 

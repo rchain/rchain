@@ -23,10 +23,11 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     val n                = 8
-    val (approver, node) = createIdProtocol(n)
+    val (approver, node) = createProtocol(n)
     val unapproved       = createUnapproved(n, node.genesis)
+    import node._
 
-    approver.unapprovedBlockPacketHandler(node.local)(unapprovedToPacket(unapproved))
+    approver.unapprovedBlockPacketHandler[Id](node.local, unapproved)
 
     node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
     node.logEff.warns.isEmpty should be(true)
@@ -36,12 +37,13 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
   it should "log a warning for invalid ApprovedBlockCandidates" in {
     val n                    = 8
-    val (approver, node)     = createIdProtocol(n)
+    val (approver, node)     = createProtocol(n)
     val differentUnapproved1 = createUnapproved(n / 2, node.genesis) //wrong number of signatures
     val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
+    import node._
 
-    approver.unapprovedBlockPacketHandler(node.local)(unapprovedToPacket(differentUnapproved1))
-    approver.unapprovedBlockPacketHandler(node.local)(unapprovedToPacket(differentUnapproved2))
+    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved1)
+    approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved2)
 
     node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
 
@@ -56,15 +58,14 @@ object BlockApproverProtocolTest {
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
     Packet(transport.UnapprovedBlock.id, u.toByteString)
 
-  def createIdProtocol(requiredSigs: Int): (BlockApproverProtocol[Id], HashSetCasperTestNode) = {
+  def createProtocol(requiredSigs: Int): (BlockApproverProtocol, HashSetCasperTestNode) = {
     import monix.execution.Scheduler.Implicits.global
 
     val (sk, pk) = Ed25519.newKeyPair
     val genesis  = HashSetCasperTest.createGenesis(Seq(pk))
     val node     = HashSetCasperTestNode.network(Vector(sk), genesis).head
-    import node._
 
-    new BlockApproverProtocol[Id](node.validatorId, genesis, requiredSigs) -> node
+    new BlockApproverProtocol(node.validatorId, genesis, requiredSigs) -> node
   }
 
 }

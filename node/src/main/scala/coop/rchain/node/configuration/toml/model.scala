@@ -20,6 +20,7 @@ case class Server(
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
+    genesisCreator: Option[Boolean],
     mapSize: Option[Long],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],

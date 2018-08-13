@@ -83,7 +83,7 @@ class ConnectToBootstrapSpec
 
   // TODO extract common trait for comm tests
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(protocolHandshake(src)))
+    kp(Right(protocolHandshake(src, System.currentTimeMillis())))
 
   private val failEverything = kp(Left[CommError, Protocol](unknownProtocol("unknown")))
 

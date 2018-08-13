@@ -88,12 +88,11 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   def hashSetCasper[
-      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      F[_]: Sync: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      internalMap: Map[BlockHash, BlockMessage])(
-      implicit scheduler: Scheduler): MultiParentCasper[F] = {
+      internalMap: Map[BlockHash, BlockMessage]): MultiParentCasper[F] = {
     val dag = BlockDag()
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint(
@@ -114,7 +113,7 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       dag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash])(implicit scheduler: Scheduler) =
+      maybePostGenesisStateHash: Option[StateHash]) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString

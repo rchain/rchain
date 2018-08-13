@@ -1,20 +1,25 @@
 package coop.rchain.comm.rp
 
-import Connect.{Connections, ConnectionsCell, RPConfAsk}, Connections._
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.discovery._
-import scala.concurrent.duration._
+import cats._
+import cats.effect.Timer
+import cats.implicits._
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.metrics.Metrics
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
-import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
-import coop.rchain.shared._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.rchain._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
+import coop.rchain.comm.rp.Connect.Connections._
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport.CommunicationResponse._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.effects._
+import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 object HandleMessages {
 
@@ -71,8 +76,9 @@ object HandleMessages {
         for {
           local               <- RPConfAsk[F].reader(_.local)
           maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
+          currentTime         <- Time[F].currentMillis
           maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
+            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr), currentTime))
         } yield
           maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
             handledWithMessage(m)))
@@ -92,26 +98,29 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- NodeDiscovery[F].addNode(peer)
-        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
-        _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
-      } yield handledWithMessage(protocolHandshakeResponse(local))
+        _           <- NodeDiscovery[F].addNode(peer)
+        _           <- ConnectionsCell[F].modify(_.addConn[F](peer))
+        currentTime <- Time[F].currentMillis
+        _           <- Log[F].info(s"Responded to protocol handshake request from $peer")
+      } yield handledWithMessage(protocolHandshakeResponse(local, currentTime))
 
     for {
       local        <- RPConfAsk[F].reader(_.local)
+      currentTime  <- Time[F].currentMillis
       _            <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
+      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local, currentTime), defaultTimeout)
       commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
   }
 
-  def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler: RPConfAsk](
+  def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       maybeHeartbeat: Option[Heartbeat]): F[CommunicationResponse] =
     for {
-      local <- RPConfAsk[F].reader(_.local)
-      _     <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
-    } yield handledWithMessage(heartbeatResponse(local))
+      local       <- RPConfAsk[F].reader(_.local)
+      currentTime <- Time[F].currentMillis
+      _           <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
+    } yield handledWithMessage(heartbeatResponse(local, currentTime))
 
   private def getOrError[F[_]: Applicative: ErrorHandler, A](oa: Option[A],
                                                              error: CommError): F[A] =
