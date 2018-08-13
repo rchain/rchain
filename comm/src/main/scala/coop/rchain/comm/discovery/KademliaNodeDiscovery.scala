@@ -36,7 +36,7 @@ private[discovery] class KademliaNodeDiscovery[
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- table.updateLastSeen[F](peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
     } yield ()
 
   def discover: F[Unit] =
@@ -127,6 +127,6 @@ private[discovery] class KademliaNodeDiscovery[
       _ <- TransportLayer[F].disconnect(sender)
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
     } yield handledWitoutMessage
 }

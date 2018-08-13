@@ -28,18 +28,20 @@ object Connect {
   object Connections {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
-      def addConn[F[_]: Applicative: Log](connection: Connection): F[Connections] =
+      def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
         connections
           .contains(connection)
           .fold(
             connections.pure[F],
-            Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections)
+            Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections) >>= (
+                conns => Metrics[F].setGauge("peers", conns.size).as(conns))
           )
-      def removeAndAddAtEnd[F[_]: Monad: Log](toRemove: List[PeerNode],
-                                              toAddAtEnd: List[PeerNode]): F[Connections] =
+      def removeAndAddAtEnd[F[_]: Monad: Log: Metrics](toRemove: List[PeerNode],
+                                                       toAddAtEnd: List[PeerNode]): F[Connections] =
         for {
           result <- (connections.filter(conn => !toRemove.contains(conn)) ++ toAddAtEnd).pure[F]
-          _      <- Log[F].info(s"Peers: ${result.size}.")
+          count  = result.size
+          _      <- Log[F].info(s"Peers: $count.") >>= (_ => Metrics[F].setGauge("peers", count))
         } yield result
     }
   }
@@ -52,8 +54,8 @@ object Connect {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log]
-    : F[Int] = {
+  def clearConnections[
+      F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]: F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {

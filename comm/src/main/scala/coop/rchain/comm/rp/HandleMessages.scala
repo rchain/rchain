@@ -79,7 +79,7 @@ object HandleMessages {
   }
 
   def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration

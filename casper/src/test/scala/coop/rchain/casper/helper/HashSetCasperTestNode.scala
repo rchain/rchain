@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 
 import coop.rchain.comm.rp.Connect, Connect._
 import coop.rchain.shared._
-import cats.{Applicative, ApplicativeError, Id}
+import cats.{Applicative, ApplicativeError, Id, Monad}
 import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
@@ -125,7 +125,7 @@ object HashSetCasperTestNode {
       m <- nodes
       if n.local != m.local
     } {
-      n.connectionsCell.modify(_.addConn[Id](m.local)(Applicative[Id], n.logEff))
+      n.connectionsCell.modify(_.addConn[Id](m.local)(Monad[Id], n.logEff, n.metricEff))
     }
 
     nodes
