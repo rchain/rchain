@@ -147,13 +147,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
 
   def roundTripWithPing(transportLayer: TransportLayer[F],
                         local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
-    roundTripWithPingAndTimeout(transportLayer, local, remote)
-
-  def roundTripWithPingAndTimeout(transportLayer: TransportLayer[F],
-                                  local: PeerNode,
-                                  remote: PeerNode,
-                                  timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
+                        remote: PeerNode,
+                        timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
     transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
 
   def sendPing(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] =
@@ -182,7 +177,9 @@ final class Dispatcher[F[_]: Applicative](
       processed = System.currentTimeMillis()
       latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
-      receivedMessages.synchronized(receivedMessages += ((peer, p)))
+      // Ignore Disconnect messages to not skew the tests
+      if (!p.message.isDisconnect)
+        receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
   def received: Seq[(PeerNode, Protocol)] = receivedMessages

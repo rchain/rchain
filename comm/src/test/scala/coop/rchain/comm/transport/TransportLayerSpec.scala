@@ -54,17 +54,15 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPingAndTimeout(transportLayer, local, remote, 200.millis)
+              roundTripWithPing(transportLayer, local, remote, 200.millis)
 
             val result: TwoNodesResult = run()
 
-            result() shouldBe 'left
-            val error: CommError = result().left.get
-            error shouldEqual TimeOut
+            result() shouldEqual Left(TimeOut)
           }
       }
 
-      "there is no respon se body" should {
+      "there is no response body" should {
         "fail with a communication error" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.withoutMessageDispatcher) {
             def execute(transportLayer: TransportLayer[F],
@@ -74,9 +72,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
             val result: TwoNodesResult = run()
 
-            result() shouldBe 'left
-            val error: CommError = result().left.get
-            error shouldEqual InternalCommunicationError("Was expecting message, nothing arrived")
+            result() shouldEqual Left(
+              InternalCommunicationError("Was expecting message, nothing arrived"))
           }
       }
 
@@ -90,9 +87,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
             val result: TwoNodesResult = run()
 
-            result() shouldBe 'left
-            val error: CommError = result().left.get
-            error shouldEqual PeerUnavailable(result.remoteNode)
+            result() shouldEqual Left(PeerUnavailable(result.remoteNode))
           }
       }
 
@@ -106,10 +101,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
             val result: TwoNodesResult = run()
 
-            result() shouldBe 'left
-            val error: CommError = result().left.get
-            error shouldEqual InternalCommunicationError(
-              "Got response: Internal communication error. Test")
+            result() shouldEqual Left(
+              InternalCommunicationError("Got response: Internal communication error. Test"))
           }
       }
     }
