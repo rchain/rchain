@@ -142,13 +142,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
       resetRuntime.space.getWaitingContinuations(channels)
     runtimeContainer.put(resetRuntime)
-    if (results.exists(_.continuation.taggedCont.isScalaBodyRef)) {
-      throw new Error("The results contain a primitive/native scala function.")
-    } else {
-      for {
-        result <- results
-      } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
-    }
+    for {
+      result <- results.filter(_.continuation.taggedCont.isParBody)
+    } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
   }
 
   private def getResetRuntime(hash: StateHash) = {
