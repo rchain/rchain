@@ -3,10 +3,7 @@ package coop.rchain.casper.api
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.helper.{
-  BlockStoreFixture,
-  HashSetCasperTestNode
-}
+import coop.rchain.casper.helper.{BlockStoreFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -29,23 +26,18 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
   private val genesis                     = createGenesis(validators)
 
   "getListeningNameResponse" should "work with unsorted channels" in {
-    val node                               = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    def basicDeploy: Deploy = {
+    def basicDeployData: DeployData = {
       val timestamp = System.currentTimeMillis()
-      val d = DeployData()
+      DeployData()
         .withUser(ByteString.EMPTY)
         .withTimestamp(timestamp)
         .withTerm("@{ 3 | 2 | 1 }!(0)")
-      val term = InterpreterUtil.mkTerm(d.term).right.get
-      Deploy(
-        term = Some(term),
-        raw = Some(d)
-      )
     }
 
-    val Some(block) = node.casperEff.deploy(basicDeploy) *> node.casperEff.createBlock
+    val Some(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
     node.casperEff.addBlock(block)
 
     val listeningName =
@@ -67,9 +59,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     implicit val nodeZeroLogEffect          = nodes(0).logEff
     implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore
 
-    val deploys = (0 to 7).map(_ => ProtoUtil.basicDeploy(0))
+    val deployDatas = (0 to 7).map(_ => ProtoUtil.basicDeployData(0))
 
-    val Some(block1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val Some(block1) = nodes(0).casperEff.deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block1)
     nodes(1).receive()
     nodes(2).receive()
@@ -84,17 +76,17 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     blocks1.length should be(1)
     listeningNameResponse1.length should be(1)
 
-    val Some(block2) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    val Some(block2) = nodes(1).casperEff.deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(block2)
     nodes(0).receive()
     nodes(2).receive()
 
-    val Some(block3) = nodes(2).casperEff.deploy(deploys(2)) *> nodes(2).casperEff.createBlock
+    val Some(block3) = nodes(2).casperEff.deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
     nodes(2).casperEff.addBlock(block3)
     nodes(0).receive()
     nodes(1).receive()
 
-    val Some(block4) = nodes(0).casperEff.deploy(deploys(3)) *> nodes(0).casperEff.createBlock
+    val Some(block4) = nodes(0).casperEff.deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block4)
     nodes(1).receive()
     nodes(2).receive()
@@ -111,17 +103,17 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     blocks2.length should be(4)
     listeningNameResponse2.length should be(4)
 
-    val Some(block5) = nodes(1).casperEff.deploy(deploys(4)) *> nodes(1).casperEff.createBlock
+    val Some(block5) = nodes(1).casperEff.deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(block5)
     nodes(0).receive()
     nodes(2).receive()
 
-    val Some(block6) = nodes(2).casperEff.deploy(deploys(5)) *> nodes(2).casperEff.createBlock
+    val Some(block6) = nodes(2).casperEff.deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
     nodes(2).casperEff.addBlock(block6)
     nodes(0).receive()
     nodes(1).receive()
 
-    val Some(block7) = nodes(0).casperEff.deploy(deploys(6)) *> nodes(0).casperEff.createBlock
+    val Some(block7) = nodes(0).casperEff.deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block7)
     nodes(1).receive()
     nodes(2).receive()
