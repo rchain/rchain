@@ -18,7 +18,7 @@ import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
+class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
@@ -26,13 +26,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private val certInputStream = new ByteArrayInputStream(cert.getBytes())
-  private val keyInputStream  = new ByteArrayInputStream(key.getBytes())
-
   private lazy val serverSslContext: SslContext =
     try {
       GrpcSslContexts
-        .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
+        .forServer(cert, key)
         .trustManager(HostnameTrustManagerFactory.Instance)
         .clientAuth(ClientAuth.REQUIRE)
         .build()
@@ -46,7 +43,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
     try {
       val builder = GrpcSslContexts.forClient
       builder.trustManager(HostnameTrustManagerFactory.Instance)
-      builder.keyManager(certInputStream, keyInputStream)
+      builder.keyManager(cert, key)
       builder.build
     } catch {
       case e: Throwable =>
