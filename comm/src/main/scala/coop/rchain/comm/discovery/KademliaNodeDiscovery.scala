@@ -128,5 +128,5 @@ private[discovery] class KademliaNodeDiscovery[
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
-    } yield handledWitoutMessage
+    } yield handledWithoutMessage
 }

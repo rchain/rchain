@@ -10,6 +10,6 @@ case class NotHandled(error: CommError)     extends CommunicationResponse
 
 object CommunicationResponse {
   def handledWithMessage(protocol: Protocol): CommunicationResponse = HandledWithMessage(protocol)
-  def handledWitoutMessage: CommunicationResponse                   = HandledWitoutMessage
+  def handledWithoutMessage: CommunicationResponse                  = HandledWitoutMessage
   def notHandled(error: CommError): CommunicationResponse           = NotHandled(error)
 }
