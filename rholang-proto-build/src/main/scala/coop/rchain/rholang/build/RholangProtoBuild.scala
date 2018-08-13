@@ -31,7 +31,7 @@ object RholangProtoBuild {
     }
 
   def escapeSourceCode(source: Path): String =
-    Source.fromFile(source.toFile).getLines().mkString("\"\"\"\n", "\n|", "\"\"\".stripMargin")
+    Source.fromFile(source.toFile).getLines().mkString("\"\"\"", "\n|", "\"\"\".stripMargin")
 
   def createScalaArtifact(pkg: Option[String], name: String, proto: Path, source: Path): String = {
     val pkgDeclaration = pkg.map(p => s"package $p").getOrElse("")
