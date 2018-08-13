@@ -3,10 +3,7 @@ package coop.rchain.casper.api
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.helper.{
-  BlockStoreFixture,
-  HashSetCasperTestNode
-}
+import coop.rchain.casper.helper.{BlockStoreFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
@@ -29,7 +26,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
   private val genesis                     = createGenesis(validators)
 
   "getListeningNameResponse" should "work with unsorted channels" in {
-    val node                               = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
     def basicDeploy: Deploy = {

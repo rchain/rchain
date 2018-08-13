@@ -75,8 +75,7 @@ object BlockAPI {
       for {
         estimates           <- casper.estimator
         tip                 = estimates.head
-        internalMap         <- BlockStore[F].asMap()
-        mainChain           = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
+        mainChain           <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         sortedListeningName = channelSortable.sortMatch(listeningName).term
@@ -127,10 +126,8 @@ object BlockAPI {
         estimates   <- MultiParentCasper[F].estimator
         tip         = estimates.head
         internalMap <- BlockStore[F].asMap()
-        mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(internalMap,
-                                                                     tip,
-                                                                     IndexedSeq.empty[BlockMessage])
-        blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
+        mainChain   <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+        blockInfos  <- mainChain.toList.traverse(getFullBlockInfo[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 

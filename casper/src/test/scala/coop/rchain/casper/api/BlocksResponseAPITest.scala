@@ -76,7 +76,7 @@ class BlocksResponseAPITest
   implicit val blockStoreEffect = BlockStore[Id]
   implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
     HashMap.empty[BlockHash, BlockMessage],
-    Estimator.tips(chain, BlockStore[Id].asMap(), genesis),
+    Estimator.tips[Id](chain, genesis),
     chain)
   implicit val logEff = new LogStub[Id]
   implicit val constructorEffect =
