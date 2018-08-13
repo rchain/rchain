@@ -9,6 +9,7 @@ class ConstApplicativeAsk[F[_]: Applicative, E](e: E) extends ApplicativeAsk[F, 
   def reader[A](f: E => A): F[A]  = applicative.map(ask)(f)
 }
 
+// TODO make availalble on catscontrib
 class EitherTApplicativeAsk[F[_], E, Err](implicit
                                           ev1: ApplicativeAsk[F, E],
                                           ev2: Monad[F])

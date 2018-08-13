@@ -144,7 +144,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  case class Servers(grpcServer: Server, metricsServer: MetricsServer, httpServer: HttpServer)
+  case class Servers(
+      grpcServerExternal: Server,
+      grpcServerInternal: Server,
+      metricsServer: MetricsServer,
+      httpServer: HttpServer
+  )
 
   def acquireServers(runtime: Runtime)(
       implicit
@@ -157,10 +162,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Servers] =
     for {
-      grpcServer    <- GrpcServer.acquireServer[Effect](conf.grpcServer.port, runtime)
+      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
+      grpcServerInternal <- GrpcServer
+                             .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
       metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
       httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
-    } yield Servers(grpcServer, metricsServer, httpServer)
+    } yield Servers(grpcServerExternal, grpcServerInternal, metricsServer, httpServer)
 
   def startServers(servers: Servers)(
       implicit
@@ -169,7 +176,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     for {
       _ <- servers.httpServer.start.toEffect
       _ <- servers.metricsServer.start.toEffect
-      _ <- GrpcServer.start[Effect](servers.grpcServer)
+      _ <- GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
     } yield ()
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -181,8 +188,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       rpConfAsk: RPConfAsk[Task]
   ): Unit =
     (for {
-      _   <- log.info("Shutting down gRPC server...")
-      _   <- Task.delay(servers.grpcServer.shutdown())
+      _   <- log.info("Shutting down gRPC servers...")
+      _   <- Task.delay(servers.grpcServerExternal.shutdown())
+      _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       ts  <- time.currentMillis
@@ -242,31 +250,31 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
         case handled       => handled.pure[Effect]
     }
 
-    for {
+    val info: Effect[Unit] = for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
+      _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
+          else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+    } yield ()
+
+    val loop: Effect[Unit] = for {
+      _ <- Connect.clearConnections[Effect]
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
+      _ <- requestApprovedBlock[Effect]
+      _ <- time.sleep(5000).toEffect
+    } yield ()
+
+    for {
+      _       <- info
       servers <- acquireServers(runtime)
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
       _       <- TransportLayer[Effect].receive(handleCommunication)
+      ndFiber <- NodeDiscovery[Task].discover.forever.fork.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      res <- ApplicativeError_[Effect, CommError].attempt(
-              if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
-              else
-                Connect.connectToBootstrap[Effect](conf.server.bootstrap,
-                                                   maxNumOfAttempts = 5,
-                                                   defaultTimeout = defaultTimeout))
-      _ <- if (res.isRight)
-            MonadOps.forever((i: Int) =>
-                               Connect
-                                 .findAndConnect[Effect](defaultTimeout)
-                                 .apply(i) <* requestApprovedBlock[Effect],
-                             0)
-          else ().pure[Effect]
-      _ <- exit0.toEffect
+      _       <- loop.forever
     } yield ()
-
   }
 
   /**
@@ -291,7 +299,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       time: Time[Task],
       rpConfAsk: RPConfAsk[Task],
       transport: TransportLayer[Task],
-      nodeDiscovery: NodeDiscovery[Task],
+      connections: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
     MultiParentCasperConstructor.fromConfig[Effect, Effect](conf.casper, runtimeManager)
@@ -301,7 +309,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                           time: Time[Task],
                                           rpConfAsk: RPConfAsk[Task],
                                           transport: TransportLayer[Task],
-                                          nodeDiscovery: NodeDiscovery[Task],
+                                          connections: ConnectionsCell[Task],
                                           blockStore: BlockStore[Effect],
                                           casperConstructor: MultiParentCasperConstructor[Effect])
     : PeerNode => PartialFunction[Packet, Effect[Option[Packet]]] =
@@ -333,12 +341,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                                                                 tcpConnections,
                                                                                 log)
     kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
+    initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
-                      .nodeDiscovery(local, defaultTimeout)(log,
-                                                            time,
-                                                            metrics,
-                                                            transport,
-                                                            kademliaRPC)
+                      .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
+                                                                      time,
+                                                                      metrics,
+                                                                      transport,
+                                                                      kademliaRPC)
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       sync,
@@ -352,14 +361,14 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                                                    time,
                                                                    rpConfAsk,
                                                                    transport,
-                                                                   nodeDiscovery,
+                                                                   rpConnections,
                                                                    blockStore,
                                                                    oracle)
     cph = generateCasperPacketHandler(log,
                                       time,
                                       rpConfAsk,
                                       transport,
-                                      nodeDiscovery,
+                                      rpConnections,
                                       blockStore,
                                       casperConstructor)
     packetHandler = PacketHandler.pf[Effect](cph)(Applicative[Effect],
