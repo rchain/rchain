@@ -453,13 +453,23 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
                                            New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
           Connective(VarRefBody(VarRef(0, 2))),
+          Connective(ConnInt(true)),
+          Connective(ConnBool(true)),
+          Connective(ConnString(true)),
+          Connective(ConnByteArray(true)),
+          Connective(ConnUri(true)),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr: Par =
       Par(
         connectives = List(
+          Connective(ConnBool(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnString(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnByteArray(true)),
           Connective(ConnNotBody(Par())),
           Connective(
             ConnAndBody(ConnectiveBody(
@@ -472,6 +482,6 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         connectiveUsed = true
       )
     val result = Sortable.sortMatch(parExpr)
-    result.term should be(sortedParExpr.get)
+    result.term should be(sortedParExpr)
   }
 }
