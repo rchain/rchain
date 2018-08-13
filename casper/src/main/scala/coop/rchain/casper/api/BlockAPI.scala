@@ -14,7 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BindPattern, Channel, Par}
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rspace.StableHashProvider
-import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 import coop.rchain.models.serialization.implicits.serializeChannel
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
@@ -86,7 +86,7 @@ object BlockAPI {
       } yield
         ListeningNameDataResponse(status = "Success",
                                   blockResults = blocksWithActiveName,
-                                  length = blocksWithActiveName.length.toLong)
+                                  length = blocksWithActiveName.length)
 
     implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
     MultiParentCasperConstructor.withCasper[F, ListeningNameDataResponse](
@@ -113,7 +113,7 @@ object BlockAPI {
       } yield
         ListeningNameContinuationResponse(status = "Success",
                                           blockResults = blocksWithActiveName,
-                                          length = blocksWithActiveName.length.toLong)
+                                          length = blocksWithActiveName.length)
 
     implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
     MultiParentCasperConstructor.withCasper[F, ListeningNameContinuationResponse](

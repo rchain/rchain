@@ -66,13 +66,13 @@ message BlockQueryResponse {
 message ListeningNameDataResponse {
   string status = 1;
   repeated DataWithBlockInfo blockResults = 2;
-  int64 length = 3;
+  int32 length = 3;
 }
 
 message ListeningNameContinuationResponse {
   string status = 1;
   repeated ContinuationsWithBlockInfo blockResults = 2;
-  int64 length = 3;
+  int32 length = 3;
 }
 
 message DataWithBlockInfo {
