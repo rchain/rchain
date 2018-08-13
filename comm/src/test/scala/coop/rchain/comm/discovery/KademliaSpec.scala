@@ -61,7 +61,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         implicit val ping: KademliaRPC[Id] = pingOk
         table.updateLastSeen[Id](peer1)
         // when
-        val newPeer1 = PeerNode(peer1.id, Endpoint("otherIP", 0, 0))
+        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
         table.updateLastSeen[Id](newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(newPeer1)
@@ -75,7 +75,7 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         table.updateLastSeen[Id](peer3)
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer1, peer3)
         // when
-        val newPeer1 = PeerNode(peer1.id, Endpoint("otherIP", 0, 0))
+        val newPeer1 = peer1.copy(endpoint = Endpoint("otherIP", 0, 0))
         table.updateLastSeen[Id](newPeer1)
         // then
         bucketEntriesAt(DISTANCE_4) shouldEqual Seq(peer2, peer3, newPeer1)
