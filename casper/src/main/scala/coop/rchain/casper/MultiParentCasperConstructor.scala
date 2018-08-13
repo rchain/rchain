@@ -79,6 +79,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
           )
         }
 
+      //TODO: Allow update to more recent ApprovedBlock
       override def receive(a: ApprovedBlock): F[Boolean] =
         Sync[F].delay(genesisPromise.isCompleted) >>= (completed => {
           if (completed) false.pure[F]
@@ -97,8 +98,6 @@ sealed abstract class MultiParentCasperConstructorInstances {
             } yield isValid
 
         })
-
-      //TODO: Allow update to more recent ApprovedBlock
 
       override def casperInstance: F[Either[Throwable, MultiParentCasper[F]]] = Sync[F].delay {
         casper.value.fold[Either[Throwable, MultiParentCasper[F]]](

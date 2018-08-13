@@ -92,7 +92,7 @@ object CommUtil {
                             .handlePacket[F](sender, maybePacket)
                             .flatMap(_ => {
                               MultiParentCasperConstructor[F].lastApprovedBlock.flatMap {
-                                case Some(_) => Log[F].info("CASPER: last approved block exists")
+                                case Some(_) => ().pure[F] //valid ApprovedBlock received
                                 case None    => askPeers(rest, local)
                               }
                             })
@@ -113,7 +113,7 @@ object CommUtil {
         } yield ()
 
       case Nil =>
-        Log[F].warn(s"CASPER: Reached an end of the peers list when asking for approved block")
+        Log[F].info(s"CASPER: Reached an end of the peers list when asking for approved block")
     }
 
     for {
