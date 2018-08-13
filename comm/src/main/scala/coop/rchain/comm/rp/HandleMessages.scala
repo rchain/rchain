@@ -21,7 +21,7 @@ object HandleMessages {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def handle[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: RoutingProtocol,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
     ProtocolHelper.sender(protocol) match {
@@ -31,7 +31,7 @@ object HandleMessages {
     }
 
   private def handle_[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: RoutingProtocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
@@ -79,7 +79,7 @@ object HandleMessages {
   }
 
   def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration
@@ -92,7 +92,6 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- NodeDiscovery[F].addNode(peer)
         _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(protocolHandshakeResponse(local))

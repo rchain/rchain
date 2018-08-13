@@ -2,6 +2,7 @@ package coop.rchain.casper.api
 
 import cats.Monad
 import cats.implicits._
+import coop.rchain.catscontrib._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.BlockHash
