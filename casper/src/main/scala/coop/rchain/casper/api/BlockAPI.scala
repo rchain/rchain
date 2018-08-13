@@ -124,10 +124,9 @@ object BlockAPI {
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
     : F[IndexedSeq[BlockMessage]] =
     for {
-      estimates   <- MultiParentCasper[F].estimator
-      tip         = estimates.head
-      internalMap <- BlockStore[F].asMap()
-      mainChain   = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
+      estimates <- MultiParentCasper[F].estimator
+      tip       = estimates.head
+      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
@@ -191,10 +190,10 @@ object BlockAPI {
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        estimates   <- MultiParentCasper[F].estimator
-        tip         = estimates.head
-        mainChain   <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
-        blockInfos  <- mainChain.toList.traverse(getFullBlockInfo[F])
+        estimates  <- MultiParentCasper[F].estimator
+        tip        = estimates.head
+        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+        blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
