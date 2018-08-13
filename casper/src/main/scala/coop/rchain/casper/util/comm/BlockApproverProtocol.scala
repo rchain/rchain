@@ -26,7 +26,7 @@ import scala.util.Try
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
 class BlockApproverProtocol[
-    F[_]: Capture: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+    F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
     validatorId: ValidatorIdentity,
     block: BlockMessage,
     requiredSigs: Int) {

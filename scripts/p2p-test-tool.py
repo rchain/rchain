@@ -369,10 +369,10 @@ def check_network_convergence(container):
     print("Check for network convergence via prometheus metrics api before running tests.")
     peers_metric = ''
     peers_metric_expected = args.peer_amount
-    timeout = 200
+    timeout = 400
     count = 0
 
-    while count < 200:
+    while count < timeout:
         cmd = f'curl -s {container.name}:40403'
         try: 
             r = container.exec_run(cmd=cmd).output.decode('utf-8')
