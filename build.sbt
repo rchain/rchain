@@ -63,6 +63,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
+      nettyBoringSsl,
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
@@ -122,7 +123,6 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        nettyBoringSsl,
         jline,
         scallop,
         scalaUri,
