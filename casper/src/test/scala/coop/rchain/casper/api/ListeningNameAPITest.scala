@@ -1,46 +1,23 @@
 package coop.rchain.casper.api
 
-import cats.{ApplicativeError, Id}
-import cats.data.EitherT
+import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.helper.{
   BlockStoreFixture,
-  BlockStoreTestFixture,
-  CasperEffect,
   HashSetCasperTestNode
 }
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.comm.transport
-import coop.rchain.comm.transport.CommMessages.packet
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models.{Channel, Expr, PCost, Par}
-import coop.rchain.rholang.interpreter.Runtime
-import java.nio.file.Files
+import coop.rchain.models.{Channel, Expr, Par}
+import coop.rchain.casper.HashSetCasperTest
 
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.HashSetCasperTest.createGenesis
-import coop.rchain.casper.{
-  HashSetCasperTest,
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  SafetyOracle
-}
-import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
-import coop.rchain.p2p.EffectsTestInstances.LogStub
-import monix.eval.Task
-import monix.execution.Scheduler
+import coop.rchain.models.Expr.ExprInstance.GInt
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.shared.PathOps.RichPath
 
 import scala.collection.immutable
 
@@ -51,7 +28,39 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val genesis                     = createGenesis(validators)
 
-  "getListeningNameResponse" should "return listening names across a chain" in {
+  "getListeningNameResponse" should "work with unsorted channels" in {
+    val node                               = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node._
+
+    def basicDeploy: Deploy = {
+      val timestamp = System.currentTimeMillis()
+      val d = DeployData()
+        .withUser(ByteString.EMPTY)
+        .withTimestamp(timestamp)
+        .withTerm("@{ 3 | 2 | 1 }!(0)")
+      val term = InterpreterUtil.mkTerm(d.term).right.get
+      Deploy(
+        term = Some(term),
+        raw = Some(d)
+      )
+    }
+
+    val Some(block) = node.casperEff.deploy(basicDeploy) *> node.casperEff.createBlock
+    node.casperEff.addBlock(block)
+
+    val listeningName =
+      Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
+    val resultData = Par().copy(exprs = Seq(Expr(GInt(0))))
+    val listeningNameResponse1 =
+      BlockAPI.getListeningNameResponse[Id](listeningName)
+    val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
+    val blocks1 = listeningNameResponse1.blockResults.map(_.block)
+    data1 should be(List(List(resultData)))
+    blocks1.length should be(1)
+    listeningNameResponse1.length should be(1)
+  }
+
+  "getListeningNameResponse" should "work across a chain" in {
     val nodes                               = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
     implicit val nodeZeroConstructor        = nodes(0).constructor
     implicit val nodeZeroSafetyOracleEffect = nodes(0).turanOracleEffect

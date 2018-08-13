@@ -70,8 +70,7 @@ object BlockAPI {
   def getListeningNameResponse[
       F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
       listeningName: Channel): F[ListeningNameResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F],
-                       channelCodec: Codec[Channel]) =
+    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
         estimates           <- casper.estimator
         tip                 = estimates.head
@@ -98,7 +97,7 @@ object BlockAPI {
                                         val stateHash =
                                           ProtoUtil.tuplespace(block).get
                                         val data =
-                                          runtimeManager.getData(stateHash, listeningName)
+                                          runtimeManager.getData(stateHash, sortedListeningName)
                                         for {
                                           blockInfo <- getBlockInfoWithoutTuplespace[F](block)
                                         } yield
