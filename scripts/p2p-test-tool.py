@@ -328,29 +328,40 @@ class rnode:
 
     show_blocks_cmd = binary + " show-blocks"
 
-def test_integration1(container):
+class node:
+    log_message_rx = re.compile("^\d*:\d*:\d*\.\d* (.*?)$", re.MULTILINE | re.DOTALL)
+
+    @staticmethod
+    def received_block_rx(expected_content):
+        return re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$")
+
+    @staticmethod
+    def added_block_rx(block_id):
+        return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
+
+def test_integration1(test_container):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
     """
     def run_cmd(cmd):
-        print (f"{container.name}: Execute <{cmd}>")
-        r = container.exec_run(['sh', '-c', cmd])
+        print (f"{test_container.name}: Execute <{cmd}>")
+        r = test_container.exec_run(['sh', '-c', cmd])
         out_lines = r.output.decode('utf-8').splitlines()
 
-        print (f"{container.name}: Finish <{cmd}>. Exit Code: {r.exit_code}")
+        print (f"{test_container.name}: Finish <{cmd}>. Exit Code: {r.exit_code}")
         (r.exit_code, out_lines)
 
     random_length = 20
     random_string = ''.join(random.choice(string.ascii_letters) for m in range(random_length))
-    expected_string = f"[{container.name}:{random_string}]"
+    expected_string = f"[{test_container.name}:{random_string}]"
 
     hello_rho = '/opt/docker/examples/tut-hello.rho'
 
     sed_cmd = f"sed -i -e 's/Joe/{expected_string}/g' {hello_rho}"
 
 
-    print(f"Running integration1 tests on container {container.name}. Expected string: {expected_string}")
+    print(f"Running integration1 test on container {test_container.name}. Expected string: {expected_string}")
 
     try:
         run_cmd(sed_cmd)
@@ -372,12 +383,31 @@ def test_integration1(container):
 
     print(f"Check all peer logs for blocks containing {expected_string}")
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-        logs = container.logs().decode('utf-8')
-        if expected_string in logs:
-            print(f"Container: {container.name}: String {expected_string} found in output. Success!")
+        if container.name == test_container.name:
+            continue
+        log_content = container.logs().decode('utf-8')
+        logs = node.log_message_rx.split(log_content)
+        blocks_received_ids = [match.group(1) for match in [node.received_block_rx(expected_string).match(log) for log in logs] if match]
+
+        if blocks_received_ids:
+            print(f"Container: {container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
+
+            if len(blocks_received_ids) > 1:
+                print(f"Too many blocks received: {blocks_received_ids}")
+                retval = retval + 1
+            else:
+                block_id = blocks_received_ids[0]
+
+                blocks_added = [match.group(0) for match in [node.added_block_rx(block_id).match(log) for log in logs] if match]
+                if blocks_added:
+                    print(f"Container: {container.name}: Added block found for {blocks_received_ids}: {blocks_added}. Success!")
+                else:
+                    print(f"Container: {container.name}: Added blocks not found for {blocks_received_ids}. FAILURE!")
+                    retval = retval + 1
+
         else:
             print(f"Container: {container.name}: String {expected_string} NOT found in output. FAILURE!")
-            retval= retval + 1
+            retval = retval + 1
 
     return retval
 
