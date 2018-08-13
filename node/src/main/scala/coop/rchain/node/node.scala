@@ -353,7 +353,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       sync,
       Metrics.eitherT(Monad[Task], metrics))
     _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
+    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
     runtime        = Runtime.create(storagePath, storageSize)
     casperRuntime  = Runtime.create(casperStoragePath, storageSize)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
