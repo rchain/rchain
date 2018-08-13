@@ -280,6 +280,6 @@ object BlockAPI {
     case Some(Processing) =>
       DeployServiceResponse(success = false,
                             "No action taken since other thread is already processing the block.")
-    case None => DeployServiceResponse(false, "No block was created.")
+    case None => DeployServiceResponse(success = false, "No block was created.")
   }
 }
