@@ -8,8 +8,10 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort.Sortable
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import org.scalatest._
+import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
@@ -17,15 +19,35 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
-  def assertSpatialMatch[T: Sortable, P: Sortable](
+  def assertSpatialMatch[T <: GeneratedMessage, P <: GeneratedMessage](
       target: T,
       pattern: P,
-      expected: Option[FreeMap])(implicit sm: SpatialMatcher[T, P]): Assertion = {
+      expectedCaptures: Option[FreeMap])(implicit sm: SpatialMatcher[T, P],
+                                         ts: Sortable[T],
+                                         ps: Sortable[P]): Assertion = {
+    println(explainMatch(target, pattern, expectedCaptures))
     assertSorted(target, "target")
     assertSorted(pattern, "pattern")
-    expected.foreach(_.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
-    assert(result == expected)
+    expectedCaptures.foreach(
+      _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
+    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost._2.map(_._1)
+    assert(result == expectedCaptures)
+  }
+
+  private def explainMatch[P <: GeneratedMessage, T <: GeneratedMessage](
+      target: T,
+      pattern: P,
+      expectedCaptures: Option[FreeMap]): String = {
+    val printer        = PrettyPrinter()
+    val targetString   = printer.buildString(target)
+    val patternString  = printer.buildString(pattern)
+    val capturesString = expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
+
+    s"""
+       |     Matching:  $patternString
+       |           to:  $targetString
+       | should yield:  $capturesString
+       |""".stripMargin
   }
 
   private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
@@ -97,6 +119,78 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern: Par = EVar(FreeVar(0)).prepend(GInt(8), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
   }
+
+  "Matching a singleton list" should "work" in {
+    val target: Expr  = EList(Seq(GInt(1)))
+    val pattern: Expr = EList(Seq(EVar(FreeVar(0))), connectiveUsed = true)
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(1)))
+    assertSpatialMatch(target, pattern, expectedResult)
+    assertSpatialMatch(target: Par, pattern: Par, expectedResult)
+  }
+
+  "Matching that requires revision of prior matches" should "work" in {
+    //     Matching:  [1, [free0]] | [free1, [2]]
+    //           to:  [1, [2]] | [1, [3]]
+    // should yield:  Some(Map(0 -> 3, 1 -> 1))
+    val p1 = EList(
+      Seq(GInt(1), EList(Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+      connectiveUsed = true
+    )
+    val p2 = EList(
+      Seq(EVar(FreeVar(1)), EList(Seq(GInt(2)))),
+      connectiveUsed = true
+    )
+    val t1 = EList(Seq(GInt(1), EList(Seq(GInt(2)))))
+    val t2 = EList(Seq(GInt(1), EList(Seq(GInt(3)))))
+
+    val target         = t2.prepend(t1, depth = 0)
+    val pattern        = p2.prepend(p1, depth = 0)
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(3), 1 -> GInt(1)))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
+  it should "work with remainders" in {
+    //     Matching:  [1, [...free0]] | [free1, [2, 2]]
+    //           to:  [1, [2, 2]] | [1, [3, 2]]
+    // should yield:  Some(Map(0 -> [3, 2], 1 -> 1))
+    val p1 = EList(
+      Seq(GInt(1), EList(remainder = FreeVar(0), connectiveUsed = true)),
+      connectiveUsed = true
+    )
+    val p2 = EList(
+      Seq(EVar(FreeVar(1)), EList(Seq(GInt(2), GInt(2)))),
+      connectiveUsed = true
+    )
+    val t1 = EList(Seq(GInt(1), EList(Seq(GInt(2), GInt(2)))))
+    val t2 = EList(Seq(GInt(1), EList(Seq(GInt(3), GInt(2)))))
+
+    val target         = t2.prepend(t1, depth = 0)
+    val pattern        = p2.prepend(p1, depth = 0)
+    val expectedResult = Some(Map[Int, Par](0 -> EList(Seq(GInt(3), GInt(2))), 1 -> GInt(1)))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
+  it should "work despite having other terms in the same list" in {
+    //     Matching:  [1, [free0, 2]] | [free1, [2, 2]]
+    //           to:  [1, [2, 2]] | [1, [3, 2]]
+    // should yield:  Some(Map(0 -> 3, 1 -> 1))
+    val p1 = EList(
+      Seq(GInt(1), EList(Seq(EVar(FreeVar(0)), GInt(2)), connectiveUsed = true)),
+      connectiveUsed = true
+    )
+    val p2 = EList(
+      Seq(EVar(FreeVar(1)), EList(Seq(GInt(2), GInt(2)))),
+      connectiveUsed = true
+    )
+    val t1 = EList(Seq(GInt(1), EList(Seq(GInt(2), GInt(2)))))
+    val t2 = EList(Seq(GInt(1), EList(Seq(GInt(3), GInt(2)))))
+
+    val target         = t2.prepend(t1, depth = 0)
+    val pattern        = p2.prepend(p1, depth = 0)
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(3), 1 -> GInt(1)))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
   "Matching extras with wildcard" should "work" in {
     val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
     val pattern: Par = EVar(Wildcard(Var.WildcardMsg())).prepend(GInt(8), depth = 1)

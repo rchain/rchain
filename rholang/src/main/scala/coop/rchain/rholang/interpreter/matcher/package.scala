@@ -1,8 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import cats.data.{OptionT, State, StateT}
-import cats.implicits._
-import cats.{Applicative, Functor, Monad}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 
@@ -10,8 +8,7 @@ import scala.collection.immutable.Stream
 
 package object matcher {
 
-  type FreeMap            = Map[Int, Par]
-  type OptionalFreeMap[A] = StateT[Option, FreeMap, A]
+  type FreeMap = Map[Int, Par]
 
   type OptionalFreeMapWithCost[A] = StateT[OptionT[State[CostAccount, ?], ?], FreeMap, A]
 
@@ -23,6 +20,20 @@ package object matcher {
           OptionT(State((c: CostAccount) => {
             val (cost, result) = s.run(m).value.run(c).value
             (f(cost), result)
+          }))
+        })
+
+      def attempt: OptionalFreeMapWithCost[Either[Unit, A]] =
+        StateT((m: FreeMap) => {
+          OptionT(State((c: CostAccount) => {
+            val (cost: CostAccount, result: Option[(FreeMap, A)]) = s.run(m).value.run(c).value
+
+            val recovered: Option[(FreeMap, Either[Unit, A])] = result match {
+              case None          => Some((m, Left(())))
+              case Some((m1, a)) => Some((m1, Right(a)))
+            }
+
+            (cost, recovered)
           }))
         })
 
@@ -103,8 +114,6 @@ package object matcher {
       })
 
   }
-
-  type NonDetFreeMap[A] = StateT[Stream, FreeMap, A]
 
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
