@@ -9,7 +9,7 @@ import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.Deploy
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
