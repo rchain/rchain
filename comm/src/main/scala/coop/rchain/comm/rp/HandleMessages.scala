@@ -71,7 +71,8 @@ object HandleMessages {
 
   }
 
-  def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](
+  def handlePacket[
+      F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk: ConnectionsCell](
       remote: PeerNode,
       maybePacket: Option[Packet]): F[CommunicationResponse] = {
     val errorMsg = s"Expecting Packet, got something else. Stopping the node."
@@ -82,16 +83,22 @@ object HandleMessages {
         _     <- ErrorHandler[F].raiseError[Unit](error)
       } yield notHandled(error)
 
-    maybePacket.fold(handleNone)(
-      p =>
-        for {
-          local               <- RPConfAsk[F].reader(_.local)
-          maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
-          maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
-        } yield
-          maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
-            handledWithMessage(m)))
+    def process =
+      maybePacket.fold(handleNone)(
+        p =>
+          for {
+            local               <- RPConfAsk[F].reader(_.local)
+            maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
+            maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
+              ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
+          } yield
+            maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
+              handledWithMessage(m)))
+
+    for {
+      conns <- ConnectionsCell[F].read
+      res   <- if (conns.contains(remote)) process else notHandled(notConnectedToPeer(remote)).pure[F]
+    } yield res
   }
 
   def handleProtocolHandshake[
