@@ -255,13 +255,23 @@ sealed abstract class MultiParentCasperInstances {
       def contains(b: BlockMessage): F[Boolean] =
         BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
-      def deploy(d: Deploy): F[Unit] =
-        for {
-          _ <- Capture[F].capture {
-                deployHist += d
-              }
-          _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(d)}")
-        } yield ()
+      def deploy(d: DeployData): F[Either[Throwable, Unit]] =
+        InterpreterUtil.mkTerm(d.term) match {
+          case Right(term) =>
+            val deploy = Deploy(
+              term = Some(term),
+              raw = Some(d)
+            )
+            for {
+              _ <- Capture[F].capture {
+                    deployHist += deploy
+                  }
+              _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(deploy)}")
+            } yield Right(())
+
+          case Left(err) =>
+            Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
+        }
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
