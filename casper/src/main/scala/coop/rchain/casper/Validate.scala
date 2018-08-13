@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.DagOperations.bfTraverse
-import coop.rchain.casper.util.{ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -123,7 +123,9 @@ object Validate {
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
-      blockNumberStatus <- timestampStatus.joinRight.traverse(_ =>
+      repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
+                               Validate.repeatDeploy[F](block, dag))
+      blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
                             Validate.blockNumber[F](block, dag))
       parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
@@ -152,41 +154,43 @@ object Validate {
     * Validate no deploy by the same (user, millisecond timestamp)
     * has been produced in the chain
     */
-  def repeatDeploy[F[_]: Monad: Log: BlockStore](block: BlockMessage,
-                                                 genesis: BlockMessage,
-                                                 dag: BlockDag): F[Boolean] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      {
-        def parents(b: BlockMessage): Iterator[BlockMessage] =
-          ProtoUtil.parents(b).iterator.flatMap(internalMap.get)
-
-        val deployKeySet = (for {
-          bd <- block.body.toList
-          d  <- bd.newCode.flatMap(_.deploy)
-          r  <- d.raw.toList
-        } yield (r.user, r.timestamp)).toSet
-
-        val repeatBlock = bfTraverse[BlockMessage](parents(block).toList)(parents).find(
-          _.body.exists(
-            _.newCode
-              .flatMap(_.deploy)
-              .exists(
-                _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
-              )
-          )
-        )
-
-        repeatBlock match {
-          case Some(b) =>
-            for {
-              _ <- Log[F].warn(ignore(
-                    block,
-                    s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"))
-            } yield false
-          case None => true.pure[F]
-        }
+  def repeatDeploy[F[_]: Monad: Log: BlockStore](
+      block: BlockMessage,
+      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+    def parents(b: BlockMessage): F[List[BlockMessage]] =
+      ProtoUtil.parents(b).toList.traverse { parentHash =>
+        ProtoUtil.unsafeGetBlock[F](parentHash)
       }
-    }
+
+    val deployKeySet = (for {
+      bd <- block.body.toList
+      d  <- bd.newCode.flatMap(_.deploy)
+      r  <- d.raw.toList
+    } yield (r.user, r.timestamp)).toSet
+
+    for {
+      initParents    <- parents(block)
+      parentBlockDag <- DagOperations.bfTraverseF(initParents)(parents).toList
+      duplicatedBlock = parentBlockDag.find(
+        _.body.exists(
+          _.newCode
+            .flatMap(_.deploy)
+            .exists(
+              _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
+            )
+        )
+      )
+      result <- duplicatedBlock match {
+                 case Some(b) =>
+                   for {
+                     _ <- Log[F].warn(ignore(
+                           block,
+                           s"found deploy by the same (user, millisecond timestamp) produced in the block(${b.blockHash})"))
+                   } yield Left(InvalidRepeatDeploy)
+                 case None => Applicative[F].pure(Right(Valid))
+               }
+    } yield result
+  }
 
   // This is not a slashable offence
   def timestamp[F[_]: Monad: Log: Time: BlockStore](
