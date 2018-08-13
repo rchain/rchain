@@ -94,7 +94,7 @@ sealed abstract class SafetyOracleInstances {
                                  maybeLatestMessageHash match {
                                    case Some(latestMessageHash) =>
                                      for {
-                                       latestMessage <- getBlock[F](latestMessageHash)
+                                       latestMessage <- unsafeGetBlock[F](latestMessageHash)
                                        isCompatible  <- computeCompatibility(estimate, latestMessage)
                                        result = if (isCompatible) {
                                          Some((validator, stake))
@@ -125,7 +125,7 @@ sealed abstract class SafetyOracleInstances {
                                               validator: Validator): F[List[BlockHash]] =
           justificationHashes.filterA(justificationHash =>
             for {
-              justificationBlock <- getBlock[F](justificationHash)
+              justificationBlock <- unsafeGetBlock[F](justificationHash)
               isSenderSecond     = justificationBlock.sender == validator
               compatible         <- computeCompatibility(estimate, justificationBlock)
             } yield isSenderSecond && compatible)
@@ -135,7 +135,7 @@ sealed abstract class SafetyOracleInstances {
           maybeFirstLatestHash match {
             case Some(firstLatestHash) =>
               for {
-                firstLatestBlock    <- getBlock[F](firstLatestHash)
+                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
                 justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
                 agreeingJustificationHashes <- filterAgreeingJustificationHashes(
                                                 justificationHashes.toList,
@@ -162,12 +162,12 @@ sealed abstract class SafetyOracleInstances {
           maybeFirstLatestHash match {
             case Some(firstLatestHash) =>
               for {
-                firstLatestBlock    <- getBlock[F](firstLatestHash)
+                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
                 justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
                 justificationBlockSecondList <- justificationHashes.toList.traverse(
                                                  justificationHash =>
                                                    for {
-                                                     justificationBlock <- getBlock[F](
+                                                     justificationBlock <- unsafeGetBlock[F](
                                                                             justificationHash)
                                                      isSenderSecond = justificationBlock.sender == second
                                                      result = if (isSenderSecond) {

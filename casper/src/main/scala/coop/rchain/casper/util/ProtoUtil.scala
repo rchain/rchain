@@ -50,7 +50,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- getBlock[F](mainParentHash)
+                        updatedEstimate <- unsafeGetBlock[F](mainParentHash)
                         mainChain       <- getMainChain[F](updatedEstimate, acc :+ estimate)
                       } yield mainChain
                     case None => (acc :+ estimate).pure[F]
@@ -58,7 +58,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def getBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
       block = maybeBlock match {

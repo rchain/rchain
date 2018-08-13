@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
-import coop.rchain.casper.util.ProtoUtil.{getBlock, parents, weightFromValidator}
+import coop.rchain.casper.util.ProtoUtil.{unsafeGetBlock, parents, weightFromValidator}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
@@ -67,7 +67,7 @@ object Estimator {
   def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Int]] = {
     def hashParents(hash: BlockHash): F[List[BlockHash]] =
       for {
-        b <- getBlock[F](hash)
+        b <- unsafeGetBlock[F](hash)
       } yield parents(b).toList
 
     def addValidatorWeightDownSupportingChain(scoreMap: Map[BlockHash, Int],
@@ -78,7 +78,7 @@ object Estimator {
         updatedScoreMap <- Foldable[List].foldM(dag, scoreMap) {
                             case (acc, hash) =>
                               for {
-                                b               <- getBlock[F](hash)
+                                b               <- unsafeGetBlock[F](hash)
                                 currScore       = acc.getOrElse(hash, 0)
                                 validatorWeight <- weightFromValidator[F](b, validator)
                               } yield acc.updated(hash, currScore + validatorWeight)
