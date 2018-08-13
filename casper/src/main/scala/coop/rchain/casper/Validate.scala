@@ -134,19 +134,19 @@ object Validate {
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      val parentsPresent = ProtoUtil.parents(block).forall(p => internalMap.contains(p))
-      val justificationsPresent =
-        block.justifications.forall(j => internalMap.contains(j.latestBlockHash))
-      if (parentsPresent && justificationsPresent) {
-        Applicative[F].pure(Right(Valid))
-      } else {
-        for {
-          _ <- Log[F].debug(
-                s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
-        } yield Left(MissingBlocks)
-      }
-    }
+    for {
+      parentsPresent <- ProtoUtil.parents(block).toList.forallM(p => BlockStore[F].contains(p))
+      justificationsPresent <- block.justifications.toList.forallM(j =>
+                                BlockStore[F].contains(j.latestBlockHash))
+      result <- if (parentsPresent && justificationsPresent) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 for {
+                   _ <- Log[F].debug(
+                         s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
+                 } yield Left(MissingBlocks)
+               }
+    } yield result
 
   /**
     * Validate no deploy by the same (user, millisecond timestamp)
