@@ -5,7 +5,12 @@ import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{MultiParentCasper, MultiParentCasperConstructor, SafetyOracle, ValidatorIdentity}
+import coop.rchain.casper.{
+  MultiParentCasper,
+  MultiParentCasperConstructor,
+  SafetyOracle,
+  ValidatorIdentity
+}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
 import coop.rchain.crypto.signatures.Ed25519
@@ -35,13 +40,15 @@ class HashSetCasperTestNode(name: String,
                             tle: TransportLayerTestImpl[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler, timeEff: Time[Id]) {
+                            logicalTime: LogicalTime[Id],
+                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
 
   import HashSetCasperTestNode.errorHandler
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
   implicit val logEff            = new LogStub[Id]
+  implicit val timeEff           = logicalTime
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
@@ -91,23 +98,24 @@ object HashSetCasperTestNode {
     val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
+    val logicalTime: LogicalTime[Id] = new LogicalTime[Id]
 
-    new HashSetCasperTestNode(name, identity, tle, genesis, sk)
+    new HashSetCasperTestNode(name, identity, tle, genesis, sk, logicalTime)
   }
 
   def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
-    implicit val timeEff           = new LogicalTime[Id]
-    val n         = sks.length
-    val names     = (1 to n).map(i => s"node-$i")
-    val peers     = names.map(peerNode(_, 40400))
-    val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
+    val n                            = sks.length
+    val names                        = (1 to n).map(i => s"node-$i")
+    val peers                        = names.map(peerNode(_, 40400))
+    val msgQueues                    = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
+    val logicalTime: LogicalTime[Id] = new LogicalTime[Id]
 
     val nodes =
       names.zip(peers).zip(sks).map {
         case ((n, p), sk) =>
           val tle = new TransportLayerTestImpl[Id](p, msgQueues)
-          new HashSetCasperTestNode(n, p, tle, genesis, sk)
+          new HashSetCasperTestNode(n, p, tle, genesis, sk, logicalTime)
       }
 
     //make sure all nodes know about each other
