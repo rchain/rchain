@@ -5,45 +5,43 @@ import cats.implicits._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  SafetyOracle,
-  ValidatorIdentity
-}
+import coop.rchain.casper.{MultiParentCasper, MultiParentCasperConstructor, SafetyOracle, ValidatorIdentity}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.rp.{Connect, HandleMessages}, HandleMessages.handle, Connect._
+import coop.rchain.comm.rp.{Connect, HandleMessages}
+import HandleMessages.handle
+import Connect._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
 import coop.rchain.casper.util.rholang.RuntimeManager
 import monix.execution.Scheduler
+
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
+
 import scala.util.Random
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Time}
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
+                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler, timeEff: Time[Id]) {
 
   import HashSetCasperTestNode.errorHandler
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
   implicit val logEff            = new LogStub[Id]
-  implicit val timeEff           = new LogicalTime[Id]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
@@ -99,6 +97,7 @@ object HashSetCasperTestNode {
 
   def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
+    implicit val timeEff           = new LogicalTime[Id]
     val n         = sks.length
     val names     = (1 to n).map(i => s"node-$i")
     val peers     = names.map(peerNode(_, 40400))
