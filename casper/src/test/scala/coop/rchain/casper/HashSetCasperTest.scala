@@ -239,13 +239,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).casperEff.addBlock(signedBlock3)
     nodes(1).receive() // receive block3
 
+    nodes(1).casperEff.contains(signedBlock3) should be(true)
+
     val Some(signedBlock4) = nodes(1).casperEff
       .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(signedBlock4) // should fail
-    nodes(0).receive()
+    nodes(0).receive()                        // doesn't receive anything as signedBlock4 is invalid
 
-    nodes(1).casperEff.contains(signedBlock3) should be(true)
-    nodes(1).casperEff.contains(signedBlock4) should be(false)
+    nodes(1).casperEff.contains(signedBlock4) should be(true) // Invalid blocks are still added
     nodes(0).casperEff.contains(signedBlock4) should be(false)
 
     nodes(1).logEff.warns
