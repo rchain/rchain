@@ -318,5 +318,4 @@ object ProtoUtil {
         Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
   }
-
 }
