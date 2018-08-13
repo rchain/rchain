@@ -180,7 +180,10 @@ object BlockAPI {
         channelHash == StableHashProvider.hash(sortedListeningName)
       case Consume(channelHash, _) =>
         channelHash == StableHashProvider.hash(sortedListeningName)
-      case _ => false
+      case COMM(consume, produces) =>
+        consume.channelsHash == StableHashProvider.hash(sortedListeningName) ||
+          produces.exists(produce =>
+            produce.channelsHash == StableHashProvider.hash(sortedListeningName))
     }
   }
 
