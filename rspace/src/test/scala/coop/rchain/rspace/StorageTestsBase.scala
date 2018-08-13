@@ -1,16 +1,13 @@
 package coop.rchain.rspace
-
-import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
-import org.lmdbjava.Txn
 import org.scalatest._
 import scodec.Codec
 
@@ -34,20 +31,22 @@ class InMemoryStoreTestsBase
     extends StorageTestsBase[String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 4096L
-
   override def withTestSpace[S](f: T => S): S = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
     val branch                                = Branch("inmem")
 
-    val env = Context.env(dbDir, mapSize)
-    val trieStore
-      : ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]] =
-      LMDBTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](env, dbDir)
-    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor](trieStore, branch)
+    val trieStore =
+      InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
+
+    val testStore = InMemoryStore.create[
+      InMemTransaction[history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]],
+      String,
+      Pattern,
+      String,
+      StringsCaptor](trieStore, branch)
+
     val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
@@ -62,14 +61,11 @@ class InMemoryStoreTestsBase
     } finally {
       trieStore.close()
       testStore.close()
-      env.close()
     }
   }
 
-  override def afterAll(): Unit = {
-    dbDir.recursivelyDelete
+  override def afterAll(): Unit =
     super.afterAll()
-  }
 }
 
 class LMDBStoreTestsBase

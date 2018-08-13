@@ -4,9 +4,8 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.{codecGNAT, GNAT}
-import coop.rchain.rspace.test.InMemoryStore
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
 import org.scalatest.BeforeAndAfterAll
@@ -279,10 +278,7 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 }
 
 class InMemoryStoreStorageExamplesTestsBase
-    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor]
-    with BeforeAndAfterAll {
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
+    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => R): R = {
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
@@ -292,10 +288,17 @@ class InMemoryStoreStorageExamplesTestsBase
       implicits.serializeEntriesCaptor.toCodec)
 
     val branch = Branch("inmem")
-    val env    = Context.env(dbDir, mapSize)
+
     val trieStore =
-      LMDBTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]](env, dbDir)
-    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
+      InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
+
+    val testStore = InMemoryStore.create[
+      InMemTransaction[history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]],
+      Channel,
+      Pattern,
+      Entry,
+      EntriesCaptor](trieStore, branch)
+
     val testSpace = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
@@ -305,13 +308,7 @@ class InMemoryStoreStorageExamplesTestsBase
     } finally {
       trieStore.close()
       testStore.close()
-      env.close()
     }
-  }
-
-  override def afterAll(): Unit = {
-    dbDir.recursivelyDelete
-    super.afterAll()
   }
 }
 
