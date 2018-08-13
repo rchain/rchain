@@ -34,6 +34,7 @@ private[api] class DeployGrpcService[
   override def listenForDataAtName(listeningName: Channel): Future[ListeningNameDataResponse] =
     BlockAPI.getListeningNameDataResponse[F](listeningName).toFuture
 
-  override def listenForContinuationAtName(listeningNames: Channels): Future[ListeningNameContinuationResponse] =
+  override def listenForContinuationAtName(
+      listeningNames: Channels): Future[ListeningNameContinuationResponse] =
     BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toFuture
 }
