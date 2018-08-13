@@ -2,22 +2,19 @@ package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Bond, Deploy, DeployCost, DeployData}
+import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models._
-import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.{ErrorLog, Reduce, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint}
-import coop.rchain.rspace.internal.Datum
 import monix.execution.Scheduler
+import coop.rchain.rspace.internal.WaitingContinuation
 
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.{DeployError, StateHash}
-import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
@@ -137,6 +134,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       channel <- datum.a.channels
       par     <- channel.channelInstance.quote
     } yield par
+  }
+
+  def getContinuation(hash: ByteString,
+                      channels: immutable.Seq[Channel]): Seq[(Seq[BindPattern], Par)] = {
+    val resetRuntime = getResetRuntime(hash)
+    val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
+      resetRuntime.space.getWaitingContinuations(channels)
+    runtimeContainer.put(resetRuntime)
+    for {
+      result <- results.filter(_.continuation.taggedCont.isParBody)
+    } yield (result.patterns, result.continuation.taggedCont.parBody.get.body)
   }
 
   private def getResetRuntime(hash: StateHash) = {
