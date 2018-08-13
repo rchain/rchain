@@ -1,10 +1,10 @@
 package coop.rchain.casper
 
+import coop.rchain.comm.rp.Connect.RPConfAsk
 import cats.{Applicative, Id, Monad}
 import cats.implicits._
 import cats.effect.{Bracket, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -88,7 +88,7 @@ sealed abstract class MultiParentCasperInstances {
     }
 
   def hashSetCasper[
-      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -109,7 +109,7 @@ sealed abstract class MultiParentCasperInstances {
   }
 
   private[this] def createMultiParentCasper[
-      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore](
+      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,

@@ -14,12 +14,14 @@ case class Server(
     bootstrap: PeerNode,
     standalone: Boolean,
     dataDir: Path,
-    mapSize: Long
+    mapSize: Long,
+    maxNumOfConnections: Int
 )
 
 case class GrpcServer(
     host: String,
-    port: Int
+    portExternal: Int,
+    portInternal: Int
 )
 
 case class Tls(

@@ -12,7 +12,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rholang.collection.{Either, LinkedList}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
@@ -38,6 +38,7 @@ object Genesis {
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
     val defaultBlessedTerms = List(
       LinkedList.term,
+      Either.term,
       NonNegativeNumber.term,
       MakeMint.term,
       BasicWallet.term,

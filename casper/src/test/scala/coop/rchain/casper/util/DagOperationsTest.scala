@@ -4,14 +4,9 @@ import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
-import cats.data.State
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import cats.mtl.implicits._
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time

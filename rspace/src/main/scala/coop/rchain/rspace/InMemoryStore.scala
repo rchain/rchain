@@ -1,4 +1,4 @@
-package coop.rchain.rspace.test
+package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 
@@ -17,15 +17,6 @@ import scala.concurrent.SyncVar
 
 import kamon._
 
-trait InMemTransaction[S] {
-  def commit(): Unit
-  def abort(): Unit
-  def close(): Unit
-  def readState[R](f: S => R): R
-  def writeState[R](f: S => (S, R)): R
-  def name: String
-}
-
 case class State[C, P, A, K](dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
                              dbJoins: Map[C, Seq[Seq[C]]]) {
   def isEmpty: Boolean =
@@ -35,38 +26,35 @@ case class State[C, P, A, K](dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
     dbGNATs.foldLeft(0L) {
       case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
     } + dbJoins.size
+
+  def chageGNATs(newGnats: Map[Blake2b256Hash, GNAT[C, P, A, K]]) =
+    State(newGnats, dbJoins)
 }
 
 object State {
   def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
 }
 
-class InMemoryStore[C, P, A, K](
-    val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
+class InMemoryStore[T, C, P, A, K](
+    val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
 )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K])
-    extends IStore[C, P, A, K] {
+    extends InMemoryOps[State[C, P, A, K]]
+    with IStore[C, P, A, K] {
+
+  type TrieTransaction = T
 
   private implicit val codecC: Codec[C] = sc.toCodec
   private implicit val codecP: Codec[P] = sp.toCodec
   private implicit val codecA: Codec[A] = sa.toCodec
   private implicit val codecK: Codec[K] = sk.toCodec
 
-  private[this] val stateRef: SyncVar[State[C, P, A, K]] = {
-    val sv = new SyncVar[StateType]
-    sv.put(State.empty)
-    sv
-  }
-
-  private[rspace] type Transaction     = InMemTransaction[StateType]
-  private[rspace] type TrieTransaction = Txn[ByteBuffer]
-
-  private[this] type StateType = State[C, P, A, K]
+  override def emptyState: State[C, P, A, K] = State.empty
 
   private[this] val refine       = Map("path" -> "inmem")
   private[this] val entriesGauge = Kamon.gauge("entries").refine(refine)
 
-  private[this] def updateGauges() =
+  private[rspace] def updateGauges() =
     withTxn(createTxnRead())(_.readState { state =>
       entriesGauge.set(state.size)
     })
@@ -74,63 +62,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     StableHashProvider.hash(channels)
 
-  private[rspace] def createTxnRead(): Transaction = new InMemTransaction[StateType] {
-
-    val name: String = "read-" + Thread.currentThread().getId
-
-    private[this] val state = stateRef.get
-
-    override def commit(): Unit = {}
-
-    override def abort(): Unit = {}
-
-    override def close(): Unit = {}
-
-    override def readState[R](f: StateType => R): R = f(state)
-
-    override def writeState[R](f: StateType => (StateType, R)): R =
-      throw new RuntimeException("read txn cannot write")
-  }
-
-  private[rspace] def createTxnWrite(): Transaction =
-    new InMemTransaction[StateType] {
-      val name: String = "write-" + Thread.currentThread().getId
-
-      private[this] val initial = stateRef.take
-      private[this] var current = initial
-
-      override def commit(): Unit = {
-        stateRef.put(current)
-        updateGauges()
-      }
-
-      override def abort(): Unit = stateRef.put(initial)
-
-      override def close(): Unit = {}
-
-      override def readState[R](f: StateType => R): R = f(current)
-
-      override def writeState[R](f: StateType => (StateType, R)): R = {
-        val (newState, result) = f(current)
-        current = newState
-        result
-      }
-    }
-
-  private[rspace] def withTxn[R](txn: Transaction)(f: Transaction => R): R =
-    try {
-      val ret: R = f(txn)
-      txn.commit()
-      ret
-    } catch {
-      case ex: Throwable =>
-        txn.abort()
-        throw ex
-    } finally {
-      txn.close()
-    }
-
-  override def withTrieTxn[R](txn: InMemTransaction[StateType])(f: Txn[ByteBuffer] => R): R =
+  override def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R =
     trieStore.withTxn(trieStore.createTxnWrite()) { ttxn =>
       f(ttxn)
     }
@@ -302,9 +234,14 @@ class InMemoryStore[C, P, A, K](
 
   private[rspace] def installWaitingContinuation(txn: Transaction,
                                                  channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit =
-    ???
-
+                                                 continuation: WaitingContinuation[P, K]): Unit = {
+    val key  = hashChannels(channels)
+    val gnat = GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation))
+    txn.writeState(state => {
+      val ns = state.chageGNATs(state.dbGNATs + (key -> gnat))
+      (ns, ())
+    })
+  }
 }
 
 object InMemoryStore {
@@ -315,16 +252,16 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[C, P, A, K](trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
-                         branch: Branch)(implicit sc: Serialize[C],
-                                         sp: Serialize[P],
-                                         sa: Serialize[A],
-                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] = {
+  def create[T, C, P, A, K](trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
+                            branch: Branch)(implicit sc: Serialize[C],
+                                            sp: Serialize[P],
+                                            sa: Serialize[A],
+                                            sk: Serialize[K]): InMemoryStore[T, C, P, A, K] = {
     implicit val codecK: Codec[K] = sk.toCodec
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     initialize(trieStore, branch)
-    new InMemoryStore[C, P, A, K](trieStore, branch)
+    new InMemoryStore[T, C, P, A, K](trieStore, branch)
   }
 }

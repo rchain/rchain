@@ -27,9 +27,10 @@ object Configuration {
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
 
   private val DefaultPort                       = 40400
-  private val DefaultGrpcPort                   = 40401
+  private val DefaultGrpcPortExternal           = 40401
   private val DefaultHttPort                    = 40402
   private val DefaultMetricsPort                = 40403
+  private val DefaultGrpcPortInternal           = 40404
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
@@ -40,7 +41,7 @@ object Configuration {
   private val DefaultValidatorSigAlgorithm      = "ed25519"
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
-
+  private val DefaultMaxNumOfConnections        = 500
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
@@ -87,11 +88,13 @@ object Configuration {
             DefaultBootstrapServer,
             DefaultStandalone,
             dataDir,
-            DefaultMapSize
+            DefaultMapSize,
+            DefaultMaxNumOfConnections
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
-            options.grpcPort.getOrElse(DefaultGrpcPort)
+            options.grpcPort.getOrElse(DefaultGrpcPortExternal),
+            options.grpcPortInternal.getOrElse(DefaultGrpcPortInternal)
           ),
           Tls(
             dataDir.resolve(DefaultCertificateFileName),
@@ -147,11 +150,14 @@ object Configuration {
 
     // gRPC
     val grpcHost: String = get(_.grpcHost, _.grpcServer.flatMap(_.host), DefaultGrpcHost)
-    val grpcPort: Int    = get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPort)
+    val grpcPortExternal: Int =
+      get(_.grpcPort, _.grpcServer.flatMap(_.port), DefaultGrpcPortExternal)
+    val grpcPortInternal: Int =
+      get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
     // Server
     val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(_.run.httpPort, _ => None, DefaultHttPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val metricsPort: Int =
       get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
@@ -186,6 +192,9 @@ object Configuration {
                                     _.validators.flatMap(_.sigAlgorithm),
                                     DefaultValidatorSigAlgorithm)
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val maxNumOfConnections = get(_.run.maxNumOfConnections,
+                                  _.server.flatMap(_.maxNumOfConnections),
+                                  DefaultMaxNumOfConnections)
 
     val server = Server(
       host,
@@ -197,11 +206,13 @@ object Configuration {
       bootstrap,
       standalone,
       dataDir,
-      mapSize
+      mapSize,
+      maxNumOfConnections
     )
     val grpcServer = GrpcServer(
       grpcHost,
-      grpcPort
+      grpcPortExternal,
+      grpcPortInternal
     )
     val tls = Tls(
       certificatePath,
@@ -209,6 +220,7 @@ object Configuration {
       certificate.isDefined,
       key.isDefined
     )
+
     val casper =
       CasperConf(
         validatorPublicKey,

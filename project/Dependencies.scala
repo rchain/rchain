@@ -11,9 +11,9 @@ object Dependencies {
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
-  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.1.0"
   val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0-RC2"
-  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.3"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -50,7 +50,7 @@ object Dependencies {
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.6.0"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.7.0"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"

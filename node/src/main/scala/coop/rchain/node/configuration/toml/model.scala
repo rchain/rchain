@@ -15,18 +15,21 @@ case class Server(
     host: Option[String],
     port: Option[Int],
     metricsPort: Option[Int],
+    httpPort: Option[Int],
     noUpnp: Option[Boolean],
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
     mapSize: Option[Long],
     casperBlockStoreSize: Option[Long],
-    dataDir: Option[Path]
+    dataDir: Option[Path],
+    maxNumOfConnections: Option[Int]
 )
 
 case class GrpcServer(
     host: Option[String],
-    port: Option[Int]
+    port: Option[Int],
+    portInternal: Option[Int]
 )
 
 case class Tls(

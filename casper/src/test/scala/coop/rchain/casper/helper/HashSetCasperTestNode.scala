@@ -34,6 +34,7 @@ import coop.rchain.shared.PathOps.RichPath
 import scala.util.Random
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.{Cell, Time}
+import monix.eval.Task
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
@@ -59,6 +60,7 @@ class HashSetCasperTestNode(name: String,
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
   implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk         = createRPConfAsk[Id](local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
