@@ -56,8 +56,13 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
   }
 
-  private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
-    assert(term == Sortable[T].sortMatch(term).term, s"Invalid test case - ${termName} is not sorted")
+  private def assertSorted[T <: GeneratedMessage](term: T, termName: String)(
+      implicit ts: Sortable[T]): Assertion = {
+    val sortedTerm = Sortable[T].sortMatch(term).term
+    val printer    = PrettyPrinter()
+    val clue       = s"Invalid test case - ${termName} is not sorted"
+    assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)
+    assert(term == sortedTerm, clue)
   }
 
   val wc = Wildcard(Var.WildcardMsg())
