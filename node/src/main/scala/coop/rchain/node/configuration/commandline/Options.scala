@@ -136,6 +136,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
+    val inMemoryStore = opt[Boolean](required = false, descr = "Use in-memory store beneath RSpace")
+
     val maxNumOfConnections =
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
 

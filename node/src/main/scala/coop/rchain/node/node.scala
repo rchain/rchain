@@ -131,6 +131,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
+  private val inMemoryStore     = conf.server.inMemoryStore
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -354,8 +355,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       Metrics.eitherT(Monad[Task], metrics))
     _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize)
+    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperConstructor <- generateCasperConstructor(runtimeManager)(log,
                                                                    time,
