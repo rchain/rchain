@@ -30,7 +30,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
+    val result: Option[FreeMap] = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
+    assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
     assert(result == expectedCaptures)
   }
 
@@ -38,16 +39,21 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]): String = {
-    val printer        = PrettyPrinter()
-    val targetString   = printer.buildString(target)
-    val patternString  = printer.buildString(pattern)
-    val capturesString = expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
+    val printer            = PrettyPrinter()
+    val targetString       = printer.buildString(target)
+    val patternString      = printer.buildString(pattern)
+    val capturesStringsMap = prettyCaptures(expectedCaptures)
 
     s"""
        |     Matching:  $patternString
        |           to:  $targetString
-       | should yield:  $capturesString
+       | should yield:  $capturesStringsMap
        |""".stripMargin
+  }
+
+  private def prettyCaptures[T <: GeneratedMessage, P <: GeneratedMessage](
+      expectedCaptures: Option[FreeMap]): Option[Map[Int, String]] = {
+    expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
   }
 
   private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
