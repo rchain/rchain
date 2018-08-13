@@ -19,6 +19,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
+  private val printer = PrettyPrinter()
+
   def assertSpatialMatch[T <: GeneratedMessage, P <: GeneratedMessage](
       target: T,
       pattern: P,
@@ -39,7 +41,6 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]): String = {
-    val printer            = PrettyPrinter()
     val targetString       = printer.buildString(target)
     val patternString      = printer.buildString(pattern)
     val capturesStringsMap = prettyCaptures(expectedCaptures)
@@ -59,7 +60,6 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   private def assertSorted[T <: GeneratedMessage](term: T, termName: String)(
       implicit ts: Sortable[T]): Assertion = {
     val sortedTerm = Sortable[T].sortMatch(term).term
-    val printer    = PrettyPrinter()
     val clue       = s"Invalid test case - ${termName} is not sorted"
     assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)
     assert(term == sortedTerm, clue)
