@@ -75,11 +75,14 @@ package object effects {
         } yield r
     }
 
-  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(
+  def tcpTransportLayer(host: String, port: Int, certPath: Path, keyPath: Path)(
       implicit scheduler: Scheduler,
       connections: TcpTransportLayer.TransportCell[Task],
-      log: Log[Task]): TcpTransportLayer =
+      log: Log[Task]): TcpTransportLayer = {
+    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
+    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TcpTransportLayer(host, port, cert, key)
+  }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
