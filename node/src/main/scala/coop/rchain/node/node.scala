@@ -335,10 +335,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       new Exception(s"CommError: $commError")
     }, e => { UnknownCommError(e.getMessage) })
     metrics = diagnostics.metrics[Task]
-    transport = effects.tcpTransportLayer(host, port, conf.tls.certificate, conf.tls.key)(
-      scheduler,
-      tcpConnections,
-      log)
+    transport = effects.tcpTransportLayer(host,
+                                          port,
+                                          conf.tls.certificate.toFile,
+                                          conf.tls.key.toFile)(scheduler, tcpConnections, log)
     kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
