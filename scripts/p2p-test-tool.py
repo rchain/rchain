@@ -150,8 +150,7 @@ def main():
                 if check_network_convergence(container) != 0:
                     show_logs()
                     show_containers()
-                    print("FAIL: Network never converged. Check container logs for issues. One or more containers might have failed to start or connect.")
-                    sys.exit()
+                    raise Exception("FAIL: Network never converged. Check container logs for issues. One or more containers might have failed to start or connect.")
     if args.run_tests == True:
         run_tests()
         return
