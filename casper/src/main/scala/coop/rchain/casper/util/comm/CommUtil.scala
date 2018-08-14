@@ -55,10 +55,11 @@ object CommUtil {
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
-      peers <- ConnectionsCell[F].read
-      local <- RPConfAsk[F].reader(_.local)
-      msg   = packet(local, pType, serializedMessage)
-      _     <- TransportLayer[F].broadcast(peers, msg)
+      peers       <- ConnectionsCell[F].read
+      local       <- RPConfAsk[F].reader(_.local)
+      currentTime <- Time[F].currentMillis
+      msg         = packet(local, pType, serializedMessage, currentTime)
+      _           <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
   def requestApprovedBlock[
@@ -69,10 +70,11 @@ object CommUtil {
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
         for {
-          _ <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
+          _           <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
+          currentTime <- Time[F].currentMillis
           send <- TransportLayer[F]
                    .roundTrip(peer,
-                              packet(local, transport.ApprovedBlockRequest, request),
+                              packet(local, transport.ApprovedBlockRequest, request, currentTime),
                               5.seconds)
           _ <- send match {
                 case Left(err) =>
@@ -180,11 +182,12 @@ object CommUtil {
 
       case r: BlockRequest =>
         for {
-          local      <- RPConfAsk[F].reader(_.local)
-          block      <- BlockStore[F].get(r.hash)
-          serialized = block.map(_.toByteString)
+          local       <- RPConfAsk[F].reader(_.local)
+          block       <- BlockStore[F].get(r.hash)
+          currentTime <- Time[F].currentMillis
+          serialized  = block.map(_.toByteString)
           maybeMsg = serialized.map(serializedMessage =>
-            packet(local, transport.BlockMessage, serializedMessage))
+            packet(local, transport.BlockMessage, serializedMessage, currentTime))
           send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
           hash     = PrettyPrinter.buildString(r.hash)
           logIntro = s"CASPER: Received request for block $hash from $peer. "

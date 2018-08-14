@@ -47,22 +47,24 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
-      implicit
-      metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
+  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(implicit
+                                                          metrics: Metrics[Task],
+                                                          transport: TransportLayer[Task],
+                                                          time: Time[Task]): KademliaRPC[Task] =
     new KademliaRPC[Task] {
       def ping(node: PeerNode): Task[Boolean] =
         for {
-          _   <- Metrics[Task].incrementCounter("protocol-ping-sends")
-          req = ProtocolHelper.ping(src)
-          res <- TransportLayer[Task].roundTrip(node, req, timeout)
+          _           <- Metrics[Task].incrementCounter("protocol-ping-sends")
+          currentTime <- time.currentMillis
+          req         = ProtocolHelper.ping(src, currentTime)
+          res         <- TransportLayer[Task].roundTrip(node, req, timeout)
         } yield res.toOption.isDefined
 
       def lookup(key: Seq[Byte], remoteNode: PeerNode): Task[Seq[PeerNode]] =
         for {
-          _   <- Metrics[Task].incrementCounter("protocol-lookup-send")
-          req = ProtocolHelper.lookup(src, key)
+          _           <- Metrics[Task].incrementCounter("protocol-lookup-send")
+          currentTime <- time.currentMillis
+          req         = ProtocolHelper.lookup(src, key, currentTime)
           r <- TransportLayer[Task]
                 .roundTrip(remoteNode, req, timeout)
                 .map(_.toOption

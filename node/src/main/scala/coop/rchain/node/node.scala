@@ -192,7 +192,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       ts  <- time.currentMillis
-      msg = ProtocolHelper.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc, ts)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down metrics server...")
       _   <- Task.delay(servers.metricsServer.stop())
@@ -339,7 +339,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                                           port,
                                           conf.tls.certificate.toFile,
                                           conf.tls.key.toFile)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
+    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport, time)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,

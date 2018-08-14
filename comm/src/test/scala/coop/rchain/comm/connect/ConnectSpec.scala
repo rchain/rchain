@@ -61,7 +61,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   }
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(protocolHandshake(src)))
+    kp(Right(protocolHandshake(src, System.currentTimeMillis())))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
