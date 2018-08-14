@@ -19,8 +19,6 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
-  def local: F[PeerNode] = identity.pure[F]
-
   def send(peer: PeerNode, msg: Protocol): F[Unit] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)
 

@@ -1462,18 +1462,6 @@ trait StorageActionsTests
                                                     expectedProduce1,
                                                     expectedConsume)
   }
-}
-
-class InMemoryStoreStorageActionsTests
-    extends InMemoryStoreTestsBase
-    with StorageActionsTests
-    with JoinOperationsTests
-
-class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
-    with StorageActionsTests
-    with JoinOperationsTests
-    with BeforeAndAfterAll {
 
   "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
     val channel  = "ch1"
@@ -1487,5 +1475,15 @@ class LMDBStoreActionsTests
     }
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
-
 }
+
+class InMemoryStoreStorageActionsTests
+    extends InMemoryStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+
+class LMDBStoreActionsTests
+    extends LMDBStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll {}
