@@ -192,37 +192,35 @@ object Validate {
   def timestamp[F[_]: Monad: Log: Time: BlockStore](
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      for {
-        currentTime  <- Time[F].currentMillis
-        timestamp    = b.header.get.timestamp
-        beforeFuture = currentTime + DRIFT >= timestamp
-        latestParentTimestamp = ProtoUtil
-          .parents(b)
-          .foldLeft(0L) {
-            case (latestTimestamp, parentHash) =>
-              val parent    = internalMap(parentHash)
-              val timestamp = parent.header.get.timestamp
-              if (latestTimestamp > timestamp) {
-                latestTimestamp
-              } else {
-                timestamp
-              }
-          }
-        afterLatestParent = timestamp >= latestParentTimestamp
-        result <- if (beforeFuture && afterLatestParent) {
-                   Applicative[F].pure(Right(Valid))
-                 } else {
-                   for {
-                     _ <- Log[F].warn(
-                           ignore(
-                             b,
-                             s"block timestamp $timestamp is not between latest parent block time and current time.")
-                         )
-                   } yield Left(InvalidUnslashableBlock)
-                 }
-      } yield result
-    }
+    for {
+      currentTime  <- Time[F].currentMillis
+      timestamp    = b.header.get.timestamp
+      beforeFuture = currentTime + DRIFT >= timestamp
+      latestParentTimestamp <- ProtoUtil.parents(b).toList.foldM(0L) {
+                                case (latestTimestamp, parentHash) =>
+                                  for {
+                                    parent    <- ProtoUtil.unsafeGetBlock[F](parentHash)
+                                    timestamp = parent.header.get.timestamp
+                                    updatedLatestTimestamp <- if (latestTimestamp > timestamp) {
+                                                               latestTimestamp.pure[F]
+                                                             } else {
+                                                               timestamp.pure[F]
+                                                             }
+                                  } yield updatedLatestTimestamp
+                              }
+      afterLatestParent = timestamp >= latestParentTimestamp
+      result <- if (beforeFuture && afterLatestParent) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           b,
+                           s"block timestamp $timestamp is not between latest parent block time and current time.")
+                       )
+                 } yield Left(InvalidUnslashableBlock)
+               }
+    } yield result
 
   def blockNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
