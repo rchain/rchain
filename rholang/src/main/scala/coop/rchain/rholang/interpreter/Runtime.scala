@@ -71,13 +71,13 @@ object Runtime {
     }
 
   def create(dataDir: Path, mapSize: Long, inMemoryStore: Boolean = false): Runtime = {
-    val context: RhoContext = if (inMemoryStore) {
+    val context: RhoContext = if (!inMemoryStore) {
+      Context.createInMemory()
+    } else {
       if (Files.notExists(dataDir)) {
         Files.createDirectories(dataDir)
       }
       Context.create(dataDir, mapSize, true)
-    } else {
-      Context.createInMemory()
     }
 
     val space: RhoRSpace             = RSpace.create(context, Branch.MASTER)
