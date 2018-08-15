@@ -7,6 +7,7 @@ import java.io.{File, FileInputStream, FileReader}
 
 trait CompiledRholangSource {
   val term: Par
+  val code: String
 }
 
 object CompiledRholangSource {

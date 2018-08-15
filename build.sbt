@@ -63,6 +63,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
+      nettyBoringSsl,
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
@@ -113,7 +114,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.3",
+    version := "0.6.1",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -122,7 +123,6 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        nettyBoringSsl,
         jline,
         scallop,
         scalaUri,

@@ -310,6 +310,36 @@ object ProcNormalizeMatcher {
         } yield
           ProcVisitOutputs(input.par.prepend(resultConnective, input.env.depth), input.knownFree)
 
+      case p: PSimpleType =>
+        p.simpletype_ match {
+          case _: SimpleTypeBool =>
+            ProcVisitOutputs(input.par
+                               .prepend(Connective(ConnBool(true)), input.env.depth)
+                               .withConnectiveUsed(true),
+                             input.knownFree).pure[M]
+          case _: SimpleTypeInt =>
+            ProcVisitOutputs(input.par
+                               .prepend(Connective(ConnInt(true)), input.env.depth)
+                               .withConnectiveUsed(true),
+                             input.knownFree).pure[M]
+          case _: SimpleTypeString =>
+            ProcVisitOutputs(input.par
+                               .prepend(Connective(ConnString(true)), input.env.depth)
+                               .withConnectiveUsed(true),
+                             input.knownFree)
+              .pure[M]
+          case _: SimpleTypeUri =>
+            ProcVisitOutputs(input.par
+                               .prepend(Connective(ConnUri(true)), input.env.depth)
+                               .withConnectiveUsed(true),
+                             input.knownFree).pure[M]
+          case _: SimpleTypeByteArray =>
+            ProcVisitOutputs(input.par
+                               .prepend(Connective(ConnByteArray(true)), input.env.depth)
+                               .withConnectiveUsed(true),
+                             input.knownFree).pure[M]
+        }
+
       case p: PGround =>
         ProcVisitOutputs(
           input.par.prepend(GroundNormalizeMatcher.normalizeMatch(p.ground_), input.env.depth),

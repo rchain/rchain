@@ -477,6 +477,11 @@ object implicits {
           case ConnOrBody(_)            => true
           case ConnNotBody(_)           => true
           case VarRefBody(_)            => false
+          case _: ConnBool              => true
+          case _: ConnInt               => true
+          case _: ConnString            => true
+          case _: ConnUri               => true
+          case _: ConnByteArray         => true
           case ConnectiveInstance.Empty => false
         }
       def locallyFree(conn: Connective, depth: Int) =
