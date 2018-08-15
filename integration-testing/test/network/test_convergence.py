@@ -14,7 +14,7 @@ def test_convergence(config, docker_network):
 
     assert wait_for( contains( container_logs(bootstrap),
                                "coop.rchain.node.NodeRuntime - Starting stand-alone node."),
-                     config.bootstrap_startup_timeout),\
+                     config.bootstrap_startup_timeout, 2),\
         "Bootstrap node didn't start correctly"
 
     bootstrap_address  = get_rnode_address(bootstrap)

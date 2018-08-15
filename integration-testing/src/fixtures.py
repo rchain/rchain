@@ -10,7 +10,7 @@ RChain = collections.namedtuple("RChain", ["network", "bootstrap", "peers"])
 
 
 def create_network():
-    network_name = f"rchain.network-{random.random_string(10)}"
+    network_name = f"rchain-{random.random_string(5)}"
 
     docker_client.networks.create(network_name, driver="bridge")
 
@@ -18,9 +18,10 @@ def create_network():
 
 def remove_resources_by_network(network_name):
     """Remove resources by network name."""
-    logging.info(f"Removing resources for docker network {network_name}")
 
-    for container in docker_client.containers.list(all=True, filters={"name":f".{network_name}"}):
+    containers = docker_client.containers.list(all=True, filters={"name":f".{network_name}"})
+    for container in containers:
+        logging.info("=" * 100)
         logging.info(f"Docker container logs for {container.name}:")
         logging.info("=" * 100)
         logs = container.logs().decode('utf-8').splitlines()
@@ -28,6 +29,10 @@ def remove_resources_by_network(network_name):
             logging.info(f"{container.name}: {log_line}")
 
         logging.info("=" * 100)
+
+    logging.info(f"Removing resources for docker network {network_name}")
+
+    for container in containers:
         logging.info(f"Remove container {container.name}")
         container.remove(force=True, v=True)
 
@@ -60,6 +65,6 @@ Config = collections.namedtuple( "Config",
 def config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     return Config(peer_count = peer_count,
-                bootstrap_startup_timeout = 30,
+                bootstrap_startup_timeout = 60,
                 network_converge_timeout = 200
                 )

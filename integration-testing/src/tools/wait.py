@@ -51,12 +51,12 @@ def network_converged(bootstrap_container, expected_peers):
         m = rx.search(r)
         if m:
             peers = int(m[1])
-            logging.debug(f"Peers so far: {peers} Expected:{expected_peers}")
+            logging.info(f"Peers so far: {peers} Expected:{expected_peers}")
             if peers == expected_peers:
                 logging.info(f"All expected peers succesfully connected. Network converged.")
                 return True
 
-        logging.debug("No peers found")
+        logging.info("No peers found")
 
         return False
 
