@@ -543,7 +543,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _)
+                        Ed25519.sign _,
+                        "rchain")
   }
 }
 

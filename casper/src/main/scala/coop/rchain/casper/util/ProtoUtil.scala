@@ -234,19 +234,24 @@ object ProtoUtil {
                       sender: ByteString,
                       sigAlgorithm: String,
                       seqNum: Int,
+                      shardId: String,
                       extraBytes: ByteString) =
-    hashByteArrays(header.toByteArray,
-                   sender.toByteArray,
-                   StringValue.of(sigAlgorithm).toByteArray,
-                   Int32Value.of(seqNum).toByteArray,
-                   extraBytes.toByteArray)
+    hashByteArrays(
+      header.toByteArray,
+      sender.toByteArray,
+      StringValue.of(sigAlgorithm).toByteArray,
+      Int32Value.of(seqNum).toByteArray,
+      StringValue.of(shardId).toByteArray,
+      extraBytes.toByteArray
+    )
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
                 pk: Array[Byte],
                 sk: Array[Byte],
                 sigAlgorithm: String,
-                signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
+                signFunction: (Array[Byte], Array[Byte]) => Array[Byte],
+                shardId: String): BlockMessage = {
 
     val header = {
       //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
@@ -258,7 +263,7 @@ object ProtoUtil {
     val sender = ByteString.copyFrom(pk)
     val seqNum = dag.currentSeqNum.getOrElse(sender, -1) + 1
 
-    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, block.extraBytes)
+    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
     val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
 
@@ -268,6 +273,7 @@ object ProtoUtil {
       .withSeqNum(seqNum)
       .withSigAlgorithm(sigAlgorithm)
       .withBlockHash(blockHash)
+      .withShardId(shardId)
 
     signedBlock
   }

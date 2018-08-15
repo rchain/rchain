@@ -89,7 +89,7 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _)
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _, "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {

@@ -315,7 +315,9 @@ sealed abstract class MultiParentCasperInstances {
                          none[BlockMessage].pure[F]
                        }
           } yield
-            proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction))
+            proposal.map(
+              signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+            )
 
         case None => none[BlockMessage].pure[F]
       }
