@@ -13,8 +13,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
-class TcpTransportLayerSpec {
-  // extends TransportLayerSpec[Task, TcpTlsEnvironment] {
+class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
@@ -33,13 +32,11 @@ class TcpTransportLayerSpec {
       TcpTlsEnvironment(host, port, cert, key, peer)
     }
 
-  def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] = ???
-
-  /** TEMPORARLY postponed, see CORE-97
+  def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     Cell.mvarCell(TransportState.empty).map { cell =>
       new TcpTransportLayer(env.host, env.port, env.cert, env.key)(scheduler, cell, log)
     }
-    */
+
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
 }
 
