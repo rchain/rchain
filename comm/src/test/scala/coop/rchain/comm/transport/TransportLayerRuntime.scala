@@ -64,8 +64,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remote   = e2.peer
             _        <- remoteTl.receive(dispatcher.dispatch(remote))
             r        <- execute(localTl, local, remote)
-            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-            _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote, System.currentTimeMillis()))
+            _        <- localTl.shutdown(ProtocolHelper.disconnect(local, System.currentTimeMillis))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -92,7 +92,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _       <- localTl.shutdown(ProtocolHelper.disconnect(local, System.currentTimeMillis))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -126,9 +126,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             _         <- remoteTl1.receive(dispatcher.dispatch(remote1))
             _         <- remoteTl2.receive(dispatcher.dispatch(remote2))
             r         <- execute(localTl, local, remote1, remote2)
-            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-            _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1, System.currentTimeMillis))
+            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2, System.currentTimeMillis))
+            _         <- localTl.shutdown(ProtocolHelper.disconnect(local, System.currentTimeMillis))
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -149,15 +149,15 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
                         local: PeerNode,
                         remote: PeerNode,
                         timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
-    transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
+    transportLayer.roundTrip(remote, ProtocolHelper.ping(local, System.currentTimeMillis), timeout)
 
   def sendPing(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] =
-    transportLayer.send(remote, ProtocolHelper.ping(local))
+    transportLayer.send(remote, ProtocolHelper.ping(local, System.currentTimeMillis))
 
   def broadcastPing(transportLayer: TransportLayer[F],
                     local: PeerNode,
                     remotes: PeerNode*): F[Unit] =
-    transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
+    transportLayer.broadcast(remotes, ProtocolHelper.ping(local, System.currentTimeMillis))
 
 }
 
@@ -191,11 +191,14 @@ final class Dispatcher[F[_]: Applicative](
 
 object Dispatcher {
   def pongDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
+    new Dispatcher(peer =>
+      CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer, System.currentTimeMillis)))
 
   def pongDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
     new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)),
+      peer =>
+        CommunicationResponse.handledWithMessage(
+          ProtocolHelper.pong(peer, System.currentTimeMillis)),
       delay = Some(delay)
     )
 

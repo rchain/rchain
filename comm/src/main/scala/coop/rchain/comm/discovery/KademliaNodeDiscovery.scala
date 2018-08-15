@@ -2,6 +2,7 @@ package coop.rchain.comm.discovery
 
 import scala.collection.mutable
 import scala.concurrent.duration._
+import cats.effect.Timer
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
@@ -9,6 +10,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
+import scala.concurrent.duration._
 import coop.rchain.comm.protocol.routing._
 
 object KademliaNodeDiscovery {
@@ -16,15 +18,16 @@ object KademliaNodeDiscovery {
       src: PeerNode,
       defaultTimeout: FiniteDuration)(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
-      knd <- (new KademliaNodeDiscovery[F](src, defaultTimeout)).pure[F]
+      knd <- new KademliaNodeDiscovery[F](src, defaultTimeout).pure[F]
       _   <- init.fold(().pure[F])(p => knd.addNode(p))
     } yield knd
 
 }
 
 private[discovery] class KademliaNodeDiscovery[
-    F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](src: PeerNode,
-                                                                           timeout: FiniteDuration)
+    F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
+    src: PeerNode,
+    timeout: FiniteDuration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
@@ -102,7 +105,10 @@ private[discovery] class KademliaNodeDiscovery[
     }
 
   private def handlePing: F[CommunicationResponse] =
-    Metrics[F].incrementCounter("ping-recv-count").as(handledWithMessage(ProtocolHelper.pong(src)))
+    for {
+      _           <- Metrics[F].incrementCounter("ping-recv-count")
+      currentTime <- Time[F].currentMillis
+    } yield handledWithMessage(ProtocolHelper.pong(src, currentTime))
 
   /**
     * Validate incoming LOOKUP message and return an answering
@@ -113,7 +119,8 @@ private[discovery] class KademliaNodeDiscovery[
 
     for {
       peers          <- Capture[F].capture(table.lookup(id))
-      lookupResponse = ProtocolHelper.lookupResponse(src, peers)
+      currentTime    <- Time[F].currentMillis
+      lookupResponse = ProtocolHelper.lookupResponse(src, peers, currentTime)
       _              <- Metrics[F].incrementCounter("lookup-recv-count")
     } yield handledWithMessage(lookupResponse)
   }
