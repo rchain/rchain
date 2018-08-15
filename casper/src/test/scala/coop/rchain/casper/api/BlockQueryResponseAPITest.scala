@@ -6,13 +6,18 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper._
-import coop.rchain.casper.helper.BlockStoreFixture
+import coop.rchain.casper.helper.{BlockStoreFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
-class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixture {
+import scala.collection.immutable.HashMap
+
+class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -57,30 +62,15 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
 
   val faultTolerance = -1f
 
-  def testCasper[F[_]: Monad: BlockStore]: MultiParentCasper[F] =
-    new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[BlockStatus] = BlockStatus.valid.pure[F]
-      def contains(b: BlockMessage): F[Boolean]     = false.pure[F]
-      def deploy(r: Deploy): F[Unit]                = ().pure[F]
-      def estimator: F[IndexedSeq[BlockMessage]] =
-        Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def createBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag] =
-        for {
-          _ <- BlockStore[F].put(ProtoUtil.stringToByteString(genesisHashString), genesisBlock)
-          _ <- BlockStore[F].put(ProtoUtil.stringToByteString(secondHashString), secondBlock)
-        } yield BlockDag()
-      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
-      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
-      def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
-    }
-
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = testCasper[Id]
-      implicit val logEff       = new LogStub[Id]
+      implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
+        HashMap[BlockHash, BlockMessage](
+          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))
+      implicit val logEff = new LogStub[Id]
       implicit val constructorEffect =
         MultiParentCasperConstructor
           .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
@@ -103,8 +93,11 @@ class BlockQueryResponseTest extends FlatSpec with Matchers with BlockStoreFixtu
 
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = testCasper[Id]
-      implicit val logEff       = new LogStub[Id]
+      implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
+        HashMap[BlockHash, BlockMessage](
+          (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))
+      implicit val logEff = new LogStub[Id]
       implicit val constructorEffect =
         MultiParentCasperConstructor
           .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)

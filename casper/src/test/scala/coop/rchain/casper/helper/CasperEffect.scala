@@ -1,5 +1,7 @@
 package coop.rchain.casper.helper
 
+import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.shared._
 import cats.{Applicative, ApplicativeError, FlatMap}
 import cats.data.EitherT
 import cats.effect.{ExitCase, Sync}
@@ -36,21 +38,21 @@ object CasperEffect {
 
   def apply(sk: Array[Byte], genesis: BlockMessage)(
       implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
-    val blockStoreDir = BlockStoreTestFixture.dbDir
-    val runtimeDir    = BlockStoreTestFixture.dbDir
-
-    implicit val logEff           = new LogStub[Effect]
-    implicit val timeEff          = new LogicalTime[Effect]
-    implicit val nodeDiscoveryEff = new NodeDiscoveryStub[Effect]()
+    val blockStoreDir            = BlockStoreTestFixture.dbDir
+    val runtimeDir               = BlockStoreTestFixture.dbDir
+    val local                    = HashSetCasperTestNode.peerNode("taskNode", 40400)
+    implicit val logEff          = new LogStub[Effect]
+    implicit val timeEff         = new LogicalTime[Effect]
+    implicit val connectionsCell = Cell.const[Effect, Connections](Connect.Connections.empty)
     implicit val transportLayerEff =
-      new TransportLayerTestImpl[Effect](HashSetCasperTestNode.peerNode("taskNode", 40400),
-                                         Map.empty[PeerNode, mutable.Queue[Protocol]])
+      new TransportLayerTestImpl[Effect](local, Map.empty[PeerNode, mutable.Queue[Protocol]])
     implicit val metricEff = new Metrics.MetricsNOP[Effect]
     implicit val blockStoreEff =
       LMDBBlockStore.create[Effect](LMDBBlockStore.Config(blockStoreDir, 1024L * 1024))(
         syncInstance,
         metricEff)
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Effect]
+    implicit val rpConfAsk         = createRPConfAsk[Effect](local)
 
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)

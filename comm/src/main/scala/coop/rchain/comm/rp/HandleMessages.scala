@@ -1,6 +1,6 @@
 package coop.rchain.comm.rp
 
-import Connect.ConnectionsCell
+import Connect.{Connections, ConnectionsCell, RPConfAsk}, Connections._
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.discovery._
 import scala.concurrent.duration._
@@ -21,7 +21,7 @@ object HandleMessages {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def handle[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: RoutingProtocol,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
     ProtocolHelper.sender(protocol) match {
@@ -31,7 +31,7 @@ object HandleMessages {
     }
 
   private def handle_[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: RoutingProtocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
@@ -55,7 +55,7 @@ object HandleMessages {
         }
       }
 
-  def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler](
+  def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](
       remote: PeerNode,
       maybePacket: Option[Packet]): F[CommunicationResponse] = {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
@@ -69,7 +69,7 @@ object HandleMessages {
     maybePacket.fold(handleNone)(
       p =>
         for {
-          local               <- TransportLayer[F].local
+          local               <- RPConfAsk[F].reader(_.local)
           maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
           maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
             ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
@@ -79,7 +79,7 @@ object HandleMessages {
   }
 
   def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler: ConnectionsCell](
+      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration
@@ -92,24 +92,23 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _ <- NodeDiscovery[F].addNode(peer)
-        _ <- ConnectionsCell[F].modify(cs => (cs + peer).pure[F])
+        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
       } yield handledWithMessage(protocolHandshakeResponse(local))
 
     for {
-      local        <- TransportLayer[F].local
+      local        <- RPConfAsk[F].reader(_.local)
       _            <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
       hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
       commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
   }
 
-  def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler](
+  def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       maybeHeartbeat: Option[Heartbeat]): F[CommunicationResponse] =
     for {
-      local <- TransportLayer[F].local
+      local <- RPConfAsk[F].reader(_.local)
       _     <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
     } yield handledWithMessage(heartbeatResponse(local))
 

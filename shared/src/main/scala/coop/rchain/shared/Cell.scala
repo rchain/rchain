@@ -17,9 +17,11 @@ object Cell extends CellInstances0 {
       new Cell[Task, S] {
         def modify(f: S => Task[S]): Task[Unit] =
           for {
-            s  <- mvar.take
-            ns <- f(s)
-            _  <- mvar.put(ns)
+            s <- mvar.take
+            _ <- f(s).transformWith(
+                  ns => mvar.put(ns),
+                  e => mvar.put(s).flatMap(_ => Task.raiseError(e))
+                )
           } yield ()
 
         def read: Task[S] = mvar.read
@@ -29,6 +31,13 @@ object Cell extends CellInstances0 {
   def const[F[_]: Applicative, S](const: S): Cell[F, S] = new Cell[F, S] {
     def modify(f: S => F[S]): F[Unit] = ().pure[F]
     def read: F[S]                    = const.pure[F]
+  }
+
+  def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
+    var s: S = init
+    def modify(f: S => S): Unit =
+      s = f(s)
+    def read: S = s
   }
 }
 

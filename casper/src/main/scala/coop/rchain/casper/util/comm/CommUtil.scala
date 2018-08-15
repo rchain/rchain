@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.comm
 
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 import cats.Monad
 import cats.implicits._
@@ -27,7 +28,7 @@ object CommUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+  def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     val hashString      = PrettyPrinter.buildString(b.blockHash)
@@ -38,7 +39,8 @@ object CommUtil {
     } yield ()
   }
 
-  def sendBlockRequest[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+  def sendBlockRequest[
+      F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       r: BlockRequest): F[Unit] = {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
@@ -49,18 +51,18 @@ object CommUtil {
     } yield ()
   }
 
-  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+  def sendToPeers[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
-      peers <- NodeDiscovery[F].peers
-      local <- TransportLayer[F].local
+      peers <- ConnectionsCell[F].read
+      local <- RPConfAsk[F].reader(_.local)
       msg   = packet(local, pType, serializedMessage)
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
   def requestApprovedBlock[
-      F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler]
+      F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Time: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk]
     : F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
 
@@ -110,19 +112,20 @@ object CommUtil {
               }
         } yield ()
 
-      case Nil => ().pure[F]
+      case Nil =>
+        Log[F].info(s"CASPER: Reached an end of the peers list when asking for approved block")
     }
 
     for {
       a     <- MultiParentCasperConstructor[F].lastApprovedBlock
-      peers <- NodeDiscovery[F].peers
-      local <- TransportLayer[F].local
+      peers <- ConnectionsCell[F].read
+      local <- RPConfAsk[F].reader(_.local)
       _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
     } yield ()
   }
 
   def casperPacketHandler[
-      F[_]: Monad: MultiParentCasperConstructor: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
+      F[_]: Monad: MultiParentCasperConstructor: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: BlockStore: RPConfAsk](
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
@@ -133,7 +136,7 @@ object CommUtil {
       )
       .andThen {
         case b @ (_: BlockMessage | _: BlockRequest) =>
-          MultiParentCasperConstructor[F].casperInstance match {
+          MultiParentCasperConstructor[F].casperInstance >>= {
             case Left(ex) =>
               Log[F]
                 .warn(
@@ -160,7 +163,7 @@ object CommUtil {
       }
 
   def blockPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: BlockStore](
+      F[_]: Monad: MultiParentCasper: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: BlockStore: RPConfAsk](
       peer: PeerNode,
       msg: scalapb.GeneratedMessage): F[Option[Packet]] =
     msg match {
@@ -177,7 +180,7 @@ object CommUtil {
 
       case r: BlockRequest =>
         for {
-          local      <- TransportLayer[F].local
+          local      <- RPConfAsk[F].reader(_.local)
           block      <- BlockStore[F].get(r.hash)
           serialized = block.map(_.toByteString)
           maybeMsg = serialized.map(serializedMessage =>
@@ -193,7 +196,7 @@ object CommUtil {
     }
 
   private def handleNewBlock[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+      F[_]: Monad: MultiParentCasper: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] =
     for {
       _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")

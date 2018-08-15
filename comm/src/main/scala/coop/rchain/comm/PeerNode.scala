@@ -28,12 +28,12 @@ final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 // TODO: Add Show instance
 final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
-  def key  = id.key
-  val sKey = id.toString
+  def key: Seq[Byte] = id.key
+  val sKey: String   = id.toString
 
-  override def toString = toAddress
+  override def toString: String = toAddress
 
-  def toAddress: String =
+  val toAddress: String =
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
 
 }
