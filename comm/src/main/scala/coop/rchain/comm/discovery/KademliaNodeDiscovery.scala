@@ -31,8 +31,6 @@ private[discovery] class KademliaNodeDiscovery[
 
   private val id: NodeIdentifier = src.id
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- table.updateLastSeen[F](peer)
@@ -95,9 +93,7 @@ private[discovery] class KademliaNodeDiscovery[
         table.updateLastSeen[F](sender) >>= kp(protocol match {
           case Protocol(_, Protocol.Message.Ping(_))        => handlePing
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
-          case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
-            handleDisconnect(sender, disconnect)
-          case _ => notHandled(unexpectedMessage(protocol.toString)).pure[F]
+          case _                                            => notHandled(unexpectedMessage(protocol.toString)).pure[F]
         })
     }
 
@@ -117,16 +113,4 @@ private[discovery] class KademliaNodeDiscovery[
       _              <- Metrics[F].incrementCounter("lookup-recv-count")
     } yield handledWithMessage(lookupResponse)
   }
-
-  /**
-    * Remove sending peer from table.
-    */
-  private def handleDisconnect(sender: PeerNode, disconnect: Disconnect): F[CommunicationResponse] =
-    for {
-      _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
-      _ <- TransportLayer[F].disconnect(sender)
-      _ <- Capture[F].capture(table.remove(sender.key))
-      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
-    } yield handledWithoutMessage
 }
