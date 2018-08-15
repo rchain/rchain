@@ -5,14 +5,13 @@ import java.nio.file.{Path, Paths}
 
 import scala.io.Source
 import scala.util.Try
-
 import cats.syntax.either._
-
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.Resources._
-
 import toml._
 import toml.Codecs._
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object TomlConfiguration {
   private implicit val bootstrapAddressCodec: Codec[PeerNode] =
@@ -34,6 +33,16 @@ object TomlConfiguration {
     case (Value.Bool(value), _) => Right(value)
     case (value, _) =>
       Left((List.empty, s"Bool expected, $value provided"))
+  }
+
+  private implicit val finiteDurationCodec: Codec[FiniteDuration] = Codec {
+    case (Value.Str(value), _) =>
+      Duration(value) match {
+        case fd: FiniteDuration => Either.right(fd)
+        case _                  => Either.left((Nil, s"Failed to parse $value as FiniteDuration."))
+      }
+    case (value, _) =>
+      Either.left((Nil, s"Failed to parse $value as FiniteDuration."))
   }
 
   def from(toml: String): Either[String, Configuration] =

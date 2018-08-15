@@ -2,14 +2,14 @@ package coop.rchain.node.configuration
 
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
-
+import scala.concurrent.duration._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
-
+import scala.concurrent.duration._
 import monix.eval.Task
 
 object Configuration {
@@ -34,6 +34,7 @@ object Configuration {
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
+  private val DefaultGenesisValidator           = false
   private val DefaultTimeout                    = 1000
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
@@ -42,6 +43,10 @@ object Configuration {
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
   private val DefaultMaxNumOfConnections        = 500
+  private val DefaultRequiredSigns              = 1
+  private val DefaultApprovalProtocolDuration   = 5.minutes
+  private val DefaultApprovalProtocolInterval   = 5.seconds
+
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
@@ -87,6 +92,7 @@ object Configuration {
             DefaultTimeout,
             DefaultBootstrapServer,
             DefaultStandalone,
+            DefaultGenesisValidator,
             dataDir,
             DefaultMapSize,
             DefaultMaxNumOfConnections
@@ -111,7 +117,11 @@ object Configuration {
             DefaultNumValidators,
             dataDir.resolve("genesis"),
             None,
-            mode = ???
+            createGenesis = false,
+            approveGenesis = false,
+            requiredSigs = -1,
+            approveGenesisDuration = 100.days,
+            approveGenesisInterval = 1.day
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -167,6 +177,19 @@ object Configuration {
       get(_.run.bootstrap, _.server.flatMap(_.bootstrap), DefaultBootstrapServer)
     val standalone: Boolean =
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
+    val genesisValidator: Boolean =
+      get(_.run.genesisValidator, _.server.flatMap(_.genesisValidator), DefaultGenesisValidator)
+    val requiredSigs =
+      get(_.run.requiredSigs, _.validators.flatMap(_.requiredSigs), DefaultRequiredSigns)
+    val genesisApproveInterval =
+      get(_.run.interval,
+          _.validators.flatMap(_.approveGenesisInterval),
+          DefaultApprovalProtocolInterval)
+    val genesisAppriveDuration =
+      get(_.run.duration,
+          _.validators.flatMap(_.approveGenesisDuration),
+          DefaultApprovalProtocolDuration)
+
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
@@ -205,6 +228,7 @@ object Configuration {
       defaultTimeout,
       bootstrap,
       standalone,
+      genesisValidator,
       dataDir,
       mapSize,
       maxNumOfConnections
@@ -231,7 +255,11 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
-        ???
+        requiredSigs,
+        standalone,
+        genesisValidator,
+        genesisApproveInterval,
+        genesisAppriveDuration
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),

@@ -4,6 +4,8 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 
+import scala.concurrent.duration.FiniteDuration
+
 case class Configuration(
     server: Option[Server],
     grpcServer: Option[GrpcServer],
@@ -20,7 +22,7 @@ case class Server(
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
-    genesisCreator: Option[Boolean],
+    genesisValidator: Option[Boolean],
     mapSize: Option[Long],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
@@ -45,5 +47,8 @@ case class Validators(
     publicKey: Option[String],
     privateKey: Option[String],
     sigAlgorithm: Option[String],
-    walletsFile: Option[String]
+    walletsFile: Option[String],
+    requiredSigs: Option[Int],
+    approveGenesisDuration: Option[FiniteDuration],
+    approveGenesisInterval: Option[FiniteDuration]
 )
