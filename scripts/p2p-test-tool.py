@@ -211,9 +211,9 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
             time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
-        if test == "integration1":
+        if test == "casper_propose_and_deploy":
             for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-                if test_integration1(container) == 0:
+                if test_casper_propose_and_deploy(container) == 0:
                     notices['pass'].append(f"{container.name}: Integration test 1 worked.")
                 else:
                     notices['fail'].append(f"{container.name}: Integration test 1 failed.")
@@ -340,7 +340,7 @@ class node:
     def added_block_rx(block_id):
         return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
 
-def test_integration1(test_container):
+def test_casper_propose_and_deploy(test_container):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
@@ -374,11 +374,10 @@ def test_integration1(test_container):
         run_cmd(rnode.propose_cmd)
 
         print("Allow for logs to fill out from last propose if needed")
-        time.sleep(5)
-
-        run_cmd(rnode.show_blocks_cmd)
     except Exception as e:
         print(e)
+
+    time.sleep(5)
 
     retval=0
 
