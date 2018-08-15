@@ -1,18 +1,20 @@
 import logging
 import re
 
-def wait_for(condition, timeout, iteration_duration = 1):
+def wait_for(condition, timeout):
     """
     Waits for a condition to be fulfilled. It retries until the timeout expires.
 
     :param condition: the condition. Has to be a function 'Unit -> Boolean'
     :param timeout: the total time to wait
-    :param iteration_duration: the time between retries
     :return: true  if the condition was met in the given timeout
     """
     import time
-    logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}, iteration_duration={iteration_duration}. Patience please!")
 
+
+    logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}. Patience please!")
+
+    iteration_duration = int(0.05 * timeout) # iteration duration is 5% of the total timeout
     iterations = int(timeout / iteration_duration)
 
     for i in range(1,iterations):
