@@ -3,6 +3,7 @@ package coop.rchain.casper
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Id, Monad}
 import cats.implicits._
+import cats.mtl.implicits._
 import cats.effect.{Bracket, Sync}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
@@ -292,7 +293,6 @@ sealed abstract class MultiParentCasperInstances {
           for {
             orderedHeads   <- estimator
             dag            <- blockDag
-            internalMap    <- BlockStore[F].asMap()
             p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
@@ -310,16 +310,15 @@ sealed abstract class MultiParentCasperInstances {
       def lastFinalizedBlock: F[BlockMessage] = lastFinalizedBlockContainer.get
 
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
-        BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-          Capture[F].capture {
-            val result = deployHist.clone()
-            DagOperations
-              .bfTraverse(p)(parentHashes(_).iterator.map(internalMap))
-              .foreach(b => {
-                b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
-              })
-            result.toSeq
-          }
+        Capture[F].capture {
+          val result = deployHist.clone()
+          DagOperations
+            .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
+            .foreach(b => {
+              b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
+              ().pure[F]
+            })
+          result.toSeq
         }
 
       private def createProposal(p: Seq[BlockMessage],
@@ -586,14 +585,14 @@ sealed abstract class MultiParentCasperInstances {
             for {
               _              <- Capture[F].capture { blockBuffer += block }
               dag            <- blockDag
-              internalMap    <- BlockStore[F].asMap()
               missingParents = parentHashes(block).toSet
               missingJustifictions = block.justifications
                 .map(_.latestBlockHash)
                 .toSet
-              missingDependencies = (missingParents union missingJustifictions).filterNot(
-                internalMap.contains)
-              _ <- missingDependencies.toList.traverse(hash => handleMissingDependency(hash, block))
+              missingDependencies <- (missingParents union missingJustifictions).toList.filterA(
+                blockHash =>
+                BlockStore[F].contains(blockHash).map(contains => !contains))
+              _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, block))
             } yield ()
           case AdmissibleEquivocation =>
             Capture[F].capture {
