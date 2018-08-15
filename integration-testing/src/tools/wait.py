@@ -11,19 +11,20 @@ def wait_for(condition, timeout):
     """
     import time
 
-
     logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}. Patience please!")
 
-    iteration_duration = int(0.05 * timeout) # iteration duration is 5% of the total timeout
-    iterations = int(timeout / iteration_duration)
-
-    for i in range(1,iterations):
+    elapsed = 0
+    while elapsed < timeout:
         if condition():
-            logging.info(f"Condition satisfied after {i * iteration_duration}s. Continue...")
+            logging.info(f"Condition satisfied after {elapsed}s. Continue...")
             return True
 
+        iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
+
         logging.info(f"Condition not fulfilled yet. Sleeping {iteration_duration}s...")
+
         time.sleep(iteration_duration)
+        elapsed = elapsed + iteration_duration
     return False
 
 # Predicates

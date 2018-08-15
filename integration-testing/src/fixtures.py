@@ -36,7 +36,7 @@ def config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     return Config(peer_count = peer_count,
                 node_startup_timeout = 40,
-                network_converge_timeout = 200
+                network_converge_timeout = 120
                 )
 
 
