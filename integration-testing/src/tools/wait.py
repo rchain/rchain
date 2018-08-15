@@ -20,9 +20,8 @@ def wait_for(condition, timeout, iteration_duration = 1):
             logging.info(f"Condition satisfied after {i * iteration_duration}s. Continue...")
             return True
 
-        logging.debug(f"Condition not fulfilled yet. Sleeping {iteration_duration}s...")
+        logging.info(f"Condition not fulfilled yet. Sleeping {iteration_duration}s...")
         time.sleep(iteration_duration)
-
     return False
 
 # Predicates
@@ -34,12 +33,12 @@ def container_logs(docker_container):
     go.__doc__ = f"container_logs({docker_container.name})"
     return go
 
-def contain(string_factory, regex_str, flags = 0):
+def contains(string_factory, regex_str, flags = 0):
     rx = re.compile(regex_str)
 
     def go(): return rx.search(string_factory(), flags)
 
-    go.__doc__ = f"{string_factory.__doc__} contain regex '{regex_str}'"
+    go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
 def network_converged(bootstrap_container, expected_peers):

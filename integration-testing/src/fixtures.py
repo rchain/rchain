@@ -49,3 +49,17 @@ def docker_network():
 
     logging.info("Teardown")
     remove_resources_by_network(network_name)
+
+Config = collections.namedtuple( "Config",
+                                 [
+                                     "peer_count",
+                                     "bootstrap_startup_timeout",
+                                     "network_converge_timeout"
+                                 ])
+@pytest.fixture
+def config(request):
+    peer_count = int(request.config.getoption("--peer-count"))
+    return Config(peer_count = peer_count,
+                bootstrap_startup_timeout = 30,
+                network_converge_timeout = 200
+                )

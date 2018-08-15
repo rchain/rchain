@@ -83,7 +83,7 @@ def create_peer_nodes(n, bootstrap_address, network, image="test-image:latest", 
         name = f"peer{i}.{network}"
         command = f"run --bootstrap {bootstrap_address} --validator-private-key {private_key} --validator-public-key {public_key} --host {name}"
 
-        logging.info(f"Starting peer node {name}\ncommand: `{command}`")
+        logging.info(f"Starting peer node {name} with command: `{command}`")
         return __create_node_container(image, name, network, command, [], memory, cpuset_cpus)
 
     return [ create_peer(i, sk, pk)
