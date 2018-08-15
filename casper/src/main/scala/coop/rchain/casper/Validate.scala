@@ -225,31 +225,28 @@ object Validate {
   def blockNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      val parentNumber = ProtoUtil
-        .parents(b)
-        .headOption
-        .map(internalMap.apply _ andThen ProtoUtil.blockNumber)
-      val number = ProtoUtil.blockNumber(b)
-      val result = parentNumber.fold(number == 0)(_ + 1 == number)
-
-      if (result) {
-        Applicative[F].pure(Right(Valid))
-      } else {
-        val log = parentNumber.fold(
-          Log[F].warn(
-            ignore(b, s"block number $number is not zero, but block has no parents.")
-          )
-        )(n => {
-          Log[F].warn(
-            ignore(b, s"block number $number is not one more than parent number $n.")
-          )
-        })
-        for {
-          _ <- log
-        } yield Left(InvalidBlockNumber)
-      }
-    }
+    for {
+      maybeMainParent       <- ProtoUtil.parents(b).headOption.traverse(ProtoUtil.unsafeGetBlock[F])
+      maybeMainParentNumber = maybeMainParent.map(ProtoUtil.blockNumber)
+      number                = ProtoUtil.blockNumber(b)
+      result                = maybeMainParentNumber.fold(number == 0)(_ + 1 == number)
+      status <- if (result) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 val log = maybeMainParentNumber.fold(
+                   Log[F].warn(
+                     ignore(b, s"block number $number is not zero, but block has no parents.")
+                   )
+                 )(n => {
+                   Log[F].warn(
+                     ignore(b, s"block number $number is not one more than parent number $n.")
+                   )
+                 })
+                 for {
+                   _ <- log
+                 } yield Left(InvalidBlockNumber)
+               }
+    } yield status
 
   def sequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
