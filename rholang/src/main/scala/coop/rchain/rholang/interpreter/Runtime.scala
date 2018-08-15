@@ -71,7 +71,7 @@ object Runtime {
     }
 
   def create(dataDir: Path, mapSize: Long, inMemoryStore: Boolean = false): Runtime = {
-    val context: RhoContext = if (!inMemoryStore) {
+    val context: RhoContext = if (inMemoryStore) {
       Context.createInMemory()
     } else {
       if (Files.notExists(dataDir)) {
