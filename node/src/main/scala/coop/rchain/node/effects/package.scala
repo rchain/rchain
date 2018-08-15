@@ -13,6 +13,10 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
+import java.nio.file.Path
+
+import scala.io.Source
+
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp._, Connect._
 
@@ -74,12 +78,13 @@ package object effects {
   def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       implicit scheduler: Scheduler,
       connections: TcpTransportLayer.TransportCell[Task],
-      log: Log[Task]) =
+      log: Log[Task]): TcpTransportLayer =
     new TcpTransportLayer(host, port, cert, key)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
+
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Connections](Connections.empty)
 

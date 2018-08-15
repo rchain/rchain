@@ -30,17 +30,22 @@ object RholangProtoBuild {
       case Right(term) => term.writeTo(new FileOutputStream(output.toFile))
     }
 
-  def createScalaArtifact(pkg: Option[String], name: String, proto: Path): String = {
+  def escapeSourceCode(source: Path): String =
+    Source.fromFile(source.toFile).getLines().mkString("\"\"\"", "\n|", "\"\"\".stripMargin")
+
+  def createScalaArtifact(pkg: Option[String], name: String, proto: Path, source: Path): String = {
     val pkgDeclaration = pkg.map(p => s"package $p").getOrElse("")
     val imports = List(
       "coop.rchain.rholang.build.CompiledRholangSource",
       "coop.rchain.models.Par"
     ).map(i => s"import $i")
     val definition = s"final case object $name extends CompiledRholangSource"
-    val protoName  = "/" + proto.toFile.getName()
+    val protoName  = "/" + proto.toFile.getName
+
     val body =
       s"""val resource = getClass.getResourceAsStream(${escape(protoName)})
-          |  override val term: Par = Par.parseFrom(resource)""".stripMargin
+         |  override val term: Par = Par.parseFrom(resource)
+         |  override val code: String = ${escapeSourceCode(source)}""".stripMargin
 
     s"""$pkgDeclaration
      |
@@ -62,13 +67,13 @@ object RholangProtoBuild {
 
       createProtoArtifact(source, protoFile)
 
-      (pkg, name, protoFile)
+      (pkg, name, protoFile, source)
     })
 
     val outputs = artifactsDetails.map {
-      case (pkg, name, source) =>
+      case (pkg, name, protoFile, sourceFile) =>
         val output   = srcManaged.resolve(s"$name.scala")
-        val artifact = createScalaArtifact(pkg, name, source)
+        val artifact = createScalaArtifact(pkg, name, protoFile, sourceFile)
 
         Files.write(output, artifact)
         output

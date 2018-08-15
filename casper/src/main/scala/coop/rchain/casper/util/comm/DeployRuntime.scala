@@ -58,7 +58,7 @@ object DeployRuntime {
   private def singleDeploy[F[_]: Monad: Capture: DeployService]: F[Unit] =
     for {
       id <- Capture[F].capture { scala.util.Random.nextInt(100) }
-      d  = ProtoUtil.basicDeployString(id)
+      d  = ProtoUtil.basicDeployData(id)
       _ <- Capture[F].capture {
             println(s"Sending the following to Casper: ${d.term}")
           }

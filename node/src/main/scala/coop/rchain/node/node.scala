@@ -125,8 +125,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   /** Configuration */
   private val port              = conf.server.port
-  private val certificateFile   = conf.tls.certificate.toFile
-  private val keyFile           = conf.tls.key.toFile
   private val address           = s"rnode://$name@$host:$port"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
@@ -338,9 +336,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       new Exception(s"CommError: $commError")
     }, e => { UnknownCommError(e.getMessage) })
     metrics = diagnostics.metrics[Task]
-    transport = effects.tcpTransportLayer(host, port, certificateFile, keyFile)(scheduler,
-                                                                                tcpConnections,
-                                                                                log)
+    transport = effects.tcpTransportLayer(host,
+                                          port,
+                                          conf.tls.certificate.toFile,
+                                          conf.tls.key.toFile)(scheduler, tcpConnections, log)
     kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects

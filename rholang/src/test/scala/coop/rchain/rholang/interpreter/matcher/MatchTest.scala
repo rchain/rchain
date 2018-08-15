@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats.{Eval => _}
+import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -477,5 +478,50 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern        = Expr(EMinusMinusBody(EMinusMinus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
     val expectedResult = Some(Map[Int, Par](0 -> lhsSet, 1 -> rhsSet))
     assertSpatialMatch(target, pattern, expectedResult)
+  }
+
+  "Matching Bool" should "work" in {
+    val successTarget: Par = GBool(false)
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnBool(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching Int" should "work" in {
+    val successTarget: Par = GInt(7)
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnInt(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching String" should "work" in {
+    val successTarget: Par = GString("Match me!")
+    val failTarget: Par = GInt(42)
+    val pattern: Connective = Connective(ConnString(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching Uri" should "work" in {
+    val successTarget: Par = GUri("rho:io:stdout")
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnUri(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching ByteArray" should "work" in {
+    val successTarget: Par = GByteArray(ByteString.copyFrom(Array[Byte](74, 75)))
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnByteArray(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
   }
 }

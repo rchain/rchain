@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 import scala.util._
 import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
@@ -121,7 +121,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
-        case _: TimeoutException => TimeOut
+        case _: TimeoutException => CommError.timeout
         case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
           peerUnavailable(peer)
         case e => protocolException(e)
@@ -183,7 +183,6 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
         _ <- log.info("Shutting down server")
         _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
       } yield s.copy(server = None, shutdown = true)
-
     }
 
     def sendShutdownMessages: Task[Unit] =
@@ -200,7 +199,11 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
         innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
       Task.gatherUnordered(peers.map(createInstruction)).void
     }
-    shutdownServer *> sendShutdownMessages
+
+    cell.read.flatMap { s =>
+      if (s.shutdown) Task.unit
+      else shutdownServer *> sendShutdownMessages
+    }
   }
 }
 

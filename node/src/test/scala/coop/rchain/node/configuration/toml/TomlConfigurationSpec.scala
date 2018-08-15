@@ -27,6 +27,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |[grpc-server]
       |host = "grpc"
       |port = 12
+      |port-internal = 13
       |
       |[tls]
       |certificate = "/tls/certificate.pem"
@@ -70,6 +71,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     // grpc
     root.grpcServer.flatMap(_.host) shouldEqual Some("grpc")
     root.grpcServer.flatMap(_.port) shouldEqual Some(12)
+    root.grpcServer.flatMap(_.portInternal) shouldEqual Some(13)
 
     // tls
     root.tls.flatMap(_.certificate) shouldEqual Some(Paths.get("/tls/certificate.pem"))
