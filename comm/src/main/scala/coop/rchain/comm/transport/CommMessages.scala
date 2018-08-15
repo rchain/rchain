@@ -56,4 +56,14 @@ object CommMessages {
     case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
   }
 
+  def disconnect(src: PeerNode): routing.Protocol = {
+    val d = Disconnect()
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(d))
+  }
+
+  def toDisconnect(proto: routing.Protocol): CommErr[Disconnect] = proto.message match {
+    case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Disconnect))
+    case a                                           => Left(UnknownProtocolError(s"Was expecting Disconnect, got $a"))
+  }
+
 }

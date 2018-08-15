@@ -64,8 +64,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remote   = e2.peer
             _        <- remoteTl.receive(dispatcher.dispatch(remote))
             r        <- execute(localTl, local, remote)
-            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-            _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _        <- remoteTl.shutdown(CommMessages.disconnect(remote))
+            _        <- localTl.shutdown(CommMessages.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -92,7 +92,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _       <- localTl.shutdown(CommMessages.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -126,9 +126,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             _         <- remoteTl1.receive(dispatcher.dispatch(remote1))
             _         <- remoteTl2.receive(dispatcher.dispatch(remote2))
             r         <- execute(localTl, local, remote1, remote2)
-            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-            _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _         <- remoteTl1.shutdown(CommMessages.disconnect(remote1))
+            _         <- remoteTl2.shutdown(CommMessages.disconnect(remote2))
+            _         <- localTl.shutdown(CommMessages.disconnect(local))
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -177,8 +177,10 @@ final class Dispatcher[F[_]: Applicative](
       processed = System.currentTimeMillis()
       latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
+      val isDisconnect =
+        p.message.isUpstream && p.message.upstream.get.typeUrl == "type.googleapis.com/coop.rchain.comm.protocol.rchain.Disconnect"
       // Ignore Disconnect messages to not skew the tests
-      if (!p.message.isDisconnect)
+      if (!isDisconnect)
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
