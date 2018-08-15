@@ -251,27 +251,31 @@ object Validate {
   def sequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      val creatorJustificationSeqNumber = b.justifications
-        .find {
-          case Justification(validator, _) => validator == b.sender
-        }
-        .fold(-1) {
-          case Justification(_, latestBlockHash) => internalMap(latestBlockHash).seqNum
-        }
-      val number = b.seqNum
-      val result = creatorJustificationSeqNumber + 1 == number
-
-      if (result) {
-        Applicative[F].pure(Right(Valid))
-      } else {
-        for {
-          _ <- Log[F].warn(ignore(
-                b,
-                s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
-        } yield Left(InvalidSequenceNumber)
-      }
-    }
+    for {
+      creatorJustificationSeqNumber <- b.justifications
+                                        .find {
+                                          case Justification(validator, _) => validator == b.sender
+                                        }
+                                        .fold((-1).pure[F]) {
+                                          case Justification(_, latestBlockHash) =>
+                                            for {
+                                              latestBlock <- ProtoUtil.unsafeGetBlock[F](
+                                                              latestBlockHash)
+                                              latestBlockSeqNum = latestBlock.seqNum
+                                            } yield latestBlockSeqNum
+                                        }
+      number = b.seqNum
+      result = creatorJustificationSeqNumber + 1 == number
+      status <- if (result) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 for {
+                   _ <- Log[F].warn(ignore(
+                         b,
+                         s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
+                 } yield Left(InvalidSequenceNumber)
+               }
+    } yield status
 
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
                                             genesis: BlockMessage,
