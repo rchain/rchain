@@ -68,24 +68,26 @@ object ProtoUtil {
       }
     } yield block
 
-  @tailrec
-  def findJustificationParentWithSeqNum(b: BlockMessage,
-                                        internalMap: Map[BlockHash, BlockMessage],
-                                        seqNum: SequenceNumber): Option[BlockMessage] =
+  def findJustificationParentWithSeqNum[F[_]: Monad: BlockStore](
+      b: BlockMessage,
+      seqNum: SequenceNumber): F[Option[BlockMessage]] =
     if (b.seqNum == seqNum) {
-      Some(b)
+      Option[BlockMessage](b).pure[F]
     } else {
       val creatorJustificationHash = b.justifications.find {
         case Justification(validator, _) => validator == b.sender
       }
       creatorJustificationHash match {
         case Some(Justification(_, blockHash)) =>
-          val creatorJustification = internalMap.get(blockHash)
-          creatorJustification match {
-            case Some(block) => findJustificationParentWithSeqNum(block, internalMap, seqNum)
-            case None        => None
-          }
-        case None => None
+          for {
+            creatorJustification <- BlockStore[F].get(blockHash)
+            justificationParentWithSeqNum <- creatorJustification match {
+                                              case Some(block) =>
+                                                findJustificationParentWithSeqNum[F](block, seqNum)
+                                              case None => none[BlockMessage].pure[F]
+                                            }
+          } yield justificationParentWithSeqNum
+        case None => none[BlockMessage].pure[F]
       }
     }
 
