@@ -4,12 +4,7 @@ import cats.data.{OptionT, State, StateT}
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Connective.ConnectiveInstance.{
-  ConnAndBody,
-  ConnNotBody,
-  ConnOrBody,
-  VarRefBody
-}
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
@@ -471,6 +466,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
           // Variable references should be substituted before going into the matcher.
           // This should never happen.
           (ParCount(), ParCount())
+        case _: ConnBool      => (ParCount(exprs = 1), ParCount(exprs = 1))
+        case _: ConnInt       => (ParCount(exprs = 1), ParCount(exprs = 1))
+        case _: ConnString    => (ParCount(exprs = 1), ParCount(exprs = 1))
+        case _: ConnUri       => (ParCount(exprs = 1), ParCount(exprs = 1))
+        case _: ConnByteArray => (ParCount(exprs = 1), ParCount(exprs = 1))
       }
   }
 }
@@ -514,6 +514,41 @@ trait SpatialMatcherInstances {
         case _: VarRefBody =>
           // this should never happen because variable references should be substituted
           OptionalFreeMapWithCost.emptyMap[Unit]
+
+        case _: ConnBool =>
+          target.singleExpr match {
+            case Some(Expr(GBool(_))) =>
+              OptionalFreeMapWithCost.pure(())
+            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+          }
+
+        case _: ConnInt =>
+          target.singleExpr match {
+            case Some(Expr(GInt(_))) =>
+              OptionalFreeMapWithCost.pure(())
+            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+          }
+
+        case _: ConnString =>
+          target.singleExpr match {
+            case Some(Expr(GString(_))) =>
+              OptionalFreeMapWithCost.pure(())
+            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+          }
+
+        case _: ConnUri =>
+          target.singleExpr match {
+            case Some(Expr(GUri(_))) =>
+              OptionalFreeMapWithCost.pure(())
+            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+          }
+
+        case _: ConnByteArray =>
+          target.singleExpr match {
+            case Some(Expr(GByteArray(_))) =>
+              OptionalFreeMapWithCost.pure(())
+            case _ => OptionalFreeMapWithCost.emptyMap[Unit]
+          }
 
         case ConnectiveInstance.Empty =>
           OptionalFreeMapWithCost.emptyMap[Unit]

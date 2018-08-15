@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.{BlockDag, BlockStatus, MultiParentCasper}
-import coop.rchain.casper.protocol.{BlockMessage, Deploy}
+import coop.rchain.casper.protocol.{BlockMessage, Deploy, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
 
 object NoOpsCasperEffect {
@@ -22,7 +22,7 @@ object NoOpsCasperEffect {
 
       def addBlock(b: BlockMessage): F[BlockStatus]                      = BlockStatus.valid.pure[F]
       def contains(b: BlockMessage): F[Boolean]                          = false.pure[F]
-      def deploy(r: Deploy): F[Unit]                                     = ().pure[F]
+      def deploy(r: DeployData): F[Either[Throwable, Unit]]              = Applicative[F].pure(Right(()))
       def estimator: F[IndexedSeq[BlockMessage]]                         = estimatorFunc
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
       def blockDag: F[BlockDag]                                          = blockDagFunc

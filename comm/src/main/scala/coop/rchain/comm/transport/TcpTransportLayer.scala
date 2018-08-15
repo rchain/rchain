@@ -26,8 +26,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private val certInputStream = new ByteArrayInputStream(cert.getBytes())
-  private val keyInputStream  = new ByteArrayInputStream(key.getBytes())
+  private def certInputStream = new ByteArrayInputStream(cert.getBytes())
+  private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private lazy val serverSslContext: SslContext =
     try {

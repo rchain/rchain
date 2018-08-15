@@ -28,19 +28,13 @@ object BlockAPI {
   def deploy[F[_]: Monad: MultiParentCasperConstructor: Log](
       d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
-      InterpreterUtil.mkTerm(d.term) match {
-        case Right(term) =>
-          val deploy = Deploy(
-            term = Some(term),
-            raw = Some(d)
-          )
-          for {
-            _ <- MultiParentCasper[F].deploy(deploy)
-          } yield DeployServiceResponse(success = true, "Success!")
-
-        case Left(err) =>
-          DeployServiceResponse(success = false, s"Error in parsing term: \n$err").pure[F]
-      }
+      for {
+        r <- MultiParentCasper[F].deploy(d)
+        re <- r match {
+               case Right(_)  => DeployServiceResponse(success = true, "Success!").pure[F]
+               case Left(err) => DeployServiceResponse(success = false, err.getMessage).pure[F]
+             }
+      } yield re
 
     MultiParentCasperConstructor
       .withCasper[F, DeployServiceResponse](

@@ -311,7 +311,7 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeployString(id: Int): DeployData = {
+  def basicDeployData(id: Int): DeployData = {
     //TODO this should be removed once we assign the deploy with exact user
     Thread.sleep(1)
     val timestamp = System.currentTimeMillis()
@@ -324,7 +324,7 @@ object ProtoUtil {
   }
 
   def basicDeploy(id: Int): Deploy = {
-    val d    = basicDeployString(id)
+    val d    = basicDeployData(id)
     val term = InterpreterUtil.mkTerm(d.term).right.get
     Deploy(
       term = Some(term),
@@ -336,6 +336,13 @@ object ProtoUtil {
     DeployCost()
       .withDeploy(basicDeploy(id))
       .withCost(PCost(1L, 1))
+
+  def sourceDeploy(source: String): DeployData = {
+    //TODO this should be removed once we assign the deploy with exact user
+    Thread.sleep(1)
+    val timestamp = System.currentTimeMillis()
+    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+  }
 
   def termDeploy(term: Par): Deploy = {
     //TODO this should be removed once we assign the deploy with exact user
