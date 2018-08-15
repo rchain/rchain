@@ -328,8 +328,8 @@ sealed abstract class MultiParentCasperInstances {
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
+          Right((computedCheckpoint, mergeLog, _, deployWithCost)) = knownStateHashesContainer
+            .mapAndUpdate[(Checkpoint, Seq[protocol.Event], Set[StateHash], Vector[DeployCost])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
@@ -338,9 +338,9 @@ sealed abstract class MultiParentCasperInstances {
                                                        emptyStateHash,
                                                        _,
                                                        runtimeManager.computeState),
-              _._2)
+              _._3)
           computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog     = computedCheckpoint.log.map(EventConverter.toCasperEvent)
+          serializedLog     = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
           postState = RChainState()
             .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
