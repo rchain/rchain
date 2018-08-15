@@ -283,7 +283,7 @@ sealed abstract class MultiParentCasperInstances {
             orderedHeads   <- estimator
             dag            <- blockDag
             internalMap    <- BlockStore[F].asMap()
-            p              = chooseNonConflicting(orderedHeads, genesis, dag, internalMap)
+            p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
             proposal <- if (r.nonEmpty || p.length > 1) {
@@ -304,7 +304,7 @@ sealed abstract class MultiParentCasperInstances {
           Capture[F].capture {
             val result = deployHist.clone()
             DagOperations
-              .bfTraverse(p)(parents(_).iterator.map(internalMap))
+              .bfTraverse(p)(parentHashes(_).iterator.map(internalMap))
               .foreach(b => {
                 b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
               })
@@ -577,7 +577,7 @@ sealed abstract class MultiParentCasperInstances {
               _              <- Capture[F].capture { blockBuffer += block }
               dag            <- blockDag
               internalMap    <- BlockStore[F].asMap()
-              missingParents = parents(block).toSet
+              missingParents = parentHashes(block).toSet
               missingJustifictions = block.justifications
                 .map(_.latestBlockHash)
                 .toSet
@@ -656,7 +656,7 @@ sealed abstract class MultiParentCasperInstances {
             val hash = block.blockHash
 
             //add current block as new child to each of its parents
-            val newChildMap = parents(block).foldLeft(bd.childMap) {
+            val newChildMap = parentHashes(block).foldLeft(bd.childMap) {
               case (acc, p) =>
                 val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
                 acc.updated(p, currChildren + hash)

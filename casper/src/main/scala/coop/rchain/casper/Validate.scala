@@ -133,7 +133,7 @@ object Validate {
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      parentsPresent <- ProtoUtil.parents(block).toList.forallM(p => BlockStore[F].contains(p))
+      parentsPresent <- ProtoUtil.parentHashes(block).toList.forallM(p => BlockStore[F].contains(p))
       justificationsPresent <- block.justifications.toList.forallM(j =>
                                 BlockStore[F].contains(j.latestBlockHash))
       result <- if (parentsPresent && justificationsPresent) {
@@ -153,11 +153,6 @@ object Validate {
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
-    def parents(b: BlockMessage): F[List[BlockMessage]] =
-      ProtoUtil.parents(b).toList.traverse { parentHash =>
-        ProtoUtil.unsafeGetBlock[F](parentHash)
-      }
-
     val deployKeySet = (for {
       bd <- block.body.toList
       d  <- bd.newCode.flatMap(_.deploy)
@@ -165,9 +160,12 @@ object Validate {
     } yield (r.user, r.timestamp)).toSet
 
     for {
-      initParents    <- parents(block)
-      parentBlockDag <- DagOperations.bfTraverseF(initParents)(parents).toList
-      duplicatedBlock = parentBlockDag.find(
+      initParents <- ProtoUtil.unsafeGetParents[F](block)
+      parentBlocksAncestors <- DagOperations
+                                .bfTraverseF[F, BlockMessage](initParents)(
+                                  ProtoUtil.unsafeGetParents[F])
+                                .toList
+      duplicatedBlock = parentBlocksAncestors.find(
         _.body.exists(
           _.newCode
             .flatMap(_.deploy)
@@ -196,7 +194,7 @@ object Validate {
       currentTime  <- Time[F].currentMillis
       timestamp    = b.header.get.timestamp
       beforeFuture = currentTime + DRIFT >= timestamp
-      latestParentTimestamp <- ProtoUtil.parents(b).toList.foldM(0L) {
+      latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   for {
                                     parent    <- ProtoUtil.unsafeGetBlock[F](parentHash)
@@ -226,7 +224,7 @@ object Validate {
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      maybeMainParent       <- ProtoUtil.parents(b).headOption.traverse(ProtoUtil.unsafeGetBlock[F])
+      maybeMainParent       <- ProtoUtil.parentHashes(b).headOption.traverse(ProtoUtil.unsafeGetBlock[F])
       maybeMainParentNumber = maybeMainParent.map(ProtoUtil.blockNumber)
       number                = ProtoUtil.blockNumber(b)
       result                = maybeMainParentNumber.fold(number == 0)(_ + 1 == number)
@@ -279,41 +277,38 @@ object Validate {
 
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
                                             genesis: BlockMessage,
-                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-    BlockStore[F].asMap().flatMap { internalMap: Map[BlockHash, BlockMessage] =>
-      val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+    val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
-      if (b.justifications.isEmpty) {
-        if (bParents.exists(_ != genesis.blockHash))
-          for {
-            _ <- Log[F].warn(
-                  ignore(b, "justification is empty, but block has non-genesis parents."))
-          } yield Left(InvalidParents)
-        else
-          Applicative[F].pure(Right(Valid))
-      } else {
-        val latestMessages = b.justifications
-          .foldLeft(Map.empty[Validator, BlockHash]) {
-            case (map, Justification(v, hash)) => map.updated(v, hash)
-          }
-        // TODO: Double check logic here
-        val viewDag = dag.copy(latestMessages = latestMessages)
+    if (b.justifications.isEmpty) {
+      if (bParents.exists(_ != genesis.blockHash))
         for {
-          estimate <- Estimator.tips[F](viewDag, genesis)
-          trueParents = ProtoUtil
-            .chooseNonConflicting(estimate, genesis, dag, internalMap)
-            .map(_.blockHash)
-          status <- if (bParents == trueParents)
-                     Applicative[F].pure(Right(Valid))
-                   else
-                     for {
-                       _ <- Log[F].warn(
-                             ignore(b,
-                                    "block parents did not match estimate based on justification."))
-                     } yield Left(InvalidParents)
-        } yield status
-      }
+          _ <- Log[F].warn(ignore(b, "justification is empty, but block has non-genesis parents."))
+        } yield Left(InvalidParents)
+      else
+        Applicative[F].pure(Right(Valid))
+    } else {
+      val latestMessages = b.justifications
+        .foldLeft(Map.empty[Validator, BlockHash]) {
+          case (map, Justification(v, hash)) => map.updated(v, hash)
+        }
+      // TODO: Double check logic here
+      val viewDag = dag.copy(latestMessages = latestMessages)
+      for {
+        estimate         <- Estimator.tips[F](viewDag, genesis)
+        trueParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+        trueParentHashes = trueParents.map(_.blockHash)
+        status <- if (bParents == trueParentHashes)
+                   Applicative[F].pure(Right(Valid))
+                 else
+                   for {
+                     _ <- Log[F].warn(
+                           ignore(b,
+                                  "block parents did not match estimate based on justification."))
+                   } yield Left(InvalidParents)
+      } yield status
     }
+  }
 
   /*
    * When we switch between equivocation forks for a slashed validator, we will potentially get a

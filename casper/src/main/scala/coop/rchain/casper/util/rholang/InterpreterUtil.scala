@@ -126,7 +126,7 @@ object InterpreterUtil {
       // TODO: Fix so that all search branches reach GCA before quitting
       val deploys = DagOperations
         .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
-          ProtoUtil.parents(_).iterator.map(internalMap.apply))
+          ProtoUtil.parentHashes(_).iterator.map(internalMap.apply))
         .takeWhile(_ != gca)
         .flatMap(ProtoUtil.deploys(_).reverse)
         .toIndexedSeq
@@ -151,7 +151,7 @@ object InterpreterUtil {
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
     : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
     val parents = ProtoUtil
-      .parents(b)
+      .parentHashes(b)
       .map(internalMap.apply)
 
     val deploys = ProtoUtil.deploys(b)

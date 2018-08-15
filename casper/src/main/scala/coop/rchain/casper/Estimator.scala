@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
-import coop.rchain.casper.util.ProtoUtil.{parents, unsafeGetBlock, weightFromValidator}
+import coop.rchain.casper.util.ProtoUtil.{parentHashes, unsafeGetBlock, weightFromValidator}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
@@ -68,7 +68,7 @@ object Estimator {
     def hashParents(hash: BlockHash): F[List[BlockHash]] =
       for {
         b <- unsafeGetBlock[F](hash)
-      } yield parents(b).toList
+      } yield parentHashes(b).toList
 
     def addValidatorWeightDownSupportingChain(scoreMap: Map[BlockHash, Int],
                                               validator: Validator,

@@ -154,12 +154,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b9  = chain.idToBlocks(9)
       val b10 = chain.idToBlocks(10)
 
-      conflicts(b2, b3, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b4, b5, genesis, chain, BlockStore[Id].asMap()) should be(true)
-      conflicts(b6, b6, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b6, b9, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b7, b8, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b7, b10, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b9, b10, genesis, chain, BlockStore[Id].asMap()) should be(true)
+      conflicts[Id](b2, b3, genesis, chain) should be(false)
+      conflicts[Id](b4, b5, genesis, chain) should be(true)
+      conflicts[Id](b6, b6, genesis, chain) should be(false)
+      conflicts[Id](b6, b9, genesis, chain) should be(false)
+      conflicts[Id](b7, b8, genesis, chain) should be(false)
+      conflicts[Id](b7, b10, genesis, chain) should be(false)
+      conflicts[Id](b9, b10, genesis, chain) should be(true)
   }
 }

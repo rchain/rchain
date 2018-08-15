@@ -27,7 +27,7 @@ object ProtoUtil {
     if (candidate == target) {
       true.pure[F]
     } else {
-      val maybeMainParentHash = ProtoUtil.parents(target).headOption
+      val maybeMainParentHash = ProtoUtil.parentHashes(target).headOption
       maybeMainParentHash match {
         case Some(mainParentHash) =>
           for {
@@ -44,7 +44,7 @@ object ProtoUtil {
   def getMainChain[F[_]: Monad: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = ProtoUtil.parents(estimate)
+    val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
       mainChain <- maybeMainParentHash match {
@@ -134,8 +134,13 @@ object ProtoUtil {
   def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Int] =
     weightFromValidator[F](b, b.sender)
 
-  def parents(b: BlockMessage): Seq[ByteString] =
+  def parentHashes(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
+
+  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+    ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+      ProtoUtil.unsafeGetBlock[F](parentHash)
+    }
 
   def deploys(b: BlockMessage): Seq[Deploy] =
     b.body.map(_.newCode.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
@@ -159,43 +164,52 @@ object ProtoUtil {
     } yield ps.blockNumber).getOrElse(0L)
 
   //Two blocks conflict if they both use the same deploy in different histories
-  def conflicts(b1: BlockMessage,
-                b2: BlockMessage,
-                genesis: BlockMessage,
-                dag: BlockDag,
-                internalMap: Map[BlockHash, BlockMessage]): Boolean = {
-    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag, internalMap)
-    if (gca == b1 || gca == b2) {
-      //blocks which already exist in each other's chains do not conflict
-      false
-    } else {
-      def getDeploys(b: BlockMessage) =
-        DagOperations
-          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(internalMap(_)))
-          .takeWhile(_ != gca)
-          .flatMap(b => {
-            b.body.map(_.newCode).getOrElse(List.empty[Deploy])
-          })
-          .toSet
+  def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage,
+                                         b2: BlockMessage,
+                                         genesis: BlockMessage,
+                                         dag: BlockDag): F[Boolean] =
+    for {
+      gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
+      result <- if (gca == b1 || gca == b2) {
+                 //blocks which already exist in each other's chains do not conflict
+                 false.pure[F]
+               } else {
+                 def getDeploys(b: BlockMessage) =
+                   for {
+                     bAncestors <- DagOperations
+                                    .bfTraverseF[F, BlockMessage](List(b))(
+                                      ProtoUtil.unsafeGetParents[F])
+                                    .toList
+                     deploys = bAncestors
+                       .takeWhile(_ != gca)
+                       .flatMap(b => {
+                         b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+                       })
+                       .toSet
+                   } yield deploys
+                 for {
+                   b1Deploys <- getDeploys(b1)
+                   b2Deploys <- getDeploys(b2)
+                 } yield b1Deploys.intersect(b2Deploys).nonEmpty
+               }
+    } yield result
 
-      getDeploys(b1).intersect(getDeploys(b2)).nonEmpty
-    }
-  }
+  def chooseNonConflicting[F[_]: Monad: BlockStore](blocks: Seq[BlockMessage],
+                                                    genesis: BlockMessage,
+                                                    dag: BlockDag): F[Seq[BlockMessage]] = {
+    def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
+      conflicts[F](_, b, genesis, dag).flatMap(b => (!b).pure[F])
 
-  def chooseNonConflicting(blocks: Seq[BlockMessage],
-                           genesis: BlockMessage,
-                           dag: BlockDag,
-                           internalMap: Map[BlockHash, BlockMessage]): Seq[BlockMessage] =
-    blocks
-      .foldLeft(List.empty[BlockMessage]) {
+    blocks.toList
+      .foldM(List.empty[BlockMessage]) {
         case (acc, b) =>
-          if (acc.forall(!conflicts(_, b, genesis, dag, internalMap))) {
-            b :: acc
-          } else {
-            acc
-          }
+          Monad[F].ifM(acc.forallM(nonConflicting(b)))(
+            (b :: acc).pure[F],
+            acc.pure[F]
+          )
       }
-      .reverse
+      .map(_.reverse)
+  }
 
   def toJustification(latestMessages: collection.Map[Validator, BlockHash]): Seq[Justification] =
     latestMessages.toSeq.map {

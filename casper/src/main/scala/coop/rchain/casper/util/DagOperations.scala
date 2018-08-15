@@ -1,8 +1,8 @@
 package coop.rchain.casper.util
 
-import cats.{Eval, Monad}
+import cats.{ApplicativeError, Eval, Monad}
 import cats.implicits._
-
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.BlockHash
@@ -64,6 +64,54 @@ object DagOperations {
         }
     }
 
+  // TODO: Move to shared
+  // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html
+  def findM[G[_], A](list: List[A], p: A => G[Boolean])(implicit G: Monad[G]): G[Option[A]] =
+    list.tailRecM[G, Option[A]] {
+      case head :: tail =>
+        p(head).map {
+          case true  => Right(Some(head))
+          case false => Left(tail)
+        }
+      case Nil => G.pure(Right(None))
+    }
+
+  def greatestCommonAncestorF[F[_]: Monad: BlockStore](b1: BlockMessage,
+                                                       b2: BlockMessage,
+                                                       genesis: BlockMessage,
+                                                       dag: BlockDag): F[BlockMessage] =
+    if (b1 == b2) {
+      b1.pure[F]
+    } else {
+      def commonAncestorChild(b: BlockMessage,
+                              commonAncestors: Set[BlockMessage]): F[List[BlockMessage]] = {
+        val childrenHashes = dag.childMap.getOrElse(b.blockHash, HashSet.empty[BlockHash])
+        for {
+          children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
+          commonAncestorChildren = children.filter(commonAncestors)
+        } yield commonAncestorChildren
+      }
+
+      for {
+        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
+        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
+        commonAncestors = b1Ancestors.intersect(b2Ancestors)
+        commonAncestorsTraversal <- bfTraverseF[F, BlockMessage](List(genesis))(
+                                     commonAncestorChild(_, commonAncestors)).toList
+        gca <- findM[F, BlockMessage](
+                commonAncestorsTraversal,
+                b =>
+                  dag.childMap
+                    .getOrElse(b.blockHash, HashSet.empty[BlockHash])
+                    .toList
+                    .existsM(hash =>
+                      for {
+                        c <- ProtoUtil.unsafeGetBlock[F](hash)
+                      } yield b1Ancestors(c) ^ b2Ancestors(c))
+              )
+      } yield gca.get
+    }
+
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
@@ -75,7 +123,7 @@ object DagOperations {
     if (b1 == b2) b1
     else {
       def parents(b: BlockMessage): Iterator[BlockMessage] =
-        ProtoUtil.parents(b).iterator.map(internalMap)
+        ProtoUtil.parentHashes(b).iterator.map(internalMap)
 
       val b1Ancestors = new mutable.HashSet[BlockMessage]
       bfTraverse[BlockMessage](Some(b1))(parents).foreach(b1Ancestors += _)
