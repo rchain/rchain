@@ -3,6 +3,8 @@ package coop.rchain.shared
 import cats._
 import cats.implicits._
 
+import scala.collection.immutable.{List, Set}
+
 sealed abstract class StreamT[F[_], +A] { self =>
 
   def ++[AA >: A](other: StreamT[F, AA])(implicit functor: Functor[F]): StreamT[F, AA] =
