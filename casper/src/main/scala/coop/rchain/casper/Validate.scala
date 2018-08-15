@@ -282,7 +282,9 @@ object Validate {
     if (b.shardId == shardId) {
       Applicative[F].pure(Right(Valid))
     } else {
-      Applicative[F].pure(Left(InvalidShardId))
+      for {
+        _ <- Log[F].warn(ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+      } yield Left(InvalidShardId)
     }
 
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
