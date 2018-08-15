@@ -1,5 +1,7 @@
 package coop.rchain.casper.util.comm
 
+import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.helper.HashSetCasperTestNode
@@ -167,12 +169,12 @@ object ApproveBlockProtocolTest {
 
   def createProtocol(requiredSigs: Int, duration: FiniteDuration, interval: FiniteDuration)(
       implicit time: Time[Task]): ApproveBlockProtocol[Task] = {
-    implicit val nodeDiscovery  = new NodeDiscoveryStub[Task]()
-    implicit val nopLog         = new NOPLog[Task]()
-    val src: PeerNode           = peerNode("src", 40400)
-    implicit val transportLayer = new TransportLayerStub[Task]
-    implicit val rpConfAsk      = createRPConfAsk[Task](src)
-    implicit val ctx            = monix.execution.Scheduler.Implicits.global
+    implicit val connectionsCell = Cell.const[Task, Connections](Connect.Connections.empty)
+    implicit val nopLog          = new NOPLog[Task]()
+    val src: PeerNode            = peerNode("src", 40400)
+    implicit val transportLayer  = new TransportLayerStub[Task]
+    implicit val rpConfAsk       = createRPConfAsk[Task](src)
+    implicit val ctx             = monix.execution.Scheduler.Implicits.global
 
     val (sk, pk) = Ed25519.newKeyPair
     val genesis  = HashSetCasperTest.createGenesis(Seq(pk))

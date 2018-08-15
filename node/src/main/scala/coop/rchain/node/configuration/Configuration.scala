@@ -34,7 +34,7 @@ object Configuration {
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
-  private val DefaultTimeout                    = 1000
+  private val DefaultTimeout                    = 2000
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5

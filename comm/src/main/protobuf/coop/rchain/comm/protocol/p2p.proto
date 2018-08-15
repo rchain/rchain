@@ -28,6 +28,9 @@ message Packet {
   bytes  content = 2;
 }
 
+message Disconnect {
+}
+
 message Protocol {
     oneof message {
         Heartbeat                   heartbeat                     = 1;
@@ -35,5 +38,6 @@ message Protocol {
         ProtocolHandshake           protocol_handshake            = 3;
         ProtocolHandshakeResponse   protocol_handshake_response   = 4;
         Packet                      packet                        = 5;
+        Disconnect                  disconnect                    = 6;
     }
 }

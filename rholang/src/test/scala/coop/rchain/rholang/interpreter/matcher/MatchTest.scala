@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats.{Eval => _}
+import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -8,8 +9,10 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort.Sortable
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import org.scalatest._
+import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
@@ -17,19 +20,50 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
-  def assertSpatialMatch[T: Sortable, P: Sortable](
+  private val printer = PrettyPrinter()
+
+  def assertSpatialMatch[T <: GeneratedMessage, P <: GeneratedMessage](
       target: T,
       pattern: P,
-      expected: Option[FreeMap])(implicit sm: SpatialMatcher[T, P]): Assertion = {
+      expectedCaptures: Option[FreeMap])(implicit sm: SpatialMatcher[T, P],
+                                         ts: Sortable[T],
+                                         ps: Sortable[P]): Assertion = {
+    println(explainMatch(target, pattern, expectedCaptures))
     assertSorted(target, "target")
     assertSorted(pattern, "pattern")
-    expected.foreach(_.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result = spatialMatch(target, pattern).runS(emptyMap).value.run(CostAccount.zero).value._2
-    assert(result == expected)
+    expectedCaptures.foreach(
+      _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
+    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost._2.map(_._1)
+    assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
+    assert(result == expectedCaptures)
   }
 
-  private def assertSorted[T: Sortable](term: T, termName: String): Assertion = {
-    assert(term == Sortable[T].sortMatch(term).term, s"Invalid test case - ${termName} is not sorted")
+  private def explainMatch[P <: GeneratedMessage, T <: GeneratedMessage](
+      target: T,
+      pattern: P,
+      expectedCaptures: Option[FreeMap]): String = {
+    val targetString       = printer.buildString(target)
+    val patternString      = printer.buildString(pattern)
+    val capturesStringsMap = prettyCaptures(expectedCaptures)
+
+    s"""
+       |     Matching:  $patternString
+       |           to:  $targetString
+       | should yield:  $capturesStringsMap
+       |""".stripMargin
+  }
+
+  private def prettyCaptures[T <: GeneratedMessage, P <: GeneratedMessage](
+      expectedCaptures: Option[FreeMap]): Option[Map[Int, String]] = {
+    expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
+  }
+
+  private def assertSorted[T <: GeneratedMessage](term: T, termName: String)(
+      implicit ts: Sortable[T]): Assertion = {
+    val sortedTerm = Sortable[T].sortMatch(term).term
+    val clue       = s"Invalid test case - ${termName} is not sorted"
+    assert(printer.buildString(term) == printer.buildString(sortedTerm), clue)
+    assert(term == sortedTerm, clue)
   }
 
   val wc = Wildcard(Var.WildcardMsg())
@@ -444,5 +478,50 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern        = Expr(EMinusMinusBody(EMinusMinus(EVar(FreeVar(0)), EVar(FreeVar(1)))))
     val expectedResult = Some(Map[Int, Par](0 -> lhsSet, 1 -> rhsSet))
     assertSpatialMatch(target, pattern, expectedResult)
+  }
+
+  "Matching Bool" should "work" in {
+    val successTarget: Par = GBool(false)
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnBool(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching Int" should "work" in {
+    val successTarget: Par = GInt(7)
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnInt(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching String" should "work" in {
+    val successTarget: Par = GString("Match me!")
+    val failTarget: Par = GInt(42)
+    val pattern: Connective = Connective(ConnString(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching Uri" should "work" in {
+    val successTarget: Par = GUri("rho:io:stdout")
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnUri(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Matching ByteArray" should "work" in {
+    val successTarget: Par = GByteArray(ByteString.copyFrom(Array[Byte](74, 75)))
+    val failTarget: Par = GString("Fail")
+    val pattern: Connective = Connective(ConnByteArray(true))
+
+    assertSpatialMatch(successTarget, pattern, Some(Map.empty))
+    assertSpatialMatch(failTarget, pattern, None)
   }
 }

@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import coop.rchain.comm.rp.Connect.RPConfAsk
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Id, Monad}
 import cats.implicits._
 import cats.effect.{Bracket, Sync}
@@ -38,6 +38,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.models.Par
 import coop.rchain.rspace.{trace, Checkpoint}
 import coop.rchain.rspace.trace.{COMM, Event}
 import coop.rchain.rspace.trace.Event.codecLog
@@ -50,7 +51,7 @@ import scodec.bits.BitVector
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
-  def deploy(d: Deploy): F[Unit]
+  def deploy(d: DeployData): F[Either[Throwable, Unit]]
   def estimator: F[A]
   def createBlock: F[Option[BlockMessage]]
 }
@@ -63,6 +64,8 @@ trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
   def storageContents(hash: ByteString): F[String]
+  // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
+  def getRuntimeManager: F[Option[RuntimeManager]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -73,22 +76,8 @@ sealed abstract class MultiParentCasperInstances {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def noOpsCasper[F[_]: Applicative]: MultiParentCasper[F] =
-    new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[BlockStatus] = BlockStatus.valid.pure[F]
-      def contains(b: BlockMessage): F[Boolean]     = false.pure[F]
-      def deploy(r: Deploy): F[Unit]                = ().pure[F]
-      def estimator: F[IndexedSeq[BlockMessage]] =
-        Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                                          = BlockDag().pure[F]
-      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
-      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
-      def storageContents(hash: ByteString): F[String]                   = "".pure[F]
-    }
-
   def hashSetCasper[
-      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -109,7 +98,7 @@ sealed abstract class MultiParentCasperInstances {
   }
 
   private[this] def createMultiParentCasper[
-      F[_]: Sync: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -266,13 +255,23 @@ sealed abstract class MultiParentCasperInstances {
       def contains(b: BlockMessage): F[Boolean] =
         BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
-      def deploy(d: Deploy): F[Unit] =
-        for {
-          _ <- Capture[F].capture {
-                deployHist += d
-              }
-          _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(d)}")
-        } yield ()
+      def deploy(d: DeployData): F[Either[Throwable, Unit]] =
+        InterpreterUtil.mkTerm(d.term) match {
+          case Right(term) =>
+            val deploy = Deploy(
+              term = Some(term),
+              raw = Some(d)
+            )
+            for {
+              _ <- Capture[F].capture {
+                    deployHist += deploy
+                  }
+              _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(deploy)}")
+            } yield Right(())
+
+          case Left(err) =>
+            Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
+        }
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         BlockStore[F].asMap() flatMap { internalMap: Map[BlockHash, BlockMessage] =>
@@ -334,8 +333,8 @@ sealed abstract class MultiParentCasperInstances {
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
+          Right((computedCheckpoint, mergeLog, _, deployWithCost)) = knownStateHashesContainer
+            .mapAndUpdate[(Checkpoint, Seq[protocol.Event], Set[StateHash], Vector[DeployCost])](
               InterpreterUtil.computeDeploysCheckpoint(p,
                                                        r,
                                                        genesis,
@@ -344,9 +343,9 @@ sealed abstract class MultiParentCasperInstances {
                                                        emptyStateHash,
                                                        _,
                                                        runtimeManager.computeState),
-              _._2)
+              _._3)
           computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog     = computedCheckpoint.log.map(EventConverter.toCasperEvent)
+          serializedLog     = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
           postState = RChainState()
             .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
@@ -720,5 +719,7 @@ sealed abstract class MultiParentCasperInstances {
                     }) *> reAttemptBuffer
               }
         } yield ()
+
+      def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
     }
 }

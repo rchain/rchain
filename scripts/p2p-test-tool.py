@@ -151,8 +151,7 @@ def main():
                 if check_network_convergence(container) != 0:
                     show_logs()
                     show_containers()
-                    print("FAIL: Network never converged. Check container logs for issues. One or more containers might have failed to start or connect.")
-                    sys.exit()
+                    raise Exception("FAIL: Network never converged. Check container logs for issues. One or more containers might have failed to start or connect.")
     if args.run_tests == True:
         run_tests()
         return
@@ -468,10 +467,10 @@ def check_network_convergence(container):
     print("Check for network convergence via prometheus metrics api before running tests.")
     peers_metric = ''
     peers_metric_expected = args.peer_amount
-    timeout = 200
+    timeout = 400
     count = 0
 
-    while count < 200:
+    while count < timeout:
         cmd = f'curl -s {container.name}:40403'
         try: 
             r = container.exec_run(cmd=cmd).output.decode('utf-8')
