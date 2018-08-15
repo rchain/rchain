@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.catscontrib.ListContrib
 import coop.rchain.shared.StreamT
 
 import scala.annotation.tailrec
@@ -64,18 +65,6 @@ object DagOperations {
         }
     }
 
-  // TODO: Move to shared
-  // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html
-  def findM[G[_], A](list: List[A], p: A => G[Boolean])(implicit G: Monad[G]): G[Option[A]] =
-    list.tailRecM[G, Option[A]] {
-      case head :: tail =>
-        p(head).map {
-          case true  => Right(Some(head))
-          case false => Left(tail)
-        }
-      case Nil => G.pure(Right(None))
-    }
-
   def greatestCommonAncestorF[F[_]: Monad: BlockStore](b1: BlockMessage,
                                                        b2: BlockMessage,
                                                        genesis: BlockMessage,
@@ -98,7 +87,7 @@ object DagOperations {
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
         commonAncestorsTraversal <- bfTraverseF[F, BlockMessage](List(genesis))(
                                      commonAncestorChild(_, commonAncestors)).toList
-        gca <- findM[F, BlockMessage](
+        gca <- ListContrib.findM[F, BlockMessage](
                 commonAncestorsTraversal,
                 b =>
                   dag.childMap
