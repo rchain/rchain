@@ -81,8 +81,8 @@ sealed abstract class MultiParentCasperInstances {
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      internalMap: Map[BlockHash, BlockMessage])(
-      implicit scheduler: Scheduler): MultiParentCasper[F] = {
+      internalMap: Map[BlockHash, BlockMessage],
+      shardId: String)(implicit scheduler: Scheduler): MultiParentCasper[F] = {
     val dag = BlockDag()
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint(
@@ -94,7 +94,14 @@ sealed abstract class MultiParentCasperInstances {
         Set[StateHash](runtimeManager.emptyStateHash),
         runtimeManager
       )
-    createMultiParentCasper[F](runtimeManager, validatorId, genesis, dag, maybePostGenesisStateHash)
+    createMultiParentCasper[F](
+      runtimeManager,
+      validatorId,
+      genesis,
+      dag,
+      maybePostGenesisStateHash,
+      shardId
+    )
   }
 
   private[this] def createMultiParentCasper[
@@ -103,7 +110,8 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       dag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash])(implicit scheduler: Scheduler) =
+      maybePostGenesisStateHash: Option[StateHash],
+      shardId: String)(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString
@@ -293,7 +301,7 @@ sealed abstract class MultiParentCasperInstances {
        *  -Else None
        */
       def createBlock: F[Option[BlockMessage]] = validatorId match {
-        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm, shardId)) =>
+        case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
           for {
             orderedHeads   <- estimator
             dag            <- blockDag
@@ -302,7 +310,7 @@ sealed abstract class MultiParentCasperInstances {
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
             proposal <- if (r.nonEmpty || p.length > 1) {
-                         createProposal(p, r, justifications, shardId)
+                         createProposal(p, r, justifications)
                        } else {
                          none[BlockMessage].pure[F]
                        }
@@ -329,8 +337,7 @@ sealed abstract class MultiParentCasperInstances {
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
-                                 justifications: Seq[Justification],
-                                 shardId: String): F[Option[BlockMessage]] =
+                                 justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
           now         <- Time[F].currentMillis
           internalMap <- BlockStore[F].asMap()

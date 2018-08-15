@@ -11,8 +11,7 @@ import coop.rchain.shared.{Log, LogSource}
 
 case class ValidatorIdentity(publicKey: Array[Byte],
                              privateKey: Array[Byte],
-                             sigAlgorithm: String,
-                             shardId: String) {
+                             sigAlgorithm: String) {
 
   //TODO: accept other signature algorithms
   val signFunction: (Array[Byte], Array[Byte]) => Array[Byte] = sigAlgorithm match {
@@ -35,7 +34,7 @@ object ValidatorIdentity {
       case Some(privateKey) =>
         val publicKey =
           CasperConf.publicKey(conf.publicKey, conf.sigAlgorithm, privateKey)
-        ValidatorIdentity(publicKey, privateKey, conf.sigAlgorithm, conf.shardId).some.pure[F]
+        ValidatorIdentity(publicKey, privateKey, conf.sigAlgorithm).some.pure[F]
 
       case None =>
         Log[F]

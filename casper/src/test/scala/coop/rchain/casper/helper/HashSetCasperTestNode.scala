@@ -43,7 +43,8 @@ class HashSetCasperTestNode(name: String,
                             tle: TransportLayerTestImpl[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
+                            storageSize: Long = 1024L * 1024,
+                            shardId: String = "rchain")(implicit scheduler: Scheduler) {
 
   import HashSetCasperTestNode.errorHandler
 
@@ -66,11 +67,11 @@ class HashSetCasperTestNode(name: String,
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
 
-  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519", genesis.shardId)
+  val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
   implicit val casperEff =
     MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap(), shardId)
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](
       ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),

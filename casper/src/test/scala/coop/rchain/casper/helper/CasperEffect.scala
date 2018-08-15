@@ -36,7 +36,7 @@ import scala.util.Random
 object CasperEffect {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def apply(sk: Array[Byte], genesis: BlockMessage)(
+  def apply(sk: Array[Byte], genesis: BlockMessage, shardId: String = "rchain")(
       implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
     val blockStoreDir            = BlockStoreTestFixture.dbDir
     val runtimeDir               = BlockStoreTestFixture.dbDir
@@ -56,13 +56,19 @@ object CasperEffect {
 
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-    val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519", genesis.shardId)
+    val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
     val casperTask = for {
       _        <- blockStoreEff.put(genesis.blockHash, genesis)
       blockMap <- blockStoreEff.asMap()
     } yield
-      MultiParentCasper.hashSetCasper[Effect](runtimeManager, Some(validatorId), genesis, blockMap)
+      MultiParentCasper.hashSetCasper[Effect](
+        runtimeManager,
+        Some(validatorId),
+        genesis,
+        blockMap,
+        shardId
+      )
 
     def cleanUp(): Unit = {
       activeRuntime.close()
