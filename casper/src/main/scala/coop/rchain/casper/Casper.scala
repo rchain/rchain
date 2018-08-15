@@ -396,7 +396,7 @@ sealed abstract class MultiParentCasperInstances {
       private def attemptAdd(b: BlockMessage): F[BlockStatus] =
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
-          postValidationStatus <- Validate.blockSummary[F](b, genesis, dag)
+          postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
           postTransactionsCheckStatus <- postValidationStatus.traverse(
                                           _ =>
                                             Validate.transactions[F](b,
