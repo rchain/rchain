@@ -8,4 +8,4 @@ echo === You can watch the docker containers for activity
 echo === If you want live logs you can enable them by setting 'log_cli=true'
 echo === for more command line options use \'$0 --help\'
 echo ==========================================================================================================================
-PYTHONPATH=src python -m pytest $@
+PYTHONPATH=src .virtualenv/bin/python -m pytest $@
