@@ -139,6 +139,18 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => List.empty[AA].pure[F]
   }
 
+  def toSet[AA >: A](implicit monad: Monad[F]): F[Set[AA]] = self match {
+    case SCons(curr, lazyTail) =>
+      for {
+        stail <- lazyTail.value
+        ltail <- stail.toList
+      } yield ltail.toSet + curr
+
+    case SLazy(lazyTail) => lazyTail.value.flatMap(_.toSet)
+
+    case _: SNil[F] => Set.empty[AA].pure[F]
+  }
+
   def zip[B](other: StreamT[F, B])(implicit monad: Monad[F]): StreamT[F, (A, B)] =
     (self, other) match {
       case (SCons(a, lazyTailA), SCons(b, lazyTailB)) =>
