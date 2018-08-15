@@ -131,7 +131,7 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case SCons(curr, lazyTail) =>
       for {
         stail <- lazyTail.value
-        ltail <- stail.toList
+        ltail <- stail.toList[AA]
       } yield curr :: ltail
 
     case SLazy(lazyTail) => lazyTail.value.flatMap(_.toList)
@@ -143,8 +143,8 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case SCons(curr, lazyTail) =>
       for {
         stail <- lazyTail.value
-        ltail <- stail.toList
-      } yield ltail.toSet + curr
+        ltail <- stail.toSet[AA]
+      } yield ltail + curr
 
     case SLazy(lazyTail) => lazyTail.value.flatMap(_.toSet)
 
