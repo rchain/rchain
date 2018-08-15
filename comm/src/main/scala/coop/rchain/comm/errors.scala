@@ -59,6 +59,7 @@ object CommError {
   def unexpectedMessage(msgStr: String): CommError       = UnexpectedMessage(msgStr)
   def senderNotAvailable: CommError                      = SenderNotAvailable
   def pongNotReceivedForPing(peer: PeerNode): CommError  = PongNotReceivedForPing(peer)
+  def timeout: CommError                                 = TimeOut
 
   def errorMessage(ce: CommError): String =
     ce match {

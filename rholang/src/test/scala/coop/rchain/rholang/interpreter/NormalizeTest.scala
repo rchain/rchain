@@ -1073,6 +1073,26 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     // format: on
   }
 
+  "PSimpleType" should "result in a connective of the correct type" in {
+    val procBool = new PSimpleType(new SimpleTypeBool())
+    val procInt = new PSimpleType(new SimpleTypeInt())
+    val procString = new PSimpleType(new SimpleTypeString())
+    val procUri = new PSimpleType(new SimpleTypeUri())
+    val procByteArray = new PSimpleType(new SimpleTypeByteArray())
+
+    val resultBool  = ProcNormalizeMatcher.normalizeMatch[Coeval](procBool, inputs).value
+    val resultInt  = ProcNormalizeMatcher.normalizeMatch[Coeval](procInt, inputs).value
+    val resultString  = ProcNormalizeMatcher.normalizeMatch[Coeval](procString, inputs).value
+    val resultUri  = ProcNormalizeMatcher.normalizeMatch[Coeval](procUri, inputs).value
+    val resultByteArray  = ProcNormalizeMatcher.normalizeMatch[Coeval](procByteArray, inputs).value
+
+    resultBool.par should be(Par(connectives = Seq(Connective(ConnBool(true))), connectiveUsed = true))
+    resultInt.par should be(Par(connectives = Seq(Connective(ConnInt(true))), connectiveUsed = true))
+    resultString.par should be(Par(connectives = Seq(Connective(ConnString(true))), connectiveUsed = true))
+    resultUri.par should be(Par(connectives = Seq(Connective(ConnUri(true))), connectiveUsed = true))
+    resultByteArray.par should be(Par(connectives = Seq(Connective(ConnByteArray(true))), connectiveUsed = true))
+  }
+
   "1 matches _" should "normalize correctly" in {
     val pMatches = new PMatches(new PGround(new GroundInt(1)), new PVar(new ProcVarWildcard()))
 

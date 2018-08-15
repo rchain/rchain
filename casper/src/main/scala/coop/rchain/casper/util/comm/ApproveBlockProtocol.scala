@@ -1,27 +1,24 @@
 package coop.rchain.casper.util.comm
 
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import com.google.protobuf.ByteString
 
 import cats.Monad
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
-
-import coop.rchain.casper.{PrettyPrinter, Validate}
 import coop.rchain.casper.protocol._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.comm.PeerNode
+import coop.rchain.casper.{PrettyPrinter, Validate}
+import coop.rchain.catscontrib.Capture
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.comm.transport
+import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
-import coop.rchain.catscontrib.{Capture, IOUtil}
 
-import monix.execution.atomic.AtomicAny
-
+import scala.concurrent.duration._
 import scala.util.Try
 
 /**
@@ -29,19 +26,23 @@ import scala.util.Try
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
 class ApproveBlockProtocol[
-    F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler] private (
+    F[_]: Capture: Sync: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk] private (
     val block: BlockMessage,
     val requiredSigs: Int,
     val start: Long,
-    val duration: Long,
+    val duration: FiniteDuration,
+    val interval: FiniteDuration,
+    private val approvedBlockF: Deferred[F, ApprovedBlock],
     private val sigsF: Ref[F, Set[Signature]]) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   val candidate                         = ApprovedBlockCandidate(Some(block), requiredSigs)
-  private val u                         = UnapprovedBlock(Some(candidate), start, duration)
+  private val u                         = UnapprovedBlock(Some(candidate), start, duration.toMillis)
   private val serializedUnapprovedBlock = u.toByteString
   private val candidateHash             = PrettyPrinter.buildString(block.blockHash)
   private val sigData                   = Blake2b256.hash(candidate.toByteArray)
+
+  val approvedBlock: F[ApprovedBlock] = approvedBlockF.get
 
   def addApproval(a: BlockApproval): F[Unit] = {
     val validSig = for {
@@ -55,16 +56,23 @@ class ApproveBlockProtocol[
     }
   }
 
+  private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
+    if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
+      //TODO(mateusz.gorski): Cancel/stop the process once the block has been approved
+      approvedBlockF.complete(ApprovedBlock(Some(candidate), signatures.toSeq)).attempt.void
+    } else Timer[F].sleep(interval) *> run()
+
+  def run(): F[Unit] =
+    for {
+      t    <- Timer[F].clockRealTime(MILLISECONDS)
+      sigs <- sigsF.get
+      _    <- completeIf(t, sigs)
+    } yield Unit
+
   def currentSigs: F[Set[Signature]] = sigsF.get
 
-  def approvedBlock: F[Option[ApprovedBlock]] =
-    sigsF.get.map(
-      sigs =>
-        if (sigs.size >= requiredSigs) Some(ApprovedBlock(Some(candidate), sigs.toSeq))
-        else none[ApprovedBlock])
-
   //TODO: potential optimization, only send to peers we have not
-  //      reveived a valid signature from yet
+  //      received a valid signature from yet
   def sendUnapprovedBlock: F[Unit] =
     for {
       _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
@@ -72,33 +80,33 @@ class ApproveBlockProtocol[
       _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
     } yield ()
 
-  def sendApprovedBlock: F[Boolean] =
-    approvedBlock.flatMap {
-      case Some(a) =>
-        val serializedApprovedBlock = a.toByteString
-        for {
-          _ <- Log[F].info(s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers...")
-          _ <- CommUtil.sendToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
-          _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
-        } yield true
-
-      case None => false.pure[F]
+  def sendApprovedBlock: F[Unit] =
+    approvedBlock.flatMap { a =>
+      val serializedApprovedBlock = a.toByteString
+      for {
+        _ <- Log[F].info(s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers...")
+        _ <- CommUtil.sendToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
+        _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
+      } yield Unit
     }
-
 }
 
 object ApproveBlockProtocol {
 
   def apply[F[_]](implicit instance: ApproveBlockProtocol[F]): ApproveBlockProtocol[F] = instance
 
-  def create[F[_]: Capture: Sync: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
+  def create[
+      F[_]: Capture: Sync: ConnectionsCell: TransportLayer: Log: Time: Timer: Concurrent: RPConfAsk](
       block: BlockMessage,
       requiredSigs: Int,
-      duration: Long): F[ApproveBlockProtocol[F]] =
+      duration: FiniteDuration,
+      interval: FiniteDuration): F[ApproveBlockProtocol[F]] =
     for {
-      now   <- Time[F].currentMillis
-      sigsF <- Ref.of[F, Set[Signature]](Set.empty[Signature])
-    } yield new ApproveBlockProtocol(block, requiredSigs, now, duration, sigsF)
+      now            <- Timer[F].clockRealTime(MILLISECONDS)
+      sigsF          <- Ref.of[F, Set[Signature]](Set.empty)
+      approvedBlockF <- Deferred[F, ApprovedBlock]
+    } yield
+      new ApproveBlockProtocol(block, requiredSigs, now, duration, interval, approvedBlockF, sigsF)
 
   def blockApprovalPacketHandler[F[_]: Monad: ApproveBlockProtocol](
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
@@ -110,22 +118,6 @@ object ApproveBlockProtocol {
             _ <- ApproveBlockProtocol[F].addApproval(ba)
           } yield none[Packet]
       }
-
-  def run[F[_]: Monad: Capture: Time: ApproveBlockProtocol](waitTime: Long = 5000L): F[Unit] =
-    for {
-      t             <- Time[F].currentMillis
-      maybeApproved <- ApproveBlockProtocol[F].approvedBlock
-      _ <- maybeApproved match {
-            case Some(_)
-                if (ApproveBlockProtocol[F].candidate.requiredSigs == 0 || t >= ApproveBlockProtocol[
-                  F].start + ApproveBlockProtocol[F].duration) =>
-              ApproveBlockProtocol[F].sendApprovedBlock
-
-            case _ =>
-              ApproveBlockProtocol[F].sendUnapprovedBlock *> IOUtil.sleep(waitTime) *> run[F](
-                waitTime)
-          }
-    } yield ()
 
   private def packetToBlockApproval(msg: Packet): Option[BlockApproval] =
     if (msg.typeId == transport.BlockApproval.id)

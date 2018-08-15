@@ -341,6 +341,16 @@ We can also include wildcards in patterns. The intuition for these is that they 
     for( _ <- ack ){ ... }
 
 
+### Patterns with simple types
+
+It's possible to match simple types: `Int`, `Bool`, `String`, `Uri`, and `ByteArray`
+
+    for( @Int <- ack) { ... }
+
+If you want to capture the value you matched, you can use the and logcial connective: `/\`
+
+    for( @{x /\ Int} <- ack) { ... }
+
 ## Mutable state
 
      1 new MakeCell in {

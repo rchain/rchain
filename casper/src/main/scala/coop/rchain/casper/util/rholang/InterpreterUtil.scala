@@ -39,7 +39,7 @@ object InterpreterUtil {
     val tsHash        = ProtoUtil.tuplespace(b)
     val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
-    val (computedCheckpoint, updatedStateHashes, cost) =
+    val (computedCheckpoint, _, updatedStateHashes, cost) =
       computeBlockCheckpointFromDeploys(b,
                                         genesis,
                                         dag,
@@ -68,10 +68,10 @@ object InterpreterUtil {
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
+    : (Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost]) = {
     //TODO: Revisit how the deployment cost should be handled for multiparent blocks
     //for time being we ignore the `postStateCost`
-    val (postStateHash, updatedStateHashes, postStateCost) =
+    val (postStateHash, mergeLog, updatedStateHashes, postStateCost) =
       computeParentsPostState(parents,
                               genesis,
                               dag,
@@ -82,7 +82,10 @@ object InterpreterUtil {
 
     val Right((postDeploysCheckpoint, deployCost)) = computeState(postStateHash, deploys)
     val postDeploysStateHash                       = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
-    (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash, deployCost)
+    (postDeploysCheckpoint,
+     mergeLog.map(EventConverter.toCasperEvent),
+     updatedStateHashes + postDeploysStateHash,
+     deployCost)
   }
 
   private def computeParentsPostState(
@@ -94,19 +97,19 @@ object InterpreterUtil {
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (StateHash, Set[StateHash], Vector[DeployCost]) = {
+    : (StateHash, Seq[trace.Event], Set[StateHash], Vector[DeployCost]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
-      (emptyStateHash, knownStateHashes, Vector.empty)
+      (emptyStateHash, Nil, knownStateHashes, Vector.empty)
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
         "We should have already computed parent state hash when we added the parent to our blockDAG.")
-      (parentStateHash, knownStateHashes, Vector.empty)
+      (parentStateHash, Nil, knownStateHashes, Vector.empty)
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -136,7 +139,7 @@ object InterpreterUtil {
       val Right((resultStateCheckpoint, deployCost)) =
         computeState(gcaStateHash, deploys)
       val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
-      (resultStateHash, knownStateHashes + resultStateHash, deployCost)
+      (resultStateHash, resultStateCheckpoint.log, knownStateHashes + resultStateHash, deployCost)
     }
   }
 
@@ -149,7 +152,7 @@ object InterpreterUtil {
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
+    : (Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost]) = {
     val parents = ProtoUtil
       .parents(b)
       .map(internalMap.apply)

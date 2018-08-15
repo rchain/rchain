@@ -166,6 +166,11 @@ object Substitute {
                 .map(ps => Connective(ConnOrBody(ConnectiveBody(ps))))
             case ConnNotBody(p) =>
               substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
+            case c: ConnBool      => fromConnective(Connective(c)).pure[M]
+            case c: ConnInt       => fromConnective(Connective(c)).pure[M]
+            case c: ConnString    => fromConnective(Connective(c)).pure[M]
+            case c: ConnUri       => fromConnective(Connective(c)).pure[M]
+            case c: ConnByteArray => fromConnective(Connective(c)).pure[M]
           }
         }
 

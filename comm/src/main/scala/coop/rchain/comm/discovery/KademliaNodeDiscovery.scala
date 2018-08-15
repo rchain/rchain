@@ -11,9 +11,20 @@ import coop.rchain.comm.transport._, CommunicationResponse._
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
-class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
-    src: PeerNode,
-    timeout: FiniteDuration)
+object KademliaNodeDiscovery {
+  def create[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
+      src: PeerNode,
+      defaultTimeout: FiniteDuration)(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
+    for {
+      knd <- (new KademliaNodeDiscovery[F](src, defaultTimeout)).pure[F]
+      _   <- init.fold(().pure[F])(p => knd.addNode(p))
+    } yield knd
+
+}
+
+private[discovery] class KademliaNodeDiscovery[
+    F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](src: PeerNode,
+                                                                           timeout: FiniteDuration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
@@ -22,10 +33,17 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def addNode(peer: PeerNode): F[Unit] =
+  private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- table.updateLastSeen[F](peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
+      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
+    } yield ()
+
+  def discover: F[Unit] =
+    for {
+      _     <- Time[F].sleep(5000)
+      peers <- findMorePeers(10).map(_.toList)
+      _     <- peers.traverse(addNode)
     } yield ()
 
   /**
@@ -38,7 +56,7 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
     * function should be called with a relatively small `limit` parameter like
     * 10 to avoid making too many unproductive networking calls.
     */
-  def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
+  private def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
     val dists = table.sparseness().toArray
 
     def find(peerSet: Set[PeerNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
@@ -109,6 +127,6 @@ class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportL
       _ <- TransportLayer[F].disconnect(sender)
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
-    } yield handledWitoutMessage
+      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
+    } yield handledWithoutMessage
 }
