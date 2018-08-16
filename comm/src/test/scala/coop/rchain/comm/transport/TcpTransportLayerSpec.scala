@@ -23,7 +23,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
       val host    = "127.0.0.1"
-      val keyPair = CertificateHelper.generateKeyPair()
+      val keyPair = CertificateHelper.generateKeyPair(true)
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get

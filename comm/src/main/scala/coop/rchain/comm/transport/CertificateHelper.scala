@@ -12,6 +12,7 @@ import scala.io.Source
 
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.util.SecureRandomUtil
 
 object CertificateHelper {
 
@@ -70,7 +71,10 @@ object CertificateHelper {
     new KeyPair(pk, sk)
   }
 
-  def generateKeyPair(): KeyPair = {
+  def generateKeyPair(useNonBlockingRandom: Boolean): KeyPair = {
+    val secureRandom =
+      if (useNonBlockingRandom) SecureRandomUtil.secureRandomNonBlocking
+      else new SecureRandom()
     val kpg = KeyPairGenerator.getInstance("ECDSA", "BC")
     kpg.initialize(new ECGenParameterSpec(EllipticCurveName), new SecureRandom())
     kpg.generateKeyPair
