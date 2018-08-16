@@ -154,6 +154,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Name of the algorithm to use for signing proposed blocks. " +
         "Currently supported values: ed25519")
 
+    val shardId = opt[String](
+      descr = "Identifier of the shard this node is connected to."
+    )
   }
   addSubcommand(run)
 
