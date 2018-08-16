@@ -3,7 +3,6 @@ package coop.rchain.crypto.signatures
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.SecureRandomUtil.secureRandomInstance
-
 import java.security.KeyPairGenerator
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
@@ -16,6 +15,8 @@ object Secp256k1 {
   private val provider  = new BouncyCastleProvider()
   private val curveName = "secp256k1"
 
+  private def toHex(bytes: Array[Byte]) = bytes.map(byte => "%02X".format(byte)).mkString
+  
   /**
     * Verifies the given secp256k1 signature in native code.
     *
@@ -37,7 +38,9 @@ object Secp256k1 {
     kpg.initialize(new ECGenParameterSpec(curveName), secureRandomInstance)
     val kp = kpg.generateKeyPair
 
-    val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS().toString(16))
+    val base16Sec = toHex(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toByteArray)
+
+    val sec = Base16.decode(base16Sec)
     val pub = Secp256k1.toPublic(sec)
 
     (PrivateKey(sec), PublicKey(pub))
