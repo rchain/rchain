@@ -1,6 +1,5 @@
 
 import logging
-from fixtures import *
 from delayed_assert import expect, assert_expectations
 
 def test_metrics_api_socket(started_rchain_network):
