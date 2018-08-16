@@ -3,8 +3,8 @@ import logging
 from fixtures import *
 from delayed_assert import expect, assert_expectations
 
-def test_metrics_api_socket(rchain_network):
-    containers = [rchain_network.bootstrap] + rchain_network.peers
+def test_metrics_api_socket(started_rchain_network):
+    containers = [started_rchain_network.bootstrap] + started_rchain_network.peers
 
     for container  in containers:
         logging.info(f"Test metrics api socket for {container.name}")

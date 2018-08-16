@@ -76,7 +76,7 @@ def create_peer_nodes(docker_client, n, bootstrap_address, network, image="test-
     Create peer nodes
     """
 
-    logging.info(f"Create and run {n} peer nodes to connect to bootstrap node {bootstrap_address}.")
+    logging.info(f"Create {n} peer nodes to connect to bootstrap {bootstrap_address}.")
 
     def create_peer(i, private_key, public_key):
         name = f"peer{i}.{network}"

@@ -52,16 +52,12 @@ def network_converged(bootstrap_container, expected_peers):
 
         r = bootstrap_container.exec_run(cmd=cmd).output.decode('utf-8')
         m = rx.search(r)
-        if m:
-            peers = int(m[1])
-            logging.info(f"Peers so far: {peers} Expected:{expected_peers}")
-            if peers == expected_peers:
-                logging.info(f"All expected peers succesfully connected. Network converged.")
-                return True
 
-        logging.info("No peers found")
+        peers = int(m[1]) if m else 0
 
-        return False
+        logging.info(f"Peers so far: {peers} Expected:{expected_peers}")
+
+        return peers == expected_peers
 
     go.__doc__ = f"network converged({bootstrap_container.name} with {expected_peers} expected peers."
 
