@@ -186,7 +186,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
       implicit logStub: LogStub[F]): Assertion =
     logStub.infos.filter(_.startsWith(start)).size should be(size)
 
-  it should "send UnapprovedBlock message to peers once when run" in {
+  it should "send UnapprovedBlock message to peers at every interval" in {
     implicit val ctx               = TestScheduler()
     implicit val logStub           = new LogStub[Task]()
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
@@ -207,7 +207,7 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     ctx.tick(1.millisecond)
     sigsF.get.unsafeRunSync.size should be(1)
     infosContain("APPROVAL: received block approval from", 1)
-    infosContain("APPROVAL: Sent UnapprovedBlock", 1)
+    infosContain("APPROVAL: Sent UnapprovedBlock", 2)
     cancelToken.cancel()
   }
 

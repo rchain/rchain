@@ -156,13 +156,13 @@ object ApproveBlockProtocol {
 
     private def internalRun(): F[Unit] =
       for {
+        _    <- sendUnapprovedBlock
         t    <- Timer[F].clockRealTime(MILLISECONDS)
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
       } yield Unit
 
-    // Send UnapprovedBlock only once
-    def run(): F[Unit] = sendUnapprovedBlock *> internalRun()
+    def run(): F[Unit] = internalRun()
 
     //TODO: potential optimization, only send to peers we have not
     //      received a valid signature from yet

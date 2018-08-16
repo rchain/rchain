@@ -113,6 +113,11 @@ message ApprovedBlockRequest {
   string identifier = 1;
 }
 
+message NoApprovedBlockAvailable {
+  string identifier = 1;
+  string nodeIdentifer = 2;
+}
+
 // ------- End Signing Protocol --------
 
 // --------- Core Protocol  --------

@@ -27,7 +27,8 @@ case class CasperConf(
     createGenesis: Boolean,
     approveGenesis: Boolean,
     approveGenesisInterval: FiniteDuration,
-    approveGenesisDuration: FiniteDuration
+    approveGenesisDuration: FiniteDuration,
+    deployTimestamp: Option[Long]
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
   val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)

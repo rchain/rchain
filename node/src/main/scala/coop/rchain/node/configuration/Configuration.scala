@@ -43,9 +43,9 @@ object Configuration {
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
   private val DefaultMaxNumOfConnections        = 500
-  private val DefaultRequiredSigns              = 1
+  private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
-  private val DefaultApprovalProtocolInterval   = 5.seconds
+  private val DefaultApprovalProtocolInterval   = 0.seconds
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -121,7 +121,8 @@ object Configuration {
             approveGenesis = false,
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
-            approveGenesisInterval = 1.day
+            approveGenesisInterval = 1.day,
+            deployTimestamp = None
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -189,6 +190,8 @@ object Configuration {
       get(_.run.duration,
           _.validators.flatMap(_.approveGenesisDuration),
           DefaultApprovalProtocolDuration)
+
+    val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
@@ -259,7 +262,8 @@ object Configuration {
         standalone,
         genesisValidator,
         genesisApproveInterval,
-        genesisAppriveDuration
+        genesisAppriveDuration,
+        deployTimestamp
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),

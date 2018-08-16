@@ -68,7 +68,12 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
   "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in {
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _              = Genesis.fromInputFiles[Id](None, numValidators, genesisPath, None, runtimeManager)
+    val _ = Genesis.fromInputFiles[Id](None,
+                                       numValidators,
+                                       genesisPath,
+                                       None,
+                                       runtimeManager,
+                                       Some(System.currentTimeMillis()))
     runtime.close()
 
     log.warns.find(_.contains("bonds")) should be(None)
@@ -83,7 +88,8 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                  numValidators,
                                  genesisPath,
                                  None,
-                                 runtimeManager)
+                                 runtimeManager,
+                                 Some(System.currentTimeMillis()))
     runtime.close()
 
     log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
@@ -102,7 +108,12 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
     val _ =
-      Genesis.fromInputFiles[Id](Some(badBondsFile), numValidators, path, None, runtimeManager)
+      Genesis.fromInputFiles[Id](Some(badBondsFile),
+                                 numValidators,
+                                 path,
+                                 None,
+                                 runtimeManager,
+                                 Some(System.currentTimeMillis()))
     runtime.close()
 
     log.warns.count(_.contains("cannot be parsed. Falling back on generating random validators.")) should be(
@@ -118,7 +129,12 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
     val genesis =
-      Genesis.fromInputFiles[Id](Some(bondsFile), numValidators, path, None, runtimeManager)
+      Genesis.fromInputFiles[Id](Some(bondsFile),
+                                 numValidators,
+                                 path,
+                                 None,
+                                 runtimeManager,
+                                 Some(System.currentTimeMillis()))
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
 
@@ -137,7 +153,12 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
     val emptyStateHash = runtimeManager.emptyStateHash
 
-    val genesis = Genesis.fromInputFiles[Id](None, numValidators, genesisPath, None, runtimeManager)
+    val genesis = Genesis.fromInputFiles[Id](None,
+                                             numValidators,
+                                             genesisPath,
+                                             None,
+                                             runtimeManager,
+                                             Some(System.currentTimeMillis()))
     BlockStore[Id].put(genesis.blockHash, genesis)
     val blockDag = BlockDag()
 
@@ -163,7 +184,12 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
 
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val genesis        = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager)
+    val genesis = Genesis.fromInputFiles[Id](None,
+                                             numValidators,
+                                             path,
+                                             None,
+                                             runtimeManager,
+                                             Some(System.currentTimeMillis()))
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
 
@@ -182,9 +208,14 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val walletsFile = path.resolve("wallets.txt").toString
     printWallets(walletsFile)
 
-    val runtime         = Runtime.create(storageLocation, storageSize)
-    val runtimeManager  = RuntimeManager.fromRuntime(runtime)
-    val _               = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager)
+    val runtime        = Runtime.create(storageLocation, storageSize)
+    val runtimeManager = RuntimeManager.fromRuntime(runtime)
+    val _ = Genesis.fromInputFiles[Id](None,
+                                       numValidators,
+                                       path,
+                                       None,
+                                       runtimeManager,
+                                       Some(System.currentTimeMillis()))
     val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
     runtime.close()
 

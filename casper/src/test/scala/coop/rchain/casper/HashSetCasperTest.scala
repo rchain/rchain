@@ -128,7 +128,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    ).map(s =>
+      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
 
     val Some(signedBlock1) = MultiParentCasper[Id].deploy(deploys.head) *> MultiParentCasper[Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock1)
@@ -148,8 +149,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val term    = InterpreterUtil.mkTerm(" for(@x <- @0){ @0!(x) } | @0!(0) ").right.get
-    val deploys = ProtoUtil.termDeploy(term) #:: ProtoUtil.termDeploy(term) #:: Stream.empty[Deploy]
+    val term = InterpreterUtil.mkTerm(" for(@x <- @0){ @0!(x) } | @0!(0) ").right.get
+    val deploys = ProtoUtil.termDeploy(term, System.currentTimeMillis()) #:: ProtoUtil.termDeploy(
+      term,
+      System.currentTimeMillis()) #:: Stream.empty[Deploy]
     deploys.foreach(MultiParentCasper[Id].deploy(_))
     val block = MultiParentCasper[Id].createBlock.get
     val _     = MultiParentCasper[Id].addBlock(block)
@@ -281,7 +284,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys = Vector(
       "for(_ <- @1){ Nil } | @1!(1)",
       "@2!(2)"
-    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    ).map(s =>
+      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
 
     val Some(signedBlock1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
 
@@ -570,7 +574,8 @@ object HashSetCasperTest {
       bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
       Nil,
       emptyStateHash,
-      runtimeManager)
+      runtimeManager,
+      System.currentTimeMillis())
     activeRuntime.close()
     genesis
   }

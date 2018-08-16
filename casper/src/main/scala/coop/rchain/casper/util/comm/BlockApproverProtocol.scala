@@ -9,9 +9,9 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
 

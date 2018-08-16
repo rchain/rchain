@@ -8,7 +8,6 @@ import cats.effect._
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.util.comm.CasperPacketHandler
-import coop.rchain.casper.util.comm.CommUtil.requestApprovedBlock
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
@@ -32,7 +31,6 @@ import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import io.grpc.Server
 import monix.eval.Task
-import monix.eval.instances.CatsConcurrentForTask
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -355,24 +353,25 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     runtime        = Runtime.create(storagePath, storageSize)
     casperRuntime  = Runtime.create(casperStoragePath, storageSize)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
-    casperPacketHandler <- CasperPacketHandler.of[Effect](conf.casper, runtimeManager, _.value)(
-                            labEff,
-                            Metrics.eitherT(Monad[Task], metrics),
-                            timerEff(timerTask),
-                            blockStore,
-                            NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
-                            TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
-                            ErrorHandler[Effect],
-                            eiterTrpConfAsk(rpConfAsk),
-                            oracle,
-                            Capture[Effect],
-                            Sync[Effect],
-                            Time.eitherTTime(Monad[Task], time),
-                            Monad[Effect],
-                            Log.eitherTLog(Monad[Task], log),
-                            multiParentCasperRef,
-                            scheduler
-                          )
+    casperPacketHandler <- CasperPacketHandler
+                            .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
+                              labEff,
+                              Metrics.eitherT(Monad[Task], metrics),
+                              timerEff(timerTask),
+                              blockStore,
+                              NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
+                              TransportLayer.eitherTTransportLayer(Monad[Task], log, transport),
+                              ErrorHandler[Effect],
+                              eiterTrpConfAsk(rpConfAsk),
+                              oracle,
+                              Capture[Effect],
+                              Sync[Effect],
+                              Time.eitherTTime(Monad[Task], time),
+                              Monad[Effect],
+                              Log.eitherTLog(Monad[Task], log),
+                              multiParentCasperRef,
+                              scheduler
+                            )
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
       Applicative[Effect],
       Log.eitherTLog(Monad[Task], log),

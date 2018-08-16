@@ -33,7 +33,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler): Seq[Par] = {
     val runtime           = getResetRuntime(start)
-    val deploy            = ProtoUtil.termDeploy(term)
+    val deploy            = ProtoUtil.termDeploy(term, System.currentTimeMillis())
     val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
     val evalRes           = eval(deploy :: Nil, runtime.reducer, runtime.errorLog, costAccountingAlg)
 

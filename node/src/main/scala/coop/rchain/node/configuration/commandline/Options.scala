@@ -152,6 +152,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         descr =
           "Number of signatures from trusted validators required to creating an approved genesis block.")
 
+    val deployTimestamp =
+      opt[Long](
+        descr = "Timestamp for the deploys."
+      )
+
     val duration =
       opt[FiniteDuration](
         short = 'd',

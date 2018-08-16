@@ -397,10 +397,11 @@ class ValidateTest
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
-    val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
-                                        initial,
-                                        emptyStateHash,
-                                        runtimeManager)
+    val genesis = Genesis.withContracts(
+      List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
+      initial,
+      emptyStateHash,
+      runtimeManager)
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 

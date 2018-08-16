@@ -14,9 +14,10 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
   GenesisValidatorHandler,
   StandaloneCasperHandler
 }
+import coop.rchain.casper.protocol.NoApprovedBlockAvailable
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture, TaskContrib}
-import coop.rchain.comm.transport.CommMessages
+import coop.rchain.comm.transport.{CommMessages}
 import coop.rchain.comm._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
@@ -28,9 +29,10 @@ import coop.rchain.casper.helper.BlockStoreTestFixture
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.protocol.rchain.Packet
 import monix.execution.schedulers.TestScheduler
-import org.scalatest.WordSpec
+import org.scalatest.{Assertion, WordSpec}
 import coop.rchain.comm.transport
 import coop.rchain.rholang.interpreter.Runtime
+import monix.execution.CancelableFuture
 
 import scala.concurrent.duration._
 import scala.util.Success
@@ -115,8 +117,9 @@ class CasperPacketHandlerSpec extends WordSpec {
         val approvedBlockRequest = ApprovedBlockRequest("test")
         val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
-          packetResponse  <- packetHandler.handle(local)(packet)
-          _               = assert(packetResponse.isEmpty)
+          packetResponse <- packetHandler.handle(local)(packet)
+          _ = assert(packetResponse ==
+            Some(NoApprovedBlockAvailable(transport.NoApprovedBlockAvailable.id, local.toString)))
           _               = assert(transportLayer.requests.isEmpty)
           blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
           packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
@@ -182,15 +185,24 @@ class CasperPacketHandlerSpec extends WordSpec {
         ctx.tick()
         assert(packetRes.value == Some(Success(None)))
         ctx.tick(duration + interval)
-        val casper = MultiParentCasperRef[Task].get.runAsync
-        assert(casper.value.isDefined && casper.value.get.isSuccess)
-        assert(casper.value.get.get.isDefined)
+        val Some(casper) = assertValue(MultiParentCasperRef[Task].get.runAsync)
 
-        val blocks = blockStore.asMap().runAsync
-        assert(blocks.value.get.get.get(genesis.blockHash) == Some(genesis))
-        val handlerInternal = refCasper.get.runAsync
-        assert(handlerInternal.value.isDefined && handlerInternal.value.get.isSuccess)
-        assert(handlerInternal.value.get.get.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+        val block = assertValue(blockStore.get(genesis.blockHash).runAsync)
+        assert(block == Some(genesis))
+        val handlerInternal = assertValue(refCasper.get.runAsync)
+        assert(handlerInternal.isInstanceOf[ApprovedBlockReceivedHandler[Task]])
+
+        val Some(approvedBlock) =
+          assertValue[Option[ApprovedBlock]](LastApprovedBlock[Task].get.runAsync)
+
+        val approvedBlockReq = ApprovedBlockRequest("test")
+        val approvedBlockPacket =
+          Packet(transport.ApprovedBlockRequest.id, approvedBlockReq.toByteString)
+        val approvedBlockReqRes = casperPacketHandler.handle(local)(approvedBlockPacket).runAsync
+        ctx.tick()
+        val res = assertValue(approvedBlockReqRes)
+        assert(res.isDefined)
+        assert(ApprovedBlock.parseFrom(res.get.content.toByteArray) == approvedBlock)
       }
     }
 
@@ -244,6 +256,11 @@ class CasperPacketHandlerSpec extends WordSpec {
 }
 
 object CasperPacketHandlerSpec {
+  def assertValue[A](a: CancelableFuture[A]): A = {
+    assert(a.value.isDefined && a.value.get.isSuccess)
+    a.value.get.get
+  }
+
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =

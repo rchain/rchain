@@ -62,8 +62,8 @@ object CommUtil {
     } yield ()
 
   def requestApprovedBlock[
-      F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: RPConfAsk]
-    : F[Unit] = {
+      F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: RPConfAsk](
+      delay: FiniteDuration): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
 
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
@@ -78,7 +78,7 @@ object CommUtil {
           _ <- send match {
                 case Left(err) =>
                   Log[F].info(s"CASPER: Failed to get response from $peer because: $err") *>
-                    askPeers(rest :+ peer, local)
+                    askPeers(rest, local)
 
                 case Right(response) =>
                   Log[F]
@@ -92,17 +92,17 @@ object CommUtil {
                           for {
                             _ <- HandleMessages.handlePacket[F](sender, maybePacket)
                             l <- LastApprovedBlock[F].get
-                            _ <- l.fold(askPeers(rest :+ peer, local))(_ => ().pure[F])
+                            _ <- l.fold(askPeers(rest, local))(_ => ().pure[F])
                           } yield ()
                         case (None, _) =>
                           Log[F].error(
                             s"CASPER: Response from $peer invalid. The sender of the message could not be determined.") *> askPeers(
-                            rest :+ peer,
+                            rest,
                             local)
                         case (Some(_), None) =>
                           Log[F].error(
                             s"CASPER: Response from $peer invalid. A packet was expected, but received ${response.message}.") *> askPeers(
-                            rest :+ peer,
+                            rest,
                             local)
                       }
                     })
@@ -110,12 +110,14 @@ object CommUtil {
               }
         } yield ()
 
-      case Nil => ().pure[F]
+      case Nil => Timer[F].sleep(delay) >> requestApprovedBlock[F](delay)
     }
 
     for {
       a     <- LastApprovedBlock[F].get
+      _     = println(s"LastApprovedBlock is $a")
       peers <- NodeDiscovery[F].peers
+      _     = println(s"Peers: $peers")
       local <- RPConfAsk[F].reader(_.local)
       _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
     } yield ()

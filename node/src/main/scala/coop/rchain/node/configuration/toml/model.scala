@@ -50,5 +50,6 @@ case class Validators(
     walletsFile: Option[String],
     requiredSigs: Option[Int],
     approveGenesisDuration: Option[FiniteDuration],
-    approveGenesisInterval: Option[FiniteDuration]
+    approveGenesisInterval: Option[FiniteDuration],
+    deployTimestamp: Option[Long]
 )
