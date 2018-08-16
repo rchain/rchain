@@ -81,8 +81,8 @@ sealed abstract class MultiParentCasperInstances {
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      internalMap: Map[BlockHash, BlockMessage])(
-      implicit scheduler: Scheduler): MultiParentCasper[F] = {
+      internalMap: Map[BlockHash, BlockMessage],
+      shardId: String)(implicit scheduler: Scheduler): MultiParentCasper[F] = {
     val dag = BlockDag()
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint(
@@ -94,7 +94,14 @@ sealed abstract class MultiParentCasperInstances {
         Set[StateHash](runtimeManager.emptyStateHash),
         runtimeManager
       )
-    createMultiParentCasper[F](runtimeManager, validatorId, genesis, dag, maybePostGenesisStateHash)
+    createMultiParentCasper[F](
+      runtimeManager,
+      validatorId,
+      genesis,
+      dag,
+      maybePostGenesisStateHash,
+      shardId
+    )
   }
 
   private[this] def createMultiParentCasper[
@@ -103,7 +110,8 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       dag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash])(implicit scheduler: Scheduler) =
+      maybePostGenesisStateHash: Option[StateHash],
+      shardId: String)(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString
@@ -307,7 +315,9 @@ sealed abstract class MultiParentCasperInstances {
                          none[BlockMessage].pure[F]
                        }
           } yield
-            proposal.map(signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction))
+            proposal.map(
+              signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+            )
 
         case None => none[BlockMessage].pure[F]
       }
@@ -355,7 +365,7 @@ sealed abstract class MultiParentCasperInstances {
             .withNewCode(deployWithCost)
             .withCommReductions(serializedLog)
           header = blockHeader(body, p.map(_.blockHash), version, now)
-          block  = unsignedBlockProto(body, header, justifications)
+          block  = unsignedBlockProto(body, header, justifications, shardId)
         } yield Some(block)
 
       def blockDag: F[BlockDag] = Capture[F].capture {
@@ -388,7 +398,7 @@ sealed abstract class MultiParentCasperInstances {
       private def attemptAdd(b: BlockMessage): F[BlockStatus] =
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
-          postValidationStatus <- Validate.blockSummary[F](b, genesis, dag)
+          postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
           postTransactionsCheckStatus <- postValidationStatus.traverse(
                                           _ =>
                                             Validate.transactions[F](b,

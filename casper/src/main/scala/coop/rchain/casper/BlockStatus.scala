@@ -27,6 +27,7 @@ case object InvalidBlockNumber      extends InvalidBlock with Slashable
 case object InvalidRepeatDeploy     extends InvalidBlock with Slashable
 case object InvalidParents          extends InvalidBlock with Slashable
 case object InvalidSequenceNumber   extends InvalidBlock with Slashable
+case object InvalidShardId          extends InvalidBlock with Slashable
 case object JustificationRegression extends InvalidBlock with Slashable
 case object NeglectedInvalidBlock   extends InvalidBlock with Slashable
 case object NeglectedEquivocation   extends InvalidBlock with Slashable
