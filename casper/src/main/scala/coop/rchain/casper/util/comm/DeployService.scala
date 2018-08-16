@@ -16,6 +16,7 @@ trait DeployService[F[_]] {
   def createBlock(): F[(Boolean, String)] //create block and add to Casper internal state
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
+  def showBlocks2(): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
 }
 
@@ -48,6 +49,13 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
   def showBlocks(): Task[String] = Task.delay {
     val response = blockingStub.showBlocks(Empty())
     response.toProtoString
+  }
+
+  def showBlocks2(): Task[String] = Task.delay {
+    val response = blockingStub.showBlocks2(Empty())
+    response.toList.foldLeft("") {
+      case (acc, bi) => acc + bi.toProtoString + "\n"
+    }
   }
 
   def addBlock(b: BlockMessage): Task[(Boolean, String)] = Task.delay {

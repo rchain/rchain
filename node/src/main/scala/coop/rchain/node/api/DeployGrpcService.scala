@@ -10,11 +10,14 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.models.Channel
 import coop.rchain.shared._
-
+import io.grpc.stub.StreamObserver
 import scala.concurrent.Future
+import scala.util.{Failure, Success}
+import scala.concurrent.ExecutionContext
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
+    F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore](
+    implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
     BlockAPI.deploy[F](d).toFuture
@@ -30,6 +33,14 @@ private[api] class DeployGrpcService[
 
   override def showBlocks(e: Empty): Future[BlocksResponse] =
     BlockAPI.getBlocksResponse[F].toFuture
+
+  override def showBlocks2(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
+    BlockAPI.getBlocksResponse[F].toFuture.onComplete {
+      case Success(blockResponse) =>
+        blockResponse.blocks.foreach(bi => observer.onNext(bi))
+        observer.onCompleted()
+      case Failure(ex) => observer.onError(ex)
+    }
 
   override def listenForDataAtName(listeningName: Channel): Future[ListeningNameDataResponse] =
     BlockAPI.getListeningNameDataResponse[F](listeningName).toFuture
