@@ -31,8 +31,8 @@ deploy:deploy-rnode-to-dockerhub:
     - sudo docker tag coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
     - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
     - |
-      if [[ $CI_COMMIT_TAG == v* ]]; then
-        echo "Is a release tag starting with v. Tag and push latest.";
+      if [[ $CI_COMMIT_TAG == v* && $CI_COMMIT_REF_NAME == "master" ]]; then
+        echo "Is a release tag starting with v and master branch. Tag and push to dockerhub latest.";
         sudo docker tag coop.rchain/rnode:latest rchain/rnode:latest
         sudo docker push rchain/rnode:latest 
       fi
