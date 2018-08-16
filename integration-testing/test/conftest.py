@@ -38,18 +38,19 @@ def cleanup(*containers):
         logging.info(f"Remove container {container.name}")
         container.remove(force=True, v=True)
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
-def config(request):
+def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     return Config(peer_count = peer_count,
                   node_startup_timeout = 20 + peer_count * 10,
                   network_converge_timeout = 200 + peer_count * 2
                   )
 
+@pytest.fixture(scope="module")
+def config(request):
+    return parse_config(request)
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+
+@pytest.fixture(scope="module")
 def docker():
     import docker
 
@@ -60,8 +61,8 @@ def docker():
     logging.info("Remove unused volumes")
     docker_client.volumes.prune()
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+
+@pytest.fixture(scope="module")
 def docker_network(docker):
     network_name = f"rchain-{random.random_string(5)}"
 
@@ -71,12 +72,11 @@ def docker_network(docker):
 
     for network in docker.networks.list():
         if network_name == network.name:
-            print(f"removing {network.name}")
+            logging.info(f"removing {network.name}")
             network.remove()
 
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+@pytest.fixture(scope="module")
 def bootstrap(docker, docker_network):
     node = create_bootstrap_node(docker, docker_network)
 
@@ -84,8 +84,7 @@ def bootstrap(docker, docker_network):
 
     cleanup(node)
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+@pytest.fixture(scope="module")
 def started_bootstrap(config, bootstrap):
     assert wait_for( contains( container_logs(bootstrap),
                                "coop.rchain.node.NodeRuntime - Starting stand-alone node."),
@@ -93,8 +92,7 @@ def started_bootstrap(config, bootstrap):
         "Bootstrap node didn't start correctly"
     yield bootstrap
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+@pytest.fixture(scope="module")
 def rchain_network(config, docker, started_bootstrap, docker_network):
     logging.debug(f"Docker network = {docker_network}")
 
@@ -106,8 +104,7 @@ def rchain_network(config, docker, started_bootstrap, docker_network):
 
     cleanup(*peers)
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+@pytest.fixture(scope="module")
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
         assert wait_for( contains(container_logs(peer),
@@ -118,8 +115,7 @@ def started_rchain_network(config, rchain_network):
     yield rchain_network
 
 
-# @pytest.fixture(scope="module")
-@pytest.fixture
+@pytest.fixture(scope="module")
 def converged_network(config, started_rchain_network):
     assert wait_for( network_converged(started_rchain_network.bootstrap, len(started_rchain_network.peers)),
                      config.network_converge_timeout), \
