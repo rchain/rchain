@@ -55,11 +55,6 @@ parser.add_argument("-n", "--network",
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
-parser.add_argument("--peer-command",
-                    dest='peer_command',
-                    type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
-                    help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
                     type=int,
@@ -119,6 +114,7 @@ if len(sys.argv)==1:
     parser.print_help(sys.stderr)
     sys.exit(1)
 
+
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
@@ -126,6 +122,7 @@ RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
+peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}:40400'
 
 
 def main():
@@ -591,7 +588,7 @@ def create_peer_nodes():
                 f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
-            command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
+            command=f"{peer_prefix_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")
