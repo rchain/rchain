@@ -344,17 +344,15 @@ object ReplayRSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val (mainStore, replaySpace) = context match {
+    val mainStore = context match {
       case lmdbContext: LMDBContext[C, P, A, K] =>
-        val mainStore   = LMDBStore.create[C, P, A, K](lmdbContext, branch)
-        val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
-        (mainStore, replaySpace)
+        LMDBStore.create[C, P, A, K](lmdbContext, branch)
 
       case memContext: InMemoryContext[C, P, A, K] =>
-        val mainStore   = InMemoryStore.create(memContext.trieStore, branch)
-        val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
-        (mainStore, replaySpace)
+        InMemoryStore.create(memContext.trieStore, branch)
     }
+
+    val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
