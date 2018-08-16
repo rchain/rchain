@@ -192,7 +192,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       ts  <- time.currentMillis
-      msg = ProtocolHelper.disconnect(loc)
+      msg = CommMessages.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down metrics server...")
       _   <- Task.delay(servers.metricsServer.stop())

@@ -36,20 +36,15 @@ message LookupResponse {
     repeated Node nodes = 1;
 }
 
-message Disconnect {
-}
-
 message Protocol {
     Header header                           = 1;
 
     oneof message {
         google.protobuf.Any upstream        = 2;
-
         Ping                ping            = 3;
         Pong                pong            = 4;
         Lookup              lookup          = 5;
         LookupResponse      lookup_response = 6;
-        Disconnect          disconnect      = 7;
     }
 }
 

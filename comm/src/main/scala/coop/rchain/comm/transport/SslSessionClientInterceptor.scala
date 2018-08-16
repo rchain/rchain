@@ -49,7 +49,6 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
             val msgType = msg match {
-              case m if m.isDisconnect     => "disconnect"
               case m if m.isLookup         => "lookup"
               case m if m.isLookupResponse => "lookup response"
               case m if m.isPing           => "ping"

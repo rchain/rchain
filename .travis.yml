@@ -1,5 +1,7 @@
 sudo: required
 dist: trusty
+jdk:
+  - openjdk8
 
 matrix:
   include:

@@ -39,6 +39,7 @@ deploy:deploy-rnode-to-dockerhub:
   only:
     - master
     - dev
+    - /^release-.*$/
     - tags 
 
 deploy:deploy-rnode-artifacts:
@@ -67,4 +68,5 @@ deploy:deploy-rnode-artifacts:
   only:
     - master
     - dev
+    - /^release-.*$/
     - tags 
