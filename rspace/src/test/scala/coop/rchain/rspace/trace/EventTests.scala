@@ -6,7 +6,6 @@ import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.{Blake2b256Hash, Serialize}
-import coop.rchain.shared.AttemptOps._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.{BitVector, ByteVector}
