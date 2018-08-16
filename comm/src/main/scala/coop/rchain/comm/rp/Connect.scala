@@ -34,13 +34,20 @@ object Connect {
           .fold(
             connections.pure[F],
             Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections) >>= (
-                conns => Metrics[F].setGauge("peers", conns.size).as(conns))
+                conns => Metrics[F].setGauge("peers", conns.size.toLong).as(conns))
           )
+      def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        for {
+          result <- connections.filter(_ != connection).pure[F]
+          count  = result.size.toLong
+          _      <- Log[F].info(s"Peers: $count.") >>= (_ => Metrics[F].setGauge("peers", count))
+        } yield result
+
       def removeAndAddAtEnd[F[_]: Monad: Log: Metrics](toRemove: List[PeerNode],
                                                        toAddAtEnd: List[PeerNode]): F[Connections] =
         for {
           result <- (connections.filter(conn => !toRemove.contains(conn)) ++ toAddAtEnd).pure[F]
-          count  = result.size
+          count  = result.size.toLong
           _      <- Log[F].info(s"Peers: $count.") >>= (_ => Metrics[F].setGauge("peers", count))
         } yield result
     }

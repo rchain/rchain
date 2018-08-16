@@ -66,11 +66,6 @@ object ProtocolHelper {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node)))
 
-  def disconnect(src: PeerNode): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withDisconnect(Disconnect())
-
   def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))

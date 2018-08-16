@@ -234,6 +234,38 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     }
   }
 
+  it should "handle multi-parent blocks correctly" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val deploys = Vector(
+      ProtoUtil.basicDeployData(0),
+      ProtoUtil.sourceDeploy("@1!(1) | for(@x <- @1){ @1!(x) }"),
+      ProtoUtil.basicDeployData(2)
+    )
+
+    val Some(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val Some(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    nodes(0).casperEff.addBlock(block0)
+    nodes(1).casperEff.addBlock(block1)
+    nodes(0).receive()
+    nodes(1).receive()
+    nodes(0).receive()
+    nodes(1).receive()
+
+    //multiparent block joining block0 and block1 since they do not conflict
+    val Some(multiparentBlock) = nodes(0).casperEff
+      .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
+    nodes(0).casperEff.addBlock(multiparentBlock)
+    nodes(1).receive()
+
+    nodes(0).logEff.warns.isEmpty shouldBe true
+    nodes(1).logEff.warns.isEmpty shouldBe true
+    multiparentBlock.header.get.parentsHashList.size shouldBe 2
+    nodes(0).casperEff.contains(multiparentBlock) shouldBe true
+    nodes(1).casperEff.contains(multiparentBlock) shouldBe true
+
+    nodes.foreach(_.tearDown())
+  }
+
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
@@ -543,7 +575,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _)
+                        Ed25519.sign _,
+                        "rchain")
   }
 }
 
@@ -567,7 +600,7 @@ object HashSetCasperTest {
   }
 
   def buildGenesis(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)

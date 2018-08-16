@@ -47,6 +47,7 @@ object Configuration {
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
     .get
+  private val DefaultShardId = "rchain"
 
   def apply(arguments: Seq[String])(implicit log: Log[Task]): Task[Configuration] =
     for {
@@ -113,7 +114,8 @@ object Configuration {
             DefaultNumValidators,
             dataDir.resolve("genesis"),
             None,
-            createGenesis = false
+            createGenesis = false,
+            DefaultShardId
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -199,6 +201,7 @@ object Configuration {
     val maxNumOfConnections = get(_.run.maxNumOfConnections,
                                   _.server.flatMap(_.maxNumOfConnections),
                                   DefaultMaxNumOfConnections)
+    val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
     val server = Server(
       host,
@@ -236,7 +239,8 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
-        standalone
+        standalone,
+        shardId
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),
