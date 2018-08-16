@@ -28,7 +28,8 @@ case class Server(
 
 case class GrpcServer(
     host: Option[String],
-    port: Option[Int]
+    port: Option[Int],
+    portInternal: Option[Int]
 )
 
 case class Tls(
@@ -43,5 +44,6 @@ case class Validators(
     publicKey: Option[String],
     privateKey: Option[String],
     sigAlgorithm: Option[String],
-    walletsFile: Option[String]
+    walletsFile: Option[String],
+    shardId: Option[String]
 )

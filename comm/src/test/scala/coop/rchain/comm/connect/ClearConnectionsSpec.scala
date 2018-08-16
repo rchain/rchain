@@ -10,6 +10,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.shared._
 import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.metrics.Metrics
 
 class ClearConnectionsSpec
     extends FunSpec
@@ -20,7 +21,9 @@ class ClearConnectionsSpec
   import ScalaTestCats._
 
   val src: PeerNode      = peer("src")
-  implicit val transport = new TransportLayerStub[Id](src)
+  implicit val transport = new TransportLayerStub[Id]
+  implicit val log       = new Log.NOPLog[Id]
+  implicit val metric    = new Metrics.MetricsNOP[Id]
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -126,11 +129,12 @@ class ClearConnectionsSpec
   private def conf(maxNumOfConnections: Int, numOfConnectionsPinged: Int = 5): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = FiniteDuration(1, MILLISECONDS))
+             defaultTimeout = FiniteDuration(1, MILLISECONDS),
+             local = peer("src"))
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(heartbeat(src)))
+    kp(Right(heartbeat(peer("src"))))
 
   def alwaysFail: Protocol => CommErr[Protocol] =
     kp(Left(timeout))

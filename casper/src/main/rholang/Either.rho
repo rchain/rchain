@@ -1,0 +1,47 @@
+//scalapackage coop.rchain.rholang.collection
+
+//Requires LinkedList
+//Represents Either[A, B] as ("Left", A) or ("Right", B)
+
+//Right-biased flatMap; f must also return an Either
+contract @["Either", "flatMap"](@either, f, return) = {
+  match either {
+    ("Right", value) => { f!(value, *return) }
+    ("Left", _)      => { return!(either) }
+  }
+} |
+
+//Right-biased map to transform an Either
+contract @["Either", "map"](@either, f, return) = {
+  match either {
+    ("Right", value) => {
+      new mappedResultCh in {
+        f!(value, *mappedResultCh) |
+        for(@mappedResult <- mappedResultCh) {
+          return!(("Right", mappedResult))
+        }
+      }
+    }
+    ("Left", _) => return!(either)
+  }
+} |
+
+//Composes a list of functions returning Either into a
+//single result by using flatMap. Similar to following Scala code:
+//for {
+//  r0 <- Right(input)
+//  r1 <- f1(r0)
+//  r2 <- f2(r1)
+//  ...
+//} yield fn
+contract @["Either", "compose"](@input, @functions, return) = {
+  new combinator, llCh in {
+    contract combinator(@head, @accumulatedValue, return) = {
+      @["Either", "flatMap"]!(accumulatedValue, head, *return)
+    } |
+    @["LinkedList", "fromList"]!(functions, *llCh) |
+    for(@ll <- llCh) {
+      @["LinkedList", "fold"]!(ll, ("Right", input), *combinator, *return)
+    }
+  }
+}

@@ -4,7 +4,7 @@ import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.SyncVarOps._
@@ -16,7 +16,6 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 
 class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
@@ -347,6 +346,40 @@ object ReplayRSpace {
 
     val mainStore = LMDBStore.create[C, P, A, K](context, branch)
 
+    val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
+
+    /*
+     * history.initialize returns true if the history trie contains no root (i.e. is empty).
+     *
+     * In this case, we create a checkpoint for the empty store so that we can reset
+     * to the empty store state with the clear method.
+     */
+    val _ = if (history.initialize(mainStore.trieStore, branch)) {
+      replaySpace.createCheckpoint()
+    }
+
+    replaySpace
+  }
+
+  def createInMemory[C, P, A, R, K](
+      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
+                            Blake2b256Hash,
+                            GNAT[C, P, A, K]],
+      branch: Branch)(implicit
+                      sc: Serialize[C],
+                      sp: Serialize[P],
+                      sa: Serialize[A],
+                      sk: Serialize[K]): ReplayRSpace[C, P, A, R, K] = {
+
+    implicit val codecC: Codec[C] = sc.toCodec
+    implicit val codecP: Codec[P] = sp.toCodec
+    implicit val codecA: Codec[A] = sa.toCodec
+    implicit val codecK: Codec[K] = sk.toCodec
+
+    val mainStore: IStore[C, P, A, K] = InMemoryStore
+      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        branch)
     val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)
 
     /*

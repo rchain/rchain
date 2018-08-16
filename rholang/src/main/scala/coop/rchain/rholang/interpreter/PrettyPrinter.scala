@@ -4,12 +4,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Connective.ConnectiveInstance.{
-  ConnAndBody,
-  ConnNotBody,
-  ConnOrBody,
-  VarRefBody
-}
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
@@ -184,6 +179,11 @@ case class PrettyPrinter(freeShift: Int,
           case ConnNotBody(value)       => "~{" ++ buildString(value) ++ "}"
           case VarRefBody(value) =>
             "=" + buildString(Var(FreeVar(value.index)))
+          case _: ConnBool      => "Bool"
+          case _: ConnInt       => "Int"
+          case _: ConnString    => "String"
+          case _: ConnUri       => "Uri"
+          case _: ConnByteArray => "ByteArray"
         }
 
       case par: Par =>

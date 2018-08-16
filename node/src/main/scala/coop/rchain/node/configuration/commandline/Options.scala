@@ -61,7 +61,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val configFile = opt[Path](descr = "Path to the configuration file.")
 
   val grpcPort =
-    opt[Int](descr = "Port used for gRPC API.")
+    opt[Int](descr = "Port used for external gRPC API.")
+
+  val grpcPortInternal =
+    opt[Int](descr = "Port used for internal gRPC API.")
 
   val grpcHost =
     opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
@@ -151,6 +154,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Name of the algorithm to use for signing proposed blocks. " +
         "Currently supported values: ed25519")
 
+    val shardId = opt[String](
+      descr = "Identifier of the shard this node is connected to."
+    )
   }
   addSubcommand(run)
 
