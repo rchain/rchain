@@ -115,8 +115,8 @@ object ProtoUtil {
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
-  def deploys(b: BlockMessage): Seq[Deploy] =
-    b.body.map(_.newCode.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
+  def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
+    b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
 
   def tuplespace(b: BlockMessage): Option[ByteString] =
     for {
@@ -152,7 +152,7 @@ object ProtoUtil {
           .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(internalMap(_)))
           .takeWhile(_ != gca)
           .flatMap(b => {
-            b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+            b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
           })
           .toSet
 
@@ -205,9 +205,8 @@ object ProtoUtil {
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
-      .withNewCodeHash(protoSeqHash(body.newCode))
-      .withCommReductionsHash(protoSeqHash(body.commReductions))
-      .withDeployCount(body.newCode.length)
+      .withDeploysHash(protoSeqHash(body.deploys))
+      .withDeployCount(body.deploys.size)
       .withVersion(version)
       .withTimestamp(timestamp)
 
@@ -295,11 +294,6 @@ object ProtoUtil {
       raw = Some(d)
     )
   }
-
-  def basicDeployCost(id: Int): DeployCost =
-    DeployCost()
-      .withDeploy(basicDeploy(id))
-      .withCost(PCost(1L, 1))
 
   def sourceDeploy(source: String): DeployData = {
     //TODO this should be removed once we assign the deploy with exact user

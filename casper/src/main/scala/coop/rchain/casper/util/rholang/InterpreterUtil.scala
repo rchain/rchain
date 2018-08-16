@@ -19,7 +19,7 @@ import scodec.bits.BitVector
 
 import scala.collection.immutable
 
-import RuntimeManager.DeployError
+import ProcessedDeployUtil.InternalProcessedDeploy
 
 object InterpreterUtil {
 
@@ -32,81 +32,72 @@ object InterpreterUtil {
                               genesis: BlockMessage,
                               dag: BlockDag,
                               internalMap: Map[BlockHash, BlockMessage],
-                              emptyStateHash: StateHash,
                               knownStateHashes: Set[StateHash],
                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
-    val tsHash        = ProtoUtil.tuplespace(b)
-    val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
-    val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
-    val (computedCheckpoint, updatedStateHashes, cost) =
-      computeBlockCheckpointFromDeploys(b,
-                                        genesis,
-                                        dag,
-                                        internalMap,
-                                        emptyStateHash,
-                                        knownStateHashes,
-                                        runtimeManager.replayComputeState(log))
-    val computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-    if (tsHash.contains(computedStateHash)) {
-      // state hash in block matches computed hash!
-      Some(computedStateHash) -> updatedStateHashes
-    } else {
-      // state hash in block does not match computed hash -- invalid!
-      // return no state hash, do not update the state hash set
-      None -> knownStateHashes
+    val tsHash          = ProtoUtil.tuplespace(b)
+    val deploys         = ProtoUtil.deploys(b)
+    val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
+    val parents         = ProtoUtil.parents(b).map(internalMap)
+    val (possiblePreStateHash, updatedStateHashes) =
+      computeParentsPostState(parents, genesis, dag, internalMap, knownStateHashes, runtimeManager)
+
+    possiblePreStateHash.flatMap(runtimeManager.replayComputeState(_, internalDeploys)) match {
+      //TODO Log errors somewhere?
+      case Left(_) => None -> knownStateHashes
+
+      case Right(computedStateHash) =>
+        if (tsHash.contains(computedStateHash)) {
+          // state hash in block matches computed hash!
+          Some(computedStateHash) -> updatedStateHashes
+        } else {
+          // state hash in block does not match computed hash -- invalid!
+          // return no state hash, do not update the state hash set
+          None -> knownStateHashes
+        }
     }
   }
 
-  def computeDeploysCheckpoint(
-      parents: Seq[BlockMessage],
-      deploys: Seq[Deploy],
-      genesis: BlockMessage,
-      dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
-      emptyStateHash: StateHash,
-      knownStateHashes: Set[StateHash],
-      computeState: (StateHash,
-                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
-    //TODO: Revisit how the deployment cost should be handled for multiparent blocks
-    //for time being we ignore the `postStateCost`
-    val (postStateHash, updatedStateHashes, postStateCost) =
-      computeParentsPostState(parents,
-                              genesis,
-                              dag,
-                              internalMap,
-                              emptyStateHash,
-                              knownStateHashes,
-                              computeState)
+  def computeDeploysCheckpoint(parents: Seq[BlockMessage],
+                               deploys: Seq[Deploy],
+                               genesis: BlockMessage,
+                               dag: BlockDag,
+                               internalMap: Map[BlockHash, BlockMessage],
+                               knownStateHashes: Set[StateHash],
+                               runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
+    : (Either[Throwable, Seq[InternalProcessedDeploy]], Set[StateHash]) = {
+    val (possiblePreStateHash, updatedStateHashes) =
+      computeParentsPostState(parents, genesis, dag, internalMap, knownStateHashes, runtimeManager)
 
-    val Right((postDeploysCheckpoint, deployCost)) = computeState(postStateHash, deploys)
-    val postDeploysStateHash                       = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
-    (postDeploysCheckpoint, updatedStateHashes + postDeploysStateHash, deployCost)
+    possiblePreStateHash match {
+      case Right(preStateHash) =>
+        val (postStateHash, processedDeploys) = runtimeManager.computeState(preStateHash, deploys)
+        Right(processedDeploys) -> (updatedStateHashes + postStateHash)
+
+      case Left(err) =>
+        Left(err) -> updatedStateHashes
+    }
   }
 
-  private def computeParentsPostState(
-      parents: Seq[BlockMessage],
-      genesis: BlockMessage,
-      dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
-      emptyStateHash: StateHash,
-      knownStateHashes: Set[StateHash],
-      computeState: (StateHash,
-                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (StateHash, Set[StateHash], Vector[DeployCost]) = {
+  private def computeParentsPostState(parents: Seq[BlockMessage],
+                                      genesis: BlockMessage,
+                                      dag: BlockDag,
+                                      internalMap: Map[BlockHash, BlockMessage],
+                                      knownStateHashes: Set[StateHash],
+                                      runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler): (Either[Throwable, StateHash], Set[StateHash]) = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
-      (emptyStateHash, knownStateHashes, Vector.empty)
+      (Right(runtimeManager.emptyStateHash), knownStateHashes)
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
         "We should have already computed parent state hash when we added the parent to our blockDAG.")
-      (parentStateHash, knownStateHashes, Vector.empty)
+      (Right(parentStateHash), knownStateHashes)
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -123,6 +114,7 @@ object InterpreterUtil {
         knownStateHashes.contains(gcaStateHash),
         "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
 
+      // TODO: Have proper merge of tuplespaces instead of recomputing.
       // TODO: Fix so that all search branches reach GCA before quitting
       val deploys = DagOperations
         .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
@@ -131,12 +123,13 @@ object InterpreterUtil {
         .flatMap(ProtoUtil.deploys(_).reverse)
         .toIndexedSeq
         .reverse
+        .flatMap(ProcessedDeployUtil.toInternal)
 
-      //TODO: figure out what casper should do with errors in deploys
-      val Right((resultStateCheckpoint, deployCost)) =
-        computeState(gcaStateHash, deploys)
-      val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
-      (resultStateHash, knownStateHashes + resultStateHash, deployCost)
+      runtimeManager.replayComputeState(gcaStateHash, deploys) match {
+        case result @ Right(hash) => result -> (knownStateHashes + hash)
+        case Left(ex) =>
+          Left(new Exception(s"Error computing parent post state: ${ex.getMessage}")) -> knownStateHashes
+      }
     }
   }
 
@@ -145,16 +138,14 @@ object InterpreterUtil {
       genesis: BlockMessage,
       dag: BlockDag,
       internalMap: Map[BlockHash, BlockMessage],
-      emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash,
-                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Set[StateHash], Vector[DeployCost]) = {
+      runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
+    : (Either[Throwable, Seq[InternalProcessedDeploy]], Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
       .map(internalMap.apply)
 
-    val deploys = ProtoUtil.deploys(b)
+    val deploys = ProtoUtil.deploys(b).flatMap(_.deploy)
 
     assert(parents.nonEmpty || (parents.isEmpty && b == genesis),
            "Received a different genesis block.")
@@ -165,9 +156,8 @@ object InterpreterUtil {
       genesis,
       dag,
       internalMap,
-      emptyStateHash,
       knownStateHashes,
-      computeState
+      runtimeManager
     )
   }
 }

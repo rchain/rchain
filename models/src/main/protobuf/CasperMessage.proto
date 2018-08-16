@@ -178,24 +178,25 @@ message BlockMessage {
 message Header {
   repeated bytes parentsHashList = 1; //list of parent block hashes
   bytes postStateHash      = 2;
-  bytes newCodeHash        = 3;
-  bytes commReductionsHash = 4;
+  bytes deploysHash        = 3;
   int64 timestamp = 5;
   int64 version = 6;
   int32 deployCount = 7;
   bytes extraBytes = 8;
 }
 
-message DeployCost {
-    Deploy deploy = 1; //Sha256 hash of the DeployData
-    PCost Cost = 2 ;
+message ProcessedDeploy {
+    Deploy deploy = 1;
+    PCost cost = 2 ;
+    repeated Event log = 3; //the new terms and comm. rule reductions from this deploy
+    bool errored = 4; //true if deploy encountered a user error
 }
 
 message Body {
-  RChainState     postState = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
-  repeated DeployCost newCode   = 2; //new rholang code that was added to the state before processing together with its cost
-  repeated Event commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
-  bytes extraBytes = 4;
+  RChainState              postState    = 1;
+  bytes                    preStateHash = 2; //hash of the tuplespace after merging parents before applying new deploys
+  repeated ProcessedDeploy deploys      = 3;
+  bytes                    extraBytes   = 4;
 }
 
 message Justification {
