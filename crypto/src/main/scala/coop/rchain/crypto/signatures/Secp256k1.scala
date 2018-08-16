@@ -14,8 +14,6 @@ object Secp256k1 {
 
   private val provider  = new BouncyCastleProvider()
   private val curveName = "secp256k1"
-
-  private def toHex(bytes: Array[Byte]) = bytes.map(byte => "%02X".format(byte)).mkString
   
   /**
     * Verifies the given secp256k1 signature in native code.
@@ -38,7 +36,11 @@ object Secp256k1 {
     kpg.initialize(new ECGenParameterSpec(curveName), secureRandomInstance)
     val kp = kpg.generateKeyPair
 
-    val base16Sec = toHex(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toByteArray)
+    val base16Sec = {
+      val s = kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16)
+      if (s.length % 2 == 0) s
+      else "0" + s
+    }
 
     val sec = Base16.decode(base16Sec)
     val pub = Secp256k1.toPublic(sec)
