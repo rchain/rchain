@@ -36,22 +36,22 @@ object TomlConfiguration {
       Left((List.empty, s"Bool expected, $value provided"))
   }
 
-  def from(toml: String): Either[String, Configuration] =
+  def from(toml: String): Either[TomlConfigurationError, Configuration] =
     Toml.parse(toml) match {
-      case Left(error) => Either.left(s"Failed to parse TOML string: $error")
+      case Left(error) => Either.left(ConfigurationParseError(error))
       case Right(ast)  => from(ast)
     }
 
-  def from(ast: Value.Tbl): Either[String, Configuration] =
+  def from(ast: Value.Tbl): Either[TomlConfigurationError, Configuration] =
     Toml.parseAs[Configuration](rewriteKeysToCamelCase(ast)) match {
-      case Left((_, error)) => Either.left(s"Failed to parse TOML AST: $error")
+      case Left((_, error)) => Either.left(ConfigurationAstError(error))
       case Right(root)      => Either.right(root)
     }
 
-  def from(file: File): Either[String, Configuration] =
+  def from(file: File): Either[TomlConfigurationError, Configuration] =
     if (file.exists())
       withResource(Source.fromFile(file))(f => from(f.getLines().mkString("\n")))
-    else Either.left(s"File ${file.getAbsolutePath} not found")
+    else Either.left(ConfigurationFileNotFound(file.getAbsolutePath))
 
   private def rewriteKeysToCamelCase(tbl: Value.Tbl): Value.Tbl = {
 
@@ -89,3 +89,8 @@ object TomlConfiguration {
   }
 
 }
+
+sealed trait TomlConfigurationError
+final case class ConfigurationParseError(error: String)  extends TomlConfigurationError
+final case class ConfigurationAstError(error: String)    extends TomlConfigurationError
+final case class ConfigurationFileNotFound(path: String) extends TomlConfigurationError

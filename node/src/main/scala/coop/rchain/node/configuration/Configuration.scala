@@ -7,7 +7,12 @@ import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
-import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
+import coop.rchain.node.configuration.toml.{
+  ConfigurationAstError,
+  ConfigurationFileNotFound,
+  ConfigurationParseError,
+  Configuration => TomlConfiguration
+}
 import coop.rchain.shared.{Log, LogSource}
 
 import monix.eval.Task
@@ -66,10 +71,22 @@ object Configuration {
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         _          <- log.info(s"Using configuration file: $configFile")
         configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
-        _ <- configE match {
-              case Right(_) => Task.unit
-              case Left(e)  => log.warn(s"Can't load the configuration file: $e")
-            }
+        exit <- configE match {
+                 case Right(_) => Task.now(false)
+                 case Left(ConfigurationParseError(e)) =>
+                   log
+                     .error(s"Can't parse the configuration: $e")
+                     .map(_ => true)
+                 case Left(ConfigurationAstError(e)) =>
+                   log
+                     .error(s"The structure of the configuration is not valid: $e")
+                     .map(_ => true)
+                 case Left(ConfigurationFileNotFound(f)) =>
+                   log
+                     .warn(s"Configuration file $f not found")
+                     .map(_ => false)
+               }
+        _      = if (exit) System.exit(1)
         config <- Task.pure(configE.toOption)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
