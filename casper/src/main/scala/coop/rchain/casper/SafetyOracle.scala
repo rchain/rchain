@@ -6,6 +6,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{mainParent, _}
 
 import scala.collection
@@ -145,17 +146,42 @@ sealed abstract class SafetyOracleInstances {
           }
         }
 
-        // TODO: Potentially replace with isInBlockDAG
-        // TODO: Replace with isInJustificationChain
         def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
-          for {
-            internalMap <- BlockStore[F].asMap()
-            children <- internalMap.values.toList.filterA { potentialChild =>
-                         val isFutureBlockIfSameValidator = candidate.seqNum <= potentialChild.seqNum
-                         val validatorCreatedChild        = potentialChild.sender == validator
-                         (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
-                       }
-          } yield children
+          blockDag.latestMessages.get(validator) match {
+            case Some(latestMessageHashByValidator) =>
+              for {
+                latestMessageByValidator <- ProtoUtil.unsafeGetBlock[F](
+                                             latestMessageHashByValidator)
+                potentialChildren <- DagOperations
+                                      .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
+                                        block =>
+                                          val maybeCreatorJustificationHash =
+                                            block.justifications.find(_.validator == validator)
+                                          maybeCreatorJustificationHash match {
+                                            case Some(creatorJustificationHash) =>
+                                              for {
+                                                maybeCreatorJustification <- BlockStore[F].get(
+                                                                              creatorJustificationHash.latestBlockHash)
+                                                creatorJustification = maybeCreatorJustification match {
+                                                  case Some(creatorJustification) =>
+                                                    List(creatorJustification)
+                                                  case None =>
+                                                    List
+                                                      .empty[BlockMessage]
+                                                }
+                                              } yield creatorJustification
+                                            case None => List.empty[BlockMessage].pure[F]
+                                          }
+                                      }
+                                      .toList
+                children <- potentialChildren.filterA { potentialChild =>
+                             val isFutureBlockIfSameValidator = candidate.seqNum <= potentialChild.seqNum
+                             val validatorCreatedChild        = potentialChild.sender == validator
+                             (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
+                           }
+              } yield children
+            case None => List.empty[BlockMessage].pure[F]
+          }
 
         def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
           val maybeFirstLatestHash = blockDag.latestMessages.get(first)
