@@ -105,6 +105,55 @@ object Validate {
       }
     }
 
+  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
+    if (b.blockHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
+      } yield false
+    } else if (b.header.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block header is missing."))
+      } yield false
+    } else if (b.body.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block body is missing."))
+      } yield false
+    } else if (b.sender.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block sender is empty."))
+      } yield false
+    } else if (b.sig.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
+      } yield false
+    } else if (b.sigAlgorithm.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
+      } yield false
+    } else if (b.shardId.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
+      } yield false
+    } else if (b.header.get.postStateHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
+      } yield false
+    } else if (b.header.get.newCodeHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
+      } yield false
+    } else if (b.header.get.commReductionsHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
+      } yield false
+    } else if (b.body.get.postState.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state is missing."))
+      } yield false
+    } else {
+      true.pure[F]
+    }
+
   /*
    * TODO: Double check ordering of validity checks
    * TODO: Add check for missing fields
@@ -283,7 +332,8 @@ object Validate {
       Applicative[F].pure(Right(Valid))
     } else {
       for {
-        _ <- Log[F].warn(ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+        _ <- Log[F].warn(
+              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
       } yield Left(InvalidShardId)
     }
 

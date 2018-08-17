@@ -415,4 +415,26 @@ class ValidateTest
 
     activeRuntime.close()
   }
+
+  "Field format validation" should "suceed on a valid block and fail on empty fields" in {
+    val genesis = Genesis.withoutContracts(Map.empty, 0L, 0L, "rchain")
+    Validate.formatOfFields[Id](genesis) should be(true)
+    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+    Validate.formatOfFields[Id](genesis.withSender(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
+    ) should be(false)
+  }
 }
