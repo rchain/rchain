@@ -199,15 +199,13 @@ object Validate {
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- ProtoUtil.parentHashes(b).toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
-                                  for {
-                                    parent    <- ProtoUtil.unsafeGetBlock[F](parentHash)
-                                    timestamp = parent.header.get.timestamp
-                                    updatedLatestTimestamp <- if (latestTimestamp > timestamp) {
-                                                               latestTimestamp.pure[F]
-                                                             } else {
-                                                               timestamp.pure[F]
-                                                             }
-                                  } yield updatedLatestTimestamp
+                                  ProtoUtil
+                                    .unsafeGetBlock[F](parentHash)
+                                    .map(parent => {
+                                      val timestamp =
+                                        parent.header.fold(latestTimestamp)(_.timestamp)
+                                      math.max(latestTimestamp, timestamp)
+                                    })
                               }
       afterLatestParent = timestamp >= latestParentTimestamp
       result <- if (beforeFuture && afterLatestParent) {
