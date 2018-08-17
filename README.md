@@ -39,4 +39,3 @@ $ BLOCK=5866762 npm run balances
 ### Improvements
 
 * Timestamp balances.csv output so that it can be included in version control.
-* Don't report zero balances?

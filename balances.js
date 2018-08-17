@@ -38,10 +38,12 @@ const addKey = (key) => { if (!keys.has(key)) { keys.add(key); write(key); } }
 // Retrieve key state and append to file
 const write = (key) => {
   return rhocBalance(key).then(bal => {
-    return isContract(key).then(c => {
-      console.log('Key:', key, 'Balance:', bal, 'Contract:', c);
-      writeStream.write(key+','+bal+','+c+'\n');
-    })
+    if (bal > 0) {
+      return isContract(key).then(c => {
+        console.log('Key:', key, 'Balance:', bal, 'Contract:', c);
+        writeStream.write(key+','+bal+','+c+'\n');
+      })
+    }
   })
   .catch(e => error(e, key));
 }
