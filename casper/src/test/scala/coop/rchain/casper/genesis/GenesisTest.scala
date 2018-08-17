@@ -142,11 +142,10 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val blockDag = BlockDag()
 
     val (maybePostGenesisStateHash, _) = InterpreterUtil
-      .validateBlockCheckpoint(
+      .validateBlockCheckpoint[Id](
         genesis,
         genesis,
         blockDag,
-        BlockStore[Id].asMap(),
         emptyStateHash,
         Set[ByteString](emptyStateHash),
         runtimeManager

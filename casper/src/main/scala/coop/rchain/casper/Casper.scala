@@ -81,21 +81,24 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
-      internalMap: Map[BlockHash, BlockMessage])(
-      implicit scheduler: Scheduler): MultiParentCasper[F] = {
+      genesis: BlockMessage)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
     val dag = BlockDag()
-    val (maybePostGenesisStateHash, _) = InterpreterUtil
-      .validateBlockCheckpoint(
-        genesis,
-        genesis,
-        dag,
-        internalMap,
-        runtimeManager.emptyStateHash,
-        Set[StateHash](runtimeManager.emptyStateHash),
-        runtimeManager
-      )
-    createMultiParentCasper[F](runtimeManager, validatorId, genesis, dag, maybePostGenesisStateHash)
+    for {
+      validateBlockCheckpointResult <- InterpreterUtil
+                                        .validateBlockCheckpoint[F](
+                                          genesis,
+                                          genesis,
+                                          dag,
+                                          runtimeManager.emptyStateHash,
+                                          Set[StateHash](runtimeManager.emptyStateHash),
+                                          runtimeManager)
+      (maybePostGenesisStateHash, _) = validateBlockCheckpointResult
+    } yield
+      createMultiParentCasper[F](runtimeManager,
+                                 validatorId,
+                                 genesis,
+                                 dag,
+                                 maybePostGenesisStateHash)
   }
 
   private[this] def createMultiParentCasper[
@@ -116,10 +119,10 @@ sealed abstract class MultiParentCasperInstances {
 
       private val emptyStateHash = runtimeManager.emptyStateHash
 
-      private val knownStateHashesContainer: AtomicSyncVar[Set[StateHash]] =
+      private val knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]] =
         maybePostGenesisStateHash match {
           case Some(postGenesisStateHash) =>
-            new AtomicSyncVar(
+            AtomicSyncVarF.of[F, Set[StateHash]](
               Set[StateHash](emptyStateHash, postGenesisStateHash)
             )
           case None => throw new Error("Genesis block validation failed.")
@@ -325,21 +328,30 @@ sealed abstract class MultiParentCasperInstances {
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
-          now         <- Time[F].currentMillis
-          internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, mergeLog, _, deployWithCost)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Seq[protocol.Event], Set[StateHash], Vector[DeployCost])](
-              InterpreterUtil.computeDeploysCheckpoint(p,
-                                                       r,
-                                                       genesis,
-                                                       _blockDag.get,
-                                                       internalMap,
-                                                       emptyStateHash,
-                                                       _,
-                                                       runtimeManager.computeState),
-              _._3)
-          computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog     = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
+          now <- Time[F].currentMillis
+          computeDeploysCheckpointResult <- knownStateHashesContainer.modify[(Checkpoint,
+                                                                              Seq[protocol.Event],
+                                                                              Set[StateHash],
+                                                                              Vector[DeployCost])] {
+                                             knownStateHashes =>
+                                               for {
+                                                 computeDeploysCheckpointResult <- InterpreterUtil
+                                                                                    .computeDeploysCheckpoint[
+                                                                                      F](
+                                                                                      p,
+                                                                                      r,
+                                                                                      genesis,
+                                                                                      _blockDag.get,
+                                                                                      emptyStateHash,
+                                                                                      knownStateHashes,
+                                                                                      runtimeManager.computeState)
+                                               } yield
+                                                 (computeDeploysCheckpointResult._3,
+                                                  computeDeploysCheckpointResult)
+                                           }
+          (computedCheckpoint, mergeLog, updatedKnownStateHashes, deployWithCost) = computeDeploysCheckpointResult
+          computedStateHash                                                       = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
+          serializedLog                                                           = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
           postState = RChainState()
             .withTuplespace(computedStateHash)
             .withBonds(bonds(p.head))
@@ -356,13 +368,15 @@ sealed abstract class MultiParentCasperInstances {
         _blockDag.get
       }
 
-      def storageContents(hash: StateHash): F[String] = Capture[F].capture {
-        if (knownStateHashesContainer.get.contains(hash)) {
-          runtimeManager.storageRepr(hash)
-        } else {
-          s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
-        }
-      }
+      def storageContents(hash: StateHash): F[String] =
+        for {
+          knownStateHashes <- knownStateHashesContainer.get
+        } yield
+          if (knownStateHashes.contains(hash)) {
+            runtimeManager.storageRepr(hash)
+          } else {
+            s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
+          }
 
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
         (equivocationsTracker

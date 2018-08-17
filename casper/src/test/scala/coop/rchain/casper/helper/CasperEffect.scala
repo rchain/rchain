@@ -59,10 +59,10 @@ object CasperEffect {
     val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
     val casperTask = for {
-      _        <- blockStoreEff.put(genesis.blockHash, genesis)
-      blockMap <- blockStoreEff.asMap()
-    } yield
-      MultiParentCasper.hashSetCasper[Effect](runtimeManager, Some(validatorId), genesis, blockMap)
+      _ <- blockStoreEff.put(genesis.blockHash, genesis)
+      hashSetCasper <- MultiParentCasper
+                        .hashSetCasper[Effect](runtimeManager, Some(validatorId), genesis)
+    } yield hashSetCasper
 
     def cleanUp(): Unit = {
       activeRuntime.close()
@@ -71,7 +71,7 @@ object CasperEffect {
       blockStoreDir.recursivelyDelete()
     }
 
-    (casperTask, cleanUp _)
+    (casperTask, cleanUp)
   }
 
   private val syncInstance = SyncInstances.syncEffect[CommError](commError => {

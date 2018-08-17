@@ -7,7 +7,8 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
 
-import cats.Id
+import cats.{Id, Monad}
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -18,8 +19,8 @@ import coop.rchain.shared.AttemptOps._
 import scodec.bits.BitVector
 
 import scala.collection.immutable
-
 import RuntimeManager.DeployError
+import coop.rchain.blockstorage.BlockStore
 
 object InterpreterUtil {
 
@@ -28,149 +29,147 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint(b: BlockMessage,
-                              genesis: BlockMessage,
-                              dag: BlockDag,
-                              internalMap: Map[BlockHash, BlockMessage],
-                              emptyStateHash: StateHash,
-                              knownStateHashes: Set[StateHash],
-                              runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
+  def validateBlockCheckpoint[F[_]: Monad: BlockStore](b: BlockMessage,
+                                                       genesis: BlockMessage,
+                                                       dag: BlockDag,
+                                                       emptyStateHash: StateHash,
+                                                       knownStateHashes: Set[StateHash],
+                                                       runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler): F[(Option[StateHash], Set[StateHash])] = {
     val tsHash        = ProtoUtil.tuplespace(b)
     val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
-    val (computedCheckpoint, _, updatedStateHashes, cost) =
-      computeBlockCheckpointFromDeploys(b,
-                                        genesis,
-                                        dag,
-                                        internalMap,
-                                        emptyStateHash,
-                                        knownStateHashes,
-                                        runtimeManager.replayComputeState(log))
-    val computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-    if (tsHash.contains(computedStateHash)) {
-      // state hash in block matches computed hash!
-      Some(computedStateHash) -> updatedStateHashes
-    } else {
-      // state hash in block does not match computed hash -- invalid!
-      // return no state hash, do not update the state hash set
-      None -> knownStateHashes
-    }
+    for {
+      blockCheckpointFromDeploys <- computeBlockCheckpointFromDeploys[F](
+                                     b,
+                                     genesis,
+                                     dag,
+                                     emptyStateHash,
+                                     knownStateHashes,
+                                     runtimeManager.replayComputeState(log))
+      (computedCheckpoint, _, updatedStateHashes, cost) = blockCheckpointFromDeploys
+      computedStateHash                                 = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
+      result <- if (tsHash.contains(computedStateHash)) {
+                 // state hash in block matches computed hash!
+                 (Some(computedStateHash) -> updatedStateHashes).pure[F]
+               } else {
+                 // state hash in block does not match computed hash -- invalid!
+                 // return no state hash, do not update the state hash set
+                 (None -> knownStateHashes).pure[F]
+               }
+    } yield result
   }
 
-  def computeDeploysCheckpoint(
+  def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
       genesis: BlockMessage,
       dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost]) = {
-    //TODO: Revisit how the deployment cost should be handled for multiparent blocks
-    //for time being we ignore the `postStateCost`
-    val (postStateHash, mergeLog, updatedStateHashes, postStateCost) =
-      computeParentsPostState(parents,
-                              genesis,
-                              dag,
-                              internalMap,
-                              emptyStateHash,
-                              knownStateHashes,
-                              computeState)
+    : F[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] =
+    for {
+      //TODO: Revisit how the deployment cost should be handled for multiparent blocks
+      //for time being we ignore the `postStateCost`
+      parentsPostState <- computeParentsPostState[F](parents,
+                                                     genesis,
+                                                     dag,
+                                                     emptyStateHash,
+                                                     knownStateHashes,
+                                                     computeState)
+      (postStateHash, mergeLog, updatedStateHashes, postStateCost) = parentsPostState
+      Right((postDeploysCheckpoint, deployCost))                   = computeState(postStateHash, deploys)
+      postDeploysStateHash                                         = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
+    } yield
+      (postDeploysCheckpoint,
+       mergeLog.map(EventConverter.toCasperEvent),
+       updatedStateHashes + postDeploysStateHash,
+       deployCost)
 
-    val Right((postDeploysCheckpoint, deployCost)) = computeState(postStateHash, deploys)
-    val postDeploysStateHash                       = ByteString.copyFrom(postDeploysCheckpoint.root.bytes.toArray)
-    (postDeploysCheckpoint,
-     mergeLog.map(EventConverter.toCasperEvent),
-     updatedStateHashes + postDeploysStateHash,
-     deployCost)
-  }
-
-  private def computeParentsPostState(
+  private def computeParentsPostState[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       genesis: BlockMessage,
       dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (StateHash, Seq[trace.Event], Set[StateHash], Vector[DeployCost]) = {
-    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
+    : F[(StateHash, Seq[trace.Event], Set[StateHash], Vector[DeployCost])] = {
+    val parentTuplespaces: Seq[(BlockMessage, StateHash)] =
+      parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
-      (emptyStateHash, Nil, knownStateHashes, Vector.empty)
+      (emptyStateHash, Seq.empty[trace.Event], knownStateHashes, Vector.empty[DeployCost]).pure[F]
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
         "We should have already computed parent state hash when we added the parent to our blockDAG.")
-      (parentStateHash, Nil, knownStateHashes, Vector.empty)
+      (parentStateHash, Seq.empty[trace.Event], knownStateHashes, Vector.empty[DeployCost]).pure[F]
     } else {
-      //In the case of multiple parents we need
-      //to apply all of the deploys that have been
-      //made in all histories since the greatest
-      //common ancestor in order to reach the current
-      //state.
-      val gca =
-        parentTuplespaces
-          .map(_._1)
-          .reduce(DagOperations.greatestCommonAncestor(_, _, genesis, dag, internalMap))
+      for {
+        //In the case of multiple parents we need
+        //to apply all of the deploys that have been
+        //made in all histories since the greatest
+        //common ancestor in order to reach the current
+        //state.
+        gca <- parents.toList.foldM(parents.head) {
+                case (gca, parent) =>
+                  DagOperations.greatestCommonAncestorF[F](gca, parent, genesis, dag)
+              }
+        gcaStateHash = ProtoUtil.tuplespace(gca).get
 
-      val gcaStateHash = ProtoUtil.tuplespace(gca).get
-      assert(
-        knownStateHashes.contains(gcaStateHash),
-        "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
+        _ = assert(
+          knownStateHashes.contains(gcaStateHash),
+          "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
 
-      // TODO: Fix so that all search branches reach GCA before quitting
-      val deploys = DagOperations
-        .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
-          ProtoUtil.parentHashes(_).iterator.map(internalMap.apply))
-        .takeWhile(_ != gca)
-        .flatMap(ProtoUtil.deploys(_).reverse)
-        .toIndexedSeq
-        .reverse
+        // TODO: Fix so that all search branches reach GCA before quitting
+        ancestors <- DagOperations
+                      .bfTraverseF[F, BlockMessage](parentTuplespaces.map(_._1).toList)(
+                        ProtoUtil.unsafeGetParents[F])
+                      .toList
+        deploys = ancestors
+          .takeWhile(_ != gca)
+          .flatMap(ProtoUtil.deploys(_).reverse)
+          .toIndexedSeq
+          .reverse
 
-      //TODO: figure out what casper should do with errors in deploys
-      val Right((resultStateCheckpoint, deployCost)) =
-        computeState(gcaStateHash, deploys)
-      val resultStateHash = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
-      (resultStateHash, resultStateCheckpoint.log, knownStateHashes + resultStateHash, deployCost)
+        //TODO: figure out what casper should do with errors in deploys
+        Right((resultStateCheckpoint, deployCost)) = computeState(gcaStateHash, deploys)
+        resultStateHash                            = ByteString.copyFrom(resultStateCheckpoint.root.bytes.toArray)
+      } yield
+        (resultStateHash, resultStateCheckpoint.log, knownStateHashes + resultStateHash, deployCost)
     }
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys(
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
       emptyStateHash: StateHash,
       knownStateHashes: Set[StateHash],
       computeState: (StateHash,
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost]) = {
-    val parents = ProtoUtil
-      .parentHashes(b)
-      .map(internalMap.apply)
+    : F[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] =
+    for {
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+      deploys = ProtoUtil.deploys(b)
 
-    val deploys = ProtoUtil.deploys(b)
+      _ = assert(parents.nonEmpty || (parents.isEmpty && b == genesis),
+                 "Received a different genesis block.")
 
-    assert(parents.nonEmpty || (parents.isEmpty && b == genesis),
-           "Received a different genesis block.")
-
-    computeDeploysCheckpoint(
-      parents,
-      deploys,
-      genesis,
-      dag,
-      internalMap,
-      emptyStateHash,
-      knownStateHashes,
-      computeState
-    )
-  }
+      deploysCheckpoint <- computeDeploysCheckpoint[F](
+                            parents,
+                            deploys,
+                            genesis,
+                            dag,
+                            emptyStateHash,
+                            knownStateHashes,
+                            computeState
+                          )
+    } yield deploysCheckpoint
 }

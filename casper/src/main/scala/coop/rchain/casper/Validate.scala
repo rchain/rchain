@@ -1,12 +1,12 @@
 package coop.rchain.casper
 
+import cats.effect.Sync
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
-import coop.rchain.casper.util.DagOperations.bfTraverse
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
@@ -14,7 +14,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.shared.{AtomicSyncVar, Log, LogSource, Time}
+import coop.rchain.shared._
 import monix.execution.Scheduler
 
 import scala.util.{Failure, Success, Try}
@@ -353,33 +353,30 @@ object Validate {
     } yield status
   }
 
-  def transactions[F[_]: Monad: Log: Capture: BlockStore](
+  def transactions[F[_]: Monad: Log: BlockStore: Sync](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
-      knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
+      knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]])(
       implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      internalMap <- BlockStore[F].asMap()
-      maybeCheckPoint <- Capture[F].capture {
-                          val Right((maybeCheckPoint, _)) =
-                            knownStateHashesContainer
-                              .mapAndUpdate[(Option[StateHash], Set[StateHash])](
-                                //invalid blocks return None and don't update the checkpoints
-                                InterpreterUtil.validateBlockCheckpoint(
-                                  block,
-                                  genesis,
-                                  dag,
-                                  internalMap,
-                                  emptyStateHash,
-                                  _,
-                                  runtimeManager
-                                ),
-                                _._2
-                              )
-                          maybeCheckPoint
+      // TODO: Wrap in a Sync.suspend ?
+      maybeCheckPoint <- knownStateHashesContainer.modify[Option[StateHash]] { knownStateHashes =>
+                          for {
+                            //invalid blocks return None and don't update the checkpoints
+                            validateBlockCheckpointResult <- InterpreterUtil
+                                                              .validateBlockCheckpoint[F](
+                                                                block,
+                                                                genesis,
+                                                                dag,
+                                                                emptyStateHash,
+                                                                knownStateHashes,
+                                                                runtimeManager
+                                                              )
+                            (maybeCheckPoint, updatedknownStateHashes) = validateBlockCheckpointResult
+                          } yield (updatedknownStateHashes, maybeCheckPoint)
                         }
     } yield
       maybeCheckPoint match {

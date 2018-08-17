@@ -71,7 +71,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val casperEff =
     MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis)
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](
       ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),

@@ -19,6 +19,7 @@ import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
 import scala.concurrent.{Future, Promise}
+import scala.util.{Failure, Success, Try}
 
 trait MultiParentCasperConstructor[F[_]] {
   def casperInstance: F[Either[Throwable, MultiParentCasper[F]]]
@@ -68,14 +69,13 @@ sealed abstract class MultiParentCasperConstructorInstances {
       validatorId: Option[ValidatorIdentity],
       validators: Set[ByteString])(implicit scheduler: Scheduler): MultiParentCasperConstructor[F] =
     new MultiParentCasperConstructor[F] {
-      private val genesisPromise = Promise[(ApprovedBlock, Map[BlockHash, BlockMessage])]()
-      private val casper: Future[MultiParentCasper[F]] =
+      private val genesisPromise = Promise[ApprovedBlock]()
+      private val casper: Future[F[MultiParentCasper[F]]] =
         genesisPromise.future.map { g =>
           MultiParentCasper.hashSetCasper[F](
             runtimeManager,
             validatorId,
-            g._1.candidate.get.block.get,
-            g._2
+            g.candidate.get.block.get
           )
         }
 
@@ -87,57 +87,57 @@ sealed abstract class MultiParentCasperConstructorInstances {
             for {
               isValid <- Validate.approvedBlock[F](a, validators)
               _ <- if (isValid) for {
-                    _           <- Log[F].info("CASPER: Valid ApprovedBlock received!")
-                    genesis     = a.candidate.get.block.get
-                    _           <- BlockStore[F].put(genesis.blockHash, genesis)
-                    internalMap <- BlockStore[F].asMap()
-                    _           <- Log[F].info(s"receive: a - ${a.hashCode}")
-                    _           <- Sync[F].delay(genesisPromise.success((a, internalMap)))
+                    _       <- Log[F].info("CASPER: Valid ApprovedBlock received!")
+                    genesis = a.candidate.get.block.get
+                    _       <- BlockStore[F].put(genesis.blockHash, genesis)
+                    _       <- Log[F].info(s"receive: a - ${a.hashCode}")
+                    _       <- Sync[F].delay(genesisPromise.success(a))
                   } yield ()
                   else Log[F].info("CASPER: Invalid ApprovedBlock received; refusing to add.")
             } yield isValid
 
         })
 
-      override def casperInstance: F[Either[Throwable, MultiParentCasper[F]]] = Sync[F].delay {
-        casper.value.fold[Either[Throwable, MultiParentCasper[F]]](
-          Left(new Exception(
-            "No valid ApprovedBlock has been received to instantiate a Casper instance!")))(
-          _.toEither)
+      override def casperInstance: F[Either[Throwable, MultiParentCasper[F]]] = Sync[F].suspend {
+        val approvedBlockException: Throwable = new Exception(
+          "No valid ApprovedBlock has been received to instantiate a Casper instance!")
+        casper.value.fold(Left(approvedBlockException).rightCast[MultiParentCasper[F]].pure[F]) {
+          case Success(fCasper) =>
+            fCasper.map(Right(_).leftCast[Throwable])
+          case Failure(ex) => Left(ex).rightCast[MultiParentCasper[F]].pure[F]
+        }
       }
 
       override def lastApprovedBlock: F[Option[ApprovedBlock]] = Sync[F].delay {
-        genesisPromise.future.value.flatMap(_.toOption.map(_._1))
+        genesisPromise.future.value.flatMap(_.toOption)
       }
-
     }
 
   def fromConfig[
-      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk,
-      G[_]: Monad: Capture: Log: Time: BlockStore](conf: CasperConf,
-                                                   runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): G[MultiParentCasperConstructor[F]] =
+      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      conf: CasperConf,
+      runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler): F[MultiParentCasperConstructor[F]] =
     if (conf.createGenesis) {
       for {
-        genesis <- Genesis.fromInputFiles[G](conf.bondsFile,
+        genesis <- Genesis.fromInputFiles[F](conf.bondsFile,
                                              conf.numValidators,
                                              conf.genesisPath,
                                              conf.walletsFile,
                                              runtimeManager)
         candidate   = ApprovedBlockCandidate(block = Some(genesis), requiredSigs = 0)
         approved    = ApprovedBlock(candidate = Some(candidate)) //TODO: do actual approval protocol
-        validatorId <- ValidatorIdentity.fromConfig[G](conf)
-        _           <- BlockStore[G].put(genesis.blockHash, genesis)
-        internalMap <- BlockStore[G].asMap()
-        casper = MultiParentCasper
-          .hashSetCasper[F](runtimeManager, validatorId, genesis, internalMap)
+        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        _           <- BlockStore[F].put(genesis.blockHash, genesis)
+        casper <- MultiParentCasper
+                   .hashSetCasper[F](runtimeManager, validatorId, genesis)
       } yield {
         successCasperConstructor[F](approved, casper)
       }
     } else {
       for {
-        validators  <- CasperConf.parseValidatorsFile[G](conf.knownValidatorsFile)
-        validatorId <- ValidatorIdentity.fromConfig[G](conf)
+        validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
+        validatorId <- ValidatorIdentity.fromConfig[F](conf)
       } yield awaitApprovedBlock[F](runtimeManager, validatorId, validators)
     }
 
