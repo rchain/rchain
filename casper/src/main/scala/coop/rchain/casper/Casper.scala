@@ -318,17 +318,17 @@ sealed abstract class MultiParentCasperInstances {
 
       def lastFinalizedBlock: F[BlockMessage] = lastFinalizedBlockContainer.get
 
+      // TODO: Optimize for large number of deploys accumulated over history
       private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
-        Capture[F].capture {
-          val result = deployHist.clone()
-          DagOperations
-            .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
-            .foreach(b => {
-              b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
-              ().pure[F]
-            })
-          result.toSeq
-        }
+        for {
+          result <- Capture[F].capture { deployHist.clone() }
+          _ <- DagOperations
+                .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
+                .foreach(b =>
+                  Capture[F].capture {
+                    b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
+                })
+        } yield result.toSeq
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
