@@ -95,6 +95,10 @@ parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
+parser.add_argument("--skip-boot-remove",
+                    dest="skip_boot_remove",
+                    action='store_true',
+                    help="skip network resource removal on network boot")
 parser.add_argument("--test-performance",
                     dest='test_performance',
                     action='store_true',
@@ -140,7 +144,8 @@ def main():
         deploy_demo()
         return
     if args.boot == True:
-        remove_resources_by_network(args.network)
+        if not args.skip_boot_remove:
+            remove_resources_by_network(args.network)
         boot_p2p_network()
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
