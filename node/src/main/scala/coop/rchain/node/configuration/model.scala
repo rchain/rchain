@@ -15,6 +15,7 @@ case class Server(
     standalone: Boolean,
     dataDir: Path,
     mapSize: Long,
+    inMemoryStore: Boolean,
     maxNumOfConnections: Int
 )
 

@@ -261,7 +261,7 @@ object InMemoryStore {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
-    initialize(trieStore, branch)
+
     new InMemoryStore[T, C, P, A, K](trieStore, branch)
   }
 }

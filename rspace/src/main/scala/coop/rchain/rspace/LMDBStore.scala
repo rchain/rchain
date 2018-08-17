@@ -269,7 +269,7 @@ class LMDBStore[C, P, A, K] private (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch = Branch.MASTER)(
+  def create[C, P, A, K](context: LMDBContext[C, P, A, K], branch: Branch = Branch.MASTER)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
