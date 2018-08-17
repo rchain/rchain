@@ -15,6 +15,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
@@ -439,6 +440,9 @@ class ValidateTest
       ) should be(false)
       Validate.formatOfFields[Id](
         genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withBody(genesis.body.get.withCommReductions(List(Event(EventInstance.Empty))))
       ) should be(false)
   }
 }

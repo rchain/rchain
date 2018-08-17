@@ -5,9 +5,10 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.DagOperations.bfTraverse
-import coop.rchain.casper.util.{ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -145,6 +146,10 @@ object Validate {
     } else if (b.body.get.postState.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
+      } yield false
+    } else if (b.body.get.commReductions.exists(_.eventInstance == EventInstance.Empty)) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
       } yield false
     } else {
       true.pure[F]
