@@ -21,6 +21,7 @@ case class Server(
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
     mapSize: Option[Long],
+    inMemoryStore: Option[Boolean],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
     maxNumOfConnections: Option[Int]
@@ -44,5 +45,6 @@ case class Validators(
     publicKey: Option[String],
     privateKey: Option[String],
     sigAlgorithm: Option[String],
-    walletsFile: Option[String]
+    walletsFile: Option[String],
+    shardId: Option[String]
 )

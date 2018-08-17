@@ -67,7 +67,8 @@ sealed abstract class MultiParentCasperConstructorInstances {
       F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      validators: Set[ByteString])(implicit scheduler: Scheduler): MultiParentCasperConstructor[F] =
+      validators: Set[ByteString],
+      shardId: String)(implicit scheduler: Scheduler): MultiParentCasperConstructor[F] =
     new MultiParentCasperConstructor[F] {
       private val genesisPromise = Promise[ApprovedBlock]()
       private val casper: Future[F[MultiParentCasper[F]]] =
@@ -75,7 +76,8 @@ sealed abstract class MultiParentCasperConstructorInstances {
           MultiParentCasper.hashSetCasper[F](
             runtimeManager,
             validatorId,
-            g.candidate.get.block.get
+            g.candidate.get.block.get,
+            shardId
           )
         }
 
@@ -124,13 +126,14 @@ sealed abstract class MultiParentCasperConstructorInstances {
                                              conf.numValidators,
                                              conf.genesisPath,
                                              conf.walletsFile,
-                                             runtimeManager)
+                                             runtimeManager,
+                                             conf.shardId)
         candidate   = ApprovedBlockCandidate(block = Some(genesis), requiredSigs = 0)
         approved    = ApprovedBlock(candidate = Some(candidate)) //TODO: do actual approval protocol
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         _           <- BlockStore[F].put(genesis.blockHash, genesis)
         casper <- MultiParentCasper
-                   .hashSetCasper[F](runtimeManager, validatorId, genesis)
+                   .hashSetCasper[F](runtimeManager, validatorId, genesis, conf.shardId)
       } yield {
         successCasperConstructor[F](approved, casper)
       }
@@ -138,7 +141,7 @@ sealed abstract class MultiParentCasperConstructorInstances {
       for {
         validators  <- CasperConf.parseValidatorsFile[F](conf.knownValidatorsFile)
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
-      } yield awaitApprovedBlock[F](runtimeManager, validatorId, validators)
+      } yield awaitApprovedBlock[F](runtimeManager, validatorId, validators, conf.shardId)
     }
 
   def withCasper[F[_]: Monad: Log: MultiParentCasperConstructor, A](f: MultiParentCasper[F] => F[A],

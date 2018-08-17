@@ -2,12 +2,12 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 
+import internal._
 import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
-import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.SeqOps.{dropIndex, removeFirst}
 import org.lmdbjava.Txn
 import scodec.Codec
@@ -261,7 +261,7 @@ object InMemoryStore {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
-    initialize(trieStore, branch)
+
     new InMemoryStore[T, C, P, A, K](trieStore, branch)
   }
 }

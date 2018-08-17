@@ -20,7 +20,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val initial                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+  val initial                     = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
   val storageDirectory            = Files.createTempDirectory(s"rholang-build-test-genesis")
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)

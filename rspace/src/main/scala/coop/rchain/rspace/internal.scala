@@ -124,4 +124,14 @@ object internal {
 
   type Installs[C, P, A, R, K] = Map[Seq[C], Install[P, A, R, K]]
 
+  import scodec.{Attempt, Err}
+
+  implicit class RichAttempt[T](a: Attempt[T]) {
+    def get: T =
+      a match {
+        case Attempt.Successful(res) => res
+        case Attempt.Failure(err) =>
+          throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
+      }
+  }
 }

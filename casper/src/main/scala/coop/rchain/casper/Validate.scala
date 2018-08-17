@@ -115,7 +115,8 @@ object Validate {
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag,
+      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
@@ -127,7 +128,9 @@ object Validate {
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
                                Validate.sequenceNumber[F](block, dag))
-    } yield sequenceNumberStatus.joinRight
+      shardIdentifierStatus <- sequenceNumberStatus.joinRight.traverse(_ =>
+                                Validate.shardIdentifier[F](block, shardId))
+    } yield shardIdentifierStatus.joinRight
 
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
@@ -274,6 +277,18 @@ object Validate {
                  } yield Left(InvalidSequenceNumber)
                }
     } yield status
+
+  def shardIdentifier[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
+    if (b.shardId == shardId) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(
+              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+      } yield Left(InvalidShardId)
+    }
 
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
                                             genesis: BlockMessage,

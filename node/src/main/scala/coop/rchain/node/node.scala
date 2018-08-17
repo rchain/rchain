@@ -79,7 +79,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       }
     } else {
       println("Generating a PEM secret key for the node")
-      val keyPair = CertificateHelper.generateKeyPair()
+      val keyPair = CertificateHelper.generateKeyPair(conf.tls.secureRandomNonBlocking)
       withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) { pw =>
         pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
       }
@@ -129,6 +129,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
+  private val inMemoryStore     = conf.server.inMemoryStore
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -192,7 +193,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
       ts  <- time.currentMillis
-      msg = ProtocolHelper.disconnect(loc)
+      msg = CommMessages.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down metrics server...")
       _   <- Task.delay(servers.metricsServer.stop())
@@ -300,7 +301,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       connections: ConnectionsCell[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect]): Effect[MultiParentCasperConstructor[Effect]] =
-    MultiParentCasperConstructor.fromConfig[Effect, Effect](conf.casper, runtimeManager)
+    MultiParentCasperConstructor.fromConfig[Effect](conf.casper, runtimeManager)
 
   private def generateCasperPacketHandler(implicit
                                           log: Log[Task],
@@ -353,8 +354,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       Metrics.eitherT(Monad[Task], metrics))
     _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize)
+    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperConstructor <- generateCasperConstructor(runtimeManager)(log,
                                                                    time,

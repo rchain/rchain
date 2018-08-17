@@ -44,7 +44,8 @@ class HashSetCasperTestNode(name: String,
                             val genesis: BlockMessage,
                             sk: Array[Byte],
                             logicalTime: LogicalTime[Id],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
+                            storageSize: Long = 1024L * 1024,
+                            shardId: String = "rchain")(implicit scheduler: Scheduler) {
 
   import HashSetCasperTestNode.errorHandler
 
@@ -71,7 +72,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val casperEff =
     MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis)
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, shardId)
   implicit val constructor = MultiParentCasperConstructor
     .successCasperConstructor[Id](
       ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
