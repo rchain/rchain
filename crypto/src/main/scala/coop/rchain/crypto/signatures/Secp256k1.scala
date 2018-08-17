@@ -14,7 +14,7 @@ object Secp256k1 {
 
   private val provider  = new BouncyCastleProvider()
   private val curveName = "secp256k1"
-  
+
   /**
     * Verifies the given secp256k1 signature in native code.
     *
