@@ -327,9 +327,13 @@ object BlockAPI {
       findResult <- BlockStore[F].find(h => {
                      Base16.encode(h.toByteArray).startsWith(q.hash)
                    })
-      fullHash = findResult.head._1
-      block    <- BlockStore[F].get(fullHash)
-    } yield block
+    } yield
+      findResult.headOption match {
+        case Some((_, block)) =>
+          Some(block)
+        case None =>
+          none[BlockMessage]
+      }
 
   private def addResponse(status: Option[BlockStatus],
                           maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {
