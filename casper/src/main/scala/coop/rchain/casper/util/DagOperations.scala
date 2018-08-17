@@ -55,19 +55,16 @@ object DagOperations {
         b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
         b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        commonAncestorsTraversal <- bfTraverseF[F, BlockMessage](List(genesis))(
-                                     commonAncestorChild(_, commonAncestors)).toList
-        gca <- ListContrib.findM[F, BlockMessage](
-                commonAncestorsTraversal,
-                b =>
-                  dag.childMap
-                    .getOrElse(b.blockHash, HashSet.empty[BlockHash])
-                    .toList
-                    .existsM(hash =>
-                      for {
-                        c <- ProtoUtil.unsafeGetBlock[F](hash)
-                      } yield b1Ancestors(c) ^ b2Ancestors(c))
-              )
+        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
+                .findF(
+                  b =>
+                    dag.childMap
+                      .getOrElse(b.blockHash, HashSet.empty[BlockHash])
+                      .toList
+                      .existsM(hash =>
+                        for {
+                          c <- ProtoUtil.unsafeGetBlock[F](hash)
+                        } yield b1Ancestors(c) ^ b2Ancestors(c)))
       } yield gca.get
     }
 }
