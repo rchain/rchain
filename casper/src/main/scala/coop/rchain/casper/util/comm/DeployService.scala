@@ -46,7 +46,7 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
   }
 
   def showBlocks(): Task[String] = Task.delay {
-    val response = blockingStub.showBlocks2(Empty()).toList
+    val response = blockingStub.showBlocks(Empty()).toList
 
     val showResponses = response
       .map {

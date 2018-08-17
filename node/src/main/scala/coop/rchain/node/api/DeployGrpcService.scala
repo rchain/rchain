@@ -31,10 +31,7 @@ private[api] class DeployGrpcService[
   override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
     BlockAPI.getBlockQueryResponse[F](q).toFuture
 
-  override def showBlocks(e: Empty): Future[BlocksResponse] =
-    BlockAPI.getBlocksResponse[F].toFuture
-
-  override def showBlocks2(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
+  override def showBlocks(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
     BlockAPI.getBlocksResponse[F].toFuture.onComplete {
       case Success(blockResponse) =>
         blockResponse.blocks.foreach(bi => observer.onNext(bi))
