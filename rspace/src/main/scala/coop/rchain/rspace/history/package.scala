@@ -105,9 +105,13 @@ package object history {
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    store.withTxn(store.createTxnRead()) { (txn: T) =>
-      keys.traverse[Option, V]((k: K) =>
-        store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+    if (keys.isEmpty) {
+      throw new IllegalArgumentException("keys can't be empty")
+    } else {
+      store.withTxn(store.createTxnRead()) { (txn: T) =>
+        keys.traverse[Option, V]((k: K) =>
+          store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+      }
     }
 
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
