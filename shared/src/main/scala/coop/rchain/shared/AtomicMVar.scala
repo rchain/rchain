@@ -6,7 +6,7 @@ import scala.concurrent.SyncVar
 
 class AtomicSyncVarF[F[_], A] private (private val underlying: SyncVar[A]) {
   def get(implicit sync: Sync[F]): F[A] =
-    sync.delay { underlying.take }
+    sync.delay { underlying.get }
 
   def modify[B](f: A => F[(A, B)])(implicit sync: Sync[F]): F[B] =
     for {
