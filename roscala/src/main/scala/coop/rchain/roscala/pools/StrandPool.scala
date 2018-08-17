@@ -11,4 +11,6 @@ trait StrandPool {
   def prepend(task: Task): Unit
 
   def getNextStrand(state: State): Boolean
+
+  def finish(): Unit
 }

@@ -64,6 +64,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
     }
 
     logger.debug("Exiting run method")
+
+    state.strandPool.finish()
   }
 
   /**
