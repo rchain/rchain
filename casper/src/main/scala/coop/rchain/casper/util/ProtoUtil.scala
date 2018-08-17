@@ -165,7 +165,15 @@ object ProtoUtil {
       ps <- bd.postState
     } yield ps.blockNumber).getOrElse(0L)
 
-  //Two blocks conflict if they both use the same deploy in different histories
+  // Two blocks conflict if they both use the same deploy in different histories
+  // TODO: Update the logic of this function to make use of the trace logs and
+  // say that two blocks don't conflict if they act on disjoint sets of channels
+  /*
+   * Two blocks conflict if they both use the same deploy in different histories
+   *
+   * TODO: Update the logic of this function to make use of the trace logs and
+   * say that two blocks don't conflict if they act on disjoint sets of channels
+   */
   def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage,
                                          b2: BlockMessage,
                                          genesis: BlockMessage,
