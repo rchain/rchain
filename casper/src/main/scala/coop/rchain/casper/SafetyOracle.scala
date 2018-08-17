@@ -164,10 +164,13 @@ sealed abstract class SafetyOracleInstances {
                                                                               creatorJustificationHash.latestBlockHash)
                                                 creatorJustification = maybeCreatorJustification match {
                                                   case Some(creatorJustification) =>
-                                                    List(creatorJustification)
+                                                    if (candidate == creatorJustification) {
+                                                      List.empty[BlockMessage]
+                                                    } else {
+                                                      List(creatorJustification)
+                                                    }
                                                   case None =>
-                                                    List
-                                                      .empty[BlockMessage]
+                                                    List.empty[BlockMessage]
                                                 }
                                               } yield creatorJustification
                                             case None => List.empty[BlockMessage].pure[F]
