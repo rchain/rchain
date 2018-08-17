@@ -134,6 +134,14 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
+    } else if (b.header.get.newCodeHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
+      } yield false
+    } else if (b.header.get.commReductionsHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
+      } yield false
     } else if (b.body.get.postState.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))

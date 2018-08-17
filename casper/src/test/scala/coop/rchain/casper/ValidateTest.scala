@@ -434,5 +434,11 @@ class ValidateTest
       Validate.formatOfFields[Id](
         genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
       ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
+      ) should be(false)
   }
 }
