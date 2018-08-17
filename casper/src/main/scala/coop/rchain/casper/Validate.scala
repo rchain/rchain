@@ -283,7 +283,8 @@ object Validate {
       Applicative[F].pure(Right(Valid))
     } else {
       for {
-        _ <- Log[F].warn(ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+        _ <- Log[F].warn(
+              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
       } yield Left(InvalidShardId)
     }
 

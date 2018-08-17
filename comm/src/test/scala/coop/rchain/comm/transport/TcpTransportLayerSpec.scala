@@ -34,7 +34,9 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
 
   def createTransportLayer(env: TcpTlsEnvironment): Task[TransportLayer[Task]] =
     Cell.mvarCell(TransportState.empty).map { cell =>
-      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)(scheduler, cell, log)
+      new TcpTransportLayer(env.host, env.port, env.cert, env.key, 4 * 1024 * 1024)(scheduler,
+                                                                                    cell,
+                                                                                    log)
     }
 
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
