@@ -165,8 +165,11 @@ object BlockAPI {
   private def isListeningNameReduced(
       block: BlockMessage,
       sortedListeningName: immutable.Seq[Channel])(implicit channelCodec: Codec[Channel]) = {
-    val serializedLog =
-      block.body.fold(Seq.empty[Event])(_.commReductions)
+    val serializedLog = for {
+      bd    <- block.body.toSeq
+      pd    <- bd.deploys
+      event <- pd.log
+    } yield event
     val log =
       serializedLog.map(EventConverter.toRspaceEvent).toList
     log.exists {

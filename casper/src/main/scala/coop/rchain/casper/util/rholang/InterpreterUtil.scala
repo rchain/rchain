@@ -19,8 +19,6 @@ import scodec.bits.BitVector
 
 import scala.collection.immutable
 
-import ProcessedDeployUtil.InternalProcessedDeploy
-
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
@@ -65,14 +63,14 @@ object InterpreterUtil {
                                internalMap: Map[BlockHash, BlockMessage],
                                knownStateHashes: Set[StateHash],
                                runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
-    : (Either[Throwable, Seq[InternalProcessedDeploy]], Set[StateHash]) = {
+    : (Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])], Set[StateHash]) = {
     val (possiblePreStateHash, updatedStateHashes) =
       computeParentsPostState(parents, genesis, dag, internalMap, knownStateHashes, runtimeManager)
 
     possiblePreStateHash match {
       case Right(preStateHash) =>
         val (postStateHash, processedDeploys) = runtimeManager.computeState(preStateHash, deploys)
-        Right(processedDeploys) -> (updatedStateHashes + postStateHash)
+        Right(postStateHash, processedDeploys) -> (updatedStateHashes + postStateHash)
 
       case Left(err) =>
         Left(err) -> updatedStateHashes
@@ -140,7 +138,7 @@ object InterpreterUtil {
       internalMap: Map[BlockHash, BlockMessage],
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
-    : (Either[Throwable, Seq[InternalProcessedDeploy]], Set[StateHash]) = {
+    : (Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])], Set[StateHash]) = {
     val parents = ProtoUtil
       .parents(b)
       .map(internalMap.apply)

@@ -19,11 +19,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "catpure rholang errors" in {
-    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy     = ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get)
-    val result     = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+    val badRholang       = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val deploy           = ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get)
+    val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
 
-    result.isLeft should be(true)
+    result.status.isFailed should be(true)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
@@ -34,8 +34,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(ProtoUtil.termDeploy(_))
 
-    val Right((checkpoint, _)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
-    val hash                   = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
@@ -71,7 +70,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
     val hash1               = testRuntimeManager1.emptyStateHash
     val deploy              = ProtoUtil.basicDeploy(0)
-    val Right(_)            = testRuntimeManager1.computeState(hash1, deploy :: Nil)
+    val _                   = testRuntimeManager1.computeState(hash1, deploy :: Nil)
     testRuntime1.close()
 
     val testRuntime2        = Runtime.create(testStorageDirectory, storageSize)

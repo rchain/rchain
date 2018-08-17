@@ -157,13 +157,13 @@ object Validate {
 
         val deployKeySet = (for {
           bd <- block.body.toList
-          d  <- bd.newCode.flatMap(_.deploy)
+          d  <- bd.deploys.flatMap(_.deploy)
           r  <- d.raw.toList
         } yield (r.user, r.timestamp)).toSet
 
         val repeatBlock = bfTraverse[BlockMessage](parents(block).toList)(parents).find(
           _.body.exists(
-            _.newCode
+            _.deploys
               .flatMap(_.deploy)
               .exists(
                 _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
@@ -362,7 +362,6 @@ object Validate {
                                   genesis,
                                   dag,
                                   internalMap,
-                                  emptyStateHash,
                                   _,
                                   runtimeManager
                                 ),

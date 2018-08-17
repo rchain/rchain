@@ -20,7 +20,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.casper.util.rholang.RuntimeManager.{DeployError, StateHash}
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rspace.Checkpoint
@@ -53,21 +53,17 @@ class InterpreterUtilTest
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      defaultStateHash: StateHash,
       knownStateHashes: Set[StateHash],
-      computeState: (StateHash,
-                     Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
-    : (StateHash, Set[StateHash], Vector[DeployCost]) = {
-    val (checkpoint, updatedKnownStateHashes, deployCost) =
+      runtimeManager: RuntimeManager): (StateHash, Set[StateHash], Seq[InternalProcessedDeploy]) = {
+    val (Right((stateHash, processedDeploys)), updatedStateHashes) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
                                                         genesis,
                                                         dag,
                                                         BlockStore[Id].asMap(),
-                                                        defaultStateHash,
                                                         knownStateHashes,
-                                                        computeState)
-    val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    (blockStateHash, updatedKnownStateHashes, deployCost)
+                                                        runtimeManager)
+
+    (stateHash, updatedStateHashes, processedDeploys)
   }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
@@ -77,23 +73,23 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
     val genesisDeploysCost =
-      genesisDeploys.map(d => DeployCost().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b1DeploysCost = b1Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
+    val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
 
     val b2Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b2DeploysCost = b2Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
+    val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
 
     val b3Deploys = Vector(
       "@7!(7)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b3DeploysCost = b3Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
+    val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
 
     /*
      * DAG Looks like this:
@@ -116,13 +112,8 @@ class InterpreterUtilTest
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
-    val (postGenStateHash, postGenKnownStateHashes, postGenDeployCost) =
-      computeBlockCheckpoint(genesis,
-                             genesis,
-                             chain,
-                             emptyStateHash,
-                             knownStateHashes,
-                             runtimeManager.computeState)
+    val (postGenStateHash, postGenKnownStateHashes, _) =
+      computeBlockCheckpoint(genesis, genesis, chain, knownStateHashes, runtimeManager)
     val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
     val genPostState        = runtimeManager.storageRepr(postGenStateHash)
 
@@ -130,13 +121,12 @@ class InterpreterUtilTest
     genPostState.contains("@{123}!(5)") should be(true)
 
     val b1 = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes, postB1DeployCost) =
+    val (postB1StateHash, postB1KnownStateHashes, _) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
-                             emptyStateHash,
                              postGenKnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
     val b1PostState        = runtimeManager.storageRepr(postB1StateHash)
     b1PostState.contains("@{1}!(1)") should be(true)
@@ -144,13 +134,12 @@ class InterpreterUtilTest
     b1PostState.contains("@{456}!(10)") should be(true)
 
     val b2 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes, postB2DeployCost) =
+    val (postB2StateHash, postB2KnownStateHashes, _) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
-                             emptyStateHash,
                              postB1KnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
 
     val b3 = chainWithUpdatedB2.idToBlocks(3)
@@ -158,9 +147,8 @@ class InterpreterUtilTest
       computeBlockCheckpoint(b3,
                              genesis,
                              chainWithUpdatedB2,
-                             emptyStateHash,
                              postB2KnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
     b3PostState.contains("@{1}!(1)") should be(true)
     b3PostState.contains("@{1}!(15)") should be(true)
@@ -185,23 +173,26 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
     val genesisDeploysWithCost =
-      genesisDeploys.map(d => DeployCost().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
 
     val b1Deploys = Vector(
       "@5!(5)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b1DeploysWithCost = b1Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(2L, 2)))
+    val b1DeploysWithCost =
+      b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L, 2)))
 
     val b2Deploys = Vector(
       "@6!(6)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b2DeploysWithCost = b2Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
+    val b2DeploysWithCost =
+      b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
 
     val b3Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val b3DeploysWithCost = b3Deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(5L, 5)))
+    val b3DeploysWithCost =
+      b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L, 5)))
 
     /*
      * DAG Looks like this:
@@ -221,57 +212,48 @@ class InterpreterUtilTest
       } yield b3
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
-    val (postGenStateHash, postGenKnownStateHashes, postGenDeployCost) =
-      computeBlockCheckpoint(genesis,
-                             genesis,
-                             chain,
-                             emptyStateHash,
-                             knownStateHashes,
-                             runtimeManager.computeState)
+    val (postGenStateHash, postGenKnownStateHashes, _) =
+      computeBlockCheckpoint(genesis, genesis, chain, knownStateHashes, runtimeManager)
     val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
     val b1                  = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes, postB1DeployCost) =
+    val (postB1StateHash, postB1KnownStateHashes, _) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
-                             emptyStateHash,
                              postGenKnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
     val b2                 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes, postB2DeployCost) =
+    val (postB2StateHash, postB2KnownStateHashes, _) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
-                             emptyStateHash,
                              postB1KnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
     val updatedGenesis     = chainWithUpdatedB2.idToBlocks(0)
     val b3                 = chainWithUpdatedB2.idToBlocks(3)
-    val (postb3StateHash, _, postB3DeployCost) =
+    val (postb3StateHash, _, _) =
       computeBlockCheckpoint(b3,
                              updatedGenesis,
                              chainWithUpdatedB2,
-                             emptyStateHash,
                              postB2KnownStateHashes,
-                             runtimeManager.computeState)
+                             runtimeManager)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
   }
 
-  def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
-    val (_, _, cost) = computeDeploysCheckpoint(Seq.empty,
-                                                deploy,
-                                                BlockMessage(),
-                                                initState,
-                                                BlockStore[Id].asMap(),
-                                                emptyStateHash,
-                                                knownStateHashes,
-                                                runtimeManager.computeState)
-    cost
+  def computeSingleProcessedDeploy(deploy: Deploy*): Seq[InternalProcessedDeploy] = {
+    val (Right((_, result)), _) = computeDeploysCheckpoint(Seq.empty,
+                                                           deploy,
+                                                           BlockMessage(),
+                                                           initState,
+                                                           BlockStore[Id].asMap(),
+                                                           knownStateHashes,
+                                                           runtimeManager)
+    result
   }
 
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in {
@@ -282,15 +264,15 @@ class InterpreterUtilTest
     val deploy3 =
       ProtoUtil.termDeploy(mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get)
 
-    val cost1 = computeSingleDeployCost(deploy1)
-    val cost2 = computeSingleDeployCost(deploy2)
-    val cost3 = computeSingleDeployCost(deploy3)
+    val cost1 = computeSingleProcessedDeploy(deploy1)
+    val cost2 = computeSingleProcessedDeploy(deploy2)
+    val cost3 = computeSingleProcessedDeploy(deploy3)
 
     val accCostsSep = cost1 ++ cost2 ++ cost3
 
     //cost within the block should be the same as sum of deploying all programs separately
     val singleDeploy = Seq(deploy1, deploy2, deploy3)
-    val accCostBatch = computeSingleDeployCost(singleDeploy: _*)
+    val accCostBatch = computeSingleProcessedDeploy(singleDeploy: _*)
 
     accCostBatch should contain theSameElementsAs (accCostsSep)
   }
@@ -301,40 +283,26 @@ class InterpreterUtilTest
       val deploy1 = ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get)
       val deploy2 = ProtoUtil.termDeploy(mkTerm("@2!([1,2,3,4])").toOption.get)
 
-      val cost1 = computeSingleDeployCost(deploy1)
-      val cost2 = computeSingleDeployCost(deploy2)
+      val cost1 = computeSingleProcessedDeploy(deploy1)
+      val cost2 = computeSingleProcessedDeploy(deploy2)
 
       val accCostsSep = cost1 ++ cost2
 
       val deployErr    = ProtoUtil.termDeploy(mkTerm("@3!(\"a\" + 3)").toOption.get)
       val batchDeploy  = Seq(deploy1, deploy2, deployErr)
-      val accCostBatch = computeSingleDeployCost(batchDeploy: _*)
+      val accCostBatch = computeSingleProcessedDeploy(batchDeploy: _*)
 
       accCostBatch should contain theSameElementsAs (accCostsSep)
     }
   }
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
-    val deploys     = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
-
-    val (computedTsCheckpoint, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
-    val computedTsLog = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
-    val invalidHash   = ByteString.EMPTY
+    val deploys          = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val invalidHash      = ByteString.EMPTY
 
     val chain =
-      createBlock[StateWithChain](Seq.empty,
-                                  deploys = deploysCost,
-                                  tsHash = invalidHash,
-                                  tsLog = computedTsLog)
+      createBlock[StateWithChain](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
         .runS(initState)
     val block = chain.idToBlocks(0)
 
@@ -343,7 +311,6 @@ class InterpreterUtilTest
                               block,
                               chain,
                               BlockStore[Id].asMap(),
-                              emptyStateHash,
                               knownStateHashes,
                               runtimeManager)
 
@@ -363,24 +330,18 @@ class InterpreterUtilTest
         .flatMap(mkTerm(_).toOption)
         .map(ProtoUtil.termDeploy)
 
-    val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
-
-    val (computedTsCheckpoint, _, _) =
+    val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
                                initState,
                                BlockStore[Id].asMap(),
-                               emptyStateHash,
                                knownStateHashes,
-                               runtimeManager.computeState)
-    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
-    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+                               runtimeManager)
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty,
-                                  deploys = deploysCost,
-                                  tsHash = computedTsHash,
-                                  tsLog = computedTsLog)
+                                  deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                                  tsHash = computedTsHash)
         .runS(initState)
     val block = chain.idToBlocks(0)
 
@@ -389,7 +350,6 @@ class InterpreterUtilTest
                               block,
                               chain,
                               BlockStore[Id].asMap(),
-                              emptyStateHash,
                               knownStateHashes,
                               runtimeManager)
 
@@ -423,24 +383,18 @@ class InterpreterUtilTest
       """.stripMargin
     ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
 
-    val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
-
-    val (computedTsCheckpoint, _, _) =
+    val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
                                initState,
                                BlockStore[Id].asMap(),
-                               emptyStateHash,
                                knownStateHashes,
-                               runtimeManager.computeState)
-    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
-    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+                               runtimeManager)
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty,
-                                  deploys = deploysCost,
-                                  tsHash = computedTsHash,
-                                  tsLog = computedTsLog)
+                                  deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                                  tsHash = computedTsHash)
         .runS(initState)
     val block = chain.idToBlocks(0)
 
@@ -449,7 +403,6 @@ class InterpreterUtilTest
                               block,
                               chain,
                               BlockStore[Id].asMap(),
-                              emptyStateHash,
                               knownStateHashes,
                               runtimeManager)
 
@@ -487,24 +440,18 @@ class InterpreterUtilTest
           """)
         .map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
 
-    val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
-
-    val (computedTsCheckpoint, _, _) =
+    val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
                                initState,
                                BlockStore[Id].asMap(),
-                               emptyStateHash,
                                knownStateHashes,
-                               runtimeManager.computeState)
-    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
-    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+                               runtimeManager)
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty,
-                                  deploys = deploysCost,
-                                  tsHash = computedTsHash,
-                                  tsLog = computedTsLog)
+                                  deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                                  tsHash = computedTsHash)
         .runS(initState)
     val block = chain.idToBlocks(0)
 
@@ -513,7 +460,6 @@ class InterpreterUtilTest
                               block,
                               chain,
                               BlockStore[Id].asMap(),
-                              emptyStateHash,
                               knownStateHashes,
                               runtimeManager)
 
@@ -548,24 +494,18 @@ class InterpreterUtilTest
           |}""".stripMargin
       ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
 
-    val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
-
-    val (computedTsCheckpoint, _, _) =
+    val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint(Seq.empty,
                                deploys,
                                BlockMessage(),
                                initState,
                                BlockStore[Id].asMap(),
-                               emptyStateHash,
                                knownStateHashes,
-                               runtimeManager.computeState)
-    val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
-    val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
+                               runtimeManager)
     val chain: BlockDag =
       createBlock[StateWithChain](Seq.empty,
-                                  deploys = deploysCost,
-                                  tsHash = computedTsHash,
-                                  tsLog = computedTsLog)
+                                  deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+                                  tsHash = computedTsHash)
         .runS(initState)
     val block = chain.idToBlocks(0)
 
@@ -574,7 +514,6 @@ class InterpreterUtilTest
                               block,
                               chain,
                               BlockStore[Id].asMap(),
-                              emptyStateHash,
                               knownStateHashes,
                               runtimeManager)
 

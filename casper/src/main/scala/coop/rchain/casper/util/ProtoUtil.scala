@@ -295,6 +295,14 @@ object ProtoUtil {
     )
   }
 
+  def basicProcessedDeploy(id: Int): ProcessedDeploy = {
+    val deploy = basicDeploy(id)
+    ProcessedDeploy(
+      deploy = Some(deploy),
+      errored = false
+    )
+  }
+
   def sourceDeploy(source: String): DeployData = {
     //TODO this should be removed once we assign the deploy with exact user
     Thread.sleep(1)

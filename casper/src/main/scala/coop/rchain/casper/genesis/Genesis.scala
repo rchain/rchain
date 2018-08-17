@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
@@ -52,9 +52,7 @@ object Genesis {
                     initial: BlockMessage,
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-    val Right((checkpoint, deployWithCost)) = runtimeManager.computeState(startHash, blessedTerms)
-    val stateHash                           = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    val reductionLog                        = checkpoint.log.map(EventConverter.toCasperEvent)
+    val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -63,8 +61,9 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val body =
-      Body(postState = stateWithContracts, newCode = deployWithCost, commReductions = reductionLog)
+    val body = Body(
+      postState = stateWithContracts,
+      deploys = processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal))
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification])

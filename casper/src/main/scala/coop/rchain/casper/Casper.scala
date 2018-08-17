@@ -11,7 +11,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -90,7 +90,6 @@ sealed abstract class MultiParentCasperInstances {
         genesis,
         dag,
         internalMap,
-        runtimeManager.emptyStateHash,
         Set[StateHash](runtimeManager.emptyStateHash),
         runtimeManager
       )
@@ -321,7 +320,7 @@ sealed abstract class MultiParentCasperInstances {
             DagOperations
               .bfTraverse(p)(parents(_).iterator.map(internalMap))
               .foreach(b => {
-                b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
+                b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
               })
             result.toSeq
           }
@@ -330,33 +329,58 @@ sealed abstract class MultiParentCasperInstances {
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
-        for {
-          now         <- Time[F].currentMillis
-          internalMap <- BlockStore[F].asMap()
-          Right((computedCheckpoint, _, deployWithCost)) = knownStateHashesContainer
-            .mapAndUpdate[(Checkpoint, Set[StateHash], Vector[DeployCost])](
-              InterpreterUtil.computeDeploysCheckpoint(p,
-                                                       r,
-                                                       genesis,
-                                                       _blockDag.get,
-                                                       internalMap,
-                                                       emptyStateHash,
-                                                       _,
-                                                       runtimeManager.computeState),
-              _._2)
-          computedStateHash = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog     = computedCheckpoint.log.map(EventConverter.toCasperEvent)
-          postState = RChainState()
-            .withTuplespace(computedStateHash)
-            .withBonds(bonds(p.head))
-            .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
-          body = Body()
-            .withPostState(postState)
-            .withNewCode(deployWithCost)
-            .withCommReductions(serializedLog)
-          header = blockHeader(body, p.map(_.blockHash), version, now)
-          block  = unsignedBlockProto(body, header, justifications)
-        } yield Some(block)
+        Time[F].currentMillis.flatMap(now =>
+          BlockStore[F]
+            .asMap()
+            .flatMap(internalMap => {
+              val possibleProcessedDeploys = knownStateHashesContainer
+                .mapAndUpdate[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])],
+                               Set[StateHash])](
+                  InterpreterUtil.computeDeploysCheckpoint(p,
+                                                           r,
+                                                           genesis,
+                                                           _blockDag.get,
+                                                           internalMap,
+                                                           _,
+                                                           runtimeManager),
+                  _._2)
+                .map(_._1)
+                .joinRight
+
+              possibleProcessedDeploys match {
+                case Left(ex) =>
+                  Log[F]
+                    .error(
+                      s"CASPER: Critical error encountered while processing deploys: ${ex.getMessage}")
+                    .map(_ => none[BlockMessage])
+
+                case Right((computedStateHash, processedDeploys)) =>
+                  val (internalErrors, persistableDeploys) =
+                    processedDeploys.partition(_.status.isInternalError)
+                  internalErrors.toList
+                    .traverse {
+                      case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                        val errorsMessage = errors.map(_.getMessage).mkString("\n")
+                        Log[F].error(
+                          s"CASPER: Internal error encountered while processing deploy ${PrettyPrinter
+                            .buildString(deploy)}: $errorsMessage")
+                      case _ => ().pure[F]
+                    }
+                    .map(_ => {
+                      val postState = RChainState()
+                        .withTuplespace(computedStateHash)
+                        .withBonds(bonds(p.head))
+                        .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
+
+                      val body = Body()
+                        .withPostState(postState)
+                        .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
+                      val header = blockHeader(body, p.map(_.blockHash), version, now)
+                      val block  = unsignedBlockProto(body, header, justifications)
+                      block.some
+                    })
+              }
+            }))
 
       def blockDag: F[BlockDag] = Capture[F].capture {
         _blockDag.get

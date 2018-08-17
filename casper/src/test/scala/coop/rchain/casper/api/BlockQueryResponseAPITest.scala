@@ -37,15 +37,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
-  val secondHashString     = "123456789101112131415161718192"
-  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber          = 1L
-  val timestamp            = 1527191665L
-  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
-  val deployCount          = 10
-  val randomDeploys: IndexedSeq[DeployCost] =
-    (0 until deployCount).map(_ => DeployCost.defaultInstance)
-  val body: Body                       = Body().withPostState(ps).withNewCode(randomDeploys)
+  val secondHashString                 = "123456789101112131415161718192"
+  val blockHash: BlockHash             = ProtoUtil.stringToByteString(secondHashString)
+  val blockNumber                      = 1L
+  val timestamp                        = 1527191665L
+  val ps: RChainState                  = RChainState().withBlockNumber(blockNumber)
+  val deployCount                      = 10
+  val randomDeploys                    = (0 until deployCount).map(ProtoUtil.basicProcessedDeploy(_))
+  val body: Body                       = Body().withPostState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)

@@ -17,7 +17,6 @@ import coop.rchain.rspace.internal.WaitingContinuation
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 import RuntimeManager.StateHash
-import ProcessedDeployUtil.InternalProcessedDeploy
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
@@ -33,13 +32,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler): Seq[Par] = {
-    val runtime                     = runtimeContainer.take()
-    val deploy                      = ProtoUtil.termDeploy(term)
-    val (_, Seq((_, _, _, status))) = newEval(deploy :: Nil, runtime, start)
+    val runtime                   = runtimeContainer.take()
+    val deploy                    = ProtoUtil.termDeploy(term)
+    val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
     val result: Seq[Datum[ListChannelWithRandom]] =
-      if (status.isFailed) Nil
+      if (processedDeploy.status.isFailed) Nil
       else {
         val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
         runtime.space.getData(returnChannel)
@@ -148,7 +147,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           runtime.space.reset(hash)
           val (cost, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
           val newCheckpoint  = runtime.space.createCheckpoint()
-          val deployResult   = (deploy, cost, newCheckpoint.log, DeployStatus.fromErrors(errors))
+          val deployResult = InternalProcessedDeploy(deploy,
+                                                     cost,
+                                                     newCheckpoint.log,
+                                                     DeployStatus.fromErrors(errors))
 
           if (errors.isEmpty) doEval(rem, newCheckpoint.root, acc :+ deployResult)
           else doEval(rem, hash, acc :+ deployResult)
@@ -168,7 +170,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     def doReplayEval(terms: Seq[InternalProcessedDeploy],
                      hash: Blake2b256Hash): Either[Throwable, StateHash] =
       terms match {
-        case (deploy, cost, log, status) +: rem =>
+        case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
           val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)

@@ -8,6 +8,11 @@ sealed trait DeployStatus { self =>
     case _: Failed => true
     case _         => false
   }
+
+  def isInternalError = self match {
+    case _: InternalErrors => true
+    case _                 => false
+  }
 }
 final case object Succeeded                                extends DeployStatus
 sealed trait Failed                                        extends DeployStatus
