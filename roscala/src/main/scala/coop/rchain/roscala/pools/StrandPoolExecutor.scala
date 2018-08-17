@@ -1,6 +1,6 @@
 package coop.rchain.roscala.pools
 
-import java.util.concurrent.{ForkJoinPool, LinkedBlockingDeque, TimeUnit}
+import java.util.concurrent._
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.roscala.Vm
@@ -19,31 +19,34 @@ object StrandPoolExecutor {
 
   def instance[E: StrandPoolExecutor](implicit ev: StrandPoolExecutor[E]): ev.Tpe = ev.instance
 
-  implicit val parallelExecutor = new StrandPoolExecutor[ParallelStrandPool] {
-    private val pool     = new ParallelStrandPool
+  implicit def parallelExecutor = new StrandPoolExecutor[ParallelStrandPool] {
+    private val tracker  = new Phaser(1)
     private val executor = new ForkJoinPool(Runtime.getRuntime.availableProcessors())
+    private val pool     = new ParallelStrandPool(this, tracker)
 
     override type Tpe = ParallelStrandPool
 
     val logger = Logger("StrandPool")
 
     override def start(vm: Vm): Unit = {
+
+      /**
+        * Register StrandPoolExecutor to the barrier
+        */
+      tracker.register()
+
       executor.invoke(vm)
 
       /**
         * It will forever wait for completion.
-        *
-        * According to [[java.util.concurrent]] doc:
-        * All methods that accept timeout parameters treat values less than or equal to zero to mean not to wait at all.
-        * To wait "forever", you can use a value of Long.MAX_VALUE.
         */
-      executor.awaitQuiescence(Long.MaxValue, TimeUnit.MILLISECONDS)
+      tracker.arriveAndAwaitAdvance()
     }
 
     override def instance = pool
   }
 
-  implicit val simpleExecutor = new StrandPoolExecutor[SimpleStrandPool] {
+  implicit def simpleExecutor = new StrandPoolExecutor[SimpleStrandPool] {
     private val globalInstance = new SimpleStrandPool
 
     override type Tpe = SimpleStrandPool
