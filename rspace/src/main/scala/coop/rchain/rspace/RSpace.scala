@@ -190,15 +190,7 @@ object RSpace {
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K]): RSpace[C, P, A, R, K] =
-    context match {
-      case lmdb: LMDBContext[C, P, A, K] =>
-        val mainStore = LMDBStore.create[C, P, A, K](lmdb, branch)
-        create(mainStore, branch)
-
-      case mem: InMemoryContext[C, P, A, K] =>
-        val mainStore = InMemoryStore.create(mem.trieStore, branch)
-        create(mainStore, branch)
-    }
+    create(context.createStore(branch), branch)
 
   def createInMemory[C, P, A, R, K](
       trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],

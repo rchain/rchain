@@ -3,13 +3,18 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import coop.rchain.rspace.history.{ITrieStore, InMemoryTrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.GNAT
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.Codec
 
 trait Context[C, P, A, K] {
   def close(): Unit
+  def createStore(branch: Branch)(implicit
+                                  sc: Serialize[C],
+                                  sp: Serialize[P],
+                                  sa: Serialize[A],
+                                  sk: Serialize[K]): IStore[C, P, A, K]
 }
 
 class LMDBContext[C, P, A, K] private[rspace] (
@@ -17,6 +22,11 @@ class LMDBContext[C, P, A, K] private[rspace] (
     val path: Path,
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]]
 ) extends Context[C, P, A, K] {
+  override def createStore(branch: Branch)(implicit sc: Serialize[C],
+                                           sp: Serialize[P],
+                                           sa: Serialize[A],
+                                           sk: Serialize[K]): IStore[C, P, A, K] =
+    LMDBStore.create[C, P, A, K](this, branch)
 
   def close(): Unit = {
     trieStore.close()
@@ -29,6 +39,12 @@ class InMemoryContext[C, P, A, K] private[rspace] (
                               Blake2b256Hash,
                               GNAT[C, P, A, K]]
 ) extends Context[C, P, A, K] {
+  override def createStore(branch: Branch)(implicit sc: Serialize[C],
+                                           sp: Serialize[P],
+                                           sa: Serialize[A],
+                                           sk: Serialize[K]): IStore[C, P, A, K] =
+    InMemoryStore.create(trieStore, branch)
+
   def close(): Unit = {}
 }
 
