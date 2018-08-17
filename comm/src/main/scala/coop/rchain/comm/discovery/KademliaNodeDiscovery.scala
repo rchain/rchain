@@ -12,7 +12,7 @@ import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
+  def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
       src: PeerNode,
       defaultTimeout: FiniteDuration)(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
@@ -23,15 +23,12 @@ object KademliaNodeDiscovery {
 }
 
 private[discovery] class KademliaNodeDiscovery[
-    F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](src: PeerNode,
-                                                                           timeout: FiniteDuration)
+    F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](src: PeerNode, timeout: FiniteDuration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
 
   private val id: NodeIdentifier = src.id
-
-  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
@@ -95,9 +92,7 @@ private[discovery] class KademliaNodeDiscovery[
         table.updateLastSeen[F](sender) >>= kp(protocol match {
           case Protocol(_, Protocol.Message.Ping(_))        => handlePing
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
-          case Protocol(_, Protocol.Message.Disconnect(disconnect)) =>
-            handleDisconnect(sender, disconnect)
-          case _ => notHandled(unexpectedMessage(protocol.toString)).pure[F]
+          case _                                            => notHandled(unexpectedMessage(protocol.toString)).pure[F]
         })
     }
 
@@ -117,16 +112,4 @@ private[discovery] class KademliaNodeDiscovery[
       _              <- Metrics[F].incrementCounter("lookup-recv-count")
     } yield handledWithMessage(lookupResponse)
   }
-
-  /**
-    * Remove sending peer from table.
-    */
-  private def handleDisconnect(sender: PeerNode, disconnect: Disconnect): F[CommunicationResponse] =
-    for {
-      _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
-      _ <- TransportLayer[F].disconnect(sender)
-      _ <- Capture[F].capture(table.remove(sender.key))
-      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
-    } yield handledWithoutMessage
 }

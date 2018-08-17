@@ -146,7 +146,6 @@ class LocationSpec extends WordSpec with Matchers {
 
       regs.map(
         reg => {
-          println(reg)
           Location.fetch(CtxtRegister(reg), testCtxt, globalEnv) shouldBe testCtxt.reg(reg)
         }
       )

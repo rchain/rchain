@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import InterpreterUtil._
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{Event => CasperEvent, _}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
@@ -153,6 +153,7 @@ class InterpreterUtilTest
                              postB2KnownStateHashes,
                              runtimeManager)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
+
     b3PostState.contains("@{1}!(1)") should be(true)
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{7}!(7)") should be(true)
@@ -248,6 +249,7 @@ class InterpreterUtilTest
                              postB2KnownStateHashes,
                              runtimeManager)
     val b3PostState = runtimeManager.storageRepr(postb3StateHash)
+
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
@@ -325,7 +327,7 @@ class InterpreterUtilTest
     stateHash should be(None)
   }
 
-  "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
+  it should "return a checkpoint with the right hash for a valid block" in {
     val deploys =
       Vector("@1!(1)",
              "@2!(1)",

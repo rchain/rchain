@@ -66,12 +66,13 @@ object Genesis {
       deploys = processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal))
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification])
+    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
   }
 
   def withoutContracts(bonds: Map[Array[Byte], Int],
                        version: Long,
-                       timestamp: Long): BlockMessage = {
+                       timestamp: Long,
+                       shardId: String): BlockMessage = {
     import Sorting.byteArrayOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
@@ -87,16 +88,17 @@ object Genesis {
       .withPostState(state)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification])
+    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  //TODO: Decide on version number
+  //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Monad: Capture: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
       maybeWalletsPath: Option[String],
-      runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): F[BlockMessage] =
+      runtimeManager: RuntimeManager,
+      shardId: String)(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
@@ -119,7 +121,7 @@ object Genesis {
                 }
       bonds   <- getBonds[F](bondsFile, numValidators, genesisPath)
       now     <- Time[F].currentMillis
-      initial = withoutContracts(bonds = bonds, timestamp = now, version = 0L)
+      initial = withoutContracts(bonds = bonds, timestamp = now, version = 0L, shardId = shardId)
     } yield
       withContracts(initial,
                     bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,

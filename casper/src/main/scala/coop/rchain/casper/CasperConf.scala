@@ -24,7 +24,8 @@ case class CasperConf(
     numValidators: Int,
     genesisPath: Path,
     walletsFile: Option[String],
-    createGenesis: Boolean
+    createGenesis: Boolean,
+    shardId: String
 ) {
   val publicKey: Option[Array[Byte]]  = publicKeyBase16.map(Base16.decode)
   val privateKey: Option[Array[Byte]] = privateKeyBase16.map(Base16.decode)

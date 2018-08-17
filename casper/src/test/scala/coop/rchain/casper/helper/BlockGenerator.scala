@@ -54,7 +54,8 @@ trait BlockGenerator {
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
+      tsHash: ByteString = ByteString.EMPTY,
+      shardId: String = "rchain"): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -81,7 +82,8 @@ trait BlockGenerator {
                            Some(body),
                            serializedJustifications,
                            creator,
-                           nextCreatorSeqNum)
+                           nextCreatorSeqNum,
+                           shardId = shardId)
       idToBlocks     = chain.idToBlocks + (nextId -> block)
       _              <- BlockStore[F].put(serializedBlockHash, block)
       latestMessages = chain.latestMessages + (block.sender -> serializedBlockHash)

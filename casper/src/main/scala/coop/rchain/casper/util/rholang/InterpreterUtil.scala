@@ -95,7 +95,7 @@ object InterpreterUtil {
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
-        s"We should have already computed parent state hash when we added the parent ${buildString(parentStateHash)} to our blockDAG."
+        s"We should have already computed parent state hash when we added the parent tuplespace hash ${buildString(parentStateHash)} to our blockDAG."
       )
       (Right(parentStateHash), knownStateHashes)
     } else {

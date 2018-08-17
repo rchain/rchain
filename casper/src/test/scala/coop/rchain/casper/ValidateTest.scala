@@ -89,7 +89,7 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _)
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _, "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
@@ -322,9 +322,12 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
 
-      Validate
-        .blockSummary[Id](block.withBlockNumber(17).withSeqNum(1), BlockMessage(), chain) should be(
-        Left(InvalidBlockNumber))
+      Validate.blockSummary[Id](
+        block.withBlockNumber(17).withSeqNum(1),
+        BlockMessage(),
+        chain,
+        "rchain"
+      ) should be(Left(InvalidBlockNumber))
       log.warns.size should be(1)
   }
 
@@ -388,7 +391,7 @@ class ValidateTest
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in {
     val (_, validators)   = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)

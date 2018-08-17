@@ -188,7 +188,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
               for {
-                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- roundTripWithPing(transportLayer, local, remote)
               } yield r
 
@@ -210,7 +210,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                         local: PeerNode,
                         remote: PeerNode): F[Unit] =
               for {
-                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- sendPing(transportLayer, local, remote)
                 _ = await()
               } yield r
@@ -229,7 +229,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                         remote1: PeerNode,
                         remote2: PeerNode): F[Unit] =
               for {
-                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
+                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- broadcastPing(transportLayer, local, remote1, remote2)
                 _ = await()
               } yield r
