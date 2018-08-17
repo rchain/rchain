@@ -196,9 +196,8 @@ message ProcessedDeploy {
 
 message Body {
   RChainState              postState    = 1;
-  bytes                    preStateHash = 2; //hash of the tuplespace after merging parents before applying new deploys
-  repeated ProcessedDeploy deploys      = 3;
-  bytes                    extraBytes   = 4;
+  repeated ProcessedDeploy deploys      = 2;
+  bytes                    extraBytes   = 3;
 }
 
 message Justification {
