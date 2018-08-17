@@ -30,7 +30,8 @@ object PrettyPrinter {
       s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
         s"-- Sender ID ${buildString(b.sender)} " +
         s"-- M Parent Hash ${buildString(mainParent)} " +
-        s"-- Contents ${buildString(postState)}"
+        s"-- Contents ${buildString(postState)}" +
+        s"-- Shard ID ${limit(b.shardId, 10)}"
     blockString match {
       case Some(str) => str
       case None      => "Block with missing elements"

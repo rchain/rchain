@@ -575,7 +575,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _)
+                        Ed25519.sign _,
+                        "rchain")
   }
 }
 
@@ -599,7 +600,7 @@ object HashSetCasperTest {
   }
 
   def buildGenesis(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)

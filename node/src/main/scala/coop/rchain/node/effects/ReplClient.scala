@@ -1,19 +1,22 @@
 package coop.rchain.node.effects
 
-import java.io.Closeable
-import java.nio.file.{Files, Path, Paths}
+import java.io.{Closeable, FileNotFoundException}
+import java.nio.file._
 import java.util.concurrent.TimeUnit
+
+import scala.io.Source
 
 import cats.implicits._
 
 import coop.rchain.node.model.repl._
+import coop.rchain.shared.Resources
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait ReplClient[F[_]] {
-  def run(line: String): F[String]
-  def eval(fileNames: List[String]): F[String]
+  def run(line: String): F[Either[Throwable, String]]
+  def eval(fileNames: List[String]): F[List[Either[Throwable, String]]]
 }
 
 object ReplClient {
@@ -24,27 +27,35 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Clos
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
-  private val blockingStub = ReplGrpc.blockingStub(channel)
+  private val stub = ReplGrpc.stub(channel)
 
-  def run(line: String): Task[String] = Task.delay {
-    blockingStub.run(CmdRequest(line)).output
-  }
-  def eval(fileNames: List[String]): Task[String] =
+  def run(line: String): Task[Either[Throwable, String]] =
+    Task
+      .fromFuture(stub.run(CmdRequest(line)))
+      .map(_.output)
+      .attempt
+      .map(_.leftMap(processError))
+
+  def eval(fileNames: List[String]): Task[List[Either[Throwable, String]]] =
     fileNames
       .traverse(eval)
-      .map(_.mkString("\n"))
 
-  def eval(fileName: String): Task[String] = Task.delay {
+  def eval(fileName: String): Task[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)
-    if (Files.exists(filePath)) {
-      blockingStub.eval(EvalRequest(readContent(filePath))).output
-    } else {
-      s"File $fileName not found"
-    }
+    if (Files.exists(filePath))
+      Task
+        .fromFuture(stub.eval(EvalRequest(readContent(filePath))))
+        .map(_.output)
+        .attempt
+        .map(_.leftMap(processError))
+    else Task.now(Left(new FileNotFoundException("File not found")))
   }
 
   private def readContent(filePath: Path): String =
-    new String(Files.readAllBytes(filePath))
+    Resources.withResource(Source.fromFile(filePath.toFile))(_.mkString)
+
+  private def processError(t: Throwable): Throwable =
+    Option(t.getCause).getOrElse(t)
 
   override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }

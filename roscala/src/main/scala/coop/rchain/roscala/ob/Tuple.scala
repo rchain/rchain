@@ -66,12 +66,8 @@ class Tuple(val value: Array[Ob]) extends Ob {
         .forall {
           case (e, msgElem) =>
             if (e != msgElem && e != Niv) {
-              if (e.meta.isInstanceOf[Tuple]
-                  && msgElem.meta.isInstanceOf[Tuple]
-                  && e.isInstanceOf[Tuple]
-                  && msgElem.isInstanceOf[Tuple]) {
-                if (e.asInstanceOf[Tuple]
-                      .matches(msgElem.asInstanceOf[Tuple])) {
+              if (e.isInstanceOf[Tuple] && msgElem.isInstanceOf[Tuple]) {
+                if (e.asInstanceOf[Tuple].matches(msgElem.asInstanceOf[Tuple])) {
                   true
                 } else false
               } else false

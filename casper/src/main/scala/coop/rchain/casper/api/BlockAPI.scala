@@ -295,9 +295,9 @@ object BlockAPI {
       faultTolerance = normalizedFaultTolerance - initialFault,
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
       parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.sender)
+      sender = PrettyPrinter.buildStringNoLimit(block.sender),
+      shardId = block.shardId
     )
-
   private def constructBlockInfoWithoutTuplespace[
       F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,

@@ -12,7 +12,7 @@ import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](
+  def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
       src: PeerNode,
       defaultTimeout: FiniteDuration)(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
@@ -23,8 +23,7 @@ object KademliaNodeDiscovery {
 }
 
 private[discovery] class KademliaNodeDiscovery[
-    F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: KademliaRPC](src: PeerNode,
-                                                                           timeout: FiniteDuration)
+    F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](src: PeerNode, timeout: FiniteDuration)
     extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
