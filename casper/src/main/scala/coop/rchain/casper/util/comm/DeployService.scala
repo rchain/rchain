@@ -46,8 +46,24 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
   }
 
   def showBlocks(): Task[String] = Task.delay {
-    val response = blockingStub.showBlocks(Empty())
-    response.toProtoString
+    val response = blockingStub.showBlocks(Empty()).toList
+
+    val showResponses = response
+      .map {
+        case bi =>
+          s"""
+------------- block ${bi.blockNumber} ---------------
+${bi.toProtoString}
+-----------------------------------------------------
+"""
+      }
+      .mkString("\n")
+
+    val showLength =
+      s"""
+Blockchain length: ${response.length}
+"""
+    showResponses + "\n" + showLength
   }
 
   def addBlock(b: BlockMessage): Task[(Boolean, String)] = Task.delay {
