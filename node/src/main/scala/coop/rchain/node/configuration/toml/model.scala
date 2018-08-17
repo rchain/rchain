@@ -21,6 +21,7 @@ case class Server(
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
     mapSize: Option[Long],
+    inMemoryStore: Option[Boolean],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
     maxNumOfConnections: Option[Int]

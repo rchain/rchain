@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
+import internal._
 import cats.Eq
 import cats.instances.byte._
 import cats.instances.option._
@@ -9,7 +10,6 @@ import cats.syntax.eq._
 import cats.syntax.traverse._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.seq._
-import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.ByteVector
 

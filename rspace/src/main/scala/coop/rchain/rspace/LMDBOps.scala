@@ -1,12 +1,13 @@
 package coop.rchain.rspace
 
+import internal._
+
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
-import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._

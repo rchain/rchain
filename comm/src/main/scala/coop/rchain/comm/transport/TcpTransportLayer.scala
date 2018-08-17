@@ -18,7 +18,7 @@ import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
+class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
@@ -60,6 +60,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
               .intercept(new SslSessionClientInterceptor())
@@ -160,6 +161,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String)(
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
         .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
         .intercept(new SslSessionServerInterceptor())

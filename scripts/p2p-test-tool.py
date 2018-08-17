@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 # This is a simple script to help with p2p network boot/testing.
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
@@ -16,6 +16,7 @@ import re
 import time
 import sys
 import random
+import string
 
 
 parser = argparse.ArgumentParser(
@@ -55,6 +56,11 @@ parser.add_argument("-n", "--network",
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
+parser.add_argument("--peer-command",
+                    dest='peer_command',
+                    type=str,
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
+                    help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
                     type=int,
@@ -114,7 +120,6 @@ if len(sys.argv)==1:
     parser.print_help(sys.stderr)
     sys.exit(1)
 
-
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
@@ -122,7 +127,6 @@ RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
-peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}:40400'
 
 
 def main():
@@ -206,6 +210,12 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
             time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
+        if test == "casper_propose_and_deploy":
+            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+                if test_casper_propose_and_deploy(container) == 0:
+                    notices['pass'].append(f"{container.name}: Integration test 1 worked.")
+                else:
+                    notices['fail'].append(f"{container.name}: Integration test 1 failed.")
 
     print("=======================SHOW LOGS===========================")
     print("Dumping logs from nodes in 3 seconds.")
@@ -307,6 +317,98 @@ def test_propose(container):
 
     return retval
 
+class rnode:
+    binary='/opt/docker/bin/rnode'
+
+    @staticmethod
+    def deploy_cmd(f):
+        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
+
+    propose_cmd = binary + " propose"
+
+    show_blocks_cmd = binary + " show-blocks"
+
+class node:
+    log_message_rx = re.compile("^\d*:\d*:\d*\.\d* (.*?)$", re.MULTILINE | re.DOTALL)
+
+    @staticmethod
+    def received_block_rx(expected_content):
+        return re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$")
+
+    @staticmethod
+    def added_block_rx(block_id):
+        return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
+
+def test_casper_propose_and_deploy(test_container):
+    """
+    This test represents an integration test that deploys a contract and then checks
+    if all the nodes have received the block containing the contract.
+    """
+    def run_cmd(cmd):
+        print (f"{test_container.name}: Execute <{cmd}>")
+        r = test_container.exec_run(['sh', '-c', cmd])
+        out_lines = r.output.decode('utf-8').splitlines()
+
+        print (f"{test_container.name}: Finish <{cmd}>. Exit Code: {r.exit_code}")
+        (r.exit_code, out_lines)
+
+    random_length = 20
+    random_string = ''.join(random.choice(string.ascii_letters) for m in range(random_length))
+    expected_string = f"[{test_container.name}:{random_string}]"
+
+    hello_rho = '/opt/docker/examples/tut-hello.rho'
+
+    sed_cmd = f"sed -i -e 's/Joe/{expected_string}/g' {hello_rho}"
+
+
+    print(f"Running integration1 test on container {test_container.name}. Expected string: {expected_string}")
+
+    try:
+        run_cmd(sed_cmd)
+
+        run_cmd(rnode.deploy_cmd(hello_rho))
+
+        print("Propose to blockchain previously deployed smart contracts.")
+
+        run_cmd(rnode.propose_cmd)
+
+        print("Allow for logs to fill out from last propose if needed")
+    except Exception as e:
+        print(e)
+
+    time.sleep(5)
+
+    retval=0
+
+    print(f"Check all peer logs for blocks containing {expected_string}")
+    for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+        if container.name == test_container.name:
+            continue
+        log_content = container.logs().decode('utf-8')
+        logs = node.log_message_rx.split(log_content)
+        blocks_received_ids = [match.group(1) for match in [node.received_block_rx(expected_string).match(log) for log in logs] if match]
+
+        if blocks_received_ids:
+            print(f"Container: {container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
+
+            if len(blocks_received_ids) > 1:
+                print(f"Too many blocks received: {blocks_received_ids}")
+                retval = retval + 1
+            else:
+                block_id = blocks_received_ids[0]
+
+                blocks_added = [match.group(0) for match in [node.added_block_rx(block_id).match(log) for log in logs] if match]
+                if blocks_added:
+                    print(f"Container: {container.name}: Added block found for {blocks_received_ids}: {blocks_added}. Success!")
+                else:
+                    print(f"Container: {container.name}: Added blocks not found for {blocks_received_ids}. FAILURE!")
+                    retval = retval + 1
+
+        else:
+            print(f"Container: {container.name}: String {expected_string} NOT found in output. FAILURE!")
+            retval = retval + 1
+
+    return retval
 
 def show_logs():
     print("=============================SHOW LOGS==========================")
@@ -588,7 +690,7 @@ def create_peer_nodes():
                 f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
-            command=f"{peer_prefix_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
+            command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")

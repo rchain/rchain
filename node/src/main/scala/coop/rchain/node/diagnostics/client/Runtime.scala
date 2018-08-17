@@ -4,14 +4,18 @@ import cats._
 import cats.implicits._
 import coop.rchain.node.effects.ConsoleIO
 import coop.rchain.node.model.diagnostics._
-import coop.rchain.shared.LongOps._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
 
 import scala.concurrent.duration._
 import coop.rchain.comm.PeerNode
 
 object Runtime {
-  def diagnosticsProgram[F[_]: Monad: ConsoleIO: DiagnosticsService]: F[Unit] =
-    for {
+
+  type ErrorHandler[F[_]] = ApplicativeError_[F, Throwable]
+
+  def diagnosticsProgram[F[_]: Monad: ErrorHandler: ConsoleIO: DiagnosticsService]: F[Unit] = {
+    val program = for {
       peers   <- DiagnosticsService[F].listPeers
       _       <- ConsoleIO[F].println(showPeers(peers))
       core    <- DiagnosticsService[F].nodeCoreMetrics
@@ -28,6 +32,18 @@ object Runtime {
       _       <- ConsoleIO[F].println(showThreads(threads))
       _       <- ConsoleIO[F].close
     } yield ()
+
+    for {
+      result <- program.attempt
+      _ <- result match {
+            case Left(ex) => ConsoleIO[F].println(s"Error: ${processError(ex).getMessage}")
+            case _        => ().pure[F]
+          }
+    } yield ()
+  }
+
+  private def processError(t: Throwable): Throwable =
+    Option(t.getCause).getOrElse(t)
 
   def showPeers(peers: Seq[PeerNode]): String =
     List(
