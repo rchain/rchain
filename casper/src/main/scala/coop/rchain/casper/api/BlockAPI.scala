@@ -323,13 +323,13 @@ object BlockAPI {
   private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
       q: BlockQuery,
       dag: BlockDag): F[Option[BlockMessage]] =
-    BlockStore[F].asMap().map { internalMap: Map[BlockHash, BlockMessage] =>
-      val fullHash = internalMap.keys
-        .find(h => {
-          Base16.encode(h.toByteArray).startsWith(q.hash)
-        })
-      fullHash.map(h => internalMap(h))
-    }
+    for {
+      findResult <- BlockStore[F].find(h => {
+                     Base16.encode(h.toByteArray).startsWith(q.hash)
+                   })
+      fullHash = findResult.head._1
+      block    <- BlockStore[F].get(fullHash)
+    } yield block
 
   private def addResponse(status: Option[BlockStatus],
                           maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {
