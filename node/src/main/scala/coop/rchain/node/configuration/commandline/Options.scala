@@ -91,6 +91,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
                 descr =
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
+    val secureRandomNonBlocking =
+      opt[Flag](descr = "Use a non blocking secure random instance")
+
     val port =
       opt[Int](short = 'p', descr = "Network port to use.")
 
