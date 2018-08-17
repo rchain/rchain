@@ -334,7 +334,9 @@ def create_empty_bonds_file():
 
 def boot_p2p_network():
     try:
-        client.networks.create(args.network, driver="bridge")
+
+        if not args.skip_boot_remove:
+            client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
         # create_empty_bonds_file() # disabled until python generated keys work
         create_bootstrap_node()
