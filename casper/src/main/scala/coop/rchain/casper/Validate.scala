@@ -118,10 +118,6 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block body is missing."))
       } yield false
-    } else if (b.sender.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block sender is empty."))
-      } yield false
     } else if (b.sig.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block signature is empty."))
@@ -137,14 +133,6 @@ object Validate {
     } else if (b.header.get.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
-    } else if (b.header.get.newCodeHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
-      } yield false
-    } else if (b.header.get.commReductionsHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
       } yield false
     } else if (b.body.get.postState.isEmpty) {
       for {
