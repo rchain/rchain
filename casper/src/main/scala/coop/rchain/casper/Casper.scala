@@ -1,53 +1,36 @@
 package coop.rchain.casper
 
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import cats.{Applicative, Id, Monad}
+import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
-import cats.effect.{Bracket, Sync}
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil.{findJustificationParentWithSeqNum, _}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.p2p.effects._
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import coop.rchain.shared.AttemptOps._
 
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
-import scala.concurrent.SyncVar
-import scala.io.Source
-import scala.util.Try
-import java.nio.file.Path
 
 import cats.effect.concurrent.Ref
-import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.Validator
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.models.Par
-import coop.rchain.rspace.{trace, Checkpoint}
-import coop.rchain.rspace.trace.{COMM, Event}
-import coop.rchain.rspace.trace.Event.codecLog
-import monix.eval.Task
+import coop.rchain.rspace.Checkpoint
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
-import scodec.Codec
-import scodec.bits.BitVector
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
