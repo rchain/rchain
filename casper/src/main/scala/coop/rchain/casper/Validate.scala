@@ -352,25 +352,25 @@ object Validate {
       implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
       internalMap <- BlockStore[F].asMap()
-      maybeCheckPoint <- Capture[F].capture {
-                          val Right((maybeCheckPoint, _)) =
-                            knownStateHashesContainer
-                              .mapAndUpdate[(Option[StateHash], Set[StateHash])](
-                                //invalid blocks return None and don't update the checkpoints
-                                InterpreterUtil.validateBlockCheckpoint(
-                                  block,
-                                  genesis,
-                                  dag,
-                                  internalMap,
-                                  _,
-                                  runtimeManager
-                                ),
-                                _._2
-                              )
-                          maybeCheckPoint
-                        }
+      maybeStateHash <- Capture[F].capture {
+                         val Right((maybeStateHash, _)) =
+                           knownStateHashesContainer
+                             .mapAndUpdate[(Option[StateHash], Set[StateHash])](
+                               //invalid blocks return None and don't update the checkpoints
+                               InterpreterUtil.validateBlockCheckpoint(
+                                 block,
+                                 genesis,
+                                 dag,
+                                 internalMap,
+                                 _,
+                                 runtimeManager
+                               ),
+                               _._2
+                             )
+                         maybeStateHash
+                       }
     } yield
-      maybeCheckPoint match {
+      maybeStateHash match {
         case Some(_) => Right(Valid)
         case None    => Left(InvalidTransaction)
       }

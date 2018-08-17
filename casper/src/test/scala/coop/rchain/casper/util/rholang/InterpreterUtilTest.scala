@@ -54,7 +54,7 @@ class InterpreterUtilTest
       genesis: BlockMessage,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
-      runtimeManager: RuntimeManager): (StateHash, Set[StateHash], Seq[InternalProcessedDeploy]) = {
+      runtimeManager: RuntimeManager): (StateHash, Set[StateHash], Seq[ProcessedDeploy]) = {
     val (Right((stateHash, processedDeploys)), updatedStateHashes) =
       InterpreterUtil.computeBlockCheckpointFromDeploys(b,
                                                         genesis,
@@ -63,7 +63,7 @@ class InterpreterUtilTest
                                                         knownStateHashes,
                                                         runtimeManager)
 
-    (stateHash, updatedStateHashes, processedDeploys)
+    (stateHash, updatedStateHashes, processedDeploys.map(ProcessedDeployUtil.fromInternal))
   }
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
@@ -112,35 +112,38 @@ class InterpreterUtilTest
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
 
-    val (postGenStateHash, postGenKnownStateHashes, _) =
+    val (postGenStateHash, postGenKnownStateHashes, postGenProcessedDeploys) =
       computeBlockCheckpoint(genesis, genesis, chain, knownStateHashes, runtimeManager)
-    val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
-    val genPostState        = runtimeManager.storageRepr(postGenStateHash)
+    val chainWithUpdatedGen =
+      injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
+    val genPostState = runtimeManager.storageRepr(postGenStateHash)
 
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
 
     val b1 = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes, _) =
+    val (postB1StateHash, postB1KnownStateHashes, postB1ProcessedDeploys) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
                              postGenKnownStateHashes,
                              runtimeManager)
-    val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
-    val b1PostState        = runtimeManager.storageRepr(postB1StateHash)
+    val chainWithUpdatedB1 =
+      injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash, postB1ProcessedDeploys)
+    val b1PostState = runtimeManager.storageRepr(postB1StateHash)
     b1PostState.contains("@{1}!(1)") should be(true)
     b1PostState.contains("@{123}!(5)") should be(true)
     b1PostState.contains("@{456}!(10)") should be(true)
 
     val b2 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes, _) =
+    val (postB2StateHash, postB2KnownStateHashes, postB2ProcessedDeploys) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
                              postB1KnownStateHashes,
                              runtimeManager)
-    val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
+    val chainWithUpdatedB2 =
+      injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash, postB2ProcessedDeploys)
 
     val b3 = chainWithUpdatedB2.idToBlocks(3)
     val (postb3StateHash, _, _) =
@@ -158,10 +161,12 @@ class InterpreterUtilTest
   private def injectPostStateHash(chain: BlockDag,
                                   id: Int,
                                   b: BlockMessage,
-                                  postGenStateHash: StateHash) = {
+                                  postGenStateHash: StateHash,
+                                  processedDeploys: Seq[ProcessedDeploy]) = {
     val updatedBlockPostState = b.body.get.postState.get.withTuplespace(postGenStateHash)
-    val updatedBlockBody      = b.body.get.withPostState(updatedBlockPostState)
-    val updatedBlock          = b.withBody(updatedBlockBody)
+    val updatedBlockBody =
+      b.body.get.withPostState(updatedBlockPostState).withDeploys(processedDeploys)
+    val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[Id].put(b.blockHash, updatedBlock)
     chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
   }
@@ -212,27 +217,30 @@ class InterpreterUtilTest
       } yield b3
     val chain   = createChain[StateWithChain].runS(initState)
     val genesis = chain.idToBlocks(0)
-    val (postGenStateHash, postGenKnownStateHashes, _) =
+    val (postGenStateHash, postGenKnownStateHashes, postGenProcessedDeploys) =
       computeBlockCheckpoint(genesis, genesis, chain, knownStateHashes, runtimeManager)
-    val chainWithUpdatedGen = injectPostStateHash(chain, 0, genesis, postGenStateHash)
-    val b1                  = chainWithUpdatedGen.idToBlocks(1)
-    val (postB1StateHash, postB1KnownStateHashes, _) =
+    val chainWithUpdatedGen =
+      injectPostStateHash(chain, 0, genesis, postGenStateHash, postGenProcessedDeploys)
+    val b1 = chainWithUpdatedGen.idToBlocks(1)
+    val (postB1StateHash, postB1KnownStateHashes, postB1ProcessedDeploys) =
       computeBlockCheckpoint(b1,
                              genesis,
                              chainWithUpdatedGen,
                              postGenKnownStateHashes,
                              runtimeManager)
-    val chainWithUpdatedB1 = injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash)
-    val b2                 = chainWithUpdatedB1.idToBlocks(2)
-    val (postB2StateHash, postB2KnownStateHashes, _) =
+    val chainWithUpdatedB1 =
+      injectPostStateHash(chainWithUpdatedGen, 1, b1, postB1StateHash, postB1ProcessedDeploys)
+    val b2 = chainWithUpdatedB1.idToBlocks(2)
+    val (postB2StateHash, postB2KnownStateHashes, postB2ProcessedDeploys) =
       computeBlockCheckpoint(b2,
                              genesis,
                              chainWithUpdatedB1,
                              postB1KnownStateHashes,
                              runtimeManager)
-    val chainWithUpdatedB2 = injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash)
-    val updatedGenesis     = chainWithUpdatedB2.idToBlocks(0)
-    val b3                 = chainWithUpdatedB2.idToBlocks(3)
+    val chainWithUpdatedB2 =
+      injectPostStateHash(chainWithUpdatedB1, 2, b2, postB2StateHash, postB2ProcessedDeploys)
+    val updatedGenesis = chainWithUpdatedB2.idToBlocks(0)
+    val b3             = chainWithUpdatedB2.idToBlocks(3)
     val (postb3StateHash, _, _) =
       computeBlockCheckpoint(b3,
                              updatedGenesis,

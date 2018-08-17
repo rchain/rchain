@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.BlockDag
+import coop.rchain.casper.PrettyPrinter.buildString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.models.Par
@@ -47,7 +48,7 @@ object InterpreterUtil {
       case Right(computedStateHash) =>
         if (tsHash.contains(computedStateHash)) {
           // state hash in block matches computed hash!
-          Some(computedStateHash) -> updatedStateHashes
+          Some(computedStateHash) -> (updatedStateHashes + computedStateHash)
         } else {
           // state hash in block does not match computed hash -- invalid!
           // return no state hash, do not update the state hash set
@@ -94,7 +95,8 @@ object InterpreterUtil {
       val parentStateHash = parentTuplespaces.head._2
       assert(
         knownStateHashes.contains(parentStateHash),
-        "We should have already computed parent state hash when we added the parent to our blockDAG.")
+        s"We should have already computed parent state hash when we added the parent ${buildString(parentStateHash)} to our blockDAG."
+      )
       (Right(parentStateHash), knownStateHashes)
     } else {
       //In the case of multiple parents we need
