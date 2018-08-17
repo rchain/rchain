@@ -41,6 +41,7 @@ object Configuration {
   private val DefaultValidatorSigAlgorithm      = "ed25519"
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
+  private val DefaultSecureRandomNonBlocking    = false
   private val DefaultMaxNumOfConnections        = 500
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -101,7 +102,8 @@ object Configuration {
             dataDir.resolve(DefaultCertificateFileName),
             Paths.get(DefaultKeyFileName),
             customCertificateLocation = false,
-            customKeyLocation = false
+            customKeyLocation = false,
+            secureRandomNonBlocking = false
           ),
           CasperConf(
             None,
@@ -183,6 +185,9 @@ object Configuration {
 
     val keyPath: Path = key.getOrElse(dataDir.resolve(DefaultKeyFileName))
 
+    val secureRandomNonBlocking =
+      get(_.run.secureRandomNonBlocking, _ => None, DefaultSecureRandomNonBlocking)
+
     // Validators
     val numValidators =
       get(_.run.numValidators, _.validators.flatMap(_.count), DefaultNumValidators)
@@ -221,7 +226,8 @@ object Configuration {
       certificatePath,
       keyPath,
       certificate.isDefined,
-      key.isDefined
+      key.isDefined,
+      secureRandomNonBlocking
     )
 
     val casper =

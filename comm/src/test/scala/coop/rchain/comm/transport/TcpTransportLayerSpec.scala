@@ -1,7 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.security.Security
-
 import scala.concurrent.duration.Duration
 
 import coop.rchain.shared
@@ -11,11 +9,8 @@ import coop.rchain.shared.{Cell, Log}
 
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
-
-  Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
   implicit val log: Log[Task]       = new shared.Log.NOPLog[Task]
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
@@ -23,7 +18,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
       val host    = "127.0.0.1"
-      val keyPair = CertificateHelper.generateKeyPair()
+      val keyPair = CertificateHelper.generateKeyPair(true)
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get

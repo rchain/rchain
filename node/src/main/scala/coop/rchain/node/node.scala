@@ -79,7 +79,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       }
     } else {
       println("Generating a PEM secret key for the node")
-      val keyPair = CertificateHelper.generateKeyPair()
+      val keyPair = CertificateHelper.generateKeyPair(conf.tls.secureRandomNonBlocking)
       withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) { pw =>
         pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
       }
