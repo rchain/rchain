@@ -416,7 +416,7 @@ class ValidateTest
     activeRuntime.close()
   }
 
-  "Field format validation" should "suceed on a valid block and fail on empty fields" in {
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
     val genesis = Genesis.withoutContracts(Map.empty, 0L, 0L, "rchain")
     Validate.formatOfFields[Id](genesis) should be(true)
     Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
