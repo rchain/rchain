@@ -101,6 +101,10 @@ parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
+parser.add_argument("--skip-boot-remove",
+                    dest="skip_boot_remove",
+                    action='store_true',
+                    help="skip network resource removal on network boot")
 parser.add_argument("--test-performance",
                     dest='test_performance',
                     action='store_true',
@@ -144,7 +148,8 @@ def main():
         deploy_demo()
         return
     if args.boot == True:
-        remove_resources_by_network(args.network)
+        if not args.skip_boot_remove:
+            remove_resources_by_network(args.network)
         boot_p2p_network()
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
@@ -192,7 +197,7 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: Peers count incorrect in node logs.")
         if test == "propose":
-            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+            for container in client.containers.list(filters={"name":f"peer\d.{args.network}"}):
                 if test_propose(container) == 0:
                     notices['pass'].append(f"{container.name}: Proposal of blocks for deployed contracts worked.")
                 else:
@@ -305,7 +310,7 @@ def test_propose(container):
 
     print("Check all peer logs for casper WARN or ERROR messages")
     time.sleep(5) # Allow for logs to fill out from last propose if needed
-    for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+    for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
                 if "WARN" in line and "CASPER" in line and not "wallets" in line:
@@ -431,7 +436,8 @@ def create_empty_bonds_file():
 
 def boot_p2p_network():
     try:
-        client.networks.create(args.network, driver="bridge")
+        if not args.skip_boot_remove:
+            client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
         # create_empty_bonds_file() # disabled until python generated keys work
         create_bootstrap_node()
