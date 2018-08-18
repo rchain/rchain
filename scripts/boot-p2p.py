@@ -5,8 +5,9 @@
 # python3.6 -m pip install docker
 # Return code of 0 is success on test and 1 is fail.
 # Example below shows how to boot network with 3 nodes, including bootstrap, and run specific test
-# ./boot-p2p.py -m 2048m -p 2 -c 0 -i rchain/rnode:dev
-# ./boot-p2p.py -i rchain/rnode:dev
+# sudo ./scripts/boot-p2p.py -m 2048m -p 2 -c 0 -i rchain/rnode:dev
+# Simple
+# sudo ./scripts/boot-p2p.py -i rchain/rnode:dev
 import subprocess
 import argparse
 import docker
