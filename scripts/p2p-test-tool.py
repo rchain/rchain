@@ -193,7 +193,7 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: Peers count incorrect in node logs.")
         if test == "propose":
-            for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+            for container in client.containers.list(filters={"name":f"peer\d.{args.network}"}):
                 if test_propose(container) == 0:
                     notices['pass'].append(f"{container.name}: Proposal of blocks for deployed contracts worked.")
                 else:
@@ -300,7 +300,7 @@ def test_propose(container):
 
     print("Check all peer logs for casper WARN or ERROR messages")
     time.sleep(5) # Allow for logs to fill out from last propose if needed
-    for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
+    for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
                 if "WARN" in line and "CASPER" in line and not "wallets" in line:
@@ -334,7 +334,6 @@ def create_empty_bonds_file():
 
 def boot_p2p_network():
     try:
-
         if not args.skip_boot_remove:
             client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
