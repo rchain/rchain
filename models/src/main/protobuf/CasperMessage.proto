@@ -16,7 +16,7 @@ service DeployService {
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
-  rpc showBlocks(google.protobuf.Empty) returns (BlocksResponse) {}
+  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfo) {}
   rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
   rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
 }

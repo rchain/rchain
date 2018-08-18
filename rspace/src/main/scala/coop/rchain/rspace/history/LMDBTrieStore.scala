@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import coop.rchain.rspace.{Blake2b256Hash, LMDBOps}
-import coop.rchain.shared.AttemptOps._
+import coop.rchain.rspace.internal._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
 import org.lmdbjava.DbiFlags.MDB_CREATE
