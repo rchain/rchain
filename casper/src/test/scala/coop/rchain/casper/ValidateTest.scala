@@ -436,13 +436,12 @@ class ValidateTest
         genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
       ) should be(false)
       Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
+        genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
       ) should be(false)
       Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withBody(genesis.body.get.withCommReductions(List(Event(EventInstance.Empty))))
+        genesis.withBody(
+          genesis.body.get
+            .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
       ) should be(false)
   }
 }
