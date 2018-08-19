@@ -8,6 +8,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{mainParent, _}
+import coop.rchain.catscontrib.ListContrib
 
 import scala.collection
 
@@ -121,15 +122,17 @@ sealed abstract class SafetyOracleInstances {
       private def agreementGraphEdgeCount(blockDag: BlockDag,
                                           estimate: BlockMessage,
                                           candidates: Map[Validator, Int]): F[Int] = {
-        // TODO: Replace with findM when it gets merged into cats
-        def filterAgreeingJustificationHashes(justificationHashes: List[BlockHash],
-                                              validator: Validator): F[List[BlockHash]] =
-          justificationHashes.filterA(justificationHash =>
-            for {
-              justificationBlock <- unsafeGetBlock[F](justificationHash)
-              isSenderSecond     = justificationBlock.sender == validator
-              compatible         <- computeCompatibility(estimate, justificationBlock)
-            } yield isSenderSecond && compatible)
+        def findAgreeingJustificationHash(justificationHashes: List[BlockHash],
+                                          validator: Validator): F[Option[BlockHash]] =
+          ListContrib.findM(
+            justificationHashes,
+            justificationHash =>
+              for {
+                justificationBlock <- unsafeGetBlock[F](justificationHash)
+                isSenderSecond     = justificationBlock.sender == validator
+                compatible         <- computeCompatibility(estimate, justificationBlock)
+              } yield isSenderSecond && compatible
+          )
 
         def seesAgreement(first: Validator, second: Validator): F[Boolean] = {
           val maybeFirstLatestHash = blockDag.latestMessages.get(first)
@@ -138,10 +141,10 @@ sealed abstract class SafetyOracleInstances {
               for {
                 firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
                 justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
-                agreeingJustificationHashes <- filterAgreeingJustificationHashes(
-                                                justificationHashes.toList,
-                                                second)
-              } yield agreeingJustificationHashes.nonEmpty
+                agreeingJustificationHash <- findAgreeingJustificationHash(
+                                              justificationHashes.toList,
+                                              second)
+              } yield agreeingJustificationHash.isDefined
             case None => false.pure[F]
           }
         }
