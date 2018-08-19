@@ -61,27 +61,32 @@ object EquivocationDetector {
   def equivocationsCheck[F[_]: Monad: BlockStore](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+    val maybeCreatorJustification   = creatorJustificationHash(block)
+    val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
+    val isNotEquivocation           = maybeCreatorJustification == maybeLatestMessageOfCreator
+    val result = if (isNotEquivocation) {
+      Right(Valid)
+    } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
+      Left(AdmissibleEquivocation)
+    } else {
+      Left(IgnorableEquivocation)
+    }
+    Applicative[F].pure(result)
+  }
+
+  private def requestedAsDependency(block: BlockMessage,
+                                    blockBufferDependencyDag: DoublyLinkedDag[BlockHash]): Boolean =
+    blockBufferDependencyDag.parentToChildAdjacencyList.contains(block.blockHash)
+
+  private def creatorJustificationHash(block: BlockMessage): Option[BlockHash] =
     for {
-      justificationOfCreator <- block.justifications
-                                 .find {
-                                   case Justification(validator: Validator, _) =>
-                                     validator == block.sender
-                                 }
-                                 .getOrElse(Justification.defaultInstance)
-                                 .latestBlockHash
-                                 .pure[F]
-      latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
-      isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
-      result <- if (isNotEquivocation) {
-                 Applicative[F].pure(Right(Valid))
-               } else if (blockBufferDependencyDag.parentToChildAdjacencyList.contains(
-                            block.blockHash)) {
-                 Applicative[F].pure(Left(AdmissibleEquivocation))
-               } else {
-                 Applicative[F].pure(Left(IgnorableEquivocation))
-               }
-    } yield result
+      maybeCreatorJustification <- block.justifications
+                                    .find {
+                                      case Justification(validator: Validator, _) =>
+                                        validator == block.sender
+                                    }
+    } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
   def neglectedEquivocationsCheckWithUpdate[F[_]: Monad: BlockStore](
