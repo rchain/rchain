@@ -419,7 +419,7 @@ sealed abstract class MultiParentCasperInstances {
           block: BlockMessage,
           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
         for {
-          neglectedEquivocationDetected <- equivocationsTracker.foldLeft(false.pure[F]) {
+          neglectedEquivocationDetected <- equivocationsTracker.toList.foldLeftM(false) {
                                             case (acc, equivocationRecord) =>
                                               for {
                                                 equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus[
@@ -429,21 +429,20 @@ sealed abstract class MultiParentCasperInstances {
                                                                                 equivocationRecord,
                                                                                 Set.empty[
                                                                                   BlockMessage])
-                                                updatedAcc <- equivocationDiscoveryStatus match {
-                                                               case EquivocationNeglected =>
-                                                                 true.pure[F]
-                                                               case EquivocationDetected =>
-                                                                 val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
-                                                                 equivocationsTracker.remove(
-                                                                   equivocationRecord)
-                                                                 equivocationsTracker.add(
-                                                                   equivocationRecord.copy(
-                                                                     equivocationDetectedBlockHashes =
-                                                                       updatedEquivocationDetectedBlockHashes))
-                                                                 acc
-                                                               case EquivocationOblivious =>
-                                                                 acc
-                                                             }
+                                                updatedAcc = equivocationDiscoveryStatus match {
+                                                  case EquivocationNeglected =>
+                                                    true
+                                                  case EquivocationDetected =>
+                                                    val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
+                                                    equivocationsTracker.remove(equivocationRecord)
+                                                    equivocationsTracker.add(
+                                                      equivocationRecord.copy(
+                                                        equivocationDetectedBlockHashes =
+                                                          updatedEquivocationDetectedBlockHashes))
+                                                    acc
+                                                  case EquivocationOblivious =>
+                                                    acc
+                                                }
                                               } yield updatedAcc
                                           }
           status <- if (neglectedEquivocationDetected) {
