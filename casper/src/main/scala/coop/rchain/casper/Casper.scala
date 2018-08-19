@@ -377,21 +377,21 @@ sealed abstract class MultiParentCasperInstances {
                                    Validate.bondsCache[F](b, runtimeManager))
           postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
                                               _ =>
-                                                Validate.neglectedInvalidBlockCheck[F](
+                                                Validate.neglectedInvalidBlock[F](
                                                   b,
                                                   invalidBlockTracker.toSet))
           postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                    .traverse(
                                                      _ =>
                                                        EquivocationDetector
-                                                         .neglectedEquivocationsCheckWithUpdate[F](
+                                                         .checkNeglectedEquivocationsWithUpdate[F](
                                                            equivocationsTracker,
                                                            b,
                                                            dag))
           blockBufferDependencyDag <- blockBufferDependencyDagState.get
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ =>
-                                            EquivocationDetector.equivocationsCheck[F](
+                                            EquivocationDetector.checkEquivocations[F](
                                               blockBufferDependencyDag,
                                               b,
                                               dag))

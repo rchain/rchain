@@ -401,7 +401,7 @@ object Validate {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlockCheck[F[_]: Applicative](
+  def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
       invalidBlockTracker: Set[BlockHash]): F[Either[InvalidBlock, ValidBlock]] = {
     val invalidJustifications = block.justifications.filter(justification =>

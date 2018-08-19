@@ -58,7 +58,7 @@ object EquivocationRecord {
 }
 
 object EquivocationDetector {
-  def equivocationsCheck[F[_]: Monad: BlockStore](
+  def checkEquivocations[F[_]: Monad: BlockStore](
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
@@ -89,28 +89,35 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def neglectedEquivocationsCheckWithUpdate[F[_]: Monad: BlockStore](
+  def checkNeglectedEquivocationsWithUpdate[F[_]: Monad: BlockStore](
       equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      neglectedEquivocationDetected <- equivocationsTracker.toList.foldLeftM(false) {
-                                        case (acc, equivocationRecord) =>
-                                          for {
-                                            neglectedEquivocationDetected <- updateEquivocationsTracker[
-                                                                              F](
-                                                                              equivocationsTracker,
-                                                                              block,
-                                                                              dag,
-                                                                              equivocationRecord)
-                                          } yield acc || neglectedEquivocationDetected
-                                      }
-      status <- if (neglectedEquivocationDetected) {
-                 Applicative[F].pure(Left(NeglectedEquivocation))
-               } else {
-                 Applicative[F].pure(Right(Valid))
-               }
+      neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
+                                        equivocationsTracker,
+                                        block,
+                                        dag)
+      status = if (neglectedEquivocationDetected) {
+        Left(NeglectedEquivocation)
+      } else {
+        Right(Valid)
+      }
     } yield status
+
+  private def isNeglectedEquivocationDetectedWithUpdate[F[_]: Monad: BlockStore](
+      equivocationsTracker: mutable.Set[EquivocationRecord],
+      block: BlockMessage,
+      dag: BlockDag): F[Boolean] =
+    equivocationsTracker.toList.foldLeftM(false) {
+      case (acc, equivocationRecord) =>
+        for {
+          neglectedEquivocationDetected <- updateEquivocationsTracker[F](equivocationsTracker,
+                                                                         block,
+                                                                         dag,
+                                                                         equivocationRecord)
+        } yield acc || neglectedEquivocationDetected
+    }
 
   /**
     * If an equivocation is detected, it is added to the equivocationDetectedBlockHashes, which keeps track
