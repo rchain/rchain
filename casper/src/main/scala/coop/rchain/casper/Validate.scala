@@ -5,9 +5,10 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.DagOperations.bfTraverse
-import coop.rchain.casper.util.{ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -103,6 +104,55 @@ object Validate {
                   ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."))
           } yield false
       }
+    }
+
+  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
+    if (b.blockHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
+      } yield false
+    } else if (b.header.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block header is missing."))
+      } yield false
+    } else if (b.body.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block body is missing."))
+      } yield false
+    } else if (b.sig.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
+      } yield false
+    } else if (b.sigAlgorithm.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
+      } yield false
+    } else if (b.shardId.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
+      } yield false
+    } else if (b.header.get.postStateHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
+      } yield false
+    } else if (b.header.get.newCodeHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
+      } yield false
+    } else if (b.header.get.commReductionsHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
+      } yield false
+    } else if (b.body.get.postState.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state is missing."))
+      } yield false
+    } else if (b.body.get.commReductions.exists(_.eventInstance == EventInstance.Empty)) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
+      } yield false
+    } else {
+      true.pure[F]
     }
 
   /*

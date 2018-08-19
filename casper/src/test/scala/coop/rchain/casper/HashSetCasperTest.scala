@@ -563,6 +563,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))
       .withParentsHashList(Seq(signedInvalidBlock.blockHash))
+      .withNewCodeHash(ProtoUtil.protoSeqHash(deploys))
+      .withCommReductionsHash(ProtoUtil.protoSeqHash(Seq.empty))
     val blockHash = Blake2b256.hash(header.toByteArray)
     val body      = Body().withPostState(postState).withDeploys(deploys)
     val serializedJustifications =

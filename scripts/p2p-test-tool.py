@@ -56,6 +56,11 @@ parser.add_argument("-n", "--network",
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
+parser.add_argument("--peer-command",
+                    dest='peer_command',
+                    type=str,
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
+                    help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
                     type=int,
@@ -115,7 +120,6 @@ if len(sys.argv)==1:
     parser.print_help(sys.stderr)
     sys.exit(1)
 
-
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
@@ -123,7 +127,6 @@ RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
-peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}:40400'
 
 
 def main():
@@ -207,9 +210,9 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
             time.sleep(10) # allow repl container to stop so it doesn't interfere with other tests
-        if test == "integration1":
+        if test == "casper_propose_and_deploy":
             for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-                if test_integration1(container) == 0:
+                if test_casper_propose_and_deploy(container) == 0:
                     notices['pass'].append(f"{container.name}: Integration test 1 worked.")
                 else:
                     notices['fail'].append(f"{container.name}: Integration test 1 failed.")
@@ -336,7 +339,7 @@ class node:
     def added_block_rx(block_id):
         return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
 
-def test_integration1(test_container):
+def test_casper_propose_and_deploy(test_container):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
@@ -370,11 +373,10 @@ def test_integration1(test_container):
         run_cmd(rnode.propose_cmd)
 
         print("Allow for logs to fill out from last propose if needed")
-        time.sleep(5)
-
-        run_cmd(rnode.show_blocks_cmd)
     except Exception as e:
         print(e)
+
+    time.sleep(5)
 
     retval=0
 
@@ -688,7 +690,7 @@ def create_peer_nodes():
                 f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
-            command=f"{peer_prefix_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
+            command=f"{args.peer_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
 
         print("Installing additonal packages on container.")
