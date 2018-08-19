@@ -20,6 +20,9 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Int].reverse
 
+  /**
+    * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
+    */
   def tips[F[_]: Monad: BlockStore](blockDag: BlockDag,
                                     genesis: BlockMessage): F[IndexedSeq[BlockMessage]] = {
     @tailrec
@@ -39,12 +42,14 @@ object Estimator {
       }
     }
 
+    /**
+      * Only include children that have been scored,
+      * this ensures that the search does not go beyond
+      * the messages defined by blockDag.latestMessages
+      */
     def replaceBlockHashWithChildren(childMap: Map[BlockHash, Set[BlockHash]],
                                      b: BlockHash,
                                      scores: Map[BlockHash, Int]): IndexedSeq[BlockHash] = {
-      //Only include children that have been scored,
-      //this ensures that the search does not go beyond
-      //the messages defined by blockDag.latestmessages
       val c: Set[BlockHash] = childMap.getOrElse(b, Set.empty[BlockHash]).filter(scores.contains)
       if (c.nonEmpty) {
         c.toIndexedSeq
@@ -64,6 +69,7 @@ object Estimator {
     } yield sortedChildren
   }
 
+  // TODO: Fix to stop at genesis/LFB
   def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Int]] = {
     def hashParents(hash: BlockHash): F[List[BlockHash]] =
       for {

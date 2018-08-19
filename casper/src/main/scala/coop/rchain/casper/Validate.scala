@@ -109,7 +109,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    * TODO: Add check for missing fields
-   * TODO: Check that justifications follow from bonds (especially beware of arbitrary droppings of bonded validators)
+   * TODO: Check that justifications follow from bonds of creator justification
    * Justification regressions validation depends on sequence numbers being valid
    */
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
@@ -132,6 +132,9 @@ object Validate {
                                 Validate.shardIdentifier[F](block, shardId))
     } yield shardIdentifierStatus.joinRight
 
+  /**
+    * Works with either efficient justifications or full explicit justifications
+    */
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
@@ -152,6 +155,8 @@ object Validate {
   /**
     * Validate no deploy by the same (user, millisecond timestamp)
     * has been produced in the chain
+    *
+    * Agnostic of non-parent justifications
     */
   def repeatDeploy[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
@@ -221,6 +226,7 @@ object Validate {
                }
     } yield result
 
+  // Agnostic of non-parent justifications
   def blockNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
@@ -247,22 +253,23 @@ object Validate {
                }
     } yield status
 
+  /**
+    * Works with either efficient justifications or full explicit justifications.
+    * Specifically, with efficient justifications, if a block B doesn't update its
+    * creator justification, this check will fail as expected. The exception is when
+    * B's creator justification is the genesis block.
+    */
   def sequenceNumber[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      creatorJustificationSeqNumber <- b.justifications
-                                        .find {
-                                          case Justification(validator, _) => validator == b.sender
-                                        }
-                                        .fold((-1).pure[F]) {
-                                          case Justification(_, latestBlockHash) =>
-                                            for {
-                                              latestBlock <- ProtoUtil.unsafeGetBlock[F](
-                                                              latestBlockHash)
-                                              latestBlockSeqNum = latestBlock.seqNum
-                                            } yield latestBlockSeqNum
-                                        }
+      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
+                                        case (_, Justification(_, latestBlockHash)) =>
+                                          for {
+                                            latestBlock <- ProtoUtil.unsafeGetBlock[F](
+                                                            latestBlockHash)
+                                          } yield latestBlock.seqNum
+                                      }
       number = b.seqNum
       result = creatorJustificationSeqNumber + 1 == number
       status <- if (result) {
@@ -276,6 +283,7 @@ object Validate {
                }
     } yield status
 
+  // Agnostic of justifications
   def shardIdentifier[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
       shardId: String): F[Either[InvalidBlock, ValidBlock]] =
@@ -288,39 +296,31 @@ object Validate {
       } yield Left(InvalidShardId)
     }
 
+  /**
+    * Works only with fully explicit justifications.
+    */
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,
                                             genesis: BlockMessage,
                                             dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
-    val bParents = b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
-
-    if (b.justifications.isEmpty) {
-      if (bParents.exists(_ != genesis.blockHash))
-        for {
-          _ <- Log[F].warn(ignore(b, "justification is empty, but block has non-genesis parents."))
-        } yield Left(InvalidParents)
-      else
-        Applicative[F].pure(Right(Valid))
-    } else {
-      val latestMessages = b.justifications
-        .foldLeft(Map.empty[Validator, BlockHash]) {
-          case (map, Justification(v, hash)) => map.updated(v, hash)
-        }
-      // TODO: Double check logic here
-      val viewDag = dag.copy(latestMessages = latestMessages)
-      for {
-        estimate         <- Estimator.tips[F](viewDag, genesis)
-        trueParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
-        trueParentHashes = trueParents.map(_.blockHash)
-        status <- if (bParents == trueParentHashes)
-                   Applicative[F].pure(Right(Valid))
-                 else
-                   for {
-                     _ <- Log[F].warn(
-                           ignore(b,
-                                  "block parents did not match estimate based on justification."))
-                   } yield Left(InvalidParents)
-      } yield status
+    val maybeParentHashes = ProtoUtil.parentHashes(b)
+    val parentHashes = maybeParentHashes match {
+      case Nil    => Seq(genesis.blockHash)
+      case hashes => hashes
     }
+    val latestMessages        = ProtoUtil.toLatestMessages(b.justifications)
+    val dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
+    for {
+      estimate             <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
+      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      computedParentHashes = computedParents.map(_.blockHash)
+      status <- if (parentHashes == computedParentHashes)
+                 Applicative[F].pure(Right(Valid))
+               else
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(b, "block parents did not match estimate based on justification."))
+                 } yield Left(InvalidParents)
+    } yield status
   }
 
   /*

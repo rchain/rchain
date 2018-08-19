@@ -307,11 +307,7 @@ class ValidateTest
       (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
         false)
       log.warns.size should be(3)
-      log.warns.last
-        .contains("justification is empty, but block has non-genesis parents") should be(true)
-      log.warns
-        .dropRight(1)
-        .forall(_.contains("block parents did not match estimate based on justification")) should be(
+      log.warns.forall(_.contains("block parents did not match estimate based on justification")) should be(
         true)
   }
 

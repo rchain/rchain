@@ -81,11 +81,7 @@ object EquivocationDetector {
 
   private def creatorJustificationHash(block: BlockMessage): Option[BlockHash] =
     for {
-      maybeCreatorJustification <- block.justifications
-                                    .find {
-                                      case Justification(validator: Validator, _) =>
-                                        validator == block.sender
-                                    }
+      maybeCreatorJustification <- ProtoUtil.creatorJustification(block)
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above

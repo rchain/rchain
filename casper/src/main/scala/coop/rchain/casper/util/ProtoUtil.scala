@@ -68,6 +68,13 @@ object ProtoUtil {
       }
     } yield block
 
+  def creatorJustification(block: BlockMessage): Option[Justification] =
+    block.justifications
+      .find {
+        case Justification(validator: Validator, _) =>
+          validator == block.sender
+      }
+
   def findJustificationParentWithSeqNum[F[_]: Monad: BlockStore](
       b: BlockMessage,
       seqNum: SequenceNumber): F[Option[BlockMessage]] =
@@ -154,7 +161,7 @@ object ProtoUtil {
     weightFromValidator[F](b, b.sender)
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =
-    b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
+    b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
 
   def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
