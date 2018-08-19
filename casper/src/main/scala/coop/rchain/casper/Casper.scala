@@ -381,202 +381,23 @@ sealed abstract class MultiParentCasperInstances {
                                                   b,
                                                   invalidBlockTracker.toSet))
           postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
-                                                   .traverse(_ =>
-                                                     neglectedEquivocationsCheckWithUpdate(b, dag))
+                                                   .traverse(
+                                                     _ =>
+                                                       EquivocationDetector
+                                                         .neglectedEquivocationsCheckWithUpdate[F](
+                                                           equivocationsTracker,
+                                                           b,
+                                                           dag))
+          blockBufferDependencyDag <- blockBufferDependencyDagState.get
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
-                                          _ => equivocationsCheck(b, dag))
+                                          _ =>
+                                            EquivocationDetector.equivocationsCheck[F](
+                                              blockBufferDependencyDag,
+                                              b,
+                                              dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
-
-      private def equivocationsCheck(block: BlockMessage,
-                                     dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-        for {
-          blockBufferDependencyDag <- blockBufferDependencyDagState.get
-          justificationOfCreator = block.justifications
-            .find {
-              case Justification(validator: Validator, _) => validator == block.sender
-            }
-            .getOrElse(Justification.defaultInstance)
-            .latestBlockHash
-          latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
-          isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
-          result <- if (isNotEquivocation) {
-                     Applicative[F].pure(Right(Valid))
-                   } else if (blockBufferDependencyDag.parentToChildAdjacencyList.contains(
-                                block.blockHash)) {
-                     Applicative[F].pure(Left(AdmissibleEquivocation))
-                   } else {
-                     Applicative[F].pure(Left(IgnorableEquivocation))
-                   }
-        } yield result
-
-      // See EquivocationRecord.scala for summary of algorithm.
-      private def neglectedEquivocationsCheckWithUpdate(
-          block: BlockMessage,
-          dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
-        for {
-          neglectedEquivocationDetected <- equivocationsTracker.toList.foldLeftM(false) {
-                                            case (acc, equivocationRecord) =>
-                                              for {
-                                                neglectedEquivocationDetected <- updateEquivocationsTracker(
-                                                                                  block,
-                                                                                  dag,
-                                                                                  equivocationRecord)
-                                              } yield acc || neglectedEquivocationDetected
-                                          }
-          status <- if (neglectedEquivocationDetected) {
-                     Applicative[F].pure(Left(NeglectedEquivocation))
-                   } else {
-                     Applicative[F].pure(Right(Valid))
-                   }
-        } yield status
-
-      /**
-        * If an equivocation is detected, it is added to the equivocationDetectedBlockHashes, which keeps track
-        * of the block hashes that correspond to the blocks from which an equivocation can be justified.
-        *
-        * @return Whether a neglected equivocation was discovered.
-        */
-      private def updateEquivocationsTracker(block: BlockMessage,
-                                             dag: BlockDag,
-                                             equivocationRecord: EquivocationRecord): F[Boolean] =
-        for {
-          equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus(block,
-                                                                        dag,
-                                                                        equivocationRecord)
-          neglectedEquivocationDetected = equivocationDiscoveryStatus match {
-            case EquivocationNeglected =>
-              true
-            case EquivocationDetected =>
-              val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
-              equivocationsTracker.remove(equivocationRecord)
-              equivocationsTracker.add(
-                equivocationRecord.copy(
-                  equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes))
-              false
-            case EquivocationOblivious =>
-              false
-          }
-        } yield neglectedEquivocationDetected
-
-      private def getEquivocationDiscoveryStatus(
-          block: BlockMessage,
-          dag: BlockDag,
-          equivocationRecord: EquivocationRecord): F[EquivocationDiscoveryStatus] = {
-        val equivocatingValidator = equivocationRecord.equivocator
-        val latestMessages        = toLatestMessages(block.justifications)
-        for {
-          isEquivocationDetectable <- equivocationDetectable(latestMessages.toSeq,
-                                                             equivocationRecord,
-                                                             Set.empty[BlockMessage])
-        } yield
-          if (isEquivocationDetectable) {
-            val maybeEquivocatingValidatorBond =
-              bonds(block).find(_.validator == equivocatingValidator)
-            maybeEquivocatingValidatorBond match {
-              case Some(Bond(_, stake)) =>
-                if (stake > 0) {
-                  EquivocationNeglected
-                } else {
-                  // TODO: Eliminate by having a validity check that says no stake can be 0
-                  EquivocationDetected
-                }
-              case None =>
-                EquivocationDetected
-            }
-          } else {
-            // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
-            // TODO: We check for unjustified droppings of validators in validateBlockSummary.
-            EquivocationOblivious
-          }
-      }
-
-      private def equivocationDetectable(latestMessages: Seq[(Validator, BlockHash)],
-                                         equivocationRecord: EquivocationRecord,
-                                         equivocationChildren: Set[BlockMessage]): F[Boolean] = {
-        def maybeAddEquivocationChildren(
-            justificationBlock: BlockMessage,
-            equivocatingValidator: Validator,
-            equivocationBaseBlockSeqNum: SequenceNumber,
-            equivocationChildren: Set[BlockMessage]): F[Set[BlockMessage]] =
-          if (justificationBlock.sender == equivocatingValidator) {
-            if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
-              for {
-                maybeJustificationParentWithSeqNum <- findJustificationParentWithSeqNum[F](
-                                                       justificationBlock,
-                                                       equivocationBaseBlockSeqNum + 1)
-                updatedEquivocationChildren = maybeJustificationParentWithSeqNum match {
-                  case Some(equivocationChild) => equivocationChildren + equivocationChild
-                  case None =>
-                    throw new Error(
-                      "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
-                }
-              } yield updatedEquivocationChildren
-            } else {
-              equivocationChildren.pure[F]
-            }
-          } else {
-            // Latest according to the justification block
-            val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
-              toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
-            maybeLatestEquivocatingValidatorBlockHash match {
-              case Some(blockHash) =>
-                for {
-                  latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
-                  updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
-                                                  for {
-                                                    maybeJustificationParentWithSeqNum <- findJustificationParentWithSeqNum[
-                                                                                           F](
-                                                                                           latestEquivocatingValidatorBlock,
-                                                                                           equivocationBaseBlockSeqNum + 1)
-                                                    updatedEquivocationChildren = maybeJustificationParentWithSeqNum match {
-                                                      case Some(equivocationChild) =>
-                                                        equivocationChildren + equivocationChild
-                                                      case None =>
-                                                        throw new Error(
-                                                          "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
-                                                    }
-                                                  } yield updatedEquivocationChildren
-                                                } else { equivocationChildren.pure[F] }
-                } yield updatedEquivocationChildren
-              case None =>
-                throw new Error(
-                  "justificationBlock is missing justification pointers to equivocatingValidator even though justificationBlock isn't a part of equivocationDetectedBlockHashes for this equivocation record.")
-            }
-          }
-
-        latestMessages match {
-          case Nil => false.pure[F]
-          case (_, justificationBlockHash) +: remainder =>
-            for {
-              justificationBlock <- ProtoUtil.unsafeGetBlock[F](justificationBlockHash)
-              isDetectable <- if (equivocationRecord.equivocationDetectedBlockHashes.contains(
-                                    justificationBlockHash)) {
-                               true.pure[F]
-                             } else {
-                               val equivocatingValidator = equivocationRecord.equivocator
-                               val equivocationBaseBlockSeqNum =
-                                 equivocationRecord.equivocationBaseBlockSeqNum
-                               for {
-                                 updatedEquivocationChildren <- maybeAddEquivocationChildren(
-                                                                 justificationBlock,
-                                                                 equivocatingValidator,
-                                                                 equivocationBaseBlockSeqNum,
-                                                                 equivocationChildren)
-                                 isDetectable <- if (updatedEquivocationChildren.size > 1) {
-                                                  true.pure[F]
-                                                } else {
-                                                  equivocationDetectable(
-                                                    remainder,
-                                                    equivocationRecord,
-                                                    updatedEquivocationChildren)
-                                                }
-                               } yield isDetectable
-                             }
-            } yield isDetectable
-        }
-      }
 
       // TODO: Handle slashing
       private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
