@@ -64,7 +64,7 @@ object ProtoUtil {
       block = maybeBlock match {
         case Some(b) => b
         case None =>
-          throw new Error(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
       }
     } yield block
 
