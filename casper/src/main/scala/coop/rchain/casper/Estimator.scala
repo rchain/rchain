@@ -6,7 +6,7 @@ import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.DagOperations
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{parentHashes, unsafeGetBlock, weightFromValidator}
 
 import scala.annotation.tailrec
@@ -80,21 +80,62 @@ object Estimator {
                                               validator: Validator,
                                               latestBlockHash: BlockHash): F[Map[BlockHash, Int]] =
       for {
-        dag <- DagOperations.bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents).toList
-        updatedScoreMap <- Foldable[List].foldM(dag, scoreMap) {
-                            case (acc, hash) =>
-                              for {
-                                b               <- unsafeGetBlock[F](hash)
-                                currScore       = acc.getOrElse(hash, 0)
-                                validatorWeight <- weightFromValidator[F](b, validator)
-                              } yield acc.updated(hash, currScore + validatorWeight)
-                          }
+        updatedScoreMap <- DagOperations
+                            .bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents)
+                            .foldLeftF(scoreMap) {
+                              case (acc, hash) =>
+                                for {
+                                  b               <- unsafeGetBlock[F](hash)
+                                  currScore       = acc.getOrElse(hash, 0)
+                                  validatorWeight <- weightFromValidator[F](b, validator)
+                                } yield acc.updated(hash, currScore + validatorWeight)
+                            }
       } yield updatedScoreMap
+
+    /**
+      * Add scores to the blocks implicitly supported through
+      * including a latest block as a "step parent"
+      *
+      * TODO: Add test where this matters
+      */
+    def addValidatorWeightToImplicitlySupported(scoreMap: Map[BlockHash, Int],
+                                                childMap: Map[BlockHash, Set[BlockHash]],
+                                                validator: Validator,
+                                                latestBlockHash: BlockHash) =
+      childMap
+        .get(latestBlockHash)
+        .toList
+        .foldM(scoreMap) {
+          case (acc, children) =>
+            children.filter(scoreMap.contains).toList.foldM(acc) {
+              case (acc2, cHash) =>
+                for {
+                  c <- ProtoUtil.unsafeGetBlock[F](cHash)
+                  result = if (ProtoUtil.parentHashes(c).size > 1 && c.sender != validator) {
+                    val currScore       = acc2.getOrElse(cHash, 0)
+                    val validatorWeight = ProtoUtil.weightMap(c).getOrElse(validator, 0)
+                    acc2.updated(cHash, currScore + validatorWeight)
+                  } else {
+                    acc2
+                  }
+                } yield result
+            }
+        }
 
     for {
       scoresMap <- Foldable[List].foldM(blockDag.latestMessages.toList, Map.empty[BlockHash, Int]) {
                     case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
-                      addValidatorWeightDownSupportingChain(acc, validator, latestBlockHash)
+                      for {
+                        postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
+                                                        acc,
+                                                        validator,
+                                                        latestBlockHash)
+                        postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
+                                                            postValidatorWeightScoreMap,
+                                                            blockDag.childMap,
+                                                            validator,
+                                                            latestBlockHash)
+                      } yield postImplicitlySupportedScoreMap
                   }
     } yield scoresMap
   }

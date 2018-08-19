@@ -70,6 +70,18 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => b.pure[F]
   }
 
+  def foldLeftF[B](b: B)(f: (B, A) => F[B])(implicit monad: Monad[F]): F[B] = self match {
+    case SCons(curr, lazyTail) =>
+      for {
+        newB   <- f(b, curr)
+        result <- lazyTail.value.flatMap(_.foldLeftF(newB)(f))
+      } yield result
+
+    case SLazy(lazyTail) => lazyTail.value.flatMap(_.foldLeftF(b)(f))
+
+    case _: SNil[F] => b.pure[F]
+  }
+
   def foldRight[B](lb: Eval[B])(f: (A, Eval[F[B]]) => Eval[F[B]])(
       implicit monad: Monad[F],
       traverse: Traverse[F]): Eval[F[B]] = self match {
