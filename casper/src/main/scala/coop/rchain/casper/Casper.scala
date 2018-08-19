@@ -339,58 +339,56 @@ sealed abstract class MultiParentCasperInstances {
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
-        Time[F].currentMillis.flatMap(now =>
-          BlockStore[F]
-            .asMap()
-            .flatMap(internalMap => {
-              val possibleProcessedDeploys = knownStateHashesContainer
-                .mapAndUpdate[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])],
-                               Set[StateHash])](
-                  InterpreterUtil.computeDeploysCheckpoint(p,
-                                                           r,
-                                                           genesis,
-                                                           _blockDag.get,
-                                                           internalMap,
-                                                           _,
-                                                           runtimeManager),
-                  _._2)
-                .map(_._1)
-                .joinRight
+        for {
+          now         <- Time[F].currentMillis
+          internalMap <- BlockStore[F].asMap()
+          possibleProcessedDeploys = knownStateHashesContainer
+            .mapAndUpdate[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])],
+                           Set[StateHash])](
+              InterpreterUtil.computeDeploysCheckpoint(p,
+                                                       r,
+                                                       genesis,
+                                                       _blockDag.get,
+                                                       internalMap,
+                                                       _,
+                                                       runtimeManager),
+              _._2)
+            .map(_._1)
+            .joinRight
+          result <- possibleProcessedDeploys match {
+                     case Left(ex) =>
+                       Log[F]
+                         .error(
+                           s"CASPER: Critical error encountered while processing deploys: ${ex.getMessage}")
+                         .map(_ => none[BlockMessage])
 
-              possibleProcessedDeploys match {
-                case Left(ex) =>
-                  Log[F]
-                    .error(
-                      s"CASPER: Critical error encountered while processing deploys: ${ex.getMessage}")
-                    .map(_ => none[BlockMessage])
+                     case Right((computedStateHash, processedDeploys)) =>
+                       val (internalErrors, persistableDeploys) =
+                         processedDeploys.partition(_.status.isInternalError)
+                       internalErrors.toList
+                         .traverse {
+                           case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                             val errorsMessage = errors.map(_.getMessage).mkString("\n")
+                             Log[F].error(
+                               s"CASPER: Internal error encountered while processing deploy ${PrettyPrinter
+                                 .buildString(deploy)}: $errorsMessage")
+                           case _ => ().pure[F]
+                         }
+                         .map(_ => {
+                           val postState = RChainState()
+                             .withTuplespace(computedStateHash)
+                             .withBonds(bonds(p.head))
+                             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
 
-                case Right((computedStateHash, processedDeploys)) =>
-                  val (internalErrors, persistableDeploys) =
-                    processedDeploys.partition(_.status.isInternalError)
-                  internalErrors.toList
-                    .traverse {
-                      case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
-                        val errorsMessage = errors.map(_.getMessage).mkString("\n")
-                        Log[F].error(
-                          s"CASPER: Internal error encountered while processing deploy ${PrettyPrinter
-                            .buildString(deploy)}: $errorsMessage")
-                      case _ => ().pure[F]
-                    }
-                    .map(_ => {
-                      val postState = RChainState()
-                        .withTuplespace(computedStateHash)
-                        .withBonds(bonds(p.head))
-                        .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
-
-                      val body = Body()
-                        .withPostState(postState)
-                        .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
-                      val header = blockHeader(body, p.map(_.blockHash), version, now)
-                      val block  = unsignedBlockProto(body, header, justifications, shardId)
-                      block.some
-                    })
-              }
-            }))
+                           val body = Body()
+                             .withPostState(postState)
+                             .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
+                           val header = blockHeader(body, p.map(_.blockHash), version, now)
+                           val block  = unsignedBlockProto(body, header, justifications, shardId)
+                           block.some
+                         })
+                   }
+        } yield result
 
       def blockDag: F[BlockDag] = Capture[F].capture {
         _blockDag.get
