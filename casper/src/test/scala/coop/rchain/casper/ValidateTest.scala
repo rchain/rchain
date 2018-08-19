@@ -417,31 +417,30 @@ class ValidateTest
     activeRuntime.close()
   }
 
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStore {
-    implicit blockStore =>
-      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      implicit val chain           = createChain[StateWithChain](1).runS(initState)
-      implicit val (sk, _)         = Ed25519.newKeyPair
-      val genesis                  = signedBlock(0)
-      Validate.formatOfFields[Id](genesis) should be(true)
-      Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
-      Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
-      Validate.formatOfFields[Id](genesis.clearBody) should be(false)
-      Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
-      Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
-      Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
-      Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(
-        false)
-      Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withBody(
-          genesis.body.get
-            .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
-      ) should be(false)
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Seq(pk))
+    val genesis =
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", Ed25519.sign _, "rchain")
+
+    Validate.formatOfFields[Id](genesis) should be(true)
+    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withBody(
+        genesis.body.get
+          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
+    ) should be(false)
   }
 }
