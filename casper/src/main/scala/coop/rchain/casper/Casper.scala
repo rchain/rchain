@@ -381,11 +381,8 @@ sealed abstract class MultiParentCasperInstances {
                                                   b,
                                                   invalidBlockTracker.toSet))
           postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
-                                                   .traverse(
-                                                     _ =>
-                                                       neglectedEquivocationsCheckWithRecordUpdate(
-                                                         b,
-                                                         dag))
+                                                   .traverse(_ =>
+                                                     neglectedEquivocationsCheckWithUpdate(b, dag))
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ => equivocationsCheck(b, dag))
           status = postEquivocationCheckStatus.joinRight.merge
@@ -415,35 +412,18 @@ sealed abstract class MultiParentCasperInstances {
         } yield result
 
       // See EquivocationRecord.scala for summary of algorithm.
-      private def neglectedEquivocationsCheckWithRecordUpdate(
+      private def neglectedEquivocationsCheckWithUpdate(
           block: BlockMessage,
           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
         for {
           neglectedEquivocationDetected <- equivocationsTracker.toList.foldLeftM(false) {
                                             case (acc, equivocationRecord) =>
                                               for {
-                                                equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus[
-                                                                                F](
-                                                                                block,
-                                                                                dag,
-                                                                                equivocationRecord,
-                                                                                Set.empty[
-                                                                                  BlockMessage])
-                                                updatedAcc = equivocationDiscoveryStatus match {
-                                                  case EquivocationNeglected =>
-                                                    true
-                                                  case EquivocationDetected =>
-                                                    val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
-                                                    equivocationsTracker.remove(equivocationRecord)
-                                                    equivocationsTracker.add(
-                                                      equivocationRecord.copy(
-                                                        equivocationDetectedBlockHashes =
-                                                          updatedEquivocationDetectedBlockHashes))
-                                                    acc
-                                                  case EquivocationOblivious =>
-                                                    acc
-                                                }
-                                              } yield updatedAcc
+                                                neglectedEquivocationDetected <- updateEquivocationsTracker(
+                                                                                  block,
+                                                                                  dag,
+                                                                                  equivocationRecord)
+                                              } yield acc || neglectedEquivocationDetected
                                           }
           status <- if (neglectedEquivocationDetected) {
                      Applicative[F].pure(Left(NeglectedEquivocation))
@@ -452,43 +432,69 @@ sealed abstract class MultiParentCasperInstances {
                    }
         } yield status
 
-      private def getEquivocationDiscoveryStatus[F[_]: Monad: BlockStore](
+      /**
+        * If an equivocation is detected, it is added to the equivocationDetectedBlockHashes, which keeps track
+        * of the block hashes that correspond to the blocks from which an equivocation can be justified.
+        *
+        * @return Whether a neglected equivocation was discovered.
+        */
+      private def updateEquivocationsTracker(block: BlockMessage,
+                                             dag: BlockDag,
+                                             equivocationRecord: EquivocationRecord): F[Boolean] =
+        for {
+          equivocationDiscoveryStatus <- getEquivocationDiscoveryStatus(block,
+                                                                        dag,
+                                                                        equivocationRecord)
+          neglectedEquivocationDetected = equivocationDiscoveryStatus match {
+            case EquivocationNeglected =>
+              true
+            case EquivocationDetected =>
+              val updatedEquivocationDetectedBlockHashes = equivocationRecord.equivocationDetectedBlockHashes + block.blockHash
+              equivocationsTracker.remove(equivocationRecord)
+              equivocationsTracker.add(
+                equivocationRecord.copy(
+                  equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes))
+              false
+            case EquivocationOblivious =>
+              false
+          }
+        } yield neglectedEquivocationDetected
+
+      private def getEquivocationDiscoveryStatus(
           block: BlockMessage,
           dag: BlockDag,
-          equivocationRecord: EquivocationRecord,
-          equivocationChild: Set[BlockMessage]): F[EquivocationDiscoveryStatus] = {
+          equivocationRecord: EquivocationRecord): F[EquivocationDiscoveryStatus] = {
         val equivocatingValidator = equivocationRecord.equivocator
         val latestMessages        = toLatestMessages(block.justifications)
         for {
-          isEquivocationDetectable <- equivocationDetectable[F](latestMessages.toSeq,
-                                                                equivocationRecord,
-                                                                equivocationChild)
+          isEquivocationDetectable <- equivocationDetectable(latestMessages.toSeq,
+                                                             equivocationRecord,
+                                                             Set.empty[BlockMessage])
         } yield
-          (if (isEquivocationDetectable) {
-             val maybeEquivocatingValidatorBond =
-               bonds(block).find(_.validator == equivocatingValidator)
-             maybeEquivocatingValidatorBond match {
-               case Some(Bond(_, stake)) =>
-                 if (stake > 0) {
-                   EquivocationNeglected
-                 } else {
-                   // TODO: Eliminate by having a validity check that says no stake can be 0
-                   EquivocationDetected
-                 }
-               case None =>
-                 EquivocationDetected
-             }
-           } else {
-             // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
-             // TODO: We check for unjustified droppings of validators in validateBlockSummary.
-             EquivocationOblivious
-           })
+          if (isEquivocationDetectable) {
+            val maybeEquivocatingValidatorBond =
+              bonds(block).find(_.validator == equivocatingValidator)
+            maybeEquivocatingValidatorBond match {
+              case Some(Bond(_, stake)) =>
+                if (stake > 0) {
+                  EquivocationNeglected
+                } else {
+                  // TODO: Eliminate by having a validity check that says no stake can be 0
+                  EquivocationDetected
+                }
+              case None =>
+                EquivocationDetected
+            }
+          } else {
+            // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
+            // TODO: We check for unjustified droppings of validators in validateBlockSummary.
+            EquivocationOblivious
+          }
       }
 
-      private def equivocationDetectable[F[_]: Monad: BlockStore](
-          latestMessages: Seq[(Validator, BlockHash)],
-          equivocationRecord: EquivocationRecord,
-          equivocationChildren: Set[BlockMessage]): F[Boolean] = {
+      private def equivocationDetectable(latestMessages: Seq[(Validator, BlockHash)],
+                                         equivocationRecord: EquivocationRecord,
+                                         equivocationChildren: Set[BlockMessage]): F[Boolean] = {
         def maybeAddEquivocationChildren(
             justificationBlock: BlockMessage,
             equivocatingValidator: Validator,
@@ -561,7 +567,7 @@ sealed abstract class MultiParentCasperInstances {
                                  isDetectable <- if (updatedEquivocationChildren.size > 1) {
                                                   true.pure[F]
                                                 } else {
-                                                  equivocationDetectable[F](
+                                                  equivocationDetectable(
                                                     remainder,
                                                     equivocationRecord,
                                                     updatedEquivocationChildren)
