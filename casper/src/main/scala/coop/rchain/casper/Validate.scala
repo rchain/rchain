@@ -403,7 +403,6 @@ object Validate {
       knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]])(
       implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      // TODO: Wrap in a Sync.suspend ?
       maybeCheckPoint <- knownStateHashesContainer.modify[Option[StateHash]] { knownStateHashes =>
                           for {
                             //invalid blocks return None and don't update the checkpoints
