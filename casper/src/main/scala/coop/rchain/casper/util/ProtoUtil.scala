@@ -74,22 +74,39 @@ object ProtoUtil {
     if (b.seqNum == seqNum) {
       Option[BlockMessage](b).pure[F]
     } else {
-      val creatorJustificationHash = b.justifications.find {
-        case Justification(validator, _) => validator == b.sender
-      }
-      creatorJustificationHash match {
-        case Some(Justification(_, blockHash)) =>
-          for {
-            creatorJustification <- BlockStore[F].get(blockHash)
-            justificationParentWithSeqNum <- creatorJustification match {
-                                              case Some(block) =>
-                                                findJustificationParentWithSeqNum[F](block, seqNum)
-                                              case None => none[BlockMessage].pure[F]
-                                            }
-          } yield justificationParentWithSeqNum
-        case None => none[BlockMessage].pure[F]
-      }
+      DagOperations
+        .bfTraverseF(List(b)) { block =>
+          getCreatorJustificationAsList[F](block, block.sender)
+        }
+        .findF { block =>
+          (block.seqNum == seqNum).pure[F]
+        }
     }
+
+  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
+      block: BlockMessage,
+      validator: Validator,
+      goalFunc: BlockMessage => Boolean = _ => false): F[List[BlockMessage]] = {
+    val maybeCreatorJustificationHash =
+      block.justifications.find(_.validator == validator)
+    maybeCreatorJustificationHash match {
+      case Some(creatorJustificationHash) =>
+        for {
+          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
+          maybeCreatorJustificationAsList = maybeCreatorJustification match {
+            case Some(creatorJustification) =>
+              if (goalFunc(creatorJustification)) {
+                List.empty[BlockMessage]
+              } else {
+                List(creatorJustification)
+              }
+            case None =>
+              List.empty[BlockMessage]
+          }
+        } yield maybeCreatorJustificationAsList
+      case None => List.empty[BlockMessage].pure[F]
+    }
+  }
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
     blockMessage.body match {

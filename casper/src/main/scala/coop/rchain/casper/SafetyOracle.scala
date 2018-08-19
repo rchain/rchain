@@ -155,26 +155,10 @@ sealed abstract class SafetyOracleInstances {
                 potentialChildren <- DagOperations
                                       .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
                                         block =>
-                                          val maybeCreatorJustificationHash =
-                                            block.justifications.find(_.validator == validator)
-                                          maybeCreatorJustificationHash match {
-                                            case Some(creatorJustificationHash) =>
-                                              for {
-                                                maybeCreatorJustification <- BlockStore[F].get(
-                                                                              creatorJustificationHash.latestBlockHash)
-                                                creatorJustification = maybeCreatorJustification match {
-                                                  case Some(creatorJustification) =>
-                                                    if (candidate == creatorJustification) {
-                                                      List.empty[BlockMessage]
-                                                    } else {
-                                                      List(creatorJustification)
-                                                    }
-                                                  case None =>
-                                                    List.empty[BlockMessage]
-                                                }
-                                              } yield creatorJustification
-                                            case None => List.empty[BlockMessage].pure[F]
-                                          }
+                                          ProtoUtil.getCreatorJustificationAsList[F](
+                                            block,
+                                            validator,
+                                            b => b == candidate)
                                       }
                                       .toList
                 children <- potentialChildren.filterA { potentialChild =>
