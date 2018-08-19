@@ -70,6 +70,8 @@ trait BlockGenerator {
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
+        .withNewCodeHash(ProtoUtil.protoSeqHash(deploys))
+        .withCommReductionsHash(ProtoUtil.protoSeqHash(tsLog))
         .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withPostState(postState).withNewCode(deploys).withCommReductions(tsLog)
