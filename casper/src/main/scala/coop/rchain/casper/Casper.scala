@@ -92,7 +92,7 @@ sealed abstract class MultiParentCasperInstances {
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      dag: BlockDag,
+      initialDag: BlockDag,
       maybePostGenesisStateHash: Option[StateHash],
       shardId: String)(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
@@ -102,7 +102,7 @@ sealed abstract class MultiParentCasperInstances {
       //TODO: Extract hardcoded version
       private val version = 0L
 
-      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(dag)
+      private val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(initialDag)
 
       private val emptyStateHash = runtimeManager.emptyStateHash
 
@@ -197,50 +197,29 @@ sealed abstract class MultiParentCasperInstances {
           _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
         } yield attempt
 
-      // TODO: Replace with findM when it gets merged into cats.
-      // See https://github.com/rchain/rchain/pull/1214#discussion_r207578410
-      def updateLastFinalizedBlock(dag: BlockDag,
-                                   lastFinalizedBlock: BlockMessage): F[BlockMessage] = {
-        val maybeFinalizedBlockChildren = dag.childMap.get(lastFinalizedBlock.blockHash)
-        maybeFinalizedBlockChildren match {
-          case Some(finalizedBlockChildren) =>
-            updateLastFinalizedBlockAux(dag, lastFinalizedBlock, finalizedBlockChildren.toSeq)
-          case None => lastFinalizedBlock.pure[F]
-        }
-      }
+      private def updateLastFinalizedBlock(dag: BlockDag,
+                                           lastFinalizedBlock: BlockMessage): F[BlockMessage] =
+        for {
+          childrenHashes <- dag.childMap
+                             .getOrElse(lastFinalizedBlock.blockHash, Set.empty[BlockHash])
+                             .pure[F]
+          children <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
+          maybeFinalizedChild <- ListContrib.findM(
+                                  children,
+                                  (block: BlockMessage) =>
+                                    isGreaterThanFaultToleranceThreshold(dag, block))
+          newFinalizedBlock <- maybeFinalizedChild match {
+                                case Some(finalizedChild) =>
+                                  updateLastFinalizedBlock(dag, finalizedChild)
+                                case None => lastFinalizedBlock.pure[F]
+                              }
+        } yield newFinalizedBlock
 
-      def updateLastFinalizedBlockAux(
-          dag: BlockDag,
-          lastFinalizedBlock: BlockMessage,
-          finalizedBlockCandidatesHashes: Seq[BlockHash]): F[BlockMessage] =
-        finalizedBlockCandidatesHashes match {
-          case Nil => lastFinalizedBlock.pure[F]
-          case blockHash +: rem =>
-            for {
-              maybeBlock <- BlockStore[F].get(blockHash)
-              updatedLastFinalizedBlock <- maybeBlock match {
-                                            case Some(block) =>
-                                              for {
-                                                normalizedFaultTolerance <- SafetyOracle[F]
-                                                                             .normalizedFaultTolerance(
-                                                                               dag,
-                                                                               block)
-                                                updatedLastFinalizedBlock <- if (normalizedFaultTolerance > faultToleranceThreshold) {
-                                                                              updateLastFinalizedBlock(
-                                                                                dag,
-                                                                                block)
-                                                                            } else {
-                                                                              updateLastFinalizedBlockAux(
-                                                                                dag,
-                                                                                lastFinalizedBlock,
-                                                                                rem)
-                                                                            }
-                                              } yield updatedLastFinalizedBlock
-                                            case None =>
-                                              lastFinalizedBlock.pure[F]
-                                          }
-            } yield updatedLastFinalizedBlock
-        }
+      private def isGreaterThanFaultToleranceThreshold(dag: BlockDag,
+                                                       block: BlockMessage): F[Boolean] =
+        for {
+          ft <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
+        } yield ft > faultToleranceThreshold
 
       def contains(b: BlockMessage): F[Boolean] =
         BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
