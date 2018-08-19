@@ -48,7 +48,17 @@ class Actor extends MboxOb {
       result = super.update(enabledSetProvided, ctxt, state)
 
     logger.debug(s"Looking for remaining messages in $mbox")
-    mbox.nextMsg(this, newEnabledSet, state)
+
+    /**
+      * Only one thread at a time is allowed to call `mbox.nextMsg`.
+      *
+      * Synchronization on `mbox` is necessary since `mbox.receiveMsg`
+      * should not be called by thread A while thread B executes
+      * `mbox.nextMsg`.
+      */
+    mbox.synchronized(
+      mbox.nextMsg(this, newEnabledSet, state)
+    )
 
     result
   }
