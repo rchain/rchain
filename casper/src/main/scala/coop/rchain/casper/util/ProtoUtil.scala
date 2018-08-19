@@ -182,9 +182,6 @@ object ProtoUtil {
       ps <- bd.postState
     } yield ps.blockNumber).getOrElse(0L)
 
-  // Two blocks conflict if they both use the same deploy in different histories
-  // TODO: Update the logic of this function to make use of the trace logs and
-  // say that two blocks don't conflict if they act on disjoint sets of channels
   /*
    * Two blocks conflict if they both use the same deploy in different histories
    *
@@ -288,7 +285,7 @@ object ProtoUtil {
       .withShardId(shardId)
   }
 
-  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
+  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
   }
@@ -298,7 +295,7 @@ object ProtoUtil {
                       sigAlgorithm: String,
                       seqNum: Int,
                       shardId: String,
-                      extraBytes: ByteString) =
+                      extraBytes: ByteString): BlockHash =
     hashByteArrays(
       header.toByteArray,
       sender.toByteArray,
