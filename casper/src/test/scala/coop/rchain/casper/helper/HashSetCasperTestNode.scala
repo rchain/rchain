@@ -4,6 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.concurrent.Ref
 import cats.{Applicative, ApplicativeError, Id}
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -73,7 +74,7 @@ class HashSetCasperTestNode(name: String,
   implicit val multiparentCasperRef = MultiParentCasperRef.of[Id]
 
   implicit val labId = new LastApprovedBlock[Id] {
-    private var lab: Option[ApprovedBlock]       = None
+    private var lab: Option[ApprovedBlock]       = Some(approvedBlock)
     override def get: Id[Option[ApprovedBlock]]  = lab
     override def set(a: ApprovedBlock): Id[Unit] = lab = Some(a)
   }

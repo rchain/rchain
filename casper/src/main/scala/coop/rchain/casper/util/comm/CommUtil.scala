@@ -4,13 +4,12 @@ import cats.Monad
 import cats.effect.Timer
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport.CommMessages.{packet, toPacket}
@@ -21,7 +20,6 @@ import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
 import scala.concurrent.duration._
-import scala.util.Try
 
 object CommUtil {
 
@@ -115,9 +113,7 @@ object CommUtil {
 
     for {
       a     <- LastApprovedBlock[F].get
-      _     = println(s"LastApprovedBlock is $a")
       peers <- NodeDiscovery[F].peers
-      _     = println(s"Peers: $peers")
       local <- RPConfAsk[F].reader(_.local)
       _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
     } yield ()

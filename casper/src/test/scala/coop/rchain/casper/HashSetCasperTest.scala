@@ -15,7 +15,7 @@ import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models.PCost
+import coop.rchain.models.{PCost, Par}
 import coop.rchain.rholang.interpreter.Runtime
 import java.nio.file.Files
 
@@ -150,9 +150,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
 
     val term = InterpreterUtil.mkTerm(" for(@x <- @0){ @0!(x) } | @0!(0) ").right.get
-    val deploys = ProtoUtil.termDeploy(term, System.currentTimeMillis()) #:: ProtoUtil.termDeploy(
-      term,
-      System.currentTimeMillis()) #:: Stream.empty[Deploy]
+    val deploys = (term #:: term #:: Stream.empty[Par])
+      .map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
     deploys.foreach(MultiParentCasper[Id].deploy(_))
     val block = MultiParentCasper[Id].createBlock.get
     val _     = MultiParentCasper[Id].addBlock(block)

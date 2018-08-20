@@ -6,6 +6,7 @@ import cats.effect.{Sync, Timer}
 import cats.implicits._
 import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate}
 import coop.rchain.catscontrib.Catscontrib._
@@ -126,25 +127,8 @@ object ApproveBlockProtocol {
       )
     }
 
-    private def signedByTrustedValidator(a: BlockApproval): Boolean = {
-      val maybeSigData = for {
-        c     <- a.candidate
-        bytes = c.toByteArray
-      } yield Blake2b256.hash(bytes)
-
-      def validatedSig(sigData: Array[Byte]) =
-        for {
-          s      <- a.sig
-          verify <- Validate.signatureVerifiers.get(s.algorithm)
-        } yield trustedValidators.exists(pk => verify(sigData, s.sig.toByteArray, pk.toByteArray))
-
-      val validSigOpt = for {
-        sigData  <- maybeSigData
-        validSig <- validatedSig(sigData)
-      } yield validSig
-
-      validSigOpt.getOrElse(false)
-    }
+    private def signedByTrustedValidator(a: BlockApproval): Boolean =
+      a.sig.fold(false)(s => trustedValidators.contains(s.publicKey))
 
     private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
       if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {

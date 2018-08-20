@@ -3,9 +3,10 @@ package coop.rchain.node.api
 import cats._
 import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
-import coop.rchain.casper.{MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.shared._

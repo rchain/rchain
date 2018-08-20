@@ -184,12 +184,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
 
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val genesis = Genesis.fromInputFiles[Id](None,
-                                             numValidators,
-                                             path,
-                                             None,
-                                             runtimeManager,
-                                             Some(System.currentTimeMillis()))
+    val genesis        = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager, None)
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
 
@@ -208,14 +203,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val walletsFile = path.resolve("wallets.txt").toString
     printWallets(walletsFile)
 
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ = Genesis.fromInputFiles[Id](None,
-                                       numValidators,
-                                       path,
-                                       None,
-                                       runtimeManager,
-                                       Some(System.currentTimeMillis()))
+    val runtime         = Runtime.create(storageLocation, storageSize)
+    val runtimeManager  = RuntimeManager.fromRuntime(runtime)
+    val _               = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager, None)
     val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
     runtime.close()
 

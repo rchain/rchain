@@ -7,6 +7,7 @@ import cats.data._
 import cats.effect._
 import cats.implicits._
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperRef, SafetyOracle}
@@ -160,7 +161,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       nodeDiscovery: NodeDiscovery[Task],
       blockStore: BlockStore[Effect],
       oracle: SafetyOracle[Effect],
-      casperConstructor: MultiParentCasperRef[Effect],
+      multiParentCasperRef: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Servers] =
@@ -367,7 +368,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                               Capture[Effect],
                               Sync[Effect],
                               Time.eitherTTime(Monad[Task], time),
-                              Monad[Effect],
                               Log.eitherTLog(Monad[Task], log),
                               multiParentCasperRef,
                               scheduler

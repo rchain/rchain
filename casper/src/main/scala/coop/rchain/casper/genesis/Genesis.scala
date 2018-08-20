@@ -25,6 +25,7 @@ import monix.execution.Scheduler
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 
 object Genesis {
 
@@ -63,7 +64,7 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val sortedReductionLog = reductionLog.sortBy(_.toProtoString)
+    val sortedReductionLog = reductionLog.sortBy(_.toByteArray)
     val body =
       Body(postState = stateWithContracts,
            newCode = deployWithCost,

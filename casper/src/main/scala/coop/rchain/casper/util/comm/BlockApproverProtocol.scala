@@ -27,7 +27,7 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private val expectedCandidate  = ApprovedBlockCandidate(Some(block), requiredSigs)
-  private val approval           = BlockApproverProtocol.getBlockApproval(block, requiredSigs, validatorId)
+  private val approval           = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
   private val serializedApproval = approval.toByteString
 
   def unapprovedBlockPacketHandler[
@@ -50,12 +50,10 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
 }
 
 object BlockApproverProtocol {
-  def getBlockApproval(block: BlockMessage,
-                       requiredSigs: Int,
+  def getBlockApproval(expectedCandidate: ApprovedBlockCandidate,
                        validatorId: ValidatorIdentity): BlockApproval = {
-    val expectedCandidate = ApprovedBlockCandidate(Some(block), requiredSigs)
-    val sigData           = Blake2b256.hash(expectedCandidate.toByteArray)
-    val sig               = validatorId.signature(sigData)
+    val sigData = Blake2b256.hash(expectedCandidate.toByteArray)
+    val sig     = validatorId.signature(sigData)
     BlockApproval(Some(expectedCandidate), Some(sig))
   }
 

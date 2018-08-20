@@ -7,6 +7,8 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
@@ -20,7 +22,6 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.{transport, PeerNode}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
@@ -36,7 +37,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
   def of[
-      F[_]: LastApprovedBlock: Metrics: Timer: BlockStore: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Monad: Log: MultiParentCasperRef](
+      F[_]: LastApprovedBlock: Metrics: Timer: BlockStore: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Log: MultiParentCasperRef](
       conf: CasperConf,
       delay: FiniteDuration,
       runtimeManager: RuntimeManager,
@@ -49,7 +50,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                              conf.walletsFile,
                                              runtimeManager,
                                              conf.deployTimestamp)
-        _           = println(s"Genesis hash: ${Base16.encode(genesis.blockHash.toByteArray)}")
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
         bap         = new BlockApproverProtocol(validatorId.get, genesis, conf.requiredSigs)
         gv          <- Ref.of[F, CasperPacketHandlerInternal[F]](new GenesisValidatorHandler(bap))
@@ -75,15 +75,15 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                   protocol
                 })
         standalone <- Ref.of[F, CasperPacketHandlerInternal[F]](new StandaloneCasperHandler[F](abp))
-        _ <- {
-          val _ = toTask(
-            StandaloneCasperHandler
-              .approveBlockInterval(conf.approveGenesisInterval,
-                                    runtimeManager,
-                                    validatorId,
-                                    standalone)).forkAndForget.runAsync
-          ().pure[F]
-        }
+        _ <- Sync[F].delay {
+              val _ = toTask(
+                StandaloneCasperHandler
+                  .approveBlockInterval(conf.approveGenesisInterval,
+                                        runtimeManager,
+                                        validatorId,
+                                        standalone)).forkAndForget.runAsync
+              ().pure[F]
+            }
       } yield new CasperPacketHandlerImpl[F](standalone)
     } else {
       for {
@@ -92,12 +92,12 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         bootstrap <- Ref.of[F, CasperPacketHandlerInternal[F]](
                       new BootstrapCasperHandler(runtimeManager, validatorId, validators))
         casperPacketHandler = new CasperPacketHandlerImpl[F](bootstrap)
-        _ <- {
-          implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
-          val rb                            = CommUtil.requestApprovedBlock[F](delay)
-          toTask(rb).forkAndForget.runAsync
-          ().pure[F]
-        }
+        _ <- Sync[F].delay {
+              implicit val ph: PacketHandler[F] = PacketHandler.pf[F](casperPacketHandler.handle)
+              val rb                            = CommUtil.requestApprovedBlock[F](delay)
+              toTask(rb).forkAndForget.runAsync
+              ().pure[F]
+            }
       } yield casperPacketHandler
     }
 
@@ -285,6 +285,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     private val nonePacket: F[Option[Packet]] = Applicative[F].pure(None: Option[Packet])
 
     // Possible optimization in the future
+    // TODO: accept update to approved block (this will be needed for checkpointing)
     override def handleApprovedBlock(
         ab: ApprovedBlock): F[(Option[MultiParentCasper[F]], Option[Packet])] =
       nonePacket.map(none[MultiParentCasper[F]] -> _)

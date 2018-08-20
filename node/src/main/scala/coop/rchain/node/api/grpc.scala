@@ -3,8 +3,9 @@ package coop.rchain.node.api
 import cats._
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.protocol.DeployServiceGrpc
-import coop.rchain.casper.{MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib._
 import coop.rchain.comm.discovery._
 import coop.rchain.node.diagnostics

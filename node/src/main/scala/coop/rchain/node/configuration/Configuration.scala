@@ -45,7 +45,7 @@ object Configuration {
   private val DefaultMaxNumOfConnections        = 500
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
-  private val DefaultApprovalProtocolInterval   = 0.seconds
+  private val DefaultApprovalProtocolInterval   = 5.seconds
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")

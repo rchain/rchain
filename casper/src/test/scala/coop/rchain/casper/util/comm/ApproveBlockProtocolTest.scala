@@ -2,6 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture

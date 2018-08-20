@@ -42,9 +42,10 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
     val genesis                    = createGenesis(Seq(genesisSk))
+    val requiredSigs               = 1
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val bap                        = new BlockApproverProtocol(validatorId, genesis, requiredSigs = 1)
+    val bap                        = new BlockApproverProtocol(validatorId, genesis, requiredSigs)
     val local: PeerNode            = peerNode("src", 40400)
 
     implicit val nodeDiscovery  = new NodeDiscoveryStub[Task]
@@ -74,21 +75,17 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
-        val requiredSigns = 1
-        val bap           = new BlockApproverProtocol(validatorId, genesis, requiredSigns)
-
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](new GenesisValidatorHandler(bap))
-        val packetHandler = new CasperPacketHandlerImpl[Task](ref)
+        val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
+        val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
 
-        val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigns, genesis)
+        val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
           packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
           _              = assert(packetResponse.isEmpty)
-          blockApproval = BlockApproverProtocol.getBlockApproval(genesis,
-                                                                 requiredSigns,
-                                                                 validatorId)
+          blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = CommMessages.packet(local,
                                                transport.BlockApproval,
                                                blockApproval.toByteString,
@@ -118,8 +115,9 @@ class CasperPacketHandlerSpec extends WordSpec {
         val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
         val test = for {
           packetResponse <- packetHandler.handle(local)(packet)
-          _ = assert(packetResponse ==
-            Some(NoApprovedBlockAvailable(transport.NoApprovedBlockAvailable.id, local.toString)))
+          _ = assert(
+            packetResponse ==
+              Some(NoApprovedBlockAvailable(transport.NoApprovedBlockAvailable.id, local.toString)))
           _               = assert(transportLayer.requests.isEmpty)
           blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
           packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
