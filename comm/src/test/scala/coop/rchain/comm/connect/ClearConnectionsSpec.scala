@@ -140,7 +140,7 @@ class ClearConnectionsSpec
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =
-    kp(Right(heartbeat(peer("src"), System.currentTimeMillis())))
+    kp(Right(heartbeat(peer("src"))))
 
   def alwaysFail: Protocol => CommErr[Protocol] =
     kp(Left(timeout))

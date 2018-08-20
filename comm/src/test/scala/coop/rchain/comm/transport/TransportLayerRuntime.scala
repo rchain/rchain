@@ -149,17 +149,15 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
                         local: PeerNode,
                         remote: PeerNode,
                         timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
-    transportLayer.roundTrip(remote,
-                             ProtocolHelper.ping(local, System.currentTimeMillis()),
-                             timeout)
+    transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
 
   def sendPing(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] =
-    transportLayer.send(remote, ProtocolHelper.ping(local, System.currentTimeMillis()))
+    transportLayer.send(remote, ProtocolHelper.ping(local))
 
   def broadcastPing(transportLayer: TransportLayer[F],
                     local: PeerNode,
                     remotes: PeerNode*): F[Unit] =
-    transportLayer.broadcast(remotes, ProtocolHelper.ping(local, System.currentTimeMillis()))
+    transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
 
 }
 
@@ -195,16 +193,11 @@ final class Dispatcher[F[_]: Applicative](
 
 object Dispatcher {
   def pongDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(
-      peer =>
-        CommunicationResponse.handledWithMessage(
-          ProtocolHelper.pong(peer, System.currentTimeMillis())))
+    new Dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
 
   def pongDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
     new Dispatcher(
-      peer =>
-        CommunicationResponse.handledWithMessage(
-          ProtocolHelper.pong(peer, System.currentTimeMillis())),
+      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)),
       delay = Some(delay)
     )
 
