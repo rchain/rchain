@@ -48,6 +48,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val bap                        = new BlockApproverProtocol(validatorId, genesis, requiredSigs)
     val local: PeerNode            = peerNode("src", 40400)
+    val shardId                    = "test-shardId"
 
     implicit val nodeDiscovery                          = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] = Cell.const[Task, Connections](List(local))
@@ -67,6 +68,11 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
+    implicit val safetyOracle = new SafetyOracle[Task] {
+      override def normalizedFaultTolerance(blockDag: BlockDag,
+                                            estimate: BlockMessage): Task[Float] =
+        Task.pure(1.0f)
+    }
   }
 
   "CasperPacketHandler" when {
@@ -77,8 +83,13 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
+        val runtimeDir     = BlockStoreTestFixture.dbDir
+        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+
         val ref =
-          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](new GenesisValidatorHandler(bap))
+          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
+            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap))
         val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
         val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
 
@@ -90,8 +101,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
           expectedPacket = CommMessages.packet(local,
                                                transport.BlockApproval,
-                                               blockApproval.toByteString,
-                                               time.clock)
+                                               blockApproval.toByteString)
           _ = {
             val lastMessage = transportLayer.requests.last
             assert(lastMessage.peer == local && lastMessage.msg == expectedPacket)
@@ -109,8 +119,13 @@ class CasperPacketHandlerSpec extends WordSpec {
         val requiredSigns = 1
         val bap           = new BlockApproverProtocol(validatorId, genesis, requiredSigns)
 
+        val runtimeDir     = BlockStoreTestFixture.dbDir
+        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+
         val ref =
-          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](new GenesisValidatorHandler(bap))
+          Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
+            new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap))
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
@@ -150,12 +165,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         val duration  = 1.second
         val startTime = System.currentTimeMillis()
 
-        implicit val safetyOracle = new SafetyOracle[Task] {
-          override def normalizedFaultTolerance(blockDag: BlockDag,
-                                                estimate: BlockMessage): Task[Float] =
-            Task.pure(1.0f)
-        }
-
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](genesis,
@@ -170,11 +179,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
           c1                  = abp.run().forkAndForget.runAsync
           c2 = StandaloneCasperHandler
-            .approveBlockInterval(interval,
-                                  "test-shardId",
-                                  runtimeManager,
-                                  Some(validatorId),
-                                  refCasper)
+            .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
             .forkAndForget
             .runAsync
           blockApproval = ApproveBlockProtocolTest.approval(ApprovedBlockCandidate(Some(genesis),
