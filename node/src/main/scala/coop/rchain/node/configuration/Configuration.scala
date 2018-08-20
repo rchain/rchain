@@ -36,11 +36,13 @@ object Configuration {
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
+  private val DefaultInMemoryStore: Boolean     = false
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
   private val DefaultCertificateFileName        = "node.certificate.pem"
   private val DefaultKeyFileName                = "node.key.pem"
+  private val DefaultSecureRandomNonBlocking    = false
   private val DefaultMaxNumOfConnections        = 500
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -90,6 +92,7 @@ object Configuration {
             DefaultStandalone,
             dataDir,
             DefaultMapSize,
+            false,
             DefaultMaxNumOfConnections
           ),
           GrpcServer(
@@ -101,7 +104,8 @@ object Configuration {
             dataDir.resolve(DefaultCertificateFileName),
             Paths.get(DefaultKeyFileName),
             customCertificateLocation = false,
-            customKeyLocation = false
+            customKeyLocation = false,
+            secureRandomNonBlocking = false
           ),
           CasperConf(
             None,
@@ -171,6 +175,8 @@ object Configuration {
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val inMemoryStore: Boolean =
+      get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
                                          _.server.flatMap(_.casperBlockStoreSize),
                                          DefaultCasperBlockStoreSize)
@@ -182,6 +188,9 @@ object Configuration {
     val certificatePath: Path = certificate.getOrElse(dataDir.resolve(DefaultCertificateFileName))
 
     val keyPath: Path = key.getOrElse(dataDir.resolve(DefaultKeyFileName))
+
+    val secureRandomNonBlocking =
+      get(_.run.secureRandomNonBlocking, _ => None, DefaultSecureRandomNonBlocking)
 
     // Validators
     val numValidators =
@@ -210,6 +219,7 @@ object Configuration {
       standalone,
       dataDir,
       mapSize,
+      inMemoryStore,
       maxNumOfConnections
     )
     val grpcServer = GrpcServer(
@@ -221,7 +231,8 @@ object Configuration {
       certificatePath,
       keyPath,
       certificate.isDefined,
-      key.isDefined
+      key.isDefined,
+      secureRandomNonBlocking
     )
 
     val casper =

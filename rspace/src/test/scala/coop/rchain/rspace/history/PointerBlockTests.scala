@@ -1,9 +1,9 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.internal._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
-import coop.rchain.shared.AttemptOps._
 import org.scalacheck.Prop
 import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.{Checkers, Configuration}

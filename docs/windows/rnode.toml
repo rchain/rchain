@@ -10,6 +10,7 @@ bootstrap = "rnode://c61769b39d368cbcbc9499634e030386c79d5b02@52.119.8.108:40400
 standalone = true
 data-dir = "C:/RChain/data"
 map-size = 200000000
+in-memory-store = false
 
 [grpc-server]
 host = "grpc"

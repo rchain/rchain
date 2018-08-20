@@ -37,6 +37,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private val maxMessageSize: Int = 100 * 1024 * 1024 // TODO should be part of configuration
+
   implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
@@ -79,7 +81,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       }
     } else {
       println("Generating a PEM secret key for the node")
-      val keyPair = CertificateHelper.generateKeyPair()
+      val keyPair = CertificateHelper.generateKeyPair(conf.tls.secureRandomNonBlocking)
       withResource(new java.io.PrintWriter(conf.tls.certificate.toFile)) { pw =>
         pw.write(CertificatePrinter.print(CertificateHelper.generate(keyPair)))
       }
@@ -129,6 +131,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
+  private val inMemoryStore     = conf.server.inMemoryStore
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -335,17 +338,17 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       new Exception(s"CommError: $commError")
     }, e => { UnknownCommError(e.getMessage) })
     metrics = diagnostics.metrics[Task]
-    transport = effects.tcpTransportLayer(host, port, conf.tls.certificate, conf.tls.key)(
-      scheduler,
-      tcpConnections,
-      log)
+    transport = effects.tcpTransportLayer(host,
+                                          port,
+                                          conf.tls.certificate,
+                                          conf.tls.key,
+                                          maxMessageSize)(scheduler, tcpConnections, log)
     kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
                                                                       time,
                                                                       metrics,
-                                                                      transport,
                                                                       kademliaRPC)
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
@@ -353,8 +356,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       Metrics.eitherT(Monad[Task], metrics))
     _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize)
+    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperConstructor <- generateCasperConstructor(runtimeManager)(log,
                                                                    time,

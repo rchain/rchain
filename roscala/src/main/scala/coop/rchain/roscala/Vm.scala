@@ -8,6 +8,7 @@ import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.pools.{StrandPool, StrandPoolExecutor}
 import coop.rchain.roscala.prim.Prim
+import coop.rchain.roscala.util.misc.OpcodePrettyPrinter
 
 object Vm {
 
@@ -36,7 +37,8 @@ object Vm {
 }
 
 class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
-  val logger = Logger("Vm")
+  val logger              = Logger("Vm")
+  val opcodePrettyPrinter = new OpcodePrettyPrinter()
 
   override def compute(): Unit = run(ctxt0, state0)
 
@@ -55,15 +57,20 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
 
     while (state.pc < state.code.codevec.size && !state.exitFlag) {
       val opcode = state.code.codevec(state.pc)
-      logger.debug(s"${state.pc}:${opcode.toString}")
+
+      // Indented debug output
+      logger.debug(s"${state.ctxt} - " + opcodePrettyPrinter.print(state.pc, opcode))
+
       state.pc += 1
 
-      // execute `opcode`
+      // Execute `opcode`
       execute(opcode, state.globalEnv, state)
       executeFlags(state)
     }
 
     logger.debug("Exiting run method")
+
+    state.strandPool.finish()
   }
 
   /**
@@ -165,8 +172,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         * Sets `pc` field of installed `Ctxt` to `pc` and
         * `outstanding` field to `n`. This is usually done before a
         * child `Ctxt` is spawned (e.g. with `OpPushAlloc`).
-        * The `outstanding` field tells spawned child `Ctxt`s how many
-        * arguments are missing in their continuation.
+        * The `outstanding` field tells the spawned child `Ctxt`s how
+        * many arguments are missing in their continuation.
         * This is important because if a child `Ctxt` sees that it is
         * the last child `Ctxt` to provide a result back to its
         * continuation, it is the job of the child to schedule the
@@ -194,7 +201,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         * Does the same thing as `OpXmit` with the difference of
         * providing a location to the `tag` register of the installed
         * `Ctxt`. The location will tell the dispatch method of the
-        * object in the `trgt` register where to write results to.
+        * object in the `trgt` register where to write results to (in
+        * the parent `Ctxt`).
         * `OpXmitTag` will take a location from the `litvec`.
         */
       case OpXmitTag(unwind, next, nargs, lit) =>
@@ -226,7 +234,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         * lead to all kind of things including the scheduling of `Ctxt`s.
         * Usually the `dispatch` method will return back a result by
         * writing it into the position described by a location in the
-        * `tag` field of the installed `Ctxt`. The `dispatch` method
+        * `tag` field of the parent `Ctxt`. The `dispatch` method
         * returns a result which usually equals to `Suspended`.
         * In this case the VM goes to the next opcode.
         * If `next` is set, the installed `Ctxt` gives up control
@@ -424,7 +432,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         * the installed `Ctxt` equals `RblFalse`.
         */
       case OpJmpFalse(pc) =>
-        if (state.ctxt.rslt == RblFalse) {
+        if (state.ctxt.rslt == RblBool(false)) {
           logger.debug(s"Jump to $pc")
           state.pc = pc
         }
@@ -456,7 +464,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
         * register defined by `reg`.
         */
       case OpLookupToReg(lit, reg) =>
-        val key   = state.code.litvec(lit)
+        val key = state.code.litvec(lit)
+        logger.debug(s"Lookup $key in ${state.ctxt.selfEnv}")
         val value = state.ctxt.selfEnv.meta.lookupObo(state.ctxt.selfEnv, key, globalEnv)
 
         if (value == Upcall) {
@@ -664,7 +673,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
   def doXmit(next: Boolean, unwind: Boolean, state: State, globalEnv: GlobalEnv): Unit = {
     val result =
       if (unwind) unwindAndDispatch(state, globalEnv)
-      else state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
+      else state.ctxt.trgt.dispatch(state.ctxt, state)
 
     if (result == Deadthread)
       state.doNextThreadFlag = true
@@ -712,7 +721,7 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
     state.ctxt.argvec = newArgvec
     state.ctxt.nargs = 0
 
-    state.ctxt.trgt.dispatch(state.ctxt, state, globalEnv)
+    state.ctxt.trgt.dispatch(state.ctxt, state)
   }
 
 }

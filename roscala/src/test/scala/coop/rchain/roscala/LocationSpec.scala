@@ -145,10 +145,7 @@ class LocationSpec extends WordSpec with Matchers {
       val regs = 0 to 9
 
       regs.map(
-        reg => {
-          println(reg)
-          Location.fetch(CtxtRegister(reg), testCtxt, globalEnv) shouldBe testCtxt.reg(reg)
-        }
+        reg => Location.fetch(CtxtRegister(reg), testCtxt, globalEnv) shouldBe testCtxt.reg(reg)
       )
     }
 

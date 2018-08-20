@@ -91,6 +91,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
                 descr =
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
+    val secureRandomNonBlocking =
+      opt[Flag](descr = "Use a non blocking secure random instance")
+
     val port =
       opt[Int](short = 'p', descr = "Network port to use.")
 
@@ -135,6 +138,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
+
+    val inMemoryStore = opt[Boolean](required = false, descr = "Use in-memory store beneath RSpace")
 
     val maxNumOfConnections =
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
