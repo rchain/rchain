@@ -32,7 +32,6 @@ object ProtocolHelper {
   def header(src: PeerNode): Header =
     Header()
       .withSender(node(src))
-      .withTimestamp(System.currentTimeMillis)
 
   def node(n: PeerNode): Node =
     Node()

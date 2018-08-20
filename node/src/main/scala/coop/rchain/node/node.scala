@@ -349,7 +349,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
                                                                       time,
                                                                       metrics,
-                                                                      transport,
                                                                       kademliaRPC)
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
