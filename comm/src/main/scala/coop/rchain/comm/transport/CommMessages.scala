@@ -9,9 +9,9 @@ import coop.rchain.comm.protocol.routing
 
 object CommMessages {
 
-  def protocolHandshake(src: PeerNode, currentMillis: Long): routing.Protocol = {
+  def protocolHandshake(src: PeerNode): routing.Protocol = {
     val ph = ProtocolHandshake()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(ph), currentMillis)
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(ph))
   }
 
   def toProtocolHandshake(proto: routing.Protocol): CommErr[ProtocolHandshake] =
@@ -20,20 +20,17 @@ object CommMessages {
       case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
     }
 
-  def protocolHandshakeResponse(src: PeerNode, currentMillis: Long): routing.Protocol = {
+  def protocolHandshakeResponse(src: PeerNode): routing.Protocol = {
     val phr = ProtocolHandshakeResponse()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr), currentMillis)
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr))
   }
 
-  def packet(src: PeerNode,
-             pType: PacketType,
-             content: Array[Byte],
-             currentMillis: Long): routing.Protocol =
-    packet(src, pType, ByteString.copyFrom(content), currentMillis)
+  def packet(src: PeerNode, pType: PacketType, content: Array[Byte]): routing.Protocol =
+    packet(src, pType, ByteString.copyFrom(content))
 
-  def heartbeat(src: PeerNode, currentMillis: Long): routing.Protocol = {
+  def heartbeat(src: PeerNode): routing.Protocol = {
     val hb = Heartbeat()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hb), currentMillis)
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hb))
   }
 
   def toHeartbeat(proto: routing.Protocol): CommErr[Heartbeat] =
@@ -42,17 +39,14 @@ object CommMessages {
       case a                                           => Left(UnknownProtocolError(s"Was expecting Heartbeat, got $a"))
     }
 
-  def heartbeatResponse(src: PeerNode, currentMillis: Long): routing.Protocol = {
+  def heartbeatResponse(src: PeerNode): routing.Protocol = {
     val hbr = HeartbeatResponse()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hbr), currentMillis)
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hbr))
   }
 
-  def packet(src: PeerNode,
-             pType: PacketType,
-             content: ByteString,
-             currentMillis: Long): routing.Protocol = {
+  def packet(src: PeerNode, pType: PacketType, content: ByteString): routing.Protocol = {
     val p = Packet(pType.id, content)
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(p), currentMillis)
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(p))
   }
 
   def toPacket(proto: routing.Protocol): CommErr[Packet] = proto.message match {
@@ -62,7 +56,7 @@ object CommMessages {
 
   def disconnect(src: PeerNode): routing.Protocol = {
     val d = Disconnect()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(d), System.currentTimeMillis())
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(d))
   }
 
   def toDisconnect(proto: routing.Protocol): CommErr[Disconnect] = proto.message match {

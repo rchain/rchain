@@ -327,12 +327,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =
       for {
-        local       <- RPConfAsk[F].reader(_.local)
-        block       <- BlockStore[F].get(br.hash)
-        currentTime <- Time[F].currentMillis
-        serialized  = block.map(_.toByteString)
+        local      <- RPConfAsk[F].reader(_.local)
+        block      <- BlockStore[F].get(br.hash)
+        serialized = block.map(_.toByteString)
         maybeMsg = serialized.map(serializedMessage =>
-          packet(local, transport.BlockMessage, serializedMessage, currentTime))
+          packet(local, transport.BlockMessage, serializedMessage))
         send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
         hash     = PrettyPrinter.buildString(br.hash)
         logIntro = s"CASPER: Received request for block $hash from $peer. "

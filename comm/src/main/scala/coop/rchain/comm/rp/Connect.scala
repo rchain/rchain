@@ -66,11 +66,10 @@ object Connect {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {
-        local       <- RPConfAsk[F].reader(_.local)
-        timeout     <- RPConfAsk[F].reader(_.defaultTimeout)
-        currentTime <- Time[F].currentMillis
-        hb          = heartbeat(local, currentTime)
-        res         <- TransportLayer[F].roundTrip(peer, hb, timeout)
+        local   <- RPConfAsk[F].reader(_.local)
+        timeout <- RPConfAsk[F].reader(_.defaultTimeout)
+        hb      = heartbeat(local)
+        res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -113,15 +112,14 @@ object Connect {
       peer: PeerNode,
       timeout: FiniteDuration): F[Unit] =
     for {
-      tss         <- Time[F].currentMillis
-      peerAddr    = peer.toAddress
-      _           <- Log[F].debug(s"Connecting to $peerAddr")
-      _           <- Metrics[F].incrementCounter("connects")
-      _           <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
-      local       <- RPConfAsk[F].reader(_.local)
-      currentTime <- Time[F].currentMillis
-      ph          = protocolHandshake(local, currentTime)
-      phsresp     <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
+      tss      <- Time[F].currentMillis
+      peerAddr = peer.toAddress
+      _        <- Log[F].debug(s"Connecting to $peerAddr")
+      _        <- Metrics[F].incrementCounter("connects")
+      _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
+      local    <- RPConfAsk[F].reader(_.local)
+      ph       = protocolHandshake(local)
+      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
       _   <- ConnectionsCell[F].modify(_.addConn[F](peer))

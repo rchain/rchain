@@ -92,9 +92,8 @@ object HandleMessages {
         for {
           local               <- RPConfAsk[F].reader(_.local)
           maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
-          currentTime         <- Time[F].currentMillis
           maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr), currentTime))
+            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
         } yield
           maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
             handledWithMessage(m)))
@@ -114,16 +113,14 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _           <- ConnectionsCell[F].modify(_.addConn[F](peer))
-        currentTime <- Time[F].currentMillis
-        _           <- Log[F].info(s"Responded to protocol handshake request from $peer")
-      } yield handledWithMessage(protocolHandshakeResponse(local, currentTime))
+        _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
+        _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
+      } yield handledWithMessage(protocolHandshakeResponse(local))
 
     for {
       local        <- RPConfAsk[F].reader(_.local)
-      currentTime  <- Time[F].currentMillis
       _            <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local, currentTime), defaultTimeout)
+      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
       commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
   }
@@ -132,10 +129,9 @@ object HandleMessages {
       peer: PeerNode,
       maybeHeartbeat: Option[Heartbeat]): F[CommunicationResponse] =
     for {
-      local       <- RPConfAsk[F].reader(_.local)
-      currentTime <- Time[F].currentMillis
-      _           <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
-    } yield handledWithMessage(heartbeatResponse(local, currentTime))
+      local <- RPConfAsk[F].reader(_.local)
+      _     <- getOrError[F, Heartbeat](maybeHeartbeat, parseError("Heartbeat"))
+    } yield handledWithMessage(heartbeatResponse(local))
 
   private def getOrError[F[_]: Applicative: ErrorHandler, A](oa: Option[A],
                                                              error: CommError): F[A] =

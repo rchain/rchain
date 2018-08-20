@@ -24,10 +24,9 @@ object ProtocolHelper {
   implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def header(src: PeerNode, currentMillis: Long): Header =
+  def header(src: PeerNode): Header =
     Header()
       .withSender(node(src))
-      .withTimestamp(currentMillis)
 
   def node(n: PeerNode): Node =
     Node()
@@ -39,36 +38,36 @@ object ProtocolHelper {
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
-  def ping(src: PeerNode, currentMillis: Long): Protocol =
+  def ping(src: PeerNode): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withPing(Ping())
 
-  def pong(src: PeerNode, currentMillis: Long): Protocol =
+  def pong(src: PeerNode): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withPong(Pong())
 
-  def lookup(src: PeerNode, id: Seq[Byte], currentMillis: Long): Protocol =
+  def lookup(src: PeerNode, id: Seq[Byte]): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withLookup(Lookup()
         .withId(id.toArray))
 
-  def lookupResponse(src: PeerNode, nodes: Seq[PeerNode], currentMillis: Long): Protocol =
+  def lookupResponse(src: PeerNode, nodes: Seq[PeerNode]): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node)))
 
-  def upstreamMessage(src: PeerNode, upstream: AnyProto, currentMillis: Long): Protocol =
+  def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withUpstream(upstream)
 
-  def upstreamResponse(src: PeerNode, upstream: AnyProto, currentMillis: Long): Protocol =
+  def upstreamResponse(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
-      .withHeader(header(src, currentMillis))
+      .withHeader(header(src))
       .withUpstream(upstream)
 
 }

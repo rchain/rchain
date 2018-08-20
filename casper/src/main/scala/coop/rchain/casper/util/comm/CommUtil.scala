@@ -54,11 +54,10 @@ object CommUtil {
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
-      peers       <- ConnectionsCell[F].read
-      local       <- RPConfAsk[F].reader(_.local)
-      currentTime <- Time[F].currentMillis
-      msg         = packet(local, pType, serializedMessage, currentTime)
-      _           <- TransportLayer[F].broadcast(peers, msg)
+      peers <- ConnectionsCell[F].read
+      local <- RPConfAsk[F].reader(_.local)
+      msg   = packet(local, pType, serializedMessage)
+      _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
   def requestApprovedBlock[
@@ -69,11 +68,10 @@ object CommUtil {
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
         for {
-          _           <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
-          currentTime <- Time[F].currentMillis
+          _ <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
           send <- TransportLayer[F]
                    .roundTrip(peer,
-                              packet(local, transport.ApprovedBlockRequest, request, currentTime),
+                              packet(local, transport.ApprovedBlockRequest, request),
                               5.seconds)
           _ <- send match {
                 case Left(err) =>

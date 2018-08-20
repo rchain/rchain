@@ -102,9 +102,8 @@ private[discovery] class KademliaNodeDiscovery[
 
   private def handlePing: F[CommunicationResponse] =
     for {
-      _           <- Metrics[F].incrementCounter("ping-recv-count")
-      currentTime <- Time[F].currentMillis
-    } yield handledWithMessage(ProtocolHelper.pong(src, currentTime))
+      _ <- Metrics[F].incrementCounter("ping-recv-count")
+    } yield handledWithMessage(ProtocolHelper.pong(src))
 
   /**
     * Validate incoming LOOKUP message and return an answering
@@ -115,8 +114,7 @@ private[discovery] class KademliaNodeDiscovery[
 
     for {
       peers          <- Capture[F].capture(table.lookup(id))
-      currentTime    <- Time[F].currentMillis
-      lookupResponse = ProtocolHelper.lookupResponse(src, peers, currentTime)
+      lookupResponse = ProtocolHelper.lookupResponse(src, peers)
       _              <- Metrics[F].incrementCounter("lookup-recv-count")
     } yield handledWithMessage(lookupResponse)
   }

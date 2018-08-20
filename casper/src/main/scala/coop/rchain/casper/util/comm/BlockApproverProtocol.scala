@@ -35,11 +35,10 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
       u: UnapprovedBlock): F[Option[Packet]] =
     if (u.candidate.contains(expectedCandidate)) {
       for {
-        local         <- RPConfAsk[F].reader(_.local)
-        currentMillis <- Time[F].currentMillis
-        msg           = packet(local, transport.BlockApproval, serializedApproval, currentMillis)
-        send          <- TransportLayer[F].send(peer, msg)
-        _             <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
+        local <- RPConfAsk[F].reader(_.local)
+        msg   = packet(local, transport.BlockApproval, serializedApproval)
+        send  <- TransportLayer[F].send(peer, msg)
+        _     <- Log[F].info(s"Received expected candidate from $peer. Approval sent in response.")
       } yield none[Packet]
     } else {
       Log[F]
