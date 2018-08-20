@@ -27,6 +27,9 @@ object ParMap {
   def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean): ParMap =
     ParMap(seq, connectiveUsed, Coeval.delay(updateLocallyFree(seq)))
 
+  def apply(seq: Seq[(Par, Par)]): ParMap =
+    ParMap(SortedParMap(seq))
+
   def apply(map: SortedParMap): ParMap =
     ParMap(map, connectiveUsed(map), Coeval.delay(updateLocallyFree(map.toSeq)))
 
