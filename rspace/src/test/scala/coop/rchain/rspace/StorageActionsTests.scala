@@ -1145,57 +1145,64 @@ trait StorageActionsTests
         .value shouldBe gnat2
     }
 
-  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
-    space =>
-      forAll { (data: TestProduceMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
-            case (channel, datum) =>
-              GNAT(List(channel),
-                   List(datum),
-                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
-          }.toList
+  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
+    forAll { (data: TestProduceMap) =>
+      if (data.nonEmpty) {
+        withTestSpace { space =>
+          val gnats: Seq[TestGNAT] =
+            data.map {
+              case (channel, datum) =>
+                GNAT(List(channel),
+                     List(datum),
+                     List.empty[WaitingContinuation[Pattern, StringsCaptor]])
+            }.toList
 
-        gnats.foreach {
-          case GNAT(List(channel), List(datum), _) =>
-            space.produce(channel, datum.a, datum.persist)
+          gnats.foreach {
+            case GNAT(List(channel), List(datum), _) =>
+              space.produce(channel, datum.a, datum.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
-  }
+    }
 
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
-    withTestSpace { space =>
-      forAll { (data: TestConsumeMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
+    forAll { (data: TestConsumeMap) =>
+      val gnats: Seq[TestGNAT] =
+        data
+          .filter(_._1.nonEmpty) //channels == Seq.empty will faill in consume
+          .map {
             case (channels, wk) =>
               GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
+          }
+          .toList
 
-        gnats.foreach {
-          case GNAT(channels, _, List(wk)) =>
-            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+      withTestSpace { space =>
+        if (gnats.nonEmpty) {
+          gnats.foreach {
+            case GNAT(channels, _, List(wk)) =>
+              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
     }
 
@@ -1480,7 +1487,7 @@ trait StorageActionsTests
 class InMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase
     with StorageActionsTests
-    with JoinOperationsTests
+    with JoinOperationsTests {}
 
 class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
