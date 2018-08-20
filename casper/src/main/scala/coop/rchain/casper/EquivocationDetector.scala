@@ -148,31 +148,42 @@ object EquivocationDetector {
       equivocationRecord: EquivocationRecord): F[EquivocationDiscoveryStatus] = {
     val equivocatingValidator = equivocationRecord.equivocator
     val latestMessages        = toLatestMessages(block.justifications)
-    for {
-      isEquivocationDetectable <- equivocationDetectable[F](latestMessages.toSeq,
-                                                            equivocationRecord,
-                                                            Set.empty[BlockMessage])
-    } yield
-      if (isEquivocationDetectable) {
-        val maybeEquivocatingValidatorBond =
-          bonds(block).find(_.validator == equivocatingValidator)
-        maybeEquivocatingValidatorBond match {
-          case Some(Bond(_, stake)) =>
-            if (stake > 0) {
-              EquivocationNeglected
-            } else {
-              // TODO: Eliminate by having a validity check that says no stake can be 0
-              EquivocationDetected
-            }
-          case None =>
-            EquivocationDetected
-        }
-      } else {
-        // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
-        // TODO: We check for unjustified droppings of validators with https://rchain.atlassian.net/browse/RHOL-631.
-        EquivocationOblivious
-      }
+    val maybeEquivocatingValidatorBond =
+      bonds(block).find(_.validator == equivocatingValidator)
+    maybeEquivocatingValidatorBond match {
+      case Some(Bond(_, stake)) =>
+        getEquivocationDiscoveryStatusForBondedValidator[F](equivocationRecord,
+                                                            latestMessages,
+                                                            stake)
+      case None =>
+        /*
+         * Since block has dropped equivocatingValidator from the bonds, it has acknowledged the equivocation.
+         * The combination of Validate.transactions and Validate.bondsCache ensure that you can only drop
+         * validators through transactions to the proof of stake contract.
+         */
+        Applicative[F].pure(EquivocationDetected)
+    }
   }
+
+  private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Monad: BlockStore](
+      equivocationRecord: EquivocationRecord,
+      latestMessages: Map[Validator, BlockHash],
+      stake: SequenceNumber): F[EquivocationDiscoveryStatus] =
+    if (stake > 0) {
+      for {
+        isEquivocationDetectable <- equivocationDetectable[F](latestMessages.toSeq,
+                                                              equivocationRecord,
+                                                              Set.empty[BlockMessage])
+      } yield
+        if (isEquivocationDetectable) {
+          EquivocationNeglected
+        } else {
+          EquivocationOblivious
+        }
+    } else {
+      // TODO: This case is not necessary if assert(stake > 0) in the PoS contract
+      Applicative[F].pure(EquivocationDetected)
+    }
 
   private def equivocationDetectable[F[_]: Monad: BlockStore](
       latestMessages: Seq[(Validator, BlockHash)],
