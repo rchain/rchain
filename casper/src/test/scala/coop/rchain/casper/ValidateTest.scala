@@ -15,6 +15,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
@@ -414,5 +415,34 @@ class ValidateTest
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
     activeRuntime.close()
+  }
+
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStore {
+    implicit blockStore =>
+      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+      implicit val chain           = createChain[StateWithChain](1).runS(initState)
+      implicit val (sk, _)         = Ed25519.newKeyPair
+      val genesis                  = signedBlock(0)
+      Validate.formatOfFields[Id](genesis) should be(true)
+      Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+      Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+      Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+      Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+      Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+      Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+      Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(
+        false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withBody(genesis.body.get.withCommReductions(List(Event(EventInstance.Empty))))
+      ) should be(false)
   }
 }

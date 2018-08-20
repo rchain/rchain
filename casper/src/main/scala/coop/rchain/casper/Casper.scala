@@ -185,11 +185,13 @@ sealed abstract class MultiParentCasperInstances {
 
       def internalAddBlock(b: BlockMessage): F[BlockStatus] =
         for {
+          validFormat <- Validate.formatOfFields[F](b)
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
           validDeploy <- Validate.repeatDeploy[F](b, genesis, dag)
-          attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
+          attempt <- if (!validFormat) InvalidUnslashableBlock.pure[F]
+                    else if (!validSig) InvalidUnslashableBlock.pure[F]
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else if (!validDeploy) InvalidRepeatDeploy.pure[F]
                     else attemptAdd(b)
