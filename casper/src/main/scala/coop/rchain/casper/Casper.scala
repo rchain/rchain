@@ -519,7 +519,6 @@ sealed abstract class MultiParentCasperInstances {
         }
 
       private def reAttemptBuffer: F[Unit] =
-        // TODO: What if you get that same exact block come in
         for {
           blockBufferDependencyDag <- blockBufferDependencyDagState.get
           dependencyFree           = blockBufferDependencyDag.dependencyFree
