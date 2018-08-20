@@ -29,7 +29,6 @@ package object effects {
       log: Log[Task],
       time: Time[Task],
       metrics: Metrics[Task],
-      transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
     KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
