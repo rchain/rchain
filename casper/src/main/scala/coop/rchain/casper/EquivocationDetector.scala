@@ -10,7 +10,7 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
 import coop.rchain.casper.util.{DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
   bonds,
-  findJustificationParentWithSeqNum,
+  findCreatorJustificationAncestorWithSeqNum,
   toLatestMessages
 }
 
@@ -171,11 +171,11 @@ object EquivocationDetector {
       stake: SequenceNumber): F[EquivocationDiscoveryStatus] =
     if (stake > 0) {
       for {
-        isEquivocationDetectable <- equivocationDetectable[F](latestMessages.toSeq,
+        equivocationDetectable <- isEquivocationDetectable[F](latestMessages.toSeq,
                                                               equivocationRecord,
                                                               Set.empty[BlockMessage])
       } yield
-        if (isEquivocationDetectable) {
+        if (equivocationDetectable) {
           EquivocationNeglected
         } else {
           EquivocationOblivious
@@ -185,89 +185,107 @@ object EquivocationDetector {
       Applicative[F].pure(EquivocationDetected)
     }
 
-  private def equivocationDetectable[F[_]: Monad: BlockStore](
+  private def isEquivocationDetectable[F[_]: Monad: BlockStore](
       latestMessages: Seq[(Validator, BlockHash)],
       equivocationRecord: EquivocationRecord,
-      equivocationChildren: Set[BlockMessage]): F[Boolean] = {
-    def maybeAddEquivocationChildren(
-        justificationBlock: BlockMessage,
-        equivocatingValidator: Validator,
-        equivocationBaseBlockSeqNum: SequenceNumber,
-        equivocationChildren: Set[BlockMessage]): F[Set[BlockMessage]] =
-      if (justificationBlock.sender == equivocatingValidator) {
-        if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
-          for {
-            maybeJustificationParentWithSeqNum <- findJustificationParentWithSeqNum[F](
-                                                   justificationBlock,
-                                                   equivocationBaseBlockSeqNum + 1)
-            updatedEquivocationChildren = maybeJustificationParentWithSeqNum match {
-              case Some(equivocationChild) => equivocationChildren + equivocationChild
-              case None =>
-                throw new Error(
-                  "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
-            }
-          } yield updatedEquivocationChildren
-        } else {
-          equivocationChildren.pure[F]
-        }
-      } else {
-        // Latest according to the justification block
-        val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
-          toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
-        maybeLatestEquivocatingValidatorBlockHash match {
-          case Some(blockHash) =>
-            for {
-              latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
-              updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
-                                              for {
-                                                maybeJustificationParentWithSeqNum <- findJustificationParentWithSeqNum[
-                                                                                       F](
-                                                                                       latestEquivocatingValidatorBlock,
-                                                                                       equivocationBaseBlockSeqNum + 1)
-                                                updatedEquivocationChildren = maybeJustificationParentWithSeqNum match {
-                                                  case Some(equivocationChild) =>
-                                                    equivocationChildren + equivocationChild
-                                                  case None =>
-                                                    throw new Error(
-                                                      "justification parent with higher sequence number hasn't been added to the blockDAG yet.")
-                                                }
-                                              } yield updatedEquivocationChildren
-                                            } else { equivocationChildren.pure[F] }
-            } yield updatedEquivocationChildren
-          case None =>
-            throw new Error(
-              "justificationBlock is missing justification pointers to equivocatingValidator even though justificationBlock isn't a part of equivocationDetectedBlockHashes for this equivocation record.")
-        }
-      }
-
+      equivocationChildren: Set[BlockMessage]): F[Boolean] =
     latestMessages match {
       case Nil => false.pure[F]
       case (_, justificationBlockHash) +: remainder =>
-        for {
-          justificationBlock <- ProtoUtil.unsafeGetBlock[F](justificationBlockHash)
-          isDetectable <- if (equivocationRecord.equivocationDetectedBlockHashes.contains(
-                                justificationBlockHash)) {
-                           true.pure[F]
-                         } else {
-                           val equivocatingValidator = equivocationRecord.equivocator
-                           val equivocationBaseBlockSeqNum =
-                             equivocationRecord.equivocationBaseBlockSeqNum
-                           for {
-                             updatedEquivocationChildren <- maybeAddEquivocationChildren(
-                                                             justificationBlock,
-                                                             equivocatingValidator,
-                                                             equivocationBaseBlockSeqNum,
-                                                             equivocationChildren)
-                             isDetectable <- if (updatedEquivocationChildren.size > 1) {
-                                              true.pure[F]
-                                            } else {
-                                              equivocationDetectable[F](remainder,
-                                                                        equivocationRecord,
-                                                                        updatedEquivocationChildren)
-                                            }
-                           } yield isDetectable
-                         }
-        } yield isDetectable
+        isEquivocationDetectableAfterViewingBlock[F](justificationBlockHash,
+                                                     equivocationRecord,
+                                                     equivocationChildren,
+                                                     remainder)
     }
+
+  private def isEquivocationDetectableAfterViewingBlock[F[_]: Monad: BlockStore](
+      justificationBlockHash: BlockHash,
+      equivocationRecord: EquivocationRecord,
+      equivocationChildren: Set[BlockMessage],
+      remainder: Seq[(Validator, BlockHash)]): F[Boolean] =
+    if (equivocationRecord.equivocationDetectedBlockHashes.contains(justificationBlockHash)) {
+      true.pure[F]
+    } else {
+      for {
+        justificationBlock <- ProtoUtil.unsafeGetBlock[F](justificationBlockHash)
+        equivocationDetected <- isEquivocationDetectableThroughChildren[F](equivocationRecord,
+                                                                           equivocationChildren,
+                                                                           remainder,
+                                                                           justificationBlock)
+      } yield equivocationDetected
+    }
+
+  private def isEquivocationDetectableThroughChildren[F[_]: Monad: BlockStore](
+      equivocationRecord: EquivocationRecord,
+      equivocationChildren: Set[BlockMessage],
+      remainder: Seq[(Validator, BlockHash)],
+      justificationBlock: BlockMessage): F[Boolean] = {
+    val equivocatingValidator = equivocationRecord.equivocator
+    val equivocationBaseBlockSeqNum =
+      equivocationRecord.equivocationBaseBlockSeqNum
+    for {
+      updatedEquivocationChildren <- maybeAddEquivocationChild[F](justificationBlock,
+                                                                  equivocatingValidator,
+                                                                  equivocationBaseBlockSeqNum,
+                                                                  equivocationChildren)
+      equivocationDetected <- if (updatedEquivocationChildren.size > 1) {
+                               true.pure[F]
+                             } else {
+                               isEquivocationDetectable[F](remainder,
+                                                           equivocationRecord,
+                                                           updatedEquivocationChildren)
+                             }
+    } yield equivocationDetected
   }
+
+  private def maybeAddEquivocationChild[F[_]: Monad: BlockStore](
+      justificationBlock: BlockMessage,
+      equivocatingValidator: Validator,
+      equivocationBaseBlockSeqNum: SequenceNumber,
+      equivocationChildren: Set[BlockMessage]): F[Set[BlockMessage]] =
+    if (justificationBlock.sender == equivocatingValidator) {
+      // This is a special case as the justificationBlock might be the equivocation child
+      if (justificationBlock.seqNum > equivocationBaseBlockSeqNum) {
+        addEquivocationChild[F](justificationBlock,
+                                equivocationBaseBlockSeqNum,
+                                equivocationChildren)
+      } else {
+        equivocationChildren.pure[F]
+      }
+    } else {
+      // Latest according to the justificationBlock
+      val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
+        toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
+      maybeLatestEquivocatingValidatorBlockHash match {
+        case Some(blockHash) =>
+          for {
+            latestEquivocatingValidatorBlock <- ProtoUtil.unsafeGetBlock[F](blockHash)
+            updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
+                                            addEquivocationChild[F](
+                                              latestEquivocatingValidatorBlock,
+                                              equivocationBaseBlockSeqNum,
+                                              equivocationChildren)
+                                          } else { equivocationChildren.pure[F] }
+          } yield updatedEquivocationChildren
+        case None =>
+          throw new Exception(
+            "justificationBlock is missing justification pointers to equivocatingValidator even though justificationBlock isn't a part of equivocationDetectedBlockHashes for this equivocation record.")
+      }
+    }
+
+  private def addEquivocationChild[F[_]: Monad: BlockStore](
+      justificationBlock: BlockMessage,
+      equivocationBaseBlockSeqNum: SequenceNumber,
+      equivocationChildren: Set[BlockMessage]): F[Set[BlockMessage]] =
+    for {
+      maybeJustificationParentWithSeqNum <- findCreatorJustificationAncestorWithSeqNum[F](
+                                             justificationBlock,
+                                             equivocationBaseBlockSeqNum + 1)
+      updatedEquivocationChildren = maybeJustificationParentWithSeqNum match {
+        case Some(equivocationChild) => equivocationChildren + equivocationChild
+        case None =>
+          throw new Exception(
+            "creator justification ancestor with lower sequence number hasn't been added to the blockDAG yet.")
+      }
+    } yield updatedEquivocationChildren
 }

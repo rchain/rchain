@@ -75,7 +75,7 @@ object ProtoUtil {
           validator == block.sender
       }
 
-  def findJustificationParentWithSeqNum[F[_]: Monad: BlockStore](
+  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
       b: BlockMessage,
       seqNum: SequenceNumber): F[Option[BlockMessage]] =
     if (b.seqNum == seqNum) {
@@ -85,9 +85,7 @@ object ProtoUtil {
         .bfTraverseF(List(b)) { block =>
           getCreatorJustificationAsList[F](block, block.sender)
         }
-        .find { block =>
-          (block.seqNum == seqNum)
-        }
+        .find(_.seqNum == seqNum)
     }
 
   def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
