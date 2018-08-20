@@ -41,6 +41,10 @@ object Runtime {
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
+  type RhoDispatch    = Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  type RhoSysFunction = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatchMap = Map[Long, RhoSysFunction]
+
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
@@ -86,9 +90,7 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(
-        space: RhoISpace,
-        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) = Map(
+    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch) = Map(
       0L -> SystemProcesses.stdout,
       1L -> SystemProcesses.stdoutAck(space, dispatcher),
       2L -> SystemProcesses.stderr,
@@ -107,16 +109,16 @@ object Runtime {
                                        "rho:io:stderr"    -> byteName(2),
                                        "rho:io:stderrAck" -> byteName(3))
 
-    lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+    lazy val dispatchTable: RhoDispatchMap =
       dispatchTableCreator(space, dispatcher)
 
-    lazy val replayDispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+    lazy val replayDispatchTable: RhoDispatchMap =
       dispatchTableCreator(replaySpace, replayDispatcher)
 
-    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+    lazy val dispatcher: RhoDispatch =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+    lazy val replayDispatcher: RhoDispatch =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
