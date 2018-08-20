@@ -9,14 +9,13 @@ import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, Pointer
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import org.scalacheck.Prop
+import org.scalacheck.{Gen, Prop}
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.test.ArbitraryInstances._
 
 trait StorageActionsTests
@@ -1027,12 +1026,38 @@ trait StorageActionsTests
           space.reset(checkpoint)
           val num = "%02d".format(chunkNo)
 
-          val contentsTest = space.store.toMap == expectedContents
+          val actualContents = space.store.toMap
+          val contentsTest   = actualContents == expectedContents
 
           if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
+
+            logger.error("difference report")
+            for ((expectedChannels, expectedRow) <- expectedContents) {
+              val actualRow = actualContents.get(expectedChannels)
+
+              actualRow match {
+                case Some(row) =>
+                  if (row != expectedRow) {
+                    logger.error(s"invalid actual value: $row !== $expectedRow")
+                  }
+                case None => logger.error(s"no expected key: $expectedChannels")
+              }
+            }
+
+            for ((actualChannels, actualRow) <- actualContents) {
+              val expectedRow = expectedContents.get(actualChannels)
+
+              expectedRow match {
+                case Some(row) =>
+                  if (row != actualRow) {
+                    logger.error(s"invalid actual value: $actualRow !== $row")
+                  }
+                case None => logger.error(s"unexpected key: $actualChannels")
+              }
+            }
           }
 
           val actualJoins = space.store.joinMap
@@ -1340,6 +1365,9 @@ trait StorageActionsTests
     check(prop)
   }
 
+  val stringGen = Gen.nonEmptyContainerOf[Array, Char](Gen.choose[Char](0x21, 0x7e.toChar)).map(_.mkString)
+  val testConsumeMapGen = Gen.nonEmptyContainerOf[TestConsumeMap]
+
   "when resetting to a bunch of checkpoints made with consumes, the store" should
     "have the expected contents" in {
     val prop = Prop.forAllNoShrink { (data: Seq[TestConsumeMap]) =>
@@ -1487,7 +1515,10 @@ trait StorageActionsTests
 class InMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase
     with StorageActionsTests
-    with JoinOperationsTests {}
+    with JoinOperationsTests {
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfiguration(minSuccessful = 5000, sizeRange = 40)
+}
 
 class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
