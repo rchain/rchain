@@ -125,11 +125,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
+    val start = System.currentTimeMillis()
+
     val deploys = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-    ).map(s =>
-      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
+    ).zipWithIndex.map(s =>
+      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s._1).right.get, start + s._2))
 
     val Some(signedBlock1) = MultiParentCasper[Id].deploy(deploys.head) *> MultiParentCasper[Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock1)

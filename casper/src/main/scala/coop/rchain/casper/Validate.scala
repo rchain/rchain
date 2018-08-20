@@ -348,8 +348,8 @@ object Validate {
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
-      knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])
-    : F[Either[InvalidBlock, ValidBlock]] =
+      knownStateHashesContainer: AtomicSyncVar[Set[StateHash]])(
+      implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
     for {
       internalMap <- BlockStore[F].asMap()
       maybeCheckPoint <- Capture[F].capture {

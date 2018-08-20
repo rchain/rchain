@@ -192,13 +192,13 @@ class ApproveBlockProtocolTest extends FlatSpec with Matchers {
     implicit val logStub           = new LogStub[Task]()
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val TestFixture(_, abp, candidate, _, sigsF) =
-      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 1.millisecond, Set(validatorPk))
+      ApproveBlockProtocolTest.createProtocol(10, 100.milliseconds, 5.millisecond, Set(validatorPk))
 
     val cancelToken = abp.run().fork.runAsync
-    ctx.tick(1.millisecond)
 
     // I know that testing the logs is not the best way but I comparing messages sent won't work
     // because we attach `System.currentMillis` to every message.
+    ctx.tick(4.millisecond)
     infosContain("APPROVAL: Sent UnapprovedBlock", 1)
     infosContain("APPROVAL: received block approval from", 0)
 

@@ -92,7 +92,8 @@ sealed abstract class MultiParentCasperInstances {
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
-      internalMap: Map[BlockHash, BlockMessage]): MultiParentCasper[F] = {
+      internalMap: Map[BlockHash, BlockMessage])(
+      implicit scheduler: Scheduler): MultiParentCasper[F] = {
     val dag = BlockDag()
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint(
@@ -113,7 +114,7 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       dag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash]) =
+      maybePostGenesisStateHash: Option[StateHash])(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString

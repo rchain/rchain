@@ -28,14 +28,14 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint(
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDag,
-      internalMap: Map[BlockHash, BlockMessage],
-      emptyStateHash: StateHash,
-      knownStateHashes: Set[StateHash],
-      runtimeManager: RuntimeManager): (Option[StateHash], Set[StateHash]) = {
+  def validateBlockCheckpoint(b: BlockMessage,
+                              genesis: BlockMessage,
+                              dag: BlockDag,
+                              internalMap: Map[BlockHash, BlockMessage],
+                              emptyStateHash: StateHash,
+                              knownStateHashes: Set[StateHash],
+                              runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler): (Option[StateHash], Set[StateHash]) = {
     val tsHash        = ProtoUtil.tuplespace(b)
     val serializedLog = b.body.fold(Seq.empty[Event])(_.commReductions)
     val log           = serializedLog.map(EventConverter.toRspaceEvent).toList
