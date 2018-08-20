@@ -57,5 +57,12 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Clos
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
 
-  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  override def close(): Unit = {
+    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+    if (!terminated) {
+      println(
+        "warn: did not shutdown after 10 seconds, retrbying with additional 10 seconds timeout")
+      channel.awaitTermination(10, TimeUnit.SECONDS)
+    }
+  }
 }
