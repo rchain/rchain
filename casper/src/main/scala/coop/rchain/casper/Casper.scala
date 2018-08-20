@@ -298,28 +298,9 @@ sealed abstract class MultiParentCasperInstances {
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
-          now <- Time[F].currentMillis
-          computeDeploysCheckpointResult <- knownStateHashesContainer.modify[(Checkpoint,
-                                                                              Seq[protocol.Event],
-                                                                              Set[StateHash],
-                                                                              Vector[DeployCost])] {
-                                             knownStateHashes =>
-                                               for {
-                                                 computeDeploysCheckpointResult <- InterpreterUtil
-                                                                                    .computeDeploysCheckpoint[
-                                                                                      F](
-                                                                                      p,
-                                                                                      r,
-                                                                                      genesis,
-                                                                                      _blockDag.get,
-                                                                                      emptyStateHash,
-                                                                                      knownStateHashes,
-                                                                                      runtimeManager.computeState)
-                                               } yield
-                                                 (computeDeploysCheckpointResult._3,
-                                                  computeDeploysCheckpointResult)
-                                           }
-          (computedCheckpoint, mergeLog, updatedKnownStateHashes, deployWithCost) = computeDeploysCheckpointResult
+          now                                                                     <- Time[F].currentMillis
+          deploysCheckpoint                                                       <- updateKnownStateHashes(knownStateHashesContainer, p, r)
+          (computedCheckpoint, mergeLog, updatedKnownStateHashes, deployWithCost) = deploysCheckpoint
           computedStateHash                                                       = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
           serializedLog                                                           = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
           postState = RChainState()
@@ -333,6 +314,25 @@ sealed abstract class MultiParentCasperInstances {
           header = blockHeader(body, p.map(_.blockHash), version, now)
           block  = unsignedBlockProto(body, header, justifications, shardId)
         } yield Some(block)
+
+      private def updateKnownStateHashes(
+          knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
+          p: Seq[BlockMessage],
+          r: Seq[Deploy]): F[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] =
+        knownStateHashesContainer
+          .modify[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] {
+            knownStateHashes =>
+              for {
+                checkpoint <- InterpreterUtil.computeDeploysCheckpoint[F](
+                               p,
+                               r,
+                               genesis,
+                               _blockDag.get,
+                               emptyStateHash,
+                               knownStateHashes,
+                               runtimeManager.computeState)
+              } yield (checkpoint._3, checkpoint)
+          }
 
       def blockDag: F[BlockDag] = Capture[F].capture {
         _blockDag.get
@@ -393,10 +393,9 @@ sealed abstract class MultiParentCasperInstances {
           blockBufferDependencyDag <- blockBufferDependencyDagState.get
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ =>
-                                            EquivocationDetector.checkEquivocations[F](
-                                              blockBufferDependencyDag,
-                                              b,
-                                              dag))
+                                            EquivocationDetector
+                                              .checkEquivocations(blockBufferDependencyDag, b, dag)
+                                              .pure[F])
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status

@@ -58,21 +58,19 @@ object EquivocationRecord {
 }
 
 object EquivocationDetector {
-  def checkEquivocations[F[_]: Monad: BlockStore](
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      block: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+  def checkEquivocations(blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
+                         block: BlockMessage,
+                         dag: BlockDag): Either[InvalidBlock, ValidBlock] = {
     val maybeCreatorJustification   = creatorJustificationHash(block)
     val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
     val isNotEquivocation           = maybeCreatorJustification == maybeLatestMessageOfCreator
-    val result = if (isNotEquivocation) {
+    if (isNotEquivocation) {
       Right(Valid)
     } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
       Left(AdmissibleEquivocation)
     } else {
       Left(IgnorableEquivocation)
     }
-    Applicative[F].pure(result)
   }
 
   private def requestedAsDependency(block: BlockMessage,
@@ -105,14 +103,13 @@ object EquivocationDetector {
       equivocationsTracker: mutable.Set[EquivocationRecord],
       block: BlockMessage,
       dag: BlockDag): F[Boolean] =
-    equivocationsTracker.toList.foldLeftM(false) {
-      case (acc, equivocationRecord) =>
-        for {
-          neglectedEquivocationDetected <- updateEquivocationsTracker[F](equivocationsTracker,
-                                                                         block,
-                                                                         dag,
-                                                                         equivocationRecord)
-        } yield acc || neglectedEquivocationDetected
+    equivocationsTracker.toList.existsM { equivocationRecord =>
+      for {
+        neglectedEquivocationDetected <- updateEquivocationsTracker[F](equivocationsTracker,
+                                                                       block,
+                                                                       dag,
+                                                                       equivocationRecord)
+      } yield neglectedEquivocationDetected
     }
 
   /**
@@ -172,7 +169,7 @@ object EquivocationDetector {
         }
       } else {
         // Since block has dropped equivocatingValidator from justifications, it has acknowledged the equivocation.
-        // TODO: We check for unjustified droppings of validators in validateBlockSummary.
+        // TODO: We check for unjustified droppings of validators with https://rchain.atlassian.net/browse/RHOL-631.
         EquivocationOblivious
       }
   }

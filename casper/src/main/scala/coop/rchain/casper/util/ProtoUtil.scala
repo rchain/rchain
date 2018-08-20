@@ -85,8 +85,8 @@ object ProtoUtil {
         .bfTraverseF(List(b)) { block =>
           getCreatorJustificationAsList[F](block, block.sender)
         }
-        .findF { block =>
-          (block.seqNum == seqNum).pure[F]
+        .find { block =>
+          (block.seqNum == seqNum)
         }
     }
 

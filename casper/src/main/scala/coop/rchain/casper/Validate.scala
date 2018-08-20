@@ -220,19 +220,14 @@ object Validate {
 
     for {
       initParents <- ProtoUtil.unsafeGetParents[F](block)
-      parentBlocksAncestors <- DagOperations
-                                .bfTraverseF[F, BlockMessage](initParents)(
-                                  ProtoUtil.unsafeGetParents[F])
-                                .toList
-      duplicatedBlock = parentBlocksAncestors.find(
-        _.body.exists(
-          _.newCode
-            .flatMap(_.deploy)
-            .exists(
-              _.raw.exists(p => deployKeySet.contains((p.user, p.timestamp)))
-            )
-        )
-      )
+      duplicatedBlock <- DagOperations
+                          .bfTraverseF[F, BlockMessage](initParents)(ProtoUtil.unsafeGetParents[F])
+                          .find(
+                            _.body.exists(
+                              _.newCode
+                                .flatMap(_.deploy)
+                                .exists(_.raw.exists(p =>
+                                  deployKeySet.contains((p.user, p.timestamp))))))
       result <- duplicatedBlock match {
                  case Some(b) =>
                    for {
@@ -355,8 +350,8 @@ object Validate {
                                             dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeParentHashes = ProtoUtil.parentHashes(b)
     val parentHashes = maybeParentHashes match {
-      case Nil    => Seq(genesis.blockHash)
-      case hashes => hashes
+      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
+      case hashes                   => hashes
     }
     val latestMessages        = ProtoUtil.toLatestMessages(b.justifications)
     val dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
@@ -444,7 +439,7 @@ object Validate {
         false
       }
 
-  def transactions[F[_]: Monad: Log: BlockStore: Sync](
+  def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
