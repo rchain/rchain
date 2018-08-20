@@ -150,7 +150,7 @@ object ApproveBlockProtocol {
         t    <- Timer[F].clockRealTime(MILLISECONDS)
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
-      } yield Unit
+      } yield ()
 
     def run(): F[Unit] = internalRun()
 
@@ -178,7 +178,7 @@ object ApproveBlockProtocol {
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                 } yield ()
             }
-      } yield Unit
+      } yield ()
   }
 
 }

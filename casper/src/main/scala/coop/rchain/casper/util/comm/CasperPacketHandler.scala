@@ -204,8 +204,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         implicit scheduler: Scheduler): F[Unit] =
       for {
         _   <- Timer[F].sleep(interval)
-        opt <- LastApprovedBlock[F].get
-        cont <- opt match {
+        lastApprovedBlockO <- LastApprovedBlock[F].get
+        cont <- lastApprovedBlockO match {
                  case None =>
                    approveBlockInterval[F](interval,
                                            shardId,
@@ -224,7 +224,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                          internalMap,
                                          shardId)
                      _   <- MultiParentCasperRef[F].set(casper)
-                     _   = println(s"Set")
                      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
                      _   <- capserHandlerInternal.set(abh)
                    } yield ()
@@ -311,17 +310,17 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleUnapprovedBlock(peer: PeerNode, ub: UnapprovedBlock): F[Option[Packet]] =
       nonePacket
 
-    override def handleBlockApproval(ba: BlockApproval): F[Option[Packet]] =
+    override def handleBlockApproval(b: BlockApproval): F[Option[Packet]] =
       nonePacket
 
-    override def handleBlockMessage(bm: BlockMessage): F[Option[Packet]] =
+    override def handleBlockMessage(b: BlockMessage): F[Option[Packet]] =
       for {
-        isOldBlock <- MultiParentCasper[F].contains(bm)
+        isOldBlock <- MultiParentCasper[F].contains(b)
         _ <- if (isOldBlock) {
               Log[F].info(
-                s"CASPER: Received block ${PrettyPrinter.buildString(bm.blockHash)} again.")
+                s"CASPER: Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
             } else {
-              handleNewBlock[F](bm)
+              handleNewBlock[F](b)
             }
       } yield none[Packet]
 

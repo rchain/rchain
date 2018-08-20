@@ -30,7 +30,6 @@ object MultiParentCasperRef {
     MultiParentCasperRef[F].get flatMap {
       case Some(casper) => f(casper)
       case None =>
-        println("No casper :(")
         Log[F].warn(s"Casper instance was not available.").map(_ => default)
     }
 }
