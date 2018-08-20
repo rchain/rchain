@@ -13,6 +13,10 @@ import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
+import java.nio.file.Path
+
+import scala.io.Source
+
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp._, Connect._
 
@@ -20,7 +24,7 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(
+  def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
       log: Log[Task],
       time: Time[Task],
@@ -28,7 +32,7 @@ package object effects {
       transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
-    KademliaNodeDiscovery.create[Task, Task](src, defaultTimeout)
+    KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
 
   def time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long] = Task.delay {
@@ -36,6 +40,10 @@ package object effects {
     }
     def nanoTime: Task[Long] = Task.delay {
       System.nanoTime
+    }
+
+    def sleep(millis: Int): Task[Unit] = Task.delay {
+      Thread.sleep(millis.toLong)
     }
   }
 
@@ -69,17 +77,24 @@ package object effects {
         } yield r
     }
 
-  def tcpTransportLayer(host: String, port: Int, cert: File, key: File)(
-      implicit scheduler: Scheduler,
-      connections: TcpTransportLayer.TransportCell[Task],
-      log: Log[Task]) =
-    new TcpTransportLayer(host, port, cert, key)
+  def tcpTransportLayer(host: String,
+                        port: Int,
+                        certPath: Path,
+                        keyPath: Path,
+                        maxMessageSize: Int)(implicit scheduler: Scheduler,
+                                             connections: TcpTransportLayer.TransportCell[Task],
+                                             log: Log[Task]): TcpTransportLayer = {
+    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
+    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
+    new TcpTransportLayer(host, port, cert, key, maxMessageSize)
+  }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def tcpConnections: Task[Cell[Task, TransportState]] = Cell.mvarCell(TransportState.empty)
+
   def rpConnections: Task[ConnectionsCell[Task]] =
-    Cell.const[Task, Connections](Connections.empty).pure[Task] // noop for now
+    Cell.mvarCell[Connections](Connections.empty)
 
   def rpConfAsk(conf: RPConf): ApplicativeAsk[Task, RPConf] =
     new ConstApplicativeAsk[Task, RPConf](conf)

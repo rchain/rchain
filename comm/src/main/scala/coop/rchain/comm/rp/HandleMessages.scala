@@ -26,7 +26,7 @@ object HandleMessages {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def handle[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: RoutingProtocol,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
     ProtocolHelper.sender(protocol) match {
@@ -36,7 +36,7 @@ object HandleMessages {
     }
 
   private def handle_[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: ErrorHandler: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: RoutingProtocol,
       sender: PeerNode,
       defaultTimeout: FiniteDuration): F[CommunicationResponse] =
@@ -44,26 +44,42 @@ object HandleMessages {
       .fold(Log[F].error("Upstream not available").as(notHandled(upstreamNotAvailable))) { usmsg =>
         usmsg.typeUrl match {
           // TODO interpolate this string to check if class exists
-
           case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Heartbeat" =>
             handleHeartbeat[F](sender, toHeartbeat(proto).toOption)
-
           case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Packet" =>
             handlePacket[F](sender, toPacket(proto).toOption)
-
           case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
             handleProtocolHandshake[F](sender, toProtocolHandshake(proto).toOption, defaultTimeout)
-
+          case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Disconnect" =>
+            handleDisconnect[F](sender, toDisconnect(proto).toOption)
           case _ =>
             Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> notHandled(
               unexpectedMessage(usmsg.typeUrl)).pure[F]
         }
       }
 
+  def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
+      sender: PeerNode,
+      maybeDisconnect: Option[Disconnect]): F[CommunicationResponse] = {
+
+    val errorMsg = s"Expecting Disconnect, got something else."
+    def handleNone: F[CommunicationResponse] =
+      Log[F].error(errorMsg).as(notHandled(unknownCommError(errorMsg)))
+
+    maybeDisconnect.fold(handleNone)(disconnect =>
+      for {
+        _ <- Log[F].info(s"Forgetting about ${sender.toAddress}.")
+        _ <- TransportLayer[F].disconnect(sender)
+        _ <- ConnectionsCell[F].modify(_.removeConn[F](sender))
+        _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+      } yield handledWithoutMessage)
+
+  }
+
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](
       remote: PeerNode,
       maybePacket: Option[Packet]): F[CommunicationResponse] = {
-    val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
+    val errorMsg = s"Expecting Packet, got something else. Stopping the node."
     def handleNone: F[CommunicationResponse] =
       for {
         _     <- Log[F].error(errorMsg)
@@ -85,7 +101,7 @@ object HandleMessages {
   }
 
   def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Log: ErrorHandler: ConnectionsCell: RPConfAsk](
+      F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
       peer: PeerNode,
       maybePh: Option[ProtocolHandshake],
       defaultTimeout: FiniteDuration
@@ -98,7 +114,6 @@ object HandleMessages {
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =
       for {
-        _           <- NodeDiscovery[F].addNode(peer)
         _           <- ConnectionsCell[F].modify(_.addConn[F](peer))
         currentTime <- Time[F].currentMillis
         _           <- Log[F].info(s"Responded to protocol handshake request from $peer")

@@ -3,7 +3,6 @@ package coop.rchain.casper.util
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
@@ -214,7 +213,8 @@ object ProtoUtil {
 
   def unsignedBlockProto(body: Body,
                          header: Header,
-                         justifications: Seq[Justification]): BlockMessage = {
+                         justifications: Seq[Justification],
+                         shardId: String): BlockMessage = {
     val hash = hashUnsignedBlock(header, justifications)
 
     BlockMessage()
@@ -222,6 +222,7 @@ object ProtoUtil {
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
+      .withShardId(shardId)
   }
 
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
@@ -233,19 +234,24 @@ object ProtoUtil {
                       sender: ByteString,
                       sigAlgorithm: String,
                       seqNum: Int,
+                      shardId: String,
                       extraBytes: ByteString) =
-    hashByteArrays(header.toByteArray,
-                   sender.toByteArray,
-                   StringValue.of(sigAlgorithm).toByteArray,
-                   Int32Value.of(seqNum).toByteArray,
-                   extraBytes.toByteArray)
+    hashByteArrays(
+      header.toByteArray,
+      sender.toByteArray,
+      StringValue.of(sigAlgorithm).toByteArray,
+      Int32Value.of(seqNum).toByteArray,
+      StringValue.of(shardId).toByteArray,
+      extraBytes.toByteArray
+    )
 
   def signBlock(block: BlockMessage,
                 dag: BlockDag,
                 pk: Array[Byte],
                 sk: Array[Byte],
                 sigAlgorithm: String,
-                signFunction: (Array[Byte], Array[Byte]) => Array[Byte]): BlockMessage = {
+                signFunction: (Array[Byte], Array[Byte]) => Array[Byte],
+                shardId: String): BlockMessage = {
 
     val header = {
       //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
@@ -257,7 +263,7 @@ object ProtoUtil {
     val sender = ByteString.copyFrom(pk)
     val seqNum = dag.currentSeqNum.getOrElse(sender, -1) + 1
 
-    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, block.extraBytes)
+    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
     val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
 
@@ -267,6 +273,7 @@ object ProtoUtil {
       .withSeqNum(seqNum)
       .withSigAlgorithm(sigAlgorithm)
       .withBlockHash(blockHash)
+      .withShardId(shardId)
 
     signedBlock
   }
@@ -276,7 +283,7 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeployString(id: Int): DeployData = {
+  def basicDeployData(id: Int): DeployData = {
     //TODO this should be removed once we assign the deploy with exact user
     Thread.sleep(1)
     val timestamp = System.currentTimeMillis()
@@ -289,7 +296,7 @@ object ProtoUtil {
   }
 
   def basicDeploy(id: Int): Deploy = {
-    val d    = basicDeployString(id)
+    val d    = basicDeployData(id)
     val term = InterpreterUtil.mkTerm(d.term).right.get
     Deploy(
       term = Some(term),
@@ -301,6 +308,9 @@ object ProtoUtil {
     DeployCost()
       .withDeploy(basicDeploy(id))
       .withCost(PCost(1L, 1))
+
+  def sourceDeploy(source: String, timestamp: Long): DeployData =
+    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
 
   def termDeploy(term: Par, timestamp: Long): Deploy =
     //TODO this should be removed once we assign the deploy with exact user

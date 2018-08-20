@@ -3,6 +3,12 @@ package coop.rchain.casper.util.comm
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.{Sync, Timer}
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import com.google.protobuf.ByteString
+
+import cats.Monad
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
@@ -47,7 +53,7 @@ object ApproveBlockProtocol {
 
   //For usage in tests only
   def unsafe[
-      F[_]: Sync: Capture: NodeDiscovery: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -63,7 +69,7 @@ object ApproveBlockProtocol {
                                     interval,
                                     sigsF)
 
-  def of[F[_]: Sync: Capture: NodeDiscovery: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -82,7 +88,7 @@ object ApproveBlockProtocol {
                                       sigsF)
 
   private class ApproveBlockProtocolImpl[
-      F[_]: Sync: Capture: NodeDiscovery: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],

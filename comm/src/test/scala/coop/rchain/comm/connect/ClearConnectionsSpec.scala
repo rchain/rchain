@@ -1,25 +1,21 @@
 package coop.rchain.comm.rp
 
-import Connect._
-import Connections._
+import cats._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import CommError._
-import protocol.routing._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect.Connections._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
+import coop.rchain.shared._
+import org.scalatest._
 
 import scala.concurrent.duration._
-import org.scalatest._
-import org.scalatest.enablers.Containing
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import ski._
-import coop.rchain.shared._
-import coop.rchain.comm.transport._
-import CommMessages._
-import coop.rchain.metrics.Metrics
 
 class ClearConnectionsSpec
     extends FunSpec

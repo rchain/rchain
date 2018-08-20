@@ -6,7 +6,6 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.CommMessages.packet
@@ -31,7 +30,7 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
   private val serializedApproval = approval.toByteString
 
   def unapprovedBlockPacketHandler[
-      F[_]: Capture: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+      F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       u: UnapprovedBlock): F[Option[Packet]] =
     if (u.candidate.contains(expectedCandidate)) {

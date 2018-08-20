@@ -30,26 +30,20 @@ object EffectsTestInstances {
       clock
     }
 
+    def sleep(millis: Int): F[Unit] = Capture[F].capture(())
+
     def reset(): Unit = this.clock = 0
   }
 
   class NodeDiscoveryStub[F[_]: Capture]() extends NodeDiscovery[F] {
 
     var nodes: List[PeerNode] = List.empty[PeerNode]
-
     def reset(): Unit =
       nodes = List.empty[PeerNode]
-
-    def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
-      nodes = node :: nodes
-      ()
-    }
-
     def peers: F[Seq[PeerNode]] = Capture[F].capture {
       nodes
     }
-
-    def findMorePeers(limit: Int): F[Seq[PeerNode]]                = ???
+    def discover: F[Unit]                                          = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
   }
 

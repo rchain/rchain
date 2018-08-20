@@ -15,6 +15,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
@@ -89,7 +90,7 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _)
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _, "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
@@ -322,9 +323,12 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
 
-      Validate
-        .blockSummary[Id](block.withBlockNumber(17).withSeqNum(1), BlockMessage(), chain) should be(
-        Left(InvalidBlockNumber))
+      Validate.blockSummary[Id](
+        block.withBlockNumber(17).withSeqNum(1),
+        BlockMessage(),
+        chain,
+        "rchain"
+      ) should be(Left(InvalidBlockNumber))
       log.warns.size should be(1)
   }
 
@@ -388,7 +392,7 @@ class ValidateTest
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in {
     val (_, validators)   = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
@@ -412,5 +416,34 @@ class ValidateTest
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
     activeRuntime.close()
+  }
+
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStore {
+    implicit blockStore =>
+      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+      implicit val chain           = createChain[StateWithChain](1).runS(initState)
+      implicit val (sk, _)         = Ed25519.newKeyPair
+      val genesis                  = signedBlock(0)
+      Validate.formatOfFields[Id](genesis) should be(true)
+      Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+      Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+      Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+      Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+      Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+      Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+      Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(
+        false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
+      ) should be(false)
+      Validate.formatOfFields[Id](
+        genesis.withBody(genesis.body.get.withCommReductions(List(Event(EventInstance.Empty))))
+      ) should be(false)
   }
 }

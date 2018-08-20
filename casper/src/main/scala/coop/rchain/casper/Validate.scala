@@ -5,9 +5,10 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.DagOperations.bfTraverse
-import coop.rchain.casper.util.{ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -105,6 +106,55 @@ object Validate {
       }
     }
 
+  def formatOfFields[F[_]: Monad: Log](b: BlockMessage): F[Boolean] =
+    if (b.blockHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
+      } yield false
+    } else if (b.header.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block header is missing."))
+      } yield false
+    } else if (b.body.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block body is missing."))
+      } yield false
+    } else if (b.sig.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
+      } yield false
+    } else if (b.sigAlgorithm.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
+      } yield false
+    } else if (b.shardId.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
+      } yield false
+    } else if (b.header.get.postStateHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
+      } yield false
+    } else if (b.header.get.newCodeHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
+      } yield false
+    } else if (b.header.get.commReductionsHash.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
+      } yield false
+    } else if (b.body.get.postState.isEmpty) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block post state is missing."))
+      } yield false
+    } else if (b.body.get.commReductions.exists(_.eventInstance == EventInstance.Empty)) {
+      for {
+        _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
+      } yield false
+    } else {
+      true.pure[F]
+    }
+
   /*
    * TODO: Double check ordering of validity checks
    * TODO: Add check for missing fields
@@ -114,7 +164,8 @@ object Validate {
   def blockSummary[F[_]: Monad: Log: Time: BlockStore](
       block: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      dag: BlockDag,
+      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
@@ -124,7 +175,9 @@ object Validate {
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
                                Validate.sequenceNumber[F](block, dag))
-    } yield sequenceNumberStatus.joinRight
+      shardIdentifierStatus <- sequenceNumberStatus.joinRight.traverse(_ =>
+                                Validate.shardIdentifier[F](block, shardId))
+    } yield shardIdentifierStatus.joinRight
 
   def missingBlocks[F[_]: Monad: Log: BlockStore](
       block: BlockMessage,
@@ -271,6 +324,18 @@ object Validate {
                 s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
         } yield Left(InvalidSequenceNumber)
       }
+    }
+
+  def shardIdentifier[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
+    if (b.shardId == shardId) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(
+              ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
+      } yield Left(InvalidShardId)
     }
 
   def parents[F[_]: Monad: Log: BlockStore](b: BlockMessage,

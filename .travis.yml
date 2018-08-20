@@ -1,5 +1,7 @@
 sudo: required
 dist: trusty
+jdk:
+  - openjdk8
 
 matrix:
   include:
@@ -46,9 +48,12 @@ deploy:
     - "node/target/rpm/RPMS/noarch/*.rpm"
     - "node/target/universal/*.tgz"
   skip_cleanup: true
+  branches:
+    only:
+    - master
+    - /^release-.*$/ 
   on:
     tags: true
-    branch: master
 
 notifications:
   email:

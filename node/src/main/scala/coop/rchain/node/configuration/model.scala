@@ -16,6 +16,7 @@ case class Server(
     genesisValidator: Boolean,
     dataDir: Path,
     mapSize: Long,
+    inMemoryStore: Boolean,
     maxNumOfConnections: Int
 )
 
@@ -29,7 +30,8 @@ case class Tls(
     certificate: Path,
     key: Path,
     customCertificateLocation: Boolean,
-    customKeyLocation: Boolean
+    customKeyLocation: Boolean,
+    secureRandomNonBlocking: Boolean
 )
 
 sealed trait Command

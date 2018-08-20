@@ -1,23 +1,32 @@
 package coop.rchain.casper.util.comm
 
 import cats.effect.concurrent.Ref
+import coop.rchain.comm.rp.Connect, Connect._
+import coop.rchain.shared._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.HashSetCasperTest
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
-import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
+import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp.Connect.Connections
 import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.p2p.EffectsTestInstances._
+import coop.rchain.shared.Log.NOPLog
+import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
 import monix.execution.schedulers.TestScheduler
-import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
+import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.util.comm.ApproveBlockProtocolTest.TestFixture
+import coop.rchain.casper.{HashSetCasperTest, LastApprovedBlock}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
+
 import scala.util.Success
 
 class ApproveBlockProtocolTest extends FlatSpec with Matchers {
@@ -274,15 +283,13 @@ object ApproveBlockProtocolTest {
       duration: FiniteDuration,
       interval: FiniteDuration,
       validatorsPk: Set[Array[Byte]])(implicit logStub: LogStub[Task]): TestFixture = {
-    implicit val time           = new LogicalTime[Task]()
-    implicit val transportLayer = new TransportLayerStub[Task]
-    implicit val nodeDiscovery  = new NodeDiscoveryStub[Task]()
-    val src: PeerNode           = peerNode("src", 40400)
-    implicit val rpConfAsk      = createRPConfAsk[Task](src)
-    implicit val ctx            = monix.execution.Scheduler.Implicits.global
-    // add peer node, it doesn't matter we add ourselves we just care that peers' list is non-empty
-    nodeDiscovery.addNode(src).unsafeRunSync
-    implicit val lab = LastApprovedBlock.of[Task].unsafeRunSync
+    implicit val time            = new LogicalTime[Task]()
+    implicit val transportLayer  = new TransportLayerStub[Task]
+    val src: PeerNode            = peerNode("src", 40400)
+    implicit val rpConfAsk       = createRPConfAsk[Task](src)
+    implicit val ctx             = monix.execution.Scheduler.Implicits.global
+    implicit val connectionsCell = Cell.mvarCell[Connections](List(src)).unsafeRunSync
+    implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
     val (sk, pk)   = Ed25519.newKeyPair
     val genesis    = HashSetCasperTest.createGenesis(Seq(pk))

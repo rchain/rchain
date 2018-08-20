@@ -21,7 +21,6 @@ import coop.rchain.shared.StringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 object Main {
 
@@ -30,7 +29,6 @@ object Main {
   private implicit val io: SchedulerService = Scheduler.io("repl-io")
 
   def main(args: Array[String]): Unit = {
-    Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
     val exec: Task[Unit] =
       for {

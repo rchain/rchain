@@ -30,4 +30,5 @@ class SimpleStrandPool extends StrandPool {
       false
     }
 
+  override def finish(): Unit = ()
 }

@@ -72,12 +72,13 @@ object Genesis {
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification])
+    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
   }
 
   def withoutContracts(bonds: Map[Array[Byte], Int],
                        version: Long,
-                       timestamp: Long): BlockMessage = {
+                       timestamp: Long,
+                       shardId: String): BlockMessage = {
     import Sorting.byteArrayOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
@@ -93,16 +94,17 @@ object Genesis {
       .withPostState(state)
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification])
+    unsignedBlockProto(body, header, List.empty[Justification], shardId)
   }
 
-  //TODO: Decide on version number
+  //TODO: Decide on version number and shard identifier
   def fromInputFiles[F[_]: Monad: Capture: Log: Time](
       maybeBondsPath: Option[String],
       numValidators: Int,
       genesisPath: Path,
       maybeWalletsPath: Option[String],
       runtimeManager: RuntimeManager,
+      shardId: String,
       deployTimestamp: Option[Long])(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
@@ -126,7 +128,7 @@ object Genesis {
                 }
       bonds     <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial   = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L)
+      initial   = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
       withContr = withContracts(initial,
                                 bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
                                 wallets,

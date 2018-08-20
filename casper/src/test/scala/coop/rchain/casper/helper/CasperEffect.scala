@@ -9,11 +9,14 @@ import coop.rchain.casper.{MultiParentCasper, SafetyOracle, ValidatorIdentity}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp.Connect._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -22,14 +25,14 @@ import scala.collection.mutable
 object CasperEffect {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def apply(sk: Array[Byte], genesis: BlockMessage)(
+  def apply(sk: Array[Byte], genesis: BlockMessage, shardId: String = "rchain")(
       implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
-    val blockStoreDir             = BlockStoreTestFixture.dbDir
-    val runtimeDir                = BlockStoreTestFixture.dbDir
-    val local                     = HashSetCasperTestNode.peerNode("taskNode", 40400)
-    implicit val logEff           = new LogStub[Effect]
-    implicit val timeEff          = new LogicalTime[Effect]
-    implicit val nodeDiscoveryEff = new NodeDiscoveryStub[Effect]()
+    val blockStoreDir            = BlockStoreTestFixture.dbDir
+    val runtimeDir               = BlockStoreTestFixture.dbDir
+    val local                    = HashSetCasperTestNode.peerNode("taskNode", 40400)
+    implicit val logEff          = new LogStub[Effect]
+    implicit val timeEff         = new LogicalTime[Effect]
+    implicit val connectionsCell = Cell.const[Effect, Connections](Connect.Connections.empty)
     implicit val transportLayerEff =
       new TransportLayerTestImpl[Effect](local, Map.empty[PeerNode, mutable.Queue[Protocol]])
     implicit val metricEff = new Metrics.MetricsNOP[Effect]
@@ -48,7 +51,13 @@ object CasperEffect {
       _        <- blockStoreEff.put(genesis.blockHash, genesis)
       blockMap <- blockStoreEff.asMap()
     } yield
-      MultiParentCasper.hashSetCasper[Effect](runtimeManager, Some(validatorId), genesis, blockMap)
+      MultiParentCasper.hashSetCasper[Effect](
+        runtimeManager,
+        Some(validatorId),
+        genesis,
+        blockMap,
+        shardId
+      )
 
     def cleanUp(): Unit = {
       activeRuntime.close()

@@ -15,6 +15,9 @@ object LastApprovedBlock extends LastApprovedBlockInstances {
 
   def of[F[_]: Sync]: F[LastApprovedBlock[F]] = MaybeCell.of[F, ApprovedBlock]
 
+  def unsafe[F[_]: Sync](init: Option[ApprovedBlock] = None): LastApprovedBlock[F] =
+    MaybeCell.unsafe[F, ApprovedBlock](init)
+
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: LastApprovedBlock[F]): LastApprovedBlock[T[F, ?]] =
     new MaybeCell[T[F, ?], ApprovedBlock] {

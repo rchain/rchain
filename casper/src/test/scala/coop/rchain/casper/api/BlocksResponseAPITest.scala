@@ -9,8 +9,9 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -18,7 +19,7 @@ import scala.collection.immutable.HashMap
 import coop.rchain.shared.Time
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-class BlocksResponseTest
+class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
@@ -80,29 +81,18 @@ class BlocksResponseTest
   val chain: BlockDag = createChain.runS(initState)
   val genesis         = chain.idToBlocks(1)
 
-  def testCasper[F[_]: Applicative]: MultiParentCasper[F] =
-    new MultiParentCasper[F] {
-      def addBlock(b: BlockMessage): F[BlockStatus] =
-        BlockStatus.valid.pure[F]
-      def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Deploy): F[Unit]            = ().pure[F]
-      def estimator: F[IndexedSeq[BlockMessage]] =
-        Estimator.tips(chain, BlockStore[Id].asMap(), genesis).pure[F]
-      def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
-      def blockDag: F[BlockDag]                                          = chain.pure[F]
-      def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
-      def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
-      def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
-    }
-  implicit val casperEffect = testCasper[Id](syncId)
-  implicit val logEff       = new LogStub[Id]()(syncId)
-  implicit val turanOracleEffect: SafetyOracle[Id] =
-    SafetyOracle.turanOracle[Id](syncId, blockStore)
+  implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
+    HashMap.empty[BlockHash, BlockMessage],
+    Estimator.tips(chain, BlockStore[Id].asMap(), genesis),
+    chain)
+  implicit val logEff = new LogStub[Id]
   implicit val casperRef = {
     val tmp = MultiParentCasperRef.of[Id]
     tmp.set(casperEffect)
     tmp
   }
+  implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
+
   "getBlocksResponse" should "return only blocks in the main chain" in {
     val blocksResponse =
       BlockAPI.getBlocksResponse[Id](syncId, casperRef, logEff, turanOracleEffect, blockStore)

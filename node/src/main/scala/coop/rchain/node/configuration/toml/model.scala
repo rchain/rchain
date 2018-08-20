@@ -24,6 +24,7 @@ case class Server(
     standalone: Option[Boolean],
     genesisValidator: Option[Boolean],
     mapSize: Option[Long],
+    inMemoryStore: Option[Boolean],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
     maxNumOfConnections: Option[Int]
@@ -48,6 +49,7 @@ case class Validators(
     privateKey: Option[String],
     sigAlgorithm: Option[String],
     walletsFile: Option[String],
+    shardId: Option[String],
     requiredSigs: Option[Int],
     approveGenesisDuration: Option[FiniteDuration],
     approveGenesisInterval: Option[FiniteDuration],

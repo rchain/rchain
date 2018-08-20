@@ -1,5 +1,7 @@
 package coop.rchain.casper.util.comm
 
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import com.google.protobuf.ByteString
 import cats.Monad
 import cats.effect.Timer
 import cats.implicits._
@@ -25,7 +27,7 @@ object CommUtil {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     val hashString      = PrettyPrinter.buildString(b.blockHash)
@@ -37,7 +39,7 @@ object CommUtil {
   }
 
   def sendBlockRequest[
-      F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+      F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       r: BlockRequest): F[Unit] = {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
@@ -48,11 +50,11 @@ object CommUtil {
     } yield ()
   }
 
-  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: RPConfAsk](
+  def sendToPeers[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       pType: PacketType,
       serializedMessage: ByteString): F[Unit] =
     for {
-      peers       <- NodeDiscovery[F].peers
+      peers       <- ConnectionsCell[F].read
       local       <- RPConfAsk[F].reader(_.local)
       currentTime <- Time[F].currentMillis
       msg         = packet(local, pType, serializedMessage, currentTime)
@@ -60,7 +62,7 @@ object CommUtil {
     } yield ()
 
   def requestApprovedBlock[
-      F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: PacketHandler: RPConfAsk](
+      F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
       delay: FiniteDuration): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
 
@@ -113,7 +115,7 @@ object CommUtil {
 
     for {
       a     <- LastApprovedBlock[F].get
-      peers <- NodeDiscovery[F].peers
+      peers <- ConnectionsCell[F].read
       local <- RPConfAsk[F].reader(_.local)
       _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
     } yield ()

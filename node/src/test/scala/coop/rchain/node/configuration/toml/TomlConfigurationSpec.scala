@@ -21,12 +21,14 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400"
       |standalone = true
       |map-size = 200000000
+      |in-memory-store = false
       |casper-block-store-size = 2000000
       |data-dir = "/var/rchain"
       |
       |[grpc-server]
       |host = "grpc"
       |port = 12
+      |port-internal = 13
       |
       |[tls]
       |certificate = "/tls/certificate.pem"
@@ -67,12 +69,14 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.server.flatMap(_.bootstrap) shouldEqual Some(bootstrap)
     root.server.flatMap(_.standalone) shouldEqual Some(true)
     root.server.flatMap(_.mapSize) shouldEqual Some(200000000)
+    root.server.flatMap(_.inMemoryStore) shouldEqual Some(false)
     root.server.flatMap(_.casperBlockStoreSize) shouldEqual Some(2000000)
     root.server.flatMap(_.dataDir) shouldEqual Some(Paths.get("/var/rchain"))
 
     // grpc
     root.grpcServer.flatMap(_.host) shouldEqual Some("grpc")
     root.grpcServer.flatMap(_.port) shouldEqual Some(12)
+    root.grpcServer.flatMap(_.portInternal) shouldEqual Some(13)
 
     // tls
     root.tls.flatMap(_.certificate) shouldEqual Some(Paths.get("/tls/certificate.pem"))

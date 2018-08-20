@@ -2,7 +2,7 @@ package coop.rchain.crypto.signatures
 
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.util.SecureRandomUtil.secureRandomInstance
+import coop.rchain.crypto.util.SecureRandomUtil
 
 import java.security.KeyPairGenerator
 import java.security.interfaces.ECPrivateKey
@@ -34,7 +34,7 @@ object Secp256k1 {
     */
   def newKeyPair: (PrivateKey, PublicKey) = {
     val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
-    kpg.initialize(new ECGenParameterSpec(curveName), secureRandomInstance)
+    kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
     val kp = kpg.generateKeyPair
 
     val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS().toString(16))

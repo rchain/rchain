@@ -20,9 +20,9 @@ object MaybeCell {
       }
     }
 
-  def unsafe[F[_]: Sync, A]: MaybeCell[F, A] =
+  def unsafe[F[_]: Sync, A](init: Option[A]): MaybeCell[F, A] =
     new MaybeCell[F, A] {
-      private val state: Ref[F, Option[A]] = Ref.unsafe[F, Option[A]](None)
+      private val state: Ref[F, Option[A]] = Ref.unsafe[F, Option[A]](init)
       override def get: F[Option[A]]       = state.get
       override def set(a: A): F[Unit]      = state.set(Some(a))
     }

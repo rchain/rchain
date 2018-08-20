@@ -9,12 +9,16 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
+import coop.rchain.models.Channel
 import coop.rchain.shared._
+import io.grpc.stub.StreamObserver
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore]
+    F[_]: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
+    implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
     BlockAPI.deploy[F](d).toFuture
@@ -28,6 +32,18 @@ private[api] class DeployGrpcService[
   override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
     BlockAPI.getBlockQueryResponse[F](q).toFuture
 
-  override def showBlocks(e: Empty): Future[BlocksResponse] =
-    BlockAPI.getBlocksResponse[F].toFuture
+  override def showBlocks(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
+    BlockAPI.getBlocksResponse[F].toFuture.onComplete {
+      case Success(blockResponse) =>
+        blockResponse.blocks.foreach(bi => observer.onNext(bi))
+        observer.onCompleted()
+      case Failure(ex) => observer.onError(ex)
+    }
+
+  override def listenForDataAtName(listeningName: Channel): Future[ListeningNameDataResponse] =
+    BlockAPI.getListeningNameDataResponse[F](listeningName).toFuture
+
+  override def listenForContinuationAtName(
+      listeningNames: Channels): Future[ListeningNameContinuationResponse] =
+    BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toFuture
 }

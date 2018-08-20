@@ -1,22 +1,21 @@
 package coop.rchain.casper.genesis
 
-import cats.Id
-import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.catscontrib._
-import coop.rchain.casper.BlockDag
-import coop.rchain.casper.protocol.Bond
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import java.io.PrintWriter
 import java.nio.file.Files
 
+import cats.Id
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.helper.BlockStoreFixture
+import coop.rchain.casper.protocol.Bond
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.catscontrib._
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
@@ -25,6 +24,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
   def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
   def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
   val numValidators   = 5
+  val rchainShardId   = "rchain"
   implicit val log    = new LogStub[Id]
   implicit val time   = new LogicalTime[Id]
 
@@ -73,6 +73,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                        genesisPath,
                                        None,
                                        runtimeManager,
+                                       rchainShardId,
                                        Some(System.currentTimeMillis()))
     runtime.close()
 
@@ -83,13 +84,15 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
   it should "generate random validators, with a warning, when bonds file does not exist" in {
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ =
-      Genesis.fromInputFiles[Id](Some("not/a/real/file"),
-                                 numValidators,
-                                 genesisPath,
-                                 None,
-                                 runtimeManager,
-                                 Some(System.currentTimeMillis()))
+    val _ = Genesis.fromInputFiles[Id](
+      Some("not/a/real/file"),
+      numValidators,
+      genesisPath,
+      None,
+      runtimeManager,
+      rchainShardId,
+      Some(System.currentTimeMillis())
+    )
     runtime.close()
 
     log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
@@ -113,6 +116,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                  path,
                                  None,
                                  runtimeManager,
+                                 rchainShardId,
                                  Some(System.currentTimeMillis()))
     runtime.close()
 
@@ -134,6 +138,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                  path,
                                  None,
                                  runtimeManager,
+                                 rchainShardId,
                                  Some(System.currentTimeMillis()))
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
@@ -158,6 +163,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                              genesisPath,
                                              None,
                                              runtimeManager,
+                                             rchainShardId,
                                              Some(System.currentTimeMillis()))
     BlockStore[Id].put(genesis.blockHash, genesis)
     val blockDag = BlockDag()
@@ -184,7 +190,8 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
 
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val genesis        = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager, None)
+    val genesis = Genesis
+      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
 
@@ -203,9 +210,10 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val walletsFile = path.resolve("wallets.txt").toString
     printWallets(walletsFile)
 
-    val runtime         = Runtime.create(storageLocation, storageSize)
-    val runtimeManager  = RuntimeManager.fromRuntime(runtime)
-    val _               = Genesis.fromInputFiles[Id](None, numValidators, path, None, runtimeManager, None)
+    val runtime        = Runtime.create(storageLocation, storageSize)
+    val runtimeManager = RuntimeManager.fromRuntime(runtime)
+    val _ = Genesis
+      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
     val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
     runtime.close()
 

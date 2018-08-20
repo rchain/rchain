@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import java.io.File
+import java.io.{ByteArrayInputStream, File}
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
@@ -13,12 +13,12 @@ import scala.concurrent.duration._
 import scala.util._
 import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
+class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
@@ -26,10 +26,13 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private def certInputStream = new ByteArrayInputStream(cert.getBytes())
+  private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
   private lazy val serverSslContext: SslContext =
     try {
       GrpcSslContexts
-        .forServer(cert, key)
+        .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
         .trustManager(HostnameTrustManagerFactory.Instance)
         .clientAuth(ClientAuth.REQUIRE)
         .build()
@@ -43,7 +46,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
     try {
       val builder = GrpcSslContexts.forClient
       builder.trustManager(HostnameTrustManagerFactory.Instance)
-      builder.keyManager(cert, key)
+      builder.keyManager(certInputStream, keyInputStream)
       builder.build
     } catch {
       case e: Throwable =>
@@ -57,6 +60,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
               .intercept(new SslSessionClientInterceptor())
@@ -122,7 +126,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
       .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
-        case _: TimeoutException => TimeOut
+        case _: TimeoutException => CommError.timeout
         case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
           peerUnavailable(peer)
         case e => protocolException(e)
@@ -158,6 +162,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
         .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
         .intercept(new SslSessionServerInterceptor())
@@ -184,7 +189,6 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
         _ <- log.info("Shutting down server")
         _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
       } yield s.copy(server = None, shutdown = true)
-
     }
 
     def sendShutdownMessages: Task[Unit] =
@@ -201,7 +205,11 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(
         innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
       Task.gatherUnordered(peers.map(createInstruction)).void
     }
-    shutdownServer *> sendShutdownMessages
+
+    cell.read.flatMap { s =>
+      if (s.shutdown) Task.unit
+      else shutdownServer *> sendShutdownMessages
+    }
   }
 }
 

@@ -1,5 +1,11 @@
 package coop.rchain.node.api
 
+import coop.rchain.node.diagnostics
+import coop.rchain.p2p.effects._
+import io.grpc.{Server, ServerBuilder}
+import io.grpc.netty.NettyServerBuilder
+
+import scala.concurrent.Future
 import cats._
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
@@ -26,7 +32,7 @@ object GrpcServer {
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
-      ServerBuilder
+      NettyServerBuilder
         .forPort(port)
         .addService(ReplGrpc.bindService(new ReplGrpcService(runtime), scheduler))
         .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
@@ -37,7 +43,7 @@ object GrpcServer {
       F[_]: Capture: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
       port: Int)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
-      ServerBuilder
+      NettyServerBuilder
         .forPort(port)
         .addService(DeployServiceGrpc.bindService(new DeployGrpcService[F], scheduler))
         .build

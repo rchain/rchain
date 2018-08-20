@@ -24,6 +24,7 @@ case class CasperConf(
     genesisPath: Path,
     walletsFile: Option[String],
     requiredSigs: Int,
+    shardId: String,
     createGenesis: Boolean,
     approveGenesis: Boolean,
     approveGenesisInterval: FiniteDuration,

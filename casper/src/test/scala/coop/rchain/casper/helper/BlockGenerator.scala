@@ -55,7 +55,8 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[DeployCost] = Seq.empty[DeployCost],
       tsHash: ByteString = ByteString.EMPTY,
-      tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
+      tsLog: Seq[Event] = Seq.empty[Event],
+      shardId: String = ""): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -69,6 +70,8 @@ trait BlockGenerator {
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
+        .withNewCodeHash(ProtoUtil.protoSeqHash(deploys))
+        .withCommReductionsHash(ProtoUtil.protoSeqHash(tsLog))
         .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withPostState(postState).withNewCode(deploys).withCommReductions(tsLog)
@@ -82,7 +85,8 @@ trait BlockGenerator {
                            Some(body),
                            serializedJustifications,
                            creator,
-                           nextCreatorSeqNum)
+                           nextCreatorSeqNum,
+                           shardId = shardId)
       idToBlocks     = chain.idToBlocks + (nextId -> block)
       _              <- BlockStore[F].put(serializedBlockHash, block)
       latestMessages = chain.latestMessages + (block.sender -> serializedBlockHash)

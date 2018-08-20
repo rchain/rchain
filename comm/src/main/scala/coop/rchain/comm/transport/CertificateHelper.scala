@@ -12,13 +12,14 @@ import scala.io.Source
 
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.crypto.util.SecureRandomUtil
 
 object CertificateHelper {
 
   val EllipticCurveName = "secp256r1"
 
   lazy val EllipticCurveParameterSpec: ParameterSpec = {
-    val ap = AlgorithmParameters.getInstance("EC", "BC")
+    val ap = AlgorithmParameters.getInstance("EC")
     ap.init(new ECGenParameterSpec(EllipticCurveName))
     ParameterSpec(ap.getParameterSpec(classOf[ECParameterSpec]))
   }
@@ -60,7 +61,7 @@ object CertificateHelper {
       _.getLines().filter(!_.contains("KEY")).mkString
     }
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
-    val kf       = KeyFactory.getInstance("EC", "BC")
+    val kf       = KeyFactory.getInstance("EC")
     val sk       = kf.generatePrivate(spec).asInstanceOf[ECPrivateKey]
     val ecSpec   = org.bouncycastle.jce.ECNamedCurveTable.getParameterSpec(EllipticCurveName)
     val Q        = ecSpec.getG.multiply(sk.getS).normalize()
@@ -70,9 +71,12 @@ object CertificateHelper {
     new KeyPair(pk, sk)
   }
 
-  def generateKeyPair(): KeyPair = {
-    val kpg = KeyPairGenerator.getInstance("ECDSA", "BC")
-    kpg.initialize(new ECGenParameterSpec(EllipticCurveName), new SecureRandom())
+  def generateKeyPair(useNonBlockingRandom: Boolean): KeyPair = {
+    val secureRandom =
+      if (useNonBlockingRandom) SecureRandomUtil.secureRandomNonBlocking
+      else new SecureRandom()
+    val kpg = KeyPairGenerator.getInstance("EC")
+    kpg.initialize(new ECGenParameterSpec(EllipticCurveName), secureRandom)
     kpg.generateKeyPair
   }
 

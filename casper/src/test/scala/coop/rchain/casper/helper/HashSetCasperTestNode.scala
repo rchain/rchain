@@ -3,8 +3,9 @@ package coop.rchain.casper.helper
 import java.nio.file.Files
 
 import cats.effect.concurrent.Ref
-import cats.{Applicative, ApplicativeError, Id}
+import cats.{Applicative, ApplicativeError, Id, Monad}
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -13,14 +14,13 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
 }
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
-import coop.rchain.comm.rp.{Connect, HandleMessages}
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
@@ -39,7 +39,8 @@ class HashSetCasperTestNode(name: String,
                             tle: TransportLayerTestImpl[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
+                            storageSize: Long = 1024L * 1024,
+                            shardId: String = "rchain")(implicit scheduler: Scheduler) {
 
   import HashSetCasperTestNode.errorHandler
 
@@ -47,7 +48,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val logEff            = new LogStub[Id]
   implicit val timeEff           = new LogicalTime[Id]
-  implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
+  implicit val connectionsCell   = Cell.id[Connections](Connect.Connections.empty)
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
@@ -56,7 +57,6 @@ class HashSetCasperTestNode(name: String,
   // pre-population removed from internals of Casper
   blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
-  implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
   implicit val rpConfAsk         = createRPConfAsk[Id](local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
@@ -69,9 +69,9 @@ class HashSetCasperTestNode(name: String,
 
   implicit val casperEff =
     MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap(), shardId)
 
-  implicit val multiparentCasperRef = MultiParentCasperRef.of[Id]
+  implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[Id](Some(casperEff))
 
   implicit val labId = new LastApprovedBlock[Id] {
     private var lab: Option[ApprovedBlock]       = Some(approvedBlock)
@@ -123,13 +123,14 @@ object HashSetCasperTestNode {
           new HashSetCasperTestNode(n, p, tle, genesis, sk)
       }
 
+    import Connections._
     //make sure all nodes know about each other
     for {
       n <- nodes
       m <- nodes
       if n.local != m.local
     } {
-      n.nodeDiscoveryEff.addNode(m.local)
+      n.connectionsCell.modify(_.addConn[Id](m.local)(Monad[Id], n.logEff, n.metricEff))
     }
 
     nodes

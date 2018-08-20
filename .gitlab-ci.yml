@@ -32,13 +32,14 @@ deploy:deploy-rnode-to-dockerhub:
     - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
     - |
       if [[ $CI_COMMIT_TAG == v* ]]; then
-        echo "Is a release tag starting with v. Tag and push latest.";
+        echo "Is a release tag starting with v and master branch. Tag and push to dockerhub latest.";
         sudo docker tag coop.rchain/rnode:latest rchain/rnode:latest
         sudo docker push rchain/rnode:latest 
       fi
   only:
     - master
     - dev
+    - /^release-.*$/
     - tags 
 
 deploy:deploy-rnode-artifacts:
@@ -67,4 +68,5 @@ deploy:deploy-rnode-artifacts:
   only:
     - master
     - dev
+    - /^release-.*$/
     - tags 

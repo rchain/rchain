@@ -49,14 +49,6 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
         upstream.unpack(ProtocolHandshake)
       }
-      it("should then add remote node to communication layer") {
-        // given
-        transportLayerEff.setResponses(kp(alwaysSuccess))
-        // when
-        Connect.connect[Effect](remote, defaultTimeout)
-        // then
-        nodeDiscoveryEff.nodes should not be empty
-      }
     }
 
     describe("when reciving encrypted ProtocolHandshake") {
