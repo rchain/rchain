@@ -2,11 +2,8 @@
 import logging
 from delayed_assert import expect, assert_expectations
 
-def containers(rchain):
-    return [rchain.bootstrap] + rchain.peers
-
 def test_metrics_api_socket(started_rchain_network):
-    for container  in containers(started_rchain_network):
+    for container  in started_rchain_network.containers:
         logging.info(f"Test metrics api socket for {container.name}")
         cmd = f"nmap -sS -n -p T:40403 -oG - {container.name}"
         r = container.exec_run(cmd=cmd, user='root').output.decode("utf-8")
@@ -16,7 +13,7 @@ def test_metrics_api_socket(started_rchain_network):
 
 
 def test_node_logs_for_errors(converged_network):
-    for container in containers(converged_network):
+    for container in converged_network.containers:
         logging.info(f"Testing {container.name} node logs for errors.")
         logs = container.logs().decode('utf-8')
 
@@ -29,7 +26,7 @@ def test_node_logs_for_errors(converged_network):
     assert_expectations()
 
 def test_node_logs_for_RuntimeException(converged_network):
-    for container in containers(converged_network):
+    for container in converged_network.containers:
         logging.info(f"Testing {container.name} node logs for \"java RuntimeException\".")
         logs = container.logs().decode('utf-8')
 

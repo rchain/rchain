@@ -14,7 +14,12 @@ def pytest_addoption(parser):
 
 
 
-RChain = collections.namedtuple("RChain", ["network", "bootstrap", "peers"])
+class RChain:
+    def __init__(self, network, bootstrap, peers):
+        self.network = network
+        self.bootstrap = bootstrap
+        self.peers = peers
+        self.containers = [bootstrap] + peers
 
 Config = collections.namedtuple( "Config",
                                  [
