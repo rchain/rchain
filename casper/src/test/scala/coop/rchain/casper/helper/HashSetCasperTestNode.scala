@@ -41,6 +41,7 @@ import monix.eval.Task
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
+                            connCell: ConnectionsCell[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
                             storageSize: Long = 1024L * 1024,
@@ -52,7 +53,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val logEff            = new LogStub[Id]
   implicit val timeEff           = new LogicalTime[Id]
-  implicit val connectionsCell   = Cell.id[Connections](Connect.Connections.empty)
+  implicit val connectionsCell   = connCell
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
@@ -101,8 +102,9 @@ object HashSetCasperTestNode {
     val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
+    val connCell = Cell.id[Connections](Connect.Connections.empty)
 
-    new HashSetCasperTestNode(name, identity, tle, genesis, sk)
+    new HashSetCasperTestNode(name, identity, tle, connCell, genesis, sk)
   }
 
   def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
@@ -115,8 +117,9 @@ object HashSetCasperTestNode {
     val nodes =
       names.zip(peers).zip(sks).map {
         case ((n, p), sk) =>
-          val tle = new TransportLayerTestImpl[Id](p, msgQueues)
-          new HashSetCasperTestNode(n, p, tle, genesis, sk)
+          val tle      = new TransportLayerTestImpl[Id](p, msgQueues)
+          val connCell = Cell.id[Connections](Connect.Connections.empty)
+          new HashSetCasperTestNode(n, p, tle, connCell, genesis, sk)
       }
 
     import Connections._
