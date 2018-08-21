@@ -61,7 +61,7 @@ class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Clos
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {
       println(
-        "warn: did not shutdown after 10 seconds, retrbying with additional 10 seconds timeout")
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }

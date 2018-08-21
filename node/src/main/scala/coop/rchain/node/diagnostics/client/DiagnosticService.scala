@@ -63,10 +63,11 @@ class GrpcDiagnosticsService(host: String, port: Int)
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
 
-    override def close(): Unit = {
+  override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
-    if(!terminated) {
-      println("warn: did not shutdown after 10 seconds, retrbying with additional 10 seconds timeout")
+    if (!terminated) {
+      println(
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }
