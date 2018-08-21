@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 BASEPATH=$(cd `dirname $0`; pwd)
 RCHAINPATH=$(dirname ${BASEPATH})
+mkdir -p ${BASEPATH}/protobuf
 
 echo ${BASEPATH}
 # install the python dependencies
