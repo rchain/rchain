@@ -31,9 +31,9 @@ def wait_for(condition, timeout):
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
 # Warning: The __doc__ has to be explicitly assigned as seen below if it's a formatted string, otherwise it will be None.
 
-def container_logs(docker_container):
-    def go(): return docker_container.logs().decode('utf-8')
-    go.__doc__ = f"container_logs({docker_container.name})"
+def node_logs(node):
+    def go(): return node.logs()
+    go.__doc__ = f"container_logs({node.name})"
     return go
 
 def contains(string_factory, regex_str, flags = 0):
@@ -44,13 +44,13 @@ def contains(string_factory, regex_str, flags = 0):
     go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
-def network_converged(bootstrap_container, expected_peers):
+def network_converged(bootstrap_node, expected_peers):
     rx = re.compile("^peers\s+(\d+).*", re.MULTILINE | re.DOTALL)
 
     def go():
-        cmd = f'curl -s {bootstrap_container.name}:40403'
+        cmd = f'curl -s {bootstrap_node.name}:40403'
 
-        r = bootstrap_container.exec_run(cmd=cmd).output.decode('utf-8')
+        r = bootstrap_node.container.exec_run(cmd=cmd).output.decode('utf-8')
         m = rx.search(r)
 
         peers = int(m[1]) if m else 0
@@ -59,6 +59,6 @@ def network_converged(bootstrap_container, expected_peers):
 
         return peers == expected_peers
 
-    go.__doc__ = f"network converged({bootstrap_container.name} with {expected_peers} expected peers."
+    go.__doc__ = f"network converged({bootstrap_node.name} with {expected_peers} expected peers."
 
     return go

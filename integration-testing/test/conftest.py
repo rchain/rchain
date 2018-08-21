@@ -2,14 +2,14 @@ import logging
 import pytest
 import tools.random as random
 
-from tools.rnode import create_bootstrap_node, get_rnode_address, create_peer_nodes
-from tools.wait import wait_for, contains, container_logs, network_converged
+from tools.rnode import create_bootstrap_node, create_peer_nodes
+from tools.wait import wait_for, contains, node_logs, network_converged
 
 import collections
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--peer-count", action="store", default="3", help="number of peers in the network (excluding bootstrap node)"
+        "--peer-count", action="store", default="1", help="number of peers in the network (excluding bootstrap node)"
     )
 
 
@@ -19,7 +19,7 @@ class RChain:
         self.network = network
         self.bootstrap = bootstrap
         self.peers = peers
-        self.containers = [bootstrap] + peers
+        self.nodes = [bootstrap] + peers
 
 Config = collections.namedtuple( "Config",
                                  [
@@ -27,21 +27,6 @@ Config = collections.namedtuple( "Config",
                                      "node_startup_timeout",
                                      "network_converge_timeout"
                                  ])
-
-def cleanup(*containers):
-    for container in containers:
-        logging.info("=" * 100)
-        logging.info(f"Docker container logs for {container.name}:")
-        logging.info("=" * 100)
-        logs = container.logs().decode('utf-8').splitlines()
-        for log_line in logs:
-            logging.info(f"{container.name}: {log_line}")
-
-        logging.info("=" * 100)
-
-    for container in containers:
-        logging.info(f"Remove container {container.name}")
-        container.remove(force=True, v=True)
 
 def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
@@ -87,11 +72,11 @@ def bootstrap(docker, docker_network):
 
     yield node
 
-    cleanup(node)
+    node.cleanup()
 
 @pytest.fixture(scope="module")
 def started_bootstrap(config, bootstrap):
-    assert wait_for( contains( container_logs(bootstrap),
+    assert wait_for( contains( node_logs(bootstrap),
                                "coop.rchain.node.NodeRuntime - Starting stand-alone node."),
                      config.node_startup_timeout), \
         "Bootstrap node didn't start correctly"
@@ -101,18 +86,17 @@ def started_bootstrap(config, bootstrap):
 def rchain_network(config, docker, started_bootstrap, docker_network):
     logging.debug(f"Docker network = {docker_network}")
 
-    bootstrap_address  = get_rnode_address(started_bootstrap)
-
-    peers = create_peer_nodes(docker, config.peer_count, bootstrap_address, docker_network)
+    peers = create_peer_nodes(docker, config.peer_count, started_bootstrap, docker_network)
 
     yield RChain(network = docker_network, bootstrap = started_bootstrap, peers = peers)
 
-    cleanup(*peers)
+    for peer in peers:
+        peer.cleanup()
 
 @pytest.fixture(scope="module")
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
-        assert wait_for( contains(container_logs(peer),
+        assert wait_for( contains(node_logs(peer),
                                   "kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403"),
                          config.node_startup_timeout), \
             "Prometeus port is not started "

@@ -1,21 +1,45 @@
 import logging
 import re
-import docker
+import tempfile
 import random
 import tools.resources as resources
+import collections
 
+class Node:
+    def __init__(self, container, deploy_dir):
+        self.container = container
+        self.deploy_dir = deploy_dir
+        self.name = container.name
+
+    def logs(self):
+        return self.container.logs().decode('utf-8')
+
+    def get_rnode_address(self):
+        log_content = self.logs()
+        m = re.search("Listening for traffic on (rnode://.*:\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
+        address = m[1]
+
+        logging.info(f"Bootstrap address: `{address}`")
+        return address
+
+    def cleanup(self):
+        logging.info("=" * 100)
+
+        logging.info(f"Docker container logs for {self.container.name}:")
+
+        logging.info("=" * 100)
+
+        logs = self.logs().splitlines()
+        for log_line in logs:
+            logging.info(f"{self.container.name}: {log_line}")
+
+        logging.info("=" * 100)
+
+        logging.info(f"Remove container {self.container.name}")
+        self.container.remove(force=True, v=True)
 
 rnode_cmd = '/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
-
-
-def get_rnode_address(container):
-    log_content = container.logs().decode('utf-8')
-    m = re.search("Listening for traffic on (rnode://.*:\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
-    address = m[1]
-
-    logging.info(f"Bootstrap address: `{address}`")
-    return address
 
 def __read_validator_keys():
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
@@ -28,24 +52,26 @@ def __read_validator_keys():
 validator_keys = __read_validator_keys()
 
 def __create_node_container(docker_client, image, name, network, command, extra_volumes, memory, cpuset_cpus):
-    bonds_file = resources.file_path("test-bonds.txt")
+    deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
+    container_deploy_dir = f"{rnode_directory}/deploy"
 
+    bonds_file = resources.file_path("test-bonds.txt")
     container_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
 
-    volume = docker_client.volumes.create()
-    return docker_client.containers.run( image,
-                                         name=name,
-                                         user='root',
-                                         detach=True,
-                                         cpuset_cpus=cpuset_cpus,
-                                         mem_limit=memory,
-                                         network=network,
-                                         volumes=[
-                                                     f"{volume.name}:{rnode_directory}",
-                                                     f"{bonds_file}:{container_bonds_file}"
-                                                 ] + extra_volumes,
-                                         command=command,
-                                         hostname=name)
+    container  = docker_client.containers.run( image,
+                                               name=name,
+                                               user='root',
+                                               detach=True,
+                                               cpuset_cpus=cpuset_cpus,
+                                               mem_limit=memory,
+                                               network=network,
+                                               volumes=[
+                                                           f"{bonds_file}:{container_bonds_file}",
+                                                           f"{deploy_dir}:{container_deploy_dir}"
+                                                       ] + extra_volumes,
+                                               command=command,
+                                               hostname=name)
+    return Node(container, deploy_dir)
 
 def create_bootstrap_node(docker_client, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
     """
@@ -71,10 +97,11 @@ def create_bootstrap_node(docker_client, network, image="test-image:latest", mem
 
     return __create_node_container(docker_client, image, name, network, command, volumes, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, n, bootstrap_address, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, n, bootstrap, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
+    bootstrap_address = bootstrap.get_rnode_address()
 
     logging.info(f"Create {n} peer nodes to connect to bootstrap {bootstrap_address}.")
 
@@ -87,15 +114,3 @@ def create_peer_nodes(docker_client, n, bootstrap_address, network, image="test-
 
     return [ create_peer(i, sk, pk)
              for i, (sk, pk) in enumerate(validator_keys[1:n+1])]
-
-
-class deploy:
-    binary='/opt/docker/bin/rnode'
-
-    @staticmethod
-    def deploy_cmd(f):
-        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
-
-    propose_cmd = binary + " propose"
-
-    show_blocks_cmd = binary + " show-blocks"
