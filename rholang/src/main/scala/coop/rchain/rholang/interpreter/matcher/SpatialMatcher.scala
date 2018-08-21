@@ -205,8 +205,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
     }
 
   def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
-    implicit lf: HasLocallyFree[T],
-    sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
     listMatchSingleNonDet(tlist, plist, (p: Par, _: Seq[T]) => p, None, false).toDet()
 
   /** This function finds a single matching from a list of patterns and a list of targets.
@@ -309,11 +309,10 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield Unit
   }
 
-  private def handleRemainder[T](remainderTargets: Seq[T],
-                                 level: Int,
-                                 merger: (Par, Seq[T]) => Par)(
-      implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] = {
-
+  private def handleRemainder[T](
+      remainderTargets: Seq[T],
+      level: Int,
+      merger: (Par, Seq[T]) => Par)(implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] =
     for {
       remainderPar <- StateT.inspect[OptionT[State[CostAccount, ?], ?], FreeMap, Par](
                        (m: FreeMap) => m.getOrElse(level, VectorPar()))
@@ -322,7 +321,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
       _ <- StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
             m + (level -> remainderParUpdated))
     } yield Unit
-  }
 
   case class ParCount(sends: Int = 0,
                       receives: Int = 0,
