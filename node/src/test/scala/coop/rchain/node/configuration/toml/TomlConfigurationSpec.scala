@@ -8,6 +8,8 @@ import org.scalatest._
 
 class TomlConfigurationSpec extends FunSuite with Matchers {
 
+  import error._
+
   val config =
     """
       |[server]
