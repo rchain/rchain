@@ -1,18 +1,18 @@
 package coop.rchain.node.configuration
 
+import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
+import cats.implicits._
+
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
-import coop.rchain.node.configuration.toml.{
-  ConfigurationAstError,
-  ConfigurationFileNotFound,
-  ConfigurationParseError,
-  Configuration => TomlConfiguration
-}
+import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
+import coop.rchain.node.configuration.toml.error._
 import coop.rchain.shared.{Log, LogSource}
 
 import monix.eval.Task
@@ -55,6 +55,27 @@ object Configuration {
     .get
   private val DefaultShardId = "rchain"
 
+  private def loadConfigurationFile(configFile: File)(
+      implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
+    for {
+      _       <- log.info(s"Using configuration file: $configFile")
+      configE <- Task.delay(toml.TomlConfiguration.from(configFile))
+      exit <- configE
+               .leftMap {
+                 case ConfigurationParseError(e) =>
+                   (s"Can't parse the configuration: $e", true)
+                 case ConfigurationAstError(e) =>
+                   (s"The structure of the configuration is not valid: $e", true)
+                 case ConfigurationFileNotFound(f) =>
+                   (s"Configuration file $f not found", false)
+               }
+               .fold({
+                 case (err, exit) => Log[Task].error(err).map(kp(exit))
+               }, kp(Task.now(false)))
+      _      = if (exit) System.exit(1)
+      config <- Task.pure(configE.toOption)
+    } yield config
+
   def apply(arguments: Seq[String])(implicit log: Log[Task]): Task[Configuration] =
     for {
       options <- Task.delay(commandline.Options(arguments))
@@ -69,25 +90,7 @@ object Configuration {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
-        _          <- log.info(s"Using configuration file: $configFile")
-        configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
-        exit <- configE match {
-                 case Right(_) => Task.now(false)
-                 case Left(ConfigurationParseError(e)) =>
-                   log
-                     .error(s"Can't parse the configuration: $e")
-                     .map(_ => true)
-                 case Left(ConfigurationAstError(e)) =>
-                   log
-                     .error(s"The structure of the configuration is not valid: $e")
-                     .map(_ => true)
-                 case Left(ConfigurationFileNotFound(f)) =>
-                   log
-                     .warn(s"Configuration file $f not found")
-                     .map(_ => false)
-               }
-        _      = if (exit) System.exit(1)
-        config <- Task.pure(configE.toOption)
+        config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
@@ -109,7 +112,7 @@ object Configuration {
             DefaultStandalone,
             dataDir,
             DefaultMapSize,
-            false,
+            inMemoryStore = false,
             DefaultMaxNumOfConnections
           ),
           GrpcServer(

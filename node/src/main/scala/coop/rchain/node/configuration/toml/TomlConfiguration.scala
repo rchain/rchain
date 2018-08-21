@@ -15,6 +15,8 @@ import toml._
 import toml.Codecs._
 
 object TomlConfiguration {
+  import error._
+
   private implicit val bootstrapAddressCodec: Codec[PeerNode] =
     Codec {
       case (Value.Str(uri), _) =>
@@ -90,7 +92,9 @@ object TomlConfiguration {
 
 }
 
-sealed trait TomlConfigurationError
-final case class ConfigurationParseError(error: String)  extends TomlConfigurationError
-final case class ConfigurationAstError(error: String)    extends TomlConfigurationError
-final case class ConfigurationFileNotFound(path: String) extends TomlConfigurationError
+object error {
+  sealed trait TomlConfigurationError
+  final case class ConfigurationParseError(error: String)  extends TomlConfigurationError
+  final case class ConfigurationAstError(error: String)    extends TomlConfigurationError
+  final case class ConfigurationFileNotFound(path: String) extends TomlConfigurationError
+}
