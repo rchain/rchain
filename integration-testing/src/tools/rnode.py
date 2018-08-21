@@ -88,3 +88,14 @@ def create_peer_nodes(docker_client, n, bootstrap_address, network, image="test-
     return [ create_peer(i, sk, pk)
              for i, (sk, pk) in enumerate(validator_keys[1:n+1])]
 
+
+class deploy:
+    binary='/opt/docker/bin/rnode'
+
+    @staticmethod
+    def deploy_cmd(f):
+        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
+
+    propose_cmd = binary + " propose"
+
+    show_blocks_cmd = binary + " show-blocks"
