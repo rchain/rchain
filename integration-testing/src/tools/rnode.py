@@ -3,13 +3,22 @@ import re
 import tempfile
 import random
 import tools.resources as resources
-import collections
+
+
+rnode_binary='/opt/docker/bin/rnode'
+rnode_directory = "/var/lib/rnode"
+rnode_deploy_dir = f"{rnode_directory}/deploy"
+rnode_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
+rnode_certificate = f'{rnode_directory}/node.certificate.pem'
+rnode_key = f'{rnode_directory}/node.key.pem'
 
 class Node:
-    def __init__(self, container, deploy_dir):
+    def __init__(self, container, deploy_dir, docker_client):
         self.container = container
-        self.deploy_dir = deploy_dir
+        self.local_deploy_dir = deploy_dir
+        self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
+        self.docker_client = docker_client
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -38,8 +47,45 @@ class Node:
         logging.info(f"Remove container {self.container.name}")
         self.container.remove(force=True, v=True)
 
-rnode_cmd = '/opt/docker/bin/rnode'
-rnode_directory = "/var/lib/rnode"
+    def deploy(self, contract):
+        cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {rnode_deploy_dir}/{contract}'
+        return self.exec_run(cmd)
+
+    def propose(self):
+        return self.exec_run(f'{rnode_binary} propose')
+
+    def show_blocks(self):
+        return self.exec_run(f'{rnode_binary} show-blocks')
+
+    def exec_run(self, cmd):
+        r = self.container.exec_run(cmd)
+        return (r.exit_code, r.output.decode('utf-8'))
+
+    __timestamp_rx = "\d\d:\d\d:\d\d\.\d\d\d"
+    __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
+
+
+    def log_lines(self):
+        log_content = self.logs()
+        return Node.__log_message_rx.split(log_content)
+
+
+    def received_blocks(self, expected_content):
+        received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$", re.MULTILINE | re.DOTALL)
+
+        logs = self.log_lines()
+
+        return [match.group(1) for match in [received_block_rx.match(log) for log in logs] if match]
+
+    def added_blocks(self, block_id):
+        added_block_rx = re.compile(f"^.*\s+CASPER: Added {block_id}.*", re.MULTILINE | re.DOTALL)
+
+        logs = self.log_lines()
+
+        return [match.group(0) for match in [added_block_rx.match(log) for log in logs] if match]
+
+
+
 
 def __read_validator_keys():
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
@@ -53,10 +99,8 @@ validator_keys = __read_validator_keys()
 
 def __create_node_container(docker_client, image, name, network, command, extra_volumes, memory, cpuset_cpus):
     deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
-    container_deploy_dir = f"{rnode_directory}/deploy"
 
     bonds_file = resources.file_path("test-bonds.txt")
-    container_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
 
     container  = docker_client.containers.run( image,
                                                name=name,
@@ -66,12 +110,12 @@ def __create_node_container(docker_client, image, name, network, command, extra_
                                                mem_limit=memory,
                                                network=network,
                                                volumes=[
-                                                           f"{bonds_file}:{container_bonds_file}",
-                                                           f"{deploy_dir}:{container_deploy_dir}"
+                                                           f"{bonds_file}:{rnode_bonds_file}",
+                                                           f"{deploy_dir}:{rnode_deploy_dir}"
                                                        ] + extra_volumes,
                                                command=command,
                                                hostname=name)
-    return Node(container, deploy_dir)
+    return Node(container, deploy_dir, docker_client)
 
 def create_bootstrap_node(docker_client, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
     """
@@ -89,8 +133,8 @@ def create_bootstrap_node(docker_client, network, image="test-image:latest", mem
     command = f"run --port 40400 --standalone --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {name}"
 
     volumes = [
-        f"{cert_file}:{rnode_directory}/node.certificate.pem",
-        f"{key_file}:{rnode_directory}/node.key.pem"
+        f"{cert_file}:{rnode_certificate}",
+        f"{key_file}:{rnode_key}"
     ]
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")

@@ -59,6 +59,6 @@ def network_converged(bootstrap_node, expected_peers):
 
         return peers == expected_peers
 
-    go.__doc__ = f"network converged({bootstrap_node.name} with {expected_peers} expected peers."
+    go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
 
     return go

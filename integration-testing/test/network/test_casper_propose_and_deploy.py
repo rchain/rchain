@@ -1,93 +1,63 @@
 from tools.random import random_string
-from tools.docker import run_cmd, list_containers
 import re
 import logging
 from delayed_assert import expect, assert_expectations
+import tools.resources as resources
+from shutil import copyfile
+from tools.wait import wait_for, contains, node_logs, network_converged
 
-class rnode:
-    binary='/opt/docker/bin/rnode'
-
-    @staticmethod
-    def deploy_cmd(f):
-        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
-
-    propose_cmd = binary + " propose"
-
-    show_blocks_cmd = binary + " show-blocks"
-
-class node:
-    log_message_rx = re.compile("^\d*:\d*:\d*\.\d* (.*?)$", re.MULTILINE | re.DOTALL)
-
-    @staticmethod
-    def received_block_rx(expected_content):
-        return re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$")
-
-    @staticmethod
-    def added_block_rx(block_id):
-        return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
-
-def test_casper_propose_and_deploy(docker, converged_network):
+def test_casper_propose_and_deploy(converged_network):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
     """
 
     token_size = 20
+    receive_timeout = 5
 
-    hello_rho = '/opt/docker/examples/tut-hello.rho'
+    contract_name = 'contract.rho'
 
-    sed_cmd = f"sed -i -e 's/Joe/{expected_string}/g' {hello_rho}"
+    for node in converged_network.nodes:
+        expected_string = f"<{node.container.name}:{random_string(token_size)}>"
 
-    for container in converged_network.containers:
+        logging.info(f"Run test on container {node.container.name}. Expected string: {expected_string}")
 
-        expected_string = f"[{test_container.name}:{random_string(token_size)}]"
-        logging.info(f"Run test on container {test_container.name}. Expected string: {expected_string}")
+        copyfile(resources.file_path(contract_name, __name__), f"{node.local_deploy_dir}/{contract_name}")
 
-        try:
-            run_cmd(sed_cmd)
+        exit_code, output = node.exec_run(f"sed -i -e 's/@placeholder@/{expected_string}/g' {node.remote_deploy_dir}/{contract_name}")
+        logging.debug(f"Sed result: {exit_code}, output: {output}")
 
-            run_cmd(rnode.deploy_cmd(hello_rho))
+        exit_code, output = node.deploy(contract_name)
+        logging.debug(f"Deploy result: {exit_code}, output: {output}")
 
-            print("Propose to blockchain previously deployed smart contracts.")
+        logging.info("Propose to blockchain previously deployed smart contracts.")
 
-            run_cmd(rnode.propose_cmd)
-
-            print("Allow for logs to fill out from last propose if needed")
-        except Exception as e:
-            print(e)
-
-        time.sleep(5)
-
-        retval=0
-
-        print(f"Check all peer logs for blocks containing {expected_string}")
-
-        other_containers = [d
-                            for d in list_containers(docker, converged_network.network)
-                            if container.name != container.name]
-
-        for container in other_containers:
-
-            log_content = container.logs().decode('utf-8')
-            logs = node.log_message_rx.split(log_content)
-            blocks_received_ids = [match.group(1) for match in [node.received_block_rx(expected_string).match(log) for log in logs] if match]
-
-            if blocks_received_ids:
-                print(f"Container: {container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
+        exit_code, output = node.propose()
+        logging.debug(f"Propose result: {exit_code}, output: {output}")
 
 
-                assert len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}"
+        logging.info(f"Check all peer logs for blocks containing {expected_string}")
 
-                block_id = blocks_received_ids[0]
+        other_nodes = [n
+                        for n in converged_network.nodes
+                        if n.container.name != node.container.name]
 
-                blocks_added = [match.group(0) for match in [node.added_block_rx(block_id).match(log) for log in logs] if match]
+        for node in other_nodes:
+            assert wait_for( contains(node_logs(node), expected_string), receive_timeout), \
+                f"Block containing {expected_string} not received "
 
-                expect(not "RuntimeException" in line, f"Container {container.name} error in log line: {line}")
-                if blocks_added:
-                    print(f"Container: {container.name}: Added block found for {blocks_received_ids}: {blocks_added}. Success!")
-                else:
-                    print(f"Container: {container.name}: Added blocks not found for {blocks_received_ids}. FAILURE!")
-                    retval = retval + 1
+            blocks_received_ids = node.received_blocks(expected_string)
 
-            else:
-                print(f"Container: {container.name}: String {expected_string} NOT found in output. FAILURE!")
+            expect(blocks_received_ids, f"Container: {node.container.name}: String {expected_string} NOT found in output. FAILURE!")
+
+            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
+
+            expect(len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}")
+
+            block_id = blocks_received_ids[0]
+
+            blocks_added = node.added_blocks(block_id)
+
+            expect(blocks_added, f"Container: {node.container.name}: Added blocks not found for {blocks_received_ids}")
+
+    assert_expectations()
