@@ -1,30 +1,28 @@
 package coop.rchain.casper.util.comm
 
 import cats.Id
-import cats.implicits._
-
-import com.google.protobuf.ByteString
-
 import coop.rchain.casper.HashSetCasperTest
-import coop.rchain.casper.helper.HashSetCasperTestNode
+import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.transport
-import coop.rchain.p2p.EffectsTestInstances._
-
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
-    val n                = 8
-    val (approver, node) = createProtocol(n)
-    val unapproved       = createUnapproved(n, node.genesis)
+    val n                          = 8
+    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val bonds                      = Map(validatorPk -> 10)
+    val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
+    val unapproved                 = createUnapproved(n, node.genesis)
     import node._
 
     approver.unapprovedBlockPacketHandler[Id](node.local, unapproved)
@@ -36,10 +34,12 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in {
-    val n                    = 8
-    val (approver, node)     = createProtocol(n)
-    val differentUnapproved1 = createUnapproved(n / 2, node.genesis) //wrong number of signatures
-    val differentUnapproved2 = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
+    val n                          = 8
+    val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val bonds                      = Map(validatorPk -> 10)
+    val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
+    val differentUnapproved1       = createUnapproved(n / 2, node.genesis) //wrong number of signatures
+    val differentUnapproved2       = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
     import node._
 
     approver.unapprovedBlockPacketHandler[Id](node.local, differentUnapproved1)
@@ -58,14 +58,29 @@ object BlockApproverProtocolTest {
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
     Packet(transport.UnapprovedBlock.id, u.toByteString)
 
-  def createProtocol(requiredSigs: Int): (BlockApproverProtocol, HashSetCasperTestNode) = {
+  def createProtocol(
+      requiredSigs: Int,
+      wallets: Seq[Wallet],
+      sk: Array[Byte],
+      bonds: Map[Array[Byte], Int]): (BlockApproverProtocol, HashSetCasperTestNode) = {
     import monix.execution.Scheduler.Implicits.global
 
-    val (sk, pk) = Ed25519.newKeyPair
-    val genesis  = HashSetCasperTest.createGenesis(Seq(pk))
-    val node     = HashSetCasperTestNode.network(Vector(sk), genesis).head
+    val runtimeDir     = BlockStoreTestFixture.dbDir
+    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 
-    new BlockApproverProtocol(node.validatorId, genesis, requiredSigs) -> node
+    val deployTimestamp = 1L
+    val validators = bonds.map(b => ProofOfStakeValidator(b._1, b._2)).toSeq
+
+    val genesis = HashSetCasperTest.buildGenesis(wallets, bonds, deployTimestamp)
+    val node    = HashSetCasperTestNode.network(Vector(sk), genesis).head
+
+    new BlockApproverProtocol(node.validatorId,
+                              deployTimestamp,
+                              runtimeManager,
+                              bonds,
+                              wallets,
+                              requiredSigs) -> node
   }
 
 }

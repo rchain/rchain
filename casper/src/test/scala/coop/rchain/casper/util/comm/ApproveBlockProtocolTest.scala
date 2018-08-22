@@ -292,7 +292,8 @@ object ApproveBlockProtocolTest {
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
     val (sk, pk)   = Ed25519.newKeyPair
-    val genesis    = HashSetCasperTest.createGenesis(Seq(pk))
+    val bonds      = HashSetCasperTest.createBonds(Seq(pk))
+    val genesis    = HashSetCasperTest.createGenesis(bonds)
     val validators = validatorsPk.map(ByteString.copyFrom(_))
     val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)

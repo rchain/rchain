@@ -1,31 +1,30 @@
 package coop.rchain.casper
 
-import cats.{ApplicativeError, Id}
+import java.nio.file.Files
+
+import cats.Id
 import cats.data.EitherT
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models.{PCost, Par}
+import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
-import java.nio.file.Files
-
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.genesis.contracts.ProofOfStakeValidator
+import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.shared.PathOps.RichPath
 
 import scala.collection.immutable
 
@@ -35,7 +34,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   private val (otherSk, _)                = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val genesis                     = createGenesis(validators)
+  private val bonds                       = createBonds(validators)
+  private val genesis                     = createGenesis(bonds)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -503,7 +503,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "increment last finalized block as appropriate in round robin" in {
     val stake                 = 10
     val equalBonds            = validators.zipWithIndex.map { case (v, _) => v -> stake }.toMap
-    val genesisWithEqualBonds = buildGenesis(equalBonds)
+    val genesisWithEqualBonds = buildGenesis(Seq.empty, equalBonds, 0L)
     val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
     val deployDatas           = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
 
@@ -599,13 +599,14 @@ object HashSetCasperTest {
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
-  def createGenesis(validators: Seq[Array[Byte]]): BlockMessage = {
-    val bonds = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-    buildGenesis(bonds)
-  }
+  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Int] =
+    validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
 
-  def buildGenesis(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
+  def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
+    buildGenesis(Seq.empty, bonds, 0L)
+
+  def buildGenesis(wallets: Seq[Wallet], bonds: Map[Array[Byte], Int], deployTimestamp: Long): BlockMessage = {
+    val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
@@ -614,10 +615,10 @@ object HashSetCasperTest {
     val genesis = Genesis.withContracts(
       initial,
       bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-      Nil,
+      wallets,
       emptyStateHash,
       runtimeManager,
-      System.currentTimeMillis())
+      deployTimestamp)
     activeRuntime.close()
     genesis
   }

@@ -186,7 +186,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
-      time: Time[Task],
       transport: TransportLayer[Task],
       log: Log[Task],
       blockStore: BlockStore[Effect],
@@ -223,7 +222,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit transport: TransportLayer[Task],
       log: Log[Task],
-      time: Time[Task],
       blockStore: BlockStore[Effect],
       rpConfAsk: RPConfAsk[Task]
   ): Task[Unit] =

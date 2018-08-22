@@ -5,50 +5,54 @@ import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.HashSetCasperTest.createGenesis
+import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
 import coop.rchain.casper.helper.BlockStoreTestFixture
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
-import coop.rchain.casper.util.comm.CasperPacketHandler.{
-  ApprovedBlockReceivedHandler,
-  BootstrapCasperHandler,
-  CasperPacketHandlerImpl,
-  CasperPacketHandlerInternal,
-  GenesisValidatorHandler,
-  StandaloneCasperHandler
-}
+import coop.rchain.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, BootstrapCasperHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal, GenesisValidatorHandler, StandaloneCasperHandler}
 import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib.{ApplicativeError_, Capture, TaskContrib}
+import coop.rchain.catscontrib.{ApplicativeError_, Capture}
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.comm.{transport, _}
 import coop.rchain.comm.transport.CommMessages
+import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Cell
 import monix.eval.Task
-import monix.execution.CancelableFuture
 import monix.execution.schedulers.TestScheduler
+import monix.execution.{CancelableFuture, Scheduler}
 import org.scalatest.WordSpec
 
 import scala.concurrent.duration._
-import scala.util.Success
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
+    val runtimeDir     = BlockStoreTestFixture.dbDir
+    val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
-    val genesis                    = createGenesis(Seq(genesisSk))
-    val requiredSigs               = 1
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
+    val bonds                      = createBonds(Seq(validatorPk))
+    val requiredSigs               = 1
+    val deployTimestamp            = 1L
+    val genesis                    = buildGenesis(Seq.empty, bonds, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val bap                        = new BlockApproverProtocol(validatorId, genesis, requiredSigs)
-    val local: PeerNode            = peerNode("src", 40400)
-    val shardId                    = "test-shardId"
+    val scheduler                  = Scheduler.io("test")
+    val bap = new BlockApproverProtocol(validatorId,
+                                        deployTimestamp,
+                                        runtimeManager,
+                                        bonds,
+                                        Seq.empty,
+                                        requiredSigs)(scheduler)
+    val local: PeerNode = peerNode("src", 40400)
+    val shardId         = "test-shardId"
 
     implicit val nodeDiscovery                          = new NodeDiscoveryStub[Task]
     implicit val connectionsCell: ConnectionsCell[Task] = Cell.const[Task, Connections](List(local))
@@ -83,10 +87,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
-        val runtimeDir     = BlockStoreTestFixture.dbDir
-        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap))
@@ -117,7 +117,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         val requiredSigns = 1
-        val bap           = new BlockApproverProtocol(validatorId, genesis, requiredSigns)
 
         val runtimeDir     = BlockStoreTestFixture.dbDir
         val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)

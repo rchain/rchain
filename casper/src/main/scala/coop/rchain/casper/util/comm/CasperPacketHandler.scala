@@ -11,6 +11,7 @@ import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
+import coop.rchain.casper.genesis.contracts.Wallet
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
@@ -44,15 +45,20 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       toTask: F[_] => Task[_])(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
       for {
-        genesis <- Genesis.fromInputFiles[F](conf.bondsFile,
-                                             conf.numValidators,
-                                             conf.genesisPath,
-                                             conf.walletsFile,
-                                             runtimeManager,
-                                             conf.shardId,
-                                             conf.deployTimestamp)
+        //TODO: refactor
+        walletsFile <- Genesis.toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
+        wallets     <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
+        timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+        bondsFile   <- Genesis.toFile[F](conf.bondsFile, conf.genesisPath.resolve("bonds.txt"))
+        bonds <- Genesis
+                  .getBonds[F](bondsFile, conf.numValidators, conf.genesisPath)
         validatorId <- ValidatorIdentity.fromConfig[F](conf)
-        bap         = new BlockApproverProtocol(validatorId.get, genesis, conf.requiredSigs)
+        bap = new BlockApproverProtocol(validatorId.get,
+                                        timestamp,
+                                        runtimeManager,
+                                        bonds,
+                                        wallets,
+                                        conf.requiredSigs)
         gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
                new GenesisValidatorHandler(runtimeManager, validatorId.get, conf.shardId, bap))
       } yield new CasperPacketHandlerImpl[F](gv)

@@ -31,13 +31,10 @@ object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def withContracts(initial: BlockMessage,
-                    validators: Seq[ProofOfStakeValidator],
-                    wallets: Seq[Wallet],
-                    startHash: StateHash,
-                    runtimeManager: RuntimeManager,
-                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage = {
-    val defaultBlessedTerms = List(
+  def defaultBlessedTerms(timestamp: Long,
+                          validators: Seq[ProofOfStakeValidator],
+                          wallets: Seq[Wallet]): List[Deploy] =
+    List(
       LinkedList.term,
       Either.term,
       NonNegativeNumber.term,
@@ -46,8 +43,17 @@ object Genesis {
       new Rev(wallets).term,
       new ProofOfStake(validators).term
     ).map(termDeploy(_, timestamp))
-    withContracts(defaultBlessedTerms, initial, startHash, runtimeManager)
-  }
+
+  def withContracts(initial: BlockMessage,
+                    validators: Seq[ProofOfStakeValidator],
+                    wallets: Seq[Wallet],
+                    startHash: StateHash,
+                    runtimeManager: RuntimeManager,
+                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage =
+    withContracts(defaultBlessedTerms(timestamp, validators, wallets),
+                  initial,
+                  startHash,
+                  runtimeManager)
 
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
@@ -65,6 +71,7 @@ object Genesis {
     val timestamp = initial.header.get.timestamp
 
     val sortedReductionLog = reductionLog.sortBy(_.toByteArray)
+
     val body =
       Body(postState = stateWithContracts,
            newCode = deployWithCost,
@@ -113,22 +120,10 @@ object Genesis {
               s"CASPER: Specified bonds file $path does not exist. Falling back on generating random validators.")))(
             _ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets <- (walletsFile, maybeWalletsPath) match {
-                  case (Some(file), _) => getWallets[F](file)
-                  case (None, Some(path)) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: Specified wallets file $path does not exist. No wallets will exist at genesis.")
-                      .map(_ => Seq.empty[Wallet])
-                  case (None, None) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: No wallets file specified and no default file found. No wallets will exist at genesis.")
-                      .map(_ => Seq.empty[Wallet])
-                }
-      bonds     <- getBonds[F](bondsFile, numValidators, genesisPath)
-      timestamp <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
-      initial   = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
+      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
+      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
       withContr = withContracts(initial,
                                 bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
                                 wallets,
@@ -137,8 +132,8 @@ object Genesis {
                                 timestamp)
     } yield withContr
 
-  private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
-                                             defaultPath: Path): F[Option[File]] =
+  def toFile[F[_]: Applicative: Log](maybePath: Option[String],
+                                     defaultPath: Path): F[Option[File]] =
     maybePath match {
       case Some(path) =>
         val f = new File(path)
@@ -156,27 +151,44 @@ object Genesis {
         } else none[File].pure[F]
     }
 
-  private def getWallets[F[_]: Monad: Capture: Log](walletsFile: File): F[Seq[Wallet]] =
-    for {
-      maybeLines <- Capture[F].capture { Try(Source.fromFile(walletsFile).getLines().toList) }
-      wallets <- maybeLines match {
-                  case Success(lines) =>
-                    lines
-                      .traverse(Wallet.fromLine(_) match {
-                        case Right(wallet) => wallet.some.pure[F]
-                        case Left(errMsg) =>
-                          Log[F]
-                            .warn(s"CASPER: Error in parsing wallets file: $errMsg")
-                            .map(_ => none[Wallet])
-                      })
-                      .map(_.flatten)
-                  case Failure(ex) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: Failed to read ${walletsFile.getAbsolutePath} for reason: ${ex.getMessage}")
-                      .map(_ => Seq.empty[Wallet])
-                }
-    } yield wallets
+  def getWallets[F[_]: Monad: Capture: Log](walletsFile: Option[File],
+                                            maybeWalletsPath: Option[String]): F[Seq[Wallet]] = {
+    def walletFromFile(file: File): F[Seq[Wallet]] =
+      for {
+        maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
+        wallets <- maybeLines match {
+                    case Success(lines) =>
+                      lines
+                        .traverse(Wallet.fromLine(_) match {
+                          case Right(wallet) => wallet.some.pure[F]
+                          case Left(errMsg) =>
+                            Log[F]
+                              .warn(s"CASPER: Error in parsing wallets file: $errMsg")
+                              .map(_ => none[Wallet])
+                        })
+                        .map(_.flatten)
+                    case Failure(ex) =>
+                      Log[F]
+                        .warn(
+                          s"CASPER: Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
+                        .map(_ => Seq.empty[Wallet])
+                  }
+      } yield wallets
+
+    (walletsFile, maybeWalletsPath) match {
+      case (Some(file), _) => walletFromFile(file)
+      case (None, Some(path)) =>
+        Log[F]
+          .warn(
+            s"CASPER: Specified wallets file $path does not exist. No wallets will exist at genesis.")
+          .map(_ => Seq.empty[Wallet])
+      case (None, None) =>
+        Log[F]
+          .warn(
+            s"CASPER: No wallets file specified and no default file found. No wallets will exist at genesis.")
+          .map(_ => Seq.empty[Wallet])
+    }
+  }
 
   def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
     bondsFile match {
@@ -205,9 +217,9 @@ object Genesis {
           }
     }
 
-  private def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
-                                                  numValidators: Int,
-                                                  genesisPath: Path): F[Map[Array[Byte], Int]] =
+  def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
+                                          numValidators: Int,
+                                          genesisPath: Path): F[Map[Array[Byte], Int]] =
     bondsFile match {
       case Some(file) =>
         Capture[F]
