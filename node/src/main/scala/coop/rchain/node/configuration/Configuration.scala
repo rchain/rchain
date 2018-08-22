@@ -65,15 +65,15 @@ object Configuration {
                  case ConfigurationParseError(e) =>
                    Log[Task]
                      .error(s"Can't parse the configuration: $e")
-                     .map(kp(true))
+                     .as(true)
                  case ConfigurationAstError(e) =>
                    Log[Task]
                      .error(s"The structure of the configuration is not valid: $e")
-                     .map(kp(true))
+                     .as(true)
                  case ConfigurationFileNotFound(f) =>
                    Log[Task]
                      .warn(s"Configuration file $f not found")
-                     .map(kp(false))
+                     .as(false)
                },
                kp(Task.now(false))
              )
