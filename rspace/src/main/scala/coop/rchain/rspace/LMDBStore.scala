@@ -219,7 +219,7 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins.drop(txn)
   }
 
-  def close(): Unit = {
+  private[rspace] override def closeImp(): Unit = {
     _dbGNATs.close()
     _dbJoins.close()
   }

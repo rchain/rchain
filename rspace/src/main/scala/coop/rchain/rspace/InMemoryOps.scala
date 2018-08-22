@@ -10,7 +10,7 @@ trait InMemTransaction[S] {
   def name: String
 }
 
-trait InMemoryOps[S] {
+trait InMemoryOps[S] extends CloseOps[InMemTransaction[S]] {
 
   protected[rspace] type Transaction = InMemTransaction[S]
 
@@ -39,7 +39,7 @@ trait InMemoryOps[S] {
       txn.close()
     }
 
-  private[rspace] def createTxnRead(): InMemTransaction[S] = new InMemTransaction[S] {
+  private[rspace] def createTxnReadImp(): InMemTransaction[S] = new InMemTransaction[S] {
 
     val name: String = "read-" + Thread.currentThread().getId
 
@@ -57,7 +57,7 @@ trait InMemoryOps[S] {
       throw new RuntimeException("read txn cannot write")
   }
 
-  private[rspace] def createTxnWrite(): InMemTransaction[S] =
+  private[rspace] def createTxnWriteImp(): InMemTransaction[S] =
     new InMemTransaction[S] {
       val name: String = "write-" + Thread.currentThread().getId
 

@@ -1475,6 +1475,22 @@ trait StorageActionsTests
     }
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
+
+  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace { space =>
+    space.close()
+    //using some nulls here to ensure that exception is thrown even before args check
+    an[RSpaceClosedException] shouldBe thrownBy(
+      space.install(Nil, List.empty[Pattern], null)
+    )
+
+    an[RSpaceClosedException] shouldBe thrownBy(
+      space.consume(Nil, List.empty[Pattern], null, false)
+    )
+
+    an[RSpaceClosedException] shouldBe thrownBy(
+      space.produce(null, null, false)
+    )
+  }
 }
 
 class InMemoryStoreStorageActionsTests

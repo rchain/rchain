@@ -108,7 +108,7 @@ class InMemoryTrieStore[K, V]
   override private[rspace] def clear(txn: InMemTransaction[State[K, V]]): Unit =
     txn.writeState(_ => (State.empty, ()))
 
-  def close(): Unit = ()
+  override def closeImp(): Unit = ()
 }
 
 object InMemoryTrieStore {
