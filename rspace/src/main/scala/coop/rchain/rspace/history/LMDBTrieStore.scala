@@ -1,16 +1,17 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
-import coop.rchain.rspace.{Blake2b256Hash, LMDBOps}
+import coop.rchain.rspace.{Blake2b256Hash, LMDBOps, Serialize}
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.Resources.withResource
+import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
-import scodec.bits.BitVector
+import scodec.bits.{BitVector, ByteVector}
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
@@ -19,9 +20,11 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
                                    protected[this] val databasePath: Path,
                                    _dbTrie: Dbi[ByteBuffer],
                                    _dbRoot: Dbi[ByteBuffer],
-                                   _dbPastRoots: Dbi[ByteBuffer])(implicit
-                                                                  codecK: Codec[K],
-                                                                  codecV: Codec[V])
+                                   _dbPastRoots: Dbi[ByteBuffer],
+                                   _dbEmptyRoots: Dbi[ByteBuffer],
+)(implicit
+  codecK: Codec[K],
+  codecV: Codec[V])
     extends ITrieStore[Txn[ByteBuffer], K, V]
     with LMDBOps {
 
@@ -47,12 +50,14 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
     _dbTrie.close()
     _dbRoot.close()
     _dbPastRoots.close()
+    _dbEmptyRoots.close()
   }
 
   private[rspace] def clear(txn: Txn[ByteBuffer]): Unit = {
     _dbTrie.drop(txn)
     _dbRoot.drop(txn)
     _dbPastRoots.drop(txn)
+    _dbEmptyRoots.drop(txn)
   }
 
   private[rspace] def getRoot(txn: Txn[ByteBuffer], branch: Branch): Option[Blake2b256Hash] =
@@ -75,7 +80,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
     _dbRoot.put(txn, branch, hash)(Codec[Branch], Codec[Blake2b256Hash])
 
   private[rspace] def getAllPastRoots(txn: Txn[ByteBuffer]): Seq[Blake2b256Hash] =
-    withResource(_dbPastRoots.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+    withResource(_dbPastRoots.iterate(txn)) { it: CursorIterator[ByteBuffer] =>
       it.asScala.foldLeft(Seq.empty[Blake2b256Hash]) { (acc, keyVal) =>
         acc ++ Codec[Seq[Blake2b256Hash]].decode(BitVector(keyVal.`val`())).map(_.value).get
       }
@@ -107,6 +112,27 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
           }
       }
       .getOrElse(throw new Exception(s"Unknown root."))
+
+  val stringSerialize: Serialize[String] = new Serialize[String] {
+
+    def encode(a: String): ByteVector =
+      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
+
+    def decode(bytes: ByteVector): Either[Throwable, String] =
+      Right(new String(bytes.toArray, StandardCharsets.UTF_8))
+  }
+
+  implicit val stringCodec: Codec[String] = stringSerialize.toCodec
+
+  val emptyRootKey = "emptyRoot"
+
+  override private[rspace] def getEmptyRoot(txn: Txn[ByteBuffer]) =
+    _dbEmptyRoots
+      .get(txn, emptyRootKey)(Codec[String], Codec[Blake2b256Hash])
+      .getOrElse(throw new Exception(s"Missing empty root."))
+
+  override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
+    _dbEmptyRoots.put(txn, emptyRootKey, hash)(Codec[String], Codec[Blake2b256Hash])
 }
 
 object LMDBTrieStore {
@@ -116,7 +142,8 @@ object LMDBTrieStore {
                                                      codecV: Codec[V]): LMDBTrieStore[K, V] = {
     val dbTrie: Dbi[ByteBuffer]      = env.openDbi("Trie", MDB_CREATE)
     val dbRoots: Dbi[ByteBuffer]     = env.openDbi("Roots", MDB_CREATE)
+    val dbEmptyRoot: Dbi[ByteBuffer] = env.openDbi("EmptyRoot", MDB_CREATE)
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots)
+    new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
   }
 }

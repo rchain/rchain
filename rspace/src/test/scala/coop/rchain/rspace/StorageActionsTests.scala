@@ -1019,6 +1019,27 @@ trait StorageActionsTests
       checkpoint1.log shouldBe empty
   }
 
+  "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
+    val store    = space.store
+    val key      = List("ch1")
+    val patterns = List(Wildcard)
+    val keyHash  = store.hashChannels(key)
+
+    val ch2 = space.createCheckpoint()
+
+    val r = space.consume(key, patterns, new StringsCaptor, persist = false)
+
+    val checkpoint0 = space.createCheckpoint()
+    checkpoint0.log should not be empty
+    space.createCheckpoint()
+    space.clear()
+    store.createCheckpoint()
+    space.clear()
+    val checkpoint2 = space.createCheckpoint()
+    checkpoint2.log shouldBe empty
+    checkpoint2.root shouldBe ch2.root
+  }
+
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
