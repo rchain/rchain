@@ -55,7 +55,7 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(blockStorage % "compile->compile;test->test", comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(blockStorage % "compile->compile;test->test", comm % "compile->compile;test->test", shared % "compile->compile;test->test", crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
