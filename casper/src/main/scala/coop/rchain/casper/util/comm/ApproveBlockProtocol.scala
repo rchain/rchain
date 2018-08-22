@@ -3,12 +3,6 @@ package coop.rchain.casper.util.comm
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.{Sync, Timer}
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import com.google.protobuf.ByteString
-
-import cats.Monad
-import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import cats.{FlatMap, Monad}
 import com.google.protobuf.ByteString
@@ -17,12 +11,12 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.{Capture, MonadTrans}
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.RPConfAsk
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 
 import scala.concurrent.duration._
@@ -53,7 +47,7 @@ object ApproveBlockProtocol {
 
   //For usage in tests only
   def unsafe[
-      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -69,7 +63,7 @@ object ApproveBlockProtocol {
                                     interval,
                                     sigsF)
 
-  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+  def of[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
       block: BlockMessage,
       trustedValidators: Set[ByteString],
       requiredSigs: Int,
@@ -88,7 +82,7 @@ object ApproveBlockProtocol {
                                       sigsF)
 
   private class ApproveBlockProtocolImpl[
-      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: RPConfAsk: LastApprovedBlock](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: Timer: Metrics: RPConfAsk: LastApprovedBlock](
       val block: BlockMessage,
       val requiredSigs: Int,
       val trustedValidators: Set[ByteString],
@@ -127,8 +121,15 @@ object ApproveBlockProtocol {
         a.sig.fold("<Empty Signature>")(sig => Base16.encode(sig.publicKey.toByteArray))
 
       FlatMap[F].ifM(isValid)(
-        sigsF.update(_ + validSig.get) *> Log[F].info(
-          s"APPROVAL: received block approval from $sender"),
+        for {
+          before <- sigsF.get
+          _      <- sigsF.update(_ + validSig.get)
+          after  <- sigsF.get
+          _ <- if (after > before)
+                Metrics[F].incrementCounter(METRICS_APPROVAL_COUNTER_NAME)
+              else ().pure[F]
+          _ <- Log[F].info(s"APPROVAL: received block approval from $sender")
+        } yield (),
         Log[F].warn(s"APPROVAL: ignoring invalid block approval from $sender")
       )
     }
@@ -180,5 +181,7 @@ object ApproveBlockProtocol {
             }
       } yield ()
   }
+
+  val METRICS_APPROVAL_COUNTER_NAME = "genesis-block-approvals"
 
 }
