@@ -60,18 +60,23 @@ object Configuration {
     for {
       _       <- log.info(s"Using configuration file: $configFile")
       configE <- Task.delay(toml.TomlConfiguration.from(configFile))
-      exit <- configE
-               .leftMap {
+      exit <- configE.fold(
+               {
                  case ConfigurationParseError(e) =>
-                   (s"Can't parse the configuration: $e", true)
+                   Log[Task]
+                     .error(s"Can't parse the configuration: $e")
+                     .map(kp(true))
                  case ConfigurationAstError(e) =>
-                   (s"The structure of the configuration is not valid: $e", true)
+                   Log[Task]
+                     .error(s"The structure of the configuration is not valid: $e")
+                     .map(kp(true))
                  case ConfigurationFileNotFound(f) =>
-                   (s"Configuration file $f not found", false)
-               }
-               .fold({
-                 case (err, exit) => Log[Task].error(err).map(kp(exit))
-               }, kp(Task.now(false)))
+                   Log[Task]
+                     .warn(s"Configuration file $f not found")
+                     .map(kp(false))
+               },
+               kp(Task.now(false))
+             )
       _      = if (exit) System.exit(1)
       config <- Task.pure(configE.toOption)
     } yield config
