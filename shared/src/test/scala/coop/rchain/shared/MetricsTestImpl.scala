@@ -13,7 +13,6 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
 
   private def incrementBy(name: String, delta: Long)(m: MutableMap[String, Long]): Unit = {
     val newValue = m.get(name).map(_ + delta).getOrElse(delta)
-    println(s"Adding $delta at $name")
     m.update(name, newValue)
   }
 
@@ -27,8 +26,7 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
     Sync[F].delay(incrementBy(name, delta)(samplers))
 
   // no idea how to implement this properly
-  override def sample(name: String): F[Unit] =
-    Sync[F].unit
+  override def sample(name: String): F[Unit] = ???
 
   override def setGauge(name: String, value: Long): F[Unit] =
     Sync[F].delay(set(name, value)(gauges))
