@@ -194,8 +194,10 @@ class CasperPacketHandlerSpec extends WordSpec {
                                                             validatorPk)
           blockApprovalPacket = Packet(transport.BlockApproval.id, blockApproval.toByteString)
           _                   <- casperPacketHandler.handle(local)(blockApprovalPacket)
-          // Sleep for 2 seconds to give time for eval-ing genesis contracts when creating Casper instance
-          _               <- Timer[Task].sleep(2.seconds)
+          // Sleep for 5 seconds to give time for eval-ing genesis contracts when creating Casper instance
+          // I don't know of any way around this because we don't have direct handle on the computation
+          // and we use the same scheduler.
+          _               <- Timer[Task].sleep(5.seconds)
           casperO         <- MultiParentCasperRef[Task].get
           _               = assert(casperO.isDefined)
           blockO          <- blockStore.get(genesis.blockHash)
