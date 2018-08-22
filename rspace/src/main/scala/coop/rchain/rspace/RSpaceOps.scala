@@ -114,7 +114,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     val emptyRootHash: Blake2b256Hash =
       store.withTxn(store.createTxnRead()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.getAllPastRoots(trieTxn).last
+          store.trieStore.getEmptyRoot(trieTxn)
         }
       }
     reset(emptyRootHash)
