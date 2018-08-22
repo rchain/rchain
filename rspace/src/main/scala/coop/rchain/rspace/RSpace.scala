@@ -230,7 +230,7 @@ object RSpace {
      * to the empty store state with the clear method.
      */
     val _ = if (history.initialize(store.trieStore, branch)) {
-      val checkpoint = space.createCheckpoint()
+      space.createCheckpoint()
     }
 
     space

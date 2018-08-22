@@ -1023,21 +1023,24 @@ trait StorageActionsTests
     val store    = space.store
     val key      = List("ch1")
     val patterns = List(Wildcard)
-    val keyHash  = store.hashChannels(key)
+    val emptyCheckpoint = space.createCheckpoint()
 
-    val ch2 = space.createCheckpoint()
-
-    val r = space.consume(key, patterns, new StringsCaptor, persist = false)
-
+    //put some data so the checkpoint is != empty
+    space.consume(key, patterns, new StringsCaptor, persist = false)
     val checkpoint0 = space.createCheckpoint()
     checkpoint0.log should not be empty
+
     space.createCheckpoint()
     space.clear()
+
+    //force clearing of trie store state
     store.createCheckpoint()
     space.clear()
+
+    //the checkpointing mechanism should not interfere with the empty root
     val checkpoint2 = space.createCheckpoint()
     checkpoint2.log shouldBe empty
-    checkpoint2.root shouldBe ch2.root
+    checkpoint2.root shouldBe emptyCheckpoint.root
   }
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
