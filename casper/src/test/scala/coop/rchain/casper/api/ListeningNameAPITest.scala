@@ -23,7 +23,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
   import HashSetCasperTest._
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val genesis                     = createGenesis(validators)
+  private val bonds                       = createBonds(validators)
+  private val genesis                     = createGenesis(bonds)
 
   "getListeningNameDataResponse" should "work with unsorted channels" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
@@ -54,7 +55,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
 
   it should "work across a chain" in {
     val nodes                               = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
-    implicit val nodeZeroConstructor        = nodes(0).constructor
+    implicit val nodeZeroCasperRef          = nodes(0).multiparentCasperRef
     implicit val nodeZeroSafetyOracleEffect = nodes(0).turanOracleEffect
     implicit val nodeZeroLogEffect          = nodes(0).logEff
     implicit val nodeZeroBlockStoreEffect   = nodes(0).blockStore

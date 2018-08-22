@@ -5,17 +5,17 @@ import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
 import cats.implicits._
-
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
-import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.node.configuration.toml.error._
+import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
-
 import monix.eval.Task
+
+import scala.concurrent.duration._
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -40,6 +40,7 @@ object Configuration {
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
+  private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
   private val DefaultInMemoryStore: Boolean     = false
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
@@ -49,6 +50,10 @@ object Configuration {
   private val DefaultKeyFileName                = "node.key.pem"
   private val DefaultSecureRandomNonBlocking    = false
   private val DefaultMaxNumOfConnections        = 500
+  private val DefaultRequiredSigns              = 0
+  private val DefaultApprovalProtocolDuration   = 5.minutes
+  private val DefaultApprovalProtocolInterval   = 5.seconds
+
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
@@ -115,6 +120,7 @@ object Configuration {
             DefaultTimeout,
             DefaultBootstrapServer,
             DefaultStandalone,
+            DefaultGenesisValidator,
             dataDir,
             DefaultMapSize,
             inMemoryStore = false,
@@ -142,7 +148,12 @@ object Configuration {
             dataDir.resolve("genesis"),
             None,
             createGenesis = false,
-            DefaultShardId
+            shardId = DefaultShardId,
+            approveGenesis = false,
+            requiredSigs = -1,
+            approveGenesisDuration = 100.days,
+            approveGenesisInterval = 1.day,
+            deployTimestamp = None
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -198,6 +209,21 @@ object Configuration {
       get(_.run.bootstrap, _.server.flatMap(_.bootstrap), DefaultBootstrapServer)
     val standalone: Boolean =
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
+    val genesisValidator: Boolean =
+      get(_.run.genesisValidator, _.server.flatMap(_.genesisValidator), DefaultGenesisValidator)
+    val requiredSigs =
+      get(_.run.requiredSigs, _.validators.flatMap(_.requiredSigs), DefaultRequiredSigns)
+    val genesisApproveInterval =
+      get(_.run.interval,
+          _.validators.flatMap(_.approveGenesisInterval),
+          DefaultApprovalProtocolInterval)
+    val genesisAppriveDuration =
+      get(_.run.duration,
+          _.validators.flatMap(_.approveGenesisDuration),
+          DefaultApprovalProtocolDuration)
+
+    val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
+
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
     val inMemoryStore: Boolean =
@@ -242,6 +268,7 @@ object Configuration {
       defaultTimeout,
       bootstrap,
       standalone,
+      genesisValidator,
       dataDir,
       mapSize,
       inMemoryStore,
@@ -270,8 +297,13 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        requiredSigs,
+        shardId,
         standalone,
-        shardId
+        genesisValidator,
+        genesisApproveInterval,
+        genesisAppriveDuration,
+        deployTimestamp
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),

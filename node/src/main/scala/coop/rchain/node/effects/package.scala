@@ -46,10 +46,10 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
-      implicit
-      metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
+  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(implicit
+                                                          metrics: Metrics[Task],
+                                                          transport: TransportLayer[Task],
+                                                          time: Time[Task]): KademliaRPC[Task] =
     new KademliaRPC[Task] {
       def ping(node: PeerNode): Task[Boolean] =
         for {
