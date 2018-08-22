@@ -11,7 +11,7 @@ Add link to corresponding JIRA issue.
 
 ### If you are not a member of the core development team, please confirm:
 - [ ] You signed the commit. Merging requires a signature. Please see the (developer wiki)[https://rchain.atlassian.net/wiki/spaces/DOC/pages/498630673/How+to+sign+commits+to+rchain+rchain] for instructions.
-- [ ] Your GitLab account is also an account with (Travis CI)[https://travis-ci.org]. Unit tests will not run on your PR unless you have an account with Travis. Merge requires passed unit tests.
+- [ ] Your GitHab account is also an account with (Travis CI)[https://travis-ci.org]. Unit tests will not run on your PR unless you have an account with Travis. Merge requires passed unit tests.
 
 ### Notes
 Optional. Add any notes on caveats, approaches you tried that didn't work, or anything else.
