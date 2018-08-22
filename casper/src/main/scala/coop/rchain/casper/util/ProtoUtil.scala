@@ -326,7 +326,7 @@ object ProtoUtil {
     }
 
     val sender = ByteString.copyFrom(pk)
-    val seqNum = dag.currentSeqNum.getOrElse(sender, -1) + 1
+    val seqNum = dag.currentSeqNum.getOrElse(sender, 0) + 1
 
     val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 

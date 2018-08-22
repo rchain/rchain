@@ -391,7 +391,8 @@ sealed abstract class MultiParentCasperInstances {
                                                          .checkNeglectedEquivocationsWithUpdate[F](
                                                            equivocationsTracker,
                                                            b,
-                                                           dag))
+                                                           dag,
+                                                           genesis))
           blockBufferDependencyDag <- blockBufferDependencyDagState.get
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ =>
