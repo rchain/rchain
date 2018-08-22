@@ -1,7 +1,6 @@
 package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
-import java.util.concurrent.TimeUnit
 
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo

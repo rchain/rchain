@@ -605,7 +605,9 @@ object HashSetCasperTest {
   def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
-  def buildGenesis(wallets: Seq[Wallet], bonds: Map[Array[Byte], Int], deployTimestamp: Long): BlockMessage = {
+  def buildGenesis(wallets: Seq[Wallet],
+                   bonds: Map[Array[Byte], Int],
+                   deployTimestamp: Long): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024

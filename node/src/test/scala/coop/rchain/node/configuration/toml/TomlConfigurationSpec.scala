@@ -9,6 +9,8 @@ import scala.concurrent.duration._
 
 class TomlConfigurationSpec extends FunSuite with Matchers {
 
+  import error._
+
   val config =
     """
       |[server]
@@ -49,7 +51,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     """.stripMargin
 
   test("Parse TOML configuration string") {
-    val result: Either[String, Configuration] = TomlConfiguration.from(config)
+    val result: Either[TomlConfigurationError, Configuration] = TomlConfiguration.from(config)
     result.isRight shouldEqual true
     val Right(root) = result
 

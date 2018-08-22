@@ -16,7 +16,7 @@ import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.CommMessages.packet
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.{PeerNode, transport}
+import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
 import monix.execution.Scheduler
@@ -107,7 +107,8 @@ object BlockApproverProtocol {
       replayedState <- runtimeManager
                         .replayComputeState(replayLog)
                         .apply(runtimeManager.emptyStateHash, genesisBlessedTerms)
-                        .leftMap(r => s"Errors during replay: ${r._2.map(_.getMessage).mkString(", ")}.")
+                        .leftMap(r =>
+                          s"Errors during replay: ${r._2.map(_.getMessage).mkString(", ")}.")
       checkpoint = replayedState._1
       _ <- (ByteString.copyFrom(checkpoint.root.bytes.toArray) == postState.tuplespace)
             .either(())
