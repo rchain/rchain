@@ -113,26 +113,16 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
       .getOrElse(throw new Exception(s"Unknown root."))
 
-  val stringSerialize: Serialize[String] = new Serialize[String] {
-
-    def encode(a: String): ByteVector =
-      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
-
-    def decode(bytes: ByteVector): Either[Throwable, String] =
-      Right(new String(bytes.toArray, StandardCharsets.UTF_8))
-  }
-
-  implicit val stringCodec: Codec[String] = stringSerialize.toCodec
-
-  val emptyRootKey = "emptyRoot"
-
   override private[rspace] def getEmptyRoot(txn: Txn[ByteBuffer]) =
-    _dbEmptyRoots
-      .get(txn, emptyRootKey)(Codec[String], Codec[Blake2b256Hash])
+    Option(_dbEmptyRoots.get(txn, LMDBTrieStore.emptyRootKey))
+      .map(bytes => Codec[Blake2b256Hash].decode(BitVector(bytes)).map(_.value).get)
       .getOrElse(throw new Exception(s"Missing empty root."))
 
   override private[rspace] def putEmptyRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit =
-    _dbEmptyRoots.put(txn, emptyRootKey, hash)(Codec[String], Codec[Blake2b256Hash])
+    _dbEmptyRoots
+      .put(txn,
+           LMDBTrieStore.emptyRootKey,
+           Codec[Blake2b256Hash].encode(hash).map(_.bytes.toDirectByteBuffer).get)
 }
 
 object LMDBTrieStore {
@@ -146,4 +136,17 @@ object LMDBTrieStore {
     val dbPastRoots: Dbi[ByteBuffer] = env.openDbi("PastRoots", MDB_CREATE)
     new LMDBTrieStore[K, V](env, path, dbTrie, dbRoots, dbPastRoots, dbEmptyRoot)
   }
+
+  private val stringSerialize: Serialize[String] = new Serialize[String] {
+
+    def encode(a: String): ByteVector =
+      ByteVector.view(a.getBytes(StandardCharsets.UTF_8))
+
+    def decode(bytes: ByteVector): Either[Throwable, String] =
+      Right(new String(bytes.toArray, StandardCharsets.UTF_8))
+  }
+
+  private val stringCodec: Codec[String] = stringSerialize.toCodec
+
+  private val emptyRootKey = stringCodec.encode("emptyRoot").get.bytes.toDirectByteBuffer
 }
