@@ -5,7 +5,8 @@ import coop.rchain.roscala.ob.{Ctxt, Nil, Niv, Ob}
 
 class EmptyMbox extends Ob {
   override def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = {
-    MboxOb.logger.debug(s"$this receives message")
+    MboxOb.logger.debug(s"$this (mailbox of $client) receives message")
+    MboxOb.logger.debug(s"Mailbox of $client gets locked")
 
     client.mbox = MboxOb.LockedMbox
     client.schedule(task, state)

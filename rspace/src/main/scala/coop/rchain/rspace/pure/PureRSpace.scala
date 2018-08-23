@@ -27,3 +27,5 @@ class PureRSpace[F[_], C, P, A, R, K](space: ISpace[C, P, A, R, K]) {
 
   def close()(s: Sync[F]): F[Unit] = s.delay(space.close())
 }
+
+

@@ -112,6 +112,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
             case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.UNAVAILABLE =>
               "The service is currently unavailable"
             case _ =>
+              e.printStackTrace()
               e.getMessage
           }
           log.warn(s"Failed to send a message to peer ${peer.toAddress}: $msg")

@@ -4,8 +4,9 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
-
 import org.rogach.scallop._
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object Converter {
   import Options._
@@ -31,6 +32,22 @@ object Converter {
 
     val argType: ArgType.V = ArgType.FLAG
   }
+
+  implicit val finiteDurationConverter: ValueConverter[FiniteDuration] =
+    new ValueConverter[FiniteDuration] {
+
+      override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
+        s match {
+          case (_, duration :: Nil) :: Nil =>
+            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
+            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
+              Left("Expected finite duration."))(fd => Right(Some(fd)))
+          case Nil => Right(None)
+          case _   => Left("Provide a duration.")
+        }
+
+      override val argType: ArgType.V = ArgType.SINGLE
+    }
 }
 
 object Options {
@@ -131,6 +148,31 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val standalone =
       opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
+
+    val requiredSigs =
+      opt[Int](
+        descr =
+          "Number of signatures from trusted validators required to creating an approved genesis block.")
+
+    val deployTimestamp =
+      opt[Long](
+        descr = "Timestamp for the deploys."
+      )
+
+    val duration =
+      opt[FiniteDuration](
+        short = 'd',
+        descr =
+          "Time window in which BlockApproval messages will be accumulated before checking conditions."
+      )
+
+    val interval =
+      opt[FiniteDuration](
+        short = 'i',
+        descr = "Interval at which condition for creating ApprovedBlock will be checked.")
+
+    val genesisValidator =
+      opt[Flag](descr = "Start a node as a genesis validator.")
 
     val host = opt[String](descr = "Hostname or IP of this node.")
 

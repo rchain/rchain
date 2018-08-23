@@ -374,21 +374,14 @@ object ProtoUtil {
       .withDeploy(basicDeploy(id))
       .withCost(PCost(1L, 1))
 
-  def sourceDeploy(source: String): DeployData = {
-    //TODO this should be removed once we assign the deploy with exact user
-    Thread.sleep(1)
-    val timestamp = System.currentTimeMillis()
+  def sourceDeploy(source: String, timestamp: Long): DeployData =
     DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
-  }
 
-  def termDeploy(term: Par): Deploy = {
+  def termDeploy(term: Par, timestamp: Long): Deploy =
     //TODO this should be removed once we assign the deploy with exact user
-    Thread.sleep(1)
-    val timestamp = System.currentTimeMillis()
     Deploy(
       term = Some(term),
       raw =
         Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
-  }
 }

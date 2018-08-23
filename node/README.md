@@ -31,15 +31,16 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
-Starting with profile default
-RChain Node 0.4.2
-      --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
-                           running.
-  -g, --grpc-port  <arg>   Port used for gRPC API.
-  -p, --profile  <arg>     Which predefined set of defaults to use: default or
-                           docker.
-      --help               Show help message
-      --version            Show version of this program
+RChain Node 0.6.1
+  -c, --config-file  <arg>          Path to the configuration file.
+      --grpc-host  <arg>            Hostname or IP of node on which gRPC service
+                                    is running.
+  -g, --grpc-port  <arg>            Port used for external gRPC API.
+      --grpc-port-internal  <arg>   Port used for internal gRPC API.
+  -p, --profile  <arg>              Which predefined set of defaults to use:
+                                    default or docker.
+      --help                        Show help message
+      --version                     Show version of this program
 
 Subcommand: diagnostics - Node diagnostics
       --help   Show help message
@@ -55,6 +56,7 @@ Subcommand: run
                                          --num-validators option.
   -b, --bootstrap  <arg>                 Bootstrap rnode address for initial
                                          seed.
+      --casper-block-store-size  <arg>   Casper BlockStore map size (in bytes)
   -c, --certificate  <arg>               Path to node's X.509 certificate file,
                                          that is being used for identification
       --data_dir  <arg>                  Path to data directory. Defaults to
@@ -64,6 +66,7 @@ Subcommand: run
       --host  <arg>                      Hostname or IP of this node.
   -h, --http-port  <arg>                 HTTP port (deprecated - all API
                                          features will be ported to gRPC API).
+  -i, --in-memory-store                  Use in-memory store beneath RSpace
   -k, --key  <arg>                       Path to node's private key PEM file,
                                          that is being used for TLS
                                          communication
@@ -74,10 +77,16 @@ Subcommand: run
                                          accept a block which starts the
                                          localnode's view of the blockDAG.
       --map_size  <arg>                  Map size (in bytes)
+      --max-num-of-connections  <arg>    Maximum number of peers allowed to
+                                         connect to the node
   -m, --metrics-port  <arg>              Port used by metrics API.
   -n, --no-upnp                          Use this flag to disable UpNp.
       --num-validators  <arg>            Number of validators at genesis.
   -p, --port  <arg>                      Network port to use.
+      --secure-random-non-blocking       Use a non blocking secure random
+                                         instance
+      --shard-id  <arg>                  Identifier of the shard this node is
+                                         connected to.
   -s, --standalone                       Start a stand-alone node (no
                                          bootstrapping).
       --validator-private-key  <arg>     Base16 encoding of the private key to
@@ -111,7 +120,15 @@ Subcommand: eval - Starts a thin client that will evaluate rholang in file on a 
 Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
       --help   Show help message
 Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
-      --help   Show help message
+  -f, --from  <arg>         Purse address that will be used to pay for the
+                            deployment.
+  -n, --nonce  <arg>        This allows to overwrite your own pending
+                            transactions that use the same nonce.
+  -p, --phlo-limit  <arg>   The amount of phlo to use for the transaction
+                            (unused phlo is refunded).
+      --phlo-price  <arg>   The price of phlo for this transaction in units
+                            dust/phlo.
+      --help                Show help message
 
  trailing arguments:
   location (required)

@@ -5,8 +5,11 @@ import java.nio.file.Paths
 import coop.rchain.comm.PeerNode
 
 import org.scalatest._
+import scala.concurrent.duration._
 
 class TomlConfigurationSpec extends FunSuite with Matchers {
+
+  import error._
 
   val config =
     """
@@ -41,10 +44,14 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |private-key = "99999"
       |sig-algorithm = "ed25519"
       |wallets-file = "/validator/wallet"
+      |required-sigs = 1
+      |approve-genesis-duration = "30min"
+      |approve-genesis-interval = "1min"
+      |deploy-timestamp = 1
     """.stripMargin
 
   test("Parse TOML configuration string") {
-    val result: Either[String, Configuration] = TomlConfiguration.from(config)
+    val result: Either[TomlConfigurationError, Configuration] = TomlConfiguration.from(config)
     result.isRight shouldEqual true
     val Right(root) = result
 
@@ -85,6 +92,10 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.validators.flatMap(_.privateKey) shouldEqual Some("99999")
     root.validators.flatMap(_.sigAlgorithm) shouldEqual Some("ed25519")
     root.validators.flatMap(_.walletsFile) shouldEqual Some("/validator/wallet")
+    root.validators.flatMap(_.requiredSigs) shouldEqual Some(1)
+    root.validators.flatMap(_.approveGenesisDuration) shouldEqual Some(30.minutes)
+    root.validators.flatMap(_.approveGenesisInterval) shouldEqual Some(1.minute)
+    root.validators.flatMap(_.deployTimestamp) shouldEqual Some(1)
   }
 
 }
