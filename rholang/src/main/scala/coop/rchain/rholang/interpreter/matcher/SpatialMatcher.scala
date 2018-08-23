@@ -207,7 +207,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
-    listMatchSingleNonDet(tlist, plist, (p: Par, _: T) => p, None, false)
+    listMatchSingleNonDet(tlist, plist, (p: Par, _: Seq[T]) => p, None, false)
       .mapK[OptionT[State[CostAccount, ?], ?]](
         new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
           override def apply[A](
@@ -221,7 +221,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     *
     * @param tlist  the target list
     * @param plist  the pattern list
-    * @param merger a function that adds a captured T to a par. Used for updating the state map.
+    * @param merger a function that sets a Par's field to the Seq of captured T-s. Used for updating the state map.
     * @param varLevel if non-empty, the free variable level where to put the remaining T's
     * @param wildcard if true, there is a wildcard in parallel with the pattern list.
     * @param lf
@@ -231,7 +231,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     */
   def listMatchSingleNonDet[T](tlist: Seq[T],
                                plist: Seq[T],
-                               merger: (Par, T) => Par,
+                               merger: (Par, Seq[T]) => Par,
                                varLevel: Option[Int],
                                wildcard: Boolean)(
       implicit lf: HasLocallyFree[T],
@@ -260,7 +260,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def listMatch[T](tlist: Seq[T],
                    plist: Seq[T],
-                   merger: (Par, T) => Par,
+                   merger: (Par, Seq[T]) => Par,
                    varLevel: Option[Int],
                    wildcard: Boolean)(implicit lf: HasLocallyFree[T],
                                       sm: SpatialMatcher[T, T]): NonDetFreeMapWithCost[Unit] =
@@ -299,31 +299,31 @@ object SpatialMatcher extends SpatialMatcherInstances {
       }
     }
 
-  private def handleRemainder[T](rem: Seq[T],
-                                 level: Int,
-                                 merger: (Par, T) => Par,
-                                 wildcard: Boolean)(
-      implicit lf: HasLocallyFree[T],
-      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] = {
-    // This function is essentially an early terminating left fold.
-    @tailrec
-    def foldRemainder(remainder: Seq[T], p: Par): OptionalFreeMapWithCost[Par] =
-      remainder match {
-        case Nil => OptionalFreeMapWithCost.pure(p)
-        case item +: rem =>
-          if (lf.locallyFree(item, 0).isEmpty)
-            foldRemainder(rem, merger(p, item))
-          else if (wildcard)
-            foldRemainder(rem, p)
-          else
-            OptionalFreeMapWithCost.emptyMap[Par]
-      }
+  private def handleRemainder[T](
+      rem: Seq[T],
+      level: Int,
+      merger: (Par, Seq[T]) => Par,
+      wildcard: Boolean)(implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] = {
+
+    val reminderTermsOpt: Option[Seq[T]] = rem.toList
+      .foldM[Option, Seq[T]](Seq.empty)((acc, item) => {
+        if (lf.locallyFree(item, 0).isEmpty)
+          Some(item +: acc)
+        else if (wildcard)
+          Some(acc)
+        else
+          None
+      })
+      .map(_.reverse)
+
     for {
-      p <- StateT.inspect[OptionT[State[CostAccount, ?], ?], FreeMap, Par]((m: FreeMap) =>
-            m.getOrElse(level, VectorPar()))
-      collectPar <- foldRemainder(rem.reverse, p)
+      remainderTerms <- OptionalFreeMapWithCost.liftF(reminderTermsOpt)
+      remainderPar <- StateT.inspect[OptionT[State[CostAccount, ?], ?], FreeMap, Par](
+                       (m: FreeMap) => m.getOrElse(level, VectorPar()))
+      //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
+      remainderParUpdated = merger(remainderPar, remainderTerms)
       _ <- StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
-            m + (level -> collectPar))
+            m + (level -> remainderParUpdated))
     } yield Unit
   }
 
@@ -622,37 +622,37 @@ trait SpatialMatcherInstances {
           remainder <- connectivesWithBounds.foldM(target)(matchConnectiveWithBounds)
           _ <- listMatchSingleNonDet[Send](remainder.sends,
                                            pattern.sends,
-                                           (p, s) => p.withSends(s +: p.sends),
+                                           (p, s) => p.withSends(s),
                                            varLevel,
                                            wildcard)
           _ <- listMatchSingleNonDet[Receive](remainder.receives,
                                               pattern.receives,
-                                              (p, s) => p.withReceives(s +: p.receives),
+                                              (p, s) => p.withReceives(s),
                                               varLevel,
                                               wildcard)
           _ <- listMatchSingleNonDet[New](remainder.news,
                                           pattern.news,
-                                          (p, s) => p.withNews(s +: p.news),
+                                          (p, s) => p.withNews(s),
                                           varLevel,
                                           wildcard)
           _ <- listMatchSingleNonDet[Expr](remainder.exprs,
                                            noFrees(pattern.exprs),
-                                           (p, e) => p.withExprs(e +: p.exprs),
+                                           (p, e) => p.withExprs(e),
                                            varLevel,
                                            wildcard)
           _ <- listMatchSingleNonDet[Match](remainder.matches,
                                             pattern.matches,
-                                            (p, e) => p.withMatches(e +: p.matches),
+                                            (p, e) => p.withMatches(e),
                                             varLevel,
                                             wildcard)
           _ <- listMatchSingleNonDet[Bundle](remainder.bundles,
                                              pattern.bundles,
-                                             (p, b) => p.withBundles(b +: p.bundles),
+                                             (p, b) => p.withBundles(b),
                                              varLevel,
                                              wildcard)
           _ <- listMatchSingleNonDet[GPrivate](remainder.ids,
                                                pattern.ids,
-                                               (p, i) => p.withIds(i +: p.ids),
+                                               (p, i) => p.withIds(i),
                                                varLevel,
                                                wildcard)
         } yield Unit
