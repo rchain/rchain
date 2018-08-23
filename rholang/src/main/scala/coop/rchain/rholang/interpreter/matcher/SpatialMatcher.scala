@@ -49,12 +49,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
         fn(target, pattern)
       override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
-        fn(target, pattern).mapK[StreamT[State[CostAccount, ?], ?]](
-          new FunctionK[OptionT[State[CostAccount, ?], ?], StreamT[State[CostAccount, ?], ?]] {
-            override def apply[A](
-                fa: OptionT[State[CostAccount, ?], A]): StreamT[State[CostAccount, ?], A] =
-              StreamT(fa.fold(Stream.empty[A])(single => Stream(single)))
-          })
+        fn(target, pattern).toNonDet()
     }
 
   def fromNonDetFunction[T, P](fn: (T, P) => NonDetFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
@@ -62,12 +57,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       override def nonDetMatch(target: T, pattern: P): NonDetFreeMapWithCost[Unit] =
         fn(target, pattern)
       override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
-        fn(target, pattern).mapK[OptionT[State[CostAccount, ?], ?]](
-          new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
-            override def apply[A](
-                fa: StreamT[State[CostAccount, ?], A]): OptionT[State[CostAccount, ?], A] =
-              OptionT(fa.value.map(_.headOption))
-          })
+        fn(target, pattern).toDet()
     }
 
   def noFrees(par: Par): Par =
