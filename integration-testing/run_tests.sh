@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-docker build .
+docker build --tag rchain-integration-testing .
 
 echo ==========================================================================================================================
 echo === Tests are slow and logging is displayed only for failing ones so it might look like there is no activity happening

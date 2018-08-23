@@ -44,7 +44,8 @@ package object history {
           val rootHash = Trie.hash(root)
           store.put(txn, rootHash, root)
           store.putRoot(txn, branch, rootHash)
-          logger.debug(s"workingRootHash: $rootHash")
+          store.putEmptyRoot(txn, rootHash)
+          logger.debug(s"workingRootHash: $rootHash, setup the empty root in trie")
           true
         case Some(_) =>
           false

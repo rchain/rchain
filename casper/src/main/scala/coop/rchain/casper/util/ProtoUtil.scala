@@ -3,10 +3,12 @@ package coop.rchain.casper.util
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.casper.BlockDag
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil.mainParent
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -20,56 +22,96 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  @tailrec
-  def isInMainChain(internalMap: Map[BlockHash, BlockMessage],
-                    candidate: BlockMessage,
-                    target: BlockMessage): Boolean =
+  def isInMainChain[F[_]: Monad: BlockStore](candidate: BlockMessage,
+                                             target: BlockMessage): F[Boolean] =
     if (candidate == target) {
-      true
+      true.pure[F]
     } else {
-      (for {
-        hdr        <- target.header
-        parentHash <- hdr.parentsHashList.headOption
-        mainParent <- internalMap.get(parentHash)
-      } yield mainParent) match {
-        case Some(parent) => isInMainChain(internalMap, candidate, parent)
-        case None         => false
+      val maybeMainParentHash = ProtoUtil.parentHashes(target).headOption
+      maybeMainParentHash match {
+        case Some(mainParentHash) =>
+          for {
+            mainParent <- BlockStore[F].get(mainParentHash)
+            isInMainChain <- mainParent match {
+                              case Some(parent) => isInMainChain[F](candidate, parent)
+                              case None         => false.pure[F]
+                            }
+          } yield isInMainChain
+        case None => false.pure[F]
       }
     }
 
-  @tailrec
-  def getMainChain(internalMap: Map[BlockHash, BlockMessage],
-                   estimate: BlockMessage,
-                   acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
-    val parentsHashes       = ProtoUtil.parents(estimate)
+  def getMainChain[F[_]: Monad: BlockStore](
+      estimate: BlockMessage,
+      acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
+    val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash flatMap internalMap.get match {
-      case Some(newEstimate) =>
-        getMainChain(internalMap, newEstimate, acc :+ estimate)
-      case None => acc :+ estimate
-    }
+    for {
+      mainChain <- maybeMainParentHash match {
+                    case Some(mainParentHash) =>
+                      for {
+                        updatedEstimate <- unsafeGetBlock[F](mainParentHash)
+                        mainChain       <- getMainChain[F](updatedEstimate, acc :+ estimate)
+                      } yield mainChain
+                    case None => (acc :+ estimate).pure[F]
+                  }
+    } yield mainChain
   }
 
-  @tailrec
-  def findJustificationParentWithSeqNum(b: BlockMessage,
-                                        internalMap: Map[BlockHash, BlockMessage],
-                                        seqNum: SequenceNumber): Option[BlockMessage] =
+  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage] =
+    for {
+      maybeBlock <- BlockStore[F].get(hash)
+      block = maybeBlock match {
+        case Some(b) => b
+        case None =>
+          throw new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
+      }
+    } yield block
+
+  def creatorJustification(block: BlockMessage): Option[Justification] =
+    block.justifications
+      .find {
+        case Justification(validator: Validator, _) =>
+          validator == block.sender
+      }
+
+  def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
+      b: BlockMessage,
+      seqNum: SequenceNumber): F[Option[BlockMessage]] =
     if (b.seqNum == seqNum) {
-      Some(b)
+      Option[BlockMessage](b).pure[F]
     } else {
-      val creatorJustificationHash = b.justifications.find {
-        case Justification(validator, _) => validator == b.sender
-      }
-      creatorJustificationHash match {
-        case Some(Justification(_, blockHash)) =>
-          val creatorJustification = internalMap.get(blockHash)
-          creatorJustification match {
-            case Some(block) => findJustificationParentWithSeqNum(block, internalMap, seqNum)
-            case None        => None
-          }
-        case None => None
-      }
+      DagOperations
+        .bfTraverseF(List(b)) { block =>
+          getCreatorJustificationAsList[F](block, block.sender)
+        }
+        .find(_.seqNum == seqNum)
     }
+
+  def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
+      block: BlockMessage,
+      validator: Validator,
+      goalFunc: BlockMessage => Boolean = _ => false): F[List[BlockMessage]] = {
+    val maybeCreatorJustificationHash =
+      block.justifications.find(_.validator == validator)
+    maybeCreatorJustificationHash match {
+      case Some(creatorJustificationHash) =>
+        for {
+          maybeCreatorJustification <- BlockStore[F].get(creatorJustificationHash.latestBlockHash)
+          maybeCreatorJustificationAsList = maybeCreatorJustification match {
+            case Some(creatorJustification) =>
+              if (goalFunc(creatorJustification)) {
+                List.empty[BlockMessage]
+              } else {
+                List(creatorJustification)
+              }
+            case None =>
+              List.empty[BlockMessage]
+          }
+        } yield maybeCreatorJustificationAsList
+      case None => List.empty[BlockMessage].pure[F]
+    }
+  }
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
     blockMessage.body match {
@@ -94,26 +136,35 @@ object ProtoUtil {
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
-  def mainParent(internalMap: Map[BlockHash, BlockMessage],
-                 blockMessage: BlockMessage): Option[BlockMessage] =
-    for {
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
+    val maybeParentHash = for {
       hdr        <- blockMessage.header
       parentHash <- hdr.parentsHashList.headOption
-      mainParent <- internalMap.get(parentHash)
-    } yield mainParent
+    } yield parentHash
+    maybeParentHash match {
+      case Some(parentHash) => BlockStore[F].get(parentHash)
+      case None             => none[BlockMessage].pure[F]
+    }
+  }
 
-  def weightFromValidator(b: BlockMessage,
-                          validator: ByteString,
-                          internalMap: Map[BlockHash, BlockMessage]): Int =
-    mainParent(internalMap, b)
-      .map(weightMap(_).getOrElse(validator, 0))
-      .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage, validator: ByteString): F[Int] =
+    for {
+      maybeMainParent <- mainParent[F](b)
+      weightFromValidator = maybeMainParent
+        .map(weightMap(_).getOrElse(validator, 0))
+        .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+    } yield weightFromValidator
 
-  def weightFromSender(b: BlockMessage, internalMap: Map[BlockHash, BlockMessage]): Int =
-    weightFromValidator(b, b.sender, internalMap)
+  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Int] =
+    weightFromValidator[F](b, b.sender)
 
-  def parents(b: BlockMessage): Seq[ByteString] =
-    b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
+  def parentHashes(b: BlockMessage): Seq[ByteString] =
+    b.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+
+  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage): F[List[BlockMessage]] =
+    ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
+      ProtoUtil.unsafeGetBlock[F](parentHash)
+    }
 
   def deploys(b: BlockMessage): Seq[Deploy] =
     b.body.map(_.newCode.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
@@ -136,44 +187,58 @@ object ProtoUtil {
       ps <- bd.postState
     } yield ps.blockNumber).getOrElse(0L)
 
-  //Two blocks conflict if they both use the same deploy in different histories
-  def conflicts(b1: BlockMessage,
-                b2: BlockMessage,
-                genesis: BlockMessage,
-                dag: BlockDag,
-                internalMap: Map[BlockHash, BlockMessage]): Boolean = {
-    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag, internalMap)
-    if (gca == b1 || gca == b2) {
-      //blocks which already exist in each other's chains do not conflict
-      false
-    } else {
-      def getDeploys(b: BlockMessage) =
-        DagOperations
-          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(internalMap(_)))
-          .takeWhile(_ != gca)
-          .flatMap(b => {
-            b.body.map(_.newCode).getOrElse(List.empty[Deploy])
-          })
-          .toSet
+  /*
+   * Two blocks conflict if they both use the same deploy in different histories
+   *
+   * TODO: Update the logic of this function to make use of the trace logs and
+   * say that two blocks don't conflict if they act on disjoint sets of channels
+   */
+  def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage,
+                                         b2: BlockMessage,
+                                         genesis: BlockMessage,
+                                         dag: BlockDag): F[Boolean] =
+    for {
+      gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
+      result <- if (gca == b1 || gca == b2) {
+                 //blocks which already exist in each other's chains do not conflict
+                 false.pure[F]
+               } else {
+                 def getDeploys(b: BlockMessage) =
+                   for {
+                     bAncestors <- DagOperations
+                                    .bfTraverseF[F, BlockMessage](List(b))(
+                                      ProtoUtil.unsafeGetParents[F])
+                                    .toList
+                     deploys = bAncestors
+                       .takeWhile(_ != gca)
+                       .flatMap(b => {
+                         b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+                       })
+                       .toSet
+                   } yield deploys
+                 for {
+                   b1Deploys <- getDeploys(b1)
+                   b2Deploys <- getDeploys(b2)
+                 } yield b1Deploys.intersect(b2Deploys).nonEmpty
+               }
+    } yield result
 
-      getDeploys(b1).intersect(getDeploys(b2)).nonEmpty
-    }
-  }
+  def chooseNonConflicting[F[_]: Monad: BlockStore](blocks: Seq[BlockMessage],
+                                                    genesis: BlockMessage,
+                                                    dag: BlockDag): F[Seq[BlockMessage]] = {
+    def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
+      conflicts[F](_, b, genesis, dag).map(b => !b)
 
-  def chooseNonConflicting(blocks: Seq[BlockMessage],
-                           genesis: BlockMessage,
-                           dag: BlockDag,
-                           internalMap: Map[BlockHash, BlockMessage]): Seq[BlockMessage] =
-    blocks
-      .foldLeft(List.empty[BlockMessage]) {
+    blocks.toList
+      .foldM(List.empty[BlockMessage]) {
         case (acc, b) =>
-          if (acc.forall(!conflicts(_, b, genesis, dag, internalMap))) {
-            b :: acc
-          } else {
-            acc
-          }
+          Monad[F].ifM(acc.forallM(nonConflicting(b)))(
+            (b :: acc).pure[F],
+            acc.pure[F]
+          )
       }
-      .reverse
+      .map(_.reverse)
+  }
 
   def toJustification(latestMessages: collection.Map[Validator, BlockHash]): Seq[Justification] =
     latestMessages.toSeq.map {
@@ -225,7 +290,7 @@ object ProtoUtil {
       .withShardId(shardId)
   }
 
-  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]) = {
+  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
   }
@@ -235,7 +300,7 @@ object ProtoUtil {
                       sigAlgorithm: String,
                       seqNum: Int,
                       shardId: String,
-                      extraBytes: ByteString) =
+                      extraBytes: ByteString): BlockHash =
     hashByteArrays(
       header.toByteArray,
       sender.toByteArray,
@@ -309,21 +374,14 @@ object ProtoUtil {
       .withDeploy(basicDeploy(id))
       .withCost(PCost(1L, 1))
 
-  def sourceDeploy(source: String): DeployData = {
-    //TODO this should be removed once we assign the deploy with exact user
-    Thread.sleep(1)
-    val timestamp = System.currentTimeMillis()
+  def sourceDeploy(source: String, timestamp: Long): DeployData =
     DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
-  }
 
-  def termDeploy(term: Par): Deploy = {
+  def termDeploy(term: Par, timestamp: Long): Deploy =
     //TODO this should be removed once we assign the deploy with exact user
-    Thread.sleep(1)
-    val timestamp = System.currentTimeMillis()
     Deploy(
       term = Some(term),
       raw =
         Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
-  }
 }
