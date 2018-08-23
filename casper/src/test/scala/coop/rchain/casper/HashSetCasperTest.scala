@@ -84,7 +84,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].deploy(deploy)
 
     val Some(block) = MultiParentCasper[Id].createBlock
-    val parents     = ProtoUtil.parents(block)
+    val parents     = ProtoUtil.parentHashes(block)
     val deploys     = block.body.get.newCode.flatMap(_.deploy)
     val storage     = blockTuplespaceContents(block)
 
@@ -140,7 +140,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val storage = blockTuplespaceContents(signedBlock2)
 
     logEff.warns should be(Nil)
-    ProtoUtil.parents(signedBlock2) should be(Seq(signedBlock1.blockHash))
+    ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
     MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock2))
     storage.contains("!(12)") should be(true)
     node.tearDown()
@@ -292,13 +292,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).casperEff.addBlock(signedBlock3)
     nodes(1).receive() // receive block3
 
+    nodes(1).casperEff.contains(signedBlock3) should be(true)
+
     val Some(signedBlock4) = nodes(1).casperEff
       .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(signedBlock4) // should fail
-    nodes(0).receive()
+    nodes(0).receive()                        // doesn't receive anything as signedBlock4 is invalid
 
-    nodes(1).casperEff.contains(signedBlock3) should be(true)
-    nodes(1).casperEff.contains(signedBlock4) should be(false)
+    nodes(1).casperEff.contains(signedBlock4) should be(true) // Invalid blocks are still added
     nodes(0).casperEff.contains(signedBlock4) should be(false)
 
     nodes(1).logEff.warns

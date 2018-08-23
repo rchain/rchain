@@ -3,6 +3,8 @@ package coop.rchain.shared
 import cats._
 import cats.implicits._
 
+import scala.collection.immutable.{List, Set}
+
 sealed abstract class StreamT[F[_], +A] { self =>
 
   def ++[AA >: A](other: StreamT[F, AA])(implicit functor: Functor[F]): StreamT[F, AA] =
@@ -64,6 +66,18 @@ sealed abstract class StreamT[F[_], +A] { self =>
       lazyTail.value.flatMap(_.foldLeft(newB)(f))
 
     case SLazy(lazyTail) => lazyTail.value.flatMap(_.foldLeft(b)(f))
+
+    case _: SNil[F] => b.pure[F]
+  }
+
+  def foldLeftF[B](b: B)(f: (B, A) => F[B])(implicit monad: Monad[F]): F[B] = self match {
+    case SCons(curr, lazyTail) =>
+      for {
+        newB   <- f(b, curr)
+        result <- lazyTail.value.flatMap(_.foldLeftF(newB)(f))
+      } yield result
+
+    case SLazy(lazyTail) => lazyTail.value.flatMap(_.foldLeftF(b)(f))
 
     case _: SNil[F] => b.pure[F]
   }
@@ -131,12 +145,24 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case SCons(curr, lazyTail) =>
       for {
         stail <- lazyTail.value
-        ltail <- stail.toList
+        ltail <- stail.toList[AA]
       } yield curr :: ltail
 
     case SLazy(lazyTail) => lazyTail.value.flatMap(_.toList)
 
     case _: SNil[F] => List.empty[AA].pure[F]
+  }
+
+  def toSet[AA >: A](implicit monad: Monad[F]): F[Set[AA]] = self match {
+    case SCons(curr, lazyTail) =>
+      for {
+        stail <- lazyTail.value
+        ltail <- stail.toSet[AA]
+      } yield ltail + curr
+
+    case SLazy(lazyTail) => lazyTail.value.flatMap(_.toSet)
+
+    case _: SNil[F] => Set.empty[AA].pure[F]
   }
 
   def zip[B](other: StreamT[F, B])(implicit monad: Monad[F]): StreamT[F, (A, B)] =

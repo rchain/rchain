@@ -123,10 +123,9 @@ object BlockAPI {
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
     : F[IndexedSeq[BlockMessage]] =
     for {
-      estimates   <- MultiParentCasper[F].estimator
-      tip         = estimates.head
-      internalMap <- BlockStore[F].asMap()
-      mainChain   = ProtoUtil.getMainChain(internalMap, tip, IndexedSeq.empty[BlockMessage])
+      estimates <- MultiParentCasper[F].estimator
+      tip       = estimates.head
+      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
@@ -190,12 +189,9 @@ object BlockAPI {
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        estimates   <- MultiParentCasper[F].estimator
-        tip         = estimates.head
-        internalMap <- BlockStore[F].asMap()
-        mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(internalMap,
-                                                                     tip,
-                                                                     IndexedSeq.empty[BlockMessage])
+        estimates  <- MultiParentCasper[F].estimator
+        tip        = estimates.head
+        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
         blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
@@ -331,13 +327,17 @@ object BlockAPI {
   private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
       q: BlockQuery,
       dag: BlockDag): F[Option[BlockMessage]] =
-    BlockStore[F].asMap().map { internalMap: Map[BlockHash, BlockMessage] =>
-      val fullHash = internalMap.keys
-        .find(h => {
-          Base16.encode(h.toByteArray).startsWith(q.hash)
-        })
-      fullHash.map(h => internalMap(h))
-    }
+    for {
+      findResult <- BlockStore[F].find(h => {
+                     Base16.encode(h.toByteArray).startsWith(q.hash)
+                   })
+    } yield
+      findResult.headOption match {
+        case Some((_, block)) =>
+          Some(block)
+        case None =>
+          none[BlockMessage]
+      }
 
   private def addResponse(status: Option[BlockStatus],
                           maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {

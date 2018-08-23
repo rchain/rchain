@@ -10,6 +10,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models._
 import coop.rchain.casper.HashSetCasperTest
+
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GInt
 import monix.execution.Scheduler.Implicits.global

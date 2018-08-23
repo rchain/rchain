@@ -81,9 +81,10 @@ class BlocksResponseAPITest
   val chain: BlockDag = createChain.runS(initState)
   val genesis         = chain.idToBlocks(1)
 
+  implicit val blockStoreEffect = BlockStore[Id]
   implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
     HashMap.empty[BlockHash, BlockMessage],
-    Estimator.tips(chain, BlockStore[Id].asMap(), genesis),
+    Estimator.tips[Id](chain, genesis),
     chain)
   implicit val logEff = new LogStub[Id]
   implicit val casperRef = {

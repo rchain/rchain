@@ -33,12 +33,16 @@ import monix.execution.Scheduler
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
+import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.shared.{Cell, Time}
+import monix.eval.Task
 
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
                             val genesis: BlockMessage,
                             sk: Array[Byte],
+                            logicalTime: LogicalTime[Id],
                             storageSize: Long = 1024L * 1024,
                             shardId: String = "rchain")(implicit scheduler: Scheduler) {
 
@@ -47,7 +51,7 @@ class HashSetCasperTestNode(name: String,
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
   implicit val logEff            = new LogStub[Id]
-  implicit val timeEff           = new LogicalTime[Id]
+  implicit val timeEff           = logicalTime
   implicit val connectionsCell   = Cell.id[Connections](Connect.Connections.empty)
   implicit val transportLayerEff = tle
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
@@ -69,7 +73,7 @@ class HashSetCasperTestNode(name: String,
 
   implicit val casperEff =
     MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap(), shardId)
+      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, shardId)
 
   implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[Id](Some(casperEff))
 
@@ -105,22 +109,24 @@ object HashSetCasperTestNode {
     val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
+    val logicalTime: LogicalTime[Id] = new LogicalTime[Id]
 
-    new HashSetCasperTestNode(name, identity, tle, genesis, sk)
+    new HashSetCasperTestNode(name, identity, tle, genesis, sk, logicalTime)
   }
 
   def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
-    val n         = sks.length
-    val names     = (1 to n).map(i => s"node-$i")
-    val peers     = names.map(peerNode(_, 40400))
-    val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
+    val n                            = sks.length
+    val names                        = (1 to n).map(i => s"node-$i")
+    val peers                        = names.map(peerNode(_, 40400))
+    val msgQueues                    = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
+    val logicalTime: LogicalTime[Id] = new LogicalTime[Id]
 
     val nodes =
       names.zip(peers).zip(sks).map {
         case ((n, p), sk) =>
           val tle = new TransportLayerTestImpl[Id](p, msgQueues)
-          new HashSetCasperTestNode(n, p, tle, genesis, sk)
+          new HashSetCasperTestNode(n, p, tle, genesis, sk, logicalTime)
       }
 
     import Connections._

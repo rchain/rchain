@@ -59,13 +59,12 @@ class InterpreterUtilTest
                      Seq[Deploy]) => Either[DeployError, (Checkpoint, Vector[DeployCost])])
     : (StateHash, Seq[CasperEvent], Set[StateHash], Vector[DeployCost]) = {
     val (checkpoint, mergeLog, updatedKnownStateHashes, deployCost) =
-      InterpreterUtil.computeBlockCheckpointFromDeploys(b,
-                                                        genesis,
-                                                        dag,
-                                                        BlockStore[Id].asMap(),
-                                                        defaultStateHash,
-                                                        knownStateHashes,
-                                                        computeState)
+      InterpreterUtil.computeBlockCheckpointFromDeploys[Id](b,
+                                                            genesis,
+                                                            dag,
+                                                            defaultStateHash,
+                                                            knownStateHashes,
+                                                            computeState)
     val blockStateHash = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     (blockStateHash, mergeLog, updatedKnownStateHashes, deployCost)
   }
@@ -267,14 +266,13 @@ class InterpreterUtilTest
   }
 
   def computeSingleDeployCost(deploy: Deploy*): Vector[DeployCost] = {
-    val (_, _, _, cost) = computeDeploysCheckpoint(Seq.empty,
-                                                   deploy,
-                                                   BlockMessage(),
-                                                   initState,
-                                                   BlockStore[Id].asMap(),
-                                                   emptyStateHash,
-                                                   knownStateHashes,
-                                                   runtimeManager.computeState)
+    val (_, _, _, cost) = computeDeploysCheckpoint[Id](Seq.empty,
+                                                       deploy,
+                                                       BlockMessage(),
+                                                       initState,
+                                                       emptyStateHash,
+                                                       knownStateHashes,
+                                                       runtimeManager.computeState)
     cost
   }
 
@@ -330,14 +328,13 @@ class InterpreterUtilTest
     val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
 
     val (computedTsCheckpoint, _, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   emptyStateHash,
+                                   knownStateHashes,
+                                   runtimeManager.computeState)
     val computedTsLog = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val invalidHash   = ByteString.EMPTY
 
@@ -350,13 +347,12 @@ class InterpreterUtilTest
     val block = chain.idToBlocks(0)
 
     val (stateHash, _) =
-      validateBlockCheckpoint(block,
-                              block,
-                              chain,
-                              BlockStore[Id].asMap(),
-                              emptyStateHash,
-                              knownStateHashes,
-                              runtimeManager)
+      validateBlockCheckpoint[Id](block,
+                                  block,
+                                  chain,
+                                  emptyStateHash,
+                                  knownStateHashes,
+                                  runtimeManager)
 
     stateHash should be(None)
   }
@@ -377,14 +373,13 @@ class InterpreterUtilTest
     val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
 
     val (computedTsCheckpoint, _, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   emptyStateHash,
+                                   knownStateHashes,
+                                   runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
     val chain: BlockDag =
@@ -396,13 +391,12 @@ class InterpreterUtilTest
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block,
-                              block,
-                              chain,
-                              BlockStore[Id].asMap(),
-                              emptyStateHash,
-                              knownStateHashes,
-                              runtimeManager)
+      validateBlockCheckpoint[Id](block,
+                                  block,
+                                  chain,
+                                  emptyStateHash,
+                                  knownStateHashes,
+                                  runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -438,14 +432,13 @@ class InterpreterUtilTest
     val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
 
     val (computedTsCheckpoint, _, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   emptyStateHash,
+                                   knownStateHashes,
+                                   runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
     val chain: BlockDag =
@@ -457,13 +450,12 @@ class InterpreterUtilTest
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block,
-                              block,
-                              chain,
-                              BlockStore[Id].asMap(),
-                              emptyStateHash,
-                              knownStateHashes,
-                              runtimeManager)
+      validateBlockCheckpoint[Id](block,
+                                  block,
+                                  chain,
+                                  emptyStateHash,
+                                  knownStateHashes,
+                                  runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -503,14 +495,13 @@ class InterpreterUtilTest
     val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
 
     val (computedTsCheckpoint, _, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   emptyStateHash,
+                                   knownStateHashes,
+                                   runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
     val chain: BlockDag =
@@ -522,13 +513,12 @@ class InterpreterUtilTest
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block,
-                              block,
-                              chain,
-                              BlockStore[Id].asMap(),
-                              emptyStateHash,
-                              knownStateHashes,
-                              runtimeManager)
+      validateBlockCheckpoint[Id](block,
+                                  block,
+                                  chain,
+                                  emptyStateHash,
+                                  knownStateHashes,
+                                  runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
@@ -565,14 +555,13 @@ class InterpreterUtilTest
     val deploysCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(1L, 1)))
 
     val (computedTsCheckpoint, _, _, _) =
-      computeDeploysCheckpoint(Seq.empty,
-                               deploys,
-                               BlockMessage(),
-                               initState,
-                               BlockStore[Id].asMap(),
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   emptyStateHash,
+                                   knownStateHashes,
+                                   runtimeManager.computeState)
     val computedTsLog  = computedTsCheckpoint.log.map(EventConverter.toCasperEvent)
     val computedTsHash = ByteString.copyFrom(computedTsCheckpoint.root.bytes.toArray)
     val chain: BlockDag =
@@ -584,13 +573,12 @@ class InterpreterUtilTest
     val block = chain.idToBlocks(0)
 
     val (tsHash, _) =
-      validateBlockCheckpoint(block,
-                              block,
-                              chain,
-                              BlockStore[Id].asMap(),
-                              emptyStateHash,
-                              knownStateHashes,
-                              runtimeManager)
+      validateBlockCheckpoint[Id](block,
+                                  block,
+                                  chain,
+                                  emptyStateHash,
+                                  knownStateHashes,
+                                  runtimeManager)
 
     tsHash should be(Some(computedTsHash))
   }
