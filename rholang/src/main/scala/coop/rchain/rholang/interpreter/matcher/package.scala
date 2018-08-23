@@ -67,6 +67,13 @@ package object matcher {
           })
         )
       })
+
+    def liftF[A](option: Option[A]): OptionalFreeMapWithCost[A] =
+      StateT((m: FreeMap) => {
+        OptionT(State((c: CostAccount) => {
+          (c, option.map(m -> _))
+        }))
+      })
   }
 
   type NonDetFreeMapWithCost[A] = StateT[StreamT[State[CostAccount, ?], ?], FreeMap, A]
