@@ -1020,9 +1020,9 @@ trait StorageActionsTests
   }
 
   "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
-    val store    = space.store
-    val key      = List("ch1")
-    val patterns = List(Wildcard)
+    val store           = space.store
+    val key             = List("ch1")
+    val patterns        = List(Wildcard)
     val emptyCheckpoint = space.createCheckpoint()
 
     //put some data so the checkpoint is != empty

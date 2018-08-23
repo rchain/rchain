@@ -486,10 +486,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    blockMessage = b.candidate.flatMap(_.block).get
                    _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
                    _            <- LastApprovedBlock[F].set(b)
-                   casper <- MultiParentCasper.hashSetCasper[F](runtimeManager,
-                                       validatorId,
-                                       blockMessage,
-                                       shardId)
+                   casper <- MultiParentCasper
+                              .hashSetCasper[F](runtimeManager, validatorId, blockMessage, shardId)
                  } yield Option(casper)
                } else
                  Log[F]
