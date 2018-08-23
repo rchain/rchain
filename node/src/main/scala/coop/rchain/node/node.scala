@@ -10,6 +10,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
+import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.protocol.rchain.Packet
@@ -27,6 +28,7 @@ import coop.rchain.node.api._
 import coop.rchain.comm.rp._, Connect.ConnectionsCell
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.rspace.Context
 
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
@@ -131,7 +133,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
-  private val inMemoryStore     = conf.server.inMemoryStore
+  private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -354,10 +356,11 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       sync,
       Metrics.eitherT(Monad[Task], metrics))
-    _              <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
+    _      <- blockStore.clear() // FIX-ME replace with a proper casper init when it's available
+    oracle = SafetyOracle.turanOracle[Effect](Applicative[Effect], blockStore)
+
+    runtime        = Runtime.create(storagePath, storageSize, storeType)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperConstructor <- generateCasperConstructor(runtimeManager)(log,
                                                                    time,

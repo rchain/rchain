@@ -14,6 +14,8 @@ import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.StoreType
+import coop.rchain.shared.StoreType._
 
 import monix.eval.Task
 
@@ -41,6 +43,7 @@ object Configuration {
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultInMemoryStore: Boolean     = false
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
@@ -112,6 +115,7 @@ object Configuration {
             DefaultStandalone,
             dataDir,
             DefaultMapSize,
+            DefaultStoreType,
             inMemoryStore = false,
             DefaultMaxNumOfConnections
           ),
@@ -195,6 +199,8 @@ object Configuration {
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
+    val storeType: StoreType =
+      get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val inMemoryStore: Boolean =
       get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
@@ -239,6 +245,7 @@ object Configuration {
       standalone,
       dataDir,
       mapSize,
+      storeType,
       inMemoryStore,
       maxNumOfConnections
     )

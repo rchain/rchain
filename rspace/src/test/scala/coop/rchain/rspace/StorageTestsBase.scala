@@ -105,3 +105,45 @@ class LMDBStoreTestsBase
   override def afterAll(): Unit =
     dbDir.recursivelyDelete
 }
+
+class MixedStoreTestsBase
+    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 4096L
+
+  override def withTestSpace[S](f: T => S): S = {
+    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
+    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+
+    val testBranch = Branch("test")
+    val env        = Context.createMixed[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val testStore = InMemoryStore
+      .create[org.lmdbjava.Txn[java.nio.ByteBuffer], String, Pattern, String, StringsCaptor](
+        env.trieStore,
+        testBranch)
+
+    val testSpace =
+      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
+    testStore.withTxn(testStore.createTxnWrite()) { txn =>
+      testStore.withTrieTxn(txn) { trieTxn =>
+        testStore.clear(txn)
+        testStore.trieStore.clear(trieTxn)
+      }
+    }
+    history.initialize(testStore.trieStore, testBranch)
+    val _ = testSpace.createCheckpoint()
+    try {
+      f(testSpace)
+    } finally {
+      testStore.trieStore.close()
+      testStore.close()
+      env.close()
+    }
+  }
+
+  override def afterAll(): Unit =
+    dbDir.recursivelyDelete
+}

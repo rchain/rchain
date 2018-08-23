@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
+import coop.rchain.shared.StoreType
 
 import org.rogach.scallop._
 
@@ -30,6 +31,20 @@ object Converter {
       flagConverter.parse(s).map(_.map(flag))
 
     val argType: ArgType.V = ArgType.FLAG
+  }
+
+  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
+      s match {
+        case (_, storeType :: Nil) :: Nil =>
+          StoreType
+            .from(storeType)
+            .map(u => Right(Some(u)))
+            .getOrElse(Left("can't parse the store type"))
+        case Nil => Right(None)
+        case _   => Left("provide the store type")
+      }
+    val argType: ArgType.V = ArgType.SINGLE
   }
 }
 
@@ -138,6 +153,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
+
+    val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val inMemoryStore = opt[Boolean](required = false, descr = "Use in-memory store beneath RSpace")
 
