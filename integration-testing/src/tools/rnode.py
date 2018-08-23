@@ -4,7 +4,7 @@ import tempfile
 import random
 import tools.resources as resources
 
-
+default_image = "rchain-integration-testing:latest"
 rnode_binary='/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = f"{rnode_directory}/deploy"
@@ -117,7 +117,7 @@ def __create_node_container(docker_client, image, name, network, command, extra_
                                                hostname=name)
     return Node(container, deploy_dir, docker_client)
 
-def create_bootstrap_node(docker_client, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
+def create_bootstrap_node(docker_client, network, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create bootstrap node.
     """
@@ -141,7 +141,7 @@ def create_bootstrap_node(docker_client, network, image="test-image:latest", mem
 
     return __create_node_container(docker_client, image, name, network, command, volumes, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, n, bootstrap, network, image="test-image:latest", memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, n, bootstrap, network, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
