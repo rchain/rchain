@@ -27,16 +27,25 @@ class Registry(private val space: ISpace[Channel,
   import Registry._
   def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
     val prefixOut = ByteString.newOutput()
-    def loop(it1: ByteIterator, it2: ByteIterator): ByteString = {
-      val b: Byte = it1.nextByte
-      if (it2.nextByte == b) {
-        prefixOut.write(b.toInt)
-        loop(it1, it2)
+    def loop(it1: ByteIterator, it2: ByteIterator): ByteString =
+      if (!it1.hasNext || !it2.hasNext) {
+        prefixOut.toByteString
       } else {
-        prefixOut.toByteString()
+        val b: Byte = it1.nextByte
+        if (it2.nextByte == b) {
+          prefixOut.write(b.toInt)
+          loop(it1, it2)
+        } else {
+          prefixOut.toByteString()
+        }
       }
-    }
     loop(b1.iterator, b2.iterator)
+  }
+
+  def safeUncons(b: ByteString): (ByteString, ByteString) = {
+    val head = if (b.isEmpty()) b else b.substring(0, 1)
+    val tail = if (b.isEmpty()) b else b.substring(1)
+    (head, tail)
   }
 
   val lookupRef: Long = 10L
@@ -44,10 +53,21 @@ class Registry(private val space: ISpace[Channel,
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
-  val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
+  val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
+  val insertRef: Long = 12L
+  val insertPatterns = List(
+    BindPattern(
+      Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+          Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+          ChanVar(FreeVar(2))),
+      freeCount = 3
+    ))
+  val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
 
-  // This is the only construction side effect.
-  space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
+  def install(): Unit = {
+    space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
+    space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
+  }
 
   val lookupCallbackRef: Long = 11L
   val prefixRetReplacePattern = BindPattern(
@@ -55,9 +75,22 @@ class Registry(private val space: ISpace[Channel,
         ChanVar(FreeVar(1)),
         ChanVar(FreeVar(2))),
     freeCount = 3)
+  val prefixValueRetReplacePattern = BindPattern(
+    Seq(
+      Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+      Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+      ChanVar(FreeVar(2)),
+      ChanVar(FreeVar(3))
+    ),
+    freeCount = 4
+  )
   val triePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
     freeCount = 1)
+
+  val insertCallbackRef: Long = 13L
+
+  def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   def handleResult(result: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): Task[Unit] =
     result match {
@@ -93,10 +126,10 @@ class Registry(private val space: ISpace[Channel,
       _ <- fail(retChan, failRand)
     } yield ()
 
-  def fetchData(dataSource: Quote,
-                key: Channel,
-                ret: Channel,
-                rand: Blake2b512Random): Task[Unit] = {
+  def fetchDataLookup(dataSource: Quote,
+                      key: Channel,
+                      ret: Channel,
+                      rand: Blake2b512Random): Task[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -113,6 +146,28 @@ class Registry(private val space: ISpace[Channel,
     } yield ()
   }
 
+  def fetchDataInsert(dataSource: Quote,
+                      key: Channel,
+                      value: Channel,
+                      ret: Channel,
+                      rand: Blake2b512Random): Task[Unit] = {
+    val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    for {
+      _ <- handleResult(
+            space.produce(
+              Quote(channel),
+              ListChannelWithRandom(Seq(key, value, ret, Channel(dataSource)), rand, None),
+              false))
+      _ <- handleResult(
+            space.consume(
+              Seq[Channel](Quote(channel), dataSource),
+              Seq(prefixValueRetReplacePattern, triePattern),
+              TaggedContinuation(ScalaBodyRef(insertCallbackRef)),
+              false
+            ))
+    } yield ()
+  }
+
   def lookup(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret), rand, cost)) =>
@@ -120,7 +175,7 @@ class Registry(private val space: ISpace[Channel,
           case Channel(Quote(keyPar)) =>
             keyPar.singleExpr match {
               case Some(Expr(GByteArray(_))) =>
-                fetchData(Quote(registryRoot), key, ret, rand)
+                fetchDataLookup(Quote(registryRoot), key, ret, rand)
               case _ =>
                 fail(ret, rand)
             }
@@ -144,8 +199,7 @@ class Registry(private val space: ISpace[Channel,
           case Channel(Quote(keyPar)) =>
             keyPar.singleExpr match {
               case Some(Expr(GByteArray(bs))) =>
-                val head = if (bs.isEmpty()) bs else bs.substring(0, 1)
-                val tail = if (bs.isEmpty()) bs else bs.substring(1)
+                val (head, tail) = safeUncons(bs)
                 data match {
                   case Channel(Quote(dataPar)) =>
                     dataPar.singleExpr match {
@@ -174,10 +228,11 @@ class Registry(private val space: ISpace[Channel,
 
                                             replace(data, replaceChan, dataRand).flatMap(
                                               _ =>
-                                                fetchData(Quote(ps(2)),
-                                                          Channel(Quote(GByteArray(newKey))),
-                                                          ret,
-                                                          callRand))
+                                                fetchDataLookup(
+                                                  Quote(ps(2)),
+                                                  Channel(Quote(parByteArray(newKey))),
+                                                  ret,
+                                                  callRand))
                                           } else
                                             localFail()
                                         case _ => localFail()
@@ -191,17 +246,154 @@ class Registry(private val space: ISpace[Channel,
                     }
                   case _ => localFail()
                 }
-              case _ =>
-                localFail()
+              case _ => localFail()
             }
-          case _ =>
-            localFail()
+          case _ => localFail()
         }
       case _ => Task.unit
     }
 
+  def insert(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+    args match {
+      case Seq(ListChannelWithRandom(Seq(key, value, ret), rand, cost)) =>
+        key match {
+          case Channel(Quote(keyPar)) =>
+            keyPar.singleExpr match {
+              case Some(Expr(GByteArray(_))) =>
+                fetchDataInsert(Quote(registryRoot), key, value, ret, rand)
+              case _ =>
+                fail(ret, rand)
+            }
+          case _ =>
+            fail(ret, rand)
+        }
+      case _ => Task.unit
+    }
+
+  def insertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] = {
+    args match {
+      case Seq(ListChannelWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
+               ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+        def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
+        key match {
+          case Channel(Quote(keyPar)) =>
+            keyPar.singleExpr match {
+              case Some(Expr(GByteArray(bs))) =>
+                val (head, tail) = safeUncons(bs)
+                data match {
+                  case Channel(Quote(dataPar)) =>
+                    dataPar.singleExpr match {
+                      case Some(Expr(EMapBody(parMap))) => {
+                        def insert() =
+                          value match {
+                            case Channel(Quote(valuePar)) =>
+                              val tuple: Par = ETuple(Seq(GInt(0), parByteArray(tail), valuePar))
+                              val newMap: Par = ParMap(
+                                SortedParMap(parMap.ps + (parByteArray(head) -> tuple)))
+                              replace(Channel(Quote(newMap)), replaceChan, dataRand).flatMap(_ =>
+                                succeed(ret, valuePar, callRand))
+                            case _ => localFail()
+                          }
+                        parMap.ps.get(parByteArray(head)) match {
+                          case None => insert()
+                          case Some(mapEntry) =>
+                            mapEntry.singleExpr() match {
+                              case Some(Expr(ETupleBody(ETuple(ps, _, _)))) =>
+                                if (ps.length != 3)
+                                  localFail()
+                                else {
+                                  // The second tuple field should be a bytearray in both cases.
+                                  ps(1).singleExpr() match {
+                                    case Some(Expr(GByteArray(edgeAdditional))) =>
+                                      def split() =
+                                        value match {
+                                          case Channel(Quote(valuePar)) =>
+                                            val outgoingEdgeStr: ByteString =
+                                              commonPrefix(edgeAdditional, tail)
+                                            val outgoingEdge: Par = parByteArray(outgoingEdgeStr)
+                                            val oldEdgeStr: ByteString =
+                                              edgeAdditional.substring(outgoingEdgeStr.size())
+                                            val newEdgeStr: ByteString =
+                                              tail.substring(outgoingEdgeStr.size())
+                                            val (oldEdgeHead, oldEdgeTail) = safeUncons(oldEdgeStr)
+                                            val (newEdgeHead, newEdgeTail) = safeUncons(newEdgeStr)
+                                            val newMap: ParMap = ParMap(
+                                              SortedParMap(
+                                                Seq[(Par, Par)](
+                                                  parByteArray(oldEdgeHead) -> ETuple(
+                                                    Seq(ps(0), parByteArray(oldEdgeTail), ps(2))),
+                                                  parByteArray(newEdgeHead) -> ETuple(
+                                                    Seq(GInt(0),
+                                                        parByteArray(newEdgeTail),
+                                                        valuePar))
+                                                )))
+                                            val newName: Par = GPrivate(
+                                              ByteString.copyFrom(callRand.next()))
+                                            val updatedTuple: Par =
+                                              ETuple(Seq(GInt(1), outgoingEdge, newName))
+                                            val updatedMap: Par = ParMap(
+                                              SortedParMap(
+                                                parMap.ps + (parByteArray(head) -> updatedTuple)))
+                                            for {
+                                              _ <- replace(Quote(updatedMap), replaceChan, dataRand)
+                                              _ <- replace(Quote(newMap),
+                                                           Quote(newName),
+                                                           callRand.splitByte(0))
+                                              _ <- succeed(ret, valuePar, callRand.splitByte(1))
+                                            } yield ()
+                                          case _ =>
+                                            localFail()
+                                        }
+                                      ps(0).singleExpr() match {
+                                        case Some(Expr(GInt(0))) =>
+                                          // Replace key
+                                          if (tail == edgeAdditional) {
+                                            insert()
+                                          } else {
+                                            split()
+                                          }
+                                        case Some(Expr(GInt(1))) =>
+                                          // If we have a complete match, recurse.
+                                          if (tail.startsWith(edgeAdditional)) {
+                                            val newKey = tail.substring(edgeAdditional.size)
+
+                                            replace(data, replaceChan, dataRand).flatMap(
+                                              _ =>
+                                                fetchDataInsert(
+                                                  Quote(ps(2)),
+                                                  Channel(Quote(parByteArray(newKey))),
+                                                  value,
+                                                  ret,
+                                                  callRand))
+                                          } else {
+                                            split()
+                                          }
+                                        case _ => localFail()
+                                      }
+                                    case _ => localFail()
+                                  }
+                                }
+                              case _ => localFail()
+                            }
+                        }
+                      }
+                      case _ => localFail()
+                    }
+                  case _ => localFail()
+                }
+              case _ => localFail()
+            }
+          case _ => localFail()
+        }
+      case _ => Task.unit
+    }
+  }
+
   val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
-    Map(lookupRef -> lookup, lookupCallbackRef -> lookupCallback)
+    Map(lookupRef         -> lookup,
+        lookupCallbackRef -> lookupCallback,
+        insertRef         -> insert,
+        insertCallbackRef -> insertCallback)
 }
 
 object Registry {
