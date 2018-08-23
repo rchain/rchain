@@ -85,7 +85,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
         _ <- s.connections.get(peer) match {
               case Some(c) => Task.delay(c.shutdown()).attempt.void
-              case _ => Task.unit // ignore if connection does not exists already
+              case _       => Task.unit // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }

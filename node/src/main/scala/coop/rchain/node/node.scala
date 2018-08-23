@@ -290,9 +290,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
             Log[Task]
               .error(
                 "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
-          case th => log.error("Caught unhandable error. Existing. Stacktrace below.") *> Task.delay {
-            th.printStackTrace();
-          }
+          case th =>
+            log.error("Caught unhandable error. Existing. Stacktrace below.") *> Task.delay {
+              th.printStackTrace();
+            }
         } *> exit0.as(Right(())))
 
   private def generateCasperConstructor(runtimeManager: RuntimeManager)(
