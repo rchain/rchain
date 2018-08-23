@@ -1510,4 +1510,10 @@ class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
     with StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll {}
+    with BeforeAndAfterAll
+
+class MixedStoreActionsTests
+    extends MixedStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll

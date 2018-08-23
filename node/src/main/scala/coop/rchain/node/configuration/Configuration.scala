@@ -13,6 +13,9 @@ import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.StoreType
+import coop.rchain.shared.StoreType._
+
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -42,7 +45,7 @@ object Configuration {
   private val DefaultTimeout                    = 2000
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultInMemoryStore: Boolean     = false
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -123,7 +126,7 @@ object Configuration {
             DefaultGenesisValidator,
             dataDir,
             DefaultMapSize,
-            inMemoryStore = false,
+            DefaultStoreType,
             DefaultMaxNumOfConnections
           ),
           GrpcServer(
@@ -231,8 +234,8 @@ object Configuration {
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
-    val inMemoryStore: Boolean =
-      get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
+    val storeType: StoreType =
+      get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
                                          _.server.flatMap(_.casperBlockStoreSize),
                                          DefaultCasperBlockStoreSize)
@@ -276,7 +279,7 @@ object Configuration {
       genesisValidator,
       dataDir,
       mapSize,
-      inMemoryStore,
+      storeType,
       maxNumOfConnections
     )
     val grpcServer = GrpcServer(

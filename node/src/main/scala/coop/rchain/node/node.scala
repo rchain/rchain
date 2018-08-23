@@ -26,6 +26,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.{MetricsServer, _}
+import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.ThrowableOps._
@@ -135,7 +136,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
-  private val inMemoryStore     = conf.server.inMemoryStore
+  private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -347,10 +348,11 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       syncEffect,
       Metrics.eitherT(Monad[Task], metrics))
+
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
+    runtime        = Runtime.create(storagePath, storageSize, storeType)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
