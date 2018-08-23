@@ -235,14 +235,11 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  case Some(approvedBlock) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
                    for {
-                     _           <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                     internalMap <- BlockStore[F].asMap()
-                     casper = MultiParentCasper
-                       .hashSetCasper[F](runtimeManager,
-                                         validatorId,
-                                         blockMessage,
-                                         internalMap,
-                                         shardId)
+                     _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
+                     casper <- MultiParentCasper.hashSetCasper[F](runtimeManager,
+                                                                  validatorId,
+                                                                  blockMessage,
+                                                                  shardId)
                      _ <- MultiParentCasperRef[F].set(casper)
                      _ <- Log[F].info(
                            "CASPER: Making a transition to ApprovedBlockRecievedHandler state.")
@@ -488,13 +485,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                    _            <- Log[F].info("CASPER: Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
                    _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                   internalMap  <- BlockStore[F].asMap()
                    _            <- LastApprovedBlock[F].set(b)
-                   casper = MultiParentCasper
-                     .hashSetCasper[F](runtimeManager,
+                   casper <- MultiParentCasper.hashSetCasper[F](runtimeManager,
                                        validatorId,
                                        blockMessage,
-                                       internalMap,
                                        shardId)
                  } yield Option(casper)
                } else
