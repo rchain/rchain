@@ -4,7 +4,7 @@ import logging
 from delayed_assert import expect, assert_expectations
 import tools.resources as resources
 from shutil import copyfile
-from tools.wait import wait_for, contains, node_logs, network_converged
+from tools.wait import wait_for, string_matches, string_equals, node_logs, network_converged, node_blocks_received, node_blocks_added, find_first
 
 def test_casper_propose_and_deploy(converged_network):
     """
@@ -43,21 +43,16 @@ def test_casper_propose_and_deploy(converged_network):
                         if n.container.name != node.container.name]
 
         for node in other_nodes:
-            assert wait_for( contains(node_logs(node), expected_string), receive_timeout), \
-                f"Block containing {expected_string} not received "
-
-            blocks_received_ids = node.received_blocks(expected_string)
-
-            expect(blocks_received_ids, f"Container: {node.container.name}: String {expected_string} NOT found in output. FAILURE!")
+            blocks_received_ids = wait_for(list_find_first(node_blocks_received(node), string_contains(expected_string)),
+                                           f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
 
             logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
 
-            expect(len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}")
+            assert len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}"
 
             block_id = blocks_received_ids[0]
 
-            blocks_added = node.added_blocks(block_id)
-
-            expect(blocks_added, f"Container: {node.container.name}: Added blocks not found for {blocks_received_ids}")
+            blocks_added = wait_for(list_find_first(node_blocks_added(node), string_equals(block_id)),
+                                    f"Container: {node.container.name}: Added blocks not found for {blocks_received_ids}")
 
     assert_expectations()
