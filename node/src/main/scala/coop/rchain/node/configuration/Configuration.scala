@@ -90,7 +90,6 @@ object Configuration {
     for {
       options <- Task.delay(commandline.Options(arguments))
       profile <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
-      _       <- log.info(s"Starting with profile ${profile.name}")
       result  <- apply(options, subcommand(options), profile)
     } yield result
 
@@ -99,15 +98,19 @@ object Configuration {
     if (command == Run) {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+        _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
         result <- Task.pure(apply(effectiveDataDir, options, config))
+        _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
       val dataDir = profile.dataDir._1()
+      System.setProperty("rnode.data.dir", dataDir.toString)
       Task.pure(
         new Configuration(
           command,
