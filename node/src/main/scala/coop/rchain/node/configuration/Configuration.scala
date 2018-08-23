@@ -46,7 +46,6 @@ object Configuration {
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
   private val DefaultStoreType: StoreType       = LMDB
-  private val DefaultInMemoryStore: Boolean     = false
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -128,7 +127,6 @@ object Configuration {
             dataDir,
             DefaultMapSize,
             DefaultStoreType,
-            inMemoryStore = false,
             DefaultMaxNumOfConnections
           ),
           GrpcServer(
@@ -238,8 +236,6 @@ object Configuration {
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
-    val inMemoryStore: Boolean =
-      get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
                                          _.server.flatMap(_.casperBlockStoreSize),
                                          DefaultCasperBlockStoreSize)
@@ -284,7 +280,6 @@ object Configuration {
       dataDir,
       mapSize,
       storeType,
-      inMemoryStore,
       maxNumOfConnections
     )
     val grpcServer = GrpcServer(

@@ -25,7 +25,6 @@ case class Server(
     genesisValidator: Option[Boolean],
     mapSize: Option[Long],
     storeType: Option[String],
-    inMemoryStore: Option[Boolean],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
     maxNumOfConnections: Option[Int]

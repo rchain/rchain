@@ -18,7 +18,6 @@ case class Server(
     dataDir: Path,
     mapSize: Long,
     storeType: StoreType,
-    inMemoryStore: Boolean,
     maxNumOfConnections: Int
 )
 
