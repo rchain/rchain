@@ -168,9 +168,14 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy) =>
+      case Some(options.deploy)      =>
+        //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+        Deploy(from.getOrElse("0x"),
+               phloLimit.getOrElse(0),
+               phloPrice.getOrElse(0),
+               nonce.getOrElse(0),
+               location())
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
@@ -326,9 +331,14 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy) =>
+      case Some(options.deploy)      =>
+        //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+        Deploy(from.getOrElse("0x"),
+               phloLimit.getOrElse(0),
+               phloPrice.getOrElse(0),
+               nonce.getOrElse(0),
+               location())
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())

@@ -236,24 +236,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
-      required = true,
       validate = addressCheck
     )
 
-    val phloLimit = opt[Int](
-      descr = "The amount of phlo to use for the transaction (unused phlo is refunded).",
-      required = true
-    )
+    val phloLimit =
+      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
 
     val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo.",
-      required = true
+      descr = "The price of phlo for this transaction in units dust/phlo."
     )
 
     val nonce = opt[Int](
-      descr = "This allows to overwrite your own pending transactions that use the same nonce.",
-      required = true
-    )
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.")
 
     val location = trailArg[String](required = true)
   }
