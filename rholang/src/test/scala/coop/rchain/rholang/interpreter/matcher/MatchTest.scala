@@ -145,6 +145,16 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     assertSpatialMatch(target: Par, pattern: Par, expectedResult)
   }
 
+  "Matching patterns to equal targets" should "work" in {
+    //     Matching:  free0 | free1
+    //           to:  1 | 1
+    // should yield:  Some(Map(0 -> 1 | 1))
+    val target: Par    = GInt(1).prepend(GInt(1), depth = 0)
+    val pattern: Par   = EVar(FreeVar(1)).prepend(EVar(FreeVar(0)), depth = 0).withConnectiveUsed(true)
+    val expectedResult = Some(Map[Int, Par](0 -> target))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
   "Matching that requires revision of prior matches" should "work" in {
     //     Matching:  [1, [free0]] | [free1, [2]]
     //           to:  [1, [2]] | [1, [3]]
