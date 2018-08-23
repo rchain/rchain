@@ -155,6 +155,18 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     assertSpatialMatch(target, pattern, expectedResult)
   }
 
+  "Matching multiple reminders" should "assign captures to remainders greedily" in {
+    //     Matching:  free0 | free1 | _
+    //           to:  1 | 2 | 3
+    // should yield:  Some(Map(0 -> 1 | 2 | 3))
+    val target: Par = GInt(3).prepend(GInt(2), depth = 0).prepend(GInt(1), depth = 0)
+    val pattern: Par = EVar(Wildcard(WildcardMsg()))
+      .prepend(EVar(FreeVar(1)), depth = 0)
+      .prepend(EVar(FreeVar(0)), depth = 0)
+    val expectedResult = Some(Map[Int, Par](0 -> target))
+    assertSpatialMatch(target, pattern, expectedResult)
+  }
+
   "Matching that requires revision of prior matches" should "work" in {
     //     Matching:  [1, [free0]] | [free1, [2]]
     //           to:  [1, [2]] | [1, [3]]
