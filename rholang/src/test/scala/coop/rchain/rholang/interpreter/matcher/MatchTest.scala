@@ -72,10 +72,15 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern: Par = EVar(FreeVar(0))
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7))))
   }
-  "Matching var with var" should "fail" in {
+  "Matching bound var with free var" should "fail" in {
     val target: Par  = EVar(BoundVar(0))
     val pattern: Par = EVar(FreeVar(0))
     assertSpatialMatch(target, pattern, None)
+  }
+  "Matching bound var with a wildcard" should "succeed" in {
+    val target: Par  = EVar(BoundVar(0))
+    val pattern: Par = EVar(Wildcard(WildcardMsg()))
+    assertSpatialMatch(target, pattern, Some(Map()))
   }
   "Matching lists of grounds with lists of vars" should "work" in {
     val target: Par = EList(List[Par](GString("add"), GInt(7), GInt(8)), BitSet())
