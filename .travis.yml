@@ -25,9 +25,9 @@ matrix:
 script:
   - ./scripts/build-subprojects.sh
 
-before_cache:
-  - find $HOME/.sbt -name "*.lock" -type f -delete
-  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -type f -delete
+# before_cache:
+#  - find $HOME/.sbt -name "*.lock" -type f -delete
+#  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -type f -delete
 
 cache:
   false
