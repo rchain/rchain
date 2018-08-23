@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.matcher
 import cats.arrow.FunctionK
 import cats.data.{OptionT, State, StateT}
 import cats.implicits._
-import cats.{Eval => _}
+import cats.{MonadError, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -264,8 +264,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     )(
       level => Seq.fill(targets.size - patterns.size)(Remainder(level))
     )
-    val patternsSorted        = remainderPatterns ++ patterns.map(Term)
-    val patternWithCandidates = patternsSorted.zip(Stream.continually(targets))
+    val allPatterns = remainderPatterns ++ patterns.map(Term)
 
     def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
       if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
@@ -288,10 +287,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
     })
 
     for {
-      matchesOpt             <- maximumBipartiteMatch.findMatches(patternWithCandidates.toList)
+      matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
       matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
-      remainderTargets       = matches.collect { case (target, _: Remainder) => target }.toSet
-      remainderTargetsSorted = targets.filter(remainderTargets.contains)
+      remainderTargets       = matches.collect { case (target, _: Remainder) => target }
+      remainderTargetsSet    = remainderTargets.toSet
+      remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
       _ <- varLevel match {
             case None =>
               // If there is a wildcard, we succeed.

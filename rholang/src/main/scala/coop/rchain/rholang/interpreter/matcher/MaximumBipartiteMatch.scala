@@ -4,6 +4,9 @@ import cats._
 import cats.data.StateT
 import cats.implicits._
 
+import scala.Function.tupled
+import scala.collection.immutable.Stream
+
 object MaximumBipartiteMatch {
   def apply[P, T, F[_]: Monad](matchFun: (P, T) => F[Boolean]): MaximumBipartiteMatch[P, T, F] = {
     val fM = implicitly[Monad[F]]
@@ -32,15 +35,22 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
   private[matcher] implicit val fMonad: Monad[F]
   private[matcher] val matchFunction: (P, T) => F[Boolean]
 
-  private case class S(matches: Map[T, Pattern], seenTargets: Set[T])
-  type Pattern    = (P, Candidates)
-  type Candidates = Seq[T]
+  private case class S(matches: Map[Candidate, Pattern], seenTargets: Set[Candidate])
+  private type Pattern = (P, Seq[Candidate])
 
-  def findMatches(patterns: List[Pattern]): F[Option[Map[T, P]]] = {
-    val findMatches             = patterns.forallM(MBM.resetSeen() >> findMatch(_))
+  //we're going to use maps and sets keyed with Candidates,
+  //so have to make sure they are treated as distinct even if they're equal
+  private type Candidate = Indexed[T]
+  private case class Indexed[A](value: A, index: Int)
+
+  def findMatches(patterns: Seq[P], targets: Seq[T]): F[Option[Seq[(T, P)]]] = {
+
+    val ts: Seq[Candidate]      = targets.zipWithIndex.map(tupled(Indexed[T]))
+    val ps: List[Pattern]       = patterns.toList.zip(Stream.continually(ts))
+    val findMatches             = ps.forallM(MBM.resetSeen() >> findMatch(_))
     val result: F[(S, Boolean)] = findMatches.run(S(Map.empty, Set.empty))
     result.map {
-      case (state, true) => Some(state.matches.mapValues(_._1))
+      case (state, true) => Some(state.matches.toSeq.map(tupled((t, p) => t.value -> p._1)))
       case _             => None
     }
   }
@@ -55,7 +65,7 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
       case (p, candidate +: candidates) =>
         FlatMap[MBM].ifM(notSeen(candidate))(
           //that is a new candidate, let's try to match it
-          FlatMap[MBM].ifM(liftF(matchFunction(p, candidate)))(
+          FlatMap[MBM].ifM(liftF(matchFunction(p, candidate.value)))(
             //this candidate matches the pattern, let's try to assign it a match
             addSeen(candidate) >> tryClaimMatch(candidate, pattern),
             //this candidate doesn't match, proceed to the others
@@ -66,7 +76,7 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
         )
     }
 
-  private def tryClaimMatch(candidate: T, pattern: Pattern): MBM[Boolean] =
+  private def tryClaimMatch(candidate: Candidate, pattern: Pattern): MBM[Boolean] =
     for {
       previousMatch <- getMatch(candidate)
       result <- previousMatch match {
@@ -92,13 +102,16 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
 
     def resetSeen(): MBM[Unit] = StateT.modify[F, S](s => s.copy(seenTargets = Set.empty))
 
-    def notSeen(t: T): MBM[Boolean] = StateT.inspect[F, S, Boolean](!_.seenTargets.contains(t))
+    def notSeen(candidate: Candidate): MBM[Boolean] =
+      StateT.inspect[F, S, Boolean](!_.seenTargets.contains(candidate))
 
-    def addSeen(t: T): MBM[Unit] = StateT.modify[F, S](s => s.copy(seenTargets = s.seenTargets + t))
+    def addSeen(candidate: Candidate): MBM[Unit] =
+      StateT.modify[F, S](s => s.copy(seenTargets = s.seenTargets + candidate))
 
-    def getMatch(t: T): MBM[Option[Pattern]] = StateT.inspect(_.matches.get(t))
+    def getMatch(candidate: Candidate): MBM[Option[Pattern]] =
+      StateT.inspect(_.matches.get(candidate))
 
-    def claimMatch(candidate: T, pattern: Pattern): MBM[Unit] =
+    def claimMatch(candidate: Candidate, pattern: Pattern): MBM[Unit] =
       StateT.modify[F, S](s => s.copy(matches = s.matches + (candidate -> pattern)))
   }
 }
