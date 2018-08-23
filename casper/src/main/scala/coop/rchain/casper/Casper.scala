@@ -66,7 +66,9 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
-    val dag = BlockDag()
+    val genesisBonds          = ProtoUtil.bonds(genesis)
+    val initialLatestMessages = genesisBonds.map(_.validator -> genesis.blockHash).toMap
+    val dag                   = BlockDag().copy(latestMessages = initialLatestMessages)
     for {
       validateBlockCheckpointResult <- InterpreterUtil
                                         .validateBlockCheckpoint[F](
@@ -389,7 +391,8 @@ sealed abstract class MultiParentCasperInstances {
                                                          .checkNeglectedEquivocationsWithUpdate[F](
                                                            equivocationsTracker,
                                                            b,
-                                                           dag))
+                                                           dag,
+                                                           genesis))
           blockBufferDependencyDag <- blockBufferDependencyDagState.get
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ =>
