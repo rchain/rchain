@@ -1,38 +1,37 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.comm.rp.Connect, Connect._
-import coop.rchain.shared._
+import java.nio.file.Files
+
+import cats.effect.concurrent.Ref
 import cats.{Applicative, ApplicativeError, Id, Monad}
-import cats.implicits._
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  SafetyOracle,
-  ValidatorIdentity
+import coop.rchain.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal
 }
+import coop.rchain.casper.util.comm.TransportLayerTestImpl
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.rp.{Connect, HandleMessages}
-import HandleMessages.handle
-import Connect._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
-import java.nio.file.Files
-
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.shared.Cell
+import coop.rchain.shared.PathOps.RichPath
 import monix.execution.Scheduler
 
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
-import coop.rchain.shared.PathOps.RichPath
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.{Cell, Time}
@@ -70,16 +69,24 @@ class HashSetCasperTestNode(name: String,
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
+  val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
+
   implicit val casperEff =
     MultiParentCasper
       .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, shardId)
-  implicit val constructor = MultiParentCasperConstructor
-    .successCasperConstructor[Id](
-      ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
-      casperEff)
 
+  implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[Id](Some(casperEff))
+
+  implicit val labId = new LastApprovedBlock[Id] {
+    private var lab: Option[ApprovedBlock]       = Some(approvedBlock)
+    override def get: Id[Option[ApprovedBlock]]  = lab
+    override def set(a: ApprovedBlock): Id[Unit] = lab = Some(a)
+  }
+  val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
+  val casperPacketHandler = new CasperPacketHandlerImpl[Id](
+    Ref.unsafe[Id, CasperPacketHandlerInternal[Id]](handlerInternal))
   implicit val packetHandlerEff = PacketHandler.pf[Id](
-    casperPacketHandler[Id]
+    casperPacketHandler.handle
   )
 
   def receive(): Unit = tle.receive(p => handle[Id](p, defaultTimeout))

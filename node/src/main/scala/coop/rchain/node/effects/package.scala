@@ -29,7 +29,6 @@ package object effects {
       log: Log[Task],
       time: Time[Task],
       metrics: Metrics[Task],
-      transport: TransportLayer[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
     KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
@@ -47,10 +46,10 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
-      implicit
-      metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
+  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(implicit
+                                                          metrics: Metrics[Task],
+                                                          transport: TransportLayer[Task],
+                                                          time: Time[Task]): KademliaRPC[Task] =
     new KademliaRPC[Task] {
       def ping(node: PeerNode): Task[Boolean] =
         for {

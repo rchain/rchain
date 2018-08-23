@@ -1,6 +1,7 @@
 package coop.rchain.casper.api
 
-import cats._
+import cats.{Applicative, Id}
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
@@ -15,6 +16,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
+import coop.rchain.shared.Time
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -22,6 +24,9 @@ class BlocksResponseAPITest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
+
+  implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
   val initState = BlockDag()
   val v1        = ByteString.copyFromUtf8("Validator One")
   val v2        = ByteString.copyFromUtf8("Validator Two")
@@ -30,6 +35,9 @@ class BlocksResponseAPITest
   val v2Bond    = Bond(v2, 20)
   val v3Bond    = Bond(v3, 15)
   val bonds     = Seq(v1Bond, v2Bond, v3Bond)
+
+  implicit def timeState[A]: Time[StateWithChain] = Time.stateTTime[BlockDag, Id](syncId, timeEff)
+
   val createChain =
     for {
       genesis <- createBlock[StateWithChain](Seq(), ByteString.EMPTY, bonds)
@@ -79,14 +87,17 @@ class BlocksResponseAPITest
     Estimator.tips[Id](chain, genesis),
     chain)
   implicit val logEff = new LogStub[Id]
-  implicit val constructorEffect =
-    MultiParentCasperConstructor
-      .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
+  implicit val casperRef = {
+    val tmp = MultiParentCasperRef.of[Id]
+    tmp.set(casperEffect)
+    tmp
+  }
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
   "getBlocksResponse" should "return only blocks in the main chain" in {
-    val blocksResponse = BlockAPI.getBlocksResponse[Id]
-    val blocks         = blocksResponse.blocks
+    val blocksResponse =
+      BlockAPI.getBlocksResponse[Id](syncId, casperRef, logEff, turanOracleEffect, blockStore)
+    val blocks = blocksResponse.blocks
     blocksResponse.length should be(5)
     blocks.length should be(5)
   }

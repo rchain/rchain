@@ -5,16 +5,17 @@ import java.nio.file.{Path, Paths}
 
 import scala.io.Source
 import scala.util.Try
-
 import cats.syntax.either._
-
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.Resources._
-
 import toml._
 import toml.Codecs._
 
+import scala.concurrent.duration.{Duration, FiniteDuration}
+
 object TomlConfiguration {
+  import error._
+
   private implicit val bootstrapAddressCodec: Codec[PeerNode] =
     Codec {
       case (Value.Str(uri), _) =>
@@ -36,22 +37,32 @@ object TomlConfiguration {
       Left((List.empty, s"Bool expected, $value provided"))
   }
 
-  def from(toml: String): Either[String, Configuration] =
+  private implicit val finiteDurationCodec: Codec[FiniteDuration] = Codec {
+    case (Value.Str(value), _) =>
+      Duration(value) match {
+        case fd: FiniteDuration => Either.right(fd)
+        case _                  => Either.left((Nil, s"Failed to parse $value as FiniteDuration."))
+      }
+    case (value, _) =>
+      Either.left((Nil, s"Failed to parse $value as FiniteDuration."))
+  }
+
+  def from(toml: String): Either[TomlConfigurationError, Configuration] =
     Toml.parse(toml) match {
-      case Left(error) => Either.left(s"Failed to parse TOML string: $error")
+      case Left(error) => Either.left(ConfigurationParseError(error))
       case Right(ast)  => from(ast)
     }
 
-  def from(ast: Value.Tbl): Either[String, Configuration] =
+  def from(ast: Value.Tbl): Either[TomlConfigurationError, Configuration] =
     Toml.parseAs[Configuration](rewriteKeysToCamelCase(ast)) match {
-      case Left((_, error)) => Either.left(s"Failed to parse TOML AST: $error")
+      case Left((_, error)) => Either.left(ConfigurationAstError(error))
       case Right(root)      => Either.right(root)
     }
 
-  def from(file: File): Either[String, Configuration] =
+  def from(file: File): Either[TomlConfigurationError, Configuration] =
     if (file.exists())
       withResource(Source.fromFile(file))(f => from(f.getLines().mkString("\n")))
-    else Either.left(s"File ${file.getAbsolutePath} not found")
+    else Either.left(ConfigurationFileNotFound(file.getAbsolutePath))
 
   private def rewriteKeysToCamelCase(tbl: Value.Tbl): Value.Tbl = {
 
@@ -88,4 +99,11 @@ object TomlConfiguration {
     loop(name.toList).mkString
   }
 
+}
+
+object error {
+  sealed trait TomlConfigurationError
+  final case class ConfigurationParseError(error: String)  extends TomlConfigurationError
+  final case class ConfigurationAstError(error: String)    extends TomlConfigurationError
+  final case class ConfigurationFileNotFound(path: String) extends TomlConfigurationError
 }

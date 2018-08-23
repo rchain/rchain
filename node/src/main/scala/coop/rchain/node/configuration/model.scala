@@ -13,6 +13,7 @@ case class Server(
     defaultTimeout: Int,
     bootstrap: PeerNode,
     standalone: Boolean,
+    genesisValidator: Boolean,
     dataDir: Path,
     mapSize: Long,
     inMemoryStore: Boolean,

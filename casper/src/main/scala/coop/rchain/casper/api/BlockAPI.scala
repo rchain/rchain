@@ -2,14 +2,15 @@ package coop.rchain.casper.api
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.catscontrib._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.BlockHash
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper._
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BindPattern, Channel, Par}
 import coop.rchain.models.rholang.sort.Sortable
@@ -22,11 +23,16 @@ import coop.rchain.models.rholang.sort.Sortable._
 import scodec.Codec
 
 import scala.collection.immutable
+import coop.rchain.catscontrib._
+import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper._
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.InterpreterUtil
 
 object BlockAPI {
 
-  def deploy[F[_]: Monad: MultiParentCasperConstructor: Log](
-      d: DeployData): F[DeployServiceResponse] = {
+  def deploy[F[_]: Monad: MultiParentCasperRef: Log](d: DeployData): F[DeployServiceResponse] = {
     def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
       for {
         r <- MultiParentCasper[F].deploy(d)
@@ -36,15 +42,14 @@ object BlockAPI {
              }
       } yield re
 
-    MultiParentCasperConstructor
+    MultiParentCasperRef
       .withCasper[F, DeployServiceResponse](
         casperDeploy(_),
         DeployServiceResponse(success = false, s"Error: Casper instance not available"))
   }
 
-  def addBlock[F[_]: Monad: MultiParentCasperConstructor: Log](
-      b: BlockMessage): F[DeployServiceResponse] =
-    MultiParentCasperConstructor.withCasper[F, DeployServiceResponse](
+  def addBlock[F[_]: Monad: MultiParentCasperRef: Log](b: BlockMessage): F[DeployServiceResponse] =
+    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper =>
         for {
           status <- casper.addBlock(b)
@@ -52,8 +57,8 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def createBlock[F[_]: Monad: MultiParentCasperConstructor: Log]: F[DeployServiceResponse] =
-    MultiParentCasperConstructor.withCasper[F, DeployServiceResponse](
+  def createBlock[F[_]: Monad: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
+    MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper =>
         for {
           maybeBlock <- casper.createBlock
@@ -63,7 +68,7 @@ object BlockAPI {
     )
 
   def getListeningNameDataResponse[
-      F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
+      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       listeningName: Channel): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
@@ -83,13 +88,13 @@ object BlockAPI {
                                   length = blocksWithActiveName.length)
 
     implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
-    MultiParentCasperConstructor.withCasper[F, ListeningNameDataResponse](
+    MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
       casperResponse(_, channelCodec),
       ListeningNameDataResponse(status = "Error: Casper instance not available"))
   }
 
   def getListeningNameContinuationResponse[
-      F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
+      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       listeningNames: Channels): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
@@ -110,7 +115,7 @@ object BlockAPI {
                                           length = blocksWithActiveName.length)
 
     implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
-    MultiParentCasperConstructor.withCasper[F, ListeningNameContinuationResponse](
+    MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
       casperResponse(_, channelCodec),
       ListeningNameContinuationResponse(status = "Error: Casper instance not available"))
   }
@@ -180,7 +185,7 @@ object BlockAPI {
     }
   }
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore]
+  def getBlocksResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore]
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -191,13 +196,12 @@ object BlockAPI {
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
-    MultiParentCasperConstructor.withCasper[F, BlocksResponse](
+    MultiParentCasperRef.withCasper[F, BlocksResponse](
       casperResponse(_),
       BlocksResponse(status = "Error: Casper instance not available"))
   }
 
-  def getBlockQueryResponse[
-      F[_]: Monad: MultiParentCasperConstructor: Log: SafetyOracle: BlockStore](
+  def getBlockQueryResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery): F[BlockQueryResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -217,7 +221,7 @@ object BlockAPI {
                              }
       } yield blockQueryResponse
 
-    MultiParentCasperConstructor.withCasper[F, BlockQueryResponse](
+    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
       casperResponse(_),
       BlockQueryResponse(status = "Error: Casper instance not available"))
   }
