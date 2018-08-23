@@ -34,19 +34,6 @@ import coop.rchain.shared._
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
-/*
-import diagnostics.MetricsServer
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
-import coop.rchain.shared._
-import ThrowableOps._
-import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
-import coop.rchain.node.api._
-import coop.rchain.comm.rp._, Connect.ConnectionsCell
-import coop.rchain.comm.protocol.routing._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.rspace.Context
- */
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Failure, Success, Try}
