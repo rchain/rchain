@@ -33,7 +33,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term)
+    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis())
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?

@@ -1,13 +1,12 @@
 package coop.rchain.node
 
 import java.security.Security
+import java.util.concurrent.{SynchronousQueue, ThreadPoolExecutor, TimeUnit}
 
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
@@ -17,16 +16,18 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StringOps._
-
 import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.schedulers.SchedulerService
+import monix.execution.{Scheduler, UncaughtExceptionReporter}
+import monix.execution.UncaughtExceptionReporter.LogExceptionsToStandardErr
+import monix.execution.schedulers.{ExecutorScheduler, SchedulerService, ThreadFactoryBuilder, _}
 
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
-  private implicit val io: SchedulerService = Scheduler.io("repl-io")
+  //TODO @pawel make this a flag! now!
+  //TODO create separate scheduler for casper
+  private implicit val io: SchedulerService = Scheduler.fixedPool("repl-io", 3999)
 
   def main(args: Array[String]): Unit = {
 

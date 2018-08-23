@@ -20,7 +20,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "catpure rholang errors" in {
     val badRholang       = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy           = ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get)
+    val deploy           = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
     val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
 
     result.status.isFailed should be(true)
@@ -32,7 +32,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deploys = Seq(
       NonNegativeNumber.term,
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
-    ).map(ProtoUtil.termDeploy(_))
+    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(

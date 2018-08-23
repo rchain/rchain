@@ -48,6 +48,23 @@ class InMemoryContext[C, P, A, K] private[rspace] (
   def close(): Unit = {}
 }
 
+class MixedContext[C, P, A, K] private[rspace] (
+    val env: Env[ByteBuffer],
+    val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]]
+) extends Context[C, P, A, K] {
+
+  override def createStore(branch: Branch)(implicit sc: Serialize[C],
+                                           sp: Serialize[P],
+                                           sa: Serialize[A],
+                                           sk: Serialize[K]): IStore[C, P, A, K] =
+    InMemoryStore.create(trieStore, branch)
+
+  def close(): Unit = {
+    trieStore.close()
+    env.close()
+  }
+}
+
 object Context {
 
   def env(path: Path,
@@ -94,5 +111,26 @@ object Context {
   def createInMemory[C, P, A, K](): InMemoryContext[C, P, A, K] = {
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     new InMemoryContext(trieStore)
+  }
+
+  def createMixed[C, P, A, K](path: Path,
+                              mapSize: Long,
+                              flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS))(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]): MixedContext[C, P, A, K] = {
+
+    implicit val codecC: Codec[C] = sc.toCodec
+    implicit val codecP: Codec[P] = sp.toCodec
+    implicit val codecA: Codec[A] = sa.toCodec
+    implicit val codecK: Codec[K] = sk.toCodec
+
+    val env = Context.env(path, mapSize, flags)
+
+    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
+
+    new MixedContext[C, P, A, K](env, trieStore)
   }
 }

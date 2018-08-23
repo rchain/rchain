@@ -1,0 +1,14 @@
+new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  contract helloWorld(@name) = {
+    new ack in {
+      stdoutAck!("Hello, ", *ack) |
+      for (_ <- ack) {
+        stdoutAck!(name, *ack) |
+        for (_ <- ack) {
+          stdout!("\n")
+        }
+      }
+    }
+  } |
+  helloWorld!("@placeholder@")
+}
