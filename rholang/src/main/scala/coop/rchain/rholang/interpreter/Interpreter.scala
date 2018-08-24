@@ -2,22 +2,16 @@ package coop.rchain.rholang.interpreter
 
 import java.io.Reader
 
-import cats.MonadError
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
-import coop.rchain.rholang.interpreter.errors.{
-  InterpreterError,
-  SyntaxError,
-  TopLevelFreeVariablesNotAllowedError,
-  TopLevelWildcardsNotAllowedError,
-  UnrecognizedInterpreterError
-}
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, SyntaxError, TopLevelFreeVariablesNotAllowedError, TopLevelWildcardsNotAllowedError, UnrecognizedInterpreterError}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {
@@ -63,20 +57,20 @@ object Interpreter {
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] =
+      implicit sync: Sync[M]): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
         if (normalizedTerm.knownFree.wildcards.isEmpty) {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
         }
       } else normalizedTerm.pure[M]
