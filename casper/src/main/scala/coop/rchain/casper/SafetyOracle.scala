@@ -120,7 +120,7 @@ sealed abstract class SafetyOracleInstances {
         } yield mainParentWeightMap
 
       private def findMaximumClique(edges: List[(Validator, Validator)],
-                            candidates: Map[Validator, Int]): (List[Validator], Int) =
+                                    candidates: Map[Validator, Int]): (List[Validator], Int) =
         Clique
           .findCliquesRecursive(edges)
           .foldLeft((List[Validator](), 0)) {
