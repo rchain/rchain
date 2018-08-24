@@ -2,6 +2,12 @@ syntax = "proto3";
 package coop.rchain.casper.protocol;
 
 import "google/protobuf/empty.proto";
+
+// If you are building for other languages "scalapb.proto"
+// can be manually obtained here:
+// https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto
+// make a scalapb directory in this file's location and place it inside
+
 import "scalapb/scalapb.proto";
 import "RhoTypes.proto";
 

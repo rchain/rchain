@@ -9,8 +9,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object TaskContrib {
-  implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
-    def unsafeRunSync: A =
+  implicit class TaskOps[A](task: Task[A]) {
+    def unsafeRunSync(implicit scheduler: Scheduler): A =
       Await.result(task.runAsync, Duration.Inf)
 
     def nonCancelingTimeout(after: FiniteDuration): Task[A] =

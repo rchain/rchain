@@ -18,7 +18,9 @@ case class Server(
     dataDir: Path,
     mapSize: Long,
     storeType: StoreType,
-    maxNumOfConnections: Int
+    maxNumOfConnections: Int,
+    maxMessageSize: Int,
+    threadPoolSize: Int
 )
 
 case class GrpcServer(

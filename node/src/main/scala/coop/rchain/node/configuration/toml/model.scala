@@ -27,7 +27,9 @@ case class Server(
     storeType: Option[String],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
-    maxNumOfConnections: Option[Int]
+    maxNumOfConnections: Option[Int],
+    maxMessageSize: Option[Int],
+    threadPoolSize: Option[Int]
 )
 
 case class GrpcServer(
