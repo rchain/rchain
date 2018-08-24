@@ -97,9 +97,9 @@ def rchain_network(config, docker, started_bootstrap, docker_network):
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
         wait_for( string_matches(node_logs(peer),
-                                 "kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403"),
+                                 "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
                   config.node_startup_timeout,
-            "Prometeus port is not started")
+                  f"Peer node {peer.name} didn't start correctly")
 
     yield rchain_network
 
