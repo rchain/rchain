@@ -27,11 +27,15 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         val sortedPars = gs.ps.sortedPars
           .map(par => Sortable.sortMatch(par))
           .sorted
-        ScoredTerm(ESetBody(
-                     ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
-                            gs.connectiveUsed,
-                            gs.locallyFree)),
-                   Node(Score.ESET, sortedPars.map(_.score): _*))
+        val remainderScoreOpt = gs.remainder.map(_ => Leaf(Score.REMAINDER))
+        ScoredTerm(
+          ESetBody(
+            ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
+                   gs.connectiveUsed,
+                   gs.locallyFree,
+                   gs.remainder)),
+          Node(Leaf(Score.ESET) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
+        )
       case EMapBody(gm) =>
         def sortKeyValuePair(key: Par, value: Par): ScoredTerm[(Par, Par)] = {
           val sortedKey   = Sortable.sortMatch(key)

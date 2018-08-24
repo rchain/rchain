@@ -110,19 +110,26 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
     setData.add(new PGround(new GroundInt(7)))
     setData.add(new PPar(new PGround(new GroundInt(8)), new PVar(new ProcVarVar("Q"))))
-    val set = new PCollect(new CollectSet(setData, new ProcRemainderEmpty()))
+    val set = new PCollect(new CollectSet(setData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
+
     result.par should be(
-      inputs.par.prepend(ParSet(
-                           Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
-                                    GInt(7),
-                                    GInt(8).prepend(EVar(FreeVar(1)), 0)),
-                           connectiveUsed = true
-                         ),
-                         0))
-    result.knownFree should be(
-      inputs.knownFree.newBindings(List(("R", ProcSort, 0, 0), ("Q", ProcSort, 0, 0)))._1)
+      inputs.par.prepend(
+        ParSet(Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(1))),
+                        GInt(7),
+                        GInt(8).prepend(EVar(FreeVar(2)), 0)),
+               connectiveUsed = true,
+               remainder = Some(FreeVar(0))),
+        depth = 0
+      )
+    )
+    val newBindings = List(
+      ("Z", ProcSort, 0, 0),
+      ("R", ProcSort, 0, 0),
+      ("Q", ProcSort, 0, 0)
+    )
+    result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
 
   "Map" should "delegate" in {
