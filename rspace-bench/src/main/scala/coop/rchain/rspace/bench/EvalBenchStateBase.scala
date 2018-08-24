@@ -27,7 +27,7 @@ trait EvalBenchStateBase {
     */
   def deleteOldStorages(): Unit =
     dbDir.getParent.toFile.listFiles
-      .filter(dir => dir.isDirectory && (dir.getAbsolutePath != dbDir.toAbsolutePath.toString))
+      .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
       .filter(_.getName.startsWith("rchain-storage-test-"))
       .foreach(dir =>
         try {
