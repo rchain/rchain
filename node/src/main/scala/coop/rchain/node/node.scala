@@ -292,7 +292,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
               .error(
                 "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
           case th =>
-            th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+            log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+              th.printStackTrace();
+            }
         } *> exit0.as(Right(())))
 
   private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] = new Timer[Effect] {
