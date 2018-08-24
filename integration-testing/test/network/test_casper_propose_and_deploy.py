@@ -4,7 +4,7 @@ import logging
 from delayed_assert import expect, assert_expectations
 import tools.resources as resources
 from shutil import copyfile
-from tools.wait import wait_for, contains, node_logs, network_converged
+from tools.wait import wait_for, node_blocks_received, node_blocks_added, find_first
 
 def test_casper_propose_and_deploy(converged_network):
     """
@@ -13,14 +13,16 @@ def test_casper_propose_and_deploy(converged_network):
     """
 
     token_size = 20
-    receive_timeout = 5
+    receive_timeout = 10
 
     contract_name = 'contract.rho'
 
     for node in converged_network.nodes:
         expected_string = f"<{node.container.name}:{random_string(token_size)}>"
 
+        logging.info("=" * 100)
         logging.info(f"Run test on container {node.container.name}. Expected string: {expected_string}")
+        logging.info("=" * 100)
 
         copyfile(resources.file_path(contract_name, __name__), f"{node.local_deploy_dir}/{contract_name}")
 
@@ -43,21 +45,13 @@ def test_casper_propose_and_deploy(converged_network):
                         if n.container.name != node.container.name]
 
         for node in other_nodes:
-            assert wait_for( contains(node_logs(node), expected_string), receive_timeout), \
-                f"Block containing {expected_string} not received "
+            block_received = wait_for( find_first( node_blocks_received(node),
+                                                      lambda b: expected_string in b.content),
+                                            receive_timeout,
+                                            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
 
-            blocks_received_ids = node.received_blocks(expected_string)
-
-            expect(blocks_received_ids, f"Container: {node.container.name}: String {expected_string} NOT found in output. FAILURE!")
-
-            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
-
-            expect(len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}")
-
-            block_id = blocks_received_ids[0]
-
-            blocks_added = node.added_blocks(block_id)
-
-            expect(blocks_added, f"Container: {node.container.name}: Added blocks not found for {blocks_received_ids}")
-
-    assert_expectations()
+            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {block_received}")
+            wait_for( find_first( node_blocks_added(node),
+                                  lambda s: s == block_received.id),
+                      receive_timeout,
+                      f"Container: {node.container.name}: Added blocks not found for {block_received.id}")
