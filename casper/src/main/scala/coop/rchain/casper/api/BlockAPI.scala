@@ -352,7 +352,8 @@ object BlockAPI {
       DeployServiceResponse(success = false,
                             "No action taken since other thread is already processing the block.")
     case None =>
-      DeployServiceResponse(success = false,
-                            "No block was created. The rnode might be in read-only mode.")
+      DeployServiceResponse(
+        success = false,
+        "No block was created. Either no new deploys have been received or the node may be in read-only mode.")
   }
 }
