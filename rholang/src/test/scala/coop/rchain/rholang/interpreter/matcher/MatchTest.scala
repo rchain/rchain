@@ -419,6 +419,26 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     assertSpatialMatch(target, justWildcard, Some(Map[Int, Par]()))
   }
 
+  it should "work with var remainders" in {
+    val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
+    val target: Expr = ParSet(targetElements)
+    val pattern: Expr =
+      ParSet(Seq(GInt(1), GInt(4), EVar(FreeVar(0))), connectiveUsed = true, remainder = Var(FreeVar(1)))
+    //the captures and their order are somewhat arbitrary and could potentially by changed
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(2), 1 -> ParSet(Seq(GInt(3), GInt(5)))))
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val allElementsAndRemainder: Expr = ParSet(targetElements, remainder = Var(FreeVar(0)))
+    assertSpatialMatch(target, allElementsAndRemainder, Some(Map[Int, Par](0 -> ParSet(Seq()))))
+
+    val justRemainder: Expr = ParSet(Seq(), remainder = Var(FreeVar(0)))
+    assertSpatialMatch(target, justRemainder, Some(Map[Int, Par](0 -> ParSet(targetElements))))
+  }
+
   "Matching a whole list with a remainder" should "capture the list." in {
     // for (@[…a] <- @0) { … } | @0!([1,2,3])
     val target: Expr   = EList(Seq(GInt(1), GInt(2), GInt(3)))
