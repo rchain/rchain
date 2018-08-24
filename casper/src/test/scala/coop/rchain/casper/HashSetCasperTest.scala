@@ -70,7 +70,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                  })
     } yield result
     val threadStatuses: (BlockStatus, BlockStatus) =
-      new TaskOps(testProgram.value)(scheduler).unsafeRunSync.right.get
+      testProgram.value.unsafeRunSync(scheduler).right.get
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
     cleanUp()
