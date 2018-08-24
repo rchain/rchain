@@ -20,7 +20,9 @@ def test_casper_propose_and_deploy(converged_network):
     for node in converged_network.nodes:
         expected_string = f"<{node.container.name}:{random_string(token_size)}>"
 
+        logging.info("=" * 100)
         logging.info(f"Run test on container {node.container.name}. Expected string: {expected_string}")
+        logging.info("=" * 100)
 
         copyfile(resources.file_path(contract_name, __name__), f"{node.local_deploy_dir}/{contract_name}")
 
