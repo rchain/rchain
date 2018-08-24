@@ -171,7 +171,6 @@ lazy val node = (project in file("node"))
          .map { case (f, p) => f -> s"$base/$p" }
      },
     /* Packaging */
-    mappings in packageZipTarball in Universal += baseDirectory.value / "macos_install.sh" -> "macos_install.sh",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
