@@ -104,19 +104,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
     withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
-      .doOnFinish {
-        case None    => Task.unit
-        case Some(e) =>
-          // TODO: Add other human readable messages for status codes
-          val msg = e match {
-            case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.UNAVAILABLE =>
-              "The service is currently unavailable"
-            case _ =>
-              e.printStackTrace()
-              e.getMessage
-          }
-          log.warn(s"Failed to send a message to peer ${peer.toAddress}: $msg")
-      }
 
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,

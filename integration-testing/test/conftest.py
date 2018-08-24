@@ -77,7 +77,7 @@ def bootstrap(docker, docker_network):
 @pytest.fixture(scope="module")
 def started_bootstrap(config, bootstrap):
     assert wait_for( contains( node_logs(bootstrap),
-                               "coop.rchain.node.NodeRuntime - Starting stand-alone node."),
+                               "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
                      config.node_startup_timeout), \
         "Bootstrap node didn't start correctly"
     yield bootstrap
