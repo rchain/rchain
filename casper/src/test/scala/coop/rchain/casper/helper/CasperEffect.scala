@@ -1,37 +1,26 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.comm.rp.Connect, Connect._
-import coop.rchain.shared._
-import cats.{Applicative, ApplicativeError, FlatMap}
 import cats.data.EitherT
-import cats.effect.{ExitCase, Sync}
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  SafetyOracle,
-  ValidatorIdentity
-}
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle, ValidatorIdentity}
 import coop.rchain.catscontrib._
 import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp.Connect._
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
-import java.nio.file.Files
-
-import coop.rchain.casper.util.rholang.RuntimeManager
-import monix.execution.Scheduler
-import monix.eval.Task
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
-import scala.collection.mutable
 import coop.rchain.shared.PathOps.RichPath
-import scala.util.Random
+import coop.rchain.shared._
+import monix.eval.Task
+import monix.execution.Scheduler
+
+import scala.collection.mutable
 
 object CasperEffect {
   type Effect[A] = EitherT[Task, CommError, A]
@@ -59,16 +48,10 @@ object CasperEffect {
     val validatorId    = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
     val casperTask = for {
-      _        <- blockStoreEff.put(genesis.blockHash, genesis)
-      blockMap <- blockStoreEff.asMap()
-    } yield
-      MultiParentCasper.hashSetCasper[Effect](
-        runtimeManager,
-        Some(validatorId),
-        genesis,
-        blockMap,
-        shardId
-      )
+      _ <- blockStoreEff.put(genesis.blockHash, genesis)
+      hashSetCasper <- MultiParentCasper
+                        .hashSetCasper[Effect](runtimeManager, Some(validatorId), genesis, shardId)
+    } yield hashSetCasper
 
     def cleanUp(): Unit = {
       activeRuntime.close()
@@ -77,7 +60,7 @@ object CasperEffect {
       blockStoreDir.recursivelyDelete()
     }
 
-    (casperTask, cleanUp _)
+    (casperTask, cleanUp)
   }
 
   private val syncInstance = SyncInstances.syncEffect[CommError](commError => {

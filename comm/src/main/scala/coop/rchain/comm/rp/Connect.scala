@@ -1,21 +1,20 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.discovery._
-import scala.concurrent.duration._
-import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.metrics.Metrics
-
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats._
+import cats.implicits._
 import cats.mtl._
-import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
-import coop.rchain.shared._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 object Connect {
 
@@ -62,7 +61,8 @@ object Connect {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def clearConnections[
-      F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]: F[Int] = {
+      F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+    : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {

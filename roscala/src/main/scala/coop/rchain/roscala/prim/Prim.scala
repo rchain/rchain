@@ -3,9 +3,10 @@ package coop.rchain.roscala.prim
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
-import coop.rchain.roscala.prim.actor.actorUpdateBang
+import coop.rchain.roscala.prim.actor.{actorNextBang, actorUpdateBang}
 import coop.rchain.roscala.prim.fixnum.fxPlus
 import coop.rchain.roscala.prim.rblfloat.flPlus
+import coop.rchain.roscala.prim.tuple.{tplHead, tplTail}
 import coop.rchain.roscala.util.misc.{numberSuffix, properPrep}
 
 import scala.reflect.{classTag, ClassTag}
@@ -43,7 +44,7 @@ abstract class Prim extends Ob {
       Prim.mismatchArgs(state, minArgs, maxArgs)
   }
 
-  override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
+  override def dispatch(ctxt: Ctxt, state: State): Ob = {
     val result = dispatchHelper(state)
 
     if (result != Invalid && result != Upcall && result != Deadthread) {
@@ -53,8 +54,8 @@ abstract class Prim extends Ob {
     result
   }
 
-  override def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob =
-    dispatch(ctxt, state, globalEnv)
+  override def invoke(ctxt: Ctxt, state: State): Ob =
+    dispatch(ctxt, state)
 }
 
 object Prim {
@@ -392,7 +393,14 @@ object Prim {
     * 326	update!
     * 327	actor-new
     */
-  val map = Map(202 -> flPlus, 232 -> fxPlus, 326 -> actorUpdateBang)
+  val map = Map(
+    65  -> tplTail,
+    67  -> tplHead,
+    202 -> flPlus,
+    232 -> fxPlus,
+    324 -> actorNextBang,
+    326 -> actorUpdateBang
+  )
 
   def mismatchArgs(state: State, minArgs: Int, maxArgs: Int): Ob = {
     val msg = if (maxArgs == MaxArgs) {

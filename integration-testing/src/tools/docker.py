@@ -7,3 +7,7 @@ def run_cmd(docker_container, cmd):
 
     logging.info(f"{docker_container.name}: Finish <{cmd}>. Exit Code: {r.exit_code}")
     return (r.exit_code, output)
+
+
+def list_containers(docker_client, network):
+    return docker_client.containers.list(all=True, filters={"name":f".{network}"})
