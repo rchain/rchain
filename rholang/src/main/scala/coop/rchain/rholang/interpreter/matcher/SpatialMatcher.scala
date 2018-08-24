@@ -674,8 +674,11 @@ trait SpatialMatcherInstances {
         case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
           foldMatch(tlist, plist).map(_ => Unit)
         }
-        case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, _))) =>
-          listMatchSingle(tlist.toSeq, plist.toSeq)
+        case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
+          val remainderVar = None
+          val merger = (p: Par, r: Seq[Par]) => p
+          val isWildcard = rem.collect { case Var(Wildcard(_)) => true }.isDefined
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVar, isWildcard).toDet()
 
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
