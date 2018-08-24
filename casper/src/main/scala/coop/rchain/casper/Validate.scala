@@ -136,19 +136,15 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
-    } else if (b.header.get.newCodeHash.isEmpty) {
+    } else if (b.header.get.deploysHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
-      } yield false
-    } else if (b.header.get.commReductionsHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block comm reductions hash is empty."))
       } yield false
     } else if (b.body.get.postState.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state is missing."))
       } yield false
-    } else if (b.body.get.commReductions.exists(_.eventInstance == EventInstance.Empty)) {
+    } else if (b.body.get.deploys.flatMap(_.log).exists(_.eventInstance == EventInstance.Empty)) {
       for {
         _ <- Log[F].warn(ignore(b, s"one of block comm reduction events is empty."))
       } yield false
@@ -165,7 +161,7 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
+      shardId: String): F[Either[BlockStatus, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
@@ -214,7 +210,7 @@ object Validate {
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val deployKeySet = (for {
       bd <- block.body.toList
-      d  <- bd.newCode.flatMap(_.deploy)
+      d  <- bd.deploys.flatMap(_.deploy)
       r  <- d.raw.toList
     } yield (r.user, r.timestamp)).toSet
 
@@ -224,7 +220,7 @@ object Validate {
                           .bfTraverseF[F, BlockMessage](initParents)(ProtoUtil.unsafeGetParents[F])
                           .find(
                             _.body.exists(
-                              _.newCode
+                              _.deploys
                                 .flatMap(_.deploy)
                                 .exists(_.raw.exists(p =>
                                   deployKeySet.contains((p.user, p.timestamp))))))
@@ -446,27 +442,27 @@ object Validate {
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]])(
-      implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
+      implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
     for {
-      maybeCheckPoint <- knownStateHashesContainer.modify[Option[StateHash]] { knownStateHashes =>
-                          for {
-                            //invalid blocks return None and don't update the checkpoints
-                            validateBlockCheckpointResult <- InterpreterUtil
-                                                              .validateBlockCheckpoint[F](
-                                                                block,
-                                                                genesis,
-                                                                dag,
-                                                                emptyStateHash,
-                                                                knownStateHashes,
-                                                                runtimeManager
-                                                              )
-                            (maybeCheckPoint, updatedknownStateHashes) = validateBlockCheckpointResult
-                          } yield (updatedknownStateHashes, maybeCheckPoint)
-                        }
+      maybeStateHash <- knownStateHashesContainer
+                         .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
+                           for {
+                             //invalid blocks return None and don't update the checkpoints
+                             validateBlockCheckpointResult <- InterpreterUtil
+                                                               .validateBlockCheckpoint[F](
+                                                                 block,
+                                                                 genesis,
+                                                                 dag,
+                                                                 knownStateHashes,
+                                                                 runtimeManager)
+                             (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
+                           } yield (updatedknownStateHashes, maybeStateHash)
+                         }
     } yield
-      maybeCheckPoint match {
-        case Some(_) => Right(Valid)
-        case None    => Left(InvalidTransaction)
+      maybeStateHash match {
+        case Left(ex)       => Left(ex)
+        case Right(Some(_)) => Right(Valid)
+        case Right(None)    => Left(InvalidTransaction)
       }
 
   /**
