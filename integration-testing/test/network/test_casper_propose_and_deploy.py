@@ -4,7 +4,7 @@ import logging
 from delayed_assert import expect, assert_expectations
 import tools.resources as resources
 from shutil import copyfile
-from tools.wait import wait_for, string_matches, string_equals, node_logs, network_converged, node_blocks_received, node_blocks_added, find_first
+from tools.wait import wait_for, node_blocks_received, node_blocks_added, find_first
 
 def test_casper_propose_and_deploy(converged_network):
     """
@@ -13,7 +13,7 @@ def test_casper_propose_and_deploy(converged_network):
     """
 
     token_size = 20
-    receive_timeout = 5
+    receive_timeout = 10
 
     contract_name = 'contract.rho'
 
@@ -43,16 +43,13 @@ def test_casper_propose_and_deploy(converged_network):
                         if n.container.name != node.container.name]
 
         for node in other_nodes:
-            blocks_received_ids = wait_for(list_find_first(node_blocks_received(node), string_contains(expected_string)),
-                                           f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
+            block_received = wait_for( find_first( node_blocks_received(node),
+                                                      lambda b: expected_string in b.content),
+                                            receive_timeout,
+                                            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
 
-            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {blocks_received_ids}")
-
-            assert len(blocks_received_ids) == 1, f"Too many blocks received: {blocks_received_ids}"
-
-            block_id = blocks_received_ids[0]
-
-            blocks_added = wait_for(list_find_first(node_blocks_added(node), string_equals(block_id)),
-                                    f"Container: {node.container.name}: Added blocks not found for {blocks_received_ids}")
-
-    assert_expectations()
+            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {block_received}")
+            wait_for( find_first( node_blocks_added(node),
+                                  lambda s: s == block_received.id),
+                      receive_timeout,
+                      f"Container: {node.container.name}: Added blocks not found for {block_received.id}")

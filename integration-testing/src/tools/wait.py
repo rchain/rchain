@@ -4,7 +4,7 @@ import pytest
 import time
 import collections
 
-def wait_for(condition, timeout):
+def wait_for(condition, timeout, error_message):
     """
     Waits for a condition to be fulfilled. It retries until the timeout expires.
 
@@ -25,7 +25,7 @@ def wait_for(condition, timeout):
             logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
             return value
 
-        except ex:
+        except Exception as ex:
             iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
 
             logging.info(f"Condition not fulfilled yet ({ex}). Sleeping {iteration_duration}s...")
@@ -33,7 +33,7 @@ def wait_for(condition, timeout):
             time.sleep(iteration_duration)
             elapsed = elapsed + iteration_duration
 
-    pytest.fail(f"Timeout expired for `{condition.__doc__}`")
+    pytest.fail(error_message)
 
 # Predicates
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
@@ -59,18 +59,6 @@ def string_matches(string_factory, regex_str, flags = 0):
     go.__doc__ = f"{string_factory.__doc__} search regex '{regex_str}'"
     return go
 
-def string_equals(expected):
-    def go(s): return s == expected
-
-    go.__doc__ = f"string equals '{expected}'"
-    return go
-
-def string_contains(expected):
-    def go(s): return expected in s
-
-    go.__doc__ = f"string contains '{expected}'"
-    return go
-
 def network_converged(bootstrap_node, expected_peers):
     rx = re.compile("^peers\s+(\d+).*", re.MULTILINE | re.DOTALL)
 
@@ -91,19 +79,16 @@ def network_converged(bootstrap_node, expected_peers):
 
 Block = collections.namedtuple("Block", ["id", "content"])
 
-def block_content(block_factory):
-    def go(): return block_factory().content
-    go.__doc__ = f"block_content"
-    return go
-
 def node_blocks_received(node):
     def go():
-        id_rx = "(.+?)"
+        id_rx = ".+?"
         # received_block_rx = re.compile(f"^.* CASPER: Received Block #(\d+) \((.*?)\.\.\.\)(.*)$", re.MULTILINE | re.DOTALL)
         received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
+        # received_block_rx = re.compile(f".* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- (.*)", re.MULTILINE | re.DOTALL)
 
         logs = node.log_lines()
-
+        # strlogs = '\n+++\n'.join(logs)
+        # logging.info(f"logs to match: {strlogs}")
         blocks = [Block( match[1], match[2])
                   for match in [received_block_rx.match(log)
                                 for log in logs]
@@ -117,7 +102,7 @@ def node_blocks_received(node):
 def node_blocks_added(node):
     def go():
         id_rx = "(.+?)"
-        added_block_rx = re.compile(f"^.*\s+CASPER: Added ({id_rx}).*", re.MULTILINE | re.DOTALL)
+        added_block_rx = re.compile(f"^.* CASPER: Added ({id_rx})\.\.\..*", re.MULTILINE | re.DOTALL)
         logs = node.log_lines()
 
         block_ids = [ match[1]
