@@ -724,11 +724,13 @@ object ProcNormalizeMatcher {
       }
 
       case p: PPar =>
-        for {
-          result       <- normalizeMatch[M](p.proc_1, input)
-          chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
-          chainedRes   <- normalizeMatch[M](p.proc_2, chainedInput)
-        } yield chainedRes
+        sync.suspend {
+          for {
+            result       <- normalizeMatch[M](p.proc_1, input)
+            chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
+            chainedRes   <- normalizeMatch[M](p.proc_2, chainedInput)
+          } yield chainedRes
+        }
 
       case p: PNew => {
         // TODO: bindings within a single new shouldn't have overlapping names.
