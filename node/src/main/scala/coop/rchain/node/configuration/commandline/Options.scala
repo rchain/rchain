@@ -4,8 +4,10 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
-
+import coop.rchain.shared.StoreType
 import org.rogach.scallop._
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object Converter {
   import Options._
@@ -31,6 +33,37 @@ object Converter {
 
     val argType: ArgType.V = ArgType.FLAG
   }
+
+  implicit val finiteDurationConverter: ValueConverter[FiniteDuration] =
+    new ValueConverter[FiniteDuration] {
+
+      override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
+        s match {
+          case (_, duration :: Nil) :: Nil =>
+            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
+            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
+              Left("Expected finite duration."))(fd => Right(Some(fd)))
+          case Nil => Right(None)
+          case _   => Left("Provide a duration.")
+        }
+
+      override val argType: ArgType.V = ArgType.SINGLE
+    }
+
+  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
+      s match {
+        case (_, storeType :: Nil) :: Nil =>
+          StoreType
+            .from(storeType)
+            .map(u => Right(Some(u)))
+            .getOrElse(Left("can't parse the store type"))
+        case Nil => Right(None)
+        case _   => Left("provide the store type")
+      }
+    val argType: ArgType.V = ArgType.SINGLE
+  }
+
 }
 
 object Options {
@@ -132,6 +165,31 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val standalone =
       opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
+    val requiredSigs =
+      opt[Int](
+        descr =
+          "Number of signatures from trusted validators required to creating an approved genesis block.")
+
+    val deployTimestamp =
+      opt[Long](
+        descr = "Timestamp for the deploys."
+      )
+
+    val duration =
+      opt[FiniteDuration](
+        short = 'd',
+        descr =
+          "Time window in which BlockApproval messages will be accumulated before checking conditions."
+      )
+
+    val interval =
+      opt[FiniteDuration](
+        short = 'i',
+        descr = "Interval at which condition for creating ApprovedBlock will be checked.")
+
+    val genesisValidator =
+      opt[Flag](descr = "Start a node as a genesis validator.")
+
     val host = opt[String](descr = "Hostname or IP of this node.")
 
     val data_dir =
@@ -139,7 +197,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
-    val inMemoryStore = opt[Boolean](required = false, descr = "Use in-memory store beneath RSpace")
+    val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val maxNumOfConnections =
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
@@ -194,24 +252,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
-      required = true,
       validate = addressCheck
     )
 
-    val phloLimit = opt[Int](
-      descr = "The amount of phlo to use for the transaction (unused phlo is refunded).",
-      required = true
-    )
+    val phloLimit =
+      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
 
     val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo.",
-      required = true
+      descr = "The price of phlo for this transaction in units dust/phlo."
     )
 
     val nonce = opt[Int](
-      descr = "This allows to overwrite your own pending transactions that use the same nonce.",
-      required = true
-    )
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.")
 
     val location = trailArg[String](required = true)
   }

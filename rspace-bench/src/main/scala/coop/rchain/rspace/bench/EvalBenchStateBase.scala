@@ -12,11 +12,11 @@ import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 
 trait EvalBenchStateBase {
-  private val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  private val mapSize: Long = 1024 * 1024 * 1024
+  private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+  private val mapSize: Long    = 1024 * 1024 * 1024
 
   val rhoScriptSource: String
-  val runtime: Runtime                        = Runtime.create(dbDir, mapSize)
+  lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
   val rand: Blake2b512Random                  = Blake2b512Random(128)
   val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
   var term: Option[Par]                       = None

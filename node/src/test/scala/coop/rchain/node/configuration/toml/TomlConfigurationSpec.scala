@@ -1,10 +1,12 @@
 package coop.rchain.node.configuration.toml
 
+import coop.rchain.shared.StoreType
 import java.nio.file.Paths
 
 import coop.rchain.comm.PeerNode
 
 import org.scalatest._
+import scala.concurrent.duration._
 
 class TomlConfigurationSpec extends FunSuite with Matchers {
 
@@ -22,7 +24,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400"
       |standalone = true
       |map-size = 200000000
-      |in-memory-store = false
+      |store-type = "lmdb"
       |casper-block-store-size = 2000000
       |data-dir = "/var/rchain"
       |
@@ -43,6 +45,10 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |private-key = "99999"
       |sig-algorithm = "ed25519"
       |wallets-file = "/validator/wallet"
+      |required-sigs = 1
+      |approve-genesis-duration = "30min"
+      |approve-genesis-interval = "1min"
+      |deploy-timestamp = 1
     """.stripMargin
 
   test("Parse TOML configuration string") {
@@ -66,7 +72,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.server.flatMap(_.bootstrap) shouldEqual Some(bootstrap)
     root.server.flatMap(_.standalone) shouldEqual Some(true)
     root.server.flatMap(_.mapSize) shouldEqual Some(200000000)
-    root.server.flatMap(_.inMemoryStore) shouldEqual Some(false)
+    root.server.flatMap(_.storeType) shouldEqual Some("lmdb")
     root.server.flatMap(_.casperBlockStoreSize) shouldEqual Some(2000000)
     root.server.flatMap(_.dataDir) shouldEqual Some(Paths.get("/var/rchain"))
 
@@ -87,6 +93,10 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     root.validators.flatMap(_.privateKey) shouldEqual Some("99999")
     root.validators.flatMap(_.sigAlgorithm) shouldEqual Some("ed25519")
     root.validators.flatMap(_.walletsFile) shouldEqual Some("/validator/wallet")
+    root.validators.flatMap(_.requiredSigs) shouldEqual Some(1)
+    root.validators.flatMap(_.approveGenesisDuration) shouldEqual Some(30.minutes)
+    root.validators.flatMap(_.approveGenesisInterval) shouldEqual Some(1.minute)
+    root.validators.flatMap(_.deployTimestamp) shouldEqual Some(1)
   }
 
 }

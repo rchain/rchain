@@ -3,6 +3,7 @@ package coop.rchain.node.configuration
 import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
+import coop.rchain.shared.StoreType
 
 case class Server(
     host: Option[String],
@@ -13,9 +14,10 @@ case class Server(
     defaultTimeout: Int,
     bootstrap: PeerNode,
     standalone: Boolean,
+    genesisValidator: Boolean,
     dataDir: Path,
     mapSize: Long,
-    inMemoryStore: Boolean,
+    storeType: StoreType,
     maxNumOfConnections: Int
 )
 

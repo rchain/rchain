@@ -27,4 +27,3 @@ trait CloseOps[T] {
     else
       createTxnWriteImp()
 }
-
