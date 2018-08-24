@@ -119,8 +119,8 @@ sealed abstract class SafetyOracleInstances {
           }
         } yield mainParentWeightMap
 
-      def findMaximumClique(edges: List[(Validator, Validator)],
-                            candidates: Map[Validator, Int]): F[(List[Validator], Int)] =
+      private def findMaximumClique(edges: List[(Validator, Validator)],
+                            candidates: Map[Validator, Int]): (List[Validator], Int) =
         Clique
           .findCliquesRecursive(edges)
           .foldLeft((List[Validator](), 0)) {
@@ -135,7 +135,6 @@ sealed abstract class SafetyOracleInstances {
               }
             }
           }
-          .pure[F]
 
       private def agreementGraphEdgeCount(blockDag: BlockDag,
                                           estimate: BlockMessage,
@@ -243,8 +242,7 @@ sealed abstract class SafetyOracleInstances {
 
         for {
           edges <- computeAgreementGraphEdges
-          re    <- findMaximumClique(edges, candidates)
-        } yield re._1.size
+        } yield findMaximumClique(edges, candidates)._1.size
       }
 
       // TODO: Change to isInBlockDAG
