@@ -315,7 +315,7 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val (stateHash, _) =
+    val (Right(stateHash), _) =
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     stateHash should be(None)
@@ -348,7 +348,7 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val (tsHash, _) =
+    val (Right(tsHash), _) =
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
@@ -396,7 +396,7 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val (tsHash, _) =
+    val (Right(tsHash), _) =
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
@@ -448,7 +448,7 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val (tsHash, _) =
+    val (Right(tsHash), _) =
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
@@ -497,7 +497,7 @@ class InterpreterUtilTest
         .runS(initState)
     val block = chain.idToBlocks(0)
 
-    val (tsHash, _) =
+    val (Right(tsHash), _) =
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     tsHash should be(Some(computedTsHash))
