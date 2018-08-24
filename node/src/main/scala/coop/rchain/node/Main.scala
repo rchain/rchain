@@ -25,22 +25,23 @@ object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
-  //TODO @pawel make this a flag! now!
-  //TODO create separate scheduler for casper
-  private implicit val io: SchedulerService = Scheduler.fixedPool("repl-io", 3999)
 
   def main(args: Array[String]): Unit = {
 
     val exec: Task[Unit] =
       for {
-        conf <- Configuration(args)
-        _    <- mainProgram(conf)
+        conf     <- Configuration(args)
+        poolSize = conf.server.threadPoolSize
+        //TODO create separate scheduler for casper
+        scheduler = Scheduler.fixedPool("node-io", poolSize)
+        _         <- Task.unit.asyncBoundary(scheduler)
+        _         <- mainProgram(conf)(scheduler)
       } yield ()
 
-    exec.unsafeRunSync
+    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
   }
 
-  private def mainProgram(conf: Configuration): Task[Unit] = {
+  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
       new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.portInternal)
     implicit val diagnosticsService: GrpcDiagnosticsService =
@@ -71,7 +72,7 @@ object Main {
     })
   }
 
-  private def nodeProgram(conf: Configuration): Task[Unit] =
+  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
       result <- new NodeRuntime(conf, host).main.value
