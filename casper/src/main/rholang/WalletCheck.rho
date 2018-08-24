@@ -20,7 +20,7 @@ contract @["WalletCheck", "create"](@hash, @purse) = {
       for (@done <- doneStore) {
         if (done) {
           doneStore!(done) |
-          *statusOut!([false, "Already claimed wallet"])
+          @statusOut!([false, "Already claimed wallet"])
         } else {
 
           // Verify signature 
@@ -38,36 +38,29 @@ contract @["WalletCheck", "create"](@hash, @purse) = {
 
                         // Create the wallet
                         @"BasicWallet"!(purse, "secp256k1", pubKey, *walletOut) |
-                        for (@wallet <- walletOut) {
-                          doneStore!(true) |
-                          
-                          // Install a forwarder to the wallet at a forgeable name.
-                          // TODO: This is completely insecure.  Once the
-                          //   registry is done, use that.
-                          statusOut!([true, pubKey]) |
-                          contract @{[pubKey, "getNonce"]}(return) = {
-                            @[wallet, "getNonce"]!(return)
-                          } |
-                          contract @{[pubKey, "getBalance"]}(return) = {
-                            @[wallet, "getBalance"]!(return)
-                          } |
-                          contract @{[pubKey, "deposit"]}(@amount, @src, success) = {
-                            @[wallet, "deposit"]!(amount, src, *success)
-                          } |
-                          contract @{[pubKey, "transfer"]}(@amount, @nonce, @sig, destination, status) = {
-                            @[wallet, "transfer"]!(amount, nonce, sig, *destination, *status)
-                          }
-                        }
+
+                        // Advertise the private name on a forgeable one
+                        // TODO: This is completely insecure.  Once the
+                        //   registry is done, use that.
+                        for (@[wallet] <- walletOut) {
+                          @pubKey!!(wallet) |
+                        
+                          // Return success
+                          @statusOut!([true, wallet])
+                        } |
+                        
+                        // All done
+                        doneStore!(true)
                       }
                     } else {
                       doneStore!(done) |
-                      statusOut!([false, "Public key is not the preimage of hash"])
+                      @statusOut!([false, "Public key is not the preimage of hash"])
                     }
                   }
                 }
               } else {
                 doneStore!(done) |
-                statusOut!([false, "Signature verification failed"])
+                @statusOut!([false, "Signature verification failed"])
               }
             }
           }
