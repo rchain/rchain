@@ -46,11 +46,20 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
             contract @[*basicWallet, "deposit"](@amount, @src, success) = {
               @[purse, "deposit"]!(amount, src, *success)
             } |
-            contract @[*basicWallet, "withdraw"](@amount, @nonce, @sig, return) = {
+            contract @[*basicWallet, "transfer"](@amount, @nonce, @sig, destination, status) = {
               new verifyResult in {
-                verify!(nonce, amount, *return, sig, *verifyResult) | for(@verified <- verifyResult) {
-                  if (verified) { @[purse, "split"]!(amount, *return) }
-                  else { return!([]) }
+                verify!(nonce, amount, *destination, sig, *verifyResult) | for(@verified <- verifyResult) {
+                  if (verified) { 
+                    new splitResultCh in {
+                      @[purse, "split"]!(amount, *splitResultCh) |
+                      for(@splitResult  <- splitResultCh) {
+                        match splitResult {
+                          []        => { status!("Overdraft") }
+                          [payment] => { destination!(payment) | status!("Success") }
+                        }
+                      }
+                    }
+                  } else { status!("Invalid signature or nonce") }
                 }
               }
             } |
