@@ -4,7 +4,7 @@ object Base16 {
   def encode(input: Array[Byte]): String = bytes2hex(input, None)
 
   def decode(input: String): Array[Byte] = {
-    val paddedInput = 
+    val paddedInput =
       if (input.length % 2 == 0) input
       else "0" + input
 

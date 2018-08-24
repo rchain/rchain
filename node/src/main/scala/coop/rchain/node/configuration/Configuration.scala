@@ -56,6 +56,8 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
+  private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
+  private val DefaultThreadPoolSize: Int        = 4000
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -130,7 +132,9 @@ object Configuration {
             dataDir,
             DefaultMapSize,
             DefaultStoreType,
-            DefaultMaxNumOfConnections
+            DefaultMaxNumOfConnections,
+            DefaultMaxMessageSize,
+            DefaultThreadPoolSize
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -268,6 +272,13 @@ object Configuration {
     val maxNumOfConnections = get(_.run.maxNumOfConnections,
                                   _.server.flatMap(_.maxNumOfConnections),
                                   DefaultMaxNumOfConnections)
+
+    val maxMessageSize: Int =
+      get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+
+    val threadPoolSize =
+      get(_.run.threadPoolSize, _.server.flatMap(_.threadPoolSize), DefaultThreadPoolSize)
+
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
     val server = Server(
@@ -283,7 +294,9 @@ object Configuration {
       dataDir,
       mapSize,
       storeType,
-      maxNumOfConnections
+      maxNumOfConnections,
+      maxMessageSize,
+      threadPoolSize
     )
     val grpcServer = GrpcServer(
       grpcHost,

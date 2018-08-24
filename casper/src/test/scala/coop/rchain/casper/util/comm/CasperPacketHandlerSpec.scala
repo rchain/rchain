@@ -74,8 +74,8 @@ class CasperPacketHandlerSpec extends WordSpec {
         fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
     }
     implicit val metrics = new MetricsNOP[Task]
-    implicit val lab = new TaskOps(LastApprovedBlock.of[Task])(
-      monix.execution.Scheduler.Implicits.global).unsafeRunSync
+    implicit val lab =
+      LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
