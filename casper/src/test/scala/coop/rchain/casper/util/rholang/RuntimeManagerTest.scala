@@ -1,15 +1,13 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
-
 import java.nio.file.Files
 
+import coop.rchain.casper.protocol.DeployCost
 import monix.execution.Scheduler.Implicits.global
-
 import org.scalatest.{FlatSpec, Matchers}
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
@@ -18,7 +16,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val activeRuntime    = Runtime.create(storageDirectory, storageSize)
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
-  "computeState" should "catpure rholang errors" in {
+  "computeState" should "capture rholang errors" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     val deploy =
       ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get, System.currentTimeMillis())
@@ -81,5 +79,37 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     testRuntime2.close()
 
     hash1 should be(hash2)
+  }
+
+  "computeState" should "charge deploys separately" in {
+    val terms = List(
+      """for(@x <- @"w") { @"z"!("Got x") }""",
+      """for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!(10)"""
+    )
+
+    def deployCost(p: Vector[DeployCost]): Long = p.flatMap(_.cost).map(_.cost).sum
+    val deploy = terms.map(t =>
+      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis()))
+    val Right((_, firstDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
+    val Right((_, secondDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.drop(1).head :: Nil)
+    val Right((_, compoundDeploy)) =
+      runtimeManager.computeState(runtimeManager.emptyStateHash, deploy)
+    assert(firstDeploy.size == 1)
+    val firstDeployCost = deployCost(firstDeploy)
+    assert(secondDeploy.size == 1)
+    val secondDeployCost = deployCost(secondDeploy)
+    assert(compoundDeploy.size == 2)
+    val compoundDeployCost = deployCost(compoundDeploy)
+    assert(firstDeployCost < compoundDeployCost)
+    assert(secondDeployCost < compoundDeployCost)
+    assert(
+      firstDeployCost == deployCost(
+        compoundDeploy.find(_.deploy.get == firstDeploy.head.deploy.get).toVector))
+    assert(
+      secondDeployCost == deployCost(
+        compoundDeploy.find(_.deploy.get == secondDeploy.head.deploy.get).toVector))
+    assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
   }
 }

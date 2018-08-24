@@ -30,10 +30,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
       implicit scheduler: Scheduler): Seq[Par] = {
-    val runtime           = getResetRuntime(start)
-    val deploy            = ProtoUtil.termDeploy(term, System.currentTimeMillis())
-    val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-    val evalRes           = eval(deploy :: Nil, runtime.reducer, runtime.errorLog, costAccountingAlg)
+    val runtime = getResetRuntime(start)
+    val deploy  = ProtoUtil.termDeploy(term, System.currentTimeMillis())
+    val evalRes = eval(deploy :: Nil, runtime.reducer, runtime.errorLog)
 
     //TODO: Is better error handling needed here?
     val result: Seq[Datum[ListChannelWithRandom]] = evalRes.fold(
@@ -68,9 +67,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             runtimeContainer.put(runtime)
             throw ex
         }
-        val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
         val error =
-          eval(terms, riggedRuntime.replayReducer, riggedRuntime.errorLog, costAccountingAlg)
+          eval(terms, riggedRuntime.replayReducer, riggedRuntime.errorLog)
         val newCheckpoint = error.fold[Either[DeployError, (Checkpoint, Vector[DeployCost])]](
           Left(_),
           replayDeployCost =>
@@ -83,8 +81,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   def computeState(hash: StateHash, terms: Seq[Deploy])(
       implicit scheduler: Scheduler): Either[DeployError, (Checkpoint, Vector[DeployCost])] = {
     val resetRuntime: Runtime = getResetRuntime(hash)
-    val costAccountingAlg     = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-    val error                 = eval(terms, resetRuntime.reducer, resetRuntime.errorLog, costAccountingAlg)
+    val error                 = eval(terms, resetRuntime.reducer, resetRuntime.errorLog)
     val newCheckpoint = error.fold[Either[DeployError, (Checkpoint, Vector[DeployCost])]](
       Left(_),
       deployCosts => Right((resetRuntime.space.createCheckpoint(), deployCosts)))
@@ -161,26 +158,25 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   private def eval(terms: Seq[Deploy],
                    reducer: Reduce[Task],
                    errorLog: ErrorLog,
-                   costAlg: CostAccountingAlg[Task],
                    accCost: Vector[DeployCost] = Vector.empty)(
       implicit scheduler: Scheduler): Either[DeployError, Vector[DeployCost]] =
     terms match {
       case deploy +: rest =>
         implicit val rand: Blake2b512Random = Blake2b512Random(
           DeployData.toByteArray(deploy.raw.get))
-        implicit val costAlgebra = costAlg
+        implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
         Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
           case Success(_) =>
             val errors     = errorLog.readAndClearErrorVector()
-            val cost       = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+            val cost       = CostAccount.toProto(costAccountingAlg.getCost().unsafeRunSync)
             val deployCost = DeployCost().withDeploy(deploy).withCost(cost)
             if (errors.isEmpty)
-              eval(rest, reducer, errorLog, costAlg, accCost :+ deployCost)
+              eval(rest, reducer, errorLog, accCost :+ deployCost)
             else
               Left((deploy, errors, accCost :+ deployCost))
           case Failure(ex) =>
             val otherErrors = errorLog.readAndClearErrorVector()
-            val cost        = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+            val cost        = CostAccount.toProto(costAccountingAlg.getCost().unsafeRunSync)
             val deployCost  = DeployCost().withDeploy(deploy).withCost(cost)
             Left((deploy, otherErrors :+ ex, accCost :+ deployCost))
         }
