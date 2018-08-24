@@ -73,7 +73,7 @@ object Runtime {
     }
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = Mixed): Runtime = {
     val context: RhoContext = storeType match {
       case InMem => Context.createInMemory()
       case LMDB =>
