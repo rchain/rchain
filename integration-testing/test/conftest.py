@@ -11,6 +11,12 @@ def pytest_addoption(parser):
     parser.addoption(
         "--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)"
     )
+    parser.addoption(
+        "--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 20 + peer_count * 10"
+    )
+    parser.addoption(
+        "--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10"
+    )
 
 
 
@@ -30,9 +36,11 @@ Config = collections.namedtuple( "Config",
 
 def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
+    start_timeout = int(request.config.getoption("--start-timeout"))
+    converge_timeout = int(request.config.getoption("--converge-timeout"))
     return Config(peer_count = peer_count,
-                  node_startup_timeout = 20 + peer_count * 10,
-                  network_converge_timeout = 200 + peer_count * 2
+                  node_startup_timeout = start_timeout if start_timeout > 0 else 20 + peer_count * 10,
+                  network_converge_timeout = converge_timeout if converge_timeout > 0 else 200 + peer_count * 2
                   )
 
 @pytest.fixture(scope="module")
