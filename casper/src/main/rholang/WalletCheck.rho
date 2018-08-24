@@ -15,41 +15,47 @@ contract @["WalletCheck", "create"](@hash, @purse) = {
     // name statusOut
     // bytearray sig: signature of [pubKey, statusOut]
     contract @hash(@[pubKey, statusOut], @sig) = {
+      
+      // Make sure the purse hasn't already been claimed
       for (@done <- doneStore) {
         if (done) {
           doneStore!(done) |
           *statusOut!([false, "Already claimed wallet"])
         } else {
-          // verify signature 
+
+          // Verify signature 
           new verifiedOut in {
             @"secp256k1Verify"!([pubKey, statusOut].toByteArray(), sig, pubKey, *verifiedOut) |
             for (@verified <- verifiedOut) {
               if (verified) {
                 new hashOut in {
+
+                  // Check that given pubKey is the preimage of hash
                   @"keccak256Hash"!(pubKey.toByteArray(), *hashOut) |
                   for (@pkHash <- hashOut) {
                     if (pkHash == hash) {
                       new walletOut in {
+
+                        // Create the wallet
                         @"BasicWallet"!(purse, "secp256k1", pubKey, *walletOut) |
                         for (@wallet <- walletOut) {
                           doneStore!(true) |
-                          new pkbaOut in {
-                            pkbaOut!(pubKey.toByteArray()) |
-                            for (@pkba <- pkbaOut) {
-                              statusOut!([true, pkba]) |
-                              contract @{[pkba, "getNonce"]}(return) = {
-                                @[wallet, "getNonce"]!(return)
-                              } |
-                              contract @{[pkba, "getBalance"]}(return) = {
-                                @[wallet, "getBalance"]!(return)
-                              } |
-                              contract @{[pkba, "deposit"]}(@amount, @src, success) = {
-                                @[wallet, "deposit"]!(amount, src, *success)
-                              } |
-                              contract @{[pkba, "transfer"]}(@amount, @nonce, @sig, destination, status) = {
-                                @[wallet, "transfer"]!(amount, nonce, sig, *destination, *status)
-                              }
-                            }
+                          
+                          // Install a forwarder to the wallet at a forgeable name.
+                          // TODO: This is completely insecure.  Once the
+                          //   registry is done, use that.
+                          statusOut!([true, pubKey]) |
+                          contract @{[pubKey, "getNonce"]}(return) = {
+                            @[wallet, "getNonce"]!(return)
+                          } |
+                          contract @{[pubKey, "getBalance"]}(return) = {
+                            @[wallet, "getBalance"]!(return)
+                          } |
+                          contract @{[pubKey, "deposit"]}(@amount, @src, success) = {
+                            @[wallet, "deposit"]!(amount, src, *success)
+                          } |
+                          contract @{[pubKey, "transfer"]}(@amount, @nonce, @sig, destination, status) = {
+                            @[wallet, "transfer"]!(amount, nonce, sig, *destination, *status)
                           }
                         }
                       }
