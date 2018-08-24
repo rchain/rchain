@@ -674,6 +674,9 @@ trait SpatialMatcherInstances {
         case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
           foldMatch(tlist, plist).map(_ => Unit)
         }
+        case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, _))) =>
+          listMatchSingle(tlist.toSeq, plist.toSeq)
+
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
           if (vp == vt)
