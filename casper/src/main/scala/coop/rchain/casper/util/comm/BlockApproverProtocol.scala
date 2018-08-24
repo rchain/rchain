@@ -113,7 +113,7 @@ object BlockApproverProtocol {
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
       stateHash <- runtimeManager
                     .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
-                    .leftMap(ex => s"Error during replay: ${ex.getMessage}.")
+                    .leftMap { case (_, status) => s"Failed status during replay: $status." }
       _ <- (stateHash == postState.tuplespace)
             .either(())
             .or("Tuplespace hash mismatch.")

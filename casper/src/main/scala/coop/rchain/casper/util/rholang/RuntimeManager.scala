@@ -54,7 +54,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
-      implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
+      implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
     val runtime = runtimeContainer.take()
     val result  = replayEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
@@ -164,22 +164,22 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   private def replayEval(
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime,
-      initHash: StateHash)(implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
+      initHash: StateHash)(implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
     implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
 
     def doReplayEval(terms: Seq[InternalProcessedDeploy],
-                     hash: Blake2b256Hash): Either[Throwable, StateHash] =
+                     hash: Blake2b256Hash): Either[(Deploy, Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
           val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
           DeployStatus.fromErrors(errors) match {
-            case UntracedCommEvent(ex) => Left(ex)
+            case ute: UntracedCommEvent => Left(deploy -> ute)
+            case int: InternalErrors    => Left(deploy -> int)
             case replayStatus =>
               if (status.isFailed != replayStatus.isFailed)
-                Left(new Exception(
-                  s"Replay status $replayStatus did not match expected status $status for deploy ${buildString(deploy)}"))
+                Left(deploy -> ReplayStatusMismatch(replayStatus, status))
               else if (errors.nonEmpty) doReplayEval(rem, hash)
               else {
                 val newCheckpoint = runtime.replaySpace.createCheckpoint()

@@ -61,7 +61,7 @@ sealed abstract class MultiParentCasperInstances {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def hashSetCasper[
-      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -78,12 +78,19 @@ sealed abstract class MultiParentCasperInstances {
                                           Set[StateHash](runtimeManager.emptyStateHash),
                                           runtimeManager)
       (maybePostGenesisStateHash, _) = validateBlockCheckpointResult
+      postGenesisStateHash <- maybePostGenesisStateHash match {
+                               case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                               case Right(None) =>
+                                 Sync[F].raiseError[StateHash](
+                                   new Exception("Genesis tuplespace validation failed!"))
+                               case Right(Some(hash)) => hash.pure[F]
+                             }
     } yield
       createMultiParentCasper[F](runtimeManager,
                                  validatorId,
                                  genesis,
                                  dag,
-                                 maybePostGenesisStateHash,
+                                 postGenesisStateHash,
                                  shardId)
   }
 
@@ -93,7 +100,7 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       initialDag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash],
+      postGenesisStateHash: StateHash,
       shardId: String)(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -107,13 +114,9 @@ sealed abstract class MultiParentCasperInstances {
       private val emptyStateHash = runtimeManager.emptyStateHash
 
       private val knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]] =
-        maybePostGenesisStateHash match {
-          case Some(postGenesisStateHash) =>
-            AtomicSyncVarF.of[F, Set[StateHash]](
-              Set[StateHash](emptyStateHash, postGenesisStateHash)
-            )
-          case None => throw new Error("Genesis block validation failed.")
-        }
+        AtomicSyncVarF.of[F, Set[StateHash]](
+          Set[StateHash](emptyStateHash, postGenesisStateHash)
+        )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
@@ -492,7 +495,8 @@ sealed abstract class MultiParentCasperInstances {
           case Processing =>
             throw new RuntimeException(s"A block should not be processing at this stage.")
           case BlockException(ex) =>
-            throw new RuntimeException(s"Encountered exception in block: ${ex.getMessage}")
+            Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
+              .buildString(block.blockHash)}: ${ex.getMessage}")
         }
 
       private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =

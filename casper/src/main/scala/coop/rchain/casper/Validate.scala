@@ -161,7 +161,7 @@ object Validate {
       block: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag,
-      shardId: String): F[Either[InvalidBlock, ValidBlock]] =
+      shardId: String): F[Either[BlockStatus, ValidBlock]] =
     for {
       missingBlockStatus <- Validate.missingBlocks[F](block, dag)
       timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
@@ -442,25 +442,27 @@ object Validate {
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]])(
-      implicit scheduler: Scheduler): F[Either[InvalidBlock, ValidBlock]] =
+      implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
     for {
-      maybeStateHash <- knownStateHashesContainer.modify[Option[StateHash]] { knownStateHashes =>
-                         for {
-                           //invalid blocks return None and don't update the checkpoints
-                           validateBlockCheckpointResult <- InterpreterUtil
-                                                             .validateBlockCheckpoint[F](
-                                                               block,
-                                                               genesis,
-                                                               dag,
-                                                               knownStateHashes,
-                                                               runtimeManager)
-                           (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
-                         } yield (updatedknownStateHashes, maybeStateHash)
-                       }
+      maybeStateHash <- knownStateHashesContainer
+                         .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
+                           for {
+                             //invalid blocks return None and don't update the checkpoints
+                             validateBlockCheckpointResult <- InterpreterUtil
+                                                               .validateBlockCheckpoint[F](
+                                                                 block,
+                                                                 genesis,
+                                                                 dag,
+                                                                 knownStateHashes,
+                                                                 runtimeManager)
+                             (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
+                           } yield (updatedknownStateHashes, maybeStateHash)
+                         }
     } yield
       maybeStateHash match {
-        case Some(_) => Right(Valid)
-        case None    => Left(InvalidTransaction)
+        case Left(ex)       => Left(ex)
+        case Right(Some(_)) => Right(Valid)
+        case Right(None)    => Left(InvalidTransaction)
       }
 
   /**

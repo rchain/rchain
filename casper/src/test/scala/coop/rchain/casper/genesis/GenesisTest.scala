@@ -178,7 +178,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
       )
     activeRuntime.close()
 
-    maybePostGenesisStateHash.isEmpty should be(false)
+    maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
   }
 
   it should "detect an existing bonds file in the default location" in {

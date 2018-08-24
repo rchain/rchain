@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, BlockException, PrettyPrinter}
 import coop.rchain.casper.PrettyPrinter.buildString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
@@ -31,12 +31,13 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Monad: BlockStore](b: BlockMessage,
-                                                       genesis: BlockMessage,
-                                                       dag: BlockDag,
-                                                       knownStateHashes: Set[StateHash],
-                                                       runtimeManager: RuntimeManager)(
-      implicit scheduler: Scheduler): F[(Option[StateHash], Set[StateHash])] = {
+  def validateBlockCheckpoint[F[_]: Monad: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag,
+      knownStateHashes: Set[StateHash],
+      runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
+    : F[(Either[BlockException, Option[StateHash]], Set[StateHash])] = {
     val tsHash          = ProtoUtil.tuplespace(b)
     val deploys         = ProtoUtil.deploys(b)
     val internalDeploys = deploys.flatMap(ProcessedDeployUtil.toInternal)
@@ -45,18 +46,29 @@ object InterpreterUtil {
       cpps                                       <- computeParentsPostState[F](parents, genesis, dag, knownStateHashes, runtimeManager)
       (possiblePreStateHash, updatedStateHashes) = cpps
     } yield
-      possiblePreStateHash.flatMap(runtimeManager.replayComputeState(_, internalDeploys)) match {
-        //TODO Log errors somewhere?
-        case Left(_) => None -> knownStateHashes
+      possiblePreStateHash match {
+        case Left(ex) => Left(BlockException(ex)) -> knownStateHashes
+        case Right(parentStateHash) =>
+          runtimeManager.replayComputeState(parentStateHash, internalDeploys) match {
+            case Left((deploy, status)) =>
+              status match {
+                case InternalErrors(exs) =>
+                  Left(
+                    BlockException(
+                      new Exception(s"Internal errors encountered while processing ${PrettyPrinter
+                        .buildString(deploy)}: ${exs.mkString("\n")}"))) -> knownStateHashes
+                case _ => Right(None) -> knownStateHashes
+              }
 
-        case Right(computedStateHash) =>
-          if (tsHash.contains(computedStateHash)) {
-            // state hash in block matches computed hash!
-            Some(computedStateHash) -> (updatedStateHashes + computedStateHash)
-          } else {
-            // state hash in block does not match computed hash -- invalid!
-            // return no state hash, do not update the state hash set
-            None -> knownStateHashes
+            case Right(computedStateHash) =>
+              if (tsHash.contains(computedStateHash)) {
+                // state hash in block matches computed hash!
+                Right(Some(computedStateHash)) -> (updatedStateHashes + computedStateHash)
+              } else {
+                // state hash in block does not match computed hash -- invalid!
+                // return no state hash, do not update the state hash set
+                Right(None) -> knownStateHashes
+              }
           }
       }
   }
@@ -134,9 +146,9 @@ object InterpreterUtil {
 
       } yield
         runtimeManager.replayComputeState(gcaStateHash, deploys) match {
-          case result @ Right(hash) => result -> (knownStateHashes + hash)
-          case Left(ex) =>
-            Left(new Exception(s"Error computing parent post state: ${ex.getMessage}")) -> knownStateHashes
+          case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
+          case Left((_, status)) =>
+            Left(new Exception(s"Failed status while computing parent post state: $status")) -> knownStateHashes
         }
     }
   }
