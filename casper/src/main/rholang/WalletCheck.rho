@@ -1,0 +1,72 @@
+// WalletCheck: holds funds until a public key with the given hash is presented,
+//     then creates a wallet with that public key and those funds.
+
+// create: makes a wallet check
+//
+// bytearray hash: the hash of the public key
+// Purse purse: the funds to put in the wallet
+contract @["WalletCheck", "create"](@hash, @purse) = {
+  new doneStore in {
+    doneStore!(false) |
+    
+    // claims the wallet by presenting the preimage of the hash
+    //
+    // bytearray pubkey
+    // name statusOut
+    // bytearray sig: signature of [pubKey, statusOut]
+    contract @hash(@[pubKey, statusOut], @sig) = {
+      for (@done <- doneStore) {
+        if (done) {
+          doneStore!(done) |
+          *statusOut!([false, "Already claimed wallet"])
+        } else {
+          // verify signature 
+          new verifiedOut in {
+            @"secp256k1Verify"!([pubKey, statusOut].toByteArray(), sig, pubKey, *verifiedOut) |
+            for (@verified <- verifiedOut) {
+              if (verified) {
+                new hashOut in {
+                  @"keccak256Hash"!(pubKey.toByteArray(), *hashOut) |
+                  for (@pkHash <- hashOut) {
+                    if (pkHash == hash) {
+                      new walletOut in {
+                        @"BasicWallet"!(purse, "secp256k1", pubKey, *walletOut) |
+                        for (@wallet <- walletOut) {
+                          doneStore!(true) |
+                          new pkbaOut in {
+                            pkbaOut!(pubKey.toByteArray()) |
+                            for (@pkba <- pkbaOut) {
+                              statusOut!([true, pkba]) |
+                              contract @{[pkba, "getNonce"]}(return) = {
+                                @[wallet, "getNonce"]!(return)
+                              } |
+                              contract @{[pkba, "getBalance"]}(return) = {
+                                @[wallet, "getBalance"]!(return)
+                              } |
+                              contract @{[pkba, "deposit"]}(@amount, @src, success) = {
+                                @[wallet, "deposit"]!(amount, src, *success)
+                              } |
+                              contract @{[pkba, "transfer"]}(@amount, @nonce, @sig, destination, status) = {
+                                @[wallet, "transfer"]!(amount, nonce, sig, *destination, *status)
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } else {
+                      doneStore!(done) |
+                      statusOut!([false, "Public key is not the preimage of hash"])
+                    }
+                  }
+                }
+              } else {
+                doneStore!(done) |
+                statusOut!([false, "Signature verification failed"])
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
