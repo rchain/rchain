@@ -2,9 +2,9 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
 
+import coop.rchain.casper.util.comm.DeployRuntime.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
-
 import org.rogach.scallop._
 
 object Converter {
@@ -30,6 +30,25 @@ object Converter {
       flagConverter.parse(s).map(_.map(flag))
 
     val argType: ArgType.V = ArgType.FLAG
+  }
+
+  implicit val nameProviderConverter = new ValueConverter[String => Name] {
+    import cats.syntax.traverse._
+    import cats.instances.option._
+    import cats.instances.either._
+
+    override def parse(s: List[(String, List[String])]) = {
+      val optMap  = s.toMap
+      val typeOpt = optMap.get("type").orElse(optMap.get("t"))
+
+      typeOpt.traverse[Either[String, ?], String => Name] {
+        case "priv" :: _ => Right(PrivName.apply _)
+        case "pub" :: _  => Right(PubName.apply _)
+        case _           => Left("Bad option value. Use \"pub\" or \"priv\"")
+      }
+    }
+
+    override val argType = ArgType.SINGLE
   }
 }
 
@@ -231,6 +250,34 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "View list of blocks on the main chain in the current Casper view on an existing running node.")
   }
   addSubcommand(showBlocks)
+
+  def listenAtName(name: String, desc: String) = new Subcommand(name) {
+    descr(desc)
+
+    val typeOfName =
+      opt[String => Name](required = true,
+                          descr = "Type of the specified name",
+                          name = "type",
+                          short = 't')
+
+    val content =
+      opt[String](required = true, descr = "Rholang name", name = "content", short = 'c')
+
+    val name: ScallopOption[Name] =
+      for {
+        content <- content
+        f       <- typeOfName
+      } yield f(content)
+  }
+
+  val dataAtName =
+    listenAtName("listen-data-at-name", "Listen for data at the specified name")
+
+  val contAtName =
+    listenAtName("listen-cont-at-name", "Listen for continuation at the specified name")
+
+  addSubcommand(dataAtName)
+  addSubcommand(contAtName)
 
   val propose = new Subcommand("propose") {
     descr(

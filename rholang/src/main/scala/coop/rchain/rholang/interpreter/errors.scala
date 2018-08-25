@@ -11,7 +11,9 @@ object errors {
   type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
   def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
 
-  trait InterpreterError                                          extends Throwable
+  trait InterpreterError extends Throwable {
+    override def getMessage = toString
+  }
   final case class NormalizerError(override val toString: String) extends InterpreterError
   final case class SyntaxError(override val toString: String)     extends InterpreterError
   final case class UnboundVariableRef(varName: String, line: Int, col: Int)

@@ -2,16 +2,21 @@ package coop.rchain.casper.util.comm
 
 import scala.io.Source
 import scala.util._
-
 import cats.Monad
 import cats.implicits._
-
-import coop.rchain.casper.protocol.{BlockQuery, DeployData}
+import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.{BlockQuery, Channels, DeployData, DeployServiceGrpc}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.models.{Channel, GPrivate, Par}
+import coop.rchain.models.Channel.ChannelInstance
 
 object DeployRuntime {
+  sealed trait Name
+  final case class PrivName(content: String) extends Name
+  final case class PubName(content: String)  extends Name
 
   type ErrorHandler[F[_]] = ApplicativeError_[F, Throwable]
 
@@ -28,6 +33,42 @@ object DeployRuntime {
 
   def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
     gracefulExit(DeployService[F].showBlocks.map(println(_)))
+
+  private def listenAtName[F[_]: Monad: ErrorHandler: Capture](name: Name)(
+      retrieve: Par => F[String]) = {
+
+    import coop.rchain.models.rholang.implicits._
+
+    val par: Either[Throwable, Par] = name match {
+      case PubName(content) => InterpreterUtil.mkTerm(content)
+      case PrivName(content) =>
+        val par: Par = GPrivate(ByteString.copyFrom(content.getBytes))
+        Right(par)
+    }
+
+    val program =
+      for {
+        par    <- implicitly[ErrorHandler[F]].fromEither(par)
+        result <- retrieve(par)
+        _      <- Capture[F].capture(println(s"The result is: $result"))
+      } yield ()
+
+    gracefulExit(program)
+  }
+
+  def listenForDataAtName[F[_]: Monad: ErrorHandler: Capture: DeployService](name: Name): F[Unit] =
+    listenAtName(name) { par =>
+      val request = Channel(ChannelInstance.Quote(par))
+      DeployService[F].listenForDataAtName(request)
+    }
+
+  def listenForContinuationAtName[F[_]: Monad: ErrorHandler: Capture: DeployService](
+      name: Name): F[Unit] =
+    listenAtName(name) { par =>
+      val channel = Channel(ChannelInstance.Quote(par))
+      val request = Channels(Seq(channel))
+      DeployService[F].listenForContinuationAtName(request)
+    }
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](purseAddress: String,

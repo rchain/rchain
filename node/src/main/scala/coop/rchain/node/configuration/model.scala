@@ -2,6 +2,7 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
+import coop.rchain.casper.util.comm.DeployRuntime.Name
 import coop.rchain.comm.PeerNode
 
 case class Server(
@@ -45,3 +46,5 @@ case class ShowBlock(hash: String) extends Command
 case object ShowBlocks             extends Command
 case object Run                    extends Command
 case object Help                   extends Command
+case class DataAtName(name: Name)  extends Command
+case class ContAtName(name: Name)  extends Command
