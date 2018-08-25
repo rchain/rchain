@@ -13,6 +13,9 @@ import coop.rchain.node.IpChecker
 import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.StoreType
+import coop.rchain.shared.StoreType._
+
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -42,7 +45,7 @@ object Configuration {
   private val DefaultTimeout                    = 2000
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultInMemoryStore: Boolean     = false
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -53,6 +56,8 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
+  private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
+  private val DefaultThreadPoolSize: Int        = 4000
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -90,7 +95,6 @@ object Configuration {
     for {
       options <- Task.delay(commandline.Options(arguments))
       profile <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
-      _       <- log.info(s"Starting with profile ${profile.name}")
       result  <- apply(options, subcommand(options), profile)
     } yield result
 
@@ -99,15 +103,19 @@ object Configuration {
     if (command == Run) {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+        _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
         result <- Task.pure(apply(effectiveDataDir, options, config))
+        _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
       val dataDir = profile.dataDir._1()
+      System.setProperty("rnode.data.dir", dataDir.toString)
       Task.pure(
         new Configuration(
           command,
@@ -123,8 +131,10 @@ object Configuration {
             DefaultGenesisValidator,
             dataDir,
             DefaultMapSize,
-            inMemoryStore = false,
-            DefaultMaxNumOfConnections
+            DefaultStoreType,
+            DefaultMaxNumOfConnections,
+            DefaultMaxMessageSize,
+            DefaultThreadPoolSize
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -231,8 +241,8 @@ object Configuration {
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
-    val inMemoryStore: Boolean =
-      get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
+    val storeType: StoreType =
+      get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
                                          _.server.flatMap(_.casperBlockStoreSize),
                                          DefaultCasperBlockStoreSize)
@@ -262,6 +272,13 @@ object Configuration {
     val maxNumOfConnections = get(_.run.maxNumOfConnections,
                                   _.server.flatMap(_.maxNumOfConnections),
                                   DefaultMaxNumOfConnections)
+
+    val maxMessageSize: Int =
+      get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+
+    val threadPoolSize =
+      get(_.run.threadPoolSize, _.server.flatMap(_.threadPoolSize), DefaultThreadPoolSize)
+
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
     val server = Server(
@@ -276,8 +293,10 @@ object Configuration {
       genesisValidator,
       dataDir,
       mapSize,
-      inMemoryStore,
-      maxNumOfConnections
+      storeType,
+      maxNumOfConnections,
+      maxMessageSize,
+      threadPoolSize
     )
     val grpcServer = GrpcServer(
       grpcHost,

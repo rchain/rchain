@@ -26,6 +26,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics.{MetricsServer, _}
+import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.ThrowableOps._
@@ -40,8 +41,6 @@ import scala.util.{Failure, Success, Try}
 class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-
-  private val maxMessageSize: Int = 100 * 1024 * 1024 // TODO should be part of configuration
 
   implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
@@ -135,7 +134,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
-  private val inMemoryStore     = conf.server.inMemoryStore
+  private val storeType         = conf.server.storeType
   private val defaultTimeout    = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS) // TODO remove
 
   /** Final Effect + helper methods */
@@ -291,7 +290,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
               .error(
                 "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
           case th =>
-            th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+            log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+              th.printStackTrace();
+            }
         } *> exit0.as(Right(())))
 
   private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] = new Timer[Effect] {
@@ -331,12 +332,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-    transport = effects.tcpTransportLayer(host,
-                                          port,
-                                          conf.tls.certificate,
-                                          conf.tls.key,
-                                          maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport, time)
+    transport = effects.tcpTransportLayer(
+      host,
+      port,
+      conf.tls.certificate,
+      conf.tls.key,
+      conf.server.maxMessageSize)(scheduler, tcpConnections, log)
+    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
@@ -347,10 +349,11 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       syncEffect,
       Metrics.eitherT(Monad[Task], metrics))
+
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
-    runtime        = Runtime.create(storagePath, storageSize, inMemoryStore)
-    casperRuntime  = Runtime.create(casperStoragePath, storageSize, inMemoryStore)
+    runtime        = Runtime.create(storagePath, storageSize, storeType)
+    casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
     casperPacketHandler <- CasperPacketHandler
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(

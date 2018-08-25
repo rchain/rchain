@@ -85,8 +85,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
         _ <- s.connections.get(peer) match {
               case Some(c) => Task.delay(c.shutdown()).attempt.void
-              case _ =>
-                log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
+              case _       => Task.unit // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }
@@ -104,19 +103,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
     withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
-      .doOnFinish {
-        case None    => Task.unit
-        case Some(e) =>
-          // TODO: Add other human readable messages for status codes
-          val msg = e match {
-            case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.UNAVAILABLE =>
-              "The service is currently unavailable"
-            case _ =>
-              e.printStackTrace()
-              e.getMessage
-          }
-          log.warn(s"Failed to send a message to peer ${peer.toAddress}: $msg")
-      }
 
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,

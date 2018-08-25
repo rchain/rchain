@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
+import coop.rchain.shared.StoreType
 import org.rogach.scallop._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -48,6 +49,21 @@ object Converter {
 
       override val argType: ArgType.V = ArgType.SINGLE
     }
+
+  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
+      s match {
+        case (_, storeType :: Nil) :: Nil =>
+          StoreType
+            .from(storeType)
+            .map(u => Right(Some(u)))
+            .getOrElse(Left("can't parse the store type"))
+        case Nil => Right(None)
+        case _   => Left("provide the store type")
+      }
+    val argType: ArgType.V = ArgType.SINGLE
+  }
+
 }
 
 object Options {
@@ -181,10 +197,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
-    val inMemoryStore = opt[Boolean](required = false, descr = "Use in-memory store beneath RSpace")
+    val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
 
     val maxNumOfConnections =
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+
+    val maxMessageSize =
+      opt[Int](descr = "Maximum size of message that can be sent via transport layer")
+
+    val threadPoolSize =
+      opt[Int](descr = "Maximum number of threads used by rnode")
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")

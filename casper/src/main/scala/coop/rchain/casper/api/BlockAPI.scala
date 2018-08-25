@@ -169,8 +169,11 @@ object BlockAPI {
   private def isListeningNameReduced(
       block: BlockMessage,
       sortedListeningName: immutable.Seq[Channel])(implicit channelCodec: Codec[Channel]) = {
-    val serializedLog =
-      block.body.fold(Seq.empty[Event])(_.commReductions)
+    val serializedLog = for {
+      bd    <- block.body.toSeq
+      pd    <- bd.deploys
+      event <- pd.log
+    } yield event
     val log =
       serializedLog.map(EventConverter.toRspaceEvent).toList
     log.exists {
@@ -351,6 +354,9 @@ object BlockAPI {
     case Some(Processing) =>
       DeployServiceResponse(success = false,
                             "No action taken since other thread is already processing the block.")
-    case None => DeployServiceResponse(success = false, "No block was created.")
+    case None =>
+      DeployServiceResponse(
+        success = false,
+        "No block was created. Either no new deploys have been received or the node may be in read-only mode.")
   }
 }

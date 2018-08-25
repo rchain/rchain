@@ -14,6 +14,8 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.shared.StoreType
+import coop.rchain.shared.StoreType._
 import monix.eval.Task
 
 import scala.collection.immutable
@@ -70,14 +72,20 @@ object Runtime {
         )
     }
 
-  def create(dataDir: Path, mapSize: Long, inMemoryStore: Boolean = false): Runtime = {
-    val context: RhoContext = if (inMemoryStore) {
-      Context.createInMemory()
-    } else {
-      if (Files.notExists(dataDir)) {
-        Files.createDirectories(dataDir)
-      }
-      Context.create(dataDir, mapSize, true)
+  // TODO: remove default store type
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+    val context: RhoContext = storeType match {
+      case InMem => Context.createInMemory()
+      case LMDB =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        Context.create(dataDir, mapSize, true)
+      case Mixed =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        Context.createMixed(dataDir, mapSize)
     }
 
     val space: RhoRSpace             = RSpace.create(context, Branch.MASTER)

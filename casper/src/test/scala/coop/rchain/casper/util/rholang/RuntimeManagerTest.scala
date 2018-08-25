@@ -1,12 +1,10 @@
 package coop.rchain.casper.util.rholang
 
-import com.google.protobuf.ByteString
+import java.nio.file.Files
+
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
-import java.nio.file.Files
-
-import coop.rchain.casper.protocol.DeployCost
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -17,12 +15,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "capture rholang errors" in {
-    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
-    val deploy =
-      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(badRholang).right.get, System.currentTimeMillis())
-    val result = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
+    val badRholang       = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val deploy           = ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(badRholang).right.get)
+    val (_, Seq(result)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploy :: Nil)
 
-    result.isLeft should be(true)
+    result.status.isFailed should be(true)
   }
 
   "captureResult" should "return the value at the specified channel after a rholang computation" in {
@@ -33,8 +30,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
     ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
 
-    val Right((checkpoint, _)) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
-    val hash                   = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+    val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
@@ -70,7 +66,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
     val hash1               = testRuntimeManager1.emptyStateHash
     val deploy              = ProtoUtil.basicDeploy(0)
-    val Right(_)            = testRuntimeManager1.computeState(hash1, deploy :: Nil)
+    val _                   = testRuntimeManager1.computeState(hash1, deploy :: Nil)
     testRuntime1.close()
 
     val testRuntime2        = Runtime.create(testStorageDirectory, storageSize)
@@ -87,14 +83,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       """for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!(10)"""
     )
 
-    def deployCost(p: Vector[DeployCost]): Long = p.flatMap(_.cost).map(_.cost).sum
+    def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost).map(_.cost).sum
     val deploy = terms.map(t =>
       ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis()))
-    val Right((_, firstDeploy)) =
+    val (_, firstDeploy) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
-    val Right((_, secondDeploy)) =
+    val (_, secondDeploy) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.drop(1).head :: Nil)
-    val Right((_, compoundDeploy)) =
+    val (_, compoundDeploy) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, deploy)
     assert(firstDeploy.size == 1)
     val firstDeployCost = deployCost(firstDeploy)
@@ -106,10 +102,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     assert(secondDeployCost < compoundDeployCost)
     assert(
       firstDeployCost == deployCost(
-        compoundDeploy.find(_.deploy.get == firstDeploy.head.deploy.get).toVector))
+        compoundDeploy.find(_.deploy == firstDeploy.head.deploy).toVector))
     assert(
       secondDeployCost == deployCost(
-        compoundDeploy.find(_.deploy.get == secondDeploy.head.deploy.get).toVector))
+        compoundDeploy.find(_.deploy == secondDeploy.head.deploy).toVector))
     assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
   }
 }
