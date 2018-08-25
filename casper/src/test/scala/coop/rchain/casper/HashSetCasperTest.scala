@@ -117,7 +117,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     logEff.warns.isEmpty should be(true)
     logEff.infos.zip(logMessages).forall { case (a, b) => a.startsWith(b) } should be(true)
-    MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock))
+    val dag = MultiParentCasper[Id].blockDag
+    MultiParentCasper[Id].estimator(dag) should be(IndexedSeq(signedBlock))
     node.tearDown()
   }
 
@@ -141,7 +142,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     logEff.warns should be(Nil)
     ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-    MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock2))
+    val dag = MultiParentCasper[Id].blockDag
+    MultiParentCasper[Id].estimator(dag) should be(IndexedSeq(signedBlock2))
     storage.contains("!(12)") should be(true)
     node.tearDown()
   }

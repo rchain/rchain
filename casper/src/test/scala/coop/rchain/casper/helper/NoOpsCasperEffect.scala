@@ -23,7 +23,7 @@ object NoOpsCasperEffect {
       def addBlock(b: BlockMessage): F[BlockStatus]                      = BlockStatus.valid.pure[F]
       def contains(b: BlockMessage): F[Boolean]                          = false.pure[F]
       def deploy(r: DeployData): F[Either[Throwable, Unit]]              = Applicative[F].pure(Right(()))
-      def estimator: F[IndexedSeq[BlockMessage]]                         = estimatorFunc
+      def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]]          = estimatorFunc
       def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
       def blockDag: F[BlockDag]                                          = blockDagFunc
       def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]

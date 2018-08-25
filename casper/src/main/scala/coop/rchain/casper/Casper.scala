@@ -36,7 +36,7 @@ trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
-  def estimator: F[A]
+  def estimator(dag: BlockDag): F[A]
   def createBlock: F[Option[BlockMessage]]
 }
 
@@ -193,7 +193,7 @@ sealed abstract class MultiParentCasperInstances {
                 case _ =>
                   reAttemptBuffer // reAttempt for any status that resulted in the adding of the block into the view
               }
-          estimates <- estimator
+          estimates <- estimator(dag)
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
@@ -247,10 +247,10 @@ sealed abstract class MultiParentCasperInstances {
             Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
         }
 
-      def estimator: F[IndexedSeq[BlockMessage]] =
+      def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
         for {
           lastFinalizedBlock <- lastFinalizedBlockContainer.get
-          rankedEstimates    <- Estimator.tips[F](_blockDag.get, lastFinalizedBlock)
+          rankedEstimates    <- Estimator.tips[F](dag, lastFinalizedBlock)
         } yield rankedEstimates
 
       /*
@@ -265,8 +265,8 @@ sealed abstract class MultiParentCasperInstances {
       def createBlock: F[Option[BlockMessage]] = validatorId match {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
           for {
-            orderedHeads   <- estimator
             dag            <- blockDag
+            orderedHeads   <- estimator(dag)
             p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
             r              <- remDeploys(dag, p)
             justifications = toJustification(dag.latestMessages)
