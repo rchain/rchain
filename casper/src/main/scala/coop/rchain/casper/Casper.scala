@@ -22,7 +22,6 @@ import coop.rchain.shared.AttemptOps._
 import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{HashMap, HashSet}
-
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
@@ -31,6 +30,8 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rspace.Checkpoint
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
+
+import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
@@ -138,6 +139,8 @@ sealed abstract class MultiParentCasperInstances {
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
 
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
+      private val createBlockLock  = new SyncVar[Unit]()
+      createBlockLock.put(())
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
         for {
@@ -265,6 +268,8 @@ sealed abstract class MultiParentCasperInstances {
       def createBlock: F[Option[BlockMessage]] = validatorId match {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
           for {
+            _              <- createBlockLock.take.pure[F]
+            _              <- Log[F].debug("createBlock has started")
             dag            <- blockDag
             orderedHeads   <- estimator(dag)
             p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
@@ -275,10 +280,11 @@ sealed abstract class MultiParentCasperInstances {
                        } else {
                          none[BlockMessage].pure[F]
                        }
-          } yield
-            proposal.map(
+            signedBlock = proposal.map(
               signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
             )
+            _ <- createBlockLock.put(()).pure[F]
+          } yield signedBlock
 
         case None => none[BlockMessage].pure[F]
       }
