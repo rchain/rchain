@@ -34,7 +34,7 @@ object Cell extends CellInstances0 {
       s = newS
       ()
     }
-    def read: F[S]                    = s.pure[F]
+    def read: F[S] = s.pure[F]
   }
 
   def id[S](init: S): Cell[Id, S] = new Cell[Id, S] {
