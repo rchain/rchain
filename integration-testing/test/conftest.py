@@ -3,13 +3,13 @@ import pytest
 import tools.random as random
 
 from tools.rnode import create_bootstrap_node, create_peer_nodes
-from tools.wait import wait_for, contains, node_logs, network_converged
+from tools.wait import wait_for, string_matches, node_logs, network_converged
 
 import collections
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--peer-count", action="store", default="1", help="number of peers in the network (excluding bootstrap node)"
+        "--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)"
     )
 
 
@@ -76,10 +76,10 @@ def bootstrap(docker, docker_network):
 
 @pytest.fixture(scope="module")
 def started_bootstrap(config, bootstrap):
-    assert wait_for( contains( node_logs(bootstrap),
-                               "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
-                     config.node_startup_timeout), \
-        "Bootstrap node didn't start correctly"
+    wait_for( string_matches( node_logs(bootstrap),
+                              "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
+              config.node_startup_timeout,
+        "Bootstrap node didn't start correctly")
     yield bootstrap
 
 @pytest.fixture(scope="module")
@@ -96,18 +96,18 @@ def rchain_network(config, docker, started_bootstrap, docker_network):
 @pytest.fixture(scope="module")
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
-        assert wait_for( contains(node_logs(peer),
-                                  "kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403"),
-                         config.node_startup_timeout), \
-            "Prometeus port is not started "
+        wait_for( string_matches(node_logs(peer),
+                                 "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
+                  config.node_startup_timeout,
+                  f"Peer node {peer.name} didn't start correctly")
 
     yield rchain_network
 
 
 @pytest.fixture(scope="module")
 def converged_network(config, started_rchain_network):
-    assert wait_for( network_converged(started_rchain_network.bootstrap, len(started_rchain_network.peers)),
-                     config.network_converge_timeout), \
-        "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect."
+    wait_for( network_converged( started_rchain_network.bootstrap, len(started_rchain_network.peers)),
+                                 config.network_converge_timeout,
+              "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
 
     yield started_rchain_network

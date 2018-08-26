@@ -80,8 +80,8 @@ class CasperPacketHandlerSpec extends WordSpec {
         fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
     }
     implicit val metrics = new MetricsNOP[Task]
-    implicit val lab = new TaskOps(LastApprovedBlock.of[Task])(
-      monix.execution.Scheduler.Implicits.global).unsafeRunSync
+    implicit val lab =
+      LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
@@ -177,6 +177,15 @@ class CasperPacketHandlerSpec extends WordSpec {
         val duration  = 1.second
         val startTime = System.currentTimeMillis()
 
+        def waitUtilCasperIsDefined: Task[MultiParentCasper[Task]] =
+          for {
+            casperO <- MultiParentCasperRef[Task].get
+            casper <- casperO match {
+                       case None         => Task.sleep(3.seconds).flatMap(_ => waitUtilCasperIsDefined)
+                       case Some(casper) => Task.pure(casper)
+                     }
+          } yield casper
+
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
           abp = ApproveBlockProtocol.unsafe[Task](genesis,
@@ -200,12 +209,9 @@ class CasperPacketHandlerSpec extends WordSpec {
                                                             validatorPk)
           blockApprovalPacket = Packet(transport.BlockApproval.id, blockApproval.toByteString)
           _                   <- casperPacketHandler.handle(local)(blockApprovalPacket)
-          // Sleep for 5 seconds to give time for eval-ing genesis contracts when creating Casper instance
-          // I don't know of any way around this because we don't have direct handle on the computation
-          // and we use the same scheduler.
-          _               <- Timer[Task].sleep(5.seconds)
-          casperO         <- MultiParentCasperRef[Task].get
-          _               = assert(casperO.isDefined)
+          //wait until casper is defined, with 1 minute timeout (indicating failure)
+          possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
+          _               = assert(possiblyCasper.isRight)
           blockO          <- blockStore.get(genesis.blockHash)
           _               = assert(blockO.isDefined)
           _               = assert(blockO.contains(genesis))

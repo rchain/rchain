@@ -11,7 +11,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.comm.CommError.ErrorHandler
@@ -61,7 +61,7 @@ sealed abstract class MultiParentCasperInstances {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def hashSetCasper[
-      F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+      F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
@@ -75,18 +75,23 @@ sealed abstract class MultiParentCasperInstances {
                                           genesis,
                                           genesis,
                                           dag,
-                                          runtimeManager.emptyStateHash,
                                           Set[StateHash](runtimeManager.emptyStateHash),
                                           runtimeManager)
       (maybePostGenesisStateHash, _) = validateBlockCheckpointResult
+      postGenesisStateHash <- maybePostGenesisStateHash match {
+                               case Left(BlockException(ex)) => Sync[F].raiseError[StateHash](ex)
+                               case Right(None) =>
+                                 Sync[F].raiseError[StateHash](
+                                   new Exception("Genesis tuplespace validation failed!"))
+                               case Right(Some(hash)) => hash.pure[F]
+                             }
     } yield
       createMultiParentCasper[F](runtimeManager,
                                  validatorId,
                                  genesis,
                                  dag,
-                                 maybePostGenesisStateHash,
+                                 postGenesisStateHash,
                                  shardId)
-
   }
 
   private[this] def createMultiParentCasper[
@@ -95,7 +100,7 @@ sealed abstract class MultiParentCasperInstances {
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       initialDag: BlockDag,
-      maybePostGenesisStateHash: Option[StateHash],
+      postGenesisStateHash: StateHash,
       shardId: String)(implicit scheduler: Scheduler) =
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -109,13 +114,9 @@ sealed abstract class MultiParentCasperInstances {
       private val emptyStateHash = runtimeManager.emptyStateHash
 
       private val knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]] =
-        maybePostGenesisStateHash match {
-          case Some(postGenesisStateHash) =>
-            AtomicSyncVarF.of[F, Set[StateHash]](
-              Set[StateHash](emptyStateHash, postGenesisStateHash)
-            )
-          case None => throw new Error("Genesis block validation failed.")
-        }
+        AtomicSyncVarF.of[F, Set[StateHash]](
+          Set[StateHash](emptyStateHash, postGenesisStateHash)
+        )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
@@ -292,7 +293,7 @@ sealed abstract class MultiParentCasperInstances {
                 .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
                 .foreach(b =>
                   Capture[F].capture {
-                    b.body.foreach(_.newCode.flatMap(_.deploy).foreach(result -= _))
+                    b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
                 })
         } yield result.toSeq
 
@@ -300,40 +301,59 @@ sealed abstract class MultiParentCasperInstances {
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[Option[BlockMessage]] =
         for {
-          now                                                                     <- Time[F].currentMillis
-          deploysCheckpoint                                                       <- updateKnownStateHashes(knownStateHashesContainer, p, r)
-          (computedCheckpoint, mergeLog, updatedKnownStateHashes, deployWithCost) = deploysCheckpoint
-          computedStateHash                                                       = ByteString.copyFrom(computedCheckpoint.root.bytes.toArray)
-          serializedLog                                                           = mergeLog ++ computedCheckpoint.log.map(EventConverter.toCasperEvent)
-          postState = RChainState()
-            .withTuplespace(computedStateHash)
-            .withBonds(bonds(p.head))
-            .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
-          body = Body()
-            .withPostState(postState)
-            .withNewCode(deployWithCost)
-            .withCommReductions(serializedLog)
-          header = blockHeader(body, p.map(_.blockHash), version, now)
-          block  = unsignedBlockProto(body, header, justifications, shardId)
-        } yield Some(block)
+          now                      <- Time[F].currentMillis
+          possibleProcessedDeploys <- updateKnownStateHashes(knownStateHashesContainer, p, r)
+          result <- possibleProcessedDeploys match {
+                     case Left(ex) =>
+                       Log[F]
+                         .error(
+                           s"CASPER: Critical error encountered while processing deploys: ${ex.getMessage}")
+                         .map(_ => none[BlockMessage])
+
+                     case Right((computedStateHash, processedDeploys)) =>
+                       val (internalErrors, persistableDeploys) =
+                         processedDeploys.partition(_.status.isInternalError)
+                       internalErrors.toList
+                         .traverse {
+                           case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
+                             val errorsMessage = errors.map(_.getMessage).mkString("\n")
+                             Log[F].error(
+                               s"CASPER: Internal error encountered while processing deploy ${PrettyPrinter
+                                 .buildString(deploy)}: $errorsMessage")
+                           case _ => ().pure[F]
+                         }
+                         .map(_ => {
+                           val postState = RChainState()
+                             .withTuplespace(computedStateHash)
+                             .withBonds(bonds(p.head))
+                             .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
+
+                           val body = Body()
+                             .withPostState(postState)
+                             .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
+                           val header = blockHeader(body, p.map(_.blockHash), version, now)
+                           val block  = unsignedBlockProto(body, header, justifications, shardId)
+                           block.some
+                         })
+                   }
+        } yield result
 
       private def updateKnownStateHashes(
           knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
           p: Seq[BlockMessage],
-          r: Seq[Deploy]): F[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] =
+          r: Seq[Deploy]): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
         knownStateHashesContainer
-          .modify[(Checkpoint, Seq[Event], Set[StateHash], Vector[DeployCost])] {
+          .modify[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])])] {
             knownStateHashes =>
               for {
-                checkpoint <- InterpreterUtil.computeDeploysCheckpoint[F](
-                               p,
-                               r,
-                               genesis,
-                               _blockDag.get,
-                               emptyStateHash,
-                               knownStateHashes,
-                               runtimeManager.computeState)
-              } yield (checkpoint._3, checkpoint)
+                possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
+                                             p,
+                                             r,
+                                             genesis,
+                                             _blockDag.get,
+                                             knownStateHashes,
+                                             runtimeManager)
+              } yield (possibleProcessedDeploys._2, possibleProcessedDeploys._1)
           }
 
       def blockDag: F[BlockDag] = Capture[F].capture {
@@ -475,7 +495,8 @@ sealed abstract class MultiParentCasperInstances {
           case Processing =>
             throw new RuntimeException(s"A block should not be processing at this stage.")
           case BlockException(ex) =>
-            throw new RuntimeException(s"Encountered exception in block: ${ex.getMessage}")
+            Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
+              .buildString(block.blockHash)}: ${ex.getMessage}")
         }
 
       private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =

@@ -166,8 +166,8 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
-  def deploys(b: BlockMessage): Seq[Deploy] =
-    b.body.map(_.newCode.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
+  def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
+    b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
 
   def tuplespace(b: BlockMessage): Option[ByteString] =
     for {
@@ -212,7 +212,7 @@ object ProtoUtil {
                      deploys = bAncestors
                        .takeWhile(_ != gca)
                        .flatMap(b => {
-                         b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+                         b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
                        })
                        .toSet
                    } yield deploys
@@ -270,9 +270,8 @@ object ProtoUtil {
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
-      .withNewCodeHash(protoSeqHash(body.newCode))
-      .withCommReductionsHash(protoSeqHash(body.commReductions))
-      .withDeployCount(body.newCode.length)
+      .withDeploysHash(protoSeqHash(body.deploys))
+      .withDeployCount(body.deploys.size)
       .withVersion(version)
       .withTimestamp(timestamp)
 
@@ -369,19 +368,23 @@ object ProtoUtil {
     )
   }
 
-  def basicDeployCost(id: Int): DeployCost =
-    DeployCost()
-      .withDeploy(basicDeploy(id))
-      .withCost(PCost(1L, 1))
+  def basicProcessedDeploy(id: Int): ProcessedDeploy = {
+    val deploy = basicDeploy(id)
+    ProcessedDeploy(
+      deploy = Some(deploy),
+      errored = false
+    )
+  }
 
   def sourceDeploy(source: String, timestamp: Long): DeployData =
     DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
 
   def termDeploy(term: Par, timestamp: Long): Deploy =
-    //TODO this should be removed once we assign the deploy with exact user
     Deploy(
       term = Some(term),
       raw =
         Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
     )
+
+  def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
 }
