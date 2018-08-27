@@ -137,7 +137,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
       implicit scheduler: Scheduler): (StateHash, Seq[InternalProcessedDeploy]) = {
-    implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
 
     def doEval(terms: Seq[Deploy],
                hash: Blake2b256Hash,
@@ -145,8 +144,9 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       terms match {
         case deploy +: rem =>
           runtime.space.reset(hash)
-          val (cost, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
-          val newCheckpoint  = runtime.space.createCheckpoint()
+          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
+          val (cost, errors)             = injAttempt(deploy, runtime.reducer, runtime.errorLog)
+          val newCheckpoint              = runtime.space.createCheckpoint()
           val deployResult = InternalProcessedDeploy(deploy,
                                                      cost,
                                                      newCheckpoint.log,
@@ -165,12 +165,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       terms: Seq[InternalProcessedDeploy],
       runtime: Runtime,
       initHash: StateHash)(implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
-    implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
 
     def doReplayEval(terms: Seq[InternalProcessedDeploy],
                      hash: Blake2b256Hash): Either[(Deploy, Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
+          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
           val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
