@@ -4,8 +4,10 @@ import tools.random as random
 
 from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
+from tools.util import log_box
 
 import collections
+import pprint
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -20,8 +22,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10"
     )
-
-
 
 class RChain:
     def __init__(self, network, bootstrap, peers):
@@ -46,11 +46,18 @@ def parse_config(request):
 
     def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
 
-    return Config(peer_count = peer_count,
+    config = Config(peer_count = peer_count,
                   node_startup_timeout = make_timeout(start_timeout, 30, 10),
                   network_converge_timeout = make_timeout(converge_timeout, 200, 10),
                   receive_timeout = make_timeout(receive_timeout, 10, 10)
                   )
+
+    with log_box(logging.info):
+        s = pprint.pformat(dict(config._asdict()), indent=4)
+        logging.info(f"Running with test configuration: {s}")
+
+    return config
+
 
 @pytest.fixture(scope="session")
 def config(request):

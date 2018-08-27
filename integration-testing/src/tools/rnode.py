@@ -3,7 +3,7 @@ import re
 import tempfile
 import random
 import tools.resources as resources
-
+from tools.util import log_box
 default_image = "rchain-integration-testing:latest"
 rnode_binary='/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
@@ -32,17 +32,11 @@ class Node:
         return address
 
     def cleanup(self):
-        logging.info("=" * 100)
-
-        logging.info(f"Docker container logs for {self.container.name}:")
-
-        logging.info("=" * 100)
-
-        logs = self.logs().splitlines()
-        for log_line in logs:
-            logging.info(f"{self.container.name}: {log_line}")
-
-        logging.info("=" * 100)
+        with log_box(logging.info):
+            logging.info(f"Docker container logs for {self.container.name}:")
+            logs = self.logs().splitlines()
+            for log_line in logs:
+                logging.info(f"{self.container.name}: {log_line}")
 
         logging.info(f"Remove container {self.container.name}")
         self.container.remove(force=True, v=True)
