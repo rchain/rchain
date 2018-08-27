@@ -66,10 +66,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = new NoOpsCasperEffect(
+      implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId)
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
       implicit val casperRef = {
         val tmp = MultiParentCasperRef.of[Id]
@@ -100,10 +100,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
 
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = new NoOpsCasperEffect(
+      implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId)
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
       implicit val casperRef = {
         val tmp = MultiParentCasperRef.of[Id]

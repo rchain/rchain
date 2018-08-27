@@ -1,13 +1,12 @@
 package coop.rchain.casper.util.comm
 
-import cats.effect.Timer
 import cats.effect.concurrent.Ref
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode, NoOpsCasperEffect}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -22,9 +21,9 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture}
 import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.transport.CommMessages
+import coop.rchain.comm.transport.CommMessages._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -35,10 +34,9 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Cell
 import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
-import monix.execution.{CancelableFuture, Scheduler}
 import org.scalatest.WordSpec
-import CommMessages._
 
 import scala.concurrent.duration._
 
@@ -131,10 +129,6 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val requiredSigns = 1
 
-        val runtimeDir     = BlockStoreTestFixture.dbDir
-        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap))
@@ -166,10 +160,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         import monix.execution.Scheduler.Implicits.global
         val fixture = setup()
         import fixture._
-
-        val runtimeDir     = BlockStoreTestFixture.dbDir
-        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
 
         val requiredSigns = 0
         // interval and duration don't really matter since we don't require and signs from validators
@@ -220,8 +210,8 @@ class CasperPacketHandlerSpec extends WordSpec {
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
-          approvedPacket = approvedBlockPacket
-          approvedBlockRes <- casperPacketHandler.handle(local)(approvedBlockPacket)
+          approvedPacket     = approvedBlockRequestPacket
+          approvedBlockRes   <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
           _ = assert(
             approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
               lastApprovedBlockO.get))
@@ -279,10 +269,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture = setup()
         import fixture._
 
-        val runtimeDir     = BlockStoreTestFixture.dbDir
-        val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-        val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-        val validators     = Set(ByteString.copyFrom(validatorPk))
+        val validators = Set(ByteString.copyFrom(validatorPk))
 
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
@@ -300,7 +287,8 @@ class CasperPacketHandlerSpec extends WordSpec {
               ByteString.copyFrom(
                 Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk))))
         )
-        val approvedPacket = approvedBlockPacket
+
+        val approvedPacket = Packet(transport.ApprovedBlock.id, approvedBlock.toByteString)
 
         val test = for {
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](bootstrapCasper)
@@ -316,7 +304,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
-          approvedBlockRes <- casperPacketHandler.handle(local)(approvedPacket)
+          approvedBlockRes   <- casperPacketHandler.handle(local)(approvedBlockRequestPacket)
           _ = assert(
             approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
               lastApprovedBlockO.get))
@@ -363,10 +351,6 @@ class CasperPacketHandlerSpec extends WordSpec {
       val fixture = setup()
       import fixture._
 
-      val runtimeDir     = BlockStoreTestFixture.dbDir
-      val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-      val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-
       val genesis                = HashSetCasperTest.createGenesis(Map.empty)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
@@ -379,7 +363,7 @@ class CasperPacketHandlerSpec extends WordSpec {
               Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk))))
       )
 
-      val casper = new NoOpsCasperEffect[Task]()
+      val casper = NoOpsCasperEffect[Task]().unsafeRunSync
 
       val refCasper = Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
         new ApprovedBlockReceivedHandler[Task](casper, approvedBlock))
@@ -432,16 +416,10 @@ class CasperPacketHandlerSpec extends WordSpec {
 }
 
 object CasperPacketHandlerSpec {
-  def assertValue[A](a: CancelableFuture[A]): A = {
-    assert(a.value.isDefined && a.value.get.isSuccess)
-    a.value.get.get
-  }
-
-  def approvedBlockPacket: Packet = {
-    val approvedBlockReq   = ApprovedBlockRequest("test")
+  def approvedBlockRequestPacket: Packet = {
+    val approvedBlockReq = ApprovedBlockRequest("test")
     Packet(transport.ApprovedBlockRequest.id, approvedBlockReq.toByteString)
   }
-
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
