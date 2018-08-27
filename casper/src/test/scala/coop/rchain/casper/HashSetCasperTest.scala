@@ -84,8 +84,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].deploy(deploy)
 
     val Some(block) = MultiParentCasper[Id].createBlock
+    val deploys     = block.body.get.deploys.flatMap(_.deploy)
     val parents     = ProtoUtil.parentHashes(block)
-    val deploys     = block.body.get.newCode.flatMap(_.deploy)
     val storage     = blockTuplespaceContents(block)
 
     parents.size should be(1)
@@ -451,7 +451,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   it should "prepare to slash an block that includes a invalid block pointer" in {
     val nodes           = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
     val deploys         = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
-    val deploysWithCost = deploys.map(d => DeployCost().withDeploy(d).withCost(PCost(10L, 1)))
+    val deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d)))
 
     val Some(signedBlock) = nodes(0).casperEff
       .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
@@ -560,17 +560,16 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode],
-                                                 deploys: immutable.IndexedSeq[DeployCost],
+                                                 deploys: immutable.IndexedSeq[ProcessedDeploy],
                                                  signedInvalidBlock: BlockMessage) = {
     val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
       .withPostStateHash(ByteString.copyFrom(postStateHash))
       .withParentsHashList(Seq(signedInvalidBlock.blockHash))
-      .withNewCodeHash(ProtoUtil.protoSeqHash(deploys))
-      .withCommReductionsHash(ProtoUtil.protoSeqHash(Seq.empty))
+      .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
     val blockHash = Blake2b256.hash(header.toByteArray)
-    val body      = Body().withPostState(postState).withNewCode(deploys)
+    val body      = Body().withPostState(postState).withDeploys(deploys)
     val serializedJustifications =
       Seq(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)

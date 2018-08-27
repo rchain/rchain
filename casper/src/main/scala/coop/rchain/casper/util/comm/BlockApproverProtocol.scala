@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.EventConverter
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
@@ -101,16 +101,20 @@ object BlockApproverProtocol {
       _ <- (blockBonds == bonds)
             .either(())
             .or("Block bonds don't match expected.")
-      replayLog           = body.commReductions.map(EventConverter.toRspaceEvent).toList
       validators          = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-      genesisBlessedTerms = Genesis.defaultBlessedTerms(timestamp, validators, wallets)
-      replayedState <- runtimeManager
-                        .replayComputeState(replayLog)
-                        .apply(runtimeManager.emptyStateHash, genesisBlessedTerms)
-                        .leftMap(r =>
-                          s"Errors during replay: ${r._2.map(_.getMessage).mkString(", ")}.")
-      checkpoint = replayedState._1
-      _ <- (ByteString.copyFrom(checkpoint.root.bytes.toArray) == postState.tuplespace)
+      genesisBlessedTerms = Genesis.defaultBlessedTerms(timestamp, validators, wallets).toSet
+      blockDeploys        = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
+      _ <- blockDeploys
+            .forall(d => genesisBlessedTerms.contains(d.deploy))
+            .either(())
+            .or("Candidate deploys do not match expected deploys.")
+      _ <- (blockDeploys.size == genesisBlessedTerms.size)
+            .either(())
+            .or("Mismatch between number of candidate deploys and expected number of deploys.")
+      stateHash <- runtimeManager
+                    .replayComputeState(runtimeManager.emptyStateHash, blockDeploys)
+                    .leftMap { case (_, status) => s"Failed status during replay: $status." }
+      _ <- (stateHash == postState.tuplespace)
             .either(())
             .or("Tuplespace hash mismatch.")
       tuplespaceBonds <- Try(runtimeManager.computeBonds(postState.tuplespace)).toEither

@@ -6,7 +6,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{mainParent, _}
 import coop.rchain.catscontrib.ListContrib
 
@@ -119,6 +119,23 @@ sealed abstract class SafetyOracleInstances {
           }
         } yield mainParentWeightMap
 
+      private def findMaximumClique(edges: List[(Validator, Validator)],
+                                    candidates: Map[Validator, Int]): (List[Validator], Int) =
+        Clique
+          .findCliquesRecursive(edges)
+          .foldLeft((List[Validator](), 0)) {
+            case ((maxClique, maxWeight), clique) => {
+              val weight = clique.map(candidates.getOrElse(_, 0)).sum
+              if (weight > maxWeight) {
+                (clique, weight)
+              } else if (weight == maxWeight && clique.size > maxClique.size) {
+                (clique, weight)
+              } else {
+                (maxClique, maxWeight)
+              }
+            }
+          }
+
       private def agreementGraphEdgeCount(blockDag: BlockDag,
                                           estimate: BlockMessage,
                                           candidates: Map[Validator, Int]): F[Int] = {
@@ -225,7 +242,7 @@ sealed abstract class SafetyOracleInstances {
 
         for {
           edges <- computeAgreementGraphEdges
-        } yield edges.size
+        } yield findMaximumClique(edges, candidates)._1.size
       }
 
       // TODO: Change to isInBlockDAG

@@ -9,6 +9,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
 }
 import org.scalatest._
 import coop.rchain.models.rholang.sort.ordering._
+
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -16,11 +17,9 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.rspace.Serialize
 import errors._
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
-import org.scalactic.TripleEqualsSupport
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
   "BoolTrue" should "Compile as GBool(true)" in {
@@ -378,6 +377,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.par.copy(exprs = List(EVar(FreeVar(1)), EVar(FreeVar(0))), connectiveUsed = true))
     result.knownFree should be(
       inputs.knownFree.newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0)))._1)
+  }
+
+  "PPar" should "normalize without StackOverflowError-s even for huge programs" in {
+    val hugePPar = (1 to 50000)
+      .map(x => new PGround(new GroundInt(x)))
+      .reduce((l: Proc, r: Proc) => new PPar(l, r))
+    noException should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](hugePPar, inputs).value
+    }
   }
 
   "PContr" should "Handle a basic contract" in {
