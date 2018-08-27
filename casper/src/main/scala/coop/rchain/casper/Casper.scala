@@ -428,8 +428,9 @@ sealed abstract class MultiParentCasperInstances {
           postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                           _ =>
                                             EquivocationDetector
-                                              .checkEquivocations(blockBufferDependencyDag, b, dag)
-                                              .pure[F])
+                                              .checkEquivocations[F](blockBufferDependencyDag,
+                                                                     b,
+                                                                     dag))
           status = postEquivocationCheckStatus.joinRight.merge
           _      <- addEffects(status, b)
         } yield status
