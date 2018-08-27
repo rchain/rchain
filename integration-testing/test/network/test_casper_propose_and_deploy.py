@@ -6,14 +6,14 @@ import tools.resources as resources
 from shutil import copyfile
 from tools.wait import wait_for, node_blocks_received, node_blocks_added, find_first
 
-def test_casper_propose_and_deploy(converged_network):
+def test_casper_propose_and_deploy(config, converged_network):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
     """
 
     token_size = 20
-    receive_timeout = 10
+    receive_timeout = 10 * config.peer_count
 
     contract_name = 'contract.rho'
 
