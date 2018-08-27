@@ -112,7 +112,7 @@ object CommUtil {
       a     <- LastApprovedBlock[F].get
       peers <- ConnectionsCell[F].read
       local <- RPConfAsk[F].reader(_.local)
-      _     <- a.fold(askPeers(peers.toList, local))(_ => ().pure[F])
+      _     <- a.fold(askPeers(peers, local))(_ => ().pure[F])
     } yield ()
   }
 }
