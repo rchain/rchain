@@ -17,6 +17,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10"
     )
+    parser.addoption(
+        "--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10"
+    )
 
 
 
@@ -31,16 +34,22 @@ Config = collections.namedtuple( "Config",
                                  [
                                      "peer_count",
                                      "node_startup_timeout",
-                                     "network_converge_timeout"
+                                     "network_converge_timeout",
+                                     "receive_timeout"
                                  ])
 
 def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
     start_timeout = int(request.config.getoption("--start-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
+    receive_timeout = int(request.config.getoption("--receive-timeout"))
+
+    def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
+
     return Config(peer_count = peer_count,
-                  node_startup_timeout = start_timeout if start_timeout > 0 else 30 + peer_count * 10,
-                  network_converge_timeout = converge_timeout if converge_timeout > 0 else 200 + peer_count * 2
+                  node_startup_timeout = make_timeout(start_timeout, 30, 10),
+                  network_converge_timeout = make_timeout(converge_timeout, 200, 10),
+                  receive_timeout = make_timeout(receive_timeout, 10, 10)
                   )
 
 @pytest.fixture(scope="session")

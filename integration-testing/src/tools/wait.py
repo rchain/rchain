@@ -33,6 +33,7 @@ def wait_for(condition, timeout, error_message):
             time.sleep(iteration_duration)
             elapsed = elapsed + iteration_duration
 
+    logging.warning(f"Giving up after {elapsed}s.")
     pytest.fail(error_message)
 
 # Predicates
@@ -56,7 +57,7 @@ def string_matches(string_factory, regex_str, flags = 0):
         else:
             raise Exception(f"string doesn't contain regex {regex_str}")
 
-    go.__doc__ = f"{string_factory.__doc__} search regex '{regex_str}'"
+    go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
 def network_converged(bootstrap_node, expected_peers):
