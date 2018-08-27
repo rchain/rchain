@@ -2,7 +2,7 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
-import coop.rchain.casper.util.comm.DeployRuntime.Name
+import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 
 case class Server(

@@ -2,7 +2,7 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
 
-import coop.rchain.casper.util.comm.DeployRuntime.{Name, PrivName, PubName}
+import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
 import org.rogach.scallop._
@@ -33,9 +33,9 @@ object Converter {
   }
 
   implicit val nameProviderConverter = new ValueConverter[String => Name] {
-    import cats.syntax.traverse._
-    import cats.instances.option._
     import cats.instances.either._
+    import cats.instances.option._
+    import cats.syntax.traverse._
 
     override def parse(s: List[(String, List[String])]) = {
       val optMap  = s.toMap
@@ -68,8 +68,8 @@ object Options {
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
-  import Options.Flag
   import Converter._
+  import Options.Flag
 
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"

@@ -15,8 +15,8 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
-  def listenForDataAtName(request: Channel): F[String]
-  def listenForContinuationAtName(request: Channels): F[String]
+  def listenForDataAtName(request: Channel): F[ListeningNameDataResponse]
+  def listenForContinuationAtName(request: Channels): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
@@ -71,15 +71,14 @@ Blockchain length: ${response.length}
     (response.success, response.message)
   }
 
-  def listenForDataAtName(request: Channel): Task[String] = Task.delay {
-    val res = blockingStub.listenForDataAtName(request)
-    res.toProtoString
+  def listenForDataAtName(request: Channel): Task[ListeningNameDataResponse] = Task.delay {
+    blockingStub.listenForDataAtName(request)
   }
 
-  def listenForContinuationAtName(request: Channels): Task[String] = Task.delay {
-    val res = blockingStub.listenForContinuationAtName(request)
-    res.toProtoString
-  }
+  def listenForContinuationAtName(request: Channels): Task[ListeningNameContinuationResponse] =
+    Task.delay {
+      blockingStub.listenForContinuationAtName(request)
+    }
 
   override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
 }
