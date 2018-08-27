@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+
+import sys
+assert sys.version_info >= (3, 6)
+
+import argparse
+import random
+import re
+
+import nacl.encoding
+import nacl.signing
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from eth_hash.auto import keccak
+import oyaml as yaml
+
+########################################
+
+def generate_wallet(balance_range):
+    sk = nacl.signing.SigningKey.generate()
+    pk = sk.verify_key
+    return dict(
+        sk = sk.encode(encoder = nacl.encoding.HexEncoder).decode('ascii'),
+        pk = pk.encode(encoder = nacl.encoding.HexEncoder).decode('ascii'),
+        balance = random.randint(balance_range[0], balance_range[1]))
+
+def node_sk_to_pem(sk):
+    b = sk.private_bytes(
+        encoding             = serialization.Encoding.PEM,
+        format               = serialization.PrivateFormat.PKCS8,
+        encryption_algorithm = serialization.NoEncryption())
+    return b.decode('ascii')
+
+def node_sk_to_addr(sk):
+    W = sk.public_key().public_numbers()
+    pk_bytes = W.x.to_bytes(32, 'big') + W.y.to_bytes(32, 'big')
+    return keccak(pk_bytes)[12:].hex()
+
+def generate_node_identity(name_prefix, balance_range):
+    sk = ec.generate_private_key(ec.SECP256R1(), default_backend())
+    addr = node_sk_to_addr(sk)
+    node_id = dict(
+        name   = name_prefix + addr[0:6],
+        addr   = addr,
+        sk_pem = node_sk_to_pem(sk))
+    if balance_range is not None:
+        node_id = dict(
+            **node_id,
+            wallet = generate_wallet(balance_range))
+    return node_id
+
+########################################
+
+def check_in_range(min=None, max=None):
+    def _check(s):
+        i = int(s)
+        if min and i < min:
+            raise argparse.ArgumentTypeError(f'Minimum value is {min}')
+        if max and i > max:
+            raise argparse.ArgumentTypeError(f'Maximum value is {max}')
+        return i
+    return _check
+
+def parse_balance_range(s):
+    m = re.match(r'(\d+)(?:-(\d+))?', s)
+    if m:
+        _min = int(m.group(1))
+        _max = int(m.group(2) or _min)
+        return (_min, _max)
+    raise argparse.ArgumentTypeError(f'Malformed range')
+
+parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+# Genesis block parameters
+# https://rchain.atlassian.net/wiki/spaces/CORE/pages/514916539/Creating+the+genesis+block
+parser.add_argument(
+        '--deploy-timestamp',
+        type = check_in_range(min = 1),
+        default = 1)
+parser.add_argument(
+        '--validator-count',
+        type = check_in_range(min = 1),
+        default = 10)
+parser.add_argument(
+        '--wallet-count',
+        type = check_in_range(min = 0),
+        default = 100)
+# Genesis block approval parameters
+# https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
+parser.add_argument(
+        '--required-sigs',
+        type = check_in_range(min = 1),
+        default = 8)
+parser.add_argument(
+        '--approval-duration',
+        type = str,
+        default = '2min')
+parser.add_argument(
+        '--approval-interval',
+        type = str,
+        default = '10s')
+# Miscellaneous
+parser.add_argument(
+        '--validator-balance',
+        type = parse_balance_range,
+        default = (50, 100))
+parser.add_argument(
+        '--wallet-balance',
+        type = parse_balance_range,
+        default = (50, 100))
+
+########################################
+
+args = parser.parse_args()
+
+setup = dict()
+setup['deploy_timestamp']  = args.deploy_timestamp
+setup['required_sigs']     = args.required_sigs
+setup['approval_interval'] = args.approval_interval
+setup['approval_duration'] = args.approval_duration
+
+setup['bootstrap'] = generate_node_identity('bootstrap-', None)
+
+validators = []
+for _ in range(0, args.validator_count):
+    validators.append(generate_node_identity('validator-', args.validator_balance))
+setup['validators'] = validators
+
+wallets = []
+for _ in range(0, args.wallet_count):
+    wallets.append(generate_wallet(args.wallet_balance))
+setup['wallets'] = wallets
+
+def dump_yaml(obj):
+    def str_presenter(dumper, data):
+        style = None
+        if '\n' in data:
+            style = '|'
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style = style)
+    yaml.add_representer(str, str_presenter)
+    return yaml.dump(obj, default_flow_style = False)
+
+print(dump_yaml(setup))
