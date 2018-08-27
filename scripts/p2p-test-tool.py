@@ -308,10 +308,10 @@ def test_propose(container):
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
             #Check logs for warnings(WARN) or errors(ERROR) on CASPER    
             for line in container.logs().decode('utf-8').splitlines():
-                if "WARN" in line and "CASPER" in line and not "wallets" in line:
+                if "WARN" in line and "coop.rchain.casper" in line and not "wallets" in line:
                     print(f"{container.name}: {line}")
                     retval = 1
-                if "ERROR" in line and "CASPER" in line:
+                if "ERROR" in line and "coop.rchain.casper" in line:
                     print(f"{container.name}: {line}")
                     retval = 1
 
@@ -333,11 +333,11 @@ class node:
 
     @staticmethod
     def received_block_rx(expected_content):
-        return re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$")
+        return re.compile(f"^.* Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$")
 
     @staticmethod
     def added_block_rx(block_id):
-        return re.compile(f"^.* CASPER: Added {block_id}\.\.\.\s*$")
+        return re.compile(f"^.* Added {block_id}\.\.\.\s*$")
 
 def test_casper_propose_and_deploy(test_container):
     """
