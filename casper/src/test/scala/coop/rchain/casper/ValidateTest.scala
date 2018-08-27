@@ -15,6 +15,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
 import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
@@ -281,7 +282,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -307,11 +308,7 @@ class ValidateTest
       (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
         false)
       log.warns.size should be(3)
-      log.warns.last
-        .contains("justification is empty, but block has non-genesis parents") should be(true)
-      log.warns
-        .dropRight(1)
-        .forall(_.contains("block parents did not match estimate based on justification")) should be(
+      log.warns.forall(_.contains("block parents did not match estimate based on justification")) should be(
         true)
   }
 
@@ -353,7 +350,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -400,10 +397,11 @@ class ValidateTest
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
-    val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
-                                        initial,
-                                        emptyStateHash,
-                                        runtimeManager)
+    val genesis = Genesis.withContracts(
+      List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
+      initial,
+      emptyStateHash,
+      runtimeManager)
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
@@ -414,5 +412,32 @@ class ValidateTest
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
     activeRuntime.close()
+  }
+
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis =
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", Ed25519.sign _, "rchain")
+
+    Validate.formatOfFields[Id](genesis) should be(true)
+    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withBody(
+        genesis.body.get
+          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
+    ) should be(false)
   }
 }

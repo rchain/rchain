@@ -37,7 +37,7 @@ object Secp256k1 {
     kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
     val kp = kpg.generateKeyPair
 
-    val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS().toString(16))
+    val sec = Base16.decode(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16))
     val pub = Secp256k1.toPublic(sec)
 
     (PrivateKey(sec), PublicKey(pub))

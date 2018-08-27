@@ -10,7 +10,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 //for debug/check run from IDEA with
-//rspaceBench/jmh:run EvalBench.replayMvcEppST -i 1 -wi 0 -f 0 -t 1
+//rspaceBench/jmh:run EvalBench.reduceMVCEPPST -i 1 -wi 0 -f 0 -t 1
 //on hyper-threaded machines for standalone check use -f <number of physical cores>
 //for example
 //java -jar target/scala-2.12/rspacebench_2.12-0.1.0-SNAPSHOT.jar EvalBench -i 10 -wi 5 -f 2 -t 2

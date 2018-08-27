@@ -1,20 +1,25 @@
 package coop.rchain.comm.rp
 
-import Connect.{Connections, ConnectionsCell, RPConfAsk}, Connections._
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.discovery._
-import scala.concurrent.duration._
+import cats._
+import cats.effect.Timer
+import cats.implicits._
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.metrics.Metrics
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
-import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
-import coop.rchain.shared._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.rchain._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
+import coop.rchain.comm.rp.Connect.Connections._
+import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport.CommunicationResponse._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.effects._
+import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 object HandleMessages {
 
@@ -120,7 +125,7 @@ object HandleMessages {
     } yield commResponse
   }
 
-  def handleHeartbeat[F[_]: Monad: TransportLayer: ErrorHandler: RPConfAsk](
+  def handleHeartbeat[F[_]: Monad: Time: TransportLayer: ErrorHandler: RPConfAsk](
       peer: PeerNode,
       maybeHeartbeat: Option[Heartbeat]): F[CommunicationResponse] =
     for {

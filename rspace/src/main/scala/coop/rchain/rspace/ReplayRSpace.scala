@@ -350,6 +350,9 @@ object ReplayRSpace {
 
       case memContext: InMemoryContext[C, P, A, K] =>
         InMemoryStore.create(memContext.trieStore, branch)
+
+      case mixedContext: MixedContext[C, P, A, K] =>
+        InMemoryStore.create(mixedContext.trieStore, branch)
     }
 
     val replaySpace = new ReplayRSpace[C, P, A, R, K](mainStore, branch)

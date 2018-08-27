@@ -38,10 +38,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
-    isInMainChain(BlockStore[Id].asMap(), genesis, b3) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), b2, b3) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), b3, b2) should be(false)
-    isInMainChain(BlockStore[Id].asMap(), b3, genesis) should be(false)
+    isInMainChain[Id](genesis, b3) should be(true)
+    isInMainChain[Id](b2, b3) should be(true)
+    isInMainChain[Id](b3, b2) should be(false)
+    isInMainChain[Id](b3, genesis) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
@@ -60,11 +60,11 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    isInMainChain(BlockStore[Id].asMap(), genesis, b2) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), genesis, b3) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), genesis, b4) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), b2, b4) should be(true)
-    isInMainChain(BlockStore[Id].asMap(), b3, b4) should be(false)
+    isInMainChain[Id](genesis, b2) should be(true)
+    isInMainChain[Id](genesis, b3) should be(true)
+    isInMainChain[Id](genesis, b4) should be(true)
+    isInMainChain[Id](b2, b4) should be(true)
+    isInMainChain[Id](b3, b4) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -95,16 +95,16 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b6      = chain.idToBlocks(6)
       val b7      = chain.idToBlocks(7)
       val b8      = chain.idToBlocks(8)
-      isInMainChain(BlockStore[Id].asMap(), genesis, b2) should be(true)
-      isInMainChain(BlockStore[Id].asMap(), b2, b3) should be(false)
-      isInMainChain(BlockStore[Id].asMap(), b3, b4) should be(false)
-      isInMainChain(BlockStore[Id].asMap(), b4, b5) should be(false)
-      isInMainChain(BlockStore[Id].asMap(), b5, b6) should be(false)
-      isInMainChain(BlockStore[Id].asMap(), b6, b7) should be(false)
-      isInMainChain(BlockStore[Id].asMap(), b7, b8) should be(true)
-      isInMainChain(BlockStore[Id].asMap(), b2, b6) should be(true)
-      isInMainChain(BlockStore[Id].asMap(), b2, b8) should be(true)
-      isInMainChain(BlockStore[Id].asMap(), b4, b2) should be(false)
+      isInMainChain[Id](genesis, b2) should be(true)
+      isInMainChain[Id](b2, b3) should be(false)
+      isInMainChain[Id](b3, b4) should be(false)
+      isInMainChain[Id](b4, b5) should be(false)
+      isInMainChain[Id](b5, b6) should be(false)
+      isInMainChain[Id](b6, b7) should be(false)
+      isInMainChain[Id](b7, b8) should be(true)
+      isInMainChain[Id](b2, b6) should be(true)
+      isInMainChain[Id](b2, b8) should be(true)
+      isInMainChain[Id](b4, b2) should be(false)
   }
 
   /*
@@ -125,7 +125,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
   "Blocks" should "conflict if they use the same deploys in different histories" in withStore {
     implicit blockStore =>
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val deploys                  = (0 until 6).map(basicDeployCost)
+      val deploys                  = (0 until 6).map(basicProcessedDeploy)
 
       def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {
@@ -154,12 +154,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b9  = chain.idToBlocks(9)
       val b10 = chain.idToBlocks(10)
 
-      conflicts(b2, b3, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b4, b5, genesis, chain, BlockStore[Id].asMap()) should be(true)
-      conflicts(b6, b6, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b6, b9, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b7, b8, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b7, b10, genesis, chain, BlockStore[Id].asMap()) should be(false)
-      conflicts(b9, b10, genesis, chain, BlockStore[Id].asMap()) should be(true)
+      conflicts[Id](b2, b3, genesis, chain) should be(false)
+      conflicts[Id](b4, b5, genesis, chain) should be(true)
+      conflicts[Id](b6, b6, genesis, chain) should be(false)
+      conflicts[Id](b6, b9, genesis, chain) should be(false)
+      conflicts[Id](b7, b8, genesis, chain) should be(false)
+      conflicts[Id](b7, b10, genesis, chain) should be(false)
+      conflicts[Id](b9, b10, genesis, chain) should be(true)
   }
 }
