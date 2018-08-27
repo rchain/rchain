@@ -63,10 +63,16 @@ class Registry(private val space: ISpace[Channel,
       freeCount = 3
     ))
   val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
+  val deletePatterns = List(
+    BindPattern(
+      Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
+      freeCount = 2))
+  val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
-  def install(): Unit = {
+  def testInstall(): Unit = {
     space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
     space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
+    space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
   }
 
   val lookupCallbackRef: Long = 11L
@@ -84,11 +90,21 @@ class Registry(private val space: ISpace[Channel,
     ),
     freeCount = 4
   )
+  val parentKeyDataReplacePattern = BindPattern(
+    Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+        ChanVar(FreeVar(2))),
+    freeCount = 3
+  )
   val triePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
     freeCount = 1)
 
   val insertCallbackRef: Long = 13L
+
+  val deleteRef: Long             = 14L
+  val deleteRootCallbackRef: Long = 15L
+  val deleteCallbackRef: Long     = 16L
 
   def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
@@ -163,6 +179,56 @@ class Registry(private val space: ISpace[Channel,
               Seq[Channel](Quote(channel), dataSource),
               Seq(prefixValueRetReplacePattern, triePattern),
               TaggedContinuation(ScalaBodyRef(insertCallbackRef)),
+              false
+            ))
+    } yield ()
+  }
+
+  def fetchDataRootDelete(dataSource: Quote,
+                          key: Channel,
+                          ret: Channel,
+                          rand: Blake2b512Random): Task[Unit] = {
+    val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    for {
+      _ <- handleResult(
+            space.produce(Quote(channel),
+                          ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+                          false))
+      _ <- handleResult(
+            space.consume(
+              Seq[Channel](Quote(channel), dataSource),
+              Seq(prefixRetReplacePattern, triePattern),
+              TaggedContinuation(ScalaBodyRef(deleteRootCallbackRef)),
+              false
+            ))
+    } yield ()
+  }
+
+  def fetchDataDelete(dataSource: Quote,
+                      key: Channel,
+                      ret: Channel,
+                      rand: Blake2b512Random,
+                      parentKey: Channel,
+                      parentData: Channel,
+                      parentReplace: Channel,
+                      parentRand: Blake2b512Random): Task[Unit] = {
+    val keyChannel: Par    = GPrivate(ByteString.copyFrom(rand.next()))
+    val parentChannel: Par = GPrivate(ByteString.copyFrom(rand.next()))
+    for {
+      _ <- handleResult(
+            space.produce(Quote(keyChannel),
+                          ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+                          false))
+      _ <- handleResult(
+            space.produce(
+              Quote(parentChannel),
+              ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, None),
+              false))
+      _ <- handleResult(
+            space.consume(
+              Seq[Channel](Quote(keyChannel), Quote(parentChannel), dataSource),
+              Seq(prefixRetReplacePattern, parentKeyDataReplacePattern, triePattern),
+              TaggedContinuation(ScalaBodyRef(deleteCallbackRef)),
               false
             ))
     } yield ()
@@ -389,11 +455,248 @@ class Registry(private val space: ISpace[Channel,
     }
   }
 
+  def delete(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+    args match {
+      case Seq(ListChannelWithRandom(Seq(key, ret), rand, cost)) =>
+        key match {
+          case Channel(Quote(keyPar)) =>
+            keyPar.singleExpr match {
+              case Some(Expr(GByteArray(_))) =>
+                fetchDataRootDelete(Quote(registryRoot), key, ret, rand)
+              case _ =>
+                fail(ret, rand)
+            }
+          case _ =>
+            fail(ret, rand)
+        }
+      case _ => Task.unit
+    }
+
+  def deleteRootCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+    args match {
+      case Seq(ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
+               ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+        def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
+        key match {
+          case Channel(Quote(keyPar)) =>
+            keyPar.singleExpr match {
+              case Some(Expr(GByteArray(bs))) =>
+                val (head, tail) = safeUncons(bs)
+                data match {
+                  case Channel(Quote(dataPar)) =>
+                    dataPar.singleExpr match {
+                      case Some(Expr(EMapBody(parMap))) =>
+                        parMap.ps.get(parByteArray(head)) match {
+                          case None => localFail()
+                          case Some(value) =>
+                            value.singleExpr() match {
+                              case Some(Expr(ETupleBody(ETuple(ps, _, _)))) =>
+                                if (ps.length != 3)
+                                  localFail()
+                                else
+                                  // The second tuple field should be a bytearray in both cases.
+                                  ps(1).singleExpr() match {
+                                    case Some(Expr(GByteArray(edgeAdditional))) =>
+                                      ps(0).singleExpr() match {
+                                        case Some(Expr(GInt(0))) =>
+                                          if (tail == edgeAdditional) {
+                                            val updatedMap: Par = ParMap(
+                                              SortedParMap(parMap.ps - parByteArray(head)))
+                                            replace(Quote(updatedMap), replaceChan, dataRand)
+                                              .flatMap(_ => succeed(ret, ps(2), callRand))
+                                          } else {
+                                            localFail()
+                                          }
+                                        case Some(Expr(GInt(1))) =>
+                                          if (tail.startsWith(edgeAdditional)) {
+                                            val newKey = tail.substring(edgeAdditional.size)
+                                            fetchDataDelete(Quote(ps(2)),
+                                                            Channel(Quote(parByteArray(newKey))),
+                                                            ret,
+                                                            callRand,
+                                                            Quote(parByteArray(head)),
+                                                            data,
+                                                            replaceChan,
+                                                            dataRand)
+                                          } else {
+                                            localFail()
+                                          }
+                                        case _ => localFail()
+                                      }
+                                    case _ => localFail()
+                                  }
+                              case _ => localFail()
+                            }
+                        }
+                      case _ => localFail()
+                    }
+                  case _ => localFail()
+                }
+              case _ => localFail()
+            }
+          case _ => localFail()
+        }
+      case _ => Task.unit
+    }
+
+  def deleteCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+    args match {
+      case Seq(
+          ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
+          ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, parentCost),
+          ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+        def localFail() =
+          replace(parentData, parentReplace, parentRand).flatMap(_ =>
+            failAndReplace(data, replaceChan, ret, dataRand, callRand))
+        key match {
+          case Channel(Quote(keyPar)) =>
+            keyPar.singleExpr match {
+              case Some(Expr(GByteArray(bs))) =>
+                val (head, tail) = safeUncons(bs)
+
+                // This nests deeply, and it's easier to read pulled out.
+                def mergeWithParent(lastKey: Par, lastEntry: Par): Task[Unit] =
+                  parentKey match {
+                    case Channel(Quote(parentKeyPar)) =>
+                      parentData match {
+                        case Channel(Quote(parentDataPar)) =>
+                          parentDataPar.singleExpr() match {
+                            case Some(Expr(EMapBody(parMap))) =>
+                              parMap.ps.get(parentKeyPar) match {
+                                case None => localFail()
+                                case Some(parentEntry) =>
+                                  parentEntry.singleExpr() match {
+                                    case Some(Expr(ETupleBody(ETuple(parentPs, _, _)))) =>
+                                      if (parentPs.length != 3)
+                                        localFail()
+                                      else
+                                        parentPs(1).singleExpr match {
+                                          case Some(Expr(GByteArray(parentAdditional))) =>
+                                            lastKey.singleExpr() match {
+                                              case Some(Expr(GByteArray(lastKeyStr))) =>
+                                                lastEntry.singleExpr() match {
+                                                  case Some(Expr(ETupleBody(ETuple(ps, _, _)))) =>
+                                                    if (ps.length != 3)
+                                                      localFail()
+                                                    else
+                                                      ps(1).singleExpr() match {
+                                                        case Some(
+                                                            Expr(GByteArray(edgeAdditional))) =>
+                                                          val mergeStream = ByteString.newOutput()
+                                                          parentAdditional.writeTo(mergeStream)
+                                                          lastKeyStr.writeTo(mergeStream)
+                                                          edgeAdditional.writeTo(mergeStream)
+                                                          val mergedEdge = parByteArray(
+                                                            mergeStream.toByteString())
+                                                          val updatedTuple: Par =
+                                                            ETuple(Seq(ps(0), mergedEdge, ps(2)))
+                                                          val updatedMap: Par = ParMap(
+                                                            SortedParMap(
+                                                              parMap.ps +
+                                                                (parentKeyPar -> updatedTuple)))
+                                                          replace(Quote(updatedMap),
+                                                                  parentReplace,
+                                                                  parentRand)
+                                                      }
+                                                  case _ => localFail()
+                                                  case _ => localFail()
+                                                }
+                                              case _ => localFail()
+                                            }
+                                          case _ => localFail()
+                                        }
+                                    case _ => localFail()
+                                  }
+                              }
+                            case _ => localFail()
+                          }
+                        case _ => localFail()
+                      }
+                    case _ => localFail()
+                  }
+
+                data match {
+                  case Channel(Quote(dataPar)) =>
+                    dataPar.singleExpr match {
+                      case Some(Expr(EMapBody(parMap))) =>
+                        parMap.ps.get(parByteArray(head)) match {
+                          case None => localFail()
+                          case Some(value) =>
+                            value.singleExpr() match {
+                              case Some(Expr(ETupleBody(ETuple(ps, _, _)))) =>
+                                if (ps.length != 3)
+                                  localFail()
+                                else
+                                  // The second tuple field should be a bytearray in both cases.
+                                  ps(1).singleExpr() match {
+                                    case Some(Expr(GByteArray(edgeAdditional))) =>
+                                      ps(0).singleExpr() match {
+                                        case Some(Expr(GInt(0))) =>
+                                          if (tail == edgeAdditional) {
+                                            if (parMap.ps.size > 2) {
+                                              val updatedMap: Par = ParMap(
+                                                SortedParMap(parMap.ps - parByteArray(head)))
+                                              for {
+                                                _ <- replace(Quote(updatedMap),
+                                                             replaceChan,
+                                                             dataRand)
+                                                _ <- replace(parentData, parentReplace, parentRand)
+                                                _ <- succeed(ret, ps(2), callRand)
+                                              } yield ()
+                                            } else if (parMap.ps.size != 2) {
+                                              localFail()
+                                            } else {
+                                              val it = (parMap.ps - parByteArray(head)).iterator
+                                              for {
+                                                _ <- Function.tupled(mergeWithParent(_, _))(it.next)
+                                                _ <- succeed(ret, ps(2), callRand)
+                                              } yield ()
+                                            }
+                                          } else {
+                                            localFail()
+                                          }
+                                        case Some(Expr(GInt(1))) =>
+                                          if (tail.startsWith(edgeAdditional)) {
+                                            val newKey = tail.substring(edgeAdditional.size)
+                                            fetchDataDelete(Quote(ps(2)),
+                                                            Channel(Quote(parByteArray(newKey))),
+                                                            ret,
+                                                            callRand,
+                                                            Quote(parByteArray(head)),
+                                                            data,
+                                                            replaceChan,
+                                                            dataRand)
+                                          } else {
+                                            localFail()
+                                          }
+                                        case _ => localFail()
+                                      }
+                                    case _ => localFail()
+                                  }
+                              case _ => localFail()
+                            }
+                        }
+                      case _ => localFail()
+                    }
+                  case _ => localFail()
+                }
+              case _ => localFail()
+            }
+          case _ => localFail()
+        }
+      case _ => Task.unit
+    }
+
   val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
-    Map(lookupRef         -> lookup,
-        lookupCallbackRef -> lookupCallback,
-        insertRef         -> insert,
-        insertCallbackRef -> insertCallback)
+    Map(
+      lookupRef             -> lookup,
+      lookupCallbackRef     -> lookupCallback,
+      insertRef             -> insert,
+      insertCallbackRef     -> insertCallback,
+      deleteRef             -> delete,
+      deleteRootCallbackRef -> deleteRootCallback,
+      deleteCallbackRef     -> deleteCallback
+    )
 }
 
 object Registry {
