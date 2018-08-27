@@ -48,7 +48,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].deploy(deploy)
 
     logEff.infos.size should be(1)
-    logEff.infos.head.contains("CASPER: Received Deploy") should be(true)
+    logEff.infos.head.contains("Received Deploy") should be(true)
     node.tearDown()
   }
 
@@ -132,11 +132,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     MultiParentCasper[Id].addBlock(signedBlock)
 
     val logMessages = List(
-      "CASPER: Received Deploy",
-      "CASPER: Beginning send of Block #1",
-      "CASPER: Sent",
-      "CASPER: Added",
-      "CASPER: New fork-choice tip is block"
+      "Received Deploy",
+      "Sent Block #1",
+      "Added",
+      "New fork-choice tip is block"
     )
 
     logEff.warns.isEmpty should be(true)
@@ -198,7 +197,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     MultiParentCasper[Id].addBlock(invalidBlock)
 
-    logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+    logEff.warns.head.contains("Ignoring block") should be(true)
     node.tearDownNode()
     validateBlockStore(node) { blockStore =>
       blockStore.get(block.blockHash) shouldBe None
@@ -214,7 +213,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     MultiParentCasper[Id].addBlock(signedBlock)
 
-    logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+    logEff.warns.head.contains("Ignoring block") should be(true)
     node.tearDownNode()
     validateBlockStore(node) { blockStore =>
       blockStore.get(signedBlock.blockHash) shouldBe None
@@ -252,8 +251,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).casperEff.addBlock(signedBlock1Prime)
     nodes(1).receive()
 
-    nodes(1).logEff.infos.count(_ startsWith "CASPER: Added") should be(1)
-    nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(0)
+    nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
+    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
 
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
@@ -369,10 +368,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).casperEff.contains(signedBlock2) should be(true)
 
     nodes(2).logEff.infos
-      .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
+      .count(_ startsWith "Requested missing block") should be(1)
     nodes(1).logEff.infos.count(s =>
-      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
-      1)
+      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
 
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
@@ -453,8 +451,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.contains(signedBlock4) should be(true) // However, in invalidBlockTracker
 
-    nodes(1).logEff.infos.count(_ startsWith "CASPER: Added admissible equivocation") should be(1)
-    nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(1)
+    nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
+    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
       1f / (1f + 3f + 5f + 7f))
@@ -495,7 +493,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
-    nodes(1).logEff.warns.count(_ startsWith "CASPER: Recording invalid block") should be(2)
+    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(2)
     nodes.foreach(_.tearDown())
   }
 
@@ -519,10 +517,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     }
 
     nodes(1).logEff.infos
-      .count(_ startsWith "CASPER: Beginning request of missing block") should be(10)
+      .count(_ startsWith "Requested missing block") should be(10)
     nodes(0).logEff.infos.count(s =>
-      (s startsWith "CASPER: Received request for block") && (s endsWith "Response sent.")) should be(
-      10)
+      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(10)
 
     nodes.foreach(_.tearDown())
   }

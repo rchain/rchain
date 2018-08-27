@@ -82,9 +82,7 @@ Block = collections.namedtuple("Block", ["id", "content"])
 def node_blocks_received(node):
     def go():
         id_rx = ".+?"
-        # received_block_rx = re.compile(f"^.* CASPER: Received Block #(\d+) \((.*?)\.\.\.\)(.*)$", re.MULTILINE | re.DOTALL)
-        received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
-        # received_block_rx = re.compile(f".* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- (.*)", re.MULTILINE | re.DOTALL)
+        received_block_rx = re.compile(f"^.* Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
 
         logs = node.log_lines()
         # strlogs = '\n+++\n'.join(logs)
@@ -102,7 +100,7 @@ def node_blocks_received(node):
 def node_blocks_added(node):
     def go():
         id_rx = "(.+?)"
-        added_block_rx = re.compile(f"^.* CASPER: Added ({id_rx})\.\.\..*", re.MULTILINE | re.DOTALL)
+        added_block_rx = re.compile(f"^.* Added ({id_rx})\.\.\..*", re.MULTILINE | re.DOTALL)
         logs = node.log_lines()
 
         block_ids = [ match[1]

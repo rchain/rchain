@@ -160,7 +160,7 @@ sealed abstract class MultiParentCasperInstances {
                      case Right((_, false)) =>
                        Log[F]
                          .info(
-                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
+                           s"Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
                          .map(_ => BlockStatus.processing)
                      case Right((_, true)) =>
                        internalAddBlock(b).flatMap(status =>
@@ -168,7 +168,7 @@ sealed abstract class MultiParentCasperInstances {
                      case Left(ex) =>
                        Log[F]
                          .warn(
-                           s"CASPER: Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}")
+                           s"Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}")
                          .map(_ => BlockStatus.exception(ex))
                    }
         } yield result
@@ -200,7 +200,7 @@ sealed abstract class MultiParentCasperInstances {
           estimates <- estimator(dag)
           tip       = estimates.head
           _ <- Log[F].info(
-                s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+                s"New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
           lastFinalizedBlock        <- lastFinalizedBlockContainer.get
           updatedLastFinalizedBlock <- updateLastFinalizedBlock(dag, lastFinalizedBlock)
           _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
@@ -244,7 +244,7 @@ sealed abstract class MultiParentCasperInstances {
               _ <- Capture[F].capture {
                     deployHist += deploy
                   }
-              _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(deploy)}")
+              _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
             } yield Right(())
 
           case Left(err) =>
@@ -317,7 +317,7 @@ sealed abstract class MultiParentCasperInstances {
                      case Left(ex) =>
                        Log[F]
                          .error(
-                           s"CASPER: Critical error encountered while processing deploys: ${ex.getMessage}")
+                           s"Critical error encountered while processing deploys: ${ex.getMessage}")
                          .map(_ => none[BlockMessage])
 
                      case Right((computedStateHash, processedDeploys)) =>
@@ -328,7 +328,7 @@ sealed abstract class MultiParentCasperInstances {
                            case InternalProcessedDeploy(deploy, _, _, InternalErrors(errors)) =>
                              val errorsMessage = errors.map(_.getMessage).mkString("\n")
                              Log[F].error(
-                               s"CASPER: Internal error encountered while processing deploy ${PrettyPrinter
+                               s"Internal error encountered while processing deploy ${PrettyPrinter
                                  .buildString(deploy)}: $errorsMessage")
                            case _ => ().pure[F]
                          }
@@ -440,7 +440,7 @@ sealed abstract class MultiParentCasperInstances {
           //Add successful! Send block to peers, log success, try to add other blocks
           case Valid =>
             addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-              s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+              s"Added ${PrettyPrinter.buildString(block.blockHash)}")
           case MissingBlocks =>
             for {
               _              <- Capture[F].capture { blockBuffer += block }
@@ -472,7 +472,7 @@ sealed abstract class MultiParentCasperInstances {
               }
             } *>
               addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-              s"CASPER: Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}")
+              s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}")
           case IgnorableEquivocation =>
             /*
              * We don't have to include these blocks to the equivocation tracker because if any validator
@@ -480,7 +480,7 @@ sealed abstract class MultiParentCasperInstances {
              * through the admissible equivocations.
              */
             Log[F].info(
-              s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
+              s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
           case InvalidUnslashableBlock =>
             handleInvalidBlockEffect(status, block)
           case InvalidBlockNumber =>
@@ -521,8 +521,8 @@ sealed abstract class MultiParentCasperInstances {
 
       private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
         for {
-          _ <- Log[F].warn(s"CASPER: Recording invalid block ${PrettyPrinter.buildString(
-                block.blockHash)} for ${status.toString}.")
+          _ <- Log[F].warn(
+                s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}.")
           // TODO: Slash block for status except InvalidUnslashableBlock
           _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
