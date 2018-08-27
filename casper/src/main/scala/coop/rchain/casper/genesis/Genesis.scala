@@ -1,42 +1,41 @@
 package coop.rchain.casper.genesis
 
-import cats.{Applicative, Foldable, Monad}
+import java.io.{File, PrintWriter}
+import java.nio.file.Path
+
+import cats.effect.Sync
 import cats.implicits._
+import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib._
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev, Wallet}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.{EventConverter, Sorting}
+import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.{Either, LinkedList}
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.BasicWallet
 import coop.rchain.shared.{Log, LogSource, Time}
-import java.io.{File, PrintWriter}
-import java.nio.file.{Files, Path}
-
 import monix.execution.Scheduler
 
-import scala.concurrent.SyncVar
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+import coop.rchain.casper.util.Sorting.byteArrayOrdering
 
 object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def withContracts(initial: BlockMessage,
-                    validators: Seq[ProofOfStakeValidator],
-                    wallets: Seq[Wallet],
-                    startHash: StateHash,
-                    runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-    val defaultBlessedTerms = List(
+  def defaultBlessedTerms(timestamp: Long,
+                          validators: Seq[ProofOfStakeValidator],
+                          wallets: Seq[Wallet]): List[Deploy] =
+    List(
       LinkedList.term,
       Either.term,
       NonNegativeNumber.term,
@@ -44,17 +43,24 @@ object Genesis {
       BasicWallet.term,
       new Rev(wallets).term,
       new ProofOfStake(validators).term
-    ).map(termDeploy)
-    withContracts(defaultBlessedTerms, initial, startHash, runtimeManager)
-  }
+    ).map(termDeploy(_, timestamp))
+
+  def withContracts(initial: BlockMessage,
+                    validators: Seq[ProofOfStakeValidator],
+                    wallets: Seq[Wallet],
+                    startHash: StateHash,
+                    runtimeManager: RuntimeManager,
+                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage =
+    withContracts(defaultBlessedTerms(timestamp, validators, wallets),
+                  initial,
+                  startHash,
+                  runtimeManager)
 
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-    val Right((checkpoint, deployWithCost)) = runtimeManager.computeState(startHash, blessedTerms)
-    val stateHash                           = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    val reductionLog                        = checkpoint.log.map(EventConverter.toCasperEvent)
+    val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -63,8 +69,12 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val body =
-      Body(postState = stateWithContracts, newCode = deployWithCost, commReductions = reductionLog)
+    val blockDeploys =
+      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
+
+    val body = Body(postState = stateWithContracts, deploys = sortedDeploys)
+
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
@@ -99,7 +109,8 @@ object Genesis {
       genesisPath: Path,
       maybeWalletsPath: Option[String],
       runtimeManager: RuntimeManager,
-      shardId: String)(implicit scheduler: Scheduler): F[BlockMessage] =
+      shardId: String,
+      deployTimestamp: Option[Long])(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
@@ -107,31 +118,20 @@ object Genesis {
               s"CASPER: Specified bonds file $path does not exist. Falling back on generating random validators.")))(
             _ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
-      wallets <- (walletsFile, maybeWalletsPath) match {
-                  case (Some(file), _) => getWallets[F](file)
-                  case (None, Some(path)) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: Specified wallets file $path does not exist. No wallets will exist at genesis.")
-                      .map(_ => Seq.empty[Wallet])
-                  case (None, None) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: No wallets file specified and no default file found. No wallets will exist at genesis.")
-                      .map(_ => Seq.empty[Wallet])
-                }
-      bonds   <- getBonds[F](bondsFile, numValidators, genesisPath)
-      now     <- Time[F].currentMillis
-      initial = withoutContracts(bonds = bonds, timestamp = now, version = 0L, shardId = shardId)
-    } yield
-      withContracts(initial,
-                    bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-                    wallets,
-                    runtimeManager.emptyStateHash,
-                    runtimeManager)
+      wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
+      bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
+      timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
+      initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
+      withContr = withContracts(initial,
+                                bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+                                wallets,
+                                runtimeManager.emptyStateHash,
+                                runtimeManager,
+                                timestamp)
+    } yield withContr
 
-  private def toFile[F[_]: Applicative: Log](maybePath: Option[String],
-                                             defaultPath: Path): F[Option[File]] =
+  def toFile[F[_]: Applicative: Log](maybePath: Option[String],
+                                     defaultPath: Path): F[Option[File]] =
     maybePath match {
       case Some(path) =>
         val f = new File(path)
@@ -149,31 +149,75 @@ object Genesis {
         } else none[File].pure[F]
     }
 
-  private def getWallets[F[_]: Monad: Capture: Log](walletsFile: File): F[Seq[Wallet]] =
-    for {
-      maybeLines <- Capture[F].capture { Try(Source.fromFile(walletsFile).getLines().toList) }
-      wallets <- maybeLines match {
-                  case Success(lines) =>
-                    lines
-                      .traverse(Wallet.fromLine(_) match {
-                        case Right(wallet) => wallet.some.pure[F]
-                        case Left(errMsg) =>
-                          Log[F]
-                            .warn(s"CASPER: Error in parsing wallets file: $errMsg")
-                            .map(_ => none[Wallet])
-                      })
-                      .map(_.flatten)
-                  case Failure(ex) =>
-                    Log[F]
-                      .warn(
-                        s"CASPER: Failed to read ${walletsFile.getAbsolutePath} for reason: ${ex.getMessage}")
-                      .map(_ => Seq.empty[Wallet])
-                }
-    } yield wallets
+  def getWallets[F[_]: Monad: Capture: Log](walletsFile: Option[File],
+                                            maybeWalletsPath: Option[String]): F[Seq[Wallet]] = {
+    def walletFromFile(file: File): F[Seq[Wallet]] =
+      for {
+        maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
+        wallets <- maybeLines match {
+                    case Success(lines) =>
+                      lines
+                        .traverse(Wallet.fromLine(_) match {
+                          case Right(wallet) => wallet.some.pure[F]
+                          case Left(errMsg) =>
+                            Log[F]
+                              .warn(s"CASPER: Error in parsing wallets file: $errMsg")
+                              .map(_ => none[Wallet])
+                        })
+                        .map(_.flatten)
+                    case Failure(ex) =>
+                      Log[F]
+                        .warn(
+                          s"CASPER: Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
+                        .map(_ => Seq.empty[Wallet])
+                  }
+      } yield wallets
 
-  private def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
-                                                  numValidators: Int,
-                                                  genesisPath: Path): F[Map[Array[Byte], Int]] =
+    (walletsFile, maybeWalletsPath) match {
+      case (Some(file), _) => walletFromFile(file)
+      case (None, Some(path)) =>
+        Log[F]
+          .warn(
+            s"CASPER: Specified wallets file $path does not exist. No wallets will exist at genesis.")
+          .map(_ => Seq.empty[Wallet])
+      case (None, None) =>
+        Log[F]
+          .warn(
+            s"CASPER: No wallets file specified and no default file found. No wallets will exist at genesis.")
+          .map(_ => Seq.empty[Wallet])
+    }
+  }
+
+  def getBondedValidators[F[_]: Monad: Sync: Log](bondsFile: Option[String]): F[Set[ByteString]] =
+    bondsFile match {
+      case None => Set.empty[ByteString].pure[F]
+      case Some(file) =>
+        Sync[F]
+          .delay {
+            Try {
+              Source
+                .fromFile(file)
+                .getLines()
+                .map(line => {
+                  val Array(pk, _) = line.trim.split(" ")
+                  ByteString.copyFrom(Base16.decode(pk))
+                })
+                .toSet
+            }
+          }
+          .flatMap {
+            case Failure(th) =>
+              Log[F]
+                .warn(
+                  s"CASPER: Failed to parse bonded validators file $file for reason ${th.getMessage}")
+                .map(_ => Set.empty)
+            case Success(x) => x.pure[F]
+          }
+    }
+
+  def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
+                                          numValidators: Int,
+                                          genesisPath: Path): F[Map[Array[Byte], Int]] =
     bondsFile match {
       case Some(file) =>
         Capture[F]

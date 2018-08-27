@@ -16,7 +16,13 @@ abstract class Ob {
 
   def accepts(msg: Ctxt): Boolean = false
 
-  def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
+  def dispatch(ctxt: Ctxt, state: State): Ob = {
+    logger.debug(s"Dispatch method not implemented for ${this.getClass.getSimpleName} class")
+    Niv
+  }
+
+  // TODO: This method should be abstract
+  def indexedSize(): Fixnum = Fixnum(0)
 
   def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = Niv
 
@@ -28,7 +34,7 @@ abstract class Ob {
     else
       argvec.becomeExtension(keyMeta.asInstanceOf[Meta], this)
 
-  def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = Niv
+  def invoke(ctxt: Ctxt, state: State): Ob = Niv
 
   /** Tries to lookup value for key and then invokes the value
     *
@@ -37,7 +43,7 @@ abstract class Ob {
   def lookupAndInvoke(ctxt: Ctxt, state: State): Ob = {
     val fn = meta.lookupObo(this, ctxt.trgt, state.globalEnv)
     logger.debug(s"Lookup and invoke $fn")
-    fn.invoke(ctxt, state, state.globalEnv)
+    fn.invoke(ctxt, state)
   }
 
   def lookup(key: Ob, globalEnv: GlobalEnv): Ob = {
@@ -126,8 +132,6 @@ case object Deadthread     extends Ob
 case object Invalid        extends Ob
 case object Niv            extends Ob
 case object Qanon          extends Ob
-case object RblFalse       extends Ob
-case object RblTrue        extends Ob
 case object Suicide        extends Ob
 case object Suspended      extends Ob
 case object Upcall         extends Ob

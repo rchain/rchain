@@ -1,16 +1,21 @@
 package coop.rchain.comm.rp
 
-import Connect._, Connections._
-import coop.rchain.comm._, CommError._, protocol.routing._
-import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
-import scala.concurrent.duration._
-import org.scalatest._
-import org.scalatest.enablers.Containing
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
-import coop.rchain.shared._
-import coop.rchain.comm.transport._, CommMessages._
+import cats._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect.Connections._
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
+import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}
+import coop.rchain.shared._
+import org.scalatest._
+
+import scala.concurrent.duration._
 
 class ClearConnectionsSpec
     extends FunSpec
@@ -24,6 +29,7 @@ class ClearConnectionsSpec
   implicit val transport = new TransportLayerStub[Id]
   implicit val log       = new Log.NOPLog[Id]
   implicit val metric    = new Metrics.MetricsNOP[Id]
+  implicit val time      = new LogicalTime[Id]
 
   override def beforeEach(): Unit = {
     transport.reset()

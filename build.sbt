@@ -55,7 +55,11 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(
+    blockStorage  % "compile->compile;test->test",
+    comm          % "compile->compile;test->test",
+    shared        % "compile->compile;test->test",
+    crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -114,7 +118,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.6.1",
+    version := "0.6.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -167,7 +171,6 @@ lazy val node = (project in file("node"))
          .map { case (f, p) => f -> s"$base/$p" }
      },
     /* Packaging */
-    mappings in packageZipTarball in Universal += baseDirectory.value / "macos_install.sh" -> "macos_install.sh",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
