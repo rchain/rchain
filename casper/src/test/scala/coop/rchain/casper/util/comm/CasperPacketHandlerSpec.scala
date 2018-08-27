@@ -220,9 +220,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
-          approvedBlockReq   = ApprovedBlockRequest("test")
-          approvedBlockPacket = Packet(transport.ApprovedBlockRequest.id,
-                                       approvedBlockReq.toByteString)
+          approvedPacket = approvedBlockPacket
           approvedBlockRes <- casperPacketHandler.handle(local)(approvedBlockPacket)
           _ = assert(
             approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
@@ -302,12 +300,12 @@ class CasperPacketHandlerSpec extends WordSpec {
               ByteString.copyFrom(
                 Ed25519.sign(Blake2b256.hash(approvedBlockCandidate.toByteArray), validatorSk))))
         )
-        val approvedBlockPacket = Packet(transport.ApprovedBlock.id, approvedBlock.toByteString)
+        val approvedPacket = approvedBlockPacket
 
         val test = for {
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](bootstrapCasper)
           casperPacketHandler = new CasperPacketHandlerImpl[Task](refCasper)
-          _                   <- casperPacketHandler.handle(local).apply(approvedBlockPacket)
+          _                   <- casperPacketHandler.handle(local).apply(approvedPacket)
           casperO             <- MultiParentCasperRef[Task].get
           _                   = assert(casperO.isDefined)
           blockO              <- blockStore.get(genesis.blockHash)
@@ -318,10 +316,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           // assert that we really serve last approved block
           lastApprovedBlockO <- LastApprovedBlock[Task].get
           _                  = assert(lastApprovedBlockO.isDefined)
-          approvedBlockReq   = ApprovedBlockRequest("test")
-          approvedBlockPacket = Packet(transport.ApprovedBlockRequest.id,
-                                       approvedBlockReq.toByteString)
-          approvedBlockRes <- casperPacketHandler.handle(local)(approvedBlockPacket)
+          approvedBlockRes <- casperPacketHandler.handle(local)(approvedPacket)
           _ = assert(
             approvedBlockRes.map(p => ApprovedBlock.parseFrom(p.content.toByteArray)) == Some(
               lastApprovedBlockO.get))
@@ -441,6 +436,12 @@ object CasperPacketHandlerSpec {
     assert(a.value.isDefined && a.value.get.isSuccess)
     a.value.get.get
   }
+
+  def approvedBlockPacket: Packet = {
+    val approvedBlockReq   = ApprovedBlockRequest("test")
+    Packet(transport.ApprovedBlockRequest.id, approvedBlockReq.toByteString)
+  }
+
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
