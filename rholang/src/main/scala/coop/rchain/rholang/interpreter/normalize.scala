@@ -55,8 +55,7 @@ object RemainderNormalizeMatcher {
       implicit sync: Sync[M]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
-        (Option(Var(Wildcard(Var.WildcardMsg()))),
-         knownFree.addWildcard(pvw.line_num, pvw.col_num))
+        (Option(Var(Wildcard(Var.WildcardMsg()))), knownFree.addWildcard(pvw.line_num, pvw.col_num))
           .pure[M]
       case pvv: ProcVarVar =>
         knownFree.get(pvv.var_) match {
