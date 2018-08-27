@@ -38,7 +38,7 @@ object Validate {
     }
 
   def ignore(b: BlockMessage, reason: String): String =
-    s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
+    s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
                                             requiredValidators: Set[ByteString]): F[Boolean] = {
@@ -63,13 +63,12 @@ object Validate {
           true.pure[F]
         else
           Log[F]
-            .warn(
-              "CASPER: Received invalid ApprovedBlock message not containing enough valid signatures.")
+            .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
             .map(_ => false)
 
       case None =>
         Log[F]
-          .warn("CASPER: Received invalid ApprovedBlock message not containing any candidate.")
+          .warn("Received invalid ApprovedBlock message not containing any candidate.")
           .map(_ => false)
     }
   }
