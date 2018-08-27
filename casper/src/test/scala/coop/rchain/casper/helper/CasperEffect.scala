@@ -32,7 +32,7 @@ object CasperEffect {
     val local                    = HashSetCasperTestNode.peerNode("taskNode", 40400)
     implicit val logEff          = new LogStub[Effect]
     implicit val timeEff         = new LogicalTime[Effect]
-    implicit val connectionsCell = Cell.const[Effect, Connections](Connect.Connections.empty)
+    implicit val connectionsCell = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
     implicit val transportLayerEff =
       new TransportLayerTestImpl[Effect](local, Map.empty[PeerNode, mutable.Queue[Protocol]])
     implicit val metricEff = new Metrics.MetricsNOP[Effect]
@@ -60,7 +60,7 @@ object CasperEffect {
       blockStoreDir.recursivelyDelete()
     }
 
-    (casperTask, cleanUp)
+    (casperTask, cleanUp _)
   }
 
   private val syncInstance = SyncInstances.syncEffect[CommError](commError => {

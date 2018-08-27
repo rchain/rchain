@@ -11,6 +11,12 @@ def pytest_addoption(parser):
     parser.addoption(
         "--peer-count", action="store", default="2", help="number of peers in the network (excluding bootstrap node)"
     )
+    parser.addoption(
+        "--start-timeout", action="store", default="0", help="timeout in seconds for starting a node. Defaults to 30 + peer_count * 10"
+    )
+    parser.addoption(
+        "--converge-timeout", action="store", default="0", help="timeout in seconds for network converge. Defaults to 200 + peer_count * 10"
+    )
 
 
 
@@ -30,17 +36,19 @@ Config = collections.namedtuple( "Config",
 
 def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
+    start_timeout = int(request.config.getoption("--start-timeout"))
+    converge_timeout = int(request.config.getoption("--converge-timeout"))
     return Config(peer_count = peer_count,
-                  node_startup_timeout = 20 + peer_count * 10,
-                  network_converge_timeout = 200 + peer_count * 2
+                  node_startup_timeout = start_timeout if start_timeout > 0 else 30 + peer_count * 10,
+                  network_converge_timeout = converge_timeout if converge_timeout > 0 else 200 + peer_count * 2
                   )
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def config(request):
     return parse_config(request)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def docker():
     import docker
 
@@ -52,7 +60,7 @@ def docker():
     docker_client.volumes.prune()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def docker_network(docker):
     network_name = f"rchain-{random.random_string(5)}"
 
@@ -66,7 +74,7 @@ def docker_network(docker):
             network.remove()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def bootstrap(docker, docker_network):
     node = create_bootstrap_node(docker, docker_network)
 
@@ -74,7 +82,7 @@ def bootstrap(docker, docker_network):
 
     node.cleanup()
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def started_bootstrap(config, bootstrap):
     wait_for( string_matches( node_logs(bootstrap),
                               "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
@@ -82,7 +90,7 @@ def started_bootstrap(config, bootstrap):
         "Bootstrap node didn't start correctly")
     yield bootstrap
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def rchain_network(config, docker, started_bootstrap, docker_network):
     logging.debug(f"Docker network = {docker_network}")
 
@@ -93,7 +101,7 @@ def rchain_network(config, docker, started_bootstrap, docker_network):
     for peer in peers:
         peer.cleanup()
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
         wait_for( string_matches(node_logs(peer),
@@ -104,7 +112,7 @@ def started_rchain_network(config, rchain_network):
     yield rchain_network
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def converged_network(config, started_rchain_network):
     wait_for( network_converged( started_rchain_network.bootstrap, len(started_rchain_network.peers)),
                                  config.network_converge_timeout,
