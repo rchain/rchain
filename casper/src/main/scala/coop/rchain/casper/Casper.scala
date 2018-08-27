@@ -265,6 +265,9 @@ sealed abstract class MultiParentCasperInstances {
        *  -If R is non-empty then create a new block with parents equal to P and (non-conflicting) txns obtained from R
        *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
        *  -Else None
+       *
+       *  TODO: Make this return Either so that we get more information about why not block was
+       *  produced (no deploys, already processing, no validator id)
        */
       def createBlock: F[Option[BlockMessage]] = validatorId match {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
