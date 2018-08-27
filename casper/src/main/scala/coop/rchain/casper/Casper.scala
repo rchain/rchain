@@ -273,7 +273,6 @@ sealed abstract class MultiParentCasperInstances {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
           Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
             for {
-              _              <- Log[F].debug("createBlock has started")
               dag            <- blockDag
               orderedHeads   <- estimator(dag)
               p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)

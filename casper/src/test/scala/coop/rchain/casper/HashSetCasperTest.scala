@@ -53,8 +53,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "not allow multiple threads to propose a block at the same time" in {
-    val scheduler                 = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp, log) = CasperEffect(validatorKeys.head, genesis)(scheduler)
+    val scheduler            = Scheduler.fixedPool("three-threads", 3)
+    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
 
     //deploy runs forever, so processing it cannot be completed
     val deploy =
@@ -76,8 +76,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "not allow multiple threads to process the same block" in {
-    val scheduler               = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp, _) = CasperEffect(validatorKeys.head, genesis)(scheduler)
+    val scheduler            = Scheduler.fixedPool("three-threads", 3)
+    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
 
     val deploy = ProtoUtil.basicDeployData(0)
     val testProgram = for {
