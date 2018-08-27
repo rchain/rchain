@@ -44,14 +44,17 @@ def test_casper_propose_and_deploy(config, converged_network):
                         if n.container.name != node.container.name]
 
         for node in other_nodes:
-            block_received = wait_for( find_first( node_blocks_received(node),
-                                                      lambda b: expected_string in b.content),
-                                            config.receive_timeout,
-                                            f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
-
-            logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {block_received}")
-            wait_for( find_first( node_blocks_added(node),
-                                  lambda s: s == block_received.id),
-                      config.receive_timeout,
-                      f"Container: {node.container.name}: Added blocks not found for {block_received.id}")
-            logging.info(f"Container: {node.container.name}: SUCCESS!")
+            blocks = wait_for(string_contains(node_blocks(node), expected_string),
+                              config.receive_timeout,
+                              f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
+            # block_received = wait_for( find_first( node_blocks_received(node),
+            #                                           lambda b: expected_string in b.content),
+            #                                 config.receive_timeout,
+            #                                 f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
+            #
+            # logging.info(f"Container: {node.container.name}: Received blocks found for {expected_string}: {block_received}")
+            # wait_for( find_first( node_blocks_added(node),
+            #                       lambda s: s == block_received.id),
+            #           config.receive_timeout,
+            #           f"Container: {node.container.name}: Added blocks not found for {block_received.id}")
+            # logging.info(f"Container: {node.container.name}: SUCCESS!")

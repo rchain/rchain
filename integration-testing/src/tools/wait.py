@@ -45,7 +45,7 @@ def node_logs(node):
     go.__doc__ = f"container_logs({node.name})"
     return go
 
-def string_matches(string_factory, regex_str, flags = 0):
+def string_contains(string_factory, regex_str, flags = 0):
     rx = re.compile(regex_str, flags)
 
     def go():
@@ -83,17 +83,15 @@ Block = collections.namedtuple("Block", ["id", "content"])
 def node_blocks_received(node):
     def go():
         id_rx = ".+?"
-        # received_block_rx = re.compile(f"^.* CASPER: Received Block #(\d+) \((.*?)\.\.\.\)(.*)$", re.MULTILINE | re.DOTALL)
         received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
-        # received_block_rx = re.compile(f".* CASPER: Received Block #\d+ \(({id_rx})\.\.\.\) -- (.*)", re.MULTILINE | re.DOTALL)
 
         logs = node.log_lines()
-        # strlogs = '\n+++\n'.join(logs)
-        # logging.info(f"logs to match: {strlogs}")
-        blocks = [Block( match[1], match[2])
-                  for match in [received_block_rx.match(log)
-                                for log in logs]
-                  if match]
+
+        block_matches = [match  for match in [received_block_rx.match(log) for log in logs] if match]
+
+        blocks = [Block( match[1], match[2]) for match in block_matches]
+
+        logging.debug(f"Blocks received: {blocks}")
 
         return blocks
 
@@ -111,6 +109,8 @@ def node_blocks_added(node):
                                      for log in logs]
                       if match]
 
+        logging.debug(f"Block ids added: {block_ids}")
+
         return block_ids
 
     go.__doc__ = f"node_blocks_received({node.name})"
@@ -120,6 +120,10 @@ def find_first(list_factory, predicate):
     def go():
         lst = list_factory()
         found = [x for x in lst if predicate(x)]
+
+        if len(found) == 0:
+            raise Exception(f"No items found that satisfy the predicate {predicate.__doc__}")
+
         return found[0]
 
     go.__doc__ = f"`{list_factory.__doc__}` find `{predicate.__doc__}`"

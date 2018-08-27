@@ -3,7 +3,7 @@ import pytest
 import tools.random as random
 
 from tools.rnode import create_bootstrap_node, create_peer_nodes
-from tools.wait import wait_for, string_matches, node_logs, network_converged
+from tools.wait import wait_for, string_contains, node_logs, network_converged
 
 import collections
 
@@ -93,7 +93,7 @@ def bootstrap(docker, docker_network):
 
 @pytest.fixture(scope="package")
 def started_bootstrap(config, bootstrap):
-    wait_for( string_matches( node_logs(bootstrap),
+    wait_for( string_contains( node_logs(bootstrap),
                               "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
               config.node_startup_timeout,
         "Bootstrap node didn't start correctly")
@@ -113,7 +113,7 @@ def rchain_network(config, docker, started_bootstrap, docker_network):
 @pytest.fixture(scope="package")
 def started_rchain_network(config, rchain_network):
     for peer in rchain_network.peers:
-        wait_for( string_matches(node_logs(peer),
+        wait_for( string_contains(node_logs(peer),
                                  "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
                   config.node_startup_timeout,
                   f"Peer node {peer.name} didn't start correctly")
