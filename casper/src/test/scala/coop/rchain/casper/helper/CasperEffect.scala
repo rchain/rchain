@@ -26,11 +26,13 @@ object CasperEffect {
   type Effect[A] = EitherT[Task, CommError, A]
 
   def apply(sk: Array[Byte], genesis: BlockMessage, shardId: String = "rchain")(
-      implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
+      implicit scheduler: Scheduler)
+    : (Effect[MultiParentCasper[Effect]], () => Unit, LogStub[Effect]) = {
     val blockStoreDir            = BlockStoreTestFixture.dbDir
     val runtimeDir               = BlockStoreTestFixture.dbDir
     val local                    = HashSetCasperTestNode.peerNode("taskNode", 40400)
-    implicit val logEff          = new LogStub[Effect]
+    val log                      = new LogStub[Effect]
+    implicit val logEff          = log
     implicit val timeEff         = new LogicalTime[Effect]
     implicit val connectionsCell = Cell.const[Effect, Connections](Connect.Connections.empty)
     implicit val transportLayerEff =
@@ -60,7 +62,7 @@ object CasperEffect {
       blockStoreDir.recursivelyDelete()
     }
 
-    (casperTask, cleanUp)
+    (casperTask, cleanUp _, log)
   }
 
   private val syncInstance = SyncInstances.syncEffect[CommError](commError => {

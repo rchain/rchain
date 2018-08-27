@@ -1,5 +1,7 @@
 package coop.rchain.casper
 
+import java.util.concurrent.locks.ReentrantLock
+
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Monad}
 import cats.implicits._
@@ -139,8 +141,7 @@ sealed abstract class MultiParentCasperInstances {
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
 
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
-      private val createBlockLock  = new SyncVar[Unit]()
-      createBlockLock.put(())
+      private val createBlockLock  = new ReentrantLock()
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
         for {
@@ -267,25 +268,26 @@ sealed abstract class MultiParentCasperInstances {
        */
       def createBlock: F[Option[BlockMessage]] = validatorId match {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
-          for {
-            _              <- createBlockLock.take.pure[F]
-            _              <- Log[F].debug("createBlock has started")
-            dag            <- blockDag
-            orderedHeads   <- estimator(dag)
-            p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
-            r              <- remDeploys(dag, p)
-            justifications = toJustification(dag.latestMessages)
-            proposal <- if (r.nonEmpty || p.length > 1) {
-                         createProposal(p, r, justifications)
-                       } else {
-                         none[BlockMessage].pure[F]
-                       }
-            signedBlock = proposal.map(
-              signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
-            )
-            _ <- createBlockLock.put(()).pure[F]
-          } yield signedBlock
-
+          Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
+            for {
+              _              <- Log[F].debug("createBlock has started")
+              dag            <- blockDag
+              orderedHeads   <- estimator(dag)
+              p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+              r              <- remDeploys(dag, p)
+              justifications = toJustification(dag.latestMessages)
+              proposal <- if (r.nonEmpty || p.length > 1) {
+                           createProposal(p, r, justifications)
+                         } else {
+                           none[BlockMessage].pure[F]
+                         }
+              signedBlock = proposal.map(
+                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+              )
+              _ <- Sync[F].delay { createBlockLock.unlock() }
+            } yield signedBlock,
+            none[BlockMessage].pure[F]
+          )
         case None => none[BlockMessage].pure[F]
       }
 
