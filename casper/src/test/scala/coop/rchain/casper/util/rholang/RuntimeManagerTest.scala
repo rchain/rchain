@@ -83,7 +83,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       """for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!(10)"""
     )
 
-    def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost).map(_.cost).sum
+    def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
     val deploy = terms.map(t =>
       ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis()))
     val (_, firstDeploy) =
