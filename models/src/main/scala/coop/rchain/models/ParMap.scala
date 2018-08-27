@@ -30,10 +30,10 @@ object ParMap {
   def apply(map: SortedParMap): ParMap =
     ParMap(map, connectiveUsed(map), Coeval.pure(updateLocallyFree(map.toSeq)))
 
-  def connectiveUsed(map: SortedParMap): Boolean =
+  private def connectiveUsed(map: SortedParMap): Boolean =
     map.sortedMap.exists { case (k, v) => k.connectiveUsed || v.connectiveUsed }
 
-  def updateLocallyFree(ps: Seq[(Par, Par)]): BitSet =
+  private def updateLocallyFree(ps: Seq[(Par, Par)]): BitSet =
     ps.foldLeft(BitSet()) {
       case (acc, (key, value)) =>
         acc | key.locallyFree | value.locallyFree
