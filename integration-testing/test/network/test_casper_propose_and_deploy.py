@@ -18,11 +18,11 @@ def test_casper_propose_and_deploy(config, converged_network):
     contract_name = 'contract.rho'
 
     for node in converged_network.nodes:
-        with log_box(logging.info):
+        with log_box(logging.info, f"Run test on node '{node.name}'"):
             expected_string = f"<{node.container.name}:{random_string(token_size)}>"
 
 
-            logging.info(f"Run test on node '{node.name}' Expected string: {expected_string}")
+            logging.info(f"Expected string: {expected_string}")
 
             copyfile(resources.file_path(contract_name, __name__), f"{node.local_deploy_dir}/{contract_name}")
 
