@@ -1,7 +1,6 @@
 import logging
 import re
 import tempfile
-import random
 import tools.resources as resources
 from tools.util import log_box
 
@@ -64,17 +63,6 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-
-def __read_validator_keys():
-    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
-    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
-    f=open(resources.file_path('pregenerated-validator-private-public-key-pairs.txt'))
-    lines=f.readlines()
-    random.shuffle(lines)
-    return [line.split() for line in lines]
-
-validator_keys = __read_validator_keys()
-
 def __create_node_container(docker_client, image, name, network, bonds_file, command, extra_volumes, memory, cpuset_cpus):
     deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
 
@@ -93,12 +81,12 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                hostname=name)
     return Node(container, deploy_dir, docker_client)
 
-def create_bootstrap_node(docker_client, network, bonds_file, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_bootstrap_node(docker_client, network, bonds_file, key_pair, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create bootstrap node.
     """
 
-    validator_private_key, validator_public_key = validator_keys[0]
+    validator_private_key, validator_public_key = key_pair
 
     key_file = resources.file_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.file_path("bootstrap_certificate/node.certificate.pem")
@@ -117,13 +105,15 @@ def create_bootstrap_node(docker_client, network, bonds_file, image=default_imag
 
     return __create_node_container(docker_client, image, name, network, bonds_file, command, volumes, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, n, bootstrap, network, bonds_file, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
+    assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
+
     bootstrap_address = bootstrap.get_rnode_address()
 
-    logging.info(f"Create {n} peer nodes to connect to bootstrap {bootstrap_address}.")
+    logging.info(f"Create {len(key_pairs)} peer nodes to connect to bootstrap {bootstrap_address}.")
 
     def create_peer(i, private_key, public_key):
         name = f"peer{i}.{network}"
@@ -133,4 +123,4 @@ def create_peer_nodes(docker_client, n, bootstrap, network, bonds_file, image=de
         return __create_node_container(docker_client, image, name, network, bonds_file, command, [], memory, cpuset_cpus)
 
     return [ create_peer(i, sk, pk)
-             for i, (sk, pk) in enumerate(validator_keys[1:n+1])]
+             for i, (sk, pk) in enumerate(key_pairs)]

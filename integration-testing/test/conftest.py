@@ -1,6 +1,8 @@
 import logging
 import pytest
-import tools.random as random
+
+import random
+import tools.random
 
 from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
@@ -80,7 +82,7 @@ def docker():
 
 @pytest.fixture(scope="package")
 def docker_network(docker):
-    network_name = f"rchain-{random.random_string(5).lower()}"
+    network_name = f"rchain-{tools.random.random_string(5).lower()}"
 
     docker.networks.create(network_name, driver="bridge")
 
@@ -93,14 +95,24 @@ def docker_network(docker):
 
 
 @pytest.fixture(scope="session")
-def bonds_file():
-    f = resources.file_path("test-bonds.txt")
-    yield f
+def validators_data(config):
+    bonds = resources.file_path("test-bonds.txt")
+
+    # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
+    # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
+    f=open(resources.file_path('pregenerated-validator-private-public-key-pairs.txt'))
+    lines=f.readlines()
+    random.shuffle(lines)
+    validator_keys = [ tuple(line.split())
+                       for line in lines[0:config.peer_count]]
+
+    yield (bonds, validator_keys[0], validator_keys[1:])
 
 
 @pytest.fixture(scope="package")
-def bootstrap(docker, docker_network, bonds_file):
-    node = create_bootstrap_node(docker, docker_network, bonds_file)
+def bootstrap(docker, docker_network, validators_data):
+    bonds_file, bootstrap_keys, _ = validators_data
+    node = create_bootstrap_node(docker, docker_network, bonds_file, bootstrap_keys)
 
     yield node
 
@@ -115,10 +127,12 @@ def started_bootstrap(config, bootstrap):
     yield bootstrap
 
 @pytest.fixture(scope="package")
-def rchain_network(config, docker, started_bootstrap, docker_network, bonds_file):
+def rchain_network(config, docker, started_bootstrap, docker_network, validators_data):
     logging.debug(f"Docker network = {docker_network}")
 
-    peers = create_peer_nodes(docker, config.peer_count, started_bootstrap, docker_network, bonds_file)
+    bonds_file, _, peer_keys = validators_data
+
+    peers = create_peer_nodes(docker, started_bootstrap, docker_network, bonds_file, peer_keys)
 
     yield RChain(network = docker_network, bootstrap = started_bootstrap, peers = peers)
 
