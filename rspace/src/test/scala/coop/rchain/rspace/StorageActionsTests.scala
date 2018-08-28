@@ -1043,7 +1043,7 @@ trait StorageActionsTests
   }
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)]): Boolean = {
+                            indexedStates: Seq[(State, Int)], differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
@@ -1058,28 +1058,30 @@ trait StorageActionsTests
           } else {
             logger.error(s"$num: store had unexpected contents")
 
-            logger.error("difference report")
-            for ((expectedChannels, expectedRow) <- expectedContents) {
-              val actualRow = actualContents.get(expectedChannels)
+            if(differenceReport) {
+              logger.error("difference report")
+              for ((expectedChannels, expectedRow) <- expectedContents) {
+                val actualRow = actualContents.get(expectedChannels)
 
-              actualRow match {
-                case Some(row) =>
-                  if (row != expectedRow) {
-                    logger.error(s"invalid actual value: $row !== $expectedRow")
-                  }
-                case None => logger.error(s"no expected key: $expectedChannels")
+                actualRow match {
+                  case Some(row) =>
+                    if (row != expectedRow) {
+                      logger.error(s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                    }
+                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+                }
               }
-            }
 
-            for ((actualChannels, actualRow) <- actualContents) {
-              val expectedRow = expectedContents.get(actualChannels)
+              for ((actualChannels, actualRow) <- actualContents) {
+                val expectedRow = expectedContents.get(actualChannels)
 
-              expectedRow match {
-                case Some(row) =>
-                  if (row != actualRow) {
-                    logger.error(s"invalid actual value: $actualRow !== $row")
-                  }
-                case None => logger.error(s"unexpected key: $actualChannels")
+                expectedRow match {
+                  case Some(row) =>
+                    if (row != actualRow) {
+                      logger.error(s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                    }
+                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+                }
               }
             }
           }
