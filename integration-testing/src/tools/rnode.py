@@ -75,10 +75,8 @@ def __read_validator_keys():
 
 validator_keys = __read_validator_keys()
 
-def __create_node_container(docker_client, image, name, network, command, extra_volumes, memory, cpuset_cpus):
+def __create_node_container(docker_client, image, name, network, bonds_file, command, extra_volumes, memory, cpuset_cpus):
     deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
-
-    bonds_file = resources.file_path("test-bonds.txt")
 
     container  = docker_client.containers.run( image,
                                                name=name,
@@ -95,7 +93,7 @@ def __create_node_container(docker_client, image, name, network, command, extra_
                                                hostname=name)
     return Node(container, deploy_dir, docker_client)
 
-def create_bootstrap_node(docker_client, network, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_bootstrap_node(docker_client, network, bonds_file, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create bootstrap node.
     """
@@ -117,9 +115,9 @@ def create_bootstrap_node(docker_client, network, image=default_image, memory="1
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return __create_node_container(docker_client, image, name, network, command, volumes, memory, cpuset_cpus)
+    return __create_node_container(docker_client, image, name, network, bonds_file, command, volumes, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, n, bootstrap, network, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, n, bootstrap, network, bonds_file, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
@@ -132,7 +130,7 @@ def create_peer_nodes(docker_client, n, bootstrap, network, image=default_image,
         command = f"run --bootstrap {bootstrap_address} --validator-private-key {private_key} --validator-public-key {public_key} --host {name}"
 
         logging.info(f"Starting peer node {name} with command: `{command}`")
-        return __create_node_container(docker_client, image, name, network, command, [], memory, cpuset_cpus)
+        return __create_node_container(docker_client, image, name, network, bonds_file, command, [], memory, cpuset_cpus)
 
     return [ create_peer(i, sk, pk)
              for i, (sk, pk) in enumerate(validator_keys[1:n+1])]

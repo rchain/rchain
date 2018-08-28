@@ -6,6 +6,7 @@ from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
 from tools.util import log_box
 from tools.profiling import log_prof_data
+import tools.resources as resources
 
 import collections
 import pprint
@@ -79,7 +80,7 @@ def docker():
 
 @pytest.fixture(scope="package")
 def docker_network(docker):
-    network_name = f"rchain-{random.random_string(5)}"
+    network_name = f"rchain-{random.random_string(5).lower()}"
 
     docker.networks.create(network_name, driver="bridge")
 
@@ -91,9 +92,15 @@ def docker_network(docker):
             network.remove()
 
 
+@pytest.fixture(scope="session")
+def bonds_file():
+    f = resources.file_path("test-bonds.txt")
+    yield f
+
+
 @pytest.fixture(scope="package")
-def bootstrap(docker, docker_network):
-    node = create_bootstrap_node(docker, docker_network)
+def bootstrap(docker, docker_network, bonds_file):
+    node = create_bootstrap_node(docker, docker_network, bonds_file)
 
     yield node
 
@@ -108,10 +115,10 @@ def started_bootstrap(config, bootstrap):
     yield bootstrap
 
 @pytest.fixture(scope="package")
-def rchain_network(config, docker, started_bootstrap, docker_network):
+def rchain_network(config, docker, started_bootstrap, docker_network, bonds_file):
     logging.debug(f"Docker network = {docker_network}")
 
-    peers = create_peer_nodes(docker, config.peer_count, started_bootstrap, docker_network)
+    peers = create_peer_nodes(docker, config.peer_count, started_bootstrap, docker_network, bonds_file)
 
     yield RChain(network = docker_network, bootstrap = started_bootstrap, peers = peers)
 
