@@ -16,8 +16,14 @@ class SortSpec extends FlatSpec with Matchers {
   }
 
   private def assertOrder[T: Sortable](smaller: T, bigger: T): Any = {
-    val left: ScoredTerm[T]  = Sortable[T].sortMatch(smaller)
-    val right: ScoredTerm[T] = Sortable[T].sortMatch(bigger)
+    val left: ScoredTerm[T] = checkSortingAndScore(smaller)
+    val right: ScoredTerm[T] = checkSortingAndScore(bigger)
     assert(Ordering[ScoredTerm[T]].compare(left, right) < 0)
+  }
+
+  def checkSortingAndScore[T: Sortable](term: T): ScoredTerm[T] = {
+    val scored: ScoredTerm[T] = Sortable[T].sortMatch(term)
+    assert(scored.term == term, "Either input term not sorted or sorting returned wrong results")
+    scored
   }
 }
