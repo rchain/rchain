@@ -196,7 +196,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   private def injAttempt(deploy: Deploy, reducer: Reduce[Task], errorLog: ErrorLog)(
       implicit scheduler: Scheduler,
       costAlg: CostAccountingAlg[Task]): (PCost, Vector[Throwable]) = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(DeployData.toByteArray(deploy.raw.get))
+    implicit val rand: Blake2b512Random = Blake2b512Random(
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get)))
     Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
       case Success(_) =>
         val errors = errorLog.readAndClearErrorVector()
