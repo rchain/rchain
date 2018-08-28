@@ -1389,9 +1389,6 @@ trait StorageActionsTests
     check(prop)
   }
 
-  val stringGen = Gen.nonEmptyContainerOf[Array, Char](Gen.choose[Char](0x21, 0x7e.toChar)).map(_.mkString)
-  val testConsumeMapGen = Gen.nonEmptyContainerOf[TestConsumeMap]
-
   "when resetting to a bunch of checkpoints made with consumes, the store" should
     "have the expected contents" in {
     val prop = Prop.forAllNoShrink { (data: Seq[TestConsumeMap]) =>
@@ -1539,10 +1536,7 @@ trait StorageActionsTests
 class InMemoryStoreStorageActionsTests
     extends InMemoryStoreTestsBase
     with StorageActionsTests
-    with JoinOperationsTests {
-  implicit override val generatorDrivenConfig =
-    PropertyCheckConfiguration(minSuccessful = 5000, sizeRange = 40)
-}
+    with JoinOperationsTests
 
 class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
