@@ -69,6 +69,7 @@ trait RSpaceBench {
   @Warmup(iterations = 0)
   @Threads(1)
   def simulateDupe(bh: Blackhole) = {
+
     space.consume(
       channels,
       matches,
@@ -76,12 +77,10 @@ trait RSpaceBench {
       persist = true
     )
 
-    val fs: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
+    val results: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
 
     implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
-    val fss         = Future.sequence(fs)
-    val tx          = Await.ready(fss, Duration.Inf)
-    bh.consume(tx)
+    bh.consume(Await.ready(Future.sequence(results), Duration.Inf))
   }
 }
 
