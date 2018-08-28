@@ -84,7 +84,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     mapData.add(
       new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
-    val map = new PCollect(new CollectMap(mapData))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
 
     val result =
       PrettyPrinter(0, 2).buildString(

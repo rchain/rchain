@@ -136,7 +136,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     mapData.add(
       new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
-    val map = new PCollect(new CollectMap(mapData))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
     result.par should be(
@@ -258,7 +258,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val pPercentPercent =
       new PPercentPercent(
         new PGround(new GroundString("Hi ${name}")),
-        new PCollect(new CollectMap(mapData))
+        new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
     result.par should be(
