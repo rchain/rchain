@@ -25,16 +25,19 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
-import coop.rchain.node.diagnostics.{MetricsServer, _}
+import coop.rchain.node.diagnostics._
 import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
+import kamon._
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import org.http4s.server.{Server => Http4sServer}
+import org.http4s.server.blaze._
+import coop.rchain.node.service._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Failure, Success, Try}
 
@@ -151,8 +154,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   case class Servers(
       grpcServerExternal: Server,
       grpcServerInternal: Server,
-      metricsServer: MetricsServer,
-      httpServer: HttpServer
+      httpServer: Http4sServer[IO],
+      metricsServer: Http4sServer[IO]
   )
 
   def acquireServers(runtime: Runtime)(
@@ -169,19 +172,36 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
-      metricsServer <- MetricsServer.create[Effect](conf.server.metricsPort)
-      httpServer    <- HttpServer(conf.server.httpPort).pure[Effect]
-    } yield Servers(grpcServerExternal, grpcServerInternal, metricsServer, httpServer)
+      prometheusReporter = new NewPrometheusReporter()
+
+      httpServer <- LiftIO[Task].liftIO {
+                     val prometheusService = NewPrometheusReporter.service(prometheusReporter)
+                     BlazeBuilder[IO]
+                       .bindHttp(conf.server.httpPort, "localhost")
+                       .mountService(jsonrpc.service, "/")
+                       .mountService(Lykke.service, "/lykke")
+                       .mountService(prometheusService, "/metrics")
+                       .start
+                   }.toEffect
+      metricsServer <- LiftIO[Task].liftIO {
+                        val prometheusService = NewPrometheusReporter.service(prometheusReporter)
+                        BlazeBuilder[IO]
+                          .bindHttp(conf.server.metricsPort, "localhost")
+                          .mountService(prometheusService, "/")
+                          .mountService(prometheusService, "/metrics")
+                          .start
+                      }.toEffect
+
+      _ <- Task.delay {
+            Kamon.addReporter(prometheusReporter)
+            Kamon.addReporter(new JmxReporter())
+          }.toEffect
+    } yield Servers(grpcServerExternal, grpcServerInternal, httpServer, metricsServer)
 
   def startServers(servers: Servers)(
       implicit
       log: Log[Task],
-  ): Effect[Unit] =
-    for {
-      _ <- servers.httpServer.start.toEffect
-      _ <- servers.metricsServer.start.toEffect
-      _ <- GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
-    } yield ()
+  ): Effect[Unit] = GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
@@ -199,9 +219,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       msg = CommMessages.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down metrics server...")
-      _   <- Task.delay(servers.metricsServer.stop())
+      _   <- LiftIO[Task].liftIO(servers.metricsServer.shutdown)
+      _   <- Task.delay(Kamon.stopAllReporters())
       _   <- log.info("Shutting down HTTP server....")
-      _   <- Task.delay(servers.httpServer.stop())
+      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown)
       _   <- log.info("Shutting down interpreter runtime ...")
       _   <- Task.delay(runtime.close)
       _   <- log.info("Shutting down Casper runtime ...")
