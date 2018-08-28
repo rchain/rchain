@@ -494,7 +494,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -546,7 +546,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -579,7 +579,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       ))
 
     result.par should be(expected)
@@ -728,7 +728,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           persistent = false,
           bindCount,
           BitSet(),
-          connectiveUsed = true
+          connectiveUsed = false
         ))
 
     result.par should be(expectedResult)
@@ -886,7 +886,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           Par(),
           persistent = false,
           bindCount,
-          connectiveUsed = true
+          connectiveUsed = false
         ))
 
     result.par should be(expectedResult)

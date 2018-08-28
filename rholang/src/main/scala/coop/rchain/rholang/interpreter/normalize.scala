@@ -710,15 +710,12 @@ object ProcNormalizeMatcher {
                                                                  line,
                                                                  col))
                         })
-          bindCount = mergedFrees.countNoWildcards
-          binds     = receipts.map(receipt => receipt._1)
-          bindingsConnectiveUsed = binds
-            .flatMap(_.patterns)
-            .exists(c => ChannelLocallyFree.connectiveUsed(c))
+          bindCount  = mergedFrees.countNoWildcards
+          binds      = receipts.map(receipt => receipt._1)
           updatedEnv = input.env.absorbFree(mergedFrees)._1
           bodyResult <- normalizeMatch[M](p.proc_,
                                           ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
-          connective = sourcesConnectives || bodyResult.par.connectiveUsed || bindingsConnectiveUsed
+          connective = sourcesConnectives || bodyResult.par.connectiveUsed
         } yield
           ProcVisitOutputs(
             input.par.prepend(
