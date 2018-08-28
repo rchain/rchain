@@ -284,26 +284,30 @@ object SpatialMatcher extends SpatialMatcherInstances {
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
     val maximumBipartiteMatch =
-      MaximumBipartiteMatch[Pattern, T, Unit, OptionalFreeMapWithCost]((pattern: Pattern, t: T) => {
-      val matchEffect = pattern match {
-        case Term(p) =>
-          if (!lf.connectiveUsed(p)) {
-            //match using `==` if pattern is a concrete term
-            guard(t == p).modifyCost(_.charge(COMPARISON_COST))
-          } else {
-            spatialMatch(t, p)
+      MaximumBipartiteMatch[Pattern, T, FreeMap, OptionalFreeMapWithCost](
+        (pattern: Pattern, t: T) => {
+          val matchEffect = pattern match {
+            case Term(p) =>
+              if (!lf.connectiveUsed(p)) {
+                //match using `==` if pattern is a concrete term
+                guard(t == p).modifyCost(_.charge(COMPARISON_COST))
+              } else {
+                spatialMatch(t, p)
+              }
+            case Remainder(_) =>
+              //Remainders can't match non-concrete terms, because they can't be captured.
+              //They match everything that's concrete though.
+              guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
           }
-        case Remainder(_) =>
-          //Remainders can't match non-concrete terms, because they can't be captured.
-          //They match everything that's concrete though.
-          guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
-      }
-      matchEffect.attemptOpt
-    })
+          isolateState(matchEffect).attemptOpt
+        })
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
       matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
+      freeMaps               = matches.map(_._3)
+      updatedFreeMap         <- aggregateUpdates(freeMaps)
+      _                      <- StateT.set[OptionT[State[CostAccount, ?], ?], FreeMap](updatedFreeMap)
       remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
@@ -334,6 +338,21 @@ object SpatialMatcher extends SpatialMatcherInstances {
       resultState <- StateT.get[F, S]
       _           <- StateT.set[F, S](initState)
     } yield resultState
+
+  private def aggregateUpdates(freeMaps: Seq[FreeMap]): OptionalFreeMapWithCost[FreeMap] =
+    for {
+      currentFreeMap <- StateT.get[OptionT[State[CostAccount, ?], ?], FreeMap]
+      _ <- guard {
+            //The correctness of isolating MBM from changing FreeMap relies
+            //on our ability to aggregate the var assignments from subsequent matches.
+            //This means all the variables populated by MBM must not duplicate each other.
+            //TODO start using MonadError in the interpreter and raise errors for violated assertions
+            val currentVars = currentFreeMap.keys.toSet
+            val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
+            addedVars.size == addedVars.distinct.size
+          }
+      updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
+    } yield updatedFreeMap
 
   private def handleRemainder[T](
       remainderTargets: Seq[T],
