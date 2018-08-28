@@ -71,7 +71,7 @@ case class PrettyPrinter(freeShift: Int,
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case ESetBody(ParSet(pars, _, _, remainder)) =>
-        "Set(" + buildSeq(pars.sortedPars.toSeq) ++ buildRemainderString(remainder) + ")"
+        "Set(" + buildSeq(pars.sortedPars) ++ buildRemainderString(remainder) + ")"
       case EMapBody(ParMap(ps, _, _)) =>
         "{" + ("" /: ps.sortedMap.zipWithIndex) {
           case (string, (kv, i)) =>
