@@ -87,9 +87,9 @@ trait BlockGenerator {
                            shardId = shardId)
       idToBlocks     = chain.idToBlocks + (nextId -> block)
       _              <- BlockStore[F].put(serializedBlockHash, block)
-      latestMessages = chain.latestMessages + (block.sender -> serializedBlockHash)
+      latestMessages = chain.latestMessages + (block.sender -> block)
       latestMessagesOfLatestMessages = chain.latestMessagesOfLatestMessages + (block.sender -> ProtoUtil
-        .toLatestMessages(serializedJustifications))
+        .toLatestMessageHashes(serializedJustifications))
       updatedChildren = HashMap[BlockHash, Set[BlockHash]](parentsHashList.map {
         parentHash: BlockHash =>
           val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])

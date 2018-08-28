@@ -348,12 +348,13 @@ object Validate {
       case hashes if hashes.isEmpty => Seq(genesis.blockHash)
       case hashes                   => hashes
     }
-    val latestMessages        = ProtoUtil.toLatestMessages(b.justifications)
-    val dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
+
     for {
-      estimate             <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
+      latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
+      dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
+      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
+      computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      computedParentHashes  = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
                else
@@ -375,7 +376,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
-    val latestMessagesOfBlock             = ProtoUtil.toLatestMessages(b.justifications)
+    val latestMessagesOfBlock             = ProtoUtil.toLatestMessageHashes(b.justifications)
     val maybeLatestMessagesFromSenderView = dag.latestMessagesOfLatestMessages.get(b.sender)
     maybeLatestMessagesFromSenderView match {
       case Some(latestMessagesFromSenderView) =>

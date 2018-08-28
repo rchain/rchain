@@ -11,7 +11,7 @@ import coop.rchain.casper.util.{DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
   bonds,
   findCreatorJustificationAncestorWithSeqNum,
-  toLatestMessages
+  toLatestMessageHashes
 }
 import coop.rchain.shared.{Log, LogSource}
 
@@ -67,7 +67,8 @@ object EquivocationDetector {
                                            dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeCreatorJustification   = creatorJustificationHash(block)
     val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
-    val isNotEquivocation           = maybeCreatorJustification == maybeLatestMessageOfCreator
+    val isNotEquivocation = maybeCreatorJustification == maybeLatestMessageOfCreator.map(
+      _.blockHash)
     if (isNotEquivocation) {
       Applicative[F].pure(Right(Valid))
     } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
@@ -164,7 +165,7 @@ object EquivocationDetector {
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage): F[EquivocationDiscoveryStatus] = {
     val equivocatingValidator = equivocationRecord.equivocator
-    val latestMessages        = toLatestMessages(block.justifications)
+    val latestMessages        = toLatestMessageHashes(block.justifications)
     val maybeEquivocatingValidatorBond =
       bonds(block).find(_.validator == equivocatingValidator)
     maybeEquivocatingValidatorBond match {
@@ -286,7 +287,7 @@ object EquivocationDetector {
     } else {
       // Latest according to the justificationBlock
       val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
-        toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
+        toLatestMessageHashes(justificationBlock.justifications).get(equivocatingValidator)
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {
