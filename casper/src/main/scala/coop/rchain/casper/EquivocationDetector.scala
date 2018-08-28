@@ -13,7 +13,6 @@ import coop.rchain.casper.util.ProtoUtil.{
   findCreatorJustificationAncestorWithSeqNum,
   toLatestMessages
 }
-import coop.rchain.shared.{Log, LogSource}
 
 import scala.collection.mutable
 
@@ -59,27 +58,18 @@ object EquivocationRecord {
 }
 
 object EquivocationDetector {
-
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
-  def checkEquivocations[F[_]: Monad: Log](blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-                                           block: BlockMessage,
-                                           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
+  def checkEquivocations(blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
+                         block: BlockMessage,
+                         dag: BlockDag): Either[InvalidBlock, ValidBlock] = {
     val maybeCreatorJustification   = creatorJustificationHash(block)
     val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
     val isNotEquivocation           = maybeCreatorJustification == maybeLatestMessageOfCreator
     if (isNotEquivocation) {
-      Applicative[F].pure(Right(Valid))
+      Right(Valid)
     } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-      Applicative[F].pure(Left(AdmissibleEquivocation))
+      Left(AdmissibleEquivocation)
     } else {
-      for {
-        sender                   <- PrettyPrinter.buildString(block.sender).pure[F]
-        creatorJustificationHash = maybeCreatorJustification.getOrElse("none")
-        latestMessageOfCreator   = maybeLatestMessageOfCreator.getOrElse("none")
-        _ <- Log[F].warn(
-              s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator")
-      } yield Left(IgnorableEquivocation)
+      Left(IgnorableEquivocation)
     }
   }
 

@@ -123,8 +123,7 @@ object BlockAPI {
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
     : F[IndexedSeq[BlockMessage]] =
     for {
-      dag       <- MultiParentCasper[F].blockDag
-      estimates <- MultiParentCasper[F].estimator(dag)
+      estimates <- MultiParentCasper[F].estimator
       tip       = estimates.head
       mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
     } yield mainChain
@@ -193,8 +192,7 @@ object BlockAPI {
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag        <- MultiParentCasper[F].blockDag
-        estimates  <- MultiParentCasper[F].estimator(dag)
+        estimates  <- MultiParentCasper[F].estimator
         tip        = estimates.head
         mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
         blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])

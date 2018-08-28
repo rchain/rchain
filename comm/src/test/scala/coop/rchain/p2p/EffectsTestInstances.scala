@@ -100,23 +100,18 @@ object EffectsTestInstances {
 
   class LogStub[F[_]: Applicative] extends Log[F] {
 
-    var debugs: List[String] = List.empty[String]
     var infos: List[String]  = List.empty[String]
     var warns: List[String]  = List.empty[String]
     var errors: List[String] = List.empty[String]
 
     def reset(): Unit = {
-      debugs = List.empty[String]
       infos = List.empty[String]
       warns = List.empty[String]
       errors = List.empty[String]
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = {
-      debugs = debugs :+ msg
-      ().pure[F]
-    }
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
     def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
       ().pure[F]

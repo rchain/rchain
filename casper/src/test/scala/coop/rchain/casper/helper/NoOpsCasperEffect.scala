@@ -26,7 +26,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore] private (
     } yield BlockStatus.valid
   def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
   def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
+  def estimator: F[IndexedSeq[BlockMessage]] =
     estimatorFunc.pure[F]
   def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
   def blockDag: F[BlockDag]                                          = blockDagFunc.pure[F]
