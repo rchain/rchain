@@ -454,6 +454,53 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSpatialMatch(target, justRemainder, Some(Map[Int, Par](0 -> ParSet(targetElements))))
   }
 
+  "Matching maps" should "work for concrete maps" in {
+    val target: Expr = ParMap(Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4))))
+    //matcher expects terms in canonical form and there's only one for any MAP
+    val pattern: Expr  = target
+    val expectedResult = Some(Map[Int, Par]())
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+  }
+
+  it should "work with free variables and wildcards" in {
+    val target: Expr = ParMap(
+      Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4)), (GInt(5), GInt(6))))
+    val pattern: Expr =
+      ParMap(
+        Seq[(Par, Par)](
+          (GInt(1), EVar(FreeVar(1))),
+          (GInt(3), GInt(4)),
+          (EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg())))
+      ),
+        connectiveUsed = true,
+        locallyFree = BitSet(0, 1),
+        remainder = None
+      )
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(5), 1 -> GInt(2)))
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val nonMatchingPattern: Expr =
+      ParMap(
+        Seq[(Par, Par)](
+          (GInt(3), EVar(FreeVar(1))),
+          (EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))),
+          (EVar(Wildcard(WildcardMsg())), GInt(4)),
+        ),
+        connectiveUsed = true,
+        locallyFree = BitSet(0, 1),
+        remainder = None
+      )
+    assertSpatialMatch(target, nonMatchingPattern, None)
+  }
+
   "Matching a whole list with a remainder" should "capture the list." in {
     // for (@[…a] <- @0) { … } | @0!([1,2,3])
     val target: Expr   = EList(Seq(GInt(1), GInt(2), GInt(3)))
