@@ -44,6 +44,17 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
+  implicit def forTuple[A, B, C, D](
+      implicit matcherAC: SpatialMatcher[A, C],
+      matcherBD: SpatialMatcher[B, D]
+  ): SpatialMatcher[(A, B), (C, D)] = new SpatialMatcher[(A, B), (C, D)] {
+    override def spatialMatch(target: (A, B), pattern: (C, D)): OptionalFreeMapWithCost[Unit] =
+      matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
+
+    override def nonDetMatch(target: (A, B), pattern: (C, D)): NonDetFreeMapWithCost[Unit] =
+      matcherAC.nonDetMatch(target._1, pattern._1) >> matcherBD.nonDetMatch(target._2, pattern._2)
+  }
+
   def fromFunction[T, P](fn: (T, P) => OptionalFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
       override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
