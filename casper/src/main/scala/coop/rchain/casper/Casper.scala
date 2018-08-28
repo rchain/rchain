@@ -1,7 +1,5 @@
 package coop.rchain.casper
 
-import java.util.concurrent.locks.ReentrantLock
-
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import cats.{Applicative, Monad}
 import cats.implicits._
@@ -141,7 +139,7 @@ sealed abstract class MultiParentCasperInstances {
       private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
 
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
-      private val createBlockLock  = new ReentrantLock()
+      private val createBlockLock  = new SyncLock
 
       def addBlock(b: BlockMessage): F[BlockStatus] =
         for {
