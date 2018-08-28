@@ -501,6 +501,34 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSpatialMatch(target, nonMatchingPattern, None)
   }
 
+  it should "work with wildcard remainders" in {
+    val targetElements = Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4)), (GInt(5), GInt(6)))
+    val target: Expr = ParMap(targetElements)
+    val pattern: Expr =
+      ParMap(Seq[(Par, Par)]((GInt(3), GInt(4))),
+             connectiveUsed = true,
+             locallyFree = BitSet(),
+             remainder = Wildcard(WildcardMsg()))
+    val expectedResult = Some(Map[Int, Par]())
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val allElementsAndWildcard: Expr = ParMap(targetElements,
+                                              connectiveUsed = true,
+                                              locallyFree = BitSet(),
+                                              remainder = Wildcard(WildcardMsg()))
+    assertSpatialMatch(target, allElementsAndWildcard, Some(Map[Int, Par]()))
+
+    val justWildcard: Expr = ParMap(Seq(),
+                                    connectiveUsed = true,
+                                    locallyFree = BitSet(),
+                                    remainder = Wildcard(WildcardMsg()))
+    assertSpatialMatch(target, justWildcard, Some(Map[Int, Par]()))
+  }
+
   "Matching a whole list with a remainder" should "capture the list." in {
     // for (@[…a] <- @0) { … } | @0!([1,2,3])
     val target: Expr   = EList(Seq(GInt(1), GInt(2), GInt(3)))
