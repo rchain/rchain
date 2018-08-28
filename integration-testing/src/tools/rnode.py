@@ -34,8 +34,7 @@ class Node:
         return address
 
     def cleanup(self):
-        with log_box(logging.info):
-            logging.info(f"Docker container logs for {self.container.name}:")
+        with log_box(logging.info, f"Logs for node {self.container.name}:"):
             logs = self.logs().splitlines()
             for log_line in logs:
                 logging.info(f"{self.container.name}: {log_line}")
