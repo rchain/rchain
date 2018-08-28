@@ -4,7 +4,9 @@ import tempfile
 import random
 import tools.resources as resources
 from tools.util import log_box
+
 default_image = "rchain-integration-testing:latest"
+
 rnode_binary='/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = f"{rnode_directory}/deploy"
@@ -62,23 +64,6 @@ class Node:
     def log_lines(self):
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
-
-
-    def received_blocks(self, expected_content):
-        received_block_rx = re.compile(f"^.* Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$", re.MULTILINE | re.DOTALL)
-
-        logs = self.log_lines()
-
-        return [match.group(1) for match in [received_block_rx.match(log) for log in logs] if match]
-
-    def added_blocks(self, block_id):
-        added_block_rx = re.compile(f"^.*\s+Added {block_id}.*", re.MULTILINE | re.DOTALL)
-
-        logs = self.log_lines()
-
-        return [match.group(0) for match in [added_block_rx.match(log) for log in logs] if match]
-
-
 
 
 def __read_validator_keys():
