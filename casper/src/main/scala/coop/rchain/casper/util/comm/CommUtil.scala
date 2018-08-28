@@ -30,9 +30,11 @@ object CommUtil {
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
+    val hashString      = PrettyPrinter.buildString(b.blockHash)
     for {
+      _ <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
       _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
-      _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
+      _ <- Log[F].info(s"CASPER: Sent $hashString to peers")
     } yield ()
   }
 
@@ -42,8 +44,9 @@ object CommUtil {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
     for {
+      _ <- Log[F].info(s"CASPER: Beginning request of missing block $hashString from peers...")
       _ <- sendToPeers[F](transport.BlockRequest, serialized)
-      _ <- Log[F].info(s"Requested missing block $hashString from peers")
+      _ <- Log[F].info(s"CASPER: Requested $hashString from peers")
     } yield ()
   }
 
@@ -65,19 +68,19 @@ object CommUtil {
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
       case peer :: rest =>
         for {
-          _ <- Log[F].info(s"Sending request for ApprovedBlock to $peer")
+          _ <- Log[F].info(s"CASPER: Sending request for ApprovedBlock to $peer")
           send <- TransportLayer[F]
                    .roundTrip(peer,
                               packet(local, transport.ApprovedBlockRequest, request),
                               5.seconds)
           _ <- send match {
                 case Left(err) =>
-                  Log[F].info(s"Failed to get response from $peer because: $err") *>
+                  Log[F].info(s"CASPER: Failed to get response from $peer because: $err") *>
                     askPeers(rest, local)
 
                 case Right(response) =>
                   Log[F]
-                    .info(s"Received response from $peer! Processing...")
+                    .info(s"CASPER: Received response from $peer! Processing...")
                     .flatMap(_ => {
                       val maybeSender = ProtocolHelper.sender(response)
                       val maybePacket = toPacket(response).toOption
@@ -91,12 +94,12 @@ object CommUtil {
                           } yield ()
                         case (None, _) =>
                           Log[F].error(
-                            s"Response from $peer invalid. The sender of the message could not be determined.") *> askPeers(
+                            s"CASPER: Response from $peer invalid. The sender of the message could not be determined.") *> askPeers(
                             rest,
                             local)
                         case (Some(_), None) =>
                           Log[F].error(
-                            s"Response from $peer invalid. A packet was expected, but received ${response.message}.") *> askPeers(
+                            s"CASPER: Response from $peer invalid. A packet was expected, but received ${response.message}.") *> askPeers(
                             rest,
                             local)
                       }

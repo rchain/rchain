@@ -71,14 +71,14 @@ class Node:
 
 
     def received_blocks(self, expected_content):
-        received_block_rx = re.compile(f"^.* Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$", re.MULTILINE | re.DOTALL)
+        received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$", re.MULTILINE | re.DOTALL)
 
         logs = self.log_lines()
 
         return [match.group(1) for match in [received_block_rx.match(log) for log in logs] if match]
 
     def added_blocks(self, block_id):
-        added_block_rx = re.compile(f"^.*\s+Added {block_id}.*", re.MULTILINE | re.DOTALL)
+        added_block_rx = re.compile(f"^.*\s+CASPER: Added {block_id}.*", re.MULTILINE | re.DOTALL)
 
         logs = self.log_lines()
 

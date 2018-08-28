@@ -60,7 +60,7 @@ object CasperEffect {
       blockStoreDir.recursivelyDelete()
     }
 
-    (casperTask, cleanUp _)
+    (casperTask, cleanUp)
   }
 
   private val syncInstance = SyncInstances.syncEffect[CommError](commError => {
