@@ -24,14 +24,14 @@ package object matcher {
           }))
         })
 
-      def attempt: OptionalFreeMapWithCost[Either[Unit, A]] =
+      def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
         StateT((m: FreeMap) => {
           OptionT(State((c: CostAccount) => {
             val (cost: CostAccount, result: Option[(FreeMap, A)]) = s.run(m).value.run(c).value
 
-            val recovered: Option[(FreeMap, Either[Unit, A])] = result match {
-              case None          => Some((m, Left(())))
-              case Some((m1, a)) => Some((m1, Right(a)))
+            val recovered: Option[(FreeMap, Option[A])] = result match {
+              case None          => Some((m, None))
+              case Some((m1, a)) => Some((m1, Some(a)))
             }
 
             (cost, recovered)

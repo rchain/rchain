@@ -298,7 +298,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
           //They match everything that's concrete though.
           guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
       }
-      matchEffect.attempt.map(_.isRight)
+      matchEffect.attemptOpt.flatMap(x => OptionalFreeMapWithCost.pure(x.isDefined))
     })
 
     for {
