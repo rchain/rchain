@@ -284,7 +284,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
     val maximumBipartiteMatch =
-      MaximumBipartiteMatch[Pattern, T, OptionalFreeMapWithCost]((pattern: Pattern, t: T) => {
+      MaximumBipartiteMatch[Pattern, T, Unit, OptionalFreeMapWithCost]((pattern: Pattern, t: T) => {
       val matchEffect = pattern match {
         case Term(p) =>
           if (!lf.connectiveUsed(p)) {
@@ -298,13 +298,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
           //They match everything that's concrete though.
           guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
       }
-      matchEffect.attemptOpt.flatMap(x => OptionalFreeMapWithCost.pure(x.isDefined))
+      matchEffect.attemptOpt
     })
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
       matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
-      remainderTargets       = matches.collect { case (target, _: Remainder) => target }
+      remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
       _ <- varLevel match {

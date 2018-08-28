@@ -8,9 +8,10 @@ import scala.Function.tupled
 import scala.collection.immutable.Stream
 
 object MaximumBipartiteMatch {
-  def apply[P, T, F[_]: Monad](matchFun: (P, T) => F[Boolean]): MaximumBipartiteMatch[P, T, F] = {
+  def apply[P, T, R, F[_]: Monad](
+      matchFun: (P, T) => F[Option[R]]): MaximumBipartiteMatch[P, T, R, F] = {
     val fM = implicitly[Monad[F]]
-    new MaximumBipartiteMatch[P, T, F] {
+    new MaximumBipartiteMatch[P, T, R, F] {
       private[matcher] override implicit val fMonad: Monad[F] = fM
       private[matcher] override val matchFunction             = matchFun
     }
@@ -22,20 +23,27 @@ object MaximumBipartiteMatch {
   * http://olympiad.cs.uct.ac.za/presentations/camp2_2017/bipartitematching-robin.pdf
   * (mainly the "Alternative approach" section)
   * <p/>
+  * The `matchFunction: (P, T) => F[Option[R]]` must return a `Some` for a matching
+  * (P, T) pair, and a `None` otherwise. The values returned via the `Option[R]` return
+  * type for each of the patterns and targets are going to be captured and returned
+  * upon successful matching of the provided Seq[P] and Seq[T].
+  * <p/>
   * All the effects produced by calling the provided `matchFunction`
   * are going to be retained in the final effect via which the algo returns.
+  * <p/>
   * See type signatures for `machFunction` and `findMatches`.
   *
   * @tparam P type of pattern / the U set
   * @tparam T type of term / the V set
+  * @tparam R type of custom results captured during the matching
   * @tparam F the target Monadic effect this algorithm is to be embedded into
   */
-trait MaximumBipartiteMatch[P, T, F[_]] {
+trait MaximumBipartiteMatch[P, T, R, F[_]] {
 
   private[matcher] implicit val fMonad: Monad[F]
-  private[matcher] val matchFunction: (P, T) => F[Boolean]
+  private[matcher] val matchFunction: (P, T) => F[Option[R]]
 
-  private case class S(matches: Map[Candidate, Pattern], seenTargets: Set[Candidate])
+  private case class S(matches: Map[Candidate, (Pattern, R)], seenTargets: Set[Candidate])
   private type Pattern = (P, Seq[Candidate])
 
   //we're going to use maps and sets keyed with Candidates,
@@ -43,15 +51,17 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
   private type Candidate = Indexed[T]
   private case class Indexed[A](value: A, index: Int)
 
-  def findMatches(patterns: Seq[P], targets: Seq[T]): F[Option[Seq[(T, P)]]] = {
+  def findMatches(patterns: Seq[P], targets: Seq[T]): F[Option[Seq[(T, P, R)]]] = {
 
     val ts: Seq[Candidate]      = targets.zipWithIndex.map(tupled(Indexed[T]))
     val ps: List[Pattern]       = patterns.toList.zip(Stream.continually(ts))
     val findMatches             = ps.forallM(MBM.resetSeen() >> findMatch(_))
     val result: F[(S, Boolean)] = findMatches.run(S(Map.empty, Set.empty))
     result.map {
-      case (state, true) => Some(state.matches.toSeq.map(tupled((t, p) => t.value -> p._1)))
-      case _             => None
+      case (state, true) =>
+        val matches: Seq[(Candidate, ((P, _), R))] = state.matches.toSeq
+        Some(matches.map(tupled((t, p) => (t.value, p._1._1, p._2))))
+      case _ => None
     }
   }
 
@@ -65,29 +75,33 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
       case (p, candidate +: candidates) =>
         FlatMap[MBM].ifM(notSeen(candidate))(
           //that is a new candidate, let's try to match it
-          FlatMap[MBM].ifM(liftF(matchFunction(p, candidate.value)))(
-            //this candidate matches the pattern, let's try to assign it a match
-            addSeen(candidate) >> tryClaimMatch(candidate, pattern),
-            //this candidate doesn't match, proceed to the others
-            findMatch((p, candidates))
-          ),
+          liftF(matchFunction(p, candidate.value)).flatMap {
+            _ match {
+              case Some(matchResult) =>
+                //this candidate matches the pattern, let's try to assign it a match
+                addSeen(candidate) >> tryClaimMatch(candidate, pattern, matchResult)
+              case None =>
+                //this candidate doesn't match, proceed to the others
+                findMatch((p, candidates))
+            }
+          },
           //we've seen this candidate already, proceed to the others
-          findMatch((p, candidates)),
+          findMatch((p, candidates))
         )
     }
 
-  private def tryClaimMatch(candidate: Candidate, pattern: Pattern): MBM[Boolean] =
+  private def tryClaimMatch(candidate: Candidate, pattern: Pattern, result: R): MBM[Boolean] =
     for {
       previousMatch <- getMatch(candidate)
       result <- previousMatch match {
                  case None =>
                    //we're first, we claim a match
-                   claimMatch(candidate, pattern) *> pure(true)
+                   claimMatch(candidate, pattern, result) *> pure(true)
                  case Some(previousPattern) =>
                    //try to find a different match for the previous pattern
                    FlatMap[MBM].ifM(findMatch(previousPattern))(
                      //if found, we can match current pattern with this candidate despite it being taken
-                     claimMatch(candidate, pattern) *> pure(true),
+                     claimMatch(candidate, pattern, result) *> pure(true),
                      //else, current pattern can't be matched with this candidate given the current matches, try others
                      findMatch(pattern)
                    )
@@ -109,9 +123,12 @@ trait MaximumBipartiteMatch[P, T, F[_]] {
       StateT.modify[F, S](s => s.copy(seenTargets = s.seenTargets + candidate))
 
     def getMatch(candidate: Candidate): MBM[Option[Pattern]] =
-      StateT.inspect(_.matches.get(candidate))
+      StateT.inspect(_.matches.get(candidate).map(_._1))
 
-    def claimMatch(candidate: Candidate, pattern: Pattern): MBM[Unit] =
-      StateT.modify[F, S](s => s.copy(matches = s.matches + (candidate -> pattern)))
+    def claimMatch(candidate: Candidate, pattern: Pattern, result: R): MBM[Unit] =
+      StateT.modify[F, S](s => {
+        val newMatch = (candidate, (pattern, result))
+        s.copy(matches = s.matches + newMatch)
+      })
   }
 }
