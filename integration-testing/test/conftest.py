@@ -5,6 +5,7 @@ import tools.random as random
 from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
 from tools.util import log_box
+from tools.profiling import log_prof_data
 
 import collections
 import pprint
@@ -61,8 +62,8 @@ def parse_config(request):
 
 @pytest.fixture(scope="session")
 def config(request):
-    return parse_config(request)
-
+    yield parse_config(request)
+    log_prof_data()
 
 @pytest.fixture(scope="session")
 def docker():
