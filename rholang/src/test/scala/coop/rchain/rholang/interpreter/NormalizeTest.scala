@@ -141,12 +141,11 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
     result.par should be(
       inputs.par.prepend(
-        ParMap(
-          List[(Par, Par)]((GInt(7), GString("Seven")),
-                           (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))),
-          locallyFree = BitSet(0, 1),
-          connectiveUsed = false
-        ),
+        ParMap(List[(Par, Par)]((GInt(7), GString("Seven")),
+                         (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))),
+               connectiveUsed = false,
+               locallyFree = BitSet(0, 1),
+               None),
         0
       ))
     result.knownFree should be(inputs.knownFree)

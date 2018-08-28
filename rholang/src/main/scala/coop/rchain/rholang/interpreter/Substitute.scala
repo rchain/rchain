@@ -347,7 +347,7 @@ object Substitute {
                          locallyFree.map(_.until(env.shift)),
                          remainder)))
 
-          case EMapBody(ParMap(spm, connectiveUsed, locallyFree)) =>
+          case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
               kvps <- spm.sortedMap.traverse {
                        case (p1, p2) =>
@@ -359,7 +359,7 @@ object Substitute {
             } yield
               Expr(
                 exprInstance =
-                  EMapBody(ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)))))
+                  EMapBody(ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)))
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)

@@ -7,7 +7,7 @@ object ParMapTypeMapper {
     TypeMapper(emapToParMap)(parMapToEMap)
 
   private[models] def emapToParMap(emap: EMap): ParMap =
-    ParMap(emap.kvs.map(unzip), emap.connectiveUsed, emap.locallyFree)
+    ParMap(emap.kvs.map(unzip), emap.connectiveUsed, emap.locallyFree, None)
 
   private[models] def parMapToEMap(parMap: ParMap): EMap =
     EMap(parMap.ps.sortedMap.map(t => zip(t._1, t._2)),

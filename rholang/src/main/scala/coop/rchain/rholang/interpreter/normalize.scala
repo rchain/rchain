@@ -134,7 +134,7 @@ object CollectionNormalizeMatcher {
         }
         .map { folded =>
           val resultKnownFree = folded._2
-          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3), resultKnownFree)
+          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3, None), resultKnownFree)
         }
     }
 

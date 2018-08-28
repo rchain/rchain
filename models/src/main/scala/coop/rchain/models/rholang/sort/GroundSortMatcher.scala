@@ -44,7 +44,7 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         }
 
         val sortedPars = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
-        ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree)),
+        ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, None)),
                    Node(Score.EMAP, sortedPars.map(_.score): _*))
       case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8)))
