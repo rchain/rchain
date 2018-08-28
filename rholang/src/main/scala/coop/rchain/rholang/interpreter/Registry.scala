@@ -18,12 +18,28 @@ import monix.eval.Task
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
 
+/**
+  * Registry implements a radix tree for public lookup of one-sided bundles.
+  * The radix tree is implemented as follows:
+  * Nodes are maps.
+  * The keys in the map are byte arrays of length [0, 1]
+  * The values in the map are tuples:
+  * (tag, edgeAdditional, data)
+  * tag:
+  * if tag is 0, it is a terminal edge (We absorb leaf nodes into their parent)
+  * if tag is 1, data is a name where another map can be read.
+  * edgeAdditional:
+  * this is a bytestring that stores any additional edge labeling in the radix tree.
+  * data:
+  * if tag is 0, this is the stored data.
+  * if tag is 1, this is a name where the process recurs.
+  */
 class Registry(private val space: ISpace[Channel,
                                          BindPattern,
                                          ListChannelWithRandom,
                                          ListChannelWithRandom,
                                          TaggedContinuation],
-               private val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) {
+               private val dispatcher: Runtime.RhoDispatch) {
   import Registry._
   def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
     val prefixOut = ByteString.newOutput()
@@ -114,22 +130,25 @@ class Registry(private val space: ISpace[Channel,
       case None                           => Task.unit
     }
 
+  def singleSend(chan: Quote, data: Channel, rand: Blake2b512Random): Task[Unit] =
+    handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand, None), false))
+
   def succeed(ret: Channel, result: Par, rand: Blake2b512Random): Task[Unit] =
     ret match {
-      case Channel(q @ Quote(_)) =>
-        handleResult(space.produce(q, ListChannelWithRandom(Seq(Quote(result)), rand, None), false))
-      case _ => Task.unit
+      case Channel(q @ Quote(_)) => singleSend(q, Quote(result), rand)
+      case _                     => Task.unit
     }
 
-  def fail(ret: Channel, rand: Blake2b512Random): Task[Unit] = succeed(ret, Par(), rand)
+  def fail(ret: Channel, rand: Blake2b512Random): Task[Unit] =
+    ret match {
+      case Channel(q @ Quote(_)) => singleSend(q, Quote(Par()), rand)
+      case _                     => Task.unit
+    }
 
   def replace(data: Channel, replaceChan: Channel, dataRand: Blake2b512Random): Task[Unit] =
     replaceChan match {
-      case Channel(q @ Quote(_)) =>
-        handleResult(
-          space
-            .produce(q, ListChannelWithRandom(Seq(data), dataRand, None), false))
-      case _ => Task.unit
+      case Channel(q @ Quote(_)) => singleSend(q, data, dataRand)
+      case _                     => Task.unit
     }
 
   def failAndReplace(data: Channel,
@@ -566,9 +585,4 @@ object Registry {
   val registryRoot = GPrivate(
     ByteString.copyFrom(
       Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697")))
-
-  def testTableCreator(space: Runtime.RhoISpace, dispatch: Runtime.RhoDispatch) = {
-    val reg = new Registry(space, dispatch)
-    reg.testingDispatchTable
-  }
 }
