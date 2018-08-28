@@ -1,9 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.arrow.FunctionK
 import cats.data.{OptionT, State, StateT}
 import cats.implicits._
-import cats.{MonadError, Eval => _}
+import cats.{Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
