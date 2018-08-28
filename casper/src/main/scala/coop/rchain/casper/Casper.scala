@@ -68,7 +68,7 @@ sealed abstract class MultiParentCasperInstances {
       genesis: BlockMessage,
       shardId: String)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
     val genesisBonds          = ProtoUtil.bonds(genesis)
-    val initialLatestMessages = genesisBonds.map(_.validator -> genesis.blockHash).toMap
+    val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
     val dag                   = BlockDag().copy(latestMessages = initialLatestMessages)
     for {
       validateBlockCheckpointResult <- InterpreterUtil
@@ -545,10 +545,9 @@ sealed abstract class MultiParentCasperInstances {
               // Even for a equivocating validator, we just update its latest message
               // to whatever block we have fetched latest among the blocks that
               // constitute the equivocation.
-              latestMessages = bd.latestMessages.updated(block.sender, hash),
-              latestMessagesOfLatestMessages =
-                bd.latestMessagesOfLatestMessages.updated(block.sender,
-                                                          toLatestMessages(block.justifications)),
+              latestMessages = bd.latestMessages.updated(block.sender, block),
+              latestMessagesOfLatestMessages = bd.latestMessagesOfLatestMessages
+                .updated(block.sender, toLatestMessageHashes(block.justifications)),
               childMap = newChildMap,
               currentSeqNum = newSeqNum
             )
