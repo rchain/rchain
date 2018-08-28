@@ -134,14 +134,24 @@ object CollectionNormalizeMatcher {
         }
         .map { folded =>
           val resultKnownFree = folded._2
-          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3, remainder), resultKnownFree)
+          val remainderConnectiveUsed = remainder.exists(HasLocallyFree[Var].connectiveUsed(_))
+          val remainderLocallyFree = remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
+
+          CollectVisitOutputs(
+            ParMap(
+              seq = folded._1.reverse,
+              connectiveUsed = folded._4 || remainderConnectiveUsed,
+              locallyFree = folded._3 | remainderLocallyFree,
+              remainder = remainder
+            ),
+            resultKnownFree
+          )
         }
     }
 
     c match {
       case cl: CollectList =>
-        RemainderNormalizeMatcher
-          .normalizeMatchProc[M](cl.procremainder_, input.knownFree)
+        RemainderNormalizeMatcher.normalizeMatchProc[M](cl.procremainder_, input.knownFree)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => EList =
@@ -179,7 +189,13 @@ object CollectionNormalizeMatcher {
               foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
           }
 
-      case cm: CollectMap => foldMatchMap(input.knownFree, None, cm.listkeyvaluepair_.toList)
+      case cm: CollectMap =>
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cm.procremainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.toList)
+          }
     }
   }
 }

@@ -136,18 +136,19 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     mapData.add(
       new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
-    val map = new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
     result.par should be(
       inputs.par.prepend(
-        ParMap(List[(Par, Par)]((GInt(7), GString("Seven")), (EVar(BoundVar(1)), EEvalBody(ChanVar(FreeVar(0))))),
+        ParMap(List[(Par, Par)]((GInt(7), GString("Seven")), (EVar(BoundVar(1)), EEvalBody(ChanVar(FreeVar(1))))),
           locallyFree = BitSet(1),
           connectiveUsed = true,
-          remainder = None),
+          remainder = Some(Var(FreeVar(0)))),
         depth = 0
       ))
     val newBindings = List(
+      ("Z", ProcSort, 0, 0),
       ("Q", NameSort, 0, 0)
     )
     result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
