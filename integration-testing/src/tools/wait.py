@@ -2,7 +2,6 @@ import logging
 import re
 import pytest
 import time
-import collections
 
 def wait_for(condition, timeout, error_message):
     """
@@ -33,6 +32,7 @@ def wait_for(condition, timeout, error_message):
             time.sleep(iteration_duration)
             elapsed = elapsed + iteration_duration
 
+    logging.warning(f"Giving up after {elapsed}s.")
     pytest.fail(error_message)
 
 # Predicates
@@ -41,10 +41,21 @@ def wait_for(condition, timeout, error_message):
 
 def node_logs(node):
     def go(): return node.logs()
-    go.__doc__ = f"container_logs({node.name})"
+    go.__doc__ = f"node_logs({node.name})"
     return go
 
-def string_matches(string_factory, regex_str, flags = 0):
+def show_blocks(node):
+    def go():
+        exit_code, output = node.show_blocks()
+
+        if exit_code != 0: raise Exception("Show-blocks failed")
+
+        return output
+
+    go.__doc__ = f"show_blocks({node.name})"
+    return go
+
+def string_contains(string_factory, regex_str, flags = 0):
     rx = re.compile(regex_str, flags)
 
     def go():
@@ -56,7 +67,7 @@ def string_matches(string_factory, regex_str, flags = 0):
         else:
             raise Exception(f"string doesn't contain regex {regex_str}")
 
-    go.__doc__ = f"{string_factory.__doc__} search regex '{regex_str}'"
+    go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
 def network_converged(bootstrap_node, expected_peers):
@@ -75,49 +86,4 @@ def network_converged(bootstrap_node, expected_peers):
 
     go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
 
-    return go
-
-Block = collections.namedtuple("Block", ["id", "content"])
-
-def node_blocks_received(node):
-    def go():
-        id_rx = ".+?"
-        received_block_rx = re.compile(f"^.* Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
-
-        logs = node.log_lines()
-        # strlogs = '\n+++\n'.join(logs)
-        # logging.info(f"logs to match: {strlogs}")
-        blocks = [Block( match[1], match[2])
-                  for match in [received_block_rx.match(log)
-                                for log in logs]
-                  if match]
-
-        return blocks
-
-    go.__doc__ = f"node_blocks_received({node.name})"
-    return go
-
-def node_blocks_added(node):
-    def go():
-        id_rx = "(.+?)"
-        added_block_rx = re.compile(f"^.* Added ({id_rx})\.\.\..*", re.MULTILINE | re.DOTALL)
-        logs = node.log_lines()
-
-        block_ids = [ match[1]
-                      for match in [ added_block_rx.match(log)
-                                     for log in logs]
-                      if match]
-
-        return block_ids
-
-    go.__doc__ = f"node_blocks_received({node.name})"
-    return go
-
-def find_first(list_factory, predicate):
-    def go():
-        lst = list_factory()
-        found = [x for x in lst if predicate(x)]
-        return found[0]
-
-    go.__doc__ = f"`{list_factory.__doc__}` find `{predicate.__doc__}`"
     return go
