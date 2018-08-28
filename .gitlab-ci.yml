@@ -10,7 +10,7 @@ test:integration-test-for-p2p-network:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
-    - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 1024m
+    - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 2048m
 
 test:integration-test-for-artifact-creation:
   stage: test 
