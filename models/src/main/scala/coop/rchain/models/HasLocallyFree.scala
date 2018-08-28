@@ -32,11 +32,13 @@ trait HasLocallyFree[T] {
 object HasLocallyFree {
   def apply[T](implicit ev: HasLocallyFree[T]) = ev
 
-  implicit def forTuple[A: HasLocallyFree, B: HasLocallyFree]: HasLocallyFree[(A, B)] = new HasLocallyFree[(A, B)] {
-    override def connectiveUsed(source: (A, B)): Boolean =
-      HasLocallyFree[A].connectiveUsed(source._1) || HasLocallyFree[B].connectiveUsed(source._2)
+  implicit def forTuple[A: HasLocallyFree, B: HasLocallyFree]: HasLocallyFree[(A, B)] =
+    new HasLocallyFree[(A, B)] {
+      override def connectiveUsed(source: (A, B)): Boolean =
+        HasLocallyFree[A].connectiveUsed(source._1) || HasLocallyFree[B].connectiveUsed(source._2)
 
-    override def locallyFree(source: (A, B), depth: Int): BitSet =
-      HasLocallyFree[A].locallyFree(source._1, depth) | HasLocallyFree[B].locallyFree(source._2, depth)
-  }
+      override def locallyFree(source: (A, B), depth: Int): BitSet =
+        HasLocallyFree[A].locallyFree(source._1, depth) | HasLocallyFree[B].locallyFree(source._2,
+                                                                                        depth)
+    }
 }

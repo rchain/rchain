@@ -948,7 +948,8 @@ object Reduce {
                   locallyFreeUnion(base.locallyFree, other.locallyFree),
                   None
                 )))
-          case (EMapBody(base @ ParMap(baseMap, _, _, _)), EMapBody(other @ ParMap(otherMap, _, _, _))) =>
+          case (EMapBody(base @ ParMap(baseMap, _, _, _)),
+                EMapBody(other @ ParMap(otherMap, _, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
                 EMapBody(

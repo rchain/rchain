@@ -702,8 +702,9 @@ trait SpatialMatcherInstances {
         case (EMapBody(ParMap(tlist, _, _, _)), EMapBody(ParMap(plist, _, _, rem))) =>
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
           val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
-          val merger = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
-          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard).toDet()
+          val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+            .toDet()
 
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)

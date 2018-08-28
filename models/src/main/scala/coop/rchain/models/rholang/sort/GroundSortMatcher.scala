@@ -42,10 +42,12 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
           val sortedValue = Sortable.sortMatch(value)
           ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
-        val sortedPars = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
+        val sortedPars        = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
         val remainderScoreOpt = gm.remainder.map(_ => Leaf(Score.REMAINDER))
-        ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, gm.remainder)),
-                   Node(Leaf(Score.EMAP) ::  sortedPars.map(_.score) ::: remainderScoreOpt.toList))
+        ScoredTerm(
+          EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, gm.remainder)),
+          Node(Leaf(Score.EMAP) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
+        )
       case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8)))
       case _ => //TODO(mateusz.gorski): rethink it

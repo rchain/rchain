@@ -358,8 +358,8 @@ object Substitute {
                      }
             } yield
               Expr(
-                exprInstance =
-                  EMapBody(ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)))
+                exprInstance = EMapBody(
+                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)))
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)

@@ -112,7 +112,9 @@ object CollectionNormalizeMatcher {
         }
     }
 
-    def foldMatchMap(knownFree: DebruijnLevelMap[VarSort], remainder: Option[Var], listProc: List[AbsynKeyValuePair]) = {
+    def foldMatchMap(knownFree: DebruijnLevelMap[VarSort],
+                     remainder: Option[Var],
+                     listProc: List[AbsynKeyValuePair]) = {
       val init = (Vector[(Par, Par)](), knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
@@ -133,9 +135,10 @@ object CollectionNormalizeMatcher {
           }
         }
         .map { folded =>
-          val resultKnownFree = folded._2
+          val resultKnownFree         = folded._2
           val remainderConnectiveUsed = remainder.exists(HasLocallyFree[Var].connectiveUsed(_))
-          val remainderLocallyFree = remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
+          val remainderLocallyFree =
+            remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
 
           CollectVisitOutputs(
             ParMap(
@@ -151,7 +154,8 @@ object CollectionNormalizeMatcher {
 
     c match {
       case cl: CollectList =>
-        RemainderNormalizeMatcher.normalizeMatchProc[M](cl.procremainder_, input.knownFree)
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cl.procremainder_, input.knownFree)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => EList =
