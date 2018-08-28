@@ -112,8 +112,8 @@ object CollectionNormalizeMatcher {
         }
     }
 
-    def foldMatchMap(listProc: List[AbsynKeyValuePair]): M[CollectVisitOutputs] = {
-      val init = (Vector[(Par, Par)](), input.knownFree, BitSet(), false)
+    def foldMatchMap(knownFree: DebruijnLevelMap[VarSort], remainder: Option[Var], listProc: List[AbsynKeyValuePair]) = {
+      val init = (Vector[(Par, Par)](), knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
           e match {
@@ -134,7 +134,7 @@ object CollectionNormalizeMatcher {
         }
         .map { folded =>
           val resultKnownFree = folded._2
-          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3, None), resultKnownFree)
+          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3, remainder), resultKnownFree)
         }
     }
 
@@ -179,7 +179,7 @@ object CollectionNormalizeMatcher {
               foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
           }
 
-      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
+      case cm: CollectMap => foldMatchMap(input.knownFree, None, cm.listkeyvaluepair_.toList)
     }
   }
 }
