@@ -41,7 +41,7 @@ class Registry(private val space: ISpace[Channel,
                                          TaggedContinuation],
                private val dispatcher: Runtime.RhoDispatch) {
   import Registry._
-  def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
+  private def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
     val prefixOut = ByteString.newOutput()
     def loop(it1: ByteIterator, it2: ByteIterator): ByteString =
       if (!it1.hasNext || !it2.hasNext) {
@@ -58,7 +58,7 @@ class Registry(private val space: ISpace[Channel,
     loop(b1.iterator, b2.iterator)
   }
 
-  def safeUncons(b: ByteString): (ByteString, ByteString) = {
+  private def safeUncons(b: ByteString): (ByteString, ByteString) = {
     val head = if (b.isEmpty()) b else b.substring(0, 1)
     val tail = if (b.isEmpty()) b else b.substring(1)
     (head, tail)
@@ -122,49 +122,50 @@ class Registry(private val space: ISpace[Channel,
   val deleteRootCallbackRef: Long = 15L
   val deleteCallbackRef: Long     = 16L
 
-  def parByteArray(bs: ByteString): Par = GByteArray(bs)
+  private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
-  def handleResult(result: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): Task[Unit] =
+  private def handleResult(
+      result: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): Task[Unit] =
     result match {
       case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
       case None                           => Task.unit
     }
 
-  def singleSend(chan: Quote, data: Channel, rand: Blake2b512Random): Task[Unit] =
+  private def singleSend(chan: Quote, data: Channel, rand: Blake2b512Random): Task[Unit] =
     handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand, None), false))
 
-  def succeed(ret: Channel, result: Par, rand: Blake2b512Random): Task[Unit] =
+  private def succeed(ret: Channel, result: Par, rand: Blake2b512Random): Task[Unit] =
     ret match {
       case Channel(q @ Quote(_)) => singleSend(q, Quote(result), rand)
       case _                     => Task.unit
     }
 
-  def fail(ret: Channel, rand: Blake2b512Random): Task[Unit] =
+  private def fail(ret: Channel, rand: Blake2b512Random): Task[Unit] =
     ret match {
       case Channel(q @ Quote(_)) => singleSend(q, Quote(Par()), rand)
       case _                     => Task.unit
     }
 
-  def replace(data: Channel, replaceChan: Channel, dataRand: Blake2b512Random): Task[Unit] =
+  private def replace(data: Channel, replaceChan: Channel, dataRand: Blake2b512Random): Task[Unit] =
     replaceChan match {
       case Channel(q @ Quote(_)) => singleSend(q, data, dataRand)
       case _                     => Task.unit
     }
 
-  def failAndReplace(data: Channel,
-                     replaceChan: Channel,
-                     retChan: Channel,
-                     dataRand: Blake2b512Random,
-                     failRand: Blake2b512Random): Task[Unit] =
+  private def failAndReplace(data: Channel,
+                             replaceChan: Channel,
+                             retChan: Channel,
+                             dataRand: Blake2b512Random,
+                             failRand: Blake2b512Random): Task[Unit] =
     for {
       _ <- replace(data, replaceChan, dataRand)
       _ <- fail(retChan, failRand)
     } yield ()
 
-  def fetchDataLookup(dataSource: Quote,
-                      key: Channel,
-                      ret: Channel,
-                      rand: Blake2b512Random): Task[Unit] = {
+  private def fetchDataLookup(dataSource: Quote,
+                              key: Channel,
+                              ret: Channel,
+                              rand: Blake2b512Random): Task[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -181,11 +182,11 @@ class Registry(private val space: ISpace[Channel,
     } yield ()
   }
 
-  def fetchDataInsert(dataSource: Quote,
-                      key: Channel,
-                      value: Channel,
-                      ret: Channel,
-                      rand: Blake2b512Random): Task[Unit] = {
+  private def fetchDataInsert(dataSource: Quote,
+                              key: Channel,
+                              value: Channel,
+                              ret: Channel,
+                              rand: Blake2b512Random): Task[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -203,10 +204,10 @@ class Registry(private val space: ISpace[Channel,
     } yield ()
   }
 
-  def fetchDataRootDelete(dataSource: Quote,
-                          key: Channel,
-                          ret: Channel,
-                          rand: Blake2b512Random): Task[Unit] = {
+  private def fetchDataRootDelete(dataSource: Quote,
+                                  key: Channel,
+                                  ret: Channel,
+                                  rand: Blake2b512Random): Task[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -223,14 +224,14 @@ class Registry(private val space: ISpace[Channel,
     } yield ()
   }
 
-  def fetchDataDelete(dataSource: Quote,
-                      key: Channel,
-                      ret: Channel,
-                      rand: Blake2b512Random,
-                      parentKey: Channel,
-                      parentData: Channel,
-                      parentReplace: Channel,
-                      parentRand: Blake2b512Random): Task[Unit] = {
+  private def fetchDataDelete(dataSource: Quote,
+                              key: Channel,
+                              ret: Channel,
+                              rand: Blake2b512Random,
+                              parentKey: Channel,
+                              parentData: Channel,
+                              parentReplace: Channel,
+                              parentRand: Blake2b512Random): Task[Unit] = {
     val keyChannel: Par    = GPrivate(ByteString.copyFrom(rand.next()))
     val parentChannel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
