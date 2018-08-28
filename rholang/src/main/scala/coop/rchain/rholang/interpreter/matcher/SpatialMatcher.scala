@@ -283,9 +283,6 @@ object SpatialMatcher extends SpatialMatcherInstances {
     )
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
-    def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
-      if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
-
     val maximumBipartiteMatch =
       MaximumBipartiteMatch[Pattern, T, OptionalFreeMapWithCost]((pattern: Pattern, t: T) => {
       val matchEffect = pattern match {
@@ -326,6 +323,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
           }
     } yield Unit
   }
+
+  private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
+    if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
 
   private def handleRemainder[T](
       remainderTargets: Seq[T],
