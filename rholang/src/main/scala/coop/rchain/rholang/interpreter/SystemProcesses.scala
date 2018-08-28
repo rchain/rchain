@@ -20,7 +20,7 @@ object SystemProcesses {
 
   def stdout: Seq[ListChannelWithRandom] => Task[Unit] = {
     case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
-      Task(Console.println(prettyPrinter.buildString(arg)))
+      Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
   def stdoutAck(space: ISpace[Channel,
@@ -31,7 +31,7 @@ object SystemProcesses {
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
-      Task(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
+      Task.now(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
@@ -42,7 +42,7 @@ object SystemProcesses {
 
   def stderr: Seq[ListChannelWithRandom] => Task[Unit] = {
     case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
-      Task(Console.err.println(prettyPrinter.buildString(arg)))
+      Task.now(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
   def stderrAck(space: ISpace[Channel,
@@ -53,7 +53,7 @@ object SystemProcesses {
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
-      Task(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
+      Task.now(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
