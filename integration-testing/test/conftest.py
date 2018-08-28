@@ -3,15 +3,17 @@ import pytest
 
 import random
 import tools.random
-
+import tempfile
 from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
 from tools.util import log_box
 from tools.profiling import log_prof_data
 import tools.resources as resources
-
+import os
 import collections
 import pprint
+
+max_bond = 100
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -93,20 +95,30 @@ def docker_network(docker):
             logging.info(f"removing {network.name}")
             network.remove()
 
+KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
 
 @pytest.fixture(scope="session")
 def validators_data(config):
-    bonds = resources.file_path("test-bonds.txt")
-
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
     # WARN  coop.rchain.casper.Validate$ - CASPER: Ignoring block 2cb8fcc56e... because block creator 3641880481... has 0 weight
     f=open(resources.file_path('pregenerated-validator-private-public-key-pairs.txt'))
     lines=f.readlines()
     random.shuffle(lines)
-    validator_keys = [ tuple(line.split())
-                       for line in lines[0:config.peer_count]]
+    validator_keys = [ KeyPair(*line.split())
+                       for line in lines[0:config.peer_count+1]]
 
-    yield (bonds, validator_keys[0], validator_keys[1:])
+    logging.info(f"Using validator keys: {validator_keys}")
+    (fd, bonds_file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix = ".txt", dir="/tmp")
+    logging.info(f"Using bonds file: `{bonds_file}`")
+    with os.fdopen(fd, "w") as f:
+        for pair in validator_keys:
+            bond = random.randint(1, max_bond)
+            f.write(f"{pair.public_key} {bond}\n")
+
+    yield (bonds_file, validator_keys[0], validator_keys[1:])
+
+    os.unlink(bonds_file)
+    logging.info(f"Bonds file `{bonds_file}` deleted")
 
 
 @pytest.fixture(scope="package")

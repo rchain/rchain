@@ -86,15 +86,13 @@ def create_bootstrap_node(docker_client, network, bonds_file, key_pair, image=de
     Create bootstrap node.
     """
 
-    validator_private_key, validator_public_key = key_pair
-
     key_file = resources.file_path("bootstrap_certificate/node.key.pem")
     cert_file = resources.file_path("bootstrap_certificate/node.certificate.pem")
 
     logging.info(f"Using key_file={key_file} and cert_file={cert_file}")
 
     name = f"bootstrap.{network}"
-    command = f"run --port 40400 --standalone --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {name}"
+    command = f"run --port 40400 --standalone --validator-private-key {key_pair.private_key} --validator-public-key {key_pair.public_key} --host {name}"
 
     volumes = [
         f"{cert_file}:{rnode_certificate}",
@@ -115,12 +113,12 @@ def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, 
 
     logging.info(f"Create {len(key_pairs)} peer nodes to connect to bootstrap {bootstrap_address}.")
 
-    def create_peer(i, private_key, public_key):
+    def create_peer(i, key_pair):
         name = f"peer{i}.{network}"
-        command = f"run --bootstrap {bootstrap_address} --validator-private-key {private_key} --validator-public-key {public_key} --host {name}"
+        command = f"run --bootstrap {bootstrap_address} --validator-private-key {key_pair.private_key} --validator-public-key {key_pair.public_key} --host {name}"
 
         logging.info(f"Starting peer node {name} with command: `{command}`")
         return __create_node_container(docker_client, image, name, network, bonds_file, command, [], memory, cpuset_cpus)
 
-    return [ create_peer(i, sk, pk)
-             for i, (sk, pk) in enumerate(key_pairs)]
+    return [ create_peer(i, key_pair)
+             for i, key_pair in enumerate(key_pairs)]
