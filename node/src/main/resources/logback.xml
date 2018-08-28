@@ -21,6 +21,7 @@
   </appender>
 
   <logger name="coop.rchain.rspace" level="warn" />
+  <logger name="org.http4s.blaze.pipeline.stages" level="error" />
   <logger name="io.netty" level="warn" />
 
   <root level="debug">
