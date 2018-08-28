@@ -15,7 +15,7 @@ object BitSetBytesMapper {
     )(bitSetToByteString)
 
   def bitSetToByteString(bitset: BitSet): ByteString = {
-    val longs: Array[Long] = bitset.toBitMask
+    val longs: Array[Long] = if (bitset.isEmpty) Array.empty else bitset.toBitMask
     val byteBuffer =
       ByteBuffer.allocate(BYTES_PER_LONG * longs.length).order(ByteOrder.LITTLE_ENDIAN)
     val bytes: Array[Byte] = longs

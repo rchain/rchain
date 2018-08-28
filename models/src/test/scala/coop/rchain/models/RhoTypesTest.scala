@@ -5,6 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.serialization.implicits._
 import testImplicits._
 import BitSetBytesMapper._
+import com.google.protobuf.ByteString
 import coop.rchain.rspace.Serialize
 
 import scala.collection.immutable.BitSet
@@ -25,9 +26,11 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 }
 
 class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
-  "BitSetBytesMapper" should "Pass round-trip serialization on empty bitset" in {
-    val emptyBitSet = BitSet()
-    byteStringToBitSet(bitSetToByteString(emptyBitSet)) should be(emptyBitSet)
+  "BitSetBytesMapper" should "encode an empty BitSet as an empty ByteString" in {
+    val emptyBitSet     = BitSet()
+    val emptyByteString = ByteString.copyFrom(Array.empty[Byte])
+    bitSetToByteString(emptyBitSet) should be(emptyByteString)
+    byteStringToBitSet(emptyByteString) should be(emptyBitSet)
   }
 
   "BitSetBytesMapper" should "Pass round-trip serialization on a long bitset" in {
