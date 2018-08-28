@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.data.{OptionT, State, StateT}
 import cats.implicits._
-import cats.{Eval => _}
+import cats.{Monad, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -326,6 +326,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
     if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
+
+  private def isolateState[S, F[_]: Monad](f: StateT[F, S, _]): StateT[F, S, S] =
+    for {
+      initState   <- StateT.get[F, S]
+      _           <- f
+      resultState <- StateT.get[F, S]
+      _           <- StateT.set[F, S](initState)
+    } yield resultState
 
   private def handleRemainder[T](
       remainderTargets: Seq[T],
