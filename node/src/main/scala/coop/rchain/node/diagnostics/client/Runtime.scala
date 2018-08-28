@@ -126,6 +126,8 @@ object Runtime {
        |  - P2P encryption handshake receivers: ${nodeCoreMetrics.p2PEncryptionHandshakeReceiverCount}
        |  - P2P protocol handshake receivers: ${nodeCoreMetrics.p2PProtocolHandshakeReceiverCount}
        |  - Peers: ${nodeCoreMetrics.peers}
+       |  - From: ${nodeCoreMetrics.from}
+       |  - To: ${nodeCoreMetrics.to}
        |""".stripMargin
 
 }

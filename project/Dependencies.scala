@@ -6,7 +6,7 @@ object Dependencies {
 
   val circeVersion  = "0.9.1"
   val http4sVersion = "0.18.0"
-  val kamonVersion  = "1.0.0"
+  val kamonVersion  = "1.1.0"
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"

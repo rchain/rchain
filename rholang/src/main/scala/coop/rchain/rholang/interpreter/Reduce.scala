@@ -937,13 +937,15 @@ object Reduce {
 
       def union(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccountingAlg[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
-          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
-            costAccountingAlg.charge(ADD_COST * basePs.size) *>
-              Applicative[M].pure[Expr](
-                ESetBody(
-                  ParSet(basePs.union(otherPs.sortedPars.toSet),
-                         base.connectiveUsed || other.connectiveUsed,
-                         locallyFreeUnion(base.locallyFree, other.locallyFree))))
+          case (ESetBody(base @ ParSet(basePs, _, _, _)),
+                ESetBody(other @ ParSet(otherPs, _, _, _))) =>
+            costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
+              ESetBody(ParSet(
+                basePs.union(otherPs.sortedPars.toSet),
+                base.connectiveUsed || other.connectiveUsed,
+                locallyFreeUnion(base.locallyFree, other.locallyFree),
+                None
+              )))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
@@ -975,7 +977,8 @@ object Reduce {
 
       def diff(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccountingAlg[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
-          case (ESetBody(base @ ParSet(basePs, _, _)), ESetBody(other @ ParSet(otherPs, _, _))) =>
+          case (ESetBody(base @ ParSet(basePs, _, _, _)),
+                ESetBody(other @ ParSet(otherPs, _, _, _))) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
             costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
@@ -983,7 +986,8 @@ object Reduce {
                 ESetBody(
                   ParSet(basePs.diff(otherPs.sortedPars.toSet),
                          base.connectiveUsed || other.connectiveUsed,
-                         locallyFreeUnion(base.locallyFree, other.locallyFree))))
+                         locallyFreeUnion(base.locallyFree, other.locallyFree),
+                         None)))
           case (EMapBody(ParMap(basePs, _, _)), EMapBody(ParMap(otherPs, _, _))) =>
             val newMap = basePs -- otherPs.keys
             costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
@@ -1009,12 +1013,13 @@ object Reduce {
     private[this] val add: Method = new Method() {
       def add(baseExpr: Expr, par: Par)(implicit costAccountingAlg: CostAccountingAlg[M]) =
         baseExpr.exprInstance match {
-          case ESetBody(base @ ParSet(basePs, _, _)) =>
+          case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs + par,
                        base.connectiveUsed || par.connectiveUsed,
-                       base.locallyFree.map(b => b | par.locallyFree))))
+                       base.locallyFree.map(b => b | par.locallyFree),
+                       None)))
           //TODO(mateusz.gorski): think whether cost accounting for addition should be dependend on the operands
 
           case other =>
@@ -1037,12 +1042,13 @@ object Reduce {
     private[this] val delete: Method = new Method() {
       def delete(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(base @ ParSet(basePs, _, _)) =>
+          case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
-                       base.locallyFree.map(b => b | par.locallyFree))))
+                       base.locallyFree.map(b => b | par.locallyFree),
+                       None)))
           case EMapBody(base @ ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](
               EMapBody(
@@ -1069,7 +1075,7 @@ object Reduce {
     private[this] val contains: Method = new Method() {
       def contains(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
-          case ESetBody(ParSet(basePs, _, _)) =>
+          case ESetBody(ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
@@ -1183,7 +1189,7 @@ object Reduce {
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _)) =>
             Applicative[M].pure[Par](GInt(basePs.size))
-          case ESetBody(ParSet(ps, _, _)) =>
+          case ESetBody(ParSet(ps, _, _, _)) =>
             Applicative[M].pure[Par](GInt(ps.size))
           case other =>
             s.raiseError(MethodNotDefined("size", other.typ))

@@ -38,7 +38,7 @@ object ValidatorIdentity {
 
       case None =>
         Log[F]
-          .warn("CASPER: No private key detected, cannot create validator identification.")
+          .warn("No private key detected, cannot create validator identification.")
           .map(_ => none[ValidatorIdentity])
     }
 }
