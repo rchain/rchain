@@ -286,7 +286,8 @@ object SpatialMatcher extends SpatialMatcherInstances {
     def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
       if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
 
-    val maximumBipartiteMatch = MaximumBipartiteMatch((pattern: Pattern, t: T) => {
+    val maximumBipartiteMatch =
+      MaximumBipartiteMatch[Pattern, T, OptionalFreeMapWithCost]((pattern: Pattern, t: T) => {
       val matchEffect = pattern match {
         case Term(p) =>
           if (!lf.connectiveUsed(p)) {
