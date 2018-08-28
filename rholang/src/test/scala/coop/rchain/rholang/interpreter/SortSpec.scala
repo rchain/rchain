@@ -6,12 +6,24 @@ import coop.rchain.models.rholang.sort.Sortable
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.rholang.sort.ScoredTerm
 
+import scala.collection.immutable.BitSet
+
 class SortSpec extends FlatSpec with Matchers {
 
   "GroundSortMatcher" should "discern sets with and without remainder" in {
     assertOrder[Expr](
       ParSet(Seq.empty),
       ParSet(Seq.empty, remainder = Some(FreeVar(0)))
+    )
+  }
+
+  it should "discern maps with and without remainder" in {
+    assertOrder[Expr](
+      ParMap(Seq.empty),
+      ParMap(Seq.empty,
+             connectiveUsed = false,
+             locallyFree = BitSet(),
+             remainder = Some(Var(FreeVar(0))))
     )
   }
 
