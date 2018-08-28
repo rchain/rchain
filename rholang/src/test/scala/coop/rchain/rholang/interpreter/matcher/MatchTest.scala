@@ -658,7 +658,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
 
   "Matching %%" should "work" in {
     val map =
-      EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("a"))), false, BitSet()))
+      EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("a")))))
     // "${name}" %% {"name" : "a"}
     val target = Expr(EPercentPercentBody(EPercentPercent(GString("${name}"), map)))
     // x %% y

@@ -130,7 +130,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         EPercentPercentBody(
           EPercentPercent(
             GString("Hello, ${name}"),
-            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice")))))
           )
         ))
     )

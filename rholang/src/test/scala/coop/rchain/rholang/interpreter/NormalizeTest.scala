@@ -265,11 +265,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(
         EPercentPercent(
           GString("Hi ${name}"),
-          ParMap(
-            seq = List[(Par, Par)]((GString("name"), GString("Alice"))),
-            connectiveUsed = false,
-            locallyFree = BitSet()
-          )
+          ParMap(seq = List[(Par, Par)]((GString("name"), GString("Alice"))))
         )
       , 0))
     result.knownFree should be(inputs.knownFree)
