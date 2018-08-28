@@ -9,7 +9,7 @@ import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, Pointer
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import org.scalacheck.{Gen, Prop}
+import org.scalacheck.Prop
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
