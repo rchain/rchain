@@ -45,25 +45,23 @@ trait RSpaceBench {
     bh.consume(r)
   }
 
-
   def createTask(taskIndex: Int, iterations: Int): Task[Unit] =
-      Task.delay {
-        for (_ <- 1 to iterations) {
-          val r1 = space.produce(channel, bob, persist = false)
-          runK(r1)
-          getK(r1).results
-        }
+    Task.delay {
+      for (_ <- 1 to iterations) {
+        val r1 = space.produce(channel, bob, persist = false)
+        runK(r1)
+        getK(r1).results
       }
+    }
 
   val tasksCount      = 200
   val iterationsCount = 10
-
   val tasks = (1 to tasksCount).map(idx => {
-      val task = createTask(idx, iterationsCount)
-      task
-    })
+    val task = createTask(idx, iterationsCount)
+    task
+  })
 
-  val testPool = Scheduler.fixedPool("testPool", 3)
+  val dupePool = Scheduler.fixedPool("dupe-pool", 3)
 
   @Benchmark
   @BenchmarkMode(Array(Mode.SingleShotTime))
@@ -78,9 +76,12 @@ trait RSpaceBench {
       persist = true
     )
 
+    val fs: IndexedSeq[Future[Unit]] = tasks.map(f => f.executeOn(dupePool).runAsync(dupePool))
+
     implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
-    val dupe = Future.sequence(tasks.map(f => f.executeOn(testPool).runAsync(s)))
-    bh.consume(Await.ready(dupe, Duration.Inf))
+    val fss         = Future.sequence(fs)
+    val tx          = Await.ready(fss, Duration.Inf)
+    bh.consume(tx)
   }
 }
 
@@ -119,7 +120,7 @@ class InMemBench extends RSpaceBench {
 
   @Setup
   def setup() = {
-    val context   = Context.createInMemory[Channel, Pattern, Entry, EntriesCaptor]()
+    val context = Context.createInMemory[Channel, Pattern, Entry, EntriesCaptor]()
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
@@ -141,7 +142,7 @@ class MixedBench extends RSpaceBench {
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
-    val context   = Context.createMixed[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
+    val context = Context.createMixed[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
