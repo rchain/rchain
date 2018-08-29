@@ -162,8 +162,10 @@ object Validate {
       dag: BlockDag,
       shardId: String): F[Either[BlockStatus, ValidBlock]] =
     for {
-      blockHashStatus    <- Validate.blockHash[F](block)
-      missingBlockStatus <- blockHashStatus.traverse(_ => Validate.missingBlocks[F](block, dag))
+      blockHashStatus   <- Validate.blockHash[F](block)
+      deployCountStatus <- blockHashStatus.traverse(_ => Validate.deployCount[F](block))
+      missingBlockStatus <- deployCountStatus.joinRight.traverse(_ =>
+                             Validate.missingBlocks[F](block, dag))
       timestampStatus <- missingBlockStatus.joinRight.traverse(_ =>
                           Validate.timestamp[F](block, dag))
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
@@ -360,6 +362,15 @@ object Validate {
       } yield Left(InvalidUnslashableBlock)
     }
   }
+
+  def deployCount[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] =
+    if (b.header.get.deployCount == b.body.get.deploys.length) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block deploy count does not match to the amount of deploys."))
+      } yield Left(InvalidUnslashableBlock)
+    }
 
   /**
     * Works only with fully explicit justifications.
