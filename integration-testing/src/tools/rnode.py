@@ -67,7 +67,7 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info(f"{self.container}: Execute '{cmd}'. Timeout: {self.timeout}s")
+        logging.info(f"{self.name}: Execute '{cmd}'. Timeout: {self.timeout}s")
 
         process.start()
 
