@@ -440,4 +440,15 @@ class ValidateTest
           .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
     ) should be(false)
   }
+
+  "Block hash format validation" should "fail on invalid hash" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis =
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", Ed25519.sign _, "rchain")
+    Validate.blockHash[Id](genesis) should be(Right(Valid))
+    Validate.blockHash[Id](
+      genesis.withBlockHash(ByteString.copyFromUtf8("123"))
+    ) should be(Left(InvalidUnslashableBlock))
+  }
 }
