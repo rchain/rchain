@@ -7,6 +7,7 @@ class RChain:
         self.peers = peers
         self.nodes = [bootstrap] + peers
 
+
 Config = collections.namedtuple( "Config",
                                  [
                                      "peer_count",
@@ -15,4 +16,6 @@ Config = collections.namedtuple( "Config",
                                      "receive_timeout",
                                      "rnode_timeout"
                                  ])
+
+
 KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])

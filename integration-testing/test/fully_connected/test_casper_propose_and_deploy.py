@@ -6,6 +6,7 @@ from tools.wait import wait_for, string_contains, show_blocks
 from tools.util import log_box
 from tools.profiling import profile
 
+
 @profile
 def test_casper_propose_and_deploy(config, converged_network):
     """
