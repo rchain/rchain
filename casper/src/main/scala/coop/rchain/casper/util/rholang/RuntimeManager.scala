@@ -106,7 +106,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
             assert(validator.exprs.length == 1)
             assert(bond.exprs.length == 1)
             val validatorName = validator.exprs.head.getGString
-            val stakeAmount   = bond.exprs.head.getGInt
+            val stakeAmount   = Math.toIntExact(bond.exprs.head.getGInt)
             Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
         }.toList
       case Channel(_) => throw new Error("Should never happen")
