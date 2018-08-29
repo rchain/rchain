@@ -824,18 +824,22 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
   "after close rspace" should "throw RSpaceClosedException on all store operations" in
     withTestSpaces { (space, replaySpace) =>
+      val channel  = "ch1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
+
       replaySpace.close()
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.install(Nil, List.empty[Pattern], null)
+        replaySpace.install(key, patterns, null)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.consume(Nil, List.empty[Pattern], null, false)
+        replaySpace.consume(key, patterns, null, false)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.produce(null, null, false)
+        replaySpace.produce(channel, null, false)
       )
     }
 }

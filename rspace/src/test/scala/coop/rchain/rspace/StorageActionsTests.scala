@@ -1535,19 +1535,23 @@ trait StorageActionsTests
   }
 
   "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
+    val channel  = "ch1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
     space =>
       space.close()
       //using some nulls here to ensure that exception is thrown even before args check
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.install(Nil, List.empty[Pattern], null)
+        space.install(key, patterns, null)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.consume(Nil, List.empty[Pattern], null, false)
+        space.consume(key, patterns, null, false)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        space.produce(null, null, false)
+        space.produce(channel, null, false)
       )
   }
 }

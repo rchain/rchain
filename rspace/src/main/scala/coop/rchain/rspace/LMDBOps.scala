@@ -13,10 +13,19 @@ import scodec.bits.BitVector
 import kamon._
 import org.lmdbjava.Txn.NotReadyException
 
-trait LMDBOps extends CloseOps[Txn[ByteBuffer]] {
-  override private[rspace] def createTxnReadImp() = env.txnRead
+trait LMDBOps extends CloseOps {
 
-  override private[rspace] def createTxnWriteImp() = env.txnWrite
+  protected[rspace] type Transaction = Txn[ByteBuffer]
+
+  private[rspace] def createTxnRead() = {
+    failIfClosed()
+    env.txnRead
+  }
+
+  private[rspace] def createTxnWrite() = {
+    failIfClosed()
+    env.txnWrite
+  }
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]

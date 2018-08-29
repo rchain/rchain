@@ -112,8 +112,6 @@ class InMemoryTrieStore[K, V]
   override private[rspace] def clear(txn: InMemTransaction[State[K, V]]): Unit =
     txn.writeState(_ => (State.empty, ()))
 
-  override def closeImp(): Unit = ()
-
   override private[rspace] def getEmptyRoot(txn: InMemTransaction[State[K, V]]) =
     txn.readState(_._dbEmptyRoot.getOrElse(throw new LookupException("Empty root not found")))
 

@@ -191,8 +191,6 @@ class InMemoryStore[T, C, P, A, K](
       }
     }
 
-  private[rspace] override def closeImp(): Unit = ()
-
   private[rspace] def clear(txn: Transaction): Unit =
     txn.writeState(_ => {
       (State.empty, ())
