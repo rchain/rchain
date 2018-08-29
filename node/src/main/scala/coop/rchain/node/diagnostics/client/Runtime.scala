@@ -16,8 +16,10 @@ object Runtime {
 
   def diagnosticsProgram[F[_]: Monad: ErrorHandler: ConsoleIO: DiagnosticsService]: F[Unit] = {
     val program = for {
-      peers   <- DiagnosticsService[F].listPeers
-      _       <- ConsoleIO[F].println(showPeers(peers))
+      peersRP <- DiagnosticsService[F].listPeers
+      _       <- ConsoleIO[F].println(showPeers(peersRP, "connected"))
+      peersND <- DiagnosticsService[F].listDiscoveredPeers
+      _       <- ConsoleIO[F].println(showPeers(peersND, "discovered"))
       core    <- DiagnosticsService[F].nodeCoreMetrics
       _       <- ConsoleIO[F].println(showNodeCoreMetrics(core))
       cpu     <- DiagnosticsService[F].processCpu
@@ -45,11 +47,11 @@ object Runtime {
   private def processError(t: Throwable): Throwable =
     Option(t.getCause).getOrElse(t)
 
-  def showPeers(peers: Seq[PeerNode]): String =
+  def showPeers(peers: Seq[PeerNode], peerType: String): String =
     List(
-      "List of peers:",
+      s"List of $peerType peers:",
       peers.map(_.toAddress).mkString("\n")
-    ).mkString("\n")
+    ).mkString("", "\n", "\n")
 
   def showProcessCpu(processCpu: ProcessCpu): String = {
     val time = processCpu.time.map(Duration.fromNanos(_).toMillis).getOrElse(0L)

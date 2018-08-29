@@ -20,6 +20,8 @@ def wait_for(condition, timeout, error_message):
         elapsed = 0
         current_ex = None
         while elapsed < timeout:
+            start_time = time.time()
+
             try:
                 value = condition()
 
@@ -27,14 +29,19 @@ def wait_for(condition, timeout, error_message):
                 return value
 
             except Exception as ex:
-                iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
+                condition_evaluation_duration = time.time() - start_time
+                elapsed = int(elapsed + condition_evaluation_duration)
+                time_left = timeout - elapsed
+
+                iteration_duration = int(max(1, int(0.15 * time_left))) # iteration duration is 15% of remaining timeout
 
                 if str(ex) == current_ex:
                     details = "same as above"
                 else:
                     details = str(ex)
                     current_ex = str(ex)
-                logging.info(f"Condition not fulfilled yet ({details}). Sleeping {iteration_duration}s...")
+
+                logging.info(f"Condition not fulfilled yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...")
 
                 time.sleep(iteration_duration)
                 elapsed = elapsed + iteration_duration

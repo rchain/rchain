@@ -27,6 +27,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--receive-timeout", action="store", default="0", help="timeout in seconds for receiving a message. Defaults to 10 + peer_count * 10"
     )
+    parser.addoption(
+        "--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s"
+    )
 
 class RChain:
     def __init__(self, network, bootstrap, peers):
@@ -40,7 +43,8 @@ Config = collections.namedtuple( "Config",
                                      "peer_count",
                                      "node_startup_timeout",
                                      "network_converge_timeout",
-                                     "receive_timeout"
+                                     "receive_timeout",
+                                     "rnode_timeout"
                                  ])
 
 def parse_config(request):
@@ -48,13 +52,15 @@ def parse_config(request):
     start_timeout = int(request.config.getoption("--start-timeout"))
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
+    rnode_timeout = int(request.config.getoption("--rnode-timeout"))
 
     def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
 
-    config = Config(peer_count = peer_count,
-                  node_startup_timeout = make_timeout(start_timeout, 30, 10),
-                  network_converge_timeout = make_timeout(converge_timeout, 200, 10),
-                  receive_timeout = make_timeout(receive_timeout, 10, 10)
+    config = Config( peer_count = peer_count,
+                     node_startup_timeout = make_timeout(start_timeout, 30, 10),
+                     network_converge_timeout = make_timeout(converge_timeout, 200, 10),
+                     receive_timeout = make_timeout(receive_timeout, 10, 10),
+                     rnode_timeout = rnode_timeout
                   )
 
     with log_box(logging.info):
@@ -129,9 +135,9 @@ def validators_data(config):
 
 
 @pytest.fixture(scope="package")
-def bootstrap(docker, docker_network, validators_data):
+def bootstrap(docker, docker_network, config, validators_data):
     bonds_file, bootstrap_keys, _ = validators_data
-    node = create_bootstrap_node(docker, docker_network, bonds_file, bootstrap_keys)
+    node = create_bootstrap_node(docker, docker_network, bonds_file, bootstrap_keys, config.rnode_timeout)
 
     yield node
 
@@ -150,8 +156,7 @@ def rchain_network(config, docker, started_bootstrap, docker_network, validators
     logging.debug(f"Docker network = {docker_network}")
 
     bonds_file, _, peer_keys = validators_data
-
-    peers = create_peer_nodes(docker, started_bootstrap, docker_network, bonds_file, peer_keys)
+    peers = create_peer_nodes(docker, started_bootstrap, docker_network, bonds_file, peer_keys, config.rnode_timeout)
 
     yield RChain(network = docker_network, bootstrap = started_bootstrap, peers = peers)
 
