@@ -35,11 +35,17 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
     Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+      if (channels.isEmpty) {
+        val msg = "channels can't be empty"
+        logger.error(msg)
+        throw new IllegalArgumentException(msg)
+      }
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
         logger.error(msg)
         throw new IllegalArgumentException(msg)
       }
+
       store.withTxn(store.createTxnWrite()) { txn =>
         logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))

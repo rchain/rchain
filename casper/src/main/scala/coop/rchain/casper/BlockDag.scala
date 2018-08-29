@@ -8,7 +8,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 final case class BlockDag(idToBlocks: Map[Int, BlockMessage],
                           childMap: Map[BlockHash, Set[BlockHash]],
-                          latestMessages: LatestMessages,
+                          latestMessages: Map[Validator, BlockMessage],
                           latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
                           currentId: Int,
                           currentSeqNum: Map[Validator, Int])
@@ -23,7 +23,7 @@ object BlockDag {
     new BlockDag(
       HashMap.empty[Int, BlockMessage],
       HashMap.empty[BlockHash, HashSet[BlockHash]],
-      LatestMessages.empty,
+      HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[Validator, LatestMessages],
       0,
       HashMap.empty[Validator, Int]

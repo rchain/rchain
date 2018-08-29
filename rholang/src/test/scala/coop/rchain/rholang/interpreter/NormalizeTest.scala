@@ -9,6 +9,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
 }
 import org.scalatest._
 import coop.rchain.models.rholang.sort.ordering._
+
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -16,11 +17,9 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.rspace.Serialize
 import errors._
 import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
-import org.scalactic.TripleEqualsSupport
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
   "BoolTrue" should "Compile as GBool(true)" in {
@@ -110,19 +109,26 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
     setData.add(new PGround(new GroundInt(7)))
     setData.add(new PPar(new PGround(new GroundInt(8)), new PVar(new ProcVarVar("Q"))))
-    val set = new PCollect(new CollectSet(setData))
+    val set = new PCollect(new CollectSet(setData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
+
     result.par should be(
-      inputs.par.prepend(ParSet(
-                           Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
-                                    GInt(7),
-                                    GInt(8).prepend(EVar(FreeVar(1)), 0)),
-                           connectiveUsed = true
-                         ),
-                         0))
-    result.knownFree should be(
-      inputs.knownFree.newBindings(List(("R", ProcSort, 0, 0), ("Q", ProcSort, 0, 0)))._1)
+      inputs.par.prepend(
+        ParSet(Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(1))),
+                        GInt(7),
+                        GInt(8).prepend(EVar(FreeVar(2)), 0)),
+               connectiveUsed = true,
+               remainder = Some(FreeVar(0))),
+        depth = 0
+      )
+    )
+    val newBindings = List(
+      ("Z", ProcSort, 0, 0),
+      ("R", ProcSort, 0, 0),
+      ("Q", ProcSort, 0, 0)
+    )
+    result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
 
   "Map" should "delegate" in {
@@ -380,6 +386,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.knownFree.newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0)))._1)
   }
 
+  "PPar" should "normalize without StackOverflowError-s even for huge programs" in {
+    val hugePPar = (1 to 50000)
+      .map(x => new PGround(new GroundInt(x)))
+      .reduce((l: Proc, r: Proc) => new PPar(l, r))
+    noException should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](hugePPar, inputs).value
+    }
+  }
+
   "PContr" should "Handle a basic contract" in {
     /*  new add in {
           contract add(ret, @x, @y) = {
@@ -479,7 +494,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -531,7 +546,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -564,7 +579,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         persistent = false,
         bindCount,
         BitSet(),
-        connectiveUsed = true
+        connectiveUsed = false
       ))
 
     result.par should be(expected)
@@ -713,7 +728,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           persistent = false,
           bindCount,
           BitSet(),
-          connectiveUsed = true
+          connectiveUsed = false
         ))
 
     result.par should be(expectedResult)
@@ -871,7 +886,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
           Par(),
           persistent = false,
           bindCount,
-          connectiveUsed = true
+          connectiveUsed = false
         ))
 
     result.par should be(expectedResult)

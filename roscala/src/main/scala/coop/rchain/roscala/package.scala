@@ -12,8 +12,8 @@ package object roscala {
     Fixnum(5),
     Fixnum(6),
     Fixnum(7),
-    RblTrue,
-    RblFalse,
+    RblBool(true),
+    RblBool(false),
     Nil,
     Niv
   )

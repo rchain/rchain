@@ -12,6 +12,7 @@ import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
   def listPeers: F[Seq[PeerNode]]
+  def listDiscoveredPeers: F[Seq[PeerNode]]
   def nodeCoreMetrics: F[NodeCoreMetrics]
   def processCpu: F[ProcessCpu]
   def memoryUsage: F[MemoryUsage]
@@ -45,6 +46,19 @@ class GrpcDiagnosticsService(host: String, port: Int)
           ))
     )
 
+  def listDiscoveredPeers: Task[Seq[PeerNode]] =
+    Task.delay(
+      blockingStub
+        .listDiscoveredPeers(Empty())
+        .peers
+        .map(
+          p =>
+            PeerNode(
+              NodeIdentifier(p.key.toByteArray.toSeq),
+              Endpoint(p.host, p.port, p.port)
+          ))
+    )
+
   def nodeCoreMetrics: Task[NodeCoreMetrics] =
     Task.delay(blockingStub.getNodeCoreMetrics(Empty()))
 
@@ -63,5 +77,13 @@ class GrpcDiagnosticsService(host: String, port: Int)
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
 
-  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  override def close(): Unit = {
+    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+    if (!terminated) {
+      println(
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+      channel.awaitTermination(10, TimeUnit.SECONDS)
+    }
+  }
+
 }

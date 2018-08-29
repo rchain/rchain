@@ -42,7 +42,7 @@ parser.add_argument("-i", "--image",
 parser.add_argument("-m", "--memory",
                     dest='memory',
                     type=str,
-                    default="1024m",
+                    default="2048m",
                     help="set docker memory limit for all nodes")
 parser.add_argument("-n", "--network",
                     dest='network',
@@ -62,6 +62,12 @@ parser.add_argument("--rnode-directory",
 parser.add_argument("-r", "--remove",
                     action='store_true',
                     help="forcibly remove containers that start with bootstrap and peer associated to network name")
+parser.add_argument("-t", "--thread-pool-size",
+                    dest='thread_pool_size',
+                    type=int,
+                    default="100",
+                    help="set maximum number of threads used by rnode")
+
 # Print -h/help if no args
 if len(sys.argv)==1:
     parser.print_help(sys.stderr)
@@ -232,7 +238,7 @@ def create_bootstrap_node():
         #         bonds_file: {'bind': container_bonds_file, 'mode': 'rw'}, \
         #         bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
         # }, \
-        command=f"{args.bootstrap_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {bootstrap_node['name']}", \
+        command=f"{args.bootstrap_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {bootstrap_node['name']}", \
         hostname=bootstrap_node['name'])
     return 0
 
@@ -259,7 +265,7 @@ def create_peer_nodes():
                 f"{bonds_file}:{container_bonds_file}", \
                 f"{peer_node[i]['volume'].name}:{args.rnode_directory}"
             ], \
-            command=f"{peer_prefix_command} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
+            command=f"{peer_prefix_command} --thread-pool-size {args.thread_pool_size} --validator-private-key {validator_private_key} --validator-public-key {validator_public_key} --host {peer_node[i]['name']}", \
             hostname=peer_node[i]['name'])
     return 0
       
