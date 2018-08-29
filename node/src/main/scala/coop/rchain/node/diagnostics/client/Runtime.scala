@@ -18,7 +18,7 @@ object Runtime {
     val program = for {
       peersRP <- DiagnosticsService[F].listPeers
       _       <- ConsoleIO[F].println(showPeers(peersRP, "connected"))
-      peersND <- DiagnosticsService[F].listPeers
+      peersND <- DiagnosticsService[F].listDiscoveredPeers
       _       <- ConsoleIO[F].println(showPeers(peersND, "discovered"))
       core    <- DiagnosticsService[F].nodeCoreMetrics
       _       <- ConsoleIO[F].println(showNodeCoreMetrics(core))

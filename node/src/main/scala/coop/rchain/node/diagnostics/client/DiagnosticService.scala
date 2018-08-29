@@ -12,6 +12,7 @@ import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
   def listPeers: F[Seq[PeerNode]]
+  def listDiscoveredPeers: F[Seq[PeerNode]]
   def nodeCoreMetrics: F[NodeCoreMetrics]
   def processCpu: F[ProcessCpu]
   def memoryUsage: F[MemoryUsage]
