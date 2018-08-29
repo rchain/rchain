@@ -1,15 +1,19 @@
 package coop.rchain.comm.discovery
 
+import cats._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.transport.CommunicationResponse._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared._
+
 import scala.collection.mutable
 import scala.concurrent.duration._
-import coop.rchain.comm._, CommError._
-import coop.rchain.p2p.effects._
-import coop.rchain.metrics.Metrics
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.comm.transport._, CommunicationResponse._
-import coop.rchain.shared._
-import coop.rchain.comm.protocol.routing._
 
 object KademliaNodeDiscovery {
   def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
@@ -97,7 +101,9 @@ private[discovery] class KademliaNodeDiscovery[
     }
 
   private def handlePing: F[CommunicationResponse] =
-    Metrics[F].incrementCounter("ping-recv-count").as(handledWithMessage(ProtocolHelper.pong(src)))
+    for {
+      _ <- Metrics[F].incrementCounter("ping-recv-count")
+    } yield handledWithMessage(ProtocolHelper.pong(src))
 
   /**
     * Validate incoming LOOKUP message and return an answering

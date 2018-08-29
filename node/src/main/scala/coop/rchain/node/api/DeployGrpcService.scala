@@ -3,20 +3,21 @@ package coop.rchain.node.api
 import cats._
 import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.{MultiParentCasperConstructor, SafetyOracle}
+import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.models.Channel
 import coop.rchain.shared._
 import io.grpc.stub.StreamObserver
-import scala.concurrent.Future
+
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
-import scala.concurrent.ExecutionContext
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: Capture: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore](
+    F[_]: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
     implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =

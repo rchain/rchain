@@ -3,16 +3,29 @@
   <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>INFO</level>
+    </filter>
     <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
     <encoder>
       <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
     </encoder>
   </appender>
 
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>${rnode.data.dir}/rnode.log</file>
+    <append>false</append>
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
   <logger name="coop.rchain.rspace" level="warn" />
-  
-  <root level="info">
+  <logger name="io.netty" level="warn" />
+
+  <root level="debug">
     <appender-ref ref="STDOUT" />
+    <appender-ref ref="FILE" />
   </root>
 
 </configuration>
