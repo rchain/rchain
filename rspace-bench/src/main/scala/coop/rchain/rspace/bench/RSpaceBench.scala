@@ -106,6 +106,7 @@ class LMDBBench extends RSpaceBench {
 
   @TearDown
   def tearDown() = {
+    space.close()
     dbDir.recursivelyDelete()
     ()
   }
@@ -124,6 +125,12 @@ class InMemBench extends RSpaceBench {
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
     space = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+  }
+
+  @TearDown
+  def tearDown() = {
+    space.close()
+    ()
   }
 }
 
@@ -150,6 +157,7 @@ class MixedBench extends RSpaceBench {
 
   @TearDown
   def tearDown() = {
+    space.close()
     dbDir.recursivelyDelete()
     ()
   }
