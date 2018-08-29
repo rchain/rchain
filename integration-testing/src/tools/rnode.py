@@ -4,6 +4,9 @@ import tempfile
 import tools.resources as resources
 from tools.util import log_box
 
+from multiprocessing import Queue, Process
+from queue import Empty
+
 default_image = "rchain-integration-testing:latest"
 
 rnode_binary='/opt/docker/bin/rnode'
@@ -13,13 +16,17 @@ rnode_bonds_file = f'{rnode_directory}/genesis/bonds.txt'
 rnode_certificate = f'{rnode_directory}/node.certificate.pem'
 rnode_key = f'{rnode_directory}/node.key.pem'
 
+class InterruptedException(Exception):
+    pass
+
 class Node:
-    def __init__(self, container, deploy_dir, docker_client):
+    def __init__(self, container, deploy_dir, docker_client, timeout):
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
         self.docker_client = docker_client
+        self.timeout = timeout
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -52,8 +59,26 @@ class Node:
         return self.exec_run(f'{rnode_binary} show-blocks')
 
     def exec_run(self, cmd):
-        r = self.container.exec_run(cmd)
-        return (r.exit_code, r.output.decode('utf-8'))
+        queue = Queue(1)
+
+        def execution():
+            r = self.container.exec_run(cmd)
+            queue.put((r.exit_code, r.output.decode('utf-8')))
+
+        process = Process(target=execution)
+
+        logging.info(f"{self.name}: Execute '{cmd}'. Timeout: {self.timeout}s")
+
+        process.start()
+
+        try:
+            result = queue.get(self.timeout)
+            logging.debug("Returning '{result}'")
+            return result
+        except Empty:
+            process.terminate()
+            process.join()
+            raise Exception(f"The command '{cmd}' hasn't finished execution after {self.timeout}s")
 
     __timestamp_rx = "\d\d:\d\d:\d\d\.\d\d\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
@@ -63,7 +88,7 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-def __create_node_container(docker_client, image, name, network, bonds_file, command, extra_volumes, memory, cpuset_cpus):
+def __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, memory, cpuset_cpus):
     deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
 
     container  = docker_client.containers.run( image,
@@ -79,9 +104,9 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                        ] + extra_volumes,
                                                command=command,
                                                hostname=name)
-    return Node(container, deploy_dir, docker_client)
+    return Node(container, deploy_dir, docker_client, rnode_timeout)
 
-def create_bootstrap_node(docker_client, network, bonds_file, key_pair, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_timeout, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create bootstrap node.
     """
@@ -101,9 +126,9 @@ def create_bootstrap_node(docker_client, network, bonds_file, key_pair, image=de
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return __create_node_container(docker_client, image, name, network, bonds_file, command, volumes, memory, cpuset_cpus)
+    return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, rnode_timeout, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
@@ -118,7 +143,8 @@ def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, 
         command = f"run --bootstrap {bootstrap_address} --validator-private-key {key_pair.private_key} --validator-public-key {key_pair.public_key} --host {name}"
 
         logging.info(f"Starting peer node {name} with command: `{command}`")
-        return __create_node_container(docker_client, image, name, network, bonds_file, command, [], memory, cpuset_cpus)
+
+        return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], memory, cpuset_cpus)
 
     return [ create_peer(i, key_pair)
              for i, key_pair in enumerate(key_pairs)]
