@@ -11,8 +11,9 @@ import coop.rchain.casper.util.{DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{
   bonds,
   findCreatorJustificationAncestorWithSeqNum,
-  toLatestMessages
+  toLatestMessageHashes
 }
+import coop.rchain.shared.{Log, LogSource}
 
 import scala.collection.mutable
 
@@ -58,18 +59,28 @@ object EquivocationRecord {
 }
 
 object EquivocationDetector {
-  def checkEquivocations(blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-                         block: BlockMessage,
-                         dag: BlockDag): Either[InvalidBlock, ValidBlock] = {
+
+  private implicit val logSource: LogSource = LogSource(this.getClass)
+
+  def checkEquivocations[F[_]: Monad: Log](blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
+                                           block: BlockMessage,
+                                           dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
     val maybeCreatorJustification   = creatorJustificationHash(block)
     val maybeLatestMessageOfCreator = dag.latestMessages.get(block.sender)
-    val isNotEquivocation           = maybeCreatorJustification == maybeLatestMessageOfCreator
+    val isNotEquivocation = maybeCreatorJustification == maybeLatestMessageOfCreator.map(
+      _.blockHash)
     if (isNotEquivocation) {
-      Right(Valid)
+      Applicative[F].pure(Right(Valid))
     } else if (requestedAsDependency(block, blockBufferDependencyDag)) {
-      Left(AdmissibleEquivocation)
+      Applicative[F].pure(Left(AdmissibleEquivocation))
     } else {
-      Left(IgnorableEquivocation)
+      for {
+        sender                   <- PrettyPrinter.buildString(block.sender).pure[F]
+        creatorJustificationHash = maybeCreatorJustification.getOrElse("none")
+        latestMessageOfCreator   = maybeLatestMessageOfCreator.getOrElse("none")
+        _ <- Log[F].warn(
+              s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator")
+      } yield Left(IgnorableEquivocation)
     }
   }
 
@@ -154,7 +165,7 @@ object EquivocationDetector {
       equivocationRecord: EquivocationRecord,
       genesis: BlockMessage): F[EquivocationDiscoveryStatus] = {
     val equivocatingValidator = equivocationRecord.equivocator
-    val latestMessages        = toLatestMessages(block.justifications)
+    val latestMessages        = toLatestMessageHashes(block.justifications)
     val maybeEquivocatingValidatorBond =
       bonds(block).find(_.validator == equivocatingValidator)
     maybeEquivocatingValidatorBond match {
@@ -276,7 +287,7 @@ object EquivocationDetector {
     } else {
       // Latest according to the justificationBlock
       val maybeLatestEquivocatingValidatorBlockHash: Option[BlockHash] =
-        toLatestMessages(justificationBlock.justifications).get(equivocatingValidator)
+        toLatestMessageHashes(justificationBlock.justifications).get(equivocatingValidator)
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {

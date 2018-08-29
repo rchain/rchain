@@ -38,7 +38,7 @@ object Validate {
     }
 
   def ignore(b: BlockMessage, reason: String): String =
-    s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
+    s"Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   def approvedBlock[F[_]: Applicative: Log](a: ApprovedBlock,
                                             requiredValidators: Set[ByteString]): F[Boolean] = {
@@ -63,13 +63,12 @@ object Validate {
           true.pure[F]
         else
           Log[F]
-            .warn(
-              "CASPER: Received invalid ApprovedBlock message not containing enough valid signatures.")
+            .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
             .map(_ => false)
 
       case None =>
         Log[F]
-          .warn("CASPER: Received invalid ApprovedBlock message not containing any candidate.")
+          .warn("Received invalid ApprovedBlock message not containing any candidate.")
           .map(_ => false)
     }
   }
@@ -349,12 +348,13 @@ object Validate {
       case hashes if hashes.isEmpty => Seq(genesis.blockHash)
       case hashes                   => hashes
     }
-    val latestMessages        = ProtoUtil.toLatestMessages(b.justifications)
-    val dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
+
     for {
-      estimate             <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
-      computedParents      <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
+      latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
+      dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
+      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
+      computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
+      computedParentHashes  = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)
                  Applicative[F].pure(Right(Valid))
                else
@@ -376,7 +376,7 @@ object Validate {
       b: BlockMessage,
       genesis: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] = {
-    val latestMessagesOfBlock             = ProtoUtil.toLatestMessages(b.justifications)
+    val latestMessagesOfBlock             = ProtoUtil.toLatestMessageHashes(b.justifications)
     val maybeLatestMessagesFromSenderView = dag.latestMessagesOfLatestMessages.get(b.sender)
     maybeLatestMessagesFromSenderView match {
       case Some(latestMessagesFromSenderView) =>

@@ -240,18 +240,29 @@ object ProtoUtil {
       .map(_.reverse)
   }
 
-  def toJustification(latestMessages: collection.Map[Validator, BlockHash]): Seq[Justification] =
+  def toJustification(latestMessages: collection.Map[Validator, BlockMessage]): Seq[Justification] =
     latestMessages.toSeq.map {
       case (validator, block) =>
         Justification()
           .withValidator(validator)
-          .withLatestBlockHash(block)
+          .withLatestBlockHash(block.blockHash)
     }
 
-  def toLatestMessages(justifications: Seq[Justification]): immutable.Map[Validator, BlockHash] =
+  def toLatestMessageHashes(
+      justifications: Seq[Justification]): immutable.Map[Validator, BlockHash] =
     justifications.foldLeft(Map.empty[Validator, BlockHash]) {
       case (acc, Justification(validator, block)) =>
         acc.updated(validator, block)
+    }
+
+  def toLatestMessage[F[_]: Monad: BlockStore](
+      justifications: Seq[Justification],
+      dag: BlockDag): F[immutable.Map[Validator, BlockMessage]] =
+    justifications.toList.foldM(Map.empty[Validator, BlockMessage]) {
+      case (acc, Justification(validator, hash)) =>
+        for {
+          block <- ProtoUtil.unsafeGetBlock[F](hash)
+        } yield acc.updated(validator, block)
     }
 
   def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
@@ -387,4 +398,11 @@ object ProtoUtil {
     )
 
   def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+
+  /**
+    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
+    * The fields stripped are the term and anything that depends on the term (Currently only the sig)
+    */
+  def stripDeployData(d: DeployData): DeployData =
+    d.withTerm("").withSig(ByteString.EMPTY)
 }

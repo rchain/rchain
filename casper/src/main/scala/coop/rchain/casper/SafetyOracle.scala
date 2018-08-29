@@ -92,12 +92,11 @@ sealed abstract class SafetyOracleInstances {
           weights <- computeMainParentWeightMap(estimate)
           candidateWeights <- weights.toList.traverse {
                                case (validator, stake) =>
-                                 val maybeLatestMessageHash = blockDag.latestMessages.get(validator)
-                                 maybeLatestMessageHash match {
-                                   case Some(latestMessageHash) =>
+                                 val maybeLatestMessage = blockDag.latestMessages.get(validator)
+                                 maybeLatestMessage match {
+                                   case Some(latestMessage) =>
                                      for {
-                                       latestMessage <- unsafeGetBlock[F](latestMessageHash)
-                                       isCompatible  <- computeCompatibility(estimate, latestMessage)
+                                       isCompatible <- computeCompatibility(estimate, latestMessage)
                                        result = if (isCompatible) {
                                          Some((validator, stake))
                                        } else {
@@ -152,12 +151,13 @@ sealed abstract class SafetyOracleInstances {
           )
 
         def seesAgreement(first: Validator, second: Validator): F[Boolean] = {
-          val maybeFirstLatestHash = blockDag.latestMessages.get(first)
-          maybeFirstLatestHash match {
-            case Some(firstLatestHash) =>
+          val maybeFirstLatest = blockDag.latestMessages.get(first)
+          maybeFirstLatest match {
+            case Some(firstLatestBlock) =>
               for {
-                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
-                justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+                justificationHashes <- firstLatestBlock.justifications
+                                        .map(_.latestBlockHash)
+                                        .pure[F]
                 agreeingJustificationHash <- findAgreeingJustificationHash(
                                               justificationHashes.toList,
                                               second)
@@ -168,10 +168,8 @@ sealed abstract class SafetyOracleInstances {
 
         def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
           blockDag.latestMessages.get(validator) match {
-            case Some(latestMessageHashByValidator) =>
+            case Some(latestMessageByValidator) =>
               for {
-                latestMessageByValidator <- ProtoUtil.unsafeGetBlock[F](
-                                             latestMessageHashByValidator)
                 potentialChildren <- DagOperations
                                       .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
                                         block =>
@@ -191,12 +189,13 @@ sealed abstract class SafetyOracleInstances {
           }
 
         def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
-          val maybeFirstLatestHash = blockDag.latestMessages.get(first)
-          maybeFirstLatestHash match {
-            case Some(firstLatestHash) =>
+          val maybeFirstLatest = blockDag.latestMessages.get(first)
+          maybeFirstLatest match {
+            case Some(firstLatestBlock) =>
               for {
-                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
-                justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+                justificationHashes <- firstLatestBlock.justifications
+                                        .map(_.latestBlockHash)
+                                        .pure[F]
                 justificationBlockSecondList <- justificationHashes.toList.traverse(
                                                  justificationHash =>
                                                    for {

@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{BlockDag, BlockStatus, MultiParentCasper}
+import coop.rchain.casper.{BlockDag, BlockStatus, CreateBlockStatus, MultiParentCasper}
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -26,9 +26,9 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore] private (
     } yield BlockStatus.valid
   def contains(b: BlockMessage): F[Boolean]             = false.pure[F]
   def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
-  def estimator: F[IndexedSeq[BlockMessage]] =
+  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     estimatorFunc.pure[F]
-  def createBlock: F[Option[BlockMessage]]                           = Applicative[F].pure[Option[BlockMessage]](None)
+  def createBlock: F[CreateBlockStatus]                              = CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDag]                                          = blockDagFunc.pure[F]
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]

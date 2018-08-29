@@ -53,7 +53,7 @@ object BlockAPI {
       casper =>
         for {
           status <- casper.addBlock(b)
-        } yield addResponse(status.some, b.some),
+        } yield addResponse(status, b),
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
@@ -62,8 +62,13 @@ object BlockAPI {
       casper =>
         for {
           maybeBlock <- casper.createBlock
-          status     <- maybeBlock.traverse(casper.addBlock)
-        } yield addResponse(status, maybeBlock),
+          result <- maybeBlock match {
+                     case err: NoBlock =>
+                       DeployServiceResponse(success = false, s"Error while creating block: $err")
+                         .pure[F]
+                     case Created(block) => casper.addBlock(block).map(addResponse(_, block))
+                   }
+        } yield result,
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
@@ -123,7 +128,8 @@ object BlockAPI {
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
     : F[IndexedSeq[BlockMessage]] =
     for {
-      estimates <- MultiParentCasper[F].estimator
+      dag       <- MultiParentCasper[F].blockDag
+      estimates <- MultiParentCasper[F].estimator(dag)
       tip       = estimates.head
       mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
     } yield mainChain
@@ -192,7 +198,8 @@ object BlockAPI {
     : F[BlocksResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        estimates  <- MultiParentCasper[F].estimator
+        dag        <- MultiParentCasper[F].blockDag
+        estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
         mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
         blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
@@ -342,21 +349,17 @@ object BlockAPI {
           none[BlockMessage]
       }
 
-  private def addResponse(status: Option[BlockStatus],
-                          maybeBlock: Option[BlockMessage]): DeployServiceResponse = status match {
-    case Some(_: InvalidBlock) =>
-      DeployServiceResponse(success = false, s"Failure! Invalid block: $status")
-    case Some(_: ValidBlock) =>
-      val hash = PrettyPrinter.buildString(maybeBlock.get.blockHash)
-      DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
-    case Some(BlockException(ex)) =>
-      DeployServiceResponse(success = false, s"Error during block processing: $ex")
-    case Some(Processing) =>
-      DeployServiceResponse(success = false,
-                            "No action taken since other thread is already processing the block.")
-    case None =>
-      DeployServiceResponse(
-        success = false,
-        "No block was created. Either no new deploys have been received or the node may be in read-only mode.")
-  }
+  private def addResponse(status: BlockStatus, block: BlockMessage): DeployServiceResponse =
+    status match {
+      case _: InvalidBlock =>
+        DeployServiceResponse(success = false, s"Failure! Invalid block: $status")
+      case _: ValidBlock =>
+        val hash = PrettyPrinter.buildString(block.blockHash)
+        DeployServiceResponse(success = true, s"Success! Block $hash created and added.")
+      case BlockException(ex) =>
+        DeployServiceResponse(success = false, s"Error during block processing: $ex")
+      case Processing =>
+        DeployServiceResponse(success = false,
+                              "No action taken since other thread is already processing the block.")
+    }
 }
