@@ -339,7 +339,7 @@ object Validate {
     }
 
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
-    val computed = ProtoUtil.hashSignedBlock(
+    val blockHashComputed = ProtoUtil.hashSignedBlock(
       b.header.get,
       b.sender,
       b.sigAlgorithm,
@@ -347,7 +347,11 @@ object Validate {
       b.shardId,
       b.extraBytes
     )
-    if (computed == b.blockHash) {
+    val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
+    val postStateHashComputed = ProtoUtil.protoHash(b.body.get.postState.get)
+    if (b.blockHash == blockHashComputed &&
+        b.header.get.deploysHash == deployHashComputed &&
+        b.header.get.postStateHash == postStateHashComputed) {
       Applicative[F].pure(Right(Valid))
     } else {
       for {
