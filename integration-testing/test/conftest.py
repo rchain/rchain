@@ -12,8 +12,7 @@ import tools.resources as resources
 import os
 import collections
 import pprint
-
-max_bond = 100
+from contextlib import contextmanager
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -97,6 +96,21 @@ def docker_network(docker):
 
 KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
 
+@contextmanager
+def create_bonds_file(validator_keys):
+    (fd, bonds_file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix = ".txt", dir="/tmp")
+    logging.info(f"Using bonds file: `{bonds_file}`")
+
+    with os.fdopen(fd, "w") as f:
+        for pair in validator_keys:
+            bond = random.randint(1, 100)
+            f.write(f"{pair.public_key} {bond}\n")
+
+    yield bonds_file
+
+    os.unlink(bonds_file)
+    logging.info(f"Bonds file `{bonds_file}` deleted")
+
 @pytest.fixture(scope="session")
 def validators_data(config):
     # Using pre-generated validator key pairs by rnode. We do this because warning below  with python generated keys
@@ -108,17 +122,10 @@ def validators_data(config):
                        for line in lines[0:config.peer_count+1]]
 
     logging.info(f"Using validator keys: {validator_keys}")
-    (fd, bonds_file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix = ".txt", dir="/tmp")
-    logging.info(f"Using bonds file: `{bonds_file}`")
-    with os.fdopen(fd, "w") as f:
-        for pair in validator_keys:
-            bond = random.randint(1, max_bond)
-            f.write(f"{pair.public_key} {bond}\n")
 
-    yield (bonds_file, validator_keys[0], validator_keys[1:])
+    with create_bonds_file(validator_keys) as bonds_file:
+        yield (bonds_file, validator_keys[0], validator_keys[1:])
 
-    os.unlink(bonds_file)
-    logging.info(f"Bonds file `{bonds_file}` deleted")
 
 
 @pytest.fixture(scope="package")
