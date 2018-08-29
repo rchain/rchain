@@ -75,11 +75,7 @@ rule <thread> ...
 
 // Because of precedence rules, we may end up with "and"s in the match["TFSTDMATCH"]( ) function
 // In that case, we have to check if both match. If we do, we'll send it to the match( ) function
-// First for channels
-rule <thread> ... <k> ... match[TF:String]( P:HigherProcOrChan ; C:Chan /\ D:Chan )
-                  => match[TF]( P:HigherProcOrChan ; C )
-                  ~> match[TF]( P:HigherProcOrChan ; D ) ... </k> ... </thread>
-// Then for processes
+// For processes
 rule <thread> ... <k> ... match[TF:String]( P:HigherProcOrChan ; Q:HigherProc /\ R:HigherProc )
                   => match[TF]( P:HigherProcOrChan ; Q )
                   ~> match[TF]( P:HigherProcOrChan ; R ) ... </k> ... </thread>
