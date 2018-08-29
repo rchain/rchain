@@ -24,9 +24,9 @@ The second, in the same vein, is that a process variable does *not* match with a
 
 will evaluate to the empty process due to not having matched, since `y` cannot match with `x!(Nil)`. Finally,
 
-    `1 match for( x <- @z!(Nil)){ Nil } {
+    1 match for( x <- @z!(Nil)){ Nil } {
     2       for( x <- y){ Nil }  => { y!(Nil) }
-    3 }`
+    3 }
 
 won't compile, due to the globally free variable `z`.
 
