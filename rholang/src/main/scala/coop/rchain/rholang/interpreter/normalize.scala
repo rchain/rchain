@@ -41,7 +41,7 @@ object GroundNormalizeMatcher {
   def normalizeMatch(g: AbsynGround): Expr =
     g match {
       case gb: GroundBool   => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
-      case gi: GroundInt    => GInt(gi.long_.toLong)
+      case gi: GroundInt    => GInt(gi.long_.toLong) //TODO raise NumberFormatException in a pure way
       case gs: GroundString => GString(gs.string_)
       case gu: GroundUri    => GUri(stripUri(gu.uri_))
     }
