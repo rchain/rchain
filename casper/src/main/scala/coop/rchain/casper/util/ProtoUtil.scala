@@ -10,6 +10,7 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.mainParent
 import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
@@ -325,7 +326,6 @@ object ProtoUtil {
                 pk: Array[Byte],
                 sk: Array[Byte],
                 sigAlgorithm: String,
-                signFunction: (Array[Byte], Array[Byte]) => Array[Byte],
                 shardId: String): BlockMessage = {
 
     val header = {
@@ -340,17 +340,25 @@ object ProtoUtil {
 
     val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
-    val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
+    val sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
 
-    val signedBlock = block
+    val sig = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
+
+    val signedBlock = sigAlgorithmBlock
       .withSender(sender)
       .withSig(sig)
       .withSeqNum(seqNum)
-      .withSigAlgorithm(sigAlgorithm)
       .withBlockHash(blockHash)
       .withShardId(shardId)
 
     signedBlock
+  }
+
+  def resignBlock(b: BlockMessage, sk: Array[Byte]): BlockMessage = {
+    val blockHash =
+      hashSignedBlock(b.header.get, b.sender, b.sigAlgorithm, b.seqNum, b.shardId, b.extraBytes)
+    val sig = ByteString.copyFrom(b.signFunction(blockHash.toByteArray, sk))
+    b.withBlockHash(blockHash).withSig(sig)
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)

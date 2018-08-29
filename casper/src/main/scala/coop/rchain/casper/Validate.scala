@@ -162,8 +162,10 @@ object Validate {
       dag: BlockDag,
       shardId: String): F[Either[BlockStatus, ValidBlock]] =
     for {
-      missingBlockStatus <- Validate.missingBlocks[F](block, dag)
-      timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
+      blockHashStatus    <- Validate.blockHash[F](block)
+      missingBlockStatus <- blockHashStatus.traverse(_ => Validate.missingBlocks[F](block, dag))
+      timestampStatus <- missingBlockStatus.joinRight.traverse(_ =>
+                          Validate.timestamp[F](block, dag))
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
                                Validate.repeatDeploy[F](block, dag))
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
@@ -176,8 +178,7 @@ object Validate {
                                          Validate.justificationRegressions[F](block, genesis, dag))
       shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(_ =>
                                 Validate.shardIdentifier[F](block, shardId))
-      blockHashStatus <- shardIdentifierStatus.joinRight.traverse(_ => Validate.blockHash[F](block))
-    } yield blockHashStatus.joinRight
+    } yield shardIdentifierStatus.joinRight
 
   /**
     * Works with either efficient justifications or full explicit justifications

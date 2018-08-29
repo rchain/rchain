@@ -90,15 +90,19 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _, "rchain")
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
       val body  = b.body.getOrElse(Body())
       val state = body.postState.getOrElse(RChainState())
+      val newState = state.withBlockNumber(n)
 
-      b.withBody(body.withPostState(state.withBlockNumber(n)))
+      val header = b.header.getOrElse(Header())
+      val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
+
+      b.withBody(body.withPostState(newState)).withHeader(newHeader)
     }
   }
 
@@ -318,9 +322,15 @@ class ValidateTest
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
+      val (sk, pk)                 = Ed25519.newKeyPair
 
       Validate.blockSummary[Id](
-        block.withBlockNumber(17).withSeqNum(1),
+        ProtoUtil.signBlock(block.withBlockNumber(17).withSeqNum(1),
+                            BlockDag(),
+                            pk,
+                            sk,
+                            "ed25519",
+                            "rchain"),
         BlockMessage(),
         chain,
         "rchain"
@@ -418,7 +428,7 @@ class ValidateTest
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
     val genesis =
-      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", Ed25519.sign _, "rchain")
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
 
     Validate.formatOfFields[Id](genesis) should be(true)
     Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
@@ -445,7 +455,7 @@ class ValidateTest
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
     val genesis =
-      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", Ed25519.sign _, "rchain")
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
     Validate.blockHash[Id](genesis) should be(Right(Valid))
     Validate.blockHash[Id](
       genesis.withBlockHash(ByteString.copyFromUtf8("123"))

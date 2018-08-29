@@ -479,7 +479,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val Some(signedBlock) = nodes(0).casperEff
       .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
-    val signedInvalidBlock = signedBlock.withSeqNum(-2) // Invalid seq num
+    val signedInvalidBlock =
+      ProtoUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
 
     val blockWithInvalidJustification =
       buildBlockWithInvalidJustification(nodes, deploysWithCost, signedInvalidBlock)
@@ -603,7 +604,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _,
                         "rchain")
   }
 }
