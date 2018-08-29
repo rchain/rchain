@@ -70,7 +70,8 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
     listData.add(new PGround(new GroundInt("7")))
-    val list = new PCollect(new CollectSet(listData, new ProcRemainderVar(new ProcVarVar("ignored"))))
+    val list =
+      new PCollect(new CollectSet(listData, new ProcRemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(

@@ -872,7 +872,8 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case _ =>
                          s.raiseError(
-                           ReduceError("Error: nth applied to something that wasn't a list or tuple."))
+                           ReduceError(
+                             "Error: nth applied to something that wasn't a list or tuple."))
                      }
           } yield result
         }
@@ -940,12 +941,13 @@ object Reduce {
           case (ESetBody(base @ ParSet(basePs, _, _, _)),
                 ESetBody(other @ ParSet(otherPs, _, _, _))) =>
             costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
-              ESetBody(ParSet(
-                basePs.union(otherPs.sortedPars.toSet),
-                base.connectiveUsed || other.connectiveUsed,
-                locallyFreeUnion(base.locallyFree, other.locallyFree),
-                None
-              )))
+              ESetBody(
+                ParSet(
+                  basePs.union(otherPs.sortedPars.toSet),
+                  base.connectiveUsed || other.connectiveUsed,
+                  locallyFreeUnion(base.locallyFree, other.locallyFree),
+                  None
+                )))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
@@ -1292,7 +1294,8 @@ object Reduce {
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
-    def evalToLong(p: Par)(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Long] =
+    def evalToLong(p: Par)(implicit env: Env[Par],
+                           costAccountingAlg: CostAccountingAlg[M]): M[Long] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
@@ -1347,11 +1350,10 @@ object Reduce {
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
-    private def restrictToInt(long: Long): M[Int] = {
+    private def restrictToInt(long: Long): M[Int] =
       s.catchNonFatal(Math.toIntExact(long)).adaptError {
         case e: ArithmeticException => ReduceError(s"Integer overflow for value $long")
       }
-    }
 
     private def updateLocallyFree(par: Par): Par = {
       val resultLocallyFree =
