@@ -140,7 +140,7 @@ rule <thread> ...
 
 
 // Logical "and"
-// First for a conjunction of HigherProcesses
+// For a conjunction of HigherProcesses
 rule <thread> ...
         <FreeVars> ...
           <node> [ID:Int][ P1:HigherProc /\ P2:HigherProc ][ PARENT:Exp ][ (.List
@@ -157,31 +157,6 @@ rule <thread> ...
 // For a statmenet P1 \/ P2, we do not bind any variables in either P1 or P2. Thus if we hit a
 // logical "or", we check for any free variables at all. Any variables here are free variables
 // in the entire statement.
-
-// For channels
- // Make the 'ornode'
-rule <thread> ...
-        <FreeVars> ...
-          <node>
-            [ID:Int][ C1:Chan \/ C2:Chan ][ PARENT:Exp ][
-            .List => ListItem(NEWID) ]{ FREEVARS:List }[(false => true)]
-          </node>
-          (.Bag => <ornode>
-            [NEWID][ C1:Chan \/ C2:Chan ][ ID ][ .List ]{ FREEVARS:List }[false]
-          </ornode>)
-          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
-    ... </FreeVars> ... </thread>
- // Continue building the tree
-rule <thread> ...
-        <FreeVars> ...
-          <ornode>
-            [ID:Int][ C1:Chan \/ C2:Chan ][ PARENT:Exp ][ (.List
-            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[(false => true)]
-          </ornode>
-          (.Bag => <node> [NEWID][ C1 ][ ID ][ .List ]{ .List }[false]  </node>
-                   <node> [NEWID +Int 1][ C2 ][ ID ][ .List ]{ .List }[false]  </node>)
-          <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
-    ... </FreeVars> ... </thread>
 
 // For HigherProcecesses
  // Make the 'ornode'

@@ -24,9 +24,6 @@ rule <thread> ... <k> ... listmatch[ S:String ]( P:HigherProc, Q:HigherProcs ; .
 
 // We also split things up if there are logical connectives: "and's" or "or's"
 // (i) The "and's" are straightforward, since we need to match with all of them
-// For channels
-rule <thread> ... <k> ... match[S:String]( P:HigherProcOrChan ; C:Chan /\ D:Chan )
-               => match[S](P ; C) ~> match[S]( P ; D ) ... </k> ... </thread>
 // For processes
 rule <thread> ... <k> ... match[S:String]( P:HigherProcOrChan ; Q:HigherProc /\ R:HigherProc )
                => match[S](P ; Q) ~> match[S]( P ; R ) ... </k> ... </thread>
@@ -34,10 +31,6 @@ rule <thread> ... <k> ... match[S:String]( P:HigherProcOrChan ; Q:HigherProc /\ 
 // (ii) The "or's" are a little more complicated, but not by much
 syntax OrCheckSyntax ::= "["HigherProcOrChan"]["HigherProcOrChan"]["List"]"
 
-// For channels
-rule <thread> ... <k> match[S:String]( P:HigherProcOrChan ; C:Chan \/ D:Chan )
-               =>  #(ORPAUSE)[S] ... </k>
-               (.Bag => <OrCheck> [P][.K][ListItem(C) ListItem(D)]  </OrCheck>) ... </thread>
 // For processes
 rule <thread> ... <k> match[S:String]( P:HigherProcOrChan ; Q:HigherProc \/ R:HigherProc )
                =>  #(ORPAUSE)[S] ... </k>
@@ -74,11 +67,6 @@ rule <thread> ...
 
 // In order to be sure that the "or"s break up sufficiently, we need to tell "match["TFSTDMATCH"]"
 // how to handle them.
-// First for channels
-rule <thread> ...
-        <k> ... match[TF:String]( P:HigherProcOrChan ; (C:Chan \/ D:Chan => C) ) ... </k>
-        <OrCheck> [P:HigherProcOrChan][(C \/ D => C)][(.List => ListItem(D)) L:List] </OrCheck>
-     ... </thread>
 // Then for processes
 rule <thread> ...
       <k> ... match[TF:String]( P:HigherProcOrChan ; (R:HigherProc \/ Q:HigherProc => R) ) ... </k>
