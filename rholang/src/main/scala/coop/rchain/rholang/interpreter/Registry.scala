@@ -15,6 +15,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{ISpace, IStore}
 import monix.eval.Task
+import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
 
@@ -43,6 +44,7 @@ class Registry(private val space: ISpace[Channel,
   import Registry._
   private def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
     val prefixOut = ByteString.newOutput()
+    @tailrec
     def loop(it1: ByteIterator, it2: ByteIterator): ByteString =
       if (!it1.hasNext || !it2.hasNext) {
         prefixOut.toByteString
@@ -64,26 +66,26 @@ class Registry(private val space: ISpace[Channel,
     (head, tail)
   }
 
-  val lookupRef: Long = Runtime.BodyRefs.REG_LOOKUP
-  val lookupPatterns = List(
+  private val lookupRef: Long = Runtime.BodyRefs.REG_LOOKUP
+  private val lookupPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
-  val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
-  val insertRef: Long = Runtime.BodyRefs.REG_INSERT
-  val insertPatterns = List(
+  private val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
+  private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
+  private val insertPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
           Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
           ChanVar(FreeVar(2))),
       freeCount = 3
     ))
-  val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
-  val deletePatterns = List(
+  private val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
+  private val deletePatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
-  val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
+  private val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
   def testInstall(): Unit = {
     space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
@@ -91,13 +93,13 @@ class Registry(private val space: ISpace[Channel,
     space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
   }
 
-  val lookupCallbackRef: Long = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
-  val prefixRetReplacePattern = BindPattern(
+  private val lookupCallbackRef: Long = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
+  private val prefixRetReplacePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
         ChanVar(FreeVar(1)),
         ChanVar(FreeVar(2))),
     freeCount = 3)
-  val prefixValueRetReplacePattern = BindPattern(
+  private val prefixValueRetReplacePattern = BindPattern(
     Seq(
       Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
       Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
@@ -106,21 +108,21 @@ class Registry(private val space: ISpace[Channel,
     ),
     freeCount = 4
   )
-  val parentKeyDataReplacePattern = BindPattern(
+  private val parentKeyDataReplacePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
         Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
         ChanVar(FreeVar(2))),
     freeCount = 3
   )
-  val triePattern = BindPattern(
+  private val triePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
     freeCount = 1)
 
-  val insertCallbackRef: Long = Runtime.BodyRefs.REG_INSERT_CALLBACK
+  private val insertCallbackRef: Long = Runtime.BodyRefs.REG_INSERT_CALLBACK
 
-  val deleteRef: Long             = Runtime.BodyRefs.REG_DELETE
-  val deleteRootCallbackRef: Long = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
-  val deleteCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_CALLBACK
+  private val deleteRef: Long             = Runtime.BodyRefs.REG_DELETE
+  private val deleteRootCallbackRef: Long = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
+  private val deleteCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_CALLBACK
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
