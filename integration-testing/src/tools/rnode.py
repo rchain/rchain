@@ -67,12 +67,11 @@ class Node:
 
         process = Process(target=execution)
 
-        logging.info(f"{self.container}: Execute '{cmd}'")
+        logging.info(f"{self.container}: Execute '{cmd}'. Timeout: {self.timeout}s")
 
         process.start()
 
         try:
-            logging.debug(f"Wait for result for {self.timeout}s")
             result = queue.get(self.timeout)
             logging.debug("Returning '{result}'")
             return result
