@@ -4,13 +4,13 @@
 
 Let's clarify the implications of the following sentence from the Rholang tutorial: "There are two kinds of values in Rholang, names and processes. Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`." This has a couple of implications that were not explicitly stated in the tutorial.
 
-1) A program cannot have any free variables. It also can't have any logical connectives `/\` or `\/`, joins, etc unless they form part of a pattern. Logical connectives, joins and arrows can be used if they are in patterns within the program, and any variable in a program must be at most locally free. For example, the following code snippets are not valid programs, despite the fact that they are valid components of patterns:
+The first is that a program cannot have any free variables. It also can't have any logical connectives `/\` or `\/`, joins, etc unless they form part of a pattern. Logical connectives, joins and arrows can be used if they are in patterns within the program, and any variable in a program must be at most locally free. For example, the following code snippets are not valid programs, despite the fact that they are valid components of patterns:
 
 * `@Nil!(Nil) /\ @Nil!(Nil)`
 * `@Nil!(Nil) ; @Nil!(Nil)`
 * `@Nil!(Nil) , @Nil!(Nil)`
 
-2) In the same vein, a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, a join, a logical connective, etc unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, joins, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
+The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, a join, a logical connective, etc unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, joins, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
 
     1 match for( x <- @Nil ){ Nil } {
     2     for( x <- y )
@@ -24,9 +24,9 @@ Let's clarify the implications of the following sentence from the Rholang tutori
 
 will evaluate to the empty process due to not having matched, since `y` cannot match with `x!(Nil)`. Finally,
 
-    1 match for( x <- @z!(Nil)){ Nil } {
+    `1 match for( x <- @z!(Nil)){ Nil } {
     2       for( x <- y){ Nil }  => { y!(Nil) }
-    3 }
+    3 }`
 
 won't compile, due to the globally free variable `z`.
 
@@ -135,7 +135,7 @@ When using parallel processes in patterns, it is sometimes not immediately obvio
 
     for( @{x | y} <- @Nil ){ Nil }
 
-Given a send of the form `@Nil!( 10 | 20 )`, we might expect the receive to bind `x` to `10` and `y` to `20`. However, this match is not so straightforward. Since `x | y = y | x`, we just as well could match `x` to `20` and `y` to `10`. Futhermore, since `10 | 20 = 10 | 20 | Nil = Nil | 10 | 20`, the match could take place in a number of ways. %To resolve this, Rholang will take the first variable in the pattern, as written, and bind it to everything in the send; the remaining variables bind to `Nil`. Thus in this case, `x` binds to `10 | 20` and `y` binds to `Nil`.
+Given a send of the form `@Nil!( 10 | 20 )`, we might expect the receive to bind `x` to `10` and `y` to `20`. However, this match is not so straightforward. Since `x | y = y | x`, we just as well could match `x` to `20` and `y` to `10`. Futhermore, since `10 | 20 = 10 | 20 | Nil = Nil | 10 | 20`, the match could take place in a number of ways.
 
 This send/receive will nondeterministically either bind `x` to `10`, `x` to `10 | 20` or `x` to the empty process `Nil` while `y` binds to whatever `x` does not take, binding to `Nil` if `x` binds to `10 | 20`. This nondeterminism applies to wildcards, too. As the interpreter stands, Rholang will choose one of `x` and `y`, give it `10 | 20`, and bind the other variable to `Nil`. Regardless, it is incorrect to write a program with such a pattern that relies on any of the variables matching to a specific piece of a message.
 
