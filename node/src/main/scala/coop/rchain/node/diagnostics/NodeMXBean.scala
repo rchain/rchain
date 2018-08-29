@@ -9,6 +9,8 @@ trait NodeMXBean {
   def getP2pEncryptionHandshakeReceiverCount: Long
   def getP2pProtocolHandshakeReceiverCount: Long
   def getPeers: Long
+  def getFrom: Long
+  def getTo: Long
 }
 
 object NodeMXBean {
@@ -21,12 +23,18 @@ object NodeMXBean {
   val P2pEncryptionHandshakeReceiverCount = "P2pEncryptionHandshakeReceiverCount"
   val P2pProtocolHandshakeReceiverCount   = "P2pProtocolHandshakeReceiverCount"
   val Peers                               = "Peers"
+  val From                                = "From"
+  val To                                  = "To"
 
-  val Attributes: Array[String] = Array(PingReceiverCount,
-                                        LookupReceiverCount,
-                                        DisconnectReceiverCount,
-                                        Connects,
-                                        P2pEncryptionHandshakeReceiverCount,
-                                        P2pProtocolHandshakeReceiverCount,
-                                        Peers)
+  val Attributes: Array[String] = Array(
+    PingReceiverCount,
+    LookupReceiverCount,
+    DisconnectReceiverCount,
+    Connects,
+    P2pEncryptionHandshakeReceiverCount,
+    P2pProtocolHandshakeReceiverCount,
+    Peers,
+    From,
+    To
+  )
 }
