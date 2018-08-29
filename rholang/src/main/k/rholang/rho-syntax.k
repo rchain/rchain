@@ -47,10 +47,6 @@ syntax NameNoVars ::= "@" Proc
 // terms, with no logical connectives, etc and those that are or have them.
 syntax Name ::= NameNoVars
               | Id
-              // logical "and"
-              | Name "/\\" Name [left]
-              // logical "or"
-              > Name "\\/" Name [left]
 
 // Names and Processes, used specifically for -arity matching
 syntax Names ::= List{ Name, "," }
@@ -122,10 +118,6 @@ syntax HigherProcNoVars ::=
 // terms, with no logical connectives, etc and those that are or have them.
 syntax Chan ::= ChanNoVars
               | Id
-              // logical "and"
-              | Chan "/\\" Chan [left]
-              // logical "or"
-              > Chan "\\/" Chan [left]
 
 // We need channels, with no variables
 syntax ChanNoVars ::= "@" HigherProc
