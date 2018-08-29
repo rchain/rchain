@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.Reader
 
-import cats.MonadError
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
@@ -63,20 +63,20 @@ object Interpreter {
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] =
+      implicit sync: Sync[M]): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
         if (normalizedTerm.knownFree.wildcards.isEmpty) {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
         }
       } else normalizedTerm.pure[M]

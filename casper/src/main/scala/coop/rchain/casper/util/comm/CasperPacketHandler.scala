@@ -240,9 +240,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                                                   validatorId,
                                                                   blockMessage,
                                                                   shardId)
-                     _ <- MultiParentCasperRef[F].set(casper)
-                     _ <- Log[F].info(
-                           "CASPER: Making a transition to ApprovedBlockRecievedHandler state.")
+                     _   <- MultiParentCasperRef[F].set(casper)
+                     _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
                      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
                      _   <- capserHandlerInternal.set(abh)
                    } yield ()
@@ -317,8 +316,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       for {
         isOldBlock <- MultiParentCasper[F].contains(b)
         _ <- if (isOldBlock) {
-              Log[F].info(
-                s"CASPER: Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+              Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
             } else {
               handleNewBlock[F](b)
             }
@@ -333,7 +331,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           packet(local, transport.BlockMessage, serializedMessage))
         send     <- maybeMsg.traverse(msg => TransportLayer[F].send(peer, msg))
         hash     = PrettyPrinter.buildString(br.hash)
-        logIntro = s"CASPER: Received request for block $hash from $peer. "
+        logIntro = s"Received request for block $hash from $peer."
         _ <- send match {
               case None    => Log[F].info(logIntro + "No response given since block not found.")
               case Some(_) => Log[F].info(logIntro + "Response sent.")
@@ -343,7 +341,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     override def handleApprovedBlockRequest(peer: PeerNode,
                                             br: ApprovedBlockRequest): F[Option[Packet]] =
       for {
-        _ <- Log[F].info(s"CASPER: Received ApprovedBlockRequest from $peer")
+        _ <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
       } yield Some(Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =
@@ -387,7 +385,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                       for {
                         _ <- MultiParentCasperRef[F].set(casperInstance)
                         _ <- Log[F].info(
-                              "CASPER: Making a transition to ApprovedBlockRecievedHandler state.")
+                              "Making a transition to ApprovedBlockRecievedHandler state.")
                         abr = new ApprovedBlockReceivedHandler(casperInstance, ab)
                         _   <- cphI.set(abr)
                       } yield ()
@@ -432,7 +430,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       F[_]: Monad: MultiParentCasper: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] =
     for {
-      _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
       _ <- MultiParentCasper[F].addBlock(b)
     } yield ()
 
@@ -482,7 +480,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       isValid <- Validate.approvedBlock[F](b, validators)
       casper <- if (isValid) {
                  for {
-                   _            <- Log[F].info("CASPER: Valid ApprovedBlock received!")
+                   _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
                    _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
                    _            <- LastApprovedBlock[F].set(b)
@@ -491,7 +489,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  } yield Option(casper)
                } else
                  Log[F]
-                   .info("CASPER: Invalid ApprovedBlock received; refusing to add.")
+                   .info("Invalid ApprovedBlock received; refusing to add.")
                    .map(_ => none[MultiParentCasper[F]])
     } yield casper
 

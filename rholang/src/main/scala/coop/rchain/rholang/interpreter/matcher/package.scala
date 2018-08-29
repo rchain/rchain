@@ -41,14 +41,13 @@ package object matcher {
       def runWithCost: (CostAccount, Option[(FreeMap, A)]) =
         s.run(Map.empty).value.run(CostAccount.zero).value
 
-      def toNonDet(): NonDetFreeMapWithCost[A] = {
+      def toNonDet(): NonDetFreeMapWithCost[A] =
         s.mapK[StreamT[State[CostAccount, ?], ?]](
           new FunctionK[OptionT[State[CostAccount, ?], ?], StreamT[State[CostAccount, ?], ?]] {
             override def apply[A](
                 fa: OptionT[State[CostAccount, ?], A]): StreamT[State[CostAccount, ?], A] =
               StreamT(fa.fold(Stream.empty[A])(single => Stream(single)))
           })
-      }
     }
 
     implicit def toOptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) =

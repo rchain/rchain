@@ -10,7 +10,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev, Wallet}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{EventConverter, Sorting}
+import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.catscontrib._
@@ -59,9 +60,7 @@ object Genesis {
                     initial: BlockMessage,
                     startHash: StateHash,
                     runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
-    val Right((checkpoint, deployWithCost)) = runtimeManager.computeState(startHash, blessedTerms)
-    val stateHash                           = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-    val reductionLog                        = checkpoint.log.map(EventConverter.toCasperEvent)
+    val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
 
     val stateWithContracts = for {
       bd <- initial.body
@@ -70,12 +69,11 @@ object Genesis {
     val version   = initial.header.get.version
     val timestamp = initial.header.get.timestamp
 
-    val sortedReductionLog = reductionLog.sortBy(_.toByteArray)
+    val blockDeploys =
+      processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
+    val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body =
-      Body(postState = stateWithContracts,
-           newCode = deployWithCost,
-           commReductions = sortedReductionLog)
+    val body = Body(postState = stateWithContracts, deploys = sortedDeploys)
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
@@ -117,7 +115,7 @@ object Genesis {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
             Log[F].warn(
-              s"CASPER: Specified bonds file $path does not exist. Falling back on generating random validators.")))(
+              s"Specified bonds file $path does not exist. Falling back on generating random validators.")))(
             _ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
@@ -163,14 +161,14 @@ object Genesis {
                           case Right(wallet) => wallet.some.pure[F]
                           case Left(errMsg) =>
                             Log[F]
-                              .warn(s"CASPER: Error in parsing wallets file: $errMsg")
+                              .warn(s"Error in parsing wallets file: $errMsg")
                               .map(_ => none[Wallet])
                         })
                         .map(_.flatten)
                     case Failure(ex) =>
                       Log[F]
                         .warn(
-                          s"CASPER: Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
+                          s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
                         .map(_ => Seq.empty[Wallet])
                   }
       } yield wallets
@@ -179,13 +177,12 @@ object Genesis {
       case (Some(file), _) => walletFromFile(file)
       case (None, Some(path)) =>
         Log[F]
-          .warn(
-            s"CASPER: Specified wallets file $path does not exist. No wallets will exist at genesis.")
+          .warn(s"Specified wallets file $path does not exist. No wallets will exist at genesis.")
           .map(_ => Seq.empty[Wallet])
       case (None, None) =>
         Log[F]
           .warn(
-            s"CASPER: No wallets file specified and no default file found. No wallets will exist at genesis.")
+            s"No wallets file specified and no default file found. No wallets will exist at genesis.")
           .map(_ => Seq.empty[Wallet])
     }
   }
@@ -210,8 +207,7 @@ object Genesis {
           .flatMap {
             case Failure(th) =>
               Log[F]
-                .warn(
-                  s"CASPER: Failed to parse bonded validators file $file for reason ${th.getMessage}")
+                .warn(s"Failed to parse bonded validators file $file for reason ${th.getMessage}")
                 .map(_ => Set.empty)
             case Success(x) => x.pure[F]
           }

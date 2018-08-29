@@ -1,7 +1,10 @@
 import logging
 import re
+import pytest
+import time
+from tools.util import log_box
 
-def wait_for(condition, timeout):
+def wait_for(condition, timeout, error_message):
     """
     Waits for a condition to be fulfilled. It retries until the timeout expires.
 
@@ -9,23 +12,35 @@ def wait_for(condition, timeout):
     :param timeout: the total time to wait
     :return: true  if the condition was met in the given timeout
     """
-    import time
 
-    logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}. Patience please!")
+    __tracebackhide__ = True
 
-    elapsed = 0
-    while elapsed < timeout:
-        if condition():
-            logging.info(f"Condition satisfied after {elapsed}s. Continue...")
-            return True
+    with log_box(logging.info, f"Waiting maximum timeout={timeout}. Patience please!", "."):
+        logging.info(f"Wait condition `{condition.__doc__}`")
+        elapsed = 0
+        current_ex = None
+        while elapsed < timeout:
+            try:
+                value = condition()
 
-        iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
+                logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
+                return value
 
-        logging.info(f"Condition not fulfilled yet. Sleeping {iteration_duration}s...")
+            except Exception as ex:
+                iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
 
-        time.sleep(iteration_duration)
-        elapsed = elapsed + iteration_duration
-    return False
+                if str(ex) == current_ex:
+                    details = "same as above"
+                else:
+                    details = str(ex)
+                    current_ex = str(ex)
+                logging.info(f"Condition not fulfilled yet ({details}). Sleeping {iteration_duration}s...")
+
+                time.sleep(iteration_duration)
+                elapsed = elapsed + iteration_duration
+
+        logging.warning(f"Giving up after {elapsed}s.")
+        pytest.fail(error_message)
 
 # Predicates
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
@@ -33,13 +48,31 @@ def wait_for(condition, timeout):
 
 def node_logs(node):
     def go(): return node.logs()
-    go.__doc__ = f"container_logs({node.name})"
+    go.__doc__ = f"node_logs({node.name})"
     return go
 
-def contains(string_factory, regex_str, flags = 0):
-    rx = re.compile(regex_str)
+def show_blocks(node):
+    def go():
+        exit_code, output = node.show_blocks()
 
-    def go(): return rx.search(string_factory(), flags)
+        if exit_code != 0: raise Exception("Show-blocks failed")
+
+        return output
+
+    go.__doc__ = f"show_blocks({node.name})"
+    return go
+
+def string_contains(string_factory, regex_str, flags = 0):
+    rx = re.compile(regex_str, flags)
+
+    def go():
+        s = string_factory()
+
+        m = rx.search(s)
+        if m:
+            return m
+        else:
+            raise Exception(f"{string_factory.__doc__} doesn't contain regex '{regex_str}'")
 
     go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
@@ -55,9 +88,8 @@ def network_converged(bootstrap_node, expected_peers):
 
         peers = int(m[1]) if m else 0
 
-        logging.info(f"Peers so far: {peers} Expected:{expected_peers}")
-
-        return peers == expected_peers
+        if peers < expected_peers:
+            raise Exception(f"Expected peers: {expected_peers}. Actual peers: {peers}")
 
     go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
 

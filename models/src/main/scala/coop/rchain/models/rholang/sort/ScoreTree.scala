@@ -139,6 +139,7 @@ trait ScoreTree {
     final val BOUND_VAR = 50
     final val FREE_VAR  = 51
     final val WILDCARD  = 52
+    final val REMAINDER = 53
 
     // Expr
     final val EVAR        = 100

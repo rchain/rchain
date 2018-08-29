@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import java.io.{ByteArrayInputStream, File}
+import java.io.ByteArrayInputStream
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
@@ -11,7 +11,6 @@ import coop.rchain.shared.{Cell, Log, LogSource}
 
 import scala.concurrent.duration._
 import scala.util._
-import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
@@ -85,8 +84,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
         _ <- s.connections.get(peer) match {
               case Some(c) => Task.delay(c.shutdown()).attempt.void
-              case _ =>
-                log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
+              case _       => Task.unit // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }
@@ -145,13 +143,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  private def buildServer(transportLayer: TransportLayerGrpc.TransportLayer): Task[Server] =
+  private def buildServer(transportLayer: GrpcService.TransportLayer): Task[Server] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
         .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
-        .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
+        .addService(GrpcService.bindService(transportLayer))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
@@ -218,9 +216,9 @@ object TransportState {
 
 class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     implicit scheduler: Scheduler)
-    extends TransportLayerGrpc.TransportLayer {
+    extends GrpcService.TransportLayer {
 
-  def send(request: TLRequest): Future[TLResponse] =
+  def send(request: TLRequest): Task[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
@@ -229,7 +227,6 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
           case HandledWithMessage(response) => returnProtocol(response)
         }
       }
-      .runAsync
 
   private def returnProtocol(protocol: Protocol): TLResponse =
     TLResponse(TLResponse.Payload.Protocol(protocol))

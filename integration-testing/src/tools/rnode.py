@@ -3,8 +3,10 @@ import re
 import tempfile
 import random
 import tools.resources as resources
+from tools.util import log_box
 
 default_image = "rchain-integration-testing:latest"
+
 rnode_binary='/opt/docker/bin/rnode'
 rnode_directory = "/var/lib/rnode"
 rnode_deploy_dir = f"{rnode_directory}/deploy"
@@ -32,17 +34,10 @@ class Node:
         return address
 
     def cleanup(self):
-        logging.info("=" * 100)
-
-        logging.info(f"Docker container logs for {self.container.name}:")
-
-        logging.info("=" * 100)
-
-        logs = self.logs().splitlines()
-        for log_line in logs:
-            logging.info(f"{self.container.name}: {log_line}")
-
-        logging.info("=" * 100)
+        with log_box(logging.info, f"Logs for node {self.container.name}:"):
+            logs = self.logs().splitlines()
+            for log_line in logs:
+                logging.info(f"{self.container.name}: {log_line}")
 
         logging.info(f"Remove container {self.container.name}")
         self.container.remove(force=True, v=True)
@@ -68,23 +63,6 @@ class Node:
     def log_lines(self):
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
-
-
-    def received_blocks(self, expected_content):
-        received_block_rx = re.compile(f"^.* CASPER: Received Block #\d+ \((.*?)\.\.\.\).*?{expected_content}.*$", re.MULTILINE | re.DOTALL)
-
-        logs = self.log_lines()
-
-        return [match.group(1) for match in [received_block_rx.match(log) for log in logs] if match]
-
-    def added_blocks(self, block_id):
-        added_block_rx = re.compile(f"^.*\s+CASPER: Added {block_id}.*", re.MULTILINE | re.DOTALL)
-
-        logs = self.log_lines()
-
-        return [match.group(0) for match in [added_block_rx.match(log) for log in logs] if match]
-
-
 
 
 def __read_validator_keys():

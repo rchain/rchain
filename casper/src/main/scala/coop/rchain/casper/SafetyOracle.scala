@@ -6,7 +6,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{mainParent, _}
 import coop.rchain.catscontrib.ListContrib
 
@@ -92,12 +92,11 @@ sealed abstract class SafetyOracleInstances {
           weights <- computeMainParentWeightMap(estimate)
           candidateWeights <- weights.toList.traverse {
                                case (validator, stake) =>
-                                 val maybeLatestMessageHash = blockDag.latestMessages.get(validator)
-                                 maybeLatestMessageHash match {
-                                   case Some(latestMessageHash) =>
+                                 val maybeLatestMessage = blockDag.latestMessages.get(validator)
+                                 maybeLatestMessage match {
+                                   case Some(latestMessage) =>
                                      for {
-                                       latestMessage <- unsafeGetBlock[F](latestMessageHash)
-                                       isCompatible  <- computeCompatibility(estimate, latestMessage)
+                                       isCompatible <- computeCompatibility(estimate, latestMessage)
                                        result = if (isCompatible) {
                                          Some((validator, stake))
                                        } else {
@@ -119,6 +118,23 @@ sealed abstract class SafetyOracleInstances {
           }
         } yield mainParentWeightMap
 
+      private def findMaximumClique(edges: List[(Validator, Validator)],
+                                    candidates: Map[Validator, Int]): (List[Validator], Int) =
+        Clique
+          .findCliquesRecursive(edges)
+          .foldLeft((List[Validator](), 0)) {
+            case ((maxClique, maxWeight), clique) => {
+              val weight = clique.map(candidates.getOrElse(_, 0)).sum
+              if (weight > maxWeight) {
+                (clique, weight)
+              } else if (weight == maxWeight && clique.size > maxClique.size) {
+                (clique, weight)
+              } else {
+                (maxClique, maxWeight)
+              }
+            }
+          }
+
       private def agreementGraphEdgeCount(blockDag: BlockDag,
                                           estimate: BlockMessage,
                                           candidates: Map[Validator, Int]): F[Int] = {
@@ -135,12 +151,13 @@ sealed abstract class SafetyOracleInstances {
           )
 
         def seesAgreement(first: Validator, second: Validator): F[Boolean] = {
-          val maybeFirstLatestHash = blockDag.latestMessages.get(first)
-          maybeFirstLatestHash match {
-            case Some(firstLatestHash) =>
+          val maybeFirstLatest = blockDag.latestMessages.get(first)
+          maybeFirstLatest match {
+            case Some(firstLatestBlock) =>
               for {
-                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
-                justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+                justificationHashes <- firstLatestBlock.justifications
+                                        .map(_.latestBlockHash)
+                                        .pure[F]
                 agreeingJustificationHash <- findAgreeingJustificationHash(
                                               justificationHashes.toList,
                                               second)
@@ -151,10 +168,8 @@ sealed abstract class SafetyOracleInstances {
 
         def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
           blockDag.latestMessages.get(validator) match {
-            case Some(latestMessageHashByValidator) =>
+            case Some(latestMessageByValidator) =>
               for {
-                latestMessageByValidator <- ProtoUtil.unsafeGetBlock[F](
-                                             latestMessageHashByValidator)
                 potentialChildren <- DagOperations
                                       .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
                                         block =>
@@ -174,12 +189,13 @@ sealed abstract class SafetyOracleInstances {
           }
 
         def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
-          val maybeFirstLatestHash = blockDag.latestMessages.get(first)
-          maybeFirstLatestHash match {
-            case Some(firstLatestHash) =>
+          val maybeFirstLatest = blockDag.latestMessages.get(first)
+          maybeFirstLatest match {
+            case Some(firstLatestBlock) =>
               for {
-                firstLatestBlock    <- unsafeGetBlock[F](firstLatestHash)
-                justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+                justificationHashes <- firstLatestBlock.justifications
+                                        .map(_.latestBlockHash)
+                                        .pure[F]
                 justificationBlockSecondList <- justificationHashes.toList.traverse(
                                                  justificationHash =>
                                                    for {
@@ -225,7 +241,7 @@ sealed abstract class SafetyOracleInstances {
 
         for {
           edges <- computeAgreementGraphEdges
-        } yield edges.size
+        } yield findMaximumClique(edges, candidates)._1.size
       }
 
       // TODO: Change to isInBlockDAG

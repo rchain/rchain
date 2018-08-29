@@ -42,8 +42,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  private val maxMessageSize: Int = 100 * 1024 * 1024 // TODO should be part of configuration
-
   implicit def eiterTrpConfAsk(implicit ev: RPConfAsk[Task]): RPConfAsk[Effect] =
     new EitherTApplicativeAsk[Task, RPConf, CommError]
 
@@ -292,7 +290,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
               .error(
                 "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
           case th =>
-            th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
+            log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
+              th.printStackTrace();
+            }
         } *> exit0.as(Right(())))
 
   private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] = new Timer[Effect] {
@@ -332,12 +332,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
     labEff               = LastApprovedBlock.eitherTLastApprovedBlock[CommError, Task](Monad[Task], lab)
-    transport = effects.tcpTransportLayer(host,
-                                          port,
-                                          conf.tls.certificate,
-                                          conf.tls.key,
-                                          maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport, time)
+    transport = effects.tcpTransportLayer(
+      host,
+      port,
+      conf.tls.certificate,
+      conf.tls.key,
+      conf.server.maxMessageSize)(scheduler, tcpConnections, log)
+    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,

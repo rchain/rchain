@@ -155,7 +155,9 @@ package object diagnostics {
               getValue(map, NodeMXBean.P2pEncryptionHandshakeReceiverCount),
             p2PProtocolHandshakeReceiverCount =
               getValue(map, NodeMXBean.P2pProtocolHandshakeReceiverCount),
-            peers = getValue(map, NodeMXBean.Peers)
+            peers = getValue(map, NodeMXBean.Peers),
+            from = getValue(map, NodeMXBean.From),
+            to = getValue(map, NodeMXBean.To)
           )
         }
     }
