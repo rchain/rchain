@@ -23,7 +23,7 @@ object PreWallet {
 
   def fromLine(line: String): Either[String, PreWallet] = line.split(",").filter(_.nonEmpty) match {
     case Array(ethAddress, initRevBalanceStr, _) =>
-      Try(initRevBalanceStr.toInt) match {
+      Try(BigInt(initRevBalanceStr)) match {
         case Success(initRevBalance) => Right(PreWallet(ethAddress, initRevBalance))
         case Failure(_) =>
           Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
