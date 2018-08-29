@@ -176,7 +176,8 @@ object Validate {
                                          Validate.justificationRegressions[F](block, genesis, dag))
       shardIdentifierStatus <- justificationRegressionsStatus.joinRight.traverse(_ =>
                                 Validate.shardIdentifier[F](block, shardId))
-    } yield shardIdentifierStatus.joinRight
+      blockHashStatus <- shardIdentifierStatus.joinRight.traverse(_ => Validate.blockHash[F](block))
+    } yield blockHashStatus.joinRight
 
   /**
     * Works with either efficient justifications or full explicit justifications
@@ -336,6 +337,24 @@ object Validate {
               ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
       } yield Left(InvalidShardId)
     }
+
+  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
+    val computed = ProtoUtil.hashSignedBlock(
+      b.header.get,
+      b.sender,
+      b.sigAlgorithm,
+      b.seqNum,
+      b.shardId,
+      b.extraBytes
+    )
+    if (computed == b.blockHash) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+      } yield Left(InvalidUnslashableBlock)
+    }
+  }
 
   /**
     * Works only with fully explicit justifications.
