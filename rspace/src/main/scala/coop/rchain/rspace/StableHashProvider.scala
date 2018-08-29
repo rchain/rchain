@@ -1,12 +1,12 @@
 package coop.rchain.rspace
 
+import internal._
 import scala.collection.immutable.Seq
 import cats.implicits._
 import scodec.{Attempt, Codec}
 import scodec.bits.BitVector
 import scodec.codecs._
 import scodec.interop.cats._
-import coop.rchain.shared.AttemptOps._
 
 object StableHashProvider {
   def hash[C](channels: Seq[C])(implicit codecC: Codec[C]): Blake2b256Hash =

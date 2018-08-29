@@ -1,6 +1,6 @@
-new helloNameAge, getOlder in {
+new helloNameAge, getOlder, stdout(`rho:io:stdout`) in {
   contract helloNameAge(@{@"name"!(name) | @"age"!(age) | _}) = {
-    @"stdout"!(["Hello, ", name, " aged ", age])
+    stdout!(["Hello, ", name, " aged ", age])
   } |
   contract getOlder(@{rest /\ {@"name"!(_) | _} | @"age"!(age) }, ret) = {
     ret!(@"age"!(age + 1) | rest)

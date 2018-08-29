@@ -27,6 +27,7 @@ PCollect.        Proc16 ::= Collection ;
 PVar.            Proc16 ::= ProcVar ;
 PVarRef.         Proc13 ::= VarRefKind Var ;
 PNil.            Proc16 ::= "Nil" ;
+PSimpleType.     Proc16 ::= SimpleType ;
 PNegation.       Proc15 ::= "~" Proc15 ;
 PConjunction.    Proc14 ::= Proc14 "/\\" Proc15 ;
 PDisjunction.    Proc13 ::= Proc13 "\\/" Proc14 ;
@@ -41,6 +42,7 @@ PPercentPercent. Proc9  ::= Proc9 "%%" Proc10 ;
 PAdd.            Proc8  ::= Proc8 "+" Proc9 ;
 PMinus.          Proc8  ::= Proc8 "-" Proc9 ;
 PPlusPlus.       Proc8  ::= Proc8 "++" Proc9 ;
+PMinusMinus.     Proc8  ::= Proc8 "--" Proc9 ;
 PLt.             Proc7  ::= Proc7 "<" Proc8 ;
 PLte.            Proc7  ::= Proc7 "<=" Proc8 ;
 PGt.             Proc7  ::= Proc7 ">" Proc8 ;
@@ -115,6 +117,7 @@ separator nonempty Case "" ;
 -- Name Declarations.
 -- Eventually will have IOPairs.
 NameDeclSimpl. NameDecl ::= Var ;
+NameDeclUrn. NameDecl ::= Var "(" Uri ")" ;
 separator nonempty NameDecl "," ;
 
 -- Booleans:
@@ -127,9 +130,9 @@ GroundString.  Ground ::= String ;
 GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
-CollectList.   Collection ::= "[" [Proc] Remainder "]" ;
+CollectList.   Collection ::= "[" [Proc] ProcRemainder "]" ;
 CollectTuple.  Collection ::= Tuple;
-CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
+CollectSet.    Collection ::= "Set" "(" [Proc] ProcRemainder")" ;
 CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
@@ -138,14 +141,22 @@ TupleSingle.    Tuple ::= "(" Proc ",)" ;
 TupleMultiple.  Tuple ::= "(" Proc "," [Proc] ")" ;
 
 -- Remainders:
-RemainderVar.   Remainder ::= "..." ProcVar ;
-RemainderEmpty. Remainder ::= "" ;
+ProcRemainderVar.   ProcRemainder ::= "..." ProcVar ;
+ProcRemainderEmpty. ProcRemainder ::= "" ;
 NameRemainderVar.   NameRemainder ::= "..." "@" ProcVar ;
 NameRemainderEmpty. NameRemainder ::= "" ;
 
 -- VarRefKind:
 VarRefKindProc. VarRefKind ::= "=" ;
 VarRefKindName. VarRefKind ::= "=" "*" ;
+
+-- Simple Types:
+SimpleTypeBool. SimpleType ::= "Bool" ;
+SimpleTypeInt. SimpleType ::= "Int" ;
+SimpleTypeString. SimpleType ::= "String" ;
+SimpleTypeUri. SimpleType ::= "Uri" ;
+SimpleTypeByteArray. SimpleType ::= "ByteArray" ;
+
 
 token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 

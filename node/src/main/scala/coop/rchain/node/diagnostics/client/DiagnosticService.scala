@@ -1,5 +1,8 @@
 package coop.rchain.node.diagnostics.client
 
+import java.io.Closeable
+import java.util.concurrent.TimeUnit
+
 import coop.rchain.comm._
 import coop.rchain.node.model.diagnostics._
 
@@ -9,6 +12,7 @@ import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
   def listPeers: F[Seq[PeerNode]]
+  def listDiscoveredPeers: F[Seq[PeerNode]]
   def nodeCoreMetrics: F[NodeCoreMetrics]
   def processCpu: F[ProcessCpu]
   def memoryUsage: F[MemoryUsage]
@@ -21,7 +25,9 @@ object DiagnosticsService {
   def apply[F[_]](implicit ev: DiagnosticsService[F]): DiagnosticsService[F] = ev
 }
 
-class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService[Task] {
+class GrpcDiagnosticsService(host: String, port: Int)
+    extends DiagnosticsService[Task]
+    with Closeable {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
@@ -31,6 +37,19 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
     Task.delay(
       blockingStub
         .listPeers(Empty())
+        .peers
+        .map(
+          p =>
+            PeerNode(
+              NodeIdentifier(p.key.toByteArray.toSeq),
+              Endpoint(p.host, p.port, p.port)
+          ))
+    )
+
+  def listDiscoveredPeers: Task[Seq[PeerNode]] =
+    Task.delay(
+      blockingStub
+        .listDiscoveredPeers(Empty())
         .peers
         .map(
           p =>
@@ -57,4 +76,14 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
 
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
+
+  override def close(): Unit = {
+    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+    if (!terminated) {
+      println(
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+      channel.awaitTermination(10, TimeUnit.SECONDS)
+    }
+  }
+
 }

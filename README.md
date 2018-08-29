@@ -25,8 +25,8 @@ Assuming you have Docker running on your system, use the following command to fe
 08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:40403
 08:30:32.799 [main] INFO  logger - gRPC server started, listening on
 08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:40400.
-08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}.
-08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}
+08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}.
+08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode de6eed5d00cf080fc587eeb412cb31a75fd10358}
 [...]
 ```
 
@@ -128,6 +128,44 @@ compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_
 <computer:~/src/rchain (dev)>
 ```
 
+### Configuration file
+Most of the [command line options](node/README.md##2-modes) can be specified in a configuration file `rnode.toml`. The default location of the configuration file is the data dir. An alternative lococation can be specified with the command line option `--config-file  <path>`. The format of the configuration file is [TOML](https://github.com/toml-lang/toml). Example configuration file:
+```toml
+[server]
+host = "localhost"
+port = 40400
+http-port = 40402
+metrics-port = 40403
+no-upnp = false
+default-timeout = 2000
+bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400"
+standalone = false
+data-dir = "/var/lib/rnode"
+map-size = 1073741824
+casper-block-store-size = 1073741824
+in-memory-store = false
+max-num-of-connections = 500
+
+[grpc-server]
+host = "localhost"
+port = 40401
+port-internal = 40404
+
+[tls]
+certificate = "/var/lib/rnode/certificate.pem"
+key = "/var/lib/rnode/key.pem"
+
+[validators]
+count = 5
+shard-id = "rchain"
+sig-algorithm = "ed25519"
+# bonds-file = ""
+# wallets-file = ""
+# known = ""
+# public-key = ""
+# private-key = ""
+```
+
 ### Running from the tar-ball
 TBD
 
@@ -137,6 +175,17 @@ TBD
 ### Installing and running on RedHat and Fedora from RPM package
 TBD
 
+### Installing and running on macOS via Homebrew
+
+#### Installing Homebrew - https://brew.sh
+```bash
+> /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+```
+
+#### Installing rnode
+```bash
+> brew install rchain/rchain/rnode
+```
 ## Deverloper guide
 
 For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
@@ -150,3 +199,9 @@ During this pre-release phase of the RChain software, there are some [known issu
 
 File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
 
+## Acknowledgements
+We use YourKit to profile rchain performance.
+YourKit supports open source projects with its full-featured Java Profiler.
+YourKit, LLC is the creator of <a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a>
+and <a href="https://www.yourkit.com/.net/profiler/">YourKit .NET Profiler</a>,
+innovative and intelligent tools for profiling Java and .NET applications.

@@ -35,6 +35,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
+      catsEffect,
       catsMtl,
       monix,
       scodecCore,
@@ -54,7 +55,11 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(
+    blockStorage  % "compile->compile;test->test",
+    comm          % "compile->compile;test->test",
+    shared        % "compile->compile;test->test",
+    crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -62,6 +67,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
+      nettyBoringSsl,
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
@@ -112,7 +118,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.3",
+    version := "0.6.2",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -121,11 +127,11 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        nettyBoringSsl,
         jline,
         scallop,
         scalaUri,
-        scalapbRuntimegGrpc
+        scalapbRuntimegGrpc,
+        tomlScala
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
@@ -165,7 +171,6 @@ lazy val node = (project in file("node"))
          .map { case (f, p) => f -> s"$base/$p" }
      },
     /* Packaging */
-    mappings in packageZipTarball in Universal += baseDirectory.value / "macos_install.sh" -> "macos_install.sh",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
@@ -206,7 +211,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -244,7 +249,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   )
   .dependsOn(rholang)
 
-lazy val roscala_macros = (project in file("roscala/macros"))
+lazy val roscalaMacros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
@@ -261,7 +266,7 @@ lazy val roscala = (project in file("roscala"))
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies
-  ).dependsOn(roscala_macros)
+  ).dependsOn(roscalaMacros)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
@@ -339,7 +344,15 @@ lazy val rspace = (project in file("rspace"))
   .dependsOn(shared, crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
-  .settings(commonSettings, libraryDependencies ++= commonDependencies)
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies,
+    javaOptions in run ++=
+      // export YOURKIT_AGENT prior to starting sbt set to the profiling agent appropriate
+      // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp).
+      // Also remember to disable forking: @Fork(value = 0)
+      sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq
+  )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
 

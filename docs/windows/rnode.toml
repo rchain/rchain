@@ -1,0 +1,31 @@
+[server]
+host = "localhost"
+port = 44010
+metrics-port = 44011
+no-upnp = false
+default-timeout = 5000
+# to choose right address please read:
+# https://rchain.atlassian.net/wiki/spaces/CORE/pages/501842019/RNode+bootstrap+addresses
+bootstrap = "rnode://c61769b39d368cbcbc9499634e030386c79d5b02@52.119.8.108:40400"
+standalone = true
+data-dir = "C:/RChain/data"
+map-size = 200000000
+in-memory-store = false
+
+[grpc-server]
+host = "grpc"
+port = 44012
+
+[tls]
+certificate = "C:/RChain/ssl/node.certificate.pem"
+key = "C:/RChain/ssl/node.key.pem"
+
+# [validators]
+# count = 5
+# bonds-file = "/validator/bonds"
+# known = "v1"
+# public-key = "88888"
+# private-key = "99999"
+# sig-algorithm = "ed25519"
+# wallets-file = "/validator/wallet"
+

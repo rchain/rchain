@@ -4,12 +4,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Connective.ConnectiveInstance
-import coop.rchain.models.Connective.ConnectiveInstance.{
-  ConnAndBody,
-  ConnNotBody,
-  ConnOrBody,
-  VarRefBody
-}
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
@@ -51,6 +46,8 @@ case class PrettyPrinter(freeShift: Int,
         (buildString(p1) + " ++ " + buildString(p2)).wrapWithBraces
       case EMinusBody(EMinus(p1, p2)) =>
         (buildString(p1) + " - " + buildString(p2)).wrapWithBraces
+      case EMinusMinusBody(EMinusMinus(p1, p2)) =>
+        (buildString(p1) + " -- " + buildString(p2)).wrapWithBraces
       case EAndBody(EAnd(p1, p2)) =>
         (buildString(p1) + " && " + buildString(p2)).wrapWithBraces
       case EOrBody(EOr(p1, p2)) =>
@@ -73,8 +70,8 @@ case class PrettyPrinter(freeShift: Int,
         "[" + buildSeq(s) + buildRemainderString(remainder) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
-      case ESetBody(ParSet(pars, _, _)) =>
-        "Set(" + buildSeq(pars.sortedPars.toSeq) + ")"
+      case ESetBody(ParSet(pars, _, _, remainder)) =>
+        "Set(" + buildSeq(pars.sortedPars.toSeq) ++ buildRemainderString(remainder) + ")"
       case EMapBody(ParMap(ps, _, _)) =>
         "{" + ("" /: ps.sortedMap.zipWithIndex) {
           case (string, (kv, i)) =>
@@ -182,6 +179,11 @@ case class PrettyPrinter(freeShift: Int,
           case ConnNotBody(value)       => "~{" ++ buildString(value) ++ "}"
           case VarRefBody(value) =>
             "=" + buildString(Var(FreeVar(value.index)))
+          case _: ConnBool      => "Bool"
+          case _: ConnInt       => "Int"
+          case _: ConnString    => "String"
+          case _: ConnUri       => "Uri"
+          case _: ConnByteArray => "ByteArray"
         }
 
       case par: Par =>
@@ -209,7 +211,8 @@ case class PrettyPrinter(freeShift: Int,
           }
         }._2
 
-      case _ => throw new Error("Attempt to print unknown GeneratedMessage type.")
+      case unsupported =>
+        throw new Error(s"Attempt to print unknown GeneratedMessage type: ${unsupported.getClass}.")
     }
 
   def increment(id: String): String = {

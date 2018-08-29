@@ -16,7 +16,6 @@ import scodec.Codec
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.test.ArbitraryInstances._
 
 trait StorageActionsTests
@@ -968,7 +967,6 @@ trait StorageActionsTests
       val store    = space.store
       val key      = List("ch1")
       val patterns = List(Wildcard)
-      val keyHash  = store.hashChannels(key)
 
       val r = space.consume(key, patterns, new StringsCaptor, persist = false)
 
@@ -1020,20 +1018,72 @@ trait StorageActionsTests
       checkpoint1.log shouldBe empty
   }
 
+  "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
+    val store           = space.store
+    val key             = List("ch1")
+    val patterns        = List(Wildcard)
+    val emptyCheckpoint = space.createCheckpoint()
+
+    //put some data so the checkpoint is != empty
+    space.consume(key, patterns, new StringsCaptor, persist = false)
+    val checkpoint0 = space.createCheckpoint()
+    checkpoint0.log should not be empty
+
+    space.createCheckpoint()
+    space.clear()
+
+    //force clearing of trie store state
+    store.createCheckpoint()
+    space.clear()
+
+    //the checkpointing mechanism should not interfere with the empty root
+    val checkpoint2 = space.createCheckpoint()
+    checkpoint2.log shouldBe empty
+    checkpoint2.root shouldBe emptyCheckpoint.root
+  }
+
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)]): Boolean = {
+                            indexedStates: Seq[(State, Int)], differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
           val num = "%02d".format(chunkNo)
 
-          val contentsTest = space.store.toMap == expectedContents
+          val actualContents = space.store.toMap
+          val contentsTest   = actualContents == expectedContents
 
           if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
+
+            if(differenceReport) {
+              logger.error("difference report")
+              for ((expectedChannels, expectedRow) <- expectedContents) {
+                val actualRow = actualContents.get(expectedChannels)
+
+                actualRow match {
+                  case Some(row) =>
+                    if (row != expectedRow) {
+                      logger.error(s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                    }
+                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+                }
+              }
+
+              for ((actualChannels, actualRow) <- actualContents) {
+                val expectedRow = expectedContents.get(actualChannels)
+
+                expectedRow match {
+                  case Some(row) =>
+                    if (row != actualRow) {
+                      logger.error(s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                    }
+                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+                }
+              }
+            }
           }
 
           val actualJoins = space.store.joinMap
@@ -1146,57 +1196,64 @@ trait StorageActionsTests
         .value shouldBe gnat2
     }
 
-  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
-    space =>
-      forAll { (data: TestProduceMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
-            case (channel, datum) =>
-              GNAT(List(channel),
-                   List(datum),
-                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
-          }.toList
+  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
+    forAll { (data: TestProduceMap) =>
+      if (data.nonEmpty) {
+        withTestSpace { space =>
+          val gnats: Seq[TestGNAT] =
+            data.map {
+              case (channel, datum) =>
+                GNAT(List(channel),
+                     List(datum),
+                     List.empty[WaitingContinuation[Pattern, StringsCaptor]])
+            }.toList
 
-        gnats.foreach {
-          case GNAT(List(channel), List(datum), _) =>
-            space.produce(channel, datum.a, datum.persist)
+          gnats.foreach {
+            case GNAT(List(channel), List(datum), _) =>
+              space.produce(channel, datum.a, datum.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
-  }
+    }
 
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
-    withTestSpace { space =>
-      forAll { (data: TestConsumeMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
+    forAll { (data: TestConsumeMap) =>
+      val gnats: Seq[TestGNAT] =
+        data
+          .filter(_._1.nonEmpty) //channels == Seq.empty will faill in consume
+          .map {
             case (channels, wk) =>
               GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
+          }
+          .toList
 
-        gnats.foreach {
-          case GNAT(channels, _, List(wk)) =>
-            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+      withTestSpace { space =>
+        if (gnats.nonEmpty) {
+          gnats.foreach {
+            case GNAT(channels, _, List(wk)) =>
+              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
     }
 
@@ -1387,6 +1444,55 @@ trait StorageActionsTests
     check(prop)
   }
 
+  "produce and consume" should "store channel hashes" in withTestSpace { space =>
+    val channels = List("ch1", "ch2")
+    val patterns = List[Pattern](Wildcard, Wildcard)
+    val k        = new StringsCaptor
+    val data     = List("datum1", "datum2")
+
+    space.consume(channels, patterns, k, false)
+
+    space.produce(channels(0), data(0), false)
+
+    space.produce(channels(1), data(1), false)
+
+    val expectedConsume = Consume.create(channels, patterns, k, false)
+
+    expectedConsume.channelsHash shouldBe StableHashProvider.hash(channels)
+
+    val expectedProduce1 = Produce.create(channels(0), data(0), false)
+
+    expectedProduce1.channelsHash shouldBe StableHashProvider.hash(Seq(channels(0)))
+
+    val expectedProduce2 = Produce.create(channels(1), data(1), false)
+
+    expectedProduce2.channelsHash shouldBe StableHashProvider.hash(Seq(channels(1)))
+
+    val commEvent = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
+
+    val Checkpoint(_, log) = space.createCheckpoint()
+
+    log should contain theSameElementsInOrderAs Seq(commEvent,
+                                                    expectedProduce2,
+                                                    expectedProduce1,
+                                                    expectedConsume)
+
+    log match {
+      case COMM(chkCommConsume1: Consume,
+                (chkCommProduce1: Produce) :: (chkCommProduce2: Produce) :: Nil)
+            :: (chkProduce2: Produce) :: (chkProduce1: Produce) :: (chkConsume: Consume) :: Nil =>
+        chkCommConsume1.channelsHash shouldBe expectedConsume.channelsHash
+        chkCommProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkCommProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+
+        chkProduce2.channelsHash shouldBe expectedProduce2.channelsHash
+        chkProduce1.channelsHash shouldBe expectedProduce1.channelsHash
+        chkConsume.channelsHash shouldBe expectedConsume.channelsHash
+
+      case _ => fail("unexpected trace log")
+    }
+  }
+
   "consume, produce, produce" should "result in the expected trace log" in withTestSpace { space =>
     val channels = List("ch1", "ch2")
     val patterns = List[Pattern](Wildcard, Wildcard)
@@ -1414,18 +1520,6 @@ trait StorageActionsTests
                                                     expectedProduce1,
                                                     expectedConsume)
   }
-}
-
-class InMemoryStoreStorageActionsTests
-    extends InMemoryStoreTestsBase
-    with StorageActionsTests
-    with JoinOperationsTests
-
-class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
-    with StorageActionsTests
-    with JoinOperationsTests
-    with BeforeAndAfterAll {
 
   "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
     val channel  = "ch1"
@@ -1439,5 +1533,21 @@ class LMDBStoreActionsTests
     }
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
-
 }
+
+class InMemoryStoreStorageActionsTests
+    extends InMemoryStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+
+class LMDBStoreActionsTests
+    extends LMDBStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll
+
+class MixedStoreActionsTests
+    extends MixedStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll

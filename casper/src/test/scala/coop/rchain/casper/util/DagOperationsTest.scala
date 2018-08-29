@@ -4,22 +4,24 @@ import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
-import cats.data.State
-import cats.effect.Bracket
 import cats.implicits._
-import cats.mtl.MonadState
 import cats.mtl.implicits._
-import coop.rchain.blockstorage.{BlockStore, InMemBlockStore}
-import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.blockstorage.InMemBlockStore
-import coop.rchain.casper.helper.BlockGenerator
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
-class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
-  implicit val blockStore      = InMemBlockStore.createWithId
-  implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-  val initState                = BlockDag().copy(currentId = -1)
+class DagOperationsTest
+    extends FlatSpec
+    with Matchers
+    with BlockGenerator
+    with BlockStoreTestFixture {
+  val initState = BlockDag().copy(currentId = -1)
+
+  "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
+    val stream = DagOperations.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))
+    stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
+  }
 
   "Greatest common ancestor" should "be computed properly" in {
     /*
@@ -57,16 +59,11 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
     val b6 = chain.idToBlocks(6)
     val b7 = chain.idToBlocks(7)
 
-    DagOperations.greatestCommonAncestor(b1, b5, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b3, b2, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b6, b7, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b2, b2, genesis, chain, BlockStore[Id].asMap()) should be(
-      b2)
-    DagOperations.greatestCommonAncestor(b3, b7, genesis, chain, BlockStore[Id].asMap()) should be(
-      b3)
+    DagOperations.greatestCommonAncestorF[Id](b1, b5, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b3, b2, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b6, b7, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b2, b2, genesis, chain) should be(b2)
+    DagOperations.greatestCommonAncestorF[Id](b3, b7, genesis, chain) should be(b3)
   }
 
 }

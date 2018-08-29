@@ -20,7 +20,7 @@ class MetaSpec extends FlatSpec with Matchers {
 
     addObo.fn(ctxt, globalEnv)
 
-    val value = someOb.meta.get(someOb, Symbol("key"))(globalEnv)
+    val value = someOb.meta.get(someOb, Symbol("key"), globalEnv)
 
     value shouldBe Symbol("value")
   }

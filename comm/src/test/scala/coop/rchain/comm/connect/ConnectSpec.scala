@@ -1,5 +1,6 @@
-package coop.rchain.comm.connect
+package coop.rchain.comm.rp
 
+import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
@@ -26,8 +27,10 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val timeEff           = new LogicalTime[Effect]
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
-  implicit val transportLayerEff = new TransportLayerStub[Effect](src)
+  implicit val transportLayerEff = new TransportLayerStub[Effect]
   implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
+  implicit val connectionsCell   = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
+  implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()
@@ -43,16 +46,8 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0)
+        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
         upstream.unpack(ProtocolHandshake)
-      }
-      it("should then add remote node to communication layer") {
-        // given
-        transportLayerEff.setResponses(kp(alwaysSuccess))
-        // when
-        Connect.connect[Effect](remote, defaultTimeout)
-        // then
-        nodeDiscoveryEff.nodes should not be empty
       }
     }
 

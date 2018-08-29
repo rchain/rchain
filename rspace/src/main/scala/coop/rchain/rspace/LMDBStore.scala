@@ -3,10 +3,10 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import internal._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
-import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Resources.withResource
@@ -47,17 +47,10 @@ class LMDBStore[C, P, A, K] private (
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
-  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
-
   /* Basic operations */
   private[this] def fetchGNAT(txn: Transaction,
                               channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
     _dbGNATs.get(txn, channelsHash)(codecGNAT[C, P, A, K])
-
-  private[this] def installGNAT(txn: Transaction,
-                                channelsHash: Blake2b256Hash,
-                                gnat: GNAT[C, P, A, K]): Unit =
-    _dbGNATs.put(txn, channelsHash, gnat)
 
   private[this] def insertGNAT(txn: Transaction,
                                channelsHash: Blake2b256Hash,
@@ -131,15 +124,10 @@ class LMDBStore[C, P, A, K] private (
 
   private[rspace] def installWaitingContinuation(txn: Transaction,
                                                  channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit = {
-    val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash) match {
-      case Some(gnat @ GNAT(_, _, currContinuations)) =>
-        installGNAT(txn, channelsHash, gnat.copy(wks = continuation +: currContinuations))
-      case None =>
-        installGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
-    }
-  }
+                                                 continuation: WaitingContinuation[P, K]): Unit =
+    _dbGNATs.put(txn,
+                 hashChannels(channels),
+                 GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation)))
 
   private[rspace] def putWaitingContinuation(txn: Transaction,
                                              channels: Seq[C],
@@ -176,14 +164,6 @@ class LMDBStore[C, P, A, K] private (
       case None =>
         throw new Exception("Attempted to remove a continuation from a value that doesn't exist")
     }
-  }
-
-  private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
-    val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash).foreach { gnat =>
-      insertGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
-    }
-    for (c <- channels) removeJoin(txn, c, channels)
   }
 
   /* Joins */
@@ -237,7 +217,6 @@ class LMDBStore[C, P, A, K] private (
   private[rspace] def clear(txn: Transaction): Unit = {
     _dbGNATs.drop(txn)
     _dbJoins.drop(txn)
-    eventsCounter.reset()
   }
 
   def close(): Unit = {
@@ -290,7 +269,7 @@ class LMDBStore[C, P, A, K] private (
 
 object LMDBStore {
 
-  def create[C, P, A, K](context: Context[C, P, A, K], branch: Branch = Branch.MASTER)(
+  def create[C, P, A, K](context: LMDBContext[C, P, A, K], branch: Branch = Branch.MASTER)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

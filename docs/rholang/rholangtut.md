@@ -2,7 +2,9 @@
 
 Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax in the latest version of RNode.
 
-Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues; however, the channels behave more like bags (multisets) rather than queues, since there is no implicit ordering on messages.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver.  Every channel has a name, and every name denotes a unique channel.
+Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues; however, the channels behave more like bags (multisets) rather than queues, since there is no implicit ordering on messages.  
+
+Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver.  Every channel has a name, and every name denotes a unique channel.
 
 ## Getting started
 
@@ -11,22 +13,85 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 * __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
 * __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
 
+## Summary of the language constructs
+Rholang has two kinds of values: processes and names.
+
+### Names
+A name represents a communication channel. You can sent messages to a name or you can receive a message from a name. 
+
+The names are created with the construct
+ 
+    new someName in {
+    //... code using someName
+    }
+
+In the above example, the name `someName` is private. By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  
+
+If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  
+
+We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
+
+Receiving messages over a channel is done using the `for` construction
+
+    for( x <- channel1, y <- channel2) {
+    ...
+    }
+
+### Processes
+In Rholang everything is a process. Values like strings, booleans or numbers are also processes. 
+The processes can be aggregated using the operator '|'. Below are a few examples:
+
+    1
+    true
+    1 + 1
+    new myName in {...}
+    someName ! ("hello")
+    for( x <- someChannel) { ... }
+    p | q
+
+### Primitive values
+Rholang currently supports integers, strings, booleans, tuples, lists, sets and maps.
+
+### Expressions
+Expressions are special because they are evaluated before sending the result to a channel. 
+
+The following operators are used for building expressions: 
+
+#### Arithmetic operators
+The supported arithmetic operators are: `+`, `-`, `/`, `*`.
+
+#### Relational operators
+The supported relational operators are: `>`, `>=`, `<`, `<=', `==`, `!=`.
+
+#### Logical operators
+The supported logical operators are: `and`, `or`, `not`.
+ 
+#### Matches expression
+The `p matches q` expression is similar to  
+
+    1 match p {
+    2   q -> true
+    3   _ -> false
+    4 }
+    
+The difference between `matches` and the above is that the former is an expression.
+
 ## Sending and receiving data
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   HelloWorld!("Hello, world!") |
     3   for (@text <- HelloWorld) {
-    4     @"stdout"!(text)
+    4     stdout!(text)
     5   }
     6 }
 
-1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  By "private", we mean that no other process can send or receive messages over this channel unless we explicitly send its name to the other process.  If rholang is running on the blockchain, the messages sent on this channel will be publicly visible, so it is not "private" in the sense of being secret.  Channels created with `new` cannot be mentioned explicitly in rholang source code.  Even if you see the bits of a private name on the blockchain, there is no language production to turn those bits back into the name.  We sometimes use the term "unforgeable" to describe these names when we want to emphasize the inability to construct them from bits.
+1) This line declares a new name-valued variable `HelloWorld` and assigns to it a newly-created private name.  
 
 2) Every name is of the form `@P`, where `P` is a rholang process.  The `!` production takes a name `n` on its left and a process `P` on its right, then sends `@P` over the channel named `n`.  Line 2 forms the name `@"Hello, world"` and sends it on the channel whose name is stored in the variable `HelloWorld`.
 
 3) This `for` production creates a process that waits for a single message to be sent on the channel whose name is stored in the variable `HelloWorld`.  The pattern `@text` gets matched against the serialized process, binding the process-valued variable `text` to the original process that was sent.
 
-4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we assume that the name `@"stdout"` designates a channel where sent messages get printed to a console.
+4) Rholang runtime environments may choose to include built-in processes listening on channels.  In this tutorial, we use new with the urn `rho:io:stdout` to request a channel where sent messages get printed to a console.
 
 ### Name Equivalence
 
@@ -54,9 +119,9 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Replicated receive
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   for (@text <= HelloWorld) {
-    3     @"stdout"!(text)
+    3     stdout!(text)
     4   } |
     5   HelloWorld!("Hello, world!") |
     6   HelloWorld!("Hola, mundo!")
@@ -68,9 +133,9 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Contracts as sugar for replicated receive
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`) in {
     2   contract HelloWorld(@text) = {
-    3     @"stdout"!(text)
+    3     stdout!(text)
     4   } |
     5   HelloWorld!("Hello, world!") |
     6   HelloWorld!("Hola, mundo!")
@@ -80,13 +145,13 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 ## Replicated send
 
-    1 new HelloWorld in {
+    1 new HelloWorld, stdout(`rho:io:stdout`), stderr(`rho:io:stderr`) in {
     2   HelloWorld!!("Hello, world!") |
     3   for (@text <- HelloWorld) {
-    4     @"stdout"!(text)
+    4     stdout!(text)
     5   } |
     6   for (@text <- HelloWorld) {
-    7     @"stderr"!(text)
+    7     stderr!(text)
     8   }
     9 }
 
@@ -98,13 +163,13 @@ Finally, channels also respect a change in variable name (alpha equivalence), so
 
 In order to have one message follow after another is known to have been received, we must use an acknowledgement message.
 
-    1 new chan, ack in {
+    1 new chan, ack, stdoutAck(`rho:io:stdoutAck`) in {
     2   chan!(0) |
     3   for (_ <- ack) {
     4     chan!(1)
     5   } |
     6   for (@num <= chan) {
-    7     @"stdoutAck"(num, *ack)
+    7     stdoutAck(num, *ack)
     8   }
     9 }
 
@@ -116,20 +181,20 @@ In order to have one message follow after another is known to have been received
 
 ## Sending and receiving multiple processes
 
-     1 new chan in {
+     1 new chan, stdout(`rho:io:stdout`) in {
      2   chan!(1,2,3) |
      3   chan!((4,5,6)) |
      4   chan!(7,8) |
      5   chan!([9, 10], 11) |
      6   chan!(12 | 13) |
      7   for (@x, @y, @z <= chan) { 
-     8     @"stdout"!(["three", x, y, z])
+     8     stdout!(["three", x, y, z])
      9   } |
     10   for (@a, @b <= chan) {
-    11     @"stdout"!(["two", a, b])
+    11     stdout!(["two", a, b])
     12   } |
     13   for (@a <= chan) {
-    14     @"stdout"!(["one", a])
+    14     stdout!(["one", a])
     15   }
     16 }
 
@@ -222,14 +287,14 @@ Patterns let us implement structured queries on data.  Suppose that we send lots
 
 Then we can think of the name `people` as a table in a database and query it.  A rough translation of the SQL statement `SELECT age, name FROM people WHERE age > 35` in the context of the data above would be
 
-     1 new people in {
+     1 new people, stdout(`rho:io:stdout`) in {
      2   people!(@"name"!("Joe") | @"age"!(20) | @"eyes"!("blue") | @"seq"!(0)) |
      3   people!(@"name"!("Julie") | @"age"!(30) | @"eyes"!("brown") | @"seq"!(0)) |
      4   people!(@"name"!("Jane") | @"age"!(40) | @"eyes"!("green") | @"seq"!(0)) |
      5   people!(@"name"!("Jack") | @"age"!(50) | @"eyes"!("grey") | @"seq"!(0))|
      6   for (@{@"seq"!(0) | {row /\ {@"name"!(name) | @"age"!(age) | _}}} <= people) {
      7     if (age > 35) {
-     8       @"stdout"!([name, age])
+     8       stdout!([name, age])
      9     } |
     10     people!(row | @"seq"!(1))
     11   }
@@ -340,6 +405,16 @@ We can also include wildcards in patterns. The intuition for these is that they 
 
     for( _ <- ack ){ ... }
 
+
+### Patterns with simple types
+
+It's possible to match simple types: `Int`, `Bool`, `String`, `Uri`, and `ByteArray`
+
+    for( @Int <- ack) { ... }
+
+If you want to capture the value you matched, you can use the and logcial connective: `/\`
+
+    for( @{x /\ Int} <- ack) { ... }
 
 ## Mutable state
 
@@ -569,7 +644,7 @@ Hashing functions are exposed as channels which expect two arguments:
 #### Example usage:
 
 ```rholang
-new x,y in {
+new x, y, stdout(`rho:io:stdout`) in {
     x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
         for (@r <- x) {
             @"keccak256Hash"!(r.toByteArray(), *y) // hash the program from (1)
@@ -578,7 +653,7 @@ new x,y in {
             // The h here is the hash of the rholang term we sent to the hash channel.
             // We can do anything we want with it, but we choose to just print it.
             // Rholang prints byte arrays in hexadecimal.
-            @"stdout"!(h)  // print out the keccak256 hash
+            stdout!(h)  // print out the keccak256 hash
         }
 }
 ```
@@ -589,10 +664,10 @@ new x,y in {
 1. Let's hash a rholang program and print out it in base16. In rholang:
 
   ```rholang
-  new x,y in { 
+  new x, y, stdout(`rho:io:stdout`) in { 
      x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
      for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
-     for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
+     for (@h <- y) { stdout!(h) }  // print out the keccak256 hash
   }
   ```
 
@@ -631,9 +706,9 @@ new x,y in {
 
   So, in rholang we run:
   ```
-  new x in { 
+  new x, stdout(`rho:io:stdout`) in { 
     @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-    for (@v <- x) { @"stdout"!(v) } 
+    for (@v <- x) { stdout!(v) } 
   } 
 
   ```
@@ -646,9 +721,9 @@ new x,y in {
 
   If we, for example, pass in a corrupted hash, changing the initial 'a' to a 'b':
   ```
-  new x in { 
+  new x, stdout(`rho:io:stdout`) in { 
      @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
-     for (@v <- x) { @"stdout"!(v) } 
+     for (@v <- x) { stdout!(v) } 
   } 
   ```
 

@@ -1,0 +1,69 @@
+//scalapackage coop.rchain.rholang.collection
+
+contract @"double"(@x, ret) = { ret!(2 * x) } |
+contract @"divide"(@x, @y, ret) = {
+  if(y == 0) { ret!(("Left", "Div by zero!")) }
+  else { ret!(("Right", x / y)) }
+} |
+contract @"100over"(@x, ret) = { @"divide"!(100, x, *ret) } |
+contract @"50over"(@x, ret) = { @"divide"!(50, x, *ret) } |
+contract @"10over"(@x, ret) = { @"divide"!(10, x, *ret) } |
+contract @"8over"(@x, ret) = { @"divide"!(8, x, *ret) } |
+
+//Requires Either, TestSet
+contract @"doubleMap"(@either, ret) = {
+  new fn in {
+    contract fn(ret) = { @["Either", "map"]!(either, "double", *ret) } |
+    ret!(*fn)
+  }
+} |
+@"doubleMap"!(("Right", 3), "RightMapTest") |
+@"doubleMap"!(("Left", "message"), "LeftMapTest") |
+
+@"TestSet"!(
+  "map should transform Right and preserve Left",
+  [
+    ["RightMapTest", ("Right", 6)],
+    ["LeftMapTest", ("Left", "message")]
+  ]
+) |
+
+contract @"10overFlatMap"(@either, ret) = {
+  new fn in {
+    contract fn(ret) = { @["Either", "flatMap"]!(either, "10over", *ret) } |
+    ret!(*fn)
+  }
+} |
+@"10overFlatMap"!(("Right", 5), "FlatMapTest1") |
+@"10overFlatMap"!(("Left", "message"), "FlatMapTest2") |
+@"10overFlatMap"!(("Right", 0), "FlatMapTest3") |
+
+@"TestSet"!(
+  "flatMap should transform Right and preserve Left",
+  [
+    ["FlatMapTest1", ("Right", 2)],
+    ["FlatMapTest2", ("Left", "message")],
+    ["FlatMapTest3", ("Left", "Div by zero!")]
+  ]
+) |
+
+contract @"composeTest"(@input, @functions, ret) = {
+  new fn in {
+    contract fn(ret) = { @["Either", "compose"]!(input, functions, *ret) } |
+    ret!(*fn)
+  }
+} |
+@"composeTest"!(5, ["10over", "8over"], "ComposeTest1") |
+@"composeTest"!(15, ["10over", "8over"], "ComposeTest2") |
+@"composeTest"!(5, ["100over", "8over", "10over"], "ComposeTest3") |
+@"composeTest"!(5, ["50over", "10over", "8over"], "ComposeTest4") |
+
+@"TestSet"!(
+  "compose should sequence Either-valued functions together",
+  [
+    ["ComposeTest1", ("Right", 4)],
+    ["ComposeTest2", ("Left", "Div by zero!")],
+    ["ComposeTest3", ("Left", "Div by zero!")],
+    ["ComposeTest4", ("Right", 8)],
+  ]
+)

@@ -7,29 +7,28 @@ import cats.implicits._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator}
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.protocol.{BlockMessage, Deploy}
+import coop.rchain.casper.protocol.{Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.SyncVar
-
 class RholangBuildTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-  val initial                     = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+  val initial                     = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
   val storageDirectory            = Files.createTempDirectory(s"rholang-build-test-genesis")
   val storageSize: Long           = 1024L * 1024
   val activeRuntime               = Runtime.create(storageDirectory, storageSize)
   val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
   val emptyStateHash              = runtimeManager.emptyStateHash
   val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-  val proofOfStakeDeploy          = ProtoUtil.termDeploy(new ProofOfStake(proofOfStakeValidators).term)
+  val proofOfStakeDeploy =
+    ProtoUtil.termDeploy(new ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
   val genesis =
     Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
   activeRuntime.close()
@@ -40,14 +39,15 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy = ProtoUtil.termDeploy(LinkedList.term)
+    val llDeploy  = ProtoUtil.sourceDeploy(LinkedList.code, System.currentTimeMillis())
+    val startTime = System.currentTimeMillis()
     val deploys = Vector(
       "@[\"LinkedList\", \"fromList\"]!([2, 3, 5, 7], \"primes\")",
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "for(@primes <- @\"primes\"){ @\"primes\"!(primes) | @[\"LinkedList\", \"map\"]!(primes, \"double\", \"dprimes\") }"
-    ).map(s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get))
+    ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2))
 
-    val Some(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
       deploys.traverse(MultiParentCasper[Id].deploy) *>
       MultiParentCasper[Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock)

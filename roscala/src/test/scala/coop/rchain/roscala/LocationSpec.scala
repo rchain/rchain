@@ -1,5 +1,7 @@
 package coop.rchain.roscala
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import coop.rchain.roscala.ob.{Invalid, _}
 import org.scalatest._
 
@@ -15,10 +17,8 @@ class LocationSpec extends WordSpec with Matchers {
     val testCtxt = new Ctxt(
       tag = CtxtRegister(0),
       nargs = 1,
-      outstanding = 0,
+      outstanding = new AtomicInteger(0),
       pc = 0,
-      rslt = Fixnum(1),
-      trgt = Fixnum(2),
       argvec = Tuple(Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6)),
       env = fixnum7,
       code = null,
@@ -28,6 +28,10 @@ class LocationSpec extends WordSpec with Matchers {
       rcvr = null,
       monitor = null
     )
+
+    testCtxt.rslt = Fixnum(1)
+    testCtxt.trgt = Fixnum(2)
+
     val globalEnv = new GlobalEnv()
 
     val initial = (globalEnv, testCtxt)
@@ -141,10 +145,7 @@ class LocationSpec extends WordSpec with Matchers {
       val regs = 0 to 9
 
       regs.map(
-        reg => {
-          println(reg)
-          Location.fetch(CtxtRegister(reg), testCtxt, globalEnv) shouldBe testCtxt.reg(reg)
-        }
+        reg => Location.fetch(CtxtRegister(reg), testCtxt, globalEnv) shouldBe testCtxt.reg(reg)
       )
     }
 

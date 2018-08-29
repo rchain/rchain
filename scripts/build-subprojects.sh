@@ -11,11 +11,11 @@ case "$SUBPROJECT" in "rosette")
 
 "core")
 
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage test coverageReport rspace:tut
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage scalafmtCheck test coverageReport rspace:tut
 
     for sub in block-storage casper crypto comm rholang roscala node rspace shared
     do
-        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
+        (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F ${sub//-})
     done
     ;;
 

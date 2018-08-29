@@ -36,6 +36,12 @@ object BlockGenerator {
 
       override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
         Monad[F].pure(idBs.put(f))
+
+      override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+        Monad[F].pure(idBs.find(p))
+
+      override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
+      override def close(): F[Unit] = Monad[F].pure(idBs.close())
     }
 }
 
@@ -47,9 +53,9 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[Deploy] = Seq.empty[Deploy],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      tsLog: Seq[Event] = Seq.empty[Event]): F[BlockMessage] =
+      shardId: String = "rchain"): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -63,9 +69,10 @@ trait BlockGenerator {
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
+        .withDeploysHash(ProtoUtil.protoSeqHash(deploys))
         .withTimestamp(now)
       blockHash = Blake2b256.hash(header.toByteArray)
-      body      = Body().withPostState(postState).withNewCode(deploys).withCommReductions(tsLog)
+      body      = Body().withPostState(postState).withDeploys(deploys)
       serializedJustifications = justifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)
@@ -76,12 +83,13 @@ trait BlockGenerator {
                            Some(body),
                            serializedJustifications,
                            creator,
-                           nextCreatorSeqNum)
+                           nextCreatorSeqNum,
+                           shardId = shardId)
       idToBlocks     = chain.idToBlocks + (nextId -> block)
       _              <- BlockStore[F].put(serializedBlockHash, block)
-      latestMessages = chain.latestMessages + (block.sender -> serializedBlockHash)
+      latestMessages = chain.latestMessages + (block.sender -> block)
       latestMessagesOfLatestMessages = chain.latestMessagesOfLatestMessages + (block.sender -> ProtoUtil
-        .toLatestMessages(serializedJustifications))
+        .toLatestMessageHashes(serializedJustifications))
       updatedChildren = HashMap[BlockHash, Set[BlockHash]](parentsHashList.map {
         parentHash: BlockHash =>
           val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])

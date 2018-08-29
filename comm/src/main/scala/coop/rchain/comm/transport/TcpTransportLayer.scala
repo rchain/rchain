@@ -1,37 +1,37 @@
 package coop.rchain.comm.transport
 
-import java.io.File
+import java.io.ByteArrayInputStream
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Cell, Log, LogSource}
 
 import scala.concurrent.duration._
 import scala.util._
-import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: PeerNode)(
+class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
-    state: TcpTransportLayer.State,
+    cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task])
     extends TransportLayer[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  val local: Task[PeerNode] = src.pure[Task]
+  private def certInputStream = new ByteArrayInputStream(cert.getBytes())
+  private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   private lazy val serverSslContext: SslContext =
     try {
       GrpcSslContexts
-        .forServer(cert, key)
+        .configure(SslContextBuilder.forServer(certInputStream, keyInputStream))
         .trustManager(HostnameTrustManagerFactory.Instance)
         .clientAuth(ClientAuth.REQUIRE)
         .build()
@@ -45,7 +45,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     try {
       val builder = GrpcSslContexts.forClient
       builder.trustManager(HostnameTrustManagerFactory.Instance)
-      builder.keyManager(cert, key)
+      builder.keyManager(certInputStream, keyInputStream)
       builder.build
     } catch {
       case e: Throwable =>
@@ -59,6 +59,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
               .intercept(new SslSessionClientInterceptor())
@@ -68,26 +69,28 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
     } yield c
 
   private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    for {
-      s <- state.get
-      _ <- if (s.shutdown && !enforce)
-            Task.raiseError(new RuntimeException("The transport layer has been shut down"))
-          else Task.unit
-      c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-      _ <- state.modify(s => s.copy(connections = s.connections + (peer -> c)))
-    } yield c
+    cell.modify { s =>
+      if (s.shutdown && !enforce)
+        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
+      else
+        for {
+          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
+        } yield s.copy(connections = s.connections + (peer -> c))
+    } >>= kp(cell.read.map(_.connections.apply(peer)))
 
   def disconnect(peer: PeerNode): Task[Unit] =
-    for {
-      _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
-      s <- state.get
-      _ <- s.connections.get(peer) match {
-            case Some(c) => Task.delay(c.shutdown()).attempt.void
-            case _ =>
-              log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
-          }
-      _ <- state.modify(s => s.copy(connections = s.connections - peer))
-    } yield ()
+    cell.modify { s =>
+      for {
+        _ <- s.connections.get(peer) match {
+              case Some(c) =>
+                log
+                  .debug(s"Disconnecting from peer ${peer.toAddress}")
+                  .map(kp(Try(c.shutdown())))
+                  .void
+              case _ => Task.unit // ignore if connection does not exists already
+            }
+      } yield s.copy(connections = s.connections - peer)
+    }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
       f: TransportLayerStub => Task[A]): Task[A] =
@@ -102,18 +105,6 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
 
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
     withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
-      .doOnFinish {
-        case None    => Task.unit
-        case Some(e) =>
-          // TODO: Add other human readable messages for status codes
-          val msg = e match {
-            case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.UNAVAILABLE =>
-              "The service is currently unavailable"
-            case _ =>
-              e.getMessage
-          }
-          log.warn(s"Failed to send a message to peer ${peer.toAddress}: $msg")
-      }
 
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,
@@ -123,7 +114,7 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
       .nonCancelingTimeout(timeout)
       .attempt
       .map(_.leftMap {
-        case _: TimeoutException => TimeOut
+        case _: TimeoutException => CommError.timeout
         case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
           peerUnavailable(peer)
         case e => protocolException(e)
@@ -155,55 +146,65 @@ class TcpTransportLayer(host: String, port: Int, cert: File, key: File)(src: Pee
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  private def buildServer(transportLayer: TransportLayerGrpc.TransportLayer): Task[Server] =
+  private def buildServer(transportLayer: GrpcService.TransportLayer): Task[Server] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
-        .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
+        .addService(GrpcService.bindService(transportLayer))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
     }
 
   def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
-    for {
-      s <- state.get
-      server <- s.server match {
-                 case Some(_) =>
-                   Task.raiseError(new RuntimeException("TransportLayer server is already started"))
-                 case _ => buildServer(new TransportLayerImpl(dispatch))
-               }
-      _ <- state.modify(_.copy(server = Some(server)))
-    } yield ()
+    cell.modify { s =>
+      for {
+        server <- s.server match {
+                   case Some(_) =>
+                     Task.raiseError(
+                       new RuntimeException("TransportLayer server is already started"))
+                   case _ => buildServer(new TransportLayerImpl(dispatch))
+                 }
+      } yield s.copy(server = Some(server))
 
-  def shutdown(msg: Protocol): Task[Unit] =
-    for {
-      s     <- state.get
-      _     <- log.info("Shutting down server")
-      _     <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
-      _     <- state.modify(_.copy(server = None, shutdown = true))
-      peers = s.connections.keys.toSeq
-      _     <- log.info("Sending shutdown message to all peers")
-      _     <- sendShutdownMessage(peers, msg)
-      _     <- log.info("Disconnecting from all peers")
-      _     <- Task.gatherUnordered(peers.map(disconnect))
-    } yield ()
+    }
 
-  private def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
-    Task
-      .gatherUnordered(
-        peers.map(innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true))
-      )
-      .void
+  def shutdown(msg: Protocol): Task[Unit] = {
+    def shutdownServer: Task[Unit] = cell.modify { s =>
+      for {
+        _ <- log.info("Shutting down server")
+        _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
+      } yield s.copy(server = None, shutdown = true)
+    }
 
+    def sendShutdownMessages: Task[Unit] =
+      for {
+        peers <- cell.read.map(_.connections.keys.toSeq)
+        _     <- log.info("Sending shutdown message to all peers")
+        _     <- sendShutdownMessage(peers, msg)
+        _     <- log.info("Disconnecting from all peers")
+        _     <- Task.gatherUnordered(peers.map(disconnect))
+      } yield ()
+
+    def sendShutdownMessage(peers: Seq[PeerNode], msg: Protocol): Task[Unit] = {
+      val createInstruction: PeerNode => Task[Unit] =
+        innerRoundTrip(_, TLRequest(msg.some), 500.milliseconds, enforce = true).as(())
+      Task.gatherUnordered(peers.map(createInstruction)).void
+    }
+
+    cell.read.flatMap { s =>
+      if (s.shutdown) Task.unit
+      else shutdownServer *> sendShutdownMessages
+    }
+  }
 }
 
 object TcpTransportLayer {
-  import cats.mtl.MonadState
-  type Connection  = ManagedChannel
-  type Connections = Map[PeerNode, Connection]
-  type State       = MonadState[Task, TransportState]
+  type Connection          = ManagedChannel
+  type Connections         = Map[PeerNode, Connection]
+  type TransportCell[F[_]] = Cell[F, TransportState]
 }
 
 case class TransportState(
@@ -212,11 +213,15 @@ case class TransportState(
     shutdown: Boolean = false
 )
 
+object TransportState {
+  def empty: TransportState = TransportState()
+}
+
 class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
     implicit scheduler: Scheduler)
-    extends TransportLayerGrpc.TransportLayer {
+    extends GrpcService.TransportLayer {
 
-  def send(request: TLRequest): Future[TLResponse] =
+  def send(request: TLRequest): Task[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
@@ -225,7 +230,6 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
           case HandledWithMessage(response) => returnProtocol(response)
         }
       }
-      .runAsync
 
   private def returnProtocol(protocol: Protocol): TLResponse =
     TLResponse(TLResponse.Payload.Protocol(protocol))

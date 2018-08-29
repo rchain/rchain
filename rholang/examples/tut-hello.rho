@@ -1,11 +1,11 @@
-new helloWorld in {
+new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
   contract helloWorld(@name) = {
     new ack in {
-      @"stdoutAck"!("Hello, ", *ack) |
+      stdoutAck!("Hello, ", *ack) |
       for (_ <- ack) {
-        @"stdoutAck"!(name, *ack) |
+        stdoutAck!(name, *ack) |
         for (_ <- ack) {
-          @"stdout"!("\n")
+          stdout!("\n")
         }
       }
     }

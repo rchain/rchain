@@ -3,9 +3,10 @@ package coop.rchain.roscala.prim
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
-import coop.rchain.roscala.prim.actor.actorUpdateBang
+import coop.rchain.roscala.prim.actor.{actorNextBang, actorUpdateBang}
 import coop.rchain.roscala.prim.fixnum.fxPlus
 import coop.rchain.roscala.prim.rblfloat.flPlus
+import coop.rchain.roscala.prim.tuple.{tplHead, tplTail}
 import coop.rchain.roscala.util.misc.{numberSuffix, properPrep}
 
 import scala.reflect.{classTag, ClassTag}
@@ -26,7 +27,7 @@ abstract class Prim extends Ob {
   val minArgs: Int
   val maxArgs: Int
 
-  def fn(ctxt: Ctxt)(state: State, globalEnv: GlobalEnv): Ob =
+  def fn(ctxt: Ctxt, state: State): Ob =
     fnSimple(ctxt) match {
       case Right(m)              => m
       case Left(e: TypeMismatch) => Prim.mismatch(ctxt, e.argNum, e.typeName)
@@ -35,16 +36,16 @@ abstract class Prim extends Ob {
 
   def fnSimple(ctxt: Ctxt): Either[PrimError, Ob]
 
-  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
+  def dispatchHelper(state: State): Ob = {
     val n = state.ctxt.nargs
     if (minArgs <= n && n <= maxArgs)
-      fn(state.ctxt)(state, globalEnv)
+      fn(state.ctxt, state)
     else
       Prim.mismatchArgs(state, minArgs, maxArgs)
   }
 
-  override def dispatch(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
-    val result = dispatchHelper(state, globalEnv)
+  override def dispatch(ctxt: Ctxt, state: State): Ob = {
+    val result = dispatchHelper(state)
 
     if (result != Invalid && result != Upcall && result != Deadthread) {
       state.ctxt.ret(result, state)
@@ -53,8 +54,8 @@ abstract class Prim extends Ob {
     result
   }
 
-  override def invoke(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob =
-    dispatch(ctxt, state, globalEnv)
+  override def invoke(ctxt: Ctxt, state: State): Ob =
+    dispatch(ctxt, state)
 }
 
 object Prim {
@@ -392,7 +393,14 @@ object Prim {
     * 326	update!
     * 327	actor-new
     */
-  val map = Map(202 -> flPlus, 232 -> fxPlus, 326 -> actorUpdateBang)
+  val map = Map(
+    65  -> tplTail,
+    67  -> tplHead,
+    202 -> flPlus,
+    232 -> fxPlus,
+    324 -> actorNextBang,
+    326 -> actorUpdateBang
+  )
 
   def mismatchArgs(state: State, minArgs: Int, maxArgs: Int): Ob = {
     val msg = if (maxArgs == MaxArgs) {

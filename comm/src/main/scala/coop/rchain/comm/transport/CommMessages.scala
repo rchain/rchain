@@ -1,13 +1,11 @@
 package coop.rchain.comm.transport
 
-import coop.rchain.comm._, CommError._
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
-import coop.rchain.p2p.effects._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
 
 object CommMessages {
 
@@ -54,6 +52,16 @@ object CommMessages {
   def toPacket(proto: routing.Protocol): CommErr[Packet] = proto.message match {
     case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Packet))
     case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
+  }
+
+  def disconnect(src: PeerNode): routing.Protocol = {
+    val d = Disconnect()
+    ProtocolHelper.upstreamMessage(src, AnyProto.pack(d))
+  }
+
+  def toDisconnect(proto: routing.Protocol): CommErr[Disconnect] = proto.message match {
+    case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Disconnect))
+    case a                                           => Left(UnknownProtocolError(s"Was expecting Disconnect, got $a"))
   }
 
 }

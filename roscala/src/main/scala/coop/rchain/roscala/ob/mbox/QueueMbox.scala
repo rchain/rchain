@@ -1,20 +1,25 @@
 package coop.rchain.roscala.ob.mbox
 
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.{Ctxt, Invalid, Nil, Niv, Ob}
 
 class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
   var lockVal: Boolean = true
 
-  override def receiveMsg(client: MboxOb, task: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
+  override def receiveMsg(client: MboxOb, task: Ctxt, state: State): Ob = {
     MboxOb.logger.debug(s"$this receives message")
 
-    if (isLocked || !enabledSet.accepts(task))
+    if (isLocked || !enabledSet.accepts(task)) {
+      if (isLocked)
+        MboxOb.logger.debug("Enqueue message since mailbox is locked")
+      else
+        MboxOb.logger.debug("Enqueue message since message is currently not accepted")
+
       queue.enqueue(task)
-    else {
+    } else {
+      MboxOb.logger.debug("Lock mailbox and schedule message")
       lock()
-      client.schedule(task, state, globalEnv)
+      client.schedule(task, state)
     }
 
     Niv
@@ -28,20 +33,16 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
     * In the case of a `QueueMbox` the mailbox gets the next message
     * from the `MboxQueue` which then gets scheduled.
     */
-  override def nextMsg(client: MboxOb,
-                       newEnabledSet: Ob,
-                       state: State,
-                       globalEnv: GlobalEnv): Ob = {
-    MboxOb.logger.debug(s"Next message received on $this")
-
+  override def nextMsg(client: MboxOb, newEnabledSet: Ob, state: State): Ob = {
     if (!isLocked) {
-      MboxOb.logger.warn("Next message received on unlocked mailbox")
+      MboxOb.logger.debug(s"Next message received on unlocked $this")
       return Niv
     }
 
     val task = queue.maybeDequeue(newEnabledSet)
 
     if (task == Invalid) {
+      MboxOb.logger.debug(s"No acceptable message in $this or empty queue")
 
       /**
         * Either there is no acceptable msg, or the queue was empty to
@@ -58,6 +59,7 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
       }
 
     } else {
+      MboxOb.logger.debug(s"Process next message from queue in $this")
 
       /**
         * The mbox is presumably locked at this point, and it should
@@ -69,7 +71,7 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
       else
         this.enabledSet = newEnabledSet
 
-      client.schedule(task.asInstanceOf[Ctxt], state, globalEnv)
+      client.schedule(task.asInstanceOf[Ctxt], state)
     }
 
     Niv
@@ -82,7 +84,7 @@ class QueueMbox(var enabledSet: Ob, val queue: MboxQueue) extends Ob {
   def unlock(): Unit = lockVal = false
 
   def enqueue(value: Ob): Unit = {
-    MboxOb.logger.debug(s"Enqueue $value")
+    MboxOb.logger.debug(s"Enqueue $value into $this")
     queue.enqueue(value)
   }
 }

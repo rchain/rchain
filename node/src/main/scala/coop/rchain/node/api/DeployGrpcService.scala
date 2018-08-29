@@ -1,77 +1,49 @@
 package coop.rchain.node.api
 
-import coop.rchain.node.diagnostics
-import coop.rchain.p2p.effects._
-import io.grpc.{Server, ServerBuilder}
-
-import scala.concurrent.Future
 import cats._
-import cats.data._
-import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.{
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  PrettyPrinter,
-  SafetyOracle
-}
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._
-import Catscontrib._
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.node.model.repl._
-import coop.rchain.node.model.diagnostics._
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import monix.eval.Task
-import monix.execution.Scheduler
-import com.google.protobuf.ByteString
-import java.io.{Reader, StringReader}
-
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.comm.transport._
-import coop.rchain.comm.discovery._
+import coop.rchain.casper.protocol.{DeployData, DeployServiceGrpc, DeployServiceResponse, _}
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
+import coop.rchain.models.Channel
 import coop.rchain.shared._
+import io.grpc.stub.StreamObserver
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: MultiParentCasperConstructor: Log: Futurable: SafetyOracle: BlockStore]
+    F[_]: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
+    implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
-  override def doDeploy(d: DeployString): Future[DeployServiceResponse] = {
-    def casperDeploy(implicit casper: MultiParentCasper[F]) =
-      InterpreterUtil.mkTerm(d.term) match {
-        case Right(term) =>
-          val deploy = Deploy(
-            term = Some(term),
-            raw = Some(d)
-          )
-          for {
-            _ <- MultiParentCasper[F].deploy(deploy)
-          } yield DeployServiceResponse(true, "Success!")
+  override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
+    BlockAPI.deploy[F](d).toFuture
 
-        case Left(err) =>
-          DeployServiceResponse(false, s"Error in parsing term: \n$err").pure[F]
-      }
+  override def createBlock(e: Empty): Future[DeployServiceResponse] =
+    BlockAPI.createBlock[F].toFuture
 
-    MultiParentCasperConstructor
-      .withCasper[F, DeployServiceResponse](
-        casperDeploy(_),
-        DeployServiceResponse(false, s"Error: Casper instance not available"))
-      .toFuture
-  }
-
-  override def createBlock(e: Empty): Future[MaybeBlockMessage] = BlockAPI.createBlock[F].toFuture
-
-  override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
+  override def addBlock(b: BlockMessage): Future[DeployServiceResponse] =
+    BlockAPI.addBlock[F](b).toFuture
 
   override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
     BlockAPI.getBlockQueryResponse[F](q).toFuture
 
-  override def showBlocks(e: Empty): Future[BlocksResponse] =
-    BlockAPI.getBlocksResponse[F].toFuture
+  override def showBlocks(request: Empty, observer: StreamObserver[BlockInfo]): Unit =
+    BlockAPI.getBlocksResponse[F].toFuture.onComplete {
+      case Success(blockResponse) =>
+        blockResponse.blocks.foreach(bi => observer.onNext(bi))
+        observer.onCompleted()
+      case Failure(ex) => observer.onError(ex)
+    }
+
+  override def listenForDataAtName(listeningName: Channel): Future[ListeningNameDataResponse] =
+    BlockAPI.getListeningNameDataResponse[F](listeningName).toFuture
+
+  override def listenForContinuationAtName(
+      listeningNames: Channels): Future[ListeningNameContinuationResponse] =
+    BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toFuture
 }

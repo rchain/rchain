@@ -15,6 +15,8 @@ trait BlockStore[F[_]] {
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]]
 
+  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]]
+
   def put(f: => (BlockHash, BlockMessage)): F[Unit]
 
   def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
@@ -24,6 +26,10 @@ trait BlockStore[F[_]] {
     get(blockHash).map(_.isDefined)
 
   def asMap(): F[Map[BlockHash, BlockMessage]]
+
+  def clear(): F[Unit]
+
+  def close(): F[Unit]
 }
 
 object BlockStore {

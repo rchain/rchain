@@ -32,11 +32,10 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
 
     override def onMessage(message: ReqT): Unit =
       message match {
-        case TLRequest(Some(Protocol(Some(Header(Some(sender), _, _)), msg))) =>
+        case TLRequest(Some(Protocol(Some(Header(Some(sender))), msg))) =>
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
             val msgType = msg match {
-              case m if m.isDisconnect     => "disconnect"
               case m if m.isLookup         => "lookup"
               case m if m.isLookupResponse => "lookup response"
               case m if m.isPing           => "ping"

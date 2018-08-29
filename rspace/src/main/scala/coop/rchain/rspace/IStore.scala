@@ -60,8 +60,6 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]]
 
-  private[rspace] def removeAll(txn: Transaction, channels: Seq[C]): Unit
-
   private[rspace] def addJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit
 
   private[rspace] def getJoin(txn: Transaction, channel: C): Seq[Seq[C]]
@@ -79,8 +77,6 @@ trait IStore[C, P, A, K] {
   val trieBranch: Branch
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R
-
-  private[rspace] val eventsCounter: StoreEventsCounter
 
   protected val _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]] =
     SyncVarOps.create(Seq.empty)

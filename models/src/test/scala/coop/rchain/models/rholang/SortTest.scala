@@ -8,7 +8,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort._
 import org.scalatest._
-import coop.rchain.models.rholang.sort.ordering._
+
 import scala.collection.immutable.BitSet
 
 class ScoredTermSpec extends FlatSpec with Matchers {
@@ -61,7 +61,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
       locallyFree = BitSet(0, 1, 2),
       connectiveUsed = true
     )
-    val result = ParSortMatcher.sortMatch(parVars)
+    val result = Sortable.sortMatch(parVars)
     result.term should be(sortedParVars.get)
   }
 }
@@ -72,7 +72,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(exprs = List(GInt(2), GInt(1), GInt(-1), GInt(-2), GInt(0)))
     val sortedParGround: Option[Par] =
       Par(exprs = List(GInt(-2), GInt(-1), GInt(0), GInt(1), GInt(2)))
-    val result = ParSortMatcher.sortMatch(parGround)
+    val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround.get)
   }
 
@@ -81,7 +81,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(exprs = List(GUri("https://www.rchain.coop/"), GInt(47), GString("Hello"), GBool(true)))
     val sortedParGround: Option[Par] =
       Par(exprs = List(GBool(true), GInt(47), GString("Hello"), GUri("https://www.rchain.coop/")))
-    val result = ParSortMatcher.sortMatch(parGround)
+    val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround.get)
   }
 
@@ -104,7 +104,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           ParSet(Seq[Par](GInt(1), GInt(2)))
         )
       )
-    val result = ParSortMatcher.sortMatch(parGround)
+    val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround)
   }
 
@@ -124,14 +124,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
              locallyFree = BitSet(),
              connectiveUsed = false)
 
-    val result = ParSortMatcher.sortMatch(parGround)
+    val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround)
   }
 
   "Par" should "Keep order when adding numbers" in {
     val parExpr: Par =
       EPlus(EPlus(GInt(1), GInt(3)), GInt(2))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(parExpr.get)
   }
 
@@ -150,7 +150,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EPlus(GInt(1), GInt(3)),
           EMinus(GInt(4), GInt(3))
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -175,7 +175,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EEq(GInt(4), GInt(3)),
           ENeq(GInt(1), GInt(5))
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -194,7 +194,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(EVar(BoundVar(3)), EVar(BoundVar(4))),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -215,7 +215,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -236,7 +236,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(Quote(GInt(5)), List(GInt(3)), false, BitSet()),
           Send(Quote(GInt(5)), List(GInt(3)), true, BitSet())
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -299,7 +299,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                   BitSet()),
           Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))), Par(), true, 0, BitSet())
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -326,8 +326,31 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 BitSet()),
           Match(GInt(5), List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))), BitSet())
         ))
-    val result = ParSortMatcher.sortMatch(parMatch)
+    val result = Sortable.sortMatch(parMatch)
     result.term should be(sortedParMatch.get)
+  }
+
+  "Par" should "Sort News based on bindCount, uri's and then body" in {
+    val parNew =
+      Par(
+        news = List(
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7)),
+          New(bindCount = 1, p = Par()),
+          New(bindCount = 2, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stderr"), p = Par())
+        ))
+    val sortedParNew =
+      Par(
+        news = List(
+          New(bindCount = 1, p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stderr"), p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
+          New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7)),
+          New(bindCount = 2, p = Par())
+        ))
+    val result = Sortable.sortMatch(parNew)
+    result.term should be(sortedParNew.get)
   }
 
   "Par" should "Sort EVars based on their type and then levels" in {
@@ -335,7 +358,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(exprs = List(EVar(FreeVar(2)), EVar(FreeVar(1)), EVar(BoundVar(2)), EVar(BoundVar(1))))
     val sortedParGround: Option[Par] =
       Par(exprs = List(EVar(BoundVar(1)), EVar(BoundVar(2)), EVar(FreeVar(1)), EVar(FreeVar(2))))
-    val result = ParSortMatcher.sortMatch(parGround)
+    val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround.get)
   }
 
@@ -358,7 +381,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EEq(GInt(4), GInt(3)),
           EOr(GBool(false), GBool(true))
         ))
-    val result = ParSortMatcher.sortMatch(parExpr)
+    val result = Sortable.sortMatch(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -383,7 +406,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         ))
 
     val bundle = Bundle(parExpr)
-    val result = BundleSortMatcher.sortMatch(bundle)
+    val result = Sortable.sortMatch(bundle)
     result.term should be(Bundle(sortedParExpr))
   }
 
@@ -411,7 +434,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Bundle(Bundle(parExpr, writeFlag = true, readFlag = false),
              writeFlag = false,
              readFlag = true))
-    val result = BundleSortMatcher.sortMatch(nestedBundle)
+    val result = Sortable.sortMatch(nestedBundle)
     result.term should be(
       Bundle(
         Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false),
@@ -430,13 +453,23 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
                                            New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
           Connective(VarRefBody(VarRef(0, 2))),
+          Connective(ConnInt(true)),
+          Connective(ConnBool(true)),
+          Connective(ConnString(true)),
+          Connective(ConnByteArray(true)),
+          Connective(ConnUri(true)),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
       )
-    val sortedParExpr: Option[Par] =
+    val sortedParExpr: Par =
       Par(
         connectives = List(
+          Connective(ConnBool(true)),
+          Connective(ConnInt(true)),
+          Connective(ConnString(true)),
+          Connective(ConnUri(true)),
+          Connective(ConnByteArray(true)),
           Connective(ConnNotBody(Par())),
           Connective(
             ConnAndBody(ConnectiveBody(
@@ -448,7 +481,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         ),
         connectiveUsed = true
       )
-    val result = ParSortMatcher.sortMatch(parExpr)
-    result.term should be(sortedParExpr.get)
+    val result = Sortable.sortMatch(parExpr)
+    result.term should be(sortedParExpr)
   }
 }

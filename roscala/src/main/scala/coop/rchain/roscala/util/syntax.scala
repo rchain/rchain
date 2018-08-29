@@ -4,8 +4,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.Lock
 
 object syntax {
-  implicit class LockOps(lock: Lock) {
-    def withLock[A](f: => A): A = {
+  implicit class LockOps(val lock: Lock) extends AnyVal {
+    @inline def withLock[A](f: => A): A = {
       lock.lock()
 
       try {
@@ -16,9 +16,9 @@ object syntax {
     }
   }
 
-  implicit class ConcurrentHashMapOps[K, V](hm: ConcurrentHashMap[K, V]) {
-    def apply(k: K): V = hm.get(k)
+  implicit class ConcurrentHashMapOps[K, V](val hm: ConcurrentHashMap[K, V]) extends AnyVal {
+    @inline def apply(k: K): V = hm.get(k)
 
-    def update(k: K, v: V) = hm.put(k, v)
+    @inline def update(k: K, v: V) = hm.put(k, v)
   }
 }

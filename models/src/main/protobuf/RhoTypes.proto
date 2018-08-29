@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+// See CapserMessage.proto if this is causing problems
 import "scalapb/scalapb.proto";
 
 option java_package = "coop.rchain.models";
@@ -19,7 +20,7 @@ message Par {
     repeated GPrivate ids = 7;
     repeated Bundle bundles = 11;
     repeated Connective connectives = 8;
-    bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 9 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 10;
 }
 
@@ -42,9 +43,16 @@ message Channel {
     }
 }
 
+message PCost {
+    uint64 cost = 1;
+    int32 iterations = 2;
+}
+
 message ListChannelWithRandom {
     repeated Channel channels = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
+    // cost of performing the spatial match
+    PCost cost = 3;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -73,7 +81,7 @@ message Send {
     Channel chan = 1 [(scalapb.field).no_box = true];
     repeated Par data = 2;
     bool persistent = 3;
-    bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 6;
 }
 
@@ -102,7 +110,7 @@ message Receive {
     Par body = 2 [(scalapb.field).no_box = true];
     bool persistent = 3;
     int32 bindCount = 4;
-    bytes locallyFree = 6 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 6 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 7;
 }
 
@@ -111,9 +119,12 @@ message Receive {
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 message New {
+    // Includes any uris listed below. This makes it easier to substitute or walk a term.
     sint32 bindCount = 1;
     Par p = 2 [(scalapb.field).no_box = true];
-    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    // For normalization, uri-referenced variables come at the end, and in lexicographical order.
+    repeated string uri = 3;
+    bytes locallyFree = 4 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
 }
 
 message MatchCase {
@@ -125,7 +136,7 @@ message MatchCase {
 message Match {
     Par target = 1 [(scalapb.field).no_box = true];
     repeated MatchCase cases = 2;
-    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 4 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 5;
 }
 
@@ -165,31 +176,33 @@ message Expr {
         EMatches e_matches_body = 27;
         EPercentPercent e_percent_percent_body = 28;
         EPlusPlus e_plus_plus_body = 29;
+        EMinusMinus e_minus_minus_body = 30;
     }
 }
 
 message EList {
     repeated Par ps = 1;
-    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
     Var remainder = 5;
 }
 
 message ETuple {
     repeated Par ps = 1;
-    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
 }
 
 message ESet {
     repeated Par ps = 1;
-    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
+    Var remainder = 5;
 }
 
 message EMap {
     repeated KeyValuePair kvs = 1;
-    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
 }
 
@@ -197,7 +210,7 @@ message EMethod {
     string methodName = 1;
     Par target = 2 [(scalapb.field).no_box = true];
     repeated Par arguments = 3;
-    bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 6;
 }
 
@@ -297,12 +310,22 @@ message EPlusPlus {
     Par p2 = 2 [(scalapb.field).no_box = true];
 }
 
+message EMinusMinus {
+    Par p1 = 1 [(scalapb.field).no_box = true];
+    Par p2 = 2 [(scalapb.field).no_box = true];
+}
+
 message Connective {
   oneof connective_instance {
     ConnectiveBody conn_and_body = 1;
     ConnectiveBody conn_or_body = 2;
     Par conn_not_body = 3;
     VarRef var_ref_body = 4;
+    bool conn_bool = 5;
+    bool conn_int = 6;
+    bool conn_string = 7;
+    bool conn_uri = 8;
+    bool conn_byte_array = 9;
   }
 }
 

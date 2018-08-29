@@ -139,29 +139,31 @@ trait ScoreTree {
     final val BOUND_VAR = 50
     final val FREE_VAR  = 51
     final val WILDCARD  = 52
+    final val REMAINDER = 53
 
     // Expr
-    final val EVAR      = 100
-    final val ENEG      = 101
-    final val EMULT     = 102
-    final val EDIV      = 103
-    final val EPLUS     = 104
-    final val EMINUS    = 105
-    final val ELT       = 106
-    final val ELTE      = 107
-    final val EGT       = 108
-    final val EGTE      = 109
-    final val EEQ       = 110
-    final val ENEQ      = 111
-    final val ENOT      = 112
-    final val EAND      = 113
-    final val EOR       = 114
-    final val EMETHOD   = 115
-    final val EBYTEARR  = 116
-    final val EEVAL     = 117
-    final val EMATCHES  = 118
-    final val EPERCENT  = 119
-    final val EPLUSPLUS = 120
+    final val EVAR        = 100
+    final val ENEG        = 101
+    final val EMULT       = 102
+    final val EDIV        = 103
+    final val EPLUS       = 104
+    final val EMINUS      = 105
+    final val ELT         = 106
+    final val ELTE        = 107
+    final val EGT         = 108
+    final val EGTE        = 109
+    final val EEQ         = 110
+    final val ENEQ        = 111
+    final val ENOT        = 112
+    final val EAND        = 113
+    final val EOR         = 114
+    final val EMETHOD     = 115
+    final val EBYTEARR    = 116
+    final val EEVAL       = 117
+    final val EMATCHES    = 118
+    final val EPERCENT    = 119
+    final val EPLUSPLUS   = 120
+    final val EMINUSMINUS = 121
 
     // Other
     final val QUOTE    = 203
@@ -176,10 +178,15 @@ trait ScoreTree {
     final val BUNDLE_WRITE      = 307
     final val BUNDLE_READ_WRITE = 308
 
-    final val CONNECTIVE_NOT    = 400
-    final val CONNECTIVE_AND    = 401
-    final val CONNECTIVE_OR     = 402
-    final val CONNECTIVE_VARREF = 403
+    final val CONNECTIVE_NOT       = 400
+    final val CONNECTIVE_AND       = 401
+    final val CONNECTIVE_OR        = 402
+    final val CONNECTIVE_VARREF    = 403
+    final val CONNECTIVE_BOOL      = 404
+    final val CONNECTIVE_INT       = 405
+    final val CONNECTIVE_STRING    = 406
+    final val CONNECTIVE_URI       = 407
+    final val CONNECTIVE_BYTEARRAY = 408
 
     final val PAR = 999
   }

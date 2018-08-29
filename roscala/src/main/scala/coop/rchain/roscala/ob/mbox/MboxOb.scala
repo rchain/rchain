@@ -1,21 +1,27 @@
 package coop.rchain.roscala.ob.mbox
 
 import com.typesafe.scalalogging.Logger
-import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob.{Ctxt, Ob}
 
 class MboxOb extends Ob {
   var mbox: Ob = MboxOb.LockedMbox
 
-  def receive(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Ob = {
+  /**
+    * Only one thread at a time is allowed to call `receive`.
+    *
+    * Synchronization on `mbox` is necessary since `mbox.receiveMsg`
+    * should not be called by thread A while thread B executes
+    * `mbox.nextMsg`.
+    */
+  def receive(ctxt: Ctxt, state: State): Ob = mbox.synchronized {
     ctxt.rcvr = this
-    mbox.receiveMsg(this, ctxt, state, globalEnv)
+    mbox.receiveMsg(this, ctxt, state)
   }
 
-  def schedule(ctxt: Ctxt, state: State, globalEnv: GlobalEnv): Unit = {
+  def schedule(ctxt: Ctxt, state: State): Unit = {
     MboxOb.logger.debug(s"Schedule $ctxt from $this")
-    state.strandPool.prepend(ctxt)
+    ctxt.scheduleStrand(state)
   }
 }
 

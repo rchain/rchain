@@ -5,15 +5,15 @@ object Dependencies {
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
   val circeVersion  = "0.9.1"
-  val http4sVersion = "0.18.0"
-  val kamonVersion  = "1.0.0"
+  val http4sVersion = "0.19.0-M1"
+  val kamonVersion  = "1.1.0"
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
-  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.1.0"
   val catsEffect          = "org.typelevel"              %% "cats-effect"               % "1.0.0-RC2"
-  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.3"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -27,7 +27,7 @@ object Dependencies {
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
   val jline               = ("org.scala-lang"             % "jline"                      % "2.10.7").exclude("org.fusesource.jansi", "jansi")
-  val kalium              = "org.abstractj.kalium"        % "kalium"                    % "0.7.0"
+  val kalium              = "coop.rchain"                 % "kalium"                    % "0.8.1-SNAPSHOT"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
@@ -50,11 +50,12 @@ object Dependencies {
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.6.0"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.7.0"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
   val secp256k1Java       = "coop.rchain"                 % "secp256k1-java"            % "0.1-SNAPSHOT"
+  val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
 
   // format: on
 
