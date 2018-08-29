@@ -85,7 +85,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "genesis-block-approvals",
+          "expr": "genesis_block_approvals",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
