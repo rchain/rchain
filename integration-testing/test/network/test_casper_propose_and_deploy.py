@@ -1,12 +1,12 @@
 from tools.random import random_string
-import re
 import logging
-from delayed_assert import expect, assert_expectations
 import tools.resources as resources
 from shutil import copyfile
 from tools.wait import wait_for, string_contains, show_blocks
 from tools.util import log_box
+from tools.profiling import profile
 
+@profile
 def test_casper_propose_and_deploy(config, converged_network):
     """
     This test represents an integration test that deploys a contract and then checks
