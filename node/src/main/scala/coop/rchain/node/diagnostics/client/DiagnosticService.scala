@@ -45,6 +45,19 @@ class GrpcDiagnosticsService(host: String, port: Int)
           ))
     )
 
+  def listDiscoveredPeers: Task[Seq[PeerNode]] =
+    Task.delay(
+      blockingStub
+        .listDiscoveredPeers(Empty())
+        .peers
+        .map(
+          p =>
+            PeerNode(
+              NodeIdentifier(p.key.toByteArray.toSeq),
+              Endpoint(p.host, p.port, p.port)
+          ))
+    )
+
   def nodeCoreMetrics: Task[NodeCoreMetrics] =
     Task.delay(blockingStub.getNodeCoreMetrics(Empty()))
 

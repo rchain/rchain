@@ -163,7 +163,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       oracle: SafetyOracle[Effect],
       multiParentCasperRef: MultiParentCasperRef[Effect],
       nodeCoreMetrics: NodeMetrics[Task],
-      jvmMetrics: JvmMetrics[Task]
+      jvmMetrics: JvmMetrics[Task],
+      connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] =
     for {
       grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
