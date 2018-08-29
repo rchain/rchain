@@ -13,6 +13,8 @@ import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.{BasicWallet, BasicWalletTest}
 import coop.rchain.rspace.Serialize
 import monix.execution.Scheduler.Implicits.global
+import org.abstractj.kalium.NaCl
+
 import org.scalatest.{FlatSpec, Matchers}
 
 class BasicWalletSpec extends FlatSpec with Matchers {
@@ -21,6 +23,11 @@ class BasicWalletSpec extends FlatSpec with Matchers {
 
   TestSetUtil.runTests(BasicWalletTest, List(NonNegativeNumber, MakeMint, BasicWallet), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
+
+  "Kalium" should "work" in {
+    val sodium = NaCl.sodium()
+    println(sodium.sodium_version_string())
+  }
 
   "BasicWallet rholang contract" should tests.head in {
     TestSetUtil.testPassed(tests.head, tuplespace) should be(true)
