@@ -140,7 +140,7 @@ rule <thread> ...
 
 
 // Logical "and"
-// First for a conjunctin of HigherProcesses
+// First for a conjunction of HigherProcesses
 rule <thread> ...
         <FreeVars> ...
           <node> [ID:Int][ P1:HigherProc /\ P2:HigherProc ][ PARENT:Exp ][ (.List
@@ -148,16 +148,6 @@ rule <thread> ...
             => true) ] </node>
          (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
                   <node> [NEWID +Int 1][ P2 ][ ID ][ .List ]{ .List }[false]  </node>)
-         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
-    ... </FreeVars> ... </thread>
-// Now for a conjuction of Chans
-rule <thread> ...
-        <FreeVars> ...
-          <node> [ID:Int][ C1:Chan /\ C2:Chan ][ PARENT:Exp ][ (.List
-            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false
-            => true) ] </node>
-         (.Bag => <node> [NEWID][ C1 ][ ID ][ .List ]{ .List }[false]  </node>
-                  <node> [NEWID +Int 1][ C2 ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
     ... </FreeVars> ... </thread>
 
