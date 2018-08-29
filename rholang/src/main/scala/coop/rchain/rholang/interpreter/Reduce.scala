@@ -861,9 +861,10 @@ object Reduce {
           s.raiseError(ReduceError("Error: nth expects 1 argument"))
         } else {
           for {
-            nth <- evalToInt(args(0))
-            v   <- evalSingleExpr(p)
-            _   <- costAccountingAlg.charge(nthMethodCost(nth))
+            nthRaw <- evalToInt(args(0))
+            nth    <- restrictToInt(nthRaw)
+            v      <- evalSingleExpr(p)
+            _      <- costAccountingAlg.charge(nthMethodCost(nth))
             result <- v.exprInstance match {
                        case EListBody(EList(ps, _, _, _)) =>
                          s.fromEither(localNth(ps, nth))
@@ -871,8 +872,7 @@ object Reduce {
                          s.fromEither(localNth(ps, nth))
                        case _ =>
                          s.raiseError(
-                           ReduceError(
-                             "Error: nth applied to something that wasn't a list or tuple."))
+                           ReduceError("Error: nth applied to something that wasn't a list or tuple."))
                      }
           } yield result
         }
@@ -1252,10 +1252,12 @@ object Reduce {
           _ <- if (args.length != 2)
                 s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
               else Applicative[M].unit
-          baseExpr <- evalSingleExpr(p)
-          fromArg  <- evalToInt(args(0))
-          toArg    <- evalToInt(args(1))
-          result   <- slice(baseExpr, fromArg, toArg)
+          baseExpr   <- evalSingleExpr(p)
+          fromArgRaw <- evalToInt(args(0))
+          fromArg    <- restrictToInt(fromArgRaw)
+          toArgRaw   <- evalToInt(args(1))
+          toArg      <- restrictToInt(toArgRaw)
+          result     <- slice(baseExpr, fromArg, toArg)
         } yield result
     }
 
@@ -1344,6 +1346,12 @@ object Reduce {
           case _ =>
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
+
+    private def restrictToInt(long: Long): M[Int] = {
+      s.catchNonFatal(Math.toIntExact(long)).adaptError {
+        case e: ArithmeticException => ReduceError(s"Integer overflow for value $long")
+      }
+    }
 
     private def updateLocallyFree(par: Par): Par = {
       val resultLocallyFree =
