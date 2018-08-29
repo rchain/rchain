@@ -45,7 +45,7 @@ In Rholang, these relations only apply *to the top level* of any name. In additi
 * `@{10 + 2} = @{5 + 7}` and
 * `@for(x <- @Nil){ 10 + 2 } = @for(x <- @Nil){ 5 + 7 }`.
 
-Since we use variables, channels also respect $\alpha$-equivalence, meaning that, for example,
+Since we use variables, channels also respect alpha equivalence, meaning that, for example,
 
 * `@{for( x <- @Nil ){ Nil }}  = @{for( z <- @Nil ){ Nil }}`
 
@@ -55,7 +55,7 @@ In the RHO calculus we don't have to worry about distinguishing the top level fr
 
 Patterns follow the same rules as channels in terms of equivalence. In the case of -arity matching, joins, logical connectives, etc. the rules apply to each name pattern individually.
 
-Here we need to treat statements that are not on the top level. We reemphasize that the rules for name equivalences described in the last section only apply on the top level. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, **excluding** $\alpha$-equivalence. This means that the following two channels are *not* equivalent:
+Here we need to treat statements that are not on the top level. We reemphasize that the rules for name equivalences described in the last section only apply on the top level. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, **excluding** alpha equivalence. This means that the following two channels are *not* equivalent:
 
 
 * `@for(  @for( @{ Nil | x } <- @Nil ){ Nil } <- @Nil ){ Nil }}`
@@ -66,58 +66,58 @@ Note that while the patterns `@{ x | Nil }}` and `@{ Nil | x }` are equivalent a
 * `@for( @{ Nil | x } <- @Nil ){ z }`
 * `@for( @{ x | Nil } <- @Nil ){ z }`
 
-are *not*. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, up to $\alpha$-equivalence. The principle is that you can only look through the looking glass once: when checking name equivalence or matching a pattern to a name or a process, if a given pattern is part of a larger pattern, there has to be an exact match.
+are *not*. When we are matching *patterns within patterns*, these equivalence rules do not apply and we check for an exact text match, up to alpha equivalence. The principle is that you can only look through the looking glass once: when checking name equivalence or matching a pattern to a name or a process, if a given pattern is part of a larger pattern, there has to be an exact match.
 
 Furthermore, we can't bind variables to parts of patterns. For example, the following send/receive will not match:
 
     1 for( @ for( @{x!(y)} <- @Nil ){ Nil } <- @Nil ){ Nil }  |
     2 @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
 
-Na\"ively, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something $\alpha$-equivalent to:
+Na&iuml;vely, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
 
-    1 @Nil!( for( @x!(y) <- @Nil ){ Nil } )
+    @Nil!( for( @x!(y) <- @Nil ){ Nil } )
 
 ## Precedence Rules
 When writing more complicated patterns, one should be aware of precedence rules of the operators in Rholang. Take for example the following pattern:
 
-    1 @{@x!(Nil) | y!(Nil)}
+    @{@x!(Nil) | y!(Nil)}
 
 A priori, it is unclear whether this should be interpreted as `@{{@x!(Nil)} | {y!(Nil)}}`, where `x` is a process variable and `y` is a name variable, or as `@{@{x!(Nil) | y}!(Nil)}}`, where `x` is a name variable and `y` is a process variable. The chosen interpretation is vital, since the way we use `x` and `y` in the body depend on the type (process or name) of each of these terms. If the first interpretation is correct,
 
-    1 for( @{@x!(Nil) | y!(Nil)} <- @10 ){ @x!("success") | y!("success") }
+    for( @{@x!(Nil) | y!(Nil)} <- @10 ){ @x!("success") | y!("success") }
 
 will compile, while
 
-    1 for( @{@x!(Nil) | y!(Nil)} <- @10 ){ x!("success") | @y!("success") }
+    for( @{@x!(Nil) | y!(Nil)} <- @10 ){ x!("success") | @y!("success") }
 
 will not. If the second interpretation is correct, the opposite is true.
 
 In Rholang, `@` binds tighter than `|`. Thus our first interpretation, `@{{@x!(Nil)} | {y!(Nil)}}`, is correct. We also have precedence rules for logical operations. Take for example the pattern
 
-    1 x /\ @y!(Nil) \/ @z!(10)
+    x /\ @y!(Nil) \/ @z!(10)
 
 Like in the example above, we could either interpret this as `{x /\ @y!(Nil)} \/ @z!(10)`, or as `x /\ {@y!(Nil) \/ @z!(10)}`. In Rholang, `/\` takes precedence over `\/` (as is the standard for logical connectives).
 
 ## Illegal Moves
 There are some illegal moves that we ought to cover. The first has to do with arithmetic operations which, if you recall from the section on name equivalence, are evaluated on the top level, but not anywhere else. Because of this, in Rholang we cannot match parts of arithmetic operations. For example, we might expect
 
-    1 for( @{x + 7} <- @Nil ){ Nil }
+    for( @{x + 7} <- @Nil ){ Nil }
 
 to match with a send such as `@Nil!(5 + 7)`, binding `x` to `5`. However, when messages are sent, top-level expressions are evaluated before sending, so this send will not match with anything&mdash;although it will compile!
 
 Remember, however, that an arithmetic operation that is in a pattern within a pattern is not evaluated when sent over a channel, and must be matched exactly. For example,
 
-    1 @Nil!( for( x <- @{5 + 7}){Nil} )
+    @Nil!( for( x <- @{5 + 7}){Nil} )
 
 can only match with something that preserves the `5 + 7` intact, such as in the process `for( @for( x <- @{5 + 7}){z} <- @Nil ){ @z!(Nil) }`. Since the `5 + 7` is part of a pattern within a pattern, we still cannot match any part of it.
 
 However, when the arithmetic operation is both (1) not on the top level of a pattern, and (2) not part of a pattern within a pattern, we *can* bind to parts of an arithmetic expression. For example, the receive
 
-    1 for( @for( _ <- @10 ){ 8 + z } <- @Nil ){ @z!(Nil) }
+    for( @for( _ <- @10 ){ 8 + z } <- @Nil ){ @z!(Nil) }
 
 can take a message from a send of the form
 
-    1 @Nil!( for( _  <- @10 ){ 8 + 10 })
+    @Nil!( for( _  <- @10 ){ 8 + 10 })
 
 binding `z` to `10`.
 
@@ -133,7 +133,7 @@ since, if it did match, `y` would match to `x => {@Nil!(x)}`, which is neither a
 ## Patterns With Parallel Processes
 When using parallel processes in patterns, it is sometimes not immediately obvious how a pattern will match. Take for example the following receive:
 
-    1 for( @{x | y} <- @Nil ){ Nil }
+    for( @{x | y} <- @Nil ){ Nil }
 
 Given a send of the form `@Nil!( 10 | 20 )`, we might expect the receive to bind `x` to `10` and `y` to `20`. However, this match is not so straightforward. Since `x | y = y | x`, we just as well could match `x` to `20` and `y` to `10`. Futhermore, since `10 | 20 = 10 | 20 | Nil = Nil | 10 | 20`, the match could take place in a number of ways. %To resolve this, Rholang will take the first variable in the pattern, as written, and bind it to everything in the send; the remaining variables bind to `Nil`. Thus in this case, `x` binds to `10 | 20` and `y` binds to `Nil`.
 
@@ -147,33 +147,33 @@ Note that we can write patterns with parallel processes that are not just proces
 
 Logical connectives can be incorporated into patterns, but we cannot send or receive over a channel which contains logical connectives. For example, it is incorrect to write
 
-    1 @{ 10 \/ 20 }!(Nil)
+    @{ 10 \/ 20 }!(Nil)
 
 We can, however, correctly write
 
-    1 for( @{@{ 10 \/ 20 }}!(z) <- @Nil ){ @Nil!(z) }
+    for( @{@{ 10 \/ 20 }}!(z) <- @Nil ){ @Nil!(z) }
 
 which listens on `@Nil` for a process which sends either to `@10` or to `@20`. Whatever is being sent is grabbed and sent over `@Nil` in the body. If we use `/\` in a pattern, any free variables which are in the pattern will be bound to their corresponding parts. However, if we use `\/`, none of the variables in the parse tree below the node are bound. In particular, if `P1 \/ P2` is in a pattern, any free variables in either `P1` or `P2` are globally free, and thus not allowed.
 
 ## Wildcards vs Variables
 There is an important, somewhat subtle difference between wildcards and variables in Rholang. A wildcard can be placed anywhere that a *free* variable can be placed, meaning that wildcards can be part of patterns but cannot be part of processes. For example, we cannot write
 
-    1 for( _ <- @Nil){ \_!(Nil) }
+    for( _ <- @Nil){ _!(Nil) }
 
 due to the wildcard being in the body of the listen, even though it is correct to write
 
-    1 for( x <- @Nil){ x!(Nil) }
+    for( x <- @Nil){ x!(Nil) }
 
 It is, however, perfectly acceptable to write
 
-    1 for( _ <- @Nil){ Nil }
+    for( _ <- @Nil){ Nil }
 
 That is the first distinction. The second distinction is that wildcards can bind to statements containing free variables, while variables cannot. For example, the pattern
 
-    1 new x in { p }
+    new x in { p }
 
 will match to *strictly fewer* patterns than the pattern
 
-    1 new x in { _ }
+    new x in { _ }
 
 `new x in { p }` will only match to a process which does not ever use the new channel in the body, such as `new x in { Nil }`. Here, `p` binds to `Nil`. It cannot match to something like `new x in { x!(Nil) }`, because `p` would have to match with `x!(Nil)`, which by itself has the free variable `x`. On the other hand, `new x in { _ }` will match with `new x in { x!(Nil) }`, throwing away `x!(Nil)`. Since `_` doesn't actually bind to anything, we are allowed to give it things with free variables. We note here that the rules for patterns within patterns still apply, meaning that a wildcard cannot be used to match to a piece of a pattern, unless that pattern itself uses a wildcard in precisely the same way.
