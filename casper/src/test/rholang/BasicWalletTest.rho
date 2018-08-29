@@ -3,8 +3,8 @@
 //requires BasicWallet, MakeMint, TestSet, LinkedList
 @"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
 @"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
-@"sig0"!("facc9e70f74c118fab7680f8ab7619198571bb7ebdcc80cc527982a358194858157c5f3dd422bf68cc9dc6a3b7b2b99b69ec9e0ebf54f26d57bda1d4d5c5a70a") |
-@"sig1"!("10bbfbd09e6490bac5621a994b0bb2ff3d2437d05f315d397c14765c9a4c31a598ba267213646bcfd2615e51f36c6c0c8c315ffa7565b654015d09a92a46d507") |
+@"sig0"!("ebae4c6bfde531c2aa435f93f29f5b4842f56194d387594af1dfe19f0547f2c29cbf54ff4afa2818181bbb7d28354843dec81eaaa5b8b4bc0d3a717b3d99d509") |
+@"sig1"!("f950c81ce70c450c54afad78712957044d325e37d05a266b8f3df9da7c67c6d953ecb1b708bfe58c2aa6bf70bdb8c84061743c5ebb14a58a09d2a6a265fcb80f") |
 @"invalidSig"!("b8cea97ee7afdab7eb6ebabe8fde9ca8f9dbd3b877e8fe6b6cfd4bcef5cfdcfccec9fd8de9e39df4b6f5a2f7b6d9da8cffef48fab85faddbaab8ebca4af4ab07") |
 
 contract @"deposit"(@wallet, @amount, @otherPurse, return) = {

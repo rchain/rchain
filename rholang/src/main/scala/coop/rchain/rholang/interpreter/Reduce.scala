@@ -940,12 +940,13 @@ object Reduce {
           case (ESetBody(base @ ParSet(basePs, _, _, _)),
                 ESetBody(other @ ParSet(otherPs, _, _, _))) =>
             costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
-              ESetBody(ParSet(
-                basePs.union(otherPs.sortedPars.toSet),
-                base.connectiveUsed || other.connectiveUsed,
-                locallyFreeUnion(base.locallyFree, other.locallyFree),
-                None
-              )))
+              ESetBody(
+                ParSet(
+                  basePs.union(otherPs.sortedPars.toSet),
+                  base.connectiveUsed || other.connectiveUsed,
+                  locallyFreeUnion(base.locallyFree, other.locallyFree),
+                  None
+                )))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
@@ -1242,6 +1243,8 @@ object Reduce {
                 remainder
               )
             )
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Par](GByteArray(bytes.substring(from, until)))
           case other =>
             s.raiseError(MethodNotDefined("slice", other.typ))
         }

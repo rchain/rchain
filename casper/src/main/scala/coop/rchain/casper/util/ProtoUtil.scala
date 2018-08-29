@@ -13,6 +13,7 @@ import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
+import coop.rchain.rholang.build.CompiledRholangSource
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -389,6 +390,12 @@ object ProtoUtil {
 
   def sourceDeploy(source: String, timestamp: Long): DeployData =
     DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+
+  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long): Deploy =
+    Deploy(
+      term = Some(source.term),
+      raw = Some(sourceDeploy(source.code, timestamp))
+    )
 
   def termDeploy(term: Par, timestamp: Long): Deploy =
     Deploy(

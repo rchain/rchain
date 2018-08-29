@@ -23,11 +23,14 @@ contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
             contract verify(@nonce, @amount, @retCh, @sig, return) = {
               for(@prevNonce <- nonceCh) {
                 if (nonce == (prevNonce + 1)) {
-                  new result in {
-                    @cryptoVerify!([nonce, amount, retCh].toByteArray(), sig.hexToBytes(), pk.hexToBytes(), *result) |
-                    for(@r <- result) {
-                      if (r) { nonceCh!(nonce) | return!(true) }
-                      else { nonceCh!(prevNonce) | return!(false) }
+                  new result, hashOut in {
+                    @"blake2b256Hash"!([nonce, amount, retCh].toByteArray(), *hashOut) |
+                    for(@hash <- hashOut) {
+                      @cryptoVerify!(hash, sig.hexToBytes(), pk.hexToBytes(), *result) |
+                      for(@r <- result) {
+                        if (r) { nonceCh!(nonce) | return!(true) }
+                        else { nonceCh!(prevNonce) | return!(false) }
+                      }
                     }
                   }
                 } else {

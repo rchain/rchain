@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.Id
 import coop.rchain.casper.HashSetCasperTest
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -60,7 +60,7 @@ object BlockApproverProtocolTest {
 
   def createProtocol(
       requiredSigs: Int,
-      wallets: Seq[Wallet],
+      wallets: Seq[PreWallet],
       sk: Array[Byte],
       bonds: Map[Array[Byte], Int]): (BlockApproverProtocol, HashSetCasperTestNode) = {
     import monix.execution.Scheduler.Implicits.global

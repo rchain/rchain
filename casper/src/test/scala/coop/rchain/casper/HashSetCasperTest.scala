@@ -8,7 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -628,7 +628,7 @@ object HashSetCasperTest {
   def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
-  def buildGenesis(wallets: Seq[Wallet],
+  def buildGenesis(wallets: Seq[PreWallet],
                    bonds: Map[Array[Byte], Int],
                    deployTimestamp: Long): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
