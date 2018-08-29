@@ -113,7 +113,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['network_sockets', 'count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['network_sockets', 'count', 'eval', 'count', 'repl', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
@@ -173,9 +173,9 @@ def run_tests():
         if test == "network_sockets":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_network_sockets(container) == 0:
-                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/40403 is available.")
+                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/40401 is available.")
                 else:
-                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/40403 is not available.")
+                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/40401 is not available.")
         if test == "errors":
             for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
                 print(container.name)
@@ -423,6 +423,16 @@ def show_logs():
         print(r)
     print("================================================================")
 
+def test_expected_peers_count_in_logs(container):
+    for line in container.logs().decode("utf-8").splitlines():
+        m = re.search('Peers: (.+?).$', line)
+        if m:
+            peer_count = int(m.group(1))
+            if peer_count == args.peer_amount:
+                return True
+    return False
+
+
 
 def create_empty_bonds_file():
 
@@ -470,25 +480,14 @@ def show_containers():
 
 def check_network_convergence(container):
     print("Check for network convergence via prometheus metrics api before running tests.")
-    peers_metric = ''
-    peers_metric_expected = args.peer_amount
     timeout = 400
     count = 0
 
     while count < timeout:
-        cmd = f'curl -s {container.name}:40403'
-        try: 
-            r = container.exec_run(cmd=cmd).output.decode('utf-8')
-            # print(r) # uncomment to show output while looping 
-        except Exception as e:
-            print("Failed to run command on container.")
-            print(f"Error msg: {e}")
-            return 1
-        print(f"checking {count} of {timeout} seconds")
-        for line in r.splitlines():
-            if line == f"peers {args.peer_amount}.0":
-                print("Network converged.")
-                return 0
+        if test_expected_peers_count_in_logs(container):
+            time.sleep(10) # allow some time for logs in all containers
+            return 0
+
         time.sleep(10)
         count += 10
     print("Timeout of {timeout} seconds reached ... exiting network convergence pre tests probe.")
