@@ -27,7 +27,14 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
   crossScalaVersions := Seq("2.11.12", scalaVersion.value)
 )
 
-lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
+// Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
+// for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
+lazy val profilerSettings = Seq(
+  javaOptions in run ++= sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq,
+  javaOptions in reStart ++= (javaOptions in run).value
+)
+
+lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings ++ profilerSettings
 
 lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
@@ -347,11 +354,6 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
     libraryDependencies ++= commonDependencies,
-    javaOptions in run ++=
-      // export YOURKIT_AGENT prior to starting sbt set to the profiling agent appropriate
-      // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp).
-      // Also remember to disable forking: @Fork(value = 0)
-      sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
