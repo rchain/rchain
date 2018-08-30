@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import scala.util.{Failure, Success, Try}
 
-case class Wallet(algorithm: String, hash: String, initRevBalance: Int)
+case class Wallet(hash: String, initRevBalance: Int)
 
 object Wallet {
 
@@ -17,14 +17,14 @@ object Wallet {
     |new purseCh, walletCh in {
     |  @[revMint, "makePurse"]!(${w.initRevBalance}, *purseCh) |
     |  for(@purse <- purseCh) {
-    |    @["WalletCheck", "create"]!(purse, "${w.algorithm}", "${w.hash}")
+    |    @["WalletCheck", "create"]!(purse, "${w.hash}")
     |  }
     |}""".stripMargin
 
   def fromLine(line: String): Either[String, Wallet] = line.split(" ").filter(_.nonEmpty) match {
-    case Array(algorithm, hash, initRevBalanceStr) =>
+    case Array(hash, initRevBalanceStr) =>
       Try(initRevBalanceStr.toInt) match {
-        case Success(initRevBalance) => Right(Wallet(algorithm, hash, initRevBalance))
+        case Success(initRevBalance) => Right(Wallet(hash, initRevBalance))
         case Failure(_) =>
           Left(s"Failed to parse given initial balance $initRevBalanceStr as int.")
       }

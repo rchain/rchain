@@ -3,9 +3,9 @@
 
 // create: makes a wallet check
 //
-// bytearray hash: the hash of the public key
 // Purse purse: the funds to put in the wallet
-contract @["WalletCheck", "create"](@purse, algorithm, @hash) = {
+// bytearray hash: the hash of the public key
+contract @["WalletCheck", "create"](@purse, @hash) = {
   new doneStore in {
     doneStore!(false) |
     
@@ -31,9 +31,9 @@ contract @["WalletCheck", "create"](@purse, algorithm, @hash) = {
                 new hashOut in {
 
                   // Check that given pubKey is the preimage of hash
-                  algorithm!(pubKey.toByteArray(), *hashOut) |
+                  @"keccak256Hash"!(pubKey.toByteArray(), *hashOut) |
                   for (@pkHash <- hashOut) {
-                    if (pkHash == hash.hexToBytes()) {
+                    if (pkHash == hash) {
                       new walletOut in {
 
                         // Create the wallet
