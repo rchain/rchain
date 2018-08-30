@@ -1,33 +1,35 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.discovery._
-import scala.concurrent.duration._
-import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.metrics.Metrics
-
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats._
+import cats.implicits._
 import cats.mtl._
-import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
-import coop.rchain.shared._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 object Connect {
 
   type Connection            = PeerNode
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
+
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
   }
+
   object Connections {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
+
       def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
         connections
           .contains(connection)
@@ -36,6 +38,7 @@ object Connect {
             Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections) >>= (
                 conns => Metrics[F].setGauge("peers", conns.size.toLong).as(conns))
           )
+
       def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
         for {
           result <- connections.filter(_ != connection).pure[F]
@@ -52,9 +55,11 @@ object Connect {
         } yield result
     }
   }
+
   import Connections._
 
   type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+
   object RPConfAsk {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
   }
@@ -62,7 +67,8 @@ object Connect {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def clearConnections[
-      F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]: F[Int] = {
+      F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+    : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {
@@ -101,7 +107,7 @@ object Connect {
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
-              Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
             case (peer, Right(_)) =>
               Log[F].info(s"Connected to ${peer.toAddress}.")
           }

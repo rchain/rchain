@@ -56,8 +56,9 @@ object EffectsTestInstances {
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {
     case class Request(peer: PeerNode, msg: Protocol)
     type Responses = PeerNode => Protocol => CommErr[Protocol]
-    var reqresp: Option[Responses] = None
-    var requests: List[Request]    = List.empty[Request]
+    var broadcasted: Map[PeerNode, Seq[Protocol]] = Map.empty
+    var reqresp: Option[Responses]                = None
+    var requests: List[Request]                   = List.empty[Request]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
@@ -78,7 +79,17 @@ object EffectsTestInstances {
         requests = requests :+ Request(peer, msg)
         Right(())
       }
-    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = ???
+
+    def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit] = Capture[F].capture {
+      val m = peers.map(_ -> msg).toMap
+      //I couldn't find implicit Monoid for Map
+      val newMap = m.foldLeft(broadcasted) {
+        case (map, (peer, msg)) =>
+          val msgs = map.get(peer).map(msgs => msgs :+ msg).getOrElse(Seq(msg))
+          map.updated(peer, msgs)
+      }
+      broadcasted = newMap
+    }
 
     def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
 
@@ -89,18 +100,23 @@ object EffectsTestInstances {
 
   class LogStub[F[_]: Applicative] extends Log[F] {
 
+    var debugs: List[String] = List.empty[String]
     var infos: List[String]  = List.empty[String]
     var warns: List[String]  = List.empty[String]
     var errors: List[String] = List.empty[String]
 
     def reset(): Unit = {
+      debugs = List.empty[String]
       infos = List.empty[String]
       warns = List.empty[String]
       errors = List.empty[String]
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
     def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
+    def debug(msg: String)(implicit ev: LogSource): F[Unit] = {
+      debugs = debugs :+ msg
+      ().pure[F]
+    }
     def info(msg: String)(implicit ev: LogSource): F[Unit] = {
       infos = infos :+ msg
       ().pure[F]

@@ -16,14 +16,20 @@ contract @"deposit"(@wallet, @amount, @otherPurse, return) = {
   }
 } |
 
-contract @"withdraw"(@wallet, @amount, @nonce, @sig, return) = {
-  new withdraw in {
-    contract withdraw(return) = {
+contract @"transfer"(@wallet, @amount, @nonce, @sig, destination, contractReturn) = {
+  new transfer, status in {
+    contract transfer(return) = {
       //send to known channel so that I can make the right signature
-      @[wallet, "withdraw"]!(amount, nonce, sig, "myWithdraw") |
-      for(@result <- @"myWithdraw"){ return!(result) }
+      @[wallet, "transfer"]!(amount, nonce, sig, "myWithdraw", *status) |
+      for(@result <- status){ 
+        match result {
+          "Success" => {for(@purse <- @"myWithdraw"){ destination!(purse) }}
+          _         => { Nil }
+        } |
+        return!(result) 
+      }
     } |
-    return!(*withdraw)
+    contractReturn!(*transfer)
   }
 } |
 
@@ -94,9 +100,9 @@ contract @"getNonce"(@wallet, return) = {
         @"getBalance"!(wallet, "walletBalance") |
         @"deposit"!(wallet, 300, otherPurse, "overdrawDep") |
         @"deposit"!(wallet, 30, otherPurse, "depWallet") |
-        @"withdraw"!(wallet, 60, 0, invalidSig, "failWithdraw") |
-        @"withdraw"!(wallet, 60, 0, sig0, "withdraw0Nonce") |
-        @"withdraw"!(wallet, 10, 1, sig1, "withdraw1Nonce") |
+        @"transfer"!(wallet, 60, 0, invalidSig, Nil, "failTransfer") |
+        @"transfer"!(wallet, 60, 0, sig0, "wPurse", "transfer0Nonce") |
+        @"transfer"!(wallet, 10, 1, sig1, Nil, "transfer1Nonce") |
       @"TestSet"!(
         "Wallet deposit should work as expected.",
         [
@@ -109,21 +115,21 @@ contract @"getNonce"(@wallet, return) = {
       
       @["TestSet", "after"]!("Wallet deposit should work as expected.", {
         @"TestSet"!(
-          "Wallet withdraw should not accept invalid signatures or nonces.",
+          "Wallet transfer should not accept invalid signatures or nonces.",
           [
-            ["failWithdraw", []], //bad signature
-            ["withdraw1Nonce", []] //nonce out of order
+            ["failTransfer", "Invalid signature or nonce"], //bad signature
+            ["transfer1Nonce", "Invalid signature or nonce"] //nonce out of order
           ]
         ) |
         
-        @["TestSet", "after"]!("Wallet withdraw should not accept invalid signatures or nonces.", {
-          for(doWithdraw <- @"withdraw0Nonce") {
-            @"withdraw0Nonce"!(*doWithdraw) |
-            doWithdraw!("wPurse") | for(@[wPurse] <- @"wPurse") {
+        @["TestSet", "after"]!("Wallet transfer should not accept invalid signatures or nonces.", {
+          for(doTransfer <- @"transfer0Nonce") {
+            @"transfer0Nonce"!(*doTransfer) |
+            doTransfer!("status") | for(@wPurse <- @"wPurse"; @"Success" <- @"status") {
               @"getBalance"!(wPurse, "purseBalance") |
               @"getNonce"!(wallet, "walletNonce") |
               @"TestSet"!(
-                "Wallet withdraw should work as expected.",
+                "Wallet transfer should work as expected.",
                 [
                   ["purseBalance", 60],
                   ["walletBalance", 70],

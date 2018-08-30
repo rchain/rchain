@@ -59,16 +59,11 @@ class DagOperationsTest
     val b6 = chain.idToBlocks(6)
     val b7 = chain.idToBlocks(7)
 
-    DagOperations.greatestCommonAncestor(b1, b5, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b3, b2, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b6, b7, genesis, chain, BlockStore[Id].asMap()) should be(
-      b1)
-    DagOperations.greatestCommonAncestor(b2, b2, genesis, chain, BlockStore[Id].asMap()) should be(
-      b2)
-    DagOperations.greatestCommonAncestor(b3, b7, genesis, chain, BlockStore[Id].asMap()) should be(
-      b3)
+    DagOperations.greatestCommonAncestorF[Id](b1, b5, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b3, b2, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b6, b7, genesis, chain) should be(b1)
+    DagOperations.greatestCommonAncestorF[Id](b2, b2, genesis, chain) should be(b2)
+    DagOperations.greatestCommonAncestorF[Id](b3, b7, genesis, chain) should be(b3)
   }
 
 }

@@ -87,11 +87,7 @@ trait BlockStoreTest
     }
   }
 
-  "Block Store" should "return None on get while it's empty" in withStore { store =>
-    store.get(blockHashGen.sample.get) shouldBe None
-  }
-
-  it should "return Some(message) on get for a published key" in {
+  "Block Store" should "return Some(message) on get for a published key" in {
     withStore { store =>
       forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements
@@ -159,6 +155,7 @@ trait BlockStoreTest
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Id] => R): R = {
     val store = InMemBlockStore.createWithId
+    assert(store.asMap.isEmpty)
     f(store)
   }
 }
@@ -175,6 +172,7 @@ class LMDBBlockStoreTest extends BlockStoreTest {
     val env   = Context.env(dbDir, mapSize)
     val store = LMDBBlockStore.createWithId(env, dbDir)
     try {
+      assert(store.asMap.isEmpty)
       f(store)
     } finally {
       env.close()

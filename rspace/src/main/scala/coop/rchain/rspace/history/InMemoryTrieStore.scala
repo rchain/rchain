@@ -6,20 +6,24 @@ import scala.collection.immutable.Seq
 
 case class State[K, V](_dbTrie: Map[Blake2b256Hash, Trie[K, V]],
                        _dbRoot: Map[Branch, Blake2b256Hash],
-                       _dbPastRoots: Map[Branch, Seq[Blake2b256Hash]]) {
+                       _dbPastRoots: Map[Branch, Seq[Blake2b256Hash]],
+                       _dbEmptyRoot: Option[Blake2b256Hash]) {
 
   def changeTrie(newTrie: Map[Blake2b256Hash, Trie[K, V]]): State[K, V] =
-    State(newTrie, _dbRoot, _dbPastRoots)
+    State(newTrie, _dbRoot, _dbPastRoots, _dbEmptyRoot)
 
   def changeRoot(newRoot: Map[Branch, Blake2b256Hash]): State[K, V] =
-    State(_dbTrie, newRoot, _dbPastRoots)
+    State(_dbTrie, newRoot, _dbPastRoots, _dbEmptyRoot)
 
   def changePastRoots(newPastRoots: Map[Branch, Seq[Blake2b256Hash]]): State[K, V] =
-    State(_dbTrie, _dbRoot, newPastRoots)
+    State(_dbTrie, _dbRoot, newPastRoots, _dbEmptyRoot)
+
+  def changeEmptyRoot(emptyRoot: Blake2b256Hash): State[K, V] =
+    State(_dbTrie, _dbRoot, _dbPastRoots, Some(emptyRoot))
 }
 
 object State {
-  def empty[K, V]: State[K, V] = State[K, V](Map.empty, Map.empty, Map.empty)
+  def empty[K, V]: State[K, V] = State[K, V](Map.empty, Map.empty, Map.empty, None)
 }
 
 class InMemoryTrieStore[K, V]
@@ -109,6 +113,13 @@ class InMemoryTrieStore[K, V]
     txn.writeState(_ => (State.empty, ()))
 
   def close(): Unit = ()
+
+  override private[rspace] def getEmptyRoot(txn: InMemTransaction[State[K, V]]) =
+    txn.readState(_._dbEmptyRoot.getOrElse(throw new LookupException("Empty root not found")))
+
+  override private[rspace] def putEmptyRoot(txn: InMemTransaction[State[K, V]],
+                                            hash: Blake2b256Hash): Unit =
+    txn.writeState(state => (state.changeEmptyRoot(hash), ()))
 }
 
 object InMemoryTrieStore {
