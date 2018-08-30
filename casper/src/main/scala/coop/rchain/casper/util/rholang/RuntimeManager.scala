@@ -97,19 +97,19 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
-    assert(data.length == 1)
+    assert(data.length == 1, "Data length for bonds map was not 1.")
     val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
     as.channels.head match {
       case Channel(Quote(p)) =>
         p.exprs.head.getEMapBody.ps.map {
           case (validator: Par, bond: Par) =>
-            assert(validator.exprs.length == 1)
-            assert(bond.exprs.length == 1)
+            assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
+            assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
             val validatorName = validator.exprs.head.getGString
             val stakeAmount   = Math.toIntExact(bond.exprs.head.getGInt)
             Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
         }.toList
-      case Channel(_) => throw new Error("Should never happen")
+      case Channel(_) => throw new Error("Matched a Channel that did not contain a Quote inside.")
     }
   }
 

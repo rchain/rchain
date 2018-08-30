@@ -528,14 +528,14 @@ object Validate {
                       "Bonds in proof of stake contract do not match block's bond cache.")
               } yield Left(InvalidBondsCache)
             }
-          case Failure(_) =>
+          case Failure(ex: Throwable) =>
             for {
-              _ <- Log[F].warn("Failed to compute bonds from tuplespace hash.")
+              _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
             } yield Left(InvalidBondsCache)
         }
       case None =>
         for {
-          _ <- Log[F].warn("Block is missing a tuplespace hash.")
+          _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a tuplespace hash.")
         } yield Left(InvalidBondsCache)
     }
   }
