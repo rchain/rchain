@@ -13,26 +13,34 @@ imports MATCHING-FUNCTION
 //    In the standard case we do not allow variables in the second component; if we encounter them
 //    we simply substitute
 rule <thread> ... <k> ...
-            match["STDMATCH"]( P:HigherProcOrChan ; D:HigherProcOrChanNoVars )
+            match["STDMATCH"]( P:HigherPat ; D:HigherPatNoVars )
             => matchstdform["STDMATCH"]( intostdmatchform(P) ; intostdmatchform(D))
         ... </k> ... </thread>
 
-// 1. Rules for encountering variables in the second component
+// 2. Rules for encountering variables in the second component
 rule <thread> ...
-          <k> match["STDMATCH"]( P:HigherProcOrChan ; X:Id ) => fv("STDMATCH", P , X) ... </k>
+          <k> match["STDMATCH"]( P:HigherPat ; X:Id ) => fv("STDMATCH", P , X) ... </k>
      ... </thread>
 
 // If there are no free vars, we're left with a #(VARPAUSE)["STDMATCH"]
 rule <thread> ...
-      <k> #(VARPAUSE)["STDMATCH" , BaseProc:HigherProcOrChan , BindingVar:Id][.List] => . ... </k>
+      <k> #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id][.List] => . ... </k>
       <subst>  Q => Q[ BaseProc / BindingVar] </subst> ... </thread>
 
 // If there are free vars, the match fails
 rule <thread> ...
       <k>
-      #(VARPAUSE)["STDMATCH" , BaseProc:HigherProcOrChan , BindingVar:Id][ListItem(X) FreeVars:List]
+      #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id][ListItem(X) FreeVars:List]
       => #(MATCHFAIL)["STDMATCH"]
   ... </k> ... </thread>
+
+// 3. Rules for encountering a wildcard in the second component
+//    We do nothing.
+rule <thread> ...
+          <k> match["STDMATCH"]( P:HigherPat ; X:Wildcard ) => . ... </k>
+     ... </thread>
+
+
 
 
 // The "DoTheseMatch" function
@@ -44,58 +52,75 @@ rule <thread> ...
 //    Like in the standard case, we do not allow variables in the second component; if we encounter
 //    them we simply substitute
 rule <thread> ... <k> ...
-                 match["TFSTDMATCH"]( P:HigherProcOrChan ; D:HigherProcOrChanNoVars )
+                 match["TFSTDMATCH"]( P:HigherPat ; D:HigherPatNoVars )
               => matchstdform["TFSTDMATCH"]( intostdmatchform(P) ; intostdmatchform(D))
               ... </k> ... </thread>
 
-rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherProcOrChan ; X:Id )
+// 2. Rules for encountering variables in the second component
+rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherPat ; X:Id )
               => fv("TFSTDMATCH", P , X) ... </k> ... </thread>
 
 // If there are no free vars, we're left with a #(VARPAUSE)["TFSTDMATCH"] and we just erase it,
 // signifying a success.
-rule <thread> ... <k> #(VARPAUSE)["TFSTDMATCH" , BaseProc:HigherProcOrChan , BindingVar:Id][.List]
+rule <thread> ... <k> #(VARPAUSE)["TFSTDMATCH" , BaseProc:HigherPat , BindingVar:Id][.List]
                       => . </k> ... </thread>
 
 // If there are free vars, the match fails
 rule <thread> ... <k> #(VARPAUSE)[
                           "TFSTDMATCH" ,
-                          BaseProc:HigherProcOrChan ,
+                          BaseProc:HigherPat ,
                           BindingVar:Id][ListItem(X) FreeVars:List]
                       => #(MATCHFAIL)["TFSTDMATCH"] </k> ... </thread>
 
+// 3. Rules for encountering a wildcard in the second component
+rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherPat ; X:Wildcard )
+              => . ... </k> ... </thread>
 
-// The "DoTheseChansMatch" function
+
+
+// The "DoTheseHigherNamesMatch" function
 // This function will see
 // 1. We allow variables in the second component
-rule <thread> ... <k> ... match["CHANMATCH"]( P:HigherProcOrChan ; D:HigherProcOrChan )
-              => matchstdform["CHANMATCH"]( intostdmatchform(P) ; intostdmatchform(D))
+rule <thread> ... <k> ... match["HIGHERNAMEMATCH"]( P:HigherPat ; D:HigherPat )
+              => matchstdform["HIGHERNAMEMATCH"]( intostdmatchform(P) ; intostdmatchform(D))
               ... </k> ... </thread>
 
 // This isn't quite right. It won't be necessary once we have alpha equivalence
-rule <thread> ... <k> ... matchstdform["CHANMATCH"](
-                            "var"[X:Id] ;
-                            "var"[Y:Id] ;
+rule <thread> ... <k> ... matchstdform["HIGHERNAMEMATCH"](
+                            "variable"[X:Id] ;
+                            "variable"[Y:Id] ;
+                            true)
+                          => . ... </k> ... </thread>
+
+rule <thread> ... <k> ... matchstdform["HIGHERNAMEMATCH"](
+                            "wildcard"[ X:Wildcard ] ;
+                            "wildcard"[ X:Wildcard ] ;
                             true)
                           => . ... </k> ... </thread>
 
 
-// The T/F version of the "DoTheseChansMatch" function
+// The T/F version of the "DoTheseHigherNamesMatch" function
 // This function will see
 // 1. We allow variables in the second component
-rule <thread> ... <k> ... match["TFCHANMATCH"](
-                                  P:HigherProcOrChan ;
-                                  D:HigherProcOrChan )
-              => matchstdform["TFCHANMATCH"](
+rule <thread> ... <k> ... match["TFHIGHERNAMEMATCH"](
+                                  P:HigherPat ;
+                                  D:HigherPat )
+              => matchstdform["TFHIGHERNAMEMATCH"](
                                   intostdmatchform(P) ;
                                   intostdmatchform(D))
                   ... </k> ... </thread>
 
 // This isn't quite right. It won't be necessary once we have alpha equivalence
-rule <thread> ... <k> ... matchstdform["TFCHANMATCH"](
-                                                "var"[X:Id] ;
-                                                "var"[Y:Id] ;
+rule <thread> ... <k> ... matchstdform["TFHIGHERNAMEMATCH"](
+                                                "variable"[X:Id] ;
+                                                "variable"[Y:Id] ;
                                                 true)
                           => . ... </k> ... </thread>
 
+rule <thread> ... <k> ... matchstdform["TFHIGHERNAMEMATCH"](
+                                                "wildcard"[ X:Wildcard ] ;
+                                                "wildcard"[ X:Wildcard ] ;
+                                                true)
+                          => . ... </k> ... </thread>
 
 endmodule

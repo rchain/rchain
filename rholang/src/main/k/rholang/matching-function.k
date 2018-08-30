@@ -7,39 +7,87 @@ imports MATCH-PROCESS
 // in slightly nuanced forms throughout the framework, so we attach the identifying
 // string to each instance of the match function.
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// Some needed syntax for matching
+// This distinguishes between Processes and Names with and without variables
+syntax ProcOrName ::= Id
+              | ProcOrNameNoVars
+              | Name
+              | Proc
 
+syntax HigherProcOrHigherName ::= Id
+              | HigherProcOrHigherNameNoVars
+              | HigherName
+              | HigherProc
+
+// For matching, we need to make a distinction between variables and no variables
+syntax ProcOrNameNoVars ::= NameNoVars
+              | ProcNoVars
+
+syntax HigherProcOrHigherNameNoVars ::= HigherNameNoVars
+              | HigherProcNoVars
+
+syntax StringlessMatchFormSyntax ::=
+              // Quote, Eval and Var
+                "[" HigherPat "]"
+              // Listen and Persistent Listen, as well as Contracts
+              | "[" HigherNamePat "][" HigherNamePat "][" HigherProcPat "]"
+              // New
+              | "[" Ids "][" HigherProcPat "]"
+              // Send
+              | "[" HigherNamePat "][" HigherProcPat "]"
+              // Match
+              | "[" HigherPat "][" HigherMatchCasesPat "]"
+              | "[" HigherPat "][" HigherProcPat "]"
+              // Logical And's and Or's
+              | "[" String "][" HigherPat "][" HigherPat "]"
+              // Nil
+              | "[" "]"
+              // Hashed new HigherNames
+              | "[" Int "]"
+              | "[" HigherProcPat "][" HigherProcPat "]"
+
+// Syntax which is needed for various matching operations
+syntax CanBeStdMatched ::= Id
+              | "intostdmatchform(" HigherPat ")"
+              | "intostdtfmatchform(" HigherPat ")"
+              | Ground
+              | HigherNameNoVars
+
+
+
+// Now the semantics of the match function
 // Take the tuples one at a time
-rule <thread> ... <k> ... listmatch[ S:String ]( P:HigherProc, Q:HigherProcs ; D:Chan, E:Chans )
-                      => listmatch[ S ]( Q ; E ) ~> match[S]( @P ; D )  ... </k> ... </thread>
+rule <thread> ... <k> ... aritymatch[ S:String ]( P:HigherProcPat, Q:HigherProcPats ; D:HigherNamePat, E:HigherNamePats )
+                      => aritymatch[ S ]( Q ; E ) ~> match[S]( @P ; D )  ... </k> ... </thread>
 
-// When they're both done, get rid of the listmatch bit and get going on matching
-rule <thread> ... <k> ... listmatch[ S:String ]( .HigherProcs ; .Chans )
+// When they're both done, get rid of the aritymatch bit and get going on matching
+rule <thread> ... <k> ... aritymatch[ S:String ]( .HigherProcPats ; .HigherNamePats )
                       => . ... </k> ... </thread>
 
 // They fail if the tuples are not the same length
-rule <thread> ... <k> ... listmatch[ S:String ]( .HigherProcs ; D:Chan, E:Chans )
+rule <thread> ... <k> ... aritymatch[ S:String ]( .HigherProcPats ; D:HigherNamePat, E:HigherNamePats )
                       => #(MATCHFAIL)[S] ... </k> ... </thread>
-rule <thread> ... <k> ... listmatch[ S:String ]( P:HigherProc, Q:HigherProcs ; .Chans )
+rule <thread> ... <k> ... aritymatch[ S:String ]( P:HigherProcPat, Q:HigherProcPats ; .HigherNamePats )
                       => #(MATCHFAIL)[S] ... </k> ... </thread>
 
 // We also split things up if there are logical connectives: "and's" or "or's"
 // (i) The "and's" are straightforward, since we need to match with all of them
 // For processes
-rule <thread> ... <k> ... match[S:String]( P:HigherProcOrChan ; Q:HigherProc /\ R:HigherProc )
+rule <thread> ... <k> ... match[S:String]( P:HigherPat ; Q:HigherProcPat /\ R:HigherProcPat )
                => match[S](P ; Q) ~> match[S]( P ; R ) ... </k> ... </thread>
 
 // (ii) The "or's" are a little more complicated, but not by much
-syntax OrCheckSyntax ::= "["HigherProcOrChan"]["HigherProcOrChan"]["List"]"
+syntax OrCheckSyntax ::= "["HigherProcPat"]["HigherProcPat"]["List"]"
 
 // For processes
-rule <thread> ... <k> match[S:String]( P:HigherProcOrChan ; Q:HigherProc \/ R:HigherProc )
+rule <thread> ... <k> match[S:String]( P:HigherPat ; Q:HigherProcPat \/ R:HigherProcPat )
                =>  #(ORPAUSE)[S] ... </k>
                (.Bag => <OrCheck> [P][.K][ListItem(Q) ListItem(R)]  </OrCheck>) ... </thread>
 
 // Make the first choice nondetermistically
 rule <thread> ... <k> #(ORPAUSE)[S:String] => match["TF" +String S](P ; C) ~> #(ORPAUSE)[S] ... </k>
                <OrCheck>
-                [P][(.K => C)][ListHead:List (ListItem(C:HigherProcOrChan) => .) ListTail:List]
+                [P][(.K => C)][ListHead:List (ListItem(C:HigherPat) => .) ListTail:List]
                </OrCheck> ... </thread>
 
 // If the match fails, keep checking
@@ -48,48 +96,48 @@ rule <thread> ...
                 ~> #(ORPAUSE)[S:String] => match[TF](P ; D)
                 ~> #(ORPAUSE)[S] ... </k>
         <OrCheck>
-          [P:HigherProcOrChan][(C:HigherProcOrChan => D)][
-          ListHead:List (ListItem(D:HigherProcOrChan) => .) ListTail:List]
+          [P:HigherPat][(C:HigherPat => D)][
+          ListHead:List (ListItem(D:HigherPat) => .) ListTail:List]
         </OrCheck> ... </thread>
         requires TF ==String ("TF" +String S)
 
 // If the match succeeds, substitute
 rule <thread> ... <k> #(ORPAUSE)[S:String] => match[S](P ; C) ... </k>
-                  (<OrCheck> [P:HigherProcOrChan][C:HigherProcOrChan][L:List] </OrCheck> => .)
+                  (<OrCheck> [P:HigherPat][C:HigherPat][L:List] </OrCheck> => .)
      ... </thread>
 
 // If nothing succeeds, then these do not match
 rule <thread> ...
         <k> ... #(MATCHFAIL)[ TF:String ] ~> #(ORPAUSE)[S:String] => #(MATCHFAIL)[ S ] ... </k>
-        (<OrCheck> [P:HigherProcOrChan][C:HigherProcOrChan][.List] </OrCheck> => .)
+        (<OrCheck> [P:HigherPat][C:HigherPat][.List] </OrCheck> => .)
      ... </thread>
         requires TF ==String ("TF" +String S)
 
 // In order to be sure that the "or"s break up sufficiently, we need to tell "match["TFSTDMATCH"]"
 // how to handle them.
-// Then for processes
+// For processes
 rule <thread> ...
-      <k> ... match[TF:String]( P:HigherProcOrChan ; (R:HigherProc \/ Q:HigherProc => R) ) ... </k>
-      <OrCheck> [P:HigherProcOrChan][(R \/ Q => R)][(.List => ListItem(Q)) L:List] </OrCheck>
+      <k> ... match[TF:String]( P:HigherPat ; (R:HigherProcPat \/ Q:HigherProcPat => R) ) ... </k>
+      <OrCheck> [P:HigherPat][(R \/ Q => R)][(.List => ListItem(Q)) L:List] </OrCheck>
  ... </thread>
 
 // Because of precedence rules, we may end up with "and"s in the match["TFSTDMATCH"]( ) function
 // In that case, we have to check if both match. If we do, we'll send it to the match( ) function
 // For processes
-rule <thread> ... <k> ... match[TF:String]( P:HigherProcOrChan ; Q:HigherProc /\ R:HigherProc )
-                  => match[TF]( P:HigherProcOrChan ; Q )
-                  ~> match[TF]( P:HigherProcOrChan ; R ) ... </k> ... </thread>
+rule <thread> ... <k> ...match[TF:String]( P:HigherPat ; Q:HigherProcPat /\ R:HigherProcPat )
+                  => match[TF]( P:HigherPat ; Q )
+                  ~> match[TF]( P:HigherPat ; R ) ... </k> ... </thread>
 
 // (b) Put everything into a standard form that's easy to work with
-rule intostdmatchform(@P:HigherProc) => "quote"[ P ]
-rule intostdmatchform(*C:Chan) => "eval"[ C ]
-rule intostdmatchform(for(C:Chan <- D:Chan){P:HigherProc}) => "listen"[C][D][P]
-rule intostdmatchform(for(C:Chan <= D:Chan){P:HigherProc}) => "persistentlisten"[C][D][P]
-rule intostdmatchform(contract D:Chan(C:Chan) = { P:HigherProc }) => "persistentlisten"[C][D][P]
-rule intostdmatchform(new X:Ids in { P:HigherProc }) => "new"[X][P]
-rule intostdmatchform(match P:HigherProcOrChan { H:HigherMatchCases} ) => "match"[P][H]
-rule intostdmatchform(C:Chan!(P:HigherProc)) => "send"[C][P]
-rule intostdmatchform(C:Chan!!(P:HigherProc)) => "persistentsend"[C][P]
+rule intostdmatchform(@P:HigherProcPat) => "quote"[ P ]
+rule intostdmatchform(*C:HigherNamePat) => "eval"[ C ]
+rule intostdmatchform(for(C:HigherNamePat <- D:HigherNamePat){P:HigherProcPat}) => "listen"[C][D][P]
+rule intostdmatchform(for(C:HigherNamePat <= D:HigherNamePat){P:HigherProcPat}) => "persistentlisten"[C][D][P]
+rule intostdmatchform(contract D:HigherNamePat(C:HigherNamePat) = { P:HigherProcPat }) => "persistentlisten"[C][D][P]
+rule intostdmatchform(new X:Ids in { P:HigherProcPat }) => "new"[X][P]
+rule intostdmatchform(match P:HigherPat { H:HigherMatchCasesPat} ) => "match"[P][H]
+rule intostdmatchform(C:HigherNamePat!(P:HigherProcPat)) => "send"[C][P]
+rule intostdmatchform(C:HigherNamePat!!(P:HigherProcPat)) => "persistentsend"[C][P]
 rule intostdmatchform( Nil ) => "Nil"[ ]
 // Expressions
 rule intostdmatchform(S:String) => "string"[S]
@@ -97,8 +145,9 @@ rule intostdmatchform(B:Bool) => "bool"[B]
 rule intostdmatchform(I:Int) => "int"[I]
 // Misc
 rule intostdmatchform( #(I:Int) ) => "hash"[I]
-rule intostdmatchform( P1:HigherProc | P2:HigherProc ) => "par"[P1][P2]
-rule intostdmatchform( X:Id ) => "var"[X]
+rule intostdmatchform( P1:HigherProcPat | P2:HigherProcPat ) => "par"[P1][P2]
+rule intostdmatchform( X:Id ) => "variable"[X]
+rule intostdmatchform( X:Wildcard ) => "wildcard"[ X ]
 
 
 // "matchstdform" goes through a couple steps; it will take two arguments, and then check to see
@@ -164,11 +213,11 @@ rule <thread> ...
 
 // When the pattern is a quote "@"
 rule <thread> ... <k> ... matchstdform[S:String](
-                        "quote"[P:HigherProc] ; "quote"[R:HigherProc] ; true)
+                        "quote"[P:HigherProcPat] ; "quote"[R:HigherProcPat] ; true)
           => match[S]( P ; R ) ... </k> ... </thread>
 
 // When the pattern is an eval "*"
-rule <thread> ... <k> ... matchstdform[S:String]( "eval"[C:Chan] ; "eval"[D:Chan] ; true)
+rule <thread> ... <k> ... matchstdform[S:String]( "eval"[C:HigherNamePat] ; "eval"[D:HigherNamePat] ; true)
           => match[S]( C ; D ) ... </k> ... </thread>
 
 // When the pattern is a "for"
@@ -177,30 +226,30 @@ rule <thread> ... <k> ... matchstdform[S:String]( "eval"[C:Chan] ; "eval"[D:Chan
 // it will match exactly the correct terms, while failing to match anything else.
 rule <thread> ...
         <k> ... matchstdform[S:String](
-                            "listen"[C:Chan][D:Chan][P:HigherProc] ;
-                            "listen"[E:Chan][F:Chan][R:HigherProc] ;
+                            "listen"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat] ;
+                            "listen"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat] ;
                             true
                           )
-          => match["CHANMATCH"](C ; E)
+          => match["HIGHERPATMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
 
 // THIS is how it should be.
 //rule <thread> ... <k> ... matchstdform(
-//                          "listen"[C:Chan][D:Chan][P:HigherProc] ;
-//                          "listen"[E:Chan][F:Chan][R:HigherProc] ;
+//                          "listen"[C:HigherName][D:HigherName][P:HigherProc] ;
+//                          "listen"[E:HigherName][F:HigherName][R:HigherProc] ;
 //                          true )
-//          => AreTheseChansEqual(C ; E) ~> match(D ; F) ~> match(P ; R) ... </k> ... </thread>
+//          => AreTheseHigherNamesEqual(C ; E) ~> match(D ; F) ~> match(P ; R) ... </k> ... </thread>
 
 
 // When the pattern is a persistent "for"
 // *** This is also incorrect; we need things like in the previous listen construct
 rule <thread> ... <k> ... matchstdform[S:String](
-                              "persistentlisten"[C:Chan][D:Chan][P:HigherProc] ;
-                              "persistentlisten"[E:Chan][F:Chan][R:HigherProc] ;
+                              "persistentlisten"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat] ;
+                              "persistentlisten"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat] ;
                               true
                             )
-          => match["CHANMATCH"](C ; E)
+          => match["HIGHERNAMEMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
 
@@ -208,15 +257,15 @@ rule <thread> ... <k> ... matchstdform[S:String](
 
 // When the pattern is a persistent "for"
 //rule <thread> ... <k> ... match(
-//                              "persistentlisten"(C:Chan)(D:Chan)(P:HigherProc),
-//                              "persistentlisten"(E:Chan)(F:Chan)(R:HigherProc),
+//                              "persistentlisten"(C:HigherName)(D:HigherName)(P:HigherProc),
+//                              "persistentlisten"(E:HigherName)(F:HigherName)(R:HigherProc),
 //                              true )
 //          => match("persistentlisten"(D)(P),"persistentlisten"(F)(R),C == E)
 //             ... </k> ... </thread>
 //
 //rule <thread> ... <k> ... match(
-//                              "persistentlisten"(D:Chan)(P:HigherProc),
-//                              "persistentlisten"(F:Chan)(R:HigherProc),
+//                              "persistentlisten"(D:HigherName)(P:HigherProc),
+//                              "persistentlisten"(F:HigherName)(R:HigherProc),
 //                              true)
 //          => match(intostdmatchform(D),intostdmatchform(F))
 //          ~> match(intostdmatchform(P),intostdmatchform(R)) ... </k> ... </thread>
@@ -224,15 +273,15 @@ rule <thread> ... <k> ... matchstdform[S:String](
 
 // When the pattern is "send"
 rule <thread> ... <k> ... matchstdform[S:String](
-                            "send"[C:Chan][P:HigherProc] ;
-                            "send"[D:Chan][R:HigherProc] ;
+                            "send"[C:HigherNamePat][P:HigherProcPat] ;
+                            "send"[D:HigherNamePat][R:HigherProcPat] ;
                             true)
           => match[S]( C ; D ) ~> match[S]( P ; R ) ... </k> ... </thread>
 
 // When the pattern is "persistentsend"
 rule <thread> ... <k> ... matchstdform[S:String](
-                            "persistentsend"[C:Chan][P:HigherProc] ;
-                            "persistentsend"[D:Chan][R:HigherProc] ;
+                            "persistentsend"[C:HigherNamePat][P:HigherProcPat] ;
+                            "persistentsend"[D:HigherNamePat][R:HigherProcPat] ;
                             true)
           => match[S]( C ; D )
           ~> match[S]( P ; R ) ... </k> ... </thread>
@@ -244,8 +293,8 @@ rule <thread> ... <k> ... matchstdform[S:String]( "hash"[I:Int] ; "hash"[J:Int] 
 // When the pattern is a "new"
 // (i)
 rule <thread> ... <k> ... matchstdform[S:String](
-                                "new"[X1:Id,L1:Ids][P:HigherProc] ;
-                                "new"[X2:Id,L2:Ids][R:HigherProc] ;
+                                "new"[X1:Id,L1:Ids][P:HigherProcPat] ;
+                                "new"[X2:Id,L2:Ids][R:HigherProcPat] ;
                                 true)
           => matchstdform[S](
                     "new"[L1][ P[@ #(I:Int) / X1] ] ;
@@ -254,20 +303,20 @@ rule <thread> ... <k> ... matchstdform[S:String](
           <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
 // (ii) If either one creates more new variables than the other we fail
 rule <thread> ... <k> ... matchstdform[S:String](
-                    "new"[X1:Id,L1:Ids][P:HigherProc] ;
-                    "new"[ .Ids ][R:HigherProc] ;
+                    "new"[X1:Id,L1:Ids][P:HigherProcPat] ;
+                    "new"[ .Ids ][R:HigherProcPat] ;
                     true)
           => #(MATCHFAIL)[S] ... </k> ... </thread>
 rule <thread> ... <k> ... matchstdform[S:String](
-                    "new"[ .Ids ][P:HigherProc] ;
-                    "new"[ X2:Id,L2:Ids ][R:HigherProc] ;
+                    "new"[ .Ids ][P:HigherProcPat] ;
+                    "new"[ X2:Id,L2:Ids ][R:HigherProcPat] ;
                     true)
           => #(MATCHFAIL)[S] ... </k> ... </thread>
 
-// (iii) When you get down to no new channels
+// (iii) When you get down to no new HigherNames
 rule <thread> ... <k> ... matchstdform[S:String](
-                    "new"[ .Ids ][P:HigherProc] ;
-                    "new"[ .Ids ][R:HigherProc] ;
+                    "new"[ .Ids ][P:HigherProcPat] ;
+                    "new"[ .Ids ][R:HigherProcPat] ;
                     true)
           => match[S]( P ; R ) ... </k> ... </thread>
 
@@ -278,34 +327,34 @@ rule <thread> ... <k> ... matchstdform[S:String](
 // be checked slightly more rigorously; we cannot match in patterns like this--We need to check for
 // pattern equality.
 rule <thread> ... <k> ... matchstdform[S:String](
-      "match"[P1:HigherProcOrChan][Q1:HigherProcOrChan => { R1:HigherProc } H1:HigherMatchCases];
-      "match"[P2:HigherProcOrChan][Q2:HigherProcOrChan => { R2:HigherProc } H2:HigherMatchCases];
+      "match"[P1:HigherPat][Q1:HigherPat => { R1:HigherProcPat } H1:HigherMatchCasesPat];
+      "match"[P2:HigherPat][Q2:HigherPat => { R2:HigherProcPat } H2:HigherMatchCasesPat];
       true)
    => matchstdform[S](
-      "match"[P1:HigherProcOrChan][H1:HigherMatchCases];
-      "match"[P2:HigherProcOrChan][H2:HigherMatchCases];
+      "match"[P1:HigherPat][H1:HigherMatchCasesPat];
+      "match"[P2:HigherPat][H2:HigherMatchCasesPat];
       true)
       ~> match[S](Q1;Q2)
       ~> match[S](R1;R2) ... </k> ... </thread>
 
 // When we are done matching off the HigherMatchCases, we match the original patterns
 rule <thread> ... <k> ... matchstdform[S:String](
-                              "match"[P1:HigherProcOrChan][.HigherMatchCases];
-                              "match"[P2:HigherProcOrChan][.HigherMatchCases];
+                              "match"[P1:HigherPat][.HigherMatchCasesPat];
+                              "match"[P2:HigherPat][.HigherMatchCasesPat];
                               true)
           => match[S](P1;P2) ... </k> ... </thread>
 
 // If the lists of patterns-to-match are of different length, matching fails.
 rule <thread> ... <k> ... matchstdform[S:String](
-                            "match"[P1:HigherProcOrChan][Q1:HigherProcOrChan =>
-                            { R1:HigherProc } H1:HigherMatchCases];
-                            "match"[P2:HigherProcOrChan][.HigherMatchCases];
+                            "match"[P1:HigherPat][Q1:HigherPat =>
+                            { R1:HigherProcPat } H1:HigherMatchCasesPat];
+                            "match"[P2:HigherPat][.HigherMatchCasesPat];
                             true)
           => #(MATCHFAIL)[S] ... </k> ... </thread>
 rule <thread> ... <k> ... matchstdform[S:String](
-                            "match"[P1:HigherProcOrChan][.HigherMatchCases];
-                            "match"[P2:HigherProcOrChan][Q2:HigherProcOrChan
-                            => { R2:HigherProc } H2:HigherMatchCases];
+                            "match"[P1:HigherPat][.HigherMatchCasesPat];
+                            "match"[P2:HigherPat][Q2:HigherPat
+                            => { R2:HigherProcPat } H2:HigherMatchCasesPat];
                             true)
           => #(MATCHFAIL)[S] ... </k> ... </thread>
 

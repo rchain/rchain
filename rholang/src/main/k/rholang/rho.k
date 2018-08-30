@@ -9,6 +9,7 @@ require "matching-function.k"
 require "specific-matching-rules.k"
 require "matching-with-par.k"
 require "free.k"
+require "program-restrictions.k"
 
 module RHO
 imports RHO-SYNTAX
@@ -20,11 +21,14 @@ imports MATCHING-FUNCTION
 imports SPECIFIC-MATCHING-RULES
 imports MATCHING-WITH-PAR
 imports FREE
+imports PROGRAM-RESTRICTIONS
+
 
 // Configuration
 configuration <T color="yellow">
                 <thread multiplicity="*" color="purple">
-                  <k color="red"> $PGM:Proc </k>
+                  // When we initiate our program, fvInitial( ) checks for free variables
+                  <k color="red"> fvInitial( $PGM:Proc ) </k>
                   <in multiplicity="*" color="blue"> .K </in>
                   <out multiplicity="*" color="yellow"> .K </out>
                   <InData multiplicity="*"> .K </InData>
