@@ -14,7 +14,7 @@ object PreWallet {
     * @return  Rholang code to add the pre-wallet to the blockchain.
     */
   def rhoCode(w: PreWallet): String = s"""
-    |new purseCh, walletCh in {
+    |new purseCh in {
     |  @[revMint, "makePurse"]!(${w.initRevBalance}, *purseCh) |
     |  for(@purse <- purseCh) {
     |    @["WalletCheck", "create"]!("${w.ethAddress}", purse)
