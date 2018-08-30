@@ -3,6 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import java.io.StringReader
 
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
@@ -60,7 +61,7 @@ object Signer extends App {
     val data        = parse(value)
     val dataBytes   = bytes(data)
     val sigKeyBytes = Base16.decode(sigKey)
-    val sigBytes    = Ed25519.sign(dataBytes, sigKeyBytes)
+    val sigBytes    = Ed25519.sign(Blake2b256.hash(dataBytes), sigKeyBytes)
     val sig         = Base16.encode(sigBytes)
     sig
   }

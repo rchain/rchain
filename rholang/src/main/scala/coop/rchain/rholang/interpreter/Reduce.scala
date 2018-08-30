@@ -1244,6 +1244,8 @@ object Reduce {
                 remainder
               )
             )
+          case GByteArray(bytes) =>
+            Applicative[M].pure[Par](GByteArray(bytes.substring(from, until)))
           case other =>
             s.raiseError(MethodNotDefined("slice", other.typ))
         }

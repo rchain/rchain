@@ -7,9 +7,14 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev, Wallet}
+import coop.rchain.casper.genesis.contracts.{
+  PreWallet,
+  PreWalletRev,
+  ProofOfStake,
+  ProofOfStakeValidator
+}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, termDeploy, unsignedBlockProto}
+import coop.rchain.casper.util.ProtoUtil.{blockHeader, compiledSourceDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -20,7 +25,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.{Either, LinkedList}
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
-import coop.rchain.rholang.wallet.BasicWallet
+import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
 
@@ -34,20 +39,21 @@ object Genesis {
 
   def defaultBlessedTerms(timestamp: Long,
                           validators: Seq[ProofOfStakeValidator],
-                          wallets: Seq[Wallet]): List[Deploy] =
+                          wallets: Seq[PreWallet]): List[Deploy] =
     List(
-      LinkedList.term,
-      Either.term,
-      NonNegativeNumber.term,
-      MakeMint.term,
-      BasicWallet.term,
-      new Rev(wallets).term,
-      new ProofOfStake(validators).term
-    ).map(termDeploy(_, timestamp))
+      LinkedList,
+      Either,
+      NonNegativeNumber,
+      MakeMint,
+      BasicWallet,
+      WalletCheck,
+      new PreWalletRev(wallets),
+      new ProofOfStake(validators)
+    ).map(compiledSourceDeploy(_, timestamp))
 
   def withContracts(initial: BlockMessage,
                     validators: Seq[ProofOfStakeValidator],
-                    wallets: Seq[Wallet],
+                    wallets: Seq[PreWallet],
                     startHash: StateHash,
                     runtimeManager: RuntimeManager,
                     timestamp: Long)(implicit scheduler: Scheduler): BlockMessage =
@@ -150,26 +156,26 @@ object Genesis {
     }
 
   def getWallets[F[_]: Monad: Capture: Log](walletsFile: Option[File],
-                                            maybeWalletsPath: Option[String]): F[Seq[Wallet]] = {
-    def walletFromFile(file: File): F[Seq[Wallet]] =
+                                            maybeWalletsPath: Option[String]): F[Seq[PreWallet]] = {
+    def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
         maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
         wallets <- maybeLines match {
                     case Success(lines) =>
                       lines
-                        .traverse(Wallet.fromLine(_) match {
+                        .traverse(PreWallet.fromLine(_) match {
                           case Right(wallet) => wallet.some.pure[F]
                           case Left(errMsg) =>
                             Log[F]
                               .warn(s"Error in parsing wallets file: $errMsg")
-                              .map(_ => none[Wallet])
+                              .map(_ => none[PreWallet])
                         })
                         .map(_.flatten)
                     case Failure(ex) =>
                       Log[F]
                         .warn(
                           s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
-                        .map(_ => Seq.empty[Wallet])
+                        .map(_ => Seq.empty[PreWallet])
                   }
       } yield wallets
 
@@ -178,12 +184,12 @@ object Genesis {
       case (None, Some(path)) =>
         Log[F]
           .warn(s"Specified wallets file $path does not exist. No wallets will exist at genesis.")
-          .map(_ => Seq.empty[Wallet])
+          .map(_ => Seq.empty[PreWallet])
       case (None, None) =>
         Log[F]
           .warn(
             s"No wallets file specified and no default file found. No wallets will exist at genesis.")
-          .map(_ => Seq.empty[Wallet])
+          .map(_ => Seq.empty[PreWallet])
     }
   }
 
