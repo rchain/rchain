@@ -241,7 +241,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
         NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
         NonDetFreeMapWithCost.pure(())
-      else
+      else if (plen == 0 && varLevel.isDefined) {
+        val matchResult =
+          if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
+            handleRemainder(tlist, varLevel.get, merger).toNonDet()
+          else
+            NonDetFreeMapWithCost.emptyMap[Unit]
+        matchResult.modifyCost(_.charge(COMPARISON_COST * tlist.size))
+      } else
         listMatch(tlist, plist, merger, varLevel, wildcard).toNonDet()
 
     result
