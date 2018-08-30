@@ -3,9 +3,9 @@
 
 // create: makes a wallet check
 //
-// bytearray hash: the hash of the public key
 // Purse purse: the funds to put in the wallet
-contract @["WalletCheck", "create"](@hash, @purse) = {
+// bytearray hash: the hash of the public key
+contract @["WalletCheck", "create"](@purse, @hash) = {
   new doneStore in {
     doneStore!(false) |
     
