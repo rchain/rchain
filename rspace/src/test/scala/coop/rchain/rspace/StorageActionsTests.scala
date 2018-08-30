@@ -1043,7 +1043,8 @@ trait StorageActionsTests
   }
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)], differenceReport: Boolean = false): Boolean = {
+                            indexedStates: Seq[(State, Int)],
+                            differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
@@ -1058,7 +1059,7 @@ trait StorageActionsTests
           } else {
             logger.error(s"$num: store had unexpected contents")
 
-            if(differenceReport) {
+            if (differenceReport) {
               logger.error("difference report")
               for ((expectedChannels, expectedRow) <- expectedContents) {
                 val actualRow = actualContents.get(expectedChannels)
@@ -1066,7 +1067,8 @@ trait StorageActionsTests
                 actualRow match {
                   case Some(row) =>
                     if (row != expectedRow) {
-                      logger.error(s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                      logger.error(
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
                     }
                   case None => logger.error(s"key [$expectedChannels] not found in actual records")
                 }
@@ -1078,7 +1080,8 @@ trait StorageActionsTests
                 expectedRow match {
                   case Some(row) =>
                     if (row != actualRow) {
-                      logger.error(s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                      logger.error(
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
                     }
                   case None => logger.error(s"key [$actualChannels] not found in expected records")
                 }
@@ -1365,6 +1368,156 @@ trait StorageActionsTests
       }
 
       space.store.toMap shouldBe contents1
+  }
+
+  def getData(): Seq[TestProduceMap] = {
+    val vec = Vector(
+      Map("襥Ⱕ녌莊阧喨䕫⮠䌱" -> ("衐촑쥌胎䴮픚", false), "돥냽㜳昗" -> ("㏡瀄ヿ넙肳諙骫⾹빏ᷲ", false)),
+      Map(
+        ""           -> ("䚞㾤⫞ֱ霷", false),
+        "ㆯ֍鱥ꏊ䷆겝♋␰죐创" -> ("", false),
+        "뮣㸰ﬔ眴泪䄙ḁ"     -> ("絩", false),
+        "꺄巭蕝㰹䓻すฃ顲抢"   -> ("遝", false),
+        "ᑄ텍䘰ꓹ㙵Ӎ﷈娲읇"   -> ("칵䣀䲌", true),
+        "倈๺꼸庅᷹ᩂ"     -> ("ꄘ㒨퉴턖銰먗๣ꃕ", true),
+        "૲堙넓䭘恾嵬"    -> ("""틁钔獉멢뤌껺겯）✸""", true),
+        ""           -> ("""┩꜇毀筶媜嘽""", true),
+        "⭽Ʈ퀧븚ퟬῡ㨓啘༔"   -> ("랊槗绔", true),
+        "핛䦽㼁๦���"    -> ("阴⚦⋠ㅷ", false)
+      ),
+      Map("욹湡铹洳直ꧩ茜㉴⛬퐣ℑ" -> ("箜", true),
+          "搠믕廫词꼬ꇯ"     -> ("⋇塶Ȗ痢꒙梃㭫갍域쁗", true),
+          "㈺ᮀ姨᧾逯諊"       -> ("", false)),
+      Map(
+        "䎴᝸뙛뚉鈫蟾"     -> ("㌔̋", true),
+        "赋렾"           -> ("৺㏄淝豗兓귇•", false),
+        "隞갴䛂豶훂즉퐇"      -> ("决ˠ宆볷ᔧ萄㘚㻋럨ゥ⢣", true),
+        "៩喭ꢆኍ鳰䋬씉ᶔ擇㠊졌쁅" -> ("ൾ", true),
+        "砼龦䓖劐"         -> ("솥", false),
+        "㤢竞迿拂넄"       -> ("绷꼮媴㯐", true),
+        "敾碰첐䕚唐䵓"    -> ("廤ᡢḶ", false),
+        "㻀"            -> ("䛤䒞乃韋ꡫ", true),
+        "枯輠豐ḣⷦ賳賀㸺"    -> ("㕇醎찤ꔃ", true),
+        "삤汔"          -> ("삊㍿욿顕⤏緿ꃣ", true),
+        "脑煆븜鷘쮒"       -> ("Ᏺ䪱為瓮Ɛ㪫砰ٓⓂ", false)
+      ),
+      Map(
+        "⨥瞃싵ѩ亥鈩⁶ො슬暿" -> ("ꒊ酙痘䳲", true),
+        "妣劚矰ﵑ벀ᗣ宅鋺"   -> ("役䣠ⳍ", false),
+        "⣵䪐똎犈"        -> ("㤝︰Ʊ", true),
+        "헝"           -> ("귾ｆ笄", true),
+        "쨴㽺"          -> ("☉簴㐷ᐋ襴搰䲏", false),
+        "듞"           -> ("᏶䰘쩋嘏藵Ṑ㥙ꐚꢌ朣", true),
+        "㵻㜙"          -> ("㈟朅", false),
+        "읽ꉤ濯フ懲ᱵ"     -> ("䈶", false),
+        "憗רּ쒠"        -> ("૽餂紝ꅻ", false),
+        "ᛑ쐔醠ӱ觿ꃹ犭䳵ꨀ"   -> ("⪢", true),
+        "褫颠橰厞"        -> ("⯊↵", false),
+        "㥴穄綻橽ࡏ춣"     -> ("㳽ꘙ͢", true)
+      ),
+      Map(
+        "껠䀃陽哧⤚⻽鄺슑ᛖ" -> ("艥ొⱘ볷ૼﳃɤ鍌画", false),
+        "鏃멁醫懠އ龅ꑻ⨮⹅"  -> ("澿㸆乾춨닸깔핌獀팈춙", false),
+        "ꁴ遣樂確"      -> ("れ罜鎝凜埼烶⍎襫", true),
+        "笋剛銗ﺘⵏ헯繊Ӻට" -> ("풫梾Ｕ懢᩷쳕", true),
+        "긯"          -> ("䤕뉼ꝲ봽", true),
+        "苛⅒꥖跢"    -> ("㎳缦", false),
+        "璔棝㛧뾾︘䇲囌"    -> ("ࡋ饡섊橿뚙㛼搩禟틾ℷ", false),
+        "핣⋄趬窼䬫銐"     -> ("护緒尟⿼풰", false)
+      ),
+      Map(
+        "趻ᰄᮆ騑묇"       -> ("ヽ뇟䆄䖻䫉骋펴ㇹ徤", false),
+        "☳ℿ㱴或㊈鬣ꅔ薓ᓶ" -> ("鐏렪֙馳駖ሂꂚ", false),
+        "翎Ო歬𥉉絩툜"      -> ("춗芎枸폳똢摡୨긙渧๣뮏", true),
+        "鎮ৈ鴑酘���靾"    -> ("䵷앤᳠", false),
+        "鍚늅섳퇑羖烩⋚≋旒"   -> ("墘", false),
+        "寋畀흌풠浗恈㛪ﴍ健"   -> ("럿퉧㰾ힲ낈橱", false),
+        "ﲠ濅ᙃ襊冦洱鑙"     -> ("㎹섢隵ᖛ夷᯶蕴", false),
+        "梔驸㫀뼓䎧୶℔˳皑"  -> ("㘐툠夸", false),
+        "꼉﹞儴鑝♊遯譣ઔϳ"  -> ("ﰖ", false),
+        "煜랞"         -> ("朣꒔뾑묲쨃", true),
+        "痤㙳㶙늽襩⳪"      -> ("륉땔▓", true),
+        "顄鍐뎚䩻坭觹"      -> ("꫘㝾덃", false)
+      ),
+      Map(
+        "렟혹"           -> ("ᯁ⣰㨥㣬⡘捰ᕻ", true),
+        "㒮ߨ"           -> ("ጇ뺽鯅֜꾞椩㗆넖", true),
+        "鹑酳謽ᜪ儿됬"       -> ("漡츌둚Ⱈⴊ饩琧෦뻀ケ", true),
+        "攷㨑ଅꧪ႖氚푑鸺"    -> ("肆ᵧ䋗黒잏苑뗮", false),
+        "듞"            -> ("笌ꎟ夰", true),
+        "⟩睌㎶侮뒛﷯늗"     -> ("ఘ", false),
+        "㊛鸸"           -> ("Ū晀晪銑踘ᓝ", false),
+        "䂟럠鯱쩏ኻ빟㖀"     -> ("벻谵숫㸷䔀睰㠔䆂瓿惴㴇", true),
+        "⋑橺䄘簇䇼絧៊ꆕ儵洩" -> ("荼쓮椺몍伈谥", false),
+        "嚼鳢⮸ꠧ"        -> ("෴粷뿉酩↉", true),
+        "Ⴡ⋑ض㳍嬞쁇탙十"   -> ("嫱锥ᇠꞇꨗ籰닐邆", false)
+      ),
+      Map(
+        "踞슑᮵披뾴"     -> ("썯", false),
+        "ﵳ僦공ヿ镥"      -> ("蔛Ὰ竜ฃ▄ᑚ䕼䐠", true),
+        " 놳侐ꢍﱹ픩ꆩ"    -> ("價忣뿲ꬤꤩꐣ塞東ᶳ곱輪㜊", true),
+        "㈃뉰บ꿶쩜鸻㿏"    -> ("짝袆᧟➋絫麤퓙⎾嶧韅", true),
+        "ٲ螘낮샎禩뾻뭔"    -> ("", false),
+        "㵱툫"         -> ("ꯔ洁", false),
+        "힑ᔭ㦣焽涼誅玭났ᆥ"  -> ("门霓೧麱寃䳿櫝᷁枳ﻏ", false),
+        "㲊뇬抇ௗ"       -> ("০塎튵턻뮴暯᩼", false),
+        "杏⤈胅奖ꭦ뜒꣆铱Ԗ" -> ("嵏祋ﲏ", true),
+        "뜊㫸♱믑퇑杧"     -> ("蘐奵鑭洉졚", true),
+        "ꃕ뙣尗ﳔ揪"     -> ("民흁ｯ챣藹", true)
+      ),
+      Map(
+        "౛봍屐읽휩䋜⥎釐ᕑ谬읗꒕" -> ("毜꿻ꈼ먆뤌ᒫ酔Ỏ", false),
+        "冘炛풝갑젯⸼ᯎ䩢뚌拢킑" -> ("ꦏ㬄渴輋✟호뙪卒", false),
+        "瘊Ꟗ齥"         -> ("ꐓ㍮矝", true),
+        "㍭⢈㉯翙ᤉὨ絳쳸荲"  -> ("薼節", true),
+        "麯햱蒿⻶後㻴ꮷ쒺ዝ劫﹉⣌" -> ("襙", true),
+        "맭൝킂"          -> ("ᶅധ瘾୿ᲁ", true),
+        "让劭ᦕ뫤乭ᇴ簆䚓"   -> ("䍺苮똿઴頟⢉蕬䔳궩北ᴅ", true),
+        "칿萐鳌"          -> ("旌຿㘳Ḁ嵽콁鼫涬", false),
+        "楜濗䜹ꮆ镠㼉"     -> ("溟᧱ੇꩲ柯烈嬝넗ᆒᴩ", false)
+      ),
+      Map("⹸㬤梊"     -> ("꫻ꏺ", false),
+          "껃ퟒ硥뵕煍⦳똊"  -> ("푾㉠쥛＜墝긆ܓ➖졕踾", true),
+          "먈肂㎏᳗疪㯦⣻" -> ("譥즰⃥軕丹彜㒒", false),
+          "२墴㕔"      -> ("컆ꈷ쎒簹涛琱利앍컽㞕˟", false)),
+      Map(
+        "羦㋏쉪帊믶⯔쑜粎﹢"   -> ("謓軞惶ᨫ", false),
+        "꿷멑輿銡⬀"      -> ("ﵔ卶", true),
+        "喰鷂簍姈潄Ι諩멗ꧧ썺" -> ("♵ⷚ妣겧홥馳ᜭ큻䛯", false),
+        "물䀓ⷈʨ㌆℣뎙"   -> ("", true),
+        "ी地䬘♞ꭅ셓穄学䘃"   -> ("ᝪ겓⸭ߦꟓ됄", true),
+        "瞲挩"        -> ("쎢ץ煵栧", false)
+      )
+    )
+
+    val res = vec.map(_.map {
+      case (channel, datumArgs) =>
+        channel -> Datum.create(channel, datumArgs._1, datumArgs._2)
+    })
+    res
+  }
+
+  "BUG when resetting to a bunch of checkpoints made with produces, the store" should
+    "have the expected contents" in {
+    val data = getData()
+
+    withTestSpace { space =>
+      logger.debug(s"Test: ${data.length} stages")
+
+      val states = data.zipWithIndex.map {
+        case (produces, chunkNo) =>
+          produces.foreach {
+            case (channel, datum) =>
+              space.produce(channel, datum.a, datum.persist)
+          }
+          val num  = "%02d".format(chunkNo)
+          val size = "%02d".format(produces.size)
+          logger.debug(s"$num: checkpointing $size produces")
+          (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
+      }
+
+      validateIndexedStates(space, states)
+    }
   }
 
   "when resetting to a bunch of checkpoints made with produces, the store" should

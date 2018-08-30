@@ -12,15 +12,16 @@ import scodec.bits.ByteVector
 
 object ArbitraryInstances {
 
+  val arbNonEmptyString =
+    //Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
+    Arbitrary(Gen.nonEmptyListOf[Char](Gen.choose[Char](0x31.toChar, 0x7e.toChar)).map(_.mkString))
+
   implicit val arbitraryPattern: Arbitrary[Pattern] = {
     val genWildcard: Gen[Pattern] = Gen.const(Wildcard)
-    val genMatch: Gen[Pattern]    = Arbitrary.arbitrary[String].map((str: String) => StringMatch(str))
+    val genMatch: Gen[Pattern]    = arbNonEmptyString.arbitrary.map((str: String) => StringMatch(str))
     val genPattern: Gen[Pattern]  = Gen.oneOf(genWildcard, genMatch)
     Arbitrary(genPattern)
   }
-
-  val arbNonEmptyString =
-    Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
   implicit def arbitraryDatum[C, T](chan: C)(implicit
                                              arbT: Arbitrary[T],
@@ -130,7 +131,7 @@ object ArbitraryInstances {
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       for {
-        chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
+        chans <- Gen.containerOfN[List, String](constrainedSize, arbNonEmptyString.arbitrary)
         data <- Gen.nonEmptyContainerOf[List, Datum[String]](
                  arbitraryDatum[String, String](chans.head).arbitrary)
         wks <- Gen.nonEmptyContainerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
@@ -149,7 +150,7 @@ object ArbitraryInstances {
       Gen
         .nonEmptyContainerOf[List, (List[String], WaitingContinuation[Pattern, StringsCaptor])](
           for {
-            chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
+            chans <- Gen.containerOfN[List, String](constrainedSize, arbNonEmptyString.arbitrary)
             wc    <- arbitraryWaitingContinuation(chans).arbitrary
           } yield (chans, wc)
         )
