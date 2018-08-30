@@ -512,7 +512,7 @@ object Reduce {
       def relop(p1: Par,
                 p2: Par,
                 relopb: (Boolean, Boolean) => Boolean,
-                relopi: (Int, Int) => Boolean,
+                relopi: (Long, Long) => Boolean,
                 relops: (String, String) => Boolean): M[Expr] =
         for {
           v1 <- evalSingleExpr(p1)
@@ -546,18 +546,18 @@ object Reduce {
           } yield GBool(!b)
         case ENegBody(ENeg(p)) =>
           for {
-            v <- evalToInt(p)
+            v <- evalToLong(p)
           } yield GInt(-v)
         case EMultBody(EMult(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
+            v1 <- evalToLong(p1)
+            v2 <- evalToLong(p2)
             _  <- costAccountingAlg.charge(MULTIPLICATION_COST)
           } yield GInt(v1 * v2)
         case EDivBody(EDiv(p1, p2)) =>
           for {
-            v1 <- evalToInt(p1)
-            v2 <- evalToInt(p2)
+            v1 <- evalToLong(p1)
+            v2 <- evalToLong(p2)
             _  <- costAccountingAlg.charge(DIVISION_COST)
           } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
@@ -861,9 +861,10 @@ object Reduce {
           s.raiseError(ReduceError("Error: nth expects 1 argument"))
         } else {
           for {
-            nth <- evalToInt(args(0))
-            v   <- evalSingleExpr(p)
-            _   <- costAccountingAlg.charge(nthMethodCost(nth))
+            nthRaw <- evalToLong(args(0))
+            nth    <- restrictToInt(nthRaw)
+            v      <- evalSingleExpr(p)
+            _      <- costAccountingAlg.charge(nthMethodCost(nth))
             result <- v.exprInstance match {
                        case EListBody(EList(ps, _, _, _)) =>
                          s.fromEither(localNth(ps, nth))
@@ -940,12 +941,13 @@ object Reduce {
           case (ESetBody(base @ ParSet(basePs, _, _, _)),
                 ESetBody(other @ ParSet(otherPs, _, _, _))) =>
             costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
-              ESetBody(ParSet(
-                basePs.union(otherPs.sortedPars.toSet),
-                base.connectiveUsed || other.connectiveUsed,
-                locallyFreeUnion(base.locallyFree, other.locallyFree),
-                None
-              )))
+              ESetBody(
+                ParSet(
+                  basePs.union(otherPs.sortedPars.toSet),
+                  base.connectiveUsed || other.connectiveUsed,
+                  locallyFreeUnion(base.locallyFree, other.locallyFree),
+                  None
+                )))
           case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
@@ -1252,10 +1254,12 @@ object Reduce {
           _ <- if (args.length != 2)
                 s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
               else Applicative[M].unit
-          baseExpr <- evalSingleExpr(p)
-          fromArg  <- evalToInt(args(0))
-          toArg    <- evalToInt(args(1))
-          result   <- slice(baseExpr, fromArg, toArg)
+          baseExpr   <- evalSingleExpr(p)
+          fromArgRaw <- evalToLong(args(0))
+          fromArg    <- restrictToInt(fromArgRaw)
+          toArgRaw   <- evalToLong(args(1))
+          toArg      <- restrictToInt(toArgRaw)
+          result     <- slice(baseExpr, fromArg, toArg)
         } yield result
     }
 
@@ -1290,7 +1294,8 @@ object Reduce {
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
 
-    def evalToInt(p: Par)(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Int] =
+    def evalToLong(p: Par)(implicit env: Env[Par],
+                           costAccountingAlg: CostAccountingAlg[M]): M[Long] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
@@ -1301,7 +1306,7 @@ object Reduce {
           case Expr(EVarBody(EVar(v))) +: Nil =>
             for {
               p      <- eval(v)
-              intVal <- evalToInt(p)
+              intVal <- evalToLong(p)
             } yield intVal
           case (e: Expr) +: Nil =>
             for {
@@ -1344,6 +1349,11 @@ object Reduce {
           case _ =>
             s.raiseError(ReduceError("Error: Multiple expressions given."))
         }
+
+    private def restrictToInt(long: Long): M[Int] =
+      s.catchNonFatal(Math.toIntExact(long)).adaptError {
+        case e: ArithmeticException => ReduceError(s"Integer overflow for value $long")
+      }
 
     private def updateLocallyFree(par: Par): Par = {
       val resultLocallyFree =

@@ -1043,7 +1043,8 @@ trait StorageActionsTests
   }
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)], differenceReport: Boolean = false): Boolean = {
+                            indexedStates: Seq[(State, Int)],
+                            differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
@@ -1058,7 +1059,7 @@ trait StorageActionsTests
           } else {
             logger.error(s"$num: store had unexpected contents")
 
-            if(differenceReport) {
+            if (differenceReport) {
               logger.error("difference report")
               for ((expectedChannels, expectedRow) <- expectedContents) {
                 val actualRow = actualContents.get(expectedChannels)
@@ -1066,7 +1067,8 @@ trait StorageActionsTests
                 actualRow match {
                   case Some(row) =>
                     if (row != expectedRow) {
-                      logger.error(s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                      logger.error(
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
                     }
                   case None => logger.error(s"key [$expectedChannels] not found in actual records")
                 }
@@ -1078,7 +1080,8 @@ trait StorageActionsTests
                 expectedRow match {
                   case Some(row) =>
                     if (row != actualRow) {
-                      logger.error(s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                      logger.error(
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
                     }
                   case None => logger.error(s"key [$actualChannels] not found in expected records")
                 }
