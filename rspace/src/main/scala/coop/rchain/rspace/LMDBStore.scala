@@ -42,7 +42,6 @@ class LMDBStore[C, P, A, K] private (
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
-  private[rspace] type Transaction     = Txn[ByteBuffer]
   private[rspace] type TrieTransaction = Transaction
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
@@ -219,7 +218,8 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins.drop(txn)
   }
 
-  def close(): Unit = {
+  override def close(): Unit = {
+    super.close()
     _dbGNATs.close()
     _dbJoins.close()
   }
