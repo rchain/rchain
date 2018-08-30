@@ -282,7 +282,7 @@ sealed abstract class MultiParentCasperInstances {
                            CreateBlockStatus.noNewDeploys.pure[F]
                          }
               signedBlock = proposal.map(
-                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
               )
               _ <- Sync[F].delay { createBlockLock.unlock() }
             } yield signedBlock,
