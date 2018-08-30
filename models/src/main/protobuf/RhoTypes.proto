@@ -145,7 +145,7 @@ message Match {
 message Expr {
     oneof expr_instance {
         bool g_bool = 1;
-        sint32 g_int = 2;
+        sint64 g_int = 2;
         string g_string = 3;
         string g_uri = 4;
         bytes g_byte_array = 25;

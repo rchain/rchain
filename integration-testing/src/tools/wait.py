@@ -2,6 +2,7 @@ import logging
 import re
 import pytest
 import time
+from tools.util import log_box
 
 def wait_for(condition, timeout, error_message):
     """
@@ -14,26 +15,39 @@ def wait_for(condition, timeout, error_message):
 
     __tracebackhide__ = True
 
-    logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}. Patience please!")
+    with log_box(logging.info, f"Waiting maximum timeout={timeout}. Patience please!", "."):
+        logging.info(f"Wait condition `{condition.__doc__}`")
+        elapsed = 0
+        current_ex = None
+        while elapsed < timeout:
+            start_time = time.time()
 
-    elapsed = 0
-    while elapsed < timeout:
-        try:
-            value = condition()
+            try:
+                value = condition()
 
-            logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
-            return value
+                logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
+                return value
 
-        except Exception as ex:
-            iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
+            except Exception as ex:
+                condition_evaluation_duration = time.time() - start_time
+                elapsed = int(elapsed + condition_evaluation_duration)
+                time_left = timeout - elapsed
 
-            logging.info(f"Condition not fulfilled yet ({ex}). Sleeping {iteration_duration}s...")
+                iteration_duration = int(max(1, int(0.15 * time_left))) # iteration duration is 15% of remaining timeout
 
-            time.sleep(iteration_duration)
-            elapsed = elapsed + iteration_duration
+                if str(ex) == current_ex:
+                    details = "same as above"
+                else:
+                    details = str(ex)
+                    current_ex = str(ex)
 
-    logging.warning(f"Giving up after {elapsed}s.")
-    pytest.fail(error_message)
+                logging.info(f"Condition not fulfilled yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...")
+
+                time.sleep(iteration_duration)
+                elapsed = elapsed + iteration_duration
+
+        logging.warning(f"Giving up after {elapsed}s.")
+        pytest.fail(error_message)
 
 # Predicates
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
@@ -65,7 +79,7 @@ def string_contains(string_factory, regex_str, flags = 0):
         if m:
             return m
         else:
-            raise Exception(f"string doesn't contain regex {regex_str}")
+            raise Exception(f"{string_factory.__doc__} doesn't contain regex '{regex_str}'")
 
     go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go

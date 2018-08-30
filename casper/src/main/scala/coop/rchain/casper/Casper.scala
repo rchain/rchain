@@ -38,7 +38,7 @@ trait Casper[F[_], A] {
   def contains(b: BlockMessage): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDag): F[A]
-  def createBlock: F[Option[BlockMessage]]
+  def createBlock: F[CreateBlockStatus]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
@@ -267,7 +267,7 @@ sealed abstract class MultiParentCasperInstances {
        *  TODO: Make this return Either so that we get more information about why not block was
        *  produced (no deploys, already processing, no validator id)
        */
-      def createBlock: F[Option[BlockMessage]] = validatorId match {
+      def createBlock: F[CreateBlockStatus] = validatorId match {
         case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
           Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
             for {
@@ -279,16 +279,16 @@ sealed abstract class MultiParentCasperInstances {
               proposal <- if (r.nonEmpty || p.length > 1) {
                            createProposal(p, r, justifications)
                          } else {
-                           none[BlockMessage].pure[F]
+                           CreateBlockStatus.noNewDeploys.pure[F]
                          }
               signedBlock = proposal.map(
-                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
               )
               _ <- Sync[F].delay { createBlockLock.unlock() }
             } yield signedBlock,
-            none[BlockMessage].pure[F]
+            CreateBlockStatus.lockUnavailable.pure[F]
           )
-        case None => none[BlockMessage].pure[F]
+        case None => CreateBlockStatus.readOnlyMode.pure[F]
       }
 
       def lastFinalizedBlock: F[BlockMessage] = lastFinalizedBlockContainer.get
@@ -307,7 +307,7 @@ sealed abstract class MultiParentCasperInstances {
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
-                                 justifications: Seq[Justification]): F[Option[BlockMessage]] =
+                                 justifications: Seq[Justification]): F[CreateBlockStatus] =
         for {
           now                      <- Time[F].currentMillis
           possibleProcessedDeploys <- updateKnownStateHashes(knownStateHashesContainer, p, r)
@@ -316,7 +316,7 @@ sealed abstract class MultiParentCasperInstances {
                        Log[F]
                          .error(
                            s"Critical error encountered while processing deploys: ${ex.getMessage}")
-                         .map(_ => none[BlockMessage])
+                         .map(_ => CreateBlockStatus.internalDeployError(ex))
 
                      case Right((computedStateHash, processedDeploys)) =>
                        val (internalErrors, persistableDeploys) =
@@ -341,7 +341,7 @@ sealed abstract class MultiParentCasperInstances {
                              .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
                            val header = blockHeader(body, p.map(_.blockHash), version, now)
                            val block  = unsignedBlockProto(body, header, justifications, shardId)
-                           block.some
+                           CreateBlockStatus.created(block)
                          })
                    }
         } yield result

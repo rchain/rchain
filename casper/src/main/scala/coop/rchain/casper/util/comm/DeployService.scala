@@ -3,12 +3,10 @@ package coop.rchain.casper.util.comm
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import cats.implicits._
-
 import com.google.protobuf.empty.Empty
+import coop.rchain.casper.protocol._
+import coop.rchain.models.Channel
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployData, DeployServiceGrpc}
-
 import monix.eval.Task
 
 trait DeployService[F[_]] {
@@ -17,6 +15,8 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
+  def listenForDataAtName(request: Channel): F[ListeningNameDataResponse]
+  def listenForContinuationAtName(request: Channels): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
@@ -70,6 +70,15 @@ Blockchain length: ${response.length}
     val response = blockingStub.addBlock(b)
     (response.success, response.message)
   }
+
+  def listenForDataAtName(request: Channel): Task[ListeningNameDataResponse] = Task.delay {
+    blockingStub.listenForDataAtName(request)
+  }
+
+  def listenForContinuationAtName(request: Channels): Task[ListeningNameContinuationResponse] =
+    Task.delay {
+      blockingStub.listenForContinuationAtName(request)
+    }
 
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

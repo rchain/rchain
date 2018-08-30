@@ -118,7 +118,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.6.2",
+    version := "0.6.3",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -344,7 +344,15 @@ lazy val rspace = (project in file("rspace"))
   .dependsOn(shared, crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
-  .settings(commonSettings, libraryDependencies ++= commonDependencies)
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies,
+    javaOptions in run ++=
+      // export YOURKIT_AGENT prior to starting sbt set to the profiling agent appropriate
+      // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp).
+      // Also remember to disable forking: @Fork(value = 0)
+      sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq
+  )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
 

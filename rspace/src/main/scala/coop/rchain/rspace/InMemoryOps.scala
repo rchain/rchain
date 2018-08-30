@@ -10,8 +10,7 @@ trait InMemTransaction[S] {
   def name: String
 }
 
-trait InMemoryOps[S] {
-
+trait InMemoryOps[S] extends CloseOps {
   protected[rspace] type Transaction = InMemTransaction[S]
 
   protected[rspace] type StateType = S
@@ -39,25 +38,31 @@ trait InMemoryOps[S] {
       txn.close()
     }
 
-  private[rspace] def createTxnRead(): InMemTransaction[S] = new InMemTransaction[S] {
+  private[rspace] def createTxnRead(): InMemTransaction[S] = {
+    failIfClosed()
 
-    val name: String = "read-" + Thread.currentThread().getId
+    new InMemTransaction[S] {
 
-    private[this] val state = stateRef.get
+      val name: String = "read-" + Thread.currentThread().getId
 
-    override def commit(): Unit = {}
+      private[this] val state = stateRef.get
 
-    override def abort(): Unit = {}
+      override def commit(): Unit = {}
 
-    override def close(): Unit = {}
+      override def abort(): Unit = {}
 
-    override def readState[R](f: S => R): R = f(state)
+      override def close(): Unit = {}
 
-    override def writeState[R](f: S => (S, R)): R =
-      throw new RuntimeException("read txn cannot write")
+      override def readState[R](f: S => R): R = f(state)
+
+      override def writeState[R](f: S => (S, R)): R =
+        throw new RuntimeException("read txn cannot write")
+    }
   }
 
-  private[rspace] def createTxnWrite(): InMemTransaction[S] =
+  private[rspace] def createTxnWrite(): InMemTransaction[S] = {
+    failIfClosed()
+
     new InMemTransaction[S] {
       val name: String = "write-" + Thread.currentThread().getId
 
@@ -81,4 +86,5 @@ trait InMemoryOps[S] {
         result
       }
     }
+  }
 }

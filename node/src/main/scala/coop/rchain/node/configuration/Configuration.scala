@@ -363,6 +363,8 @@ object Configuration {
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) => ShowBlocks
       case Some(options.run)        => Run
+      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName) => ContAtName(options.contAtName.name())
       case _                        => Help
     }
 }

@@ -81,6 +81,7 @@ message NodeCoreMetrics {
 
 service Diagnostics {
   rpc ListPeers (google.protobuf.Empty) returns (Peers);
+  rpc ListDiscoveredPeers (google.protobuf.Empty) returns (Peers);
   rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
   rpc GetMemoryUsage (google.protobuf.Empty) returns (MemoryUsage);
   rpc GetGarbageCollectors (google.protobuf.Empty) returns (GarbageCollectors);

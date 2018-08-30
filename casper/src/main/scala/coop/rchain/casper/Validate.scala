@@ -162,8 +162,10 @@ object Validate {
       dag: BlockDag,
       shardId: String): F[Either[BlockStatus, ValidBlock]] =
     for {
-      missingBlockStatus <- Validate.missingBlocks[F](block, dag)
-      timestampStatus    <- missingBlockStatus.traverse(_ => Validate.timestamp[F](block, dag))
+      blockHashStatus    <- Validate.blockHash[F](block)
+      missingBlockStatus <- blockHashStatus.traverse(_ => Validate.missingBlocks[F](block, dag))
+      timestampStatus <- missingBlockStatus.joinRight.traverse(_ =>
+                          Validate.timestamp[F](block, dag))
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
                                Validate.repeatDeploy[F](block, dag))
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
@@ -336,6 +338,28 @@ object Validate {
               ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected."))
       } yield Left(InvalidShardId)
     }
+
+  def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] = {
+    val blockHashComputed = ProtoUtil.hashSignedBlock(
+      b.header.get,
+      b.sender,
+      b.sigAlgorithm,
+      b.seqNum,
+      b.shardId,
+      b.extraBytes
+    )
+    val deployHashComputed    = ProtoUtil.protoSeqHash(b.body.get.deploys)
+    val postStateHashComputed = ProtoUtil.protoHash(b.body.get.postState.get)
+    if (b.blockHash == blockHashComputed &&
+        b.header.get.deploysHash == deployHashComputed &&
+        b.header.get.postStateHash == postStateHashComputed) {
+      Applicative[F].pure(Right(Valid))
+    } else {
+      for {
+        _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
+      } yield Left(InvalidUnslashableBlock)
+    }
+  }
 
   /**
     * Works only with fully explicit justifications.

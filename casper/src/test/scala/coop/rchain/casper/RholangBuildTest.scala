@@ -47,7 +47,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
       "for(@primes <- @\"primes\"){ @\"primes\"!(primes) | @[\"LinkedList\", \"map\"]!(primes, \"double\", \"dprimes\") }"
     ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2))
 
-    val Some(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
       deploys.traverse(MultiParentCasper[Id].deploy) *>
       MultiParentCasper[Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock)
