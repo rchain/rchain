@@ -9,7 +9,12 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
-import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
+import coop.rchain.casper.helper.{
+  BlockStoreTestFixture,
+  BlockUtil,
+  CasperEffect,
+  HashSetCasperTestNode
+}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -25,8 +30,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -480,7 +485,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Some(signedBlock) = nodes(0).casperEff
       .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
     val signedInvalidBlock =
-      ProtoUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
+      BlockUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
 
     val blockWithInvalidJustification =
       buildBlockWithInvalidJustification(nodes, deploysWithCost, signedInvalidBlock)

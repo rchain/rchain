@@ -8,14 +8,12 @@ import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.mainParent
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models.{PCost, Par}
+import coop.rchain.models.Par
 
-import scala.annotation.tailrec
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -352,13 +350,6 @@ object ProtoUtil {
       .withShardId(shardId)
 
     signedBlock
-  }
-
-  def resignBlock(b: BlockMessage, sk: Array[Byte]): BlockMessage = {
-    val blockHash =
-      hashSignedBlock(b.header.get, b.sender, b.sigAlgorithm, b.seqNum, b.shardId, b.extraBytes)
-    val sig = ByteString.copyFrom(b.signFunction(blockHash.toByteArray, sk))
-    b.withBlockHash(blockHash).withSig(sig)
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
