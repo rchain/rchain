@@ -1,7 +1,8 @@
-
 import logging
 from delayed_assert import expect, assert_expectations
+from tools.profiling import profile
 
+@profile
 def test_metrics_api_socket(started_rchain_network):
     for node  in started_rchain_network.nodes:
         logging.info(f"Test metrics api socket for {node.name}")
@@ -12,6 +13,7 @@ def test_metrics_api_socket(started_rchain_network):
     assert_expectations()
 
 
+@profile
 def test_node_logs_for_errors(converged_network):
     for node in converged_network.nodes:
         logging.info(f"Testing {node.name} node logs for errors.")
@@ -25,6 +27,7 @@ def test_node_logs_for_errors(converged_network):
 
     assert_expectations()
 
+@profile
 def test_node_logs_for_RuntimeException(converged_network):
     for node in converged_network.nodes:
         logging.info(f"Testing {node.name} node logs for \"java RuntimeException\".")

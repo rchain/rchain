@@ -2,7 +2,7 @@ import logging
 import re
 import pytest
 import time
-import collections
+from tools.util import log_box
 
 def wait_for(condition, timeout, error_message):
     """
@@ -15,25 +15,39 @@ def wait_for(condition, timeout, error_message):
 
     __tracebackhide__ = True
 
-    logging.info(f"Waiting for condition `{condition.__doc__}`. Timeout={timeout}. Patience please!")
+    with log_box(logging.info, f"Waiting maximum timeout={timeout}. Patience please!", "."):
+        logging.info(f"Wait condition `{condition.__doc__}`")
+        elapsed = 0
+        current_ex = None
+        while elapsed < timeout:
+            start_time = time.time()
 
-    elapsed = 0
-    while elapsed < timeout:
-        try:
-            value = condition()
+            try:
+                value = condition()
 
-            logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
-            return value
+                logging.info(f"Condition satisfied after {elapsed}s. Returning {value}")
+                return value
 
-        except Exception as ex:
-            iteration_duration = max(1, int(0.15 * (timeout - elapsed))) # iteration duration is 15% of remaining timeout
+            except Exception as ex:
+                condition_evaluation_duration = time.time() - start_time
+                elapsed = int(elapsed + condition_evaluation_duration)
+                time_left = timeout - elapsed
 
-            logging.info(f"Condition not fulfilled yet ({ex}). Sleeping {iteration_duration}s...")
+                iteration_duration = int(max(1, int(0.15 * time_left))) # iteration duration is 15% of remaining timeout
 
-            time.sleep(iteration_duration)
-            elapsed = elapsed + iteration_duration
+                if str(ex) == current_ex:
+                    details = "same as above"
+                else:
+                    details = str(ex)
+                    current_ex = str(ex)
 
-    pytest.fail(error_message)
+                logging.info(f"Condition not fulfilled yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...")
+
+                time.sleep(iteration_duration)
+                elapsed = elapsed + iteration_duration
+
+        logging.warning(f"Giving up after {elapsed}s.")
+        pytest.fail(error_message)
 
 # Predicates
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
@@ -41,10 +55,21 @@ def wait_for(condition, timeout, error_message):
 
 def node_logs(node):
     def go(): return node.logs()
-    go.__doc__ = f"container_logs({node.name})"
+    go.__doc__ = f"node_logs({node.name})"
     return go
 
-def string_matches(string_factory, regex_str, flags = 0):
+def show_blocks(node):
+    def go():
+        exit_code, output = node.show_blocks()
+
+        if exit_code != 0: raise Exception("Show-blocks failed")
+
+        return output
+
+    go.__doc__ = f"show_blocks({node.name})"
+    return go
+
+def string_contains(string_factory, regex_str, flags = 0):
     rx = re.compile(regex_str, flags)
 
     def go():
@@ -54,9 +79,9 @@ def string_matches(string_factory, regex_str, flags = 0):
         if m:
             return m
         else:
-            raise Exception(f"string doesn't contain regex {regex_str}")
+            raise Exception(f"{string_factory.__doc__} doesn't contain regex '{regex_str}'")
 
-    go.__doc__ = f"{string_factory.__doc__} search regex '{regex_str}'"
+    go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
 def network_converged(bootstrap_node, expected_peers):
@@ -75,49 +100,4 @@ def network_converged(bootstrap_node, expected_peers):
 
     go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
 
-    return go
-
-Block = collections.namedtuple("Block", ["id", "content"])
-
-def node_blocks_received(node):
-    def go():
-        id_rx = ".+?"
-        received_block_rx = re.compile(f"^.* Received Block #\d+ \(({id_rx})\.\.\.\) -- Sender ID {id_rx}\.\.\. -- M Parent Hash {id_rx}\.\.\. -- Contents {id_rx}\.\.\.\.(.*)", re.MULTILINE | re.DOTALL)
-
-        logs = node.log_lines()
-        # strlogs = '\n+++\n'.join(logs)
-        # logging.info(f"logs to match: {strlogs}")
-        blocks = [Block( match[1], match[2])
-                  for match in [received_block_rx.match(log)
-                                for log in logs]
-                  if match]
-
-        return blocks
-
-    go.__doc__ = f"node_blocks_received({node.name})"
-    return go
-
-def node_blocks_added(node):
-    def go():
-        id_rx = "(.+?)"
-        added_block_rx = re.compile(f"^.* Added ({id_rx})\.\.\..*", re.MULTILINE | re.DOTALL)
-        logs = node.log_lines()
-
-        block_ids = [ match[1]
-                      for match in [ added_block_rx.match(log)
-                                     for log in logs]
-                      if match]
-
-        return block_ids
-
-    go.__doc__ = f"node_blocks_received({node.name})"
-    return go
-
-def find_first(list_factory, predicate):
-    def go():
-        lst = list_factory()
-        found = [x for x in lst if predicate(x)]
-        return found[0]
-
-    go.__doc__ = f"`{list_factory.__doc__}` find `{predicate.__doc__}`"
     return go

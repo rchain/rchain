@@ -241,7 +241,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
         NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
         NonDetFreeMapWithCost.pure(())
-      else
+      else if (plen == 0 && varLevel.isDefined) {
+        val matchResult =
+          if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
+            handleRemainder(tlist, varLevel.get, merger).toNonDet()
+          else
+            NonDetFreeMapWithCost.emptyMap[Unit]
+        matchResult.modifyCost(_.charge(COMPARISON_COST * tlist.size))
+      } else
         listMatch(tlist, plist, merger, varLevel, wildcard).toNonDet()
 
     result
@@ -674,6 +681,13 @@ trait SpatialMatcherInstances {
         case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
           foldMatch(tlist, plist).map(_ => Unit)
         }
+        case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
+          val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
+          val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
+          val merger          = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+            .toDet()
+
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
           if (vp == vt)

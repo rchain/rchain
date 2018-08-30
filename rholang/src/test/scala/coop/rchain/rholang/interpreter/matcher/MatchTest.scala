@@ -12,11 +12,12 @@ import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import org.scalatest._
+import org.scalatest.concurrent.TimeLimits
 import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
-class VarMatcherSpec extends FlatSpec with Matchers {
+class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
@@ -42,9 +43,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]): String = {
-    val targetString       = printer.buildString(target)
-    val patternString      = printer.buildString(pattern)
-    val capturesStringsMap = prettyCaptures(expectedCaptures)
+
+    def truncate(s: String): String = if (s.length > 120) s.substring(0, 120) + "..." else s
+
+    val targetString       = truncate(printer.buildString(target))
+    val patternString      = truncate(printer.buildString(pattern))
+    val capturesStringsMap = truncate(prettyCaptures(expectedCaptures).toString)
 
     s"""
        |     Matching:  $patternString
@@ -100,6 +104,17 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
         .withConnectiveUsed(true), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(8))))
+  }
+
+  "Matching huge list of targets with no patterns and a reminder" should "better be quick" in {
+    //This is a very common case in rspace that can be handled in linear time, yet was quadratic for a short while
+    val target: Par = Par(exprs = Seq.fill(1000)(GInt(1): Expr))
+    val pattern: Par = EVar(FreeVar(0))
+
+    import org.scalatest.time.SpanSugar._
+    failAfter(5 seconds) {
+      assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> target)))
+    }
   }
 
   "Matching a send's channel" should "work" in {
@@ -368,6 +383,75 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val targetPar: Par  = target
     val patternPar: Par = pattern
     assertSpatialMatch(targetPar, patternPar, expectedResult)
+  }
+
+  "Matching sets" should "work for concrete sets" in {
+    val target: Expr = ParSet(Seq(GInt(1), GInt(2), GInt(3)))
+    //matcher expects terms in canonical form and there's only one for any set
+    val pattern: Expr  = target
+    val expectedResult = Some(Map[Int, Par]())
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+  }
+
+  it should "work with free variables and wildcards" in {
+    val target: Expr = ParSet(Seq(GInt(1), GInt(2), GInt(3), GInt(4), GInt(5)))
+    val pattern: Expr =
+      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg()))),
+             connectiveUsed = true)
+    //the captures and their order are somewhat arbitrary and could potentially by changed
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(4), 1 -> GInt(3)))
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val nonMatchingPattern: Expr =
+      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))), connectiveUsed = true)
+    assertSpatialMatch(target, nonMatchingPattern, None)
+  }
+
+  it should "work with wildcard remainders" in {
+    val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
+    val target: Expr = ParSet(targetElements)
+    val pattern: Expr =
+      ParSet(Seq(GInt(1), GInt(4)), connectiveUsed = true, remainder = Wildcard(WildcardMsg()))
+    val expectedResult = Some(Map[Int, Par]())
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val allElementsAndWildcard: Expr = ParSet(targetElements, remainder = Wildcard(WildcardMsg()))
+    assertSpatialMatch(target, allElementsAndWildcard, Some(Map[Int, Par]()))
+
+    val justWildcard: Expr = ParSet(Seq(), remainder = Wildcard(WildcardMsg()))
+    assertSpatialMatch(target, justWildcard, Some(Map[Int, Par]()))
+  }
+
+  it should "work with var remainders" in {
+    val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
+    val target: Expr = ParSet(targetElements)
+    val pattern: Expr =
+      ParSet(Seq(GInt(1), GInt(4), EVar(FreeVar(0))), connectiveUsed = true, remainder = Var(FreeVar(1)))
+    //the captures and their order are somewhat arbitrary and could potentially by changed
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(2), 1 -> ParSet(Seq(GInt(3), GInt(5)))))
+    assertSpatialMatch(target, pattern, expectedResult)
+
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    assertSpatialMatch(targetPar, patternPar, expectedResult)
+
+    val allElementsAndRemainder: Expr = ParSet(targetElements, remainder = Var(FreeVar(0)))
+    assertSpatialMatch(target, allElementsAndRemainder, Some(Map[Int, Par](0 -> ParSet(Seq()))))
+
+    val justRemainder: Expr = ParSet(Seq(), remainder = Var(FreeVar(0)))
+    assertSpatialMatch(target, justRemainder, Some(Map[Int, Par](0 -> ParSet(targetElements))))
   }
 
   "Matching a whole list with a remainder" should "capture the list." in {

@@ -41,7 +41,7 @@ object GroundNormalizeMatcher {
   def normalizeMatch(g: AbsynGround): Expr =
     g match {
       case gb: GroundBool   => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
-      case gi: GroundInt    => GInt(gi.integer_)
+      case gi: GroundInt    => GInt(gi.long_.toLong) //TODO raise NumberFormatException in a pure way
       case gs: GroundString => GString(gs.string_)
       case gu: GroundUri    => GUri(stripUri(gu.uri_))
     }
@@ -161,11 +161,24 @@ object CollectionNormalizeMatcher {
           case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
+
       case cs: CollectSet =>
-        val constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => ParSet =
-          (pars, locallyFree, connectiveUsed) =>
-            ParSet(pars, connectiveUsed, Coeval.delay(locallyFree.get))
-        foldMatch(input.knownFree, cs.listproc_.toList, constructor)
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cs.procremainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => ParSet =
+                optionalRemainder =>
+                  (pars, locallyFree, connectiveUsed) => {
+                    val tmpParSet =
+                      ParSet(pars, connectiveUsed, Coeval.delay(locallyFree.get), optionalRemainder)
+                    tmpParSet.copy(
+                      connectiveUsed = tmpParSet.connectiveUsed || optionalRemainder.isDefined)
+                }
+
+              foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
+          }
+
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
     }
   }
@@ -697,15 +710,12 @@ object ProcNormalizeMatcher {
                                                                  line,
                                                                  col))
                         })
-          bindCount = mergedFrees.countNoWildcards
-          binds     = receipts.map(receipt => receipt._1)
-          bindingsConnectiveUsed = binds
-            .flatMap(_.patterns)
-            .exists(c => ChannelLocallyFree.connectiveUsed(c))
+          bindCount  = mergedFrees.countNoWildcards
+          binds      = receipts.map(receipt => receipt._1)
           updatedEnv = input.env.absorbFree(mergedFrees)._1
           bodyResult <- normalizeMatch[M](p.proc_,
                                           ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
-          connective = sourcesConnectives || bodyResult.par.connectiveUsed || bindingsConnectiveUsed
+          connective = sourcesConnectives || bodyResult.par.connectiveUsed
         } yield
           ProcVisitOutputs(
             input.par.prepend(

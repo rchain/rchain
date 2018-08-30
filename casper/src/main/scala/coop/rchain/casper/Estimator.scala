@@ -124,17 +124,17 @@ object Estimator {
 
     for {
       scoresMap <- Foldable[List].foldM(blockDag.latestMessages.toList, Map.empty[BlockHash, Int]) {
-                    case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
+                    case (acc, (validator: Validator, latestBlock: BlockMessage)) =>
                       for {
                         postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
                                                         acc,
                                                         validator,
-                                                        latestBlockHash)
+                                                        latestBlock.blockHash)
                         postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
                                                             postValidatorWeightScoreMap,
                                                             blockDag.childMap,
                                                             validator,
-                                                            latestBlockHash)
+                                                            latestBlock.blockHash)
                       } yield postImplicitlySupportedScoreMap
                   }
     } yield scoresMap

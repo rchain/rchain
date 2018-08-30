@@ -75,7 +75,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
           forkchoice <- Estimator.tips[F](
-                         chain.copy(latestMessages = HashMap.empty[Validator, BlockHash]),
+                         chain.copy(latestMessages = HashMap.empty[Validator, BlockMessage]),
                          genesis)
           _ = forkchoice.head should be(genesis)
         } yield ()
@@ -131,7 +131,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b6      = chain.idToBlocks(6)
       val b8      = chain.idToBlocks(8)
 
-      val latestBlocks = HashMap[Validator, BlockHash](v1 -> b8.blockHash, v2 -> b6.blockHash)
+      val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
@@ -198,7 +198,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b8      = chain.idToBlocks(8)
 
       val latestBlocks =
-        HashMap[Validator, BlockHash](v1 -> b6.blockHash, v2 -> b8.blockHash, v3 -> b7.blockHash)
+        HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {

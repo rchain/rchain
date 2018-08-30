@@ -8,13 +8,12 @@ import coop.rchain.casper.{BlockDag, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.mainParent
 import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models.{PCost, Par}
+import coop.rchain.models.Par
 
-import scala.annotation.tailrec
 import scala.collection.immutable
 
 object ProtoUtil {
@@ -240,18 +239,29 @@ object ProtoUtil {
       .map(_.reverse)
   }
 
-  def toJustification(latestMessages: collection.Map[Validator, BlockHash]): Seq[Justification] =
+  def toJustification(latestMessages: collection.Map[Validator, BlockMessage]): Seq[Justification] =
     latestMessages.toSeq.map {
       case (validator, block) =>
         Justification()
           .withValidator(validator)
-          .withLatestBlockHash(block)
+          .withLatestBlockHash(block.blockHash)
     }
 
-  def toLatestMessages(justifications: Seq[Justification]): immutable.Map[Validator, BlockHash] =
+  def toLatestMessageHashes(
+      justifications: Seq[Justification]): immutable.Map[Validator, BlockHash] =
     justifications.foldLeft(Map.empty[Validator, BlockHash]) {
       case (acc, Justification(validator, block)) =>
         acc.updated(validator, block)
+    }
+
+  def toLatestMessage[F[_]: Monad: BlockStore](
+      justifications: Seq[Justification],
+      dag: BlockDag): F[immutable.Map[Validator, BlockMessage]] =
+    justifications.toList.foldM(Map.empty[Validator, BlockMessage]) {
+      case (acc, Justification(validator, hash)) =>
+        for {
+          block <- ProtoUtil.unsafeGetBlock[F](hash)
+        } yield acc.updated(validator, block)
     }
 
   def protoHash[A <: { def toByteArray: Array[Byte] }](protoSeq: A*): ByteString =
@@ -314,7 +324,6 @@ object ProtoUtil {
                 pk: Array[Byte],
                 sk: Array[Byte],
                 sigAlgorithm: String,
-                signFunction: (Array[Byte], Array[Byte]) => Array[Byte],
                 shardId: String): BlockMessage = {
 
     val header = {
@@ -329,13 +338,14 @@ object ProtoUtil {
 
     val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
-    val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
+    val sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
 
-    val signedBlock = block
+    val sig = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
+
+    val signedBlock = sigAlgorithmBlock
       .withSender(sender)
       .withSig(sig)
       .withSeqNum(seqNum)
-      .withSigAlgorithm(sigAlgorithm)
       .withBlockHash(blockHash)
       .withShardId(shardId)
 
@@ -387,4 +397,11 @@ object ProtoUtil {
     )
 
   def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+
+  /**
+    * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
+    * The fields stripped are the term and anything that depends on the term (Currently only the sig)
+    */
+  def stripDeployData(d: DeployData): DeployData =
+    d.withTerm("").withSig(ByteString.EMPTY)
 }

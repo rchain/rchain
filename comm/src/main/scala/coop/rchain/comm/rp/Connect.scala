@@ -21,12 +21,15 @@ object Connect {
   type Connection            = PeerNode
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
+
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
   }
+
   object Connections {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
+
       def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
         connections
           .contains(connection)
@@ -35,6 +38,7 @@ object Connect {
             Log[F].info(s"Peers: ${connections.size + 1}.").as(connection :: connections) >>= (
                 conns => Metrics[F].setGauge("peers", conns.size.toLong).as(conns))
           )
+
       def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
         for {
           result <- connections.filter(_ != connection).pure[F]
@@ -51,9 +55,11 @@ object Connect {
         } yield result
     }
   }
+
   import Connections._
 
   type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+
   object RPConfAsk {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
   }
@@ -101,7 +107,7 @@ object Connect {
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
             case (peer, Left(error)) =>
-              Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
             case (peer, Right(_)) =>
               Log[F].info(s"Connected to ${peer.toAddress}.")
           }

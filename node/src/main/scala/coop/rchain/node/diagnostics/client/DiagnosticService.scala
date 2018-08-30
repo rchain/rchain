@@ -12,6 +12,7 @@ import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
   def listPeers: F[Seq[PeerNode]]
+  def listDiscoveredPeers: F[Seq[PeerNode]]
   def nodeCoreMetrics: F[NodeCoreMetrics]
   def processCpu: F[ProcessCpu]
   def memoryUsage: F[MemoryUsage]
@@ -36,6 +37,19 @@ class GrpcDiagnosticsService(host: String, port: Int)
     Task.delay(
       blockingStub
         .listPeers(Empty())
+        .peers
+        .map(
+          p =>
+            PeerNode(
+              NodeIdentifier(p.key.toByteArray.toSeq),
+              Endpoint(p.host, p.port, p.port)
+          ))
+    )
+
+  def listDiscoveredPeers: Task[Seq[PeerNode]] =
+    Task.delay(
+      blockingStub
+        .listDiscoveredPeers(Empty())
         .peers
         .map(
           p =>
