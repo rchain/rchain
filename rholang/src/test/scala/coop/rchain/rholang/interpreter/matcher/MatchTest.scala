@@ -43,9 +43,12 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]): String = {
-    val targetString       = printer.buildString(target)
-    val patternString      = printer.buildString(pattern)
-    val capturesStringsMap = prettyCaptures(expectedCaptures)
+
+    def truncate(s: String): String = if (s.length > 120) s.substring(0, 120) + "..." else s
+
+    val targetString       = truncate(printer.buildString(target))
+    val patternString      = truncate(printer.buildString(pattern))
+    val capturesStringsMap = truncate(prettyCaptures(expectedCaptures).toString)
 
     s"""
        |     Matching:  $patternString
