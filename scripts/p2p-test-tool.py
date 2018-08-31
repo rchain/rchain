@@ -113,7 +113,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['network_sockets', 'count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
@@ -173,9 +173,9 @@ def run_tests():
         if test == "network_sockets":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_network_sockets(container) == 0:
-                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/40401 is available.")
+                    notices['pass'].append(f"{container.name}: Metrics API http/tcp/40400 is available.")
                 else:
-                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/40401 is not available.")
+                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/40400 is not available.")
         if test == "errors":
             for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
                 print(container.name)
@@ -707,9 +707,9 @@ def create_peer_nodes():
 def test_network_sockets(container):
     print(f"Test metrics api socket for {container.name}")
     try:
-        cmd = f"nmap -sS -n -p T:40403 -oG - {container.name}"
+        cmd = f"nmap -sS -n -p T:40400 -oG - {container.name}"
         r = container.exec_run(cmd=cmd, user='root').output.decode("utf-8")
-        if "40403/open/tcp" in r:
+        if "40400/open/tcp" in r:
             return 0 
         else:
             return 1 

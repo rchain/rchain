@@ -178,7 +178,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       httpServer <- LiftIO[Task].liftIO {
                      val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                      BlazeBuilder[IO]
-                       .bindHttp(conf.server.httpPort, "localhost")
+                       .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(jsonrpc.service, "/")
                        .mountService(Lykke.service, "/lykke")
                        .mountService(prometheusService, "/metrics")
@@ -187,7 +187,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       metricsServer <- LiftIO[Task].liftIO {
                         val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                         BlazeBuilder[IO]
-                          .bindHttp(conf.server.metricsPort, "localhost")
+                          .bindHttp(conf.server.metricsPort, "0.0.0.0")
                           .mountService(prometheusService, "/")
                           .mountService(prometheusService, "/metrics")
                           .start

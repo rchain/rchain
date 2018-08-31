@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
@@ -31,7 +31,7 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
                             deployTimestamp: Long,
                             runtimeManager: RuntimeManager,
                             bonds: Map[Array[Byte], Int],
-                            wallets: Seq[Wallet],
+                            wallets: Seq[PreWallet],
                             requiredSigs: Int)(implicit scheduler: Scheduler) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
@@ -88,7 +88,7 @@ object BlockApproverProtocol {
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
-      wallets: Seq[Wallet],
+      wallets: Seq[PreWallet],
       bonds: Map[ByteString, Int])(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
