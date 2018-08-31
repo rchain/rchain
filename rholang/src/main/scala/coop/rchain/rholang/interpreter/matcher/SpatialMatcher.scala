@@ -568,31 +568,9 @@ trait SpatialMatcherInstances {
         }
       } else {
 
-        @tailrec
-        def possiblyFind[T, R](prop: T => Option[R], haystack: Seq[T]): Option[R] =
-          haystack match {
-            case Nil => None
-            case head +: rest =>
-              prop(head) match {
-                case None  => possiblyFind(prop, rest)
-                case found => found
-              }
-          }
-
-        val varLevel: Option[Int] = possiblyFind[Expr, Int](
-          {
-            case expr =>
-              expr.exprInstance match {
-                case EVarBody(EVar(v)) =>
-                  v.varInstance match {
-                    case FreeVar(level) => Some(level)
-                    case _              => None
-                  }
-                case _ => None
-              }
-          },
-          pattern.exprs
-        )
+        val varLevel: Option[Int] = pattern.exprs.collectFirst[Int] {
+          case Expr(EVarBody(EVar(Var(FreeVar(level))))) => level
+        }
 
         val wildcard: Boolean = pattern.exprs.exists { expr =>
           expr.exprInstance match {
