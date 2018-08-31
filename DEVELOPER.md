@@ -159,6 +159,17 @@ To deploy a tarball run:
 
 The tarball can be found in directory `node/target/universal/`
 
+#### Running
+To run rnode locally from within sbt use the revolver plugin. It will start the app in a forked JVM.
+```
+> sh> sbt
+> sbt:rchain> project node
+> sbt:node> reStart run -s
+```
+Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
+```
+
+
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
