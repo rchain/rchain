@@ -95,11 +95,11 @@ class ValidateTest
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body = b.body.getOrElse(Body())
-      val state = body.postState.getOrElse(RChainState())
+      val body     = b.body.getOrElse(Body())
+      val state    = body.postState.getOrElse(RChainState())
       val newState = state.withBlockNumber(n)
 
-      val header = b.header.getOrElse(Header())
+      val header    = b.header.getOrElse(Header())
       val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
 
       b.withBody(body.withPostState(newState)).withHeader(newHeader)

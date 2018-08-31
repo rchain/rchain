@@ -75,9 +75,11 @@ object EquivocationDetector {
       Applicative[F].pure(Left(AdmissibleEquivocation))
     } else {
       for {
-        sender                   <- PrettyPrinter.buildString(block.sender).pure[F]
-        creatorJustificationHash = maybeCreatorJustification.getOrElse("none")
-        latestMessageOfCreator   = maybeLatestMessageOfCreator.getOrElse("none")
+        sender <- PrettyPrinter.buildString(block.sender).pure[F]
+        creatorJustificationHash = PrettyPrinter.buildString(
+          maybeCreatorJustification.getOrElse(ByteString.EMPTY))
+        latestMessageOfCreator = PrettyPrinter.buildString(
+          maybeLatestMessageOfCreator.map(_.blockHash).getOrElse(ByteString.EMPTY))
         _ <- Log[F].warn(
               s"Ignorable equivocation: sender is $sender, creator justification is $creatorJustificationHash, latest message of creator is $latestMessageOfCreator")
       } yield Left(IgnorableEquivocation)

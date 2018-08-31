@@ -2,24 +2,28 @@ package coop.rchain.node.api
 
 import coop.rchain.node.diagnostics
 import coop.rchain.p2p.effects._
+
 import io.grpc.{Server, ServerBuilder}
 import io.grpc.netty.NettyServerBuilder
-
 import scala.concurrent.Future
+
 import cats._
 import cats.implicits._
+
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.protocol.DeployServiceGrpc
 import coop.rchain.catscontrib._
 import coop.rchain.comm.discovery._
+import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.node.diagnostics
 import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
 import io.grpc.{Server, ServerBuilder}
 import monix.execution.Scheduler
 
@@ -28,7 +32,7 @@ object GrpcServer {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def acquireInternalServer[
-      F[_]: Capture: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable](
+      F[_]: Capture: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: ConnectionsCell: Futurable](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

@@ -119,7 +119,7 @@ object RholangCLI {
     Interpreter
       .buildNormalizedTerm(source)
       .runAttempt
-      .fold(System.err.println, processTerm)
+      .fold(_.printStackTrace(System.err), processTerm)
   }
 
   @tailrec

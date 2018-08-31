@@ -28,5 +28,5 @@ def log_prof_data():
         for fname, (count, calls) in PROF_DATA.items():
             max_time = max(calls)
             avg_time = sum(calls) / len(calls)
-            logging.info("Function %s called %d times. Execution time max: %.3f, average: %.3f", fname, count, max_time, avg_time)
+            logging.info("Function %s called %d times. Execution time max: %.3fs, average: %.3fs", fname, count, max_time, avg_time)
 
