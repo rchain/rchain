@@ -18,6 +18,7 @@ import coop.rchain.rholang.interpreter.matcher.StreamT._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
+import scala.collection.mutable
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -283,24 +284,24 @@ object SpatialMatcher extends SpatialMatcherInstances {
     )
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
-    val maximumBipartiteMatch =
-      MaximumBipartiteMatch[Pattern, T, FreeMap, OptionalFreeMapWithCost](
-        (pattern: Pattern, t: T) => {
-          val matchEffect = pattern match {
-            case Term(p) =>
-              if (!lf.connectiveUsed(p)) {
-                //match using `==` if pattern is a concrete term
-                guard(t == p).modifyCost(_.charge(COMPARISON_COST))
-              } else {
-                spatialMatch(t, p)
-              }
-            case Remainder(_) =>
-              //Remainders can't match non-concrete terms, because they can't be captured.
-              //They match everything that's concrete though.
-              guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
-          }
-          isolateState(matchEffect).attemptOpt
-        })
+    val matchFunction: (Pattern, T) => OptionalFreeMapWithCost[Option[FreeMap]] =
+      (pattern: Pattern, t: T) => {
+        val matchEffect = pattern match {
+          case Term(p) =>
+            if (!lf.connectiveUsed(p)) {
+              //match using `==` if pattern is a concrete term
+              guard(t == p).modifyCost(_.charge(COMPARISON_COST))
+            } else {
+              spatialMatch(t, p)
+            }
+          case Remainder(_) =>
+            //Remainders can't match non-concrete terms, because they can't be captured.
+            //They match everything that's concrete though.
+            guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
+        }
+        isolateState(matchEffect).attemptOpt
+      }
+    val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
@@ -338,6 +339,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
       resultState <- StateT.get[F, S]
       _           <- StateT.set[F, S](initState)
     } yield resultState
+
+  private def memoizeInHashMap[A, B, C](f: (A, B) => C): (A, B) => C = {
+    val memo = mutable.HashMap[(A, B), C]()
+    (a, b) =>
+      memo.getOrElseUpdate((a, b), f(a, b))
+  }
 
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): OptionalFreeMapWithCost[FreeMap] =
     for {
