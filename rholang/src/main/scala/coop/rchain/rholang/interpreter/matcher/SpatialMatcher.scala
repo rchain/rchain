@@ -218,11 +218,13 @@ object SpatialMatcher extends SpatialMatcherInstances {
   def listMatchSingle[T](tlist: Seq[T], plist: Seq[T])(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] =
-    listMatchSingleNonDet(tlist, plist, (p: Par, _: Seq[T]) => p, None, false).toDet()
+    listMatchSingle_(tlist, plist, (p: Par, _: Seq[T]) => p, None, false)
 
   /** This function finds a single matching from a list of patterns and a list of targets.
     * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
     * If both are provided, we prefer to capture terms that can be captured.
+    *
+    * The '_' in the name is to avoid overloading and thus having to provide parameter types for `merger` explicitly...
     *
     * @param tlist  the target list
     * @param plist  the pattern list
@@ -234,33 +236,33 @@ object SpatialMatcher extends SpatialMatcherInstances {
     * @tparam T
     * @return
     */
-  def listMatchSingleNonDet[T](tlist: Seq[T],
-                               plist: Seq[T],
-                               merger: (Par, Seq[T]) => Par,
-                               varLevel: Option[Int],
-                               wildcard: Boolean)(
+  def listMatchSingle_[T](tlist: Seq[T],
+                          plist: Seq[T],
+                          merger: (Par, Seq[T]) => Par,
+                          varLevel: Option[Int],
+                          wildcard: Boolean)(
       implicit lf: HasLocallyFree[T],
-      sm: SpatialMatcher[T, T]): NonDetFreeMapWithCost[Unit] = {
+      sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] = {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
 
-    val result: NonDetFreeMapWithCost[Unit] =
+    val result: OptionalFreeMapWithCost[Unit] =
       if (exactMatch && plen != tlen)
-        NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
+        OptionalFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen > tlen)
-        NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
+        OptionalFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
-        NonDetFreeMapWithCost.pure(())
+        OptionalFreeMapWithCost.pure(())
       else if (plen == 0 && varLevel.isDefined) {
         val matchResult =
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
-            handleRemainder(tlist, varLevel.get, merger).toNonDet()
+            handleRemainder(tlist, varLevel.get, merger)
           else
-            NonDetFreeMapWithCost.emptyMap[Unit]
+            OptionalFreeMapWithCost.emptyMap[Unit]
         matchResult.modifyCost(_.charge(COMPARISON_COST * tlist.size))
       } else
-        listMatch(tlist, plist, merger, varLevel, wildcard).toNonDet()
+        listMatch(tlist, plist, merger, varLevel, wildcard)
 
     result
   }
@@ -630,41 +632,41 @@ trait SpatialMatcherInstances {
         }
         for {
           remainder <- connectivesWithBounds.foldM(target)(matchConnectiveWithBounds)
-          _ <- listMatchSingleNonDet[Send](remainder.sends,
-                                           pattern.sends,
-                                           (p, s) => p.withSends(s),
-                                           varLevel,
-                                           wildcard)
-          _ <- listMatchSingleNonDet[Receive](remainder.receives,
-                                              pattern.receives,
-                                              (p, s) => p.withReceives(s),
-                                              varLevel,
-                                              wildcard)
-          _ <- listMatchSingleNonDet[New](remainder.news,
-                                          pattern.news,
-                                          (p, s) => p.withNews(s),
+          _ <- listMatchSingle_[Send](remainder.sends,
+                                      pattern.sends,
+                                      (p, s) => p.withSends(s),
+                                      varLevel,
+                                      wildcard).toNonDet()
+          _ <- listMatchSingle_[Receive](remainder.receives,
+                                         pattern.receives,
+                                         (p, s) => p.withReceives(s),
+                                         varLevel,
+                                         wildcard).toNonDet()
+          _ <- listMatchSingle_[New](remainder.news,
+                                     pattern.news,
+                                     (p, s) => p.withNews(s),
+                                     varLevel,
+                                     wildcard).toNonDet()
+          _ <- listMatchSingle_[Expr](remainder.exprs,
+                                      noFrees(pattern.exprs),
+                                      (p, e) => p.withExprs(e),
+                                      varLevel,
+                                      wildcard).toNonDet()
+          _ <- listMatchSingle_[Match](remainder.matches,
+                                       pattern.matches,
+                                       (p, e) => p.withMatches(e),
+                                       varLevel,
+                                       wildcard).toNonDet()
+          _ <- listMatchSingle_[Bundle](remainder.bundles,
+                                        pattern.bundles,
+                                        (p, b) => p.withBundles(b),
+                                        varLevel,
+                                        wildcard).toNonDet()
+          _ <- listMatchSingle_[GPrivate](remainder.ids,
+                                          pattern.ids,
+                                          (p, i) => p.withIds(i),
                                           varLevel,
-                                          wildcard)
-          _ <- listMatchSingleNonDet[Expr](remainder.exprs,
-                                           noFrees(pattern.exprs),
-                                           (p, e) => p.withExprs(e),
-                                           varLevel,
-                                           wildcard)
-          _ <- listMatchSingleNonDet[Match](remainder.matches,
-                                            pattern.matches,
-                                            (p, e) => p.withMatches(e),
-                                            varLevel,
-                                            wildcard)
-          _ <- listMatchSingleNonDet[Bundle](remainder.bundles,
-                                             pattern.bundles,
-                                             (p, b) => p.withBundles(b),
-                                             varLevel,
-                                             wildcard)
-          _ <- listMatchSingleNonDet[GPrivate](remainder.ids,
-                                               pattern.ids,
-                                               (p, i) => p.withIds(i),
-                                               varLevel,
-                                               wildcard)
+                                          wildcard).toNonDet()
         } yield Unit
       }
   }
@@ -730,15 +732,13 @@ trait SpatialMatcherInstances {
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
           val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
           val merger          = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
-          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
-            .toDet()
+          listMatchSingle_(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
 
         case (EMapBody(ParMap(tlist, _, _, _)), EMapBody(ParMap(plist, _, _, rem))) =>
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
           val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
           val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
-          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
-            .toDet()
+          listMatchSingle_(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
 
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)
