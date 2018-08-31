@@ -95,7 +95,7 @@ class ValidateTest
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body  = b.body.getOrElse(Body())
+      val body = b.body.getOrElse(Body())
       val state = body.postState.getOrElse(RChainState())
       val newState = state.withBlockNumber(n)
 
@@ -458,7 +458,7 @@ class ValidateTest
     Validate.blockHash[Id](genesis) should be(Right(Valid))
     Validate.blockHash[Id](
       genesis.withBlockHash(ByteString.copyFromUtf8("123"))
-    ) should be(Left(InvalidUnslashableBlock))
+    ) should be(Left(InvalidBlockHash))
   }
 
   "Block deploy count validation" should "fail on invalid number of deploys" in {
@@ -468,6 +468,6 @@ class ValidateTest
     Validate.deployCount[Id](genesis) should be(Right(Valid))
     Validate.deployCount[Id](
       genesis.withHeader(genesis.header.get.withDeployCount(100))
-    ) should be(Left(InvalidUnslashableBlock))
+    ) should be(Left(InvalidDeployCount))
   }
 }

@@ -359,7 +359,7 @@ object Validate {
     } else {
       for {
         _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
-      } yield Left(InvalidUnslashableBlock)
+      } yield Left(InvalidBlockHash)
     }
   }
 
@@ -369,7 +369,7 @@ object Validate {
     } else {
       for {
         _ <- Log[F].warn(ignore(b, s"block deploy count does not match to the amount of deploys."))
-      } yield Left(InvalidUnslashableBlock)
+      } yield Left(InvalidDeployCount)
     }
 
   /**
