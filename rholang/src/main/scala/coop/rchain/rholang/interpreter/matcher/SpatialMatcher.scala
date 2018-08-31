@@ -229,7 +229,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     * @param tlist  the target list
     * @param plist  the pattern list
     * @param merger a function that sets a Par's field to the Seq of captured T-s. Used for updating the state map.
-    * @param varLevel if non-empty, the free variable level where to put the remaining T's
+    * @param remainder if non-empty, the free variable level where to put the remaining T's
     * @param wildcard if true, there is a wildcard in parallel with the pattern list.
     * @param lf
     * @param sm a function that does a spatial match between T's
@@ -239,11 +239,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
   def listMatchSingle_[T](tlist: Seq[T],
                           plist: Seq[T],
                           merger: (Par, Seq[T]) => Par,
-                          varLevel: Option[Int],
+                          remainder: Option[Int],
                           wildcard: Boolean)(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] = {
-    val exactMatch = !wildcard && varLevel.isEmpty
+    val exactMatch = !wildcard && remainder.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
 
@@ -252,17 +252,17 @@ object SpatialMatcher extends SpatialMatcherInstances {
         OptionalFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen > tlen)
         OptionalFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
-      else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
+      else if (plen == 0 && tlen == 0 && remainder.isEmpty)
         OptionalFreeMapWithCost.pure(())
-      else if (plen == 0 && varLevel.isDefined) {
+      else if (plen == 0 && remainder.isDefined) {
         val matchResult =
           if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
-            handleRemainder(tlist, varLevel.get, merger)
+            handleRemainder(tlist, remainder.get, merger)
           else
             OptionalFreeMapWithCost.emptyMap[Unit]
         matchResult.modifyCost(_.charge(COMPARISON_COST * tlist.size))
       } else
-        listMatch(tlist, plist, merger, varLevel, wildcard)
+        listMatch(tlist, plist, merger, remainder, wildcard)
 
     result
   }
@@ -270,7 +270,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
   private[this] def listMatch[T](targets: Seq[T],
                                  patterns: Seq[T],
                                  merger: (Par, Seq[T]) => Par,
-                                 varLevel: Option[Int],
+                                 remainder: Option[Int],
                                  wildcard: Boolean)(
       implicit lf: HasLocallyFree[T],
       sm: SpatialMatcher[T, T]): OptionalFreeMapWithCost[Unit] = {
@@ -279,7 +279,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     case class Term(term: T)         extends Pattern
     case class Remainder(level: Int) extends Pattern
 
-    val remainderPatterns: Seq[Pattern] = varLevel.fold(
+    val remainderPatterns: Seq[Pattern] = remainder.fold(
       Seq.empty[Pattern]
     )(
       level => Seq.fill(targets.size - patterns.size)(Remainder(level))
@@ -314,7 +314,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
-      _ <- varLevel match {
+      _ <- remainder match {
             case None =>
               // If there is a wildcard, we succeed.
               // We also succeed if there isn't but the remainder is empty.
