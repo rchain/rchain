@@ -310,7 +310,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
       freeMaps               = matches.map(_._3)
       updatedFreeMap         <- aggregateUpdates(freeMaps)
-      _                      <- StateT.set[OptionT[State[CostAccount, ?], ?], FreeMap](updatedFreeMap)
+      _                      <- StateT.set[OptionWithCost, FreeMap](updatedFreeMap)
       remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
@@ -350,7 +350,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   private def aggregateUpdates(freeMaps: Seq[FreeMap]): OptionalFreeMapWithCost[FreeMap] =
     for {
-      currentFreeMap <- StateT.get[OptionT[State[CostAccount, ?], ?], FreeMap]
+      currentFreeMap <- StateT.get[OptionWithCost, FreeMap]
       _ <- guard {
             //The correctness of isolating MBM from changing FreeMap relies
             //on our ability to aggregate the var assignments from subsequent matches.
@@ -368,11 +368,11 @@ object SpatialMatcher extends SpatialMatcherInstances {
       level: Int,
       merger: (Par, Seq[T]) => Par)(implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] =
     for {
-      remainderPar <- StateT.inspect[OptionT[State[CostAccount, ?], ?], FreeMap, Par](
-                       (m: FreeMap) => m.getOrElse(level, VectorPar()))
+      remainderPar <- StateT.inspect[OptionWithCost, FreeMap, Par]((m: FreeMap) =>
+                       m.getOrElse(level, VectorPar()))
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
-      _ <- StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
+      _ <- StateT.modify[OptionWithCost, FreeMap]((m: FreeMap) =>
             m + (level -> remainderParUpdated))
     } yield Unit
 
@@ -690,8 +690,7 @@ trait SpatialMatcherInstances {
             matchedRem <- foldMatch(tlist, plist, rem)
             _ <- rem match {
                   case Some(Var(FreeVar(level))) =>
-                    StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap](m =>
-                      m + (level -> EList(matchedRem)))
+                    StateT.modify[OptionWithCost, FreeMap](m => m + (level -> EList(matchedRem)))
                   case _ => OptionalFreeMapWithCost.pure[Unit](())
                 }
           } yield Unit
