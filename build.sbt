@@ -6,7 +6,7 @@ import com.typesafe.sbt.packager.docker._
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.4",
+  scalaVersion := "2.12.6",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
