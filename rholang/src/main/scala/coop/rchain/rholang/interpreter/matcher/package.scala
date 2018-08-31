@@ -44,9 +44,9 @@ package object matcher {
       def toNonDet(): NonDetFreeMapWithCost[A] =
         s.mapK[StreamT[State[CostAccount, ?], ?]](
           new FunctionK[OptionT[State[CostAccount, ?], ?], StreamT[State[CostAccount, ?], ?]] {
-            override def apply[A](
-                fa: OptionT[State[CostAccount, ?], A]): StreamT[State[CostAccount, ?], A] =
-              StreamT(fa.fold(Stream.empty[A])(single => Stream(single)))
+            override def apply[T](
+                fa: OptionT[State[CostAccount, ?], T]): StreamT[State[CostAccount, ?], T] =
+              StreamT(fa.fold(Stream.empty[T])(single => Stream(single)))
           })
     }
 
@@ -103,8 +103,8 @@ package object matcher {
       def toDet(): OptionalFreeMapWithCost[A] =
         s.mapK[OptionT[State[CostAccount, ?], ?]](
           new FunctionK[StreamT[State[CostAccount, ?], ?], OptionT[State[CostAccount, ?], ?]] {
-            override def apply[A](
-                fa: StreamT[State[CostAccount, ?], A]): OptionT[State[CostAccount, ?], A] =
+            override def apply[T](
+                fa: StreamT[State[CostAccount, ?], T]): OptionT[State[CostAccount, ?], T] =
               OptionT(fa.value.map(_.headOption))
           })
     }
