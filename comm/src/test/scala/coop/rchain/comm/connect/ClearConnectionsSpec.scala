@@ -128,9 +128,7 @@ class ClearConnectionsSpec
     PeerNode(NodeIdentifier(name.getBytes), Endpoint("host", 80, 80))
 
   private def mkConnections(peers: PeerNode*): ConnectionsCell[Id] =
-    Cell.id[Connections](peers.reverse.foldLeft(Connections.empty) {
-      case (acc, el) => acc.addConn[Id](el)
-    })
+    Cell.id[Connections](peers.toList)
 
   private def conf(maxNumOfConnections: Int, numOfConnectionsPinged: Int = 5): RPConfAsk[Id] =
     new ConstApplicativeAsk(
