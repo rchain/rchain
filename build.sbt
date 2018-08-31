@@ -10,7 +10,9 @@ lazy val projectSettings = Seq(
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
-    Resolver.sonatypeRepo("snapshots")),
+    Resolver.sonatypeRepo("snapshots"),
+    "jitpack" at "https://jitpack.io"
+  ),
   scalafmtOnCompile := true
 )
 
