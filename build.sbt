@@ -4,6 +4,9 @@ import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
+//allow stopping sbt tasks using ctrl+c without killing sbt itself
+Global / cancelable := true
+
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.4",
