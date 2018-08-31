@@ -572,16 +572,9 @@ trait SpatialMatcherInstances {
           case Expr(EVarBody(EVar(Var(FreeVar(level))))) => level
         }
 
-        val wildcard: Boolean = pattern.exprs.exists { expr =>
-          expr.exprInstance match {
-            case EVarBody(EVar(v)) =>
-              v.varInstance match {
-                case Wildcard(_) => true
-                case _           => false
-              }
-            case _ => false
-          }
-        }
+        val wildcard: Boolean = pattern.exprs.collectFirst {
+          case Expr(EVarBody(EVar(Var(Wildcard(_))))) => ()
+        }.isDefined
 
         val filteredPattern  = noFrees(pattern)
         val pc               = ParCount(filteredPattern)
