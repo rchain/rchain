@@ -32,6 +32,8 @@ case object NeglectedInvalidBlock   extends InvalidBlock with Slashable
 case object NeglectedEquivocation   extends InvalidBlock with Slashable
 case object InvalidTransaction      extends InvalidBlock with Slashable
 case object InvalidBondsCache       extends InvalidBlock with Slashable
+case object InvalidBlockHash   extends InvalidBlock with Slashable
+case object InvalidDeployCount extends InvalidBlock with Slashable
 
 object BlockStatus {
   def valid: BlockStatus                    = Valid
