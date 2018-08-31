@@ -42,6 +42,12 @@ trait RegistryTester extends PersistentStoreTester {
 }
 
 class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
+  /*
+    0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2
+    089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e
+    0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0
+    0897a37e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3
+  */
   val eightByteArray: Par       = GByteArray(ByteString.copyFrom(Array[Byte](0x08.toByte)))
   val ninetySevenByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0x97.toByte)))
   val branchName: Par = GPrivate(
@@ -54,22 +60,22 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         ParMap(Seq(eightByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(1), ninetySevenByteArray, branchName))))))))))),
     persistent = false
   )
-  val sixCByteArray: Par   = GByteArray(ByteString.copyFrom(Array[Byte](0x6c.toByte)))
-  val dcByteArray: Par     = GByteArray(ByteString.copyFrom(Array[Byte](0xdc.toByte)))
-  val eSevenByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0xe7.toByte)))
+  val sevenFiveByteArray: Par   = GByteArray(ByteString.copyFrom(Array[Byte](0x75.toByte)))
+  val aThreeByteArray: Par   = GByteArray(ByteString.copyFrom(Array[Byte](0xa3.toByte)))
   val eNineByteArray: Par  = GByteArray(ByteString.copyFrom(Array[Byte](0xe9.toByte)))
+  val efByteArray: Par  = GByteArray(ByteString.copyFrom(Array[Byte](0xef.toByte)))
   val emptyByteArray: Par  = GByteArray(ByteString.EMPTY)
-  val branch1: Par         = GByteArray(ByteString.copyFrom(Base16.decode("bcb195efbad3b7ca343f50713e")))
-  val branch2: Par         = GByteArray(ByteString.copyFrom(Base16.decode("75426a859c8d3b25df4508cda9")))
-  val branch3: Par         = GByteArray(ByteString.copyFrom(Base16.decode("55241ea248915d153e082c75a9")))
-  val branch4: Par         = GByteArray(ByteString.copyFrom(Base16.decode("533fd9c5c26e7ea3fe07f99a4d")))
+  val branch1: Par         = GByteArray(ByteString.copyFrom(Base16.decode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2")))
+  val branch2: Par         = GByteArray(ByteString.copyFrom(Base16.decode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e")))
+  val branch3: Par         = GByteArray(ByteString.copyFrom(Base16.decode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0")))
+  val branch4: Par         = GByteArray(ByteString.copyFrom(Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3")))
   val branchSend: Send = Send(
     chan = Quote(branchName),
     data = Seq(
       Expr(EMapBody(ParMap(Seq(
         emptyByteArray  -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), emptyByteArray, GInt(7))))))),
-        dcByteArray     -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
-        eSevenByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9)))))))
+        eNineByteArray     -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
+        sevenFiveByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9)))))))
       ))))),
     persistent = false
   )
@@ -78,10 +84,10 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     chan = Quote(branchName),
     data = Seq(
       Expr(EMapBody(ParMap(Seq(
-        dcByteArray     -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
-        eSevenByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9))))))),
-        sixCByteArray   -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch3, GInt(10))))))),
-        eNineByteArray  -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch4, GInt(11)))))))
+        eNineByteArray     -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
+        sevenFiveByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9))))))),
+        efByteArray   -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch3, GInt(10))))))),
+        aThreeByteArray  -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch4, GInt(11)))))))
       ))))),
     persistent = false
   )
@@ -90,8 +96,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "lookup" should "recurse" in {
     /* lookup par is effectively:
       new r(`rho:registry:lookup`) in {
-        r!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), "result0") |
-        r!("0897e775426a859c8d3b25df4508cda9".hexToBytes(), "result1") |
+        r!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result0") |
+        r!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), "result1") |
         r!("0897".hexToBytes(), "result2")
       }
       But with the effect of the new already applied.
@@ -143,7 +149,7 @@ sends {
         methodName: "hexToBytes"
         target {
           exprs {
-            g_string: "0897dcbcb195efbad3b7ca343f50713e"
+            g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
           }
           locallyFree: "\000\000\000\000\000\000\000\000"
           connective_used: false
@@ -180,7 +186,7 @@ sends {
         methodName: "hexToBytes"
         target {
           exprs {
-            g_string: "0897e775426a859c8d3b25df4508cda9"
+            g_string: "089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"
           }
           locallyFree: "\000\000\000\000\000\000\000\000"
           connective_used: false
@@ -256,32 +262,32 @@ connective_used: false""")
     /* Insert Par is effectively:
         new rl(`rho:registry:lookup`), ri(`rho:registry:insert`) in {
           new ack in {
-            ri!("0897dcbc".hexToBytes(), 10, *ack) |
+            ri!("0897e953".hexToBytes(), 10, *ack) |
             for (@10 <- ack) { //merge 0
-              rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), *ack) |
+              rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
               for (@x <- ack) { //merge 1
                 @"result0"!(x) |
-                rl!("0897dcbc".hexToBytes(), *ack) |
+                rl!("0897e953".hexToBytes(), *ack) |
                 for (@x <- ack) { //merge 2
                   @"result1"!(x) |
-                  ri!("0897dc".hexToBytes(), 11, *ack) |
+                  ri!("0897e9".hexToBytes(), 11, *ack) |
                   for (@11 <- ack) { //merge 3
-                    rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), *ack) |
+                    rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
                     for (@x <- ack) { //merge4
                       @"result2"!(x) |
-                      rl!("0897dcbc".hexToBytes(), *ack) |
+                      rl!("0897e953".hexToBytes(), *ack) |
                       for (@x <- ack) { //merge5
                         @"result3"!(x) |
-                        rl!("0897dc".hexToBytes(), *ack) |
+                        rl!("0897e9".hexToBytes(), *ack) |
                         for (@x <- ack) {
                           @"result4"!(x) |
                           ri!("08bb".hexToBytes(), 12, *ack) |
                           for (@12 <- ack) {
-                            rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), "result5") |
-                            rl!("0897e775426a859c8d3b25df4508cda9".hexToBytes(), "result6") |
+                            rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result5") |
+                            rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), "result6") |
                             rl!("0897".hexToBytes(), "result7") |
-                            rl!("0897dc".hexToBytes(), "result8") |
-                            rl!("0897dcbc".hexToBytes(), "result9") |
+                            rl!("0897e9".hexToBytes(), "result8") |
+                            rl!("0897e953".hexToBytes(), "result9") |
                             rl!("08bb".hexToBytes(), "result10")
                           }
                         }
@@ -312,7 +318,7 @@ news {
             methodName: "hexToBytes"
             target {
               exprs {
-                g_string: "0897dcbc"
+                g_string: "0897e953"
               }
               locallyFree: "\000\000\000\000\000\000\000\000"
               connective_used: false
@@ -379,7 +385,7 @@ news {
                 methodName: "hexToBytes"
                 target {
                   exprs {
-                    g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                    g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                   }
                   locallyFree: "\000\000\000\000\000\000\000\000"
                   connective_used: false
@@ -468,7 +474,7 @@ news {
                     methodName: "hexToBytes"
                     target {
                       exprs {
-                        g_string: "0897dcbc"
+                        g_string: "0897e953"
                       }
                       locallyFree: "\000\000\000\000\000\000\000\000"
                       connective_used: false
@@ -557,7 +563,7 @@ news {
                         methodName: "hexToBytes"
                         target {
                           exprs {
-                            g_string: "0897dc"
+                            g_string: "0897e9"
                           }
                           locallyFree: "\000\000\000\000\000\000\000\000"
                           connective_used: false
@@ -624,7 +630,7 @@ news {
                             methodName: "hexToBytes"
                             target {
                               exprs {
-                                g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                                g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                               }
                               locallyFree: "\000\000\000\000\000\000\000\000"
                               connective_used: false
@@ -713,7 +719,7 @@ news {
                                 methodName: "hexToBytes"
                                 target {
                                   exprs {
-                                    g_string: "0897dcbc"
+                                    g_string: "0897e953"
                                   }
                                   locallyFree: "\000\000\000\000\000\000\000\000"
                                   connective_used: false
@@ -802,7 +808,7 @@ news {
                                     methodName: "hexToBytes"
                                     target {
                                       exprs {
-                                        g_string: "0897dc"
+                                        g_string: "0897e9"
                                       }
                                       locallyFree: "\000\000\000\000\000\000\000\000"
                                       connective_used: false
@@ -995,7 +1001,7 @@ news {
                                             methodName: "hexToBytes"
                                             target {
                                               exprs {
-                                                g_string: "0897dc"
+                                                g_string: "0897e9"
                                               }
                                               locallyFree: "\000\000\000\000\000\000\000\000"
                                               connective_used: false
@@ -1032,7 +1038,7 @@ news {
                                             methodName: "hexToBytes"
                                             target {
                                               exprs {
-                                                g_string: "0897dcbc"
+                                                g_string: "0897e953"
                                               }
                                               locallyFree: "\000\000\000\000\000\000\000\000"
                                               connective_used: false
@@ -1069,7 +1075,7 @@ news {
                                             methodName: "hexToBytes"
                                             target {
                                               exprs {
-                                                g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                                                g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                                               }
                                               locallyFree: "\000\000\000\000\000\000\000\000"
                                               connective_used: false
@@ -1106,7 +1112,7 @@ news {
                                             methodName: "hexToBytes"
                                             target {
                                               exprs {
-                                                g_string: "0897e775426a859c8d3b25df4508cda9"
+                                                g_string: "089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"
                                               }
                                               locallyFree: "\000\000\000\000\000\000\000\000"
                                               connective_used: false
@@ -1258,7 +1264,7 @@ news {
     val merge2 = Blake2b512Random.merge(Seq(merge1.splitByte(2), lookup1Rand))
     val result1Rand = merge2.splitByte(0)
     val insert1Rand = merge2.splitByte(1)
-    //0897dc only takes 2 lookups (root, and 0897). It uses 1 more to split
+    //0897e9 only takes 2 lookups (root, and 0897). It uses 1 more to split
     insert1Rand.next(); insert1Rand.next(); insert1Rand.next()
     val merge3 = Blake2b512Random.merge(Seq(merge2.splitByte(2), insert1Rand.splitByte(1)))
     val lookup2Rand = merge3.splitByte(0)
@@ -1271,7 +1277,7 @@ news {
     val merge5 = Blake2b512Random.merge(Seq(merge4.splitByte(2), lookup3Rand))
     val result3Rand = merge5.splitByte(0)
     val lookup4Rand = merge5.splitByte(1)
-    //Only 3 lookups: root, 0897, dc
+    //Only 3 lookups: root, 0897, e9
     lookup4Rand.next(); lookup4Rand.next(); lookup4Rand.next()
     val merge6 = Blake2b512Random.merge(Seq(merge5.splitByte(2), lookup4Rand))
     val result4Rand = merge6.splitByte(0)
@@ -1399,31 +1405,31 @@ news {
       delete par is effectively: (but with urn's already substituted)
 new rl(`rho:registry:lookup`), rd(`rho:registry:delete`) in {
   new ack in {
-    rd!("0897e9533fd9c5c26e7ea3fe07f99a4d".hexToBytes(), *ack) |
+    rd!("0897a37e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3".hexToBytes(), *ack) |
     for (@11 <- ack) { //merge 0
-      rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), *ack) |
+      rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
       for (@x <- ack) { //merge 1
         @"result0"!(x) |
-        rl!("0897e775426a859c8d3b25df4508cda9".hexToBytes(), *ack) |
+        rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
         for (@x <- ack) { //merge 2
           @"result1"!(x) |
-          rl!("08976c55241ea248915d153e082c75a9".hexToBytes(), *ack) |
+          rl!("0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0".hexToBytes(), *ack) |
           for (@x <- ack) { //merge 3
             @"result2"!(x) |
-            rd!("08976c55241ea248915d153e082c75a9".hexToBytes(), *ack) |
+            rd!("0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0".hexToBytes(), *ack) |
             for (@10 <- ack) { //merge4
-              rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), *ack) |
+              rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
               for (@x <- ack) { //merge5
                 @"result3"!(x) |
-                rl!("0897e775426a859c8d3b25df4508cda9".hexToBytes(), *ack) |
+                rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
                 for (@x <- ack) { //merge6
                   @"result4"!(x) |
-                  rd!("0897e775426a859c8d3b25df4508cda9".hexToBytes(), *ack) |
+                  rd!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
                   for (@9 <- ack) { //merge7
-                    rl!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), *ack) |
+                    rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
                     for (@x <- ack) { //merge8
                       @"result5"!(x) |
-                      rd!("0897dcbcb195efbad3b7ca343f50713e".hexToBytes(), "result6")
+                      rd!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result6")
                     }
                   }
                 }
@@ -1454,7 +1460,7 @@ news {
             methodName: "hexToBytes"
             target {
               exprs {
-                g_string: "0897e9533fd9c5c26e7ea3fe07f99a4d"
+                g_string: "0897a37e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"
               }
               locallyFree: "\000\000\000\000\000\000\000\000"
               connective_used: false
@@ -1514,7 +1520,7 @@ news {
                 methodName: "hexToBytes"
                 target {
                   exprs {
-                    g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                    g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                   }
                   locallyFree: "\000\000\000\000\000\000\000\000"
                   connective_used: false
@@ -1603,7 +1609,7 @@ news {
                     methodName: "hexToBytes"
                     target {
                       exprs {
-                        g_string: "0897e775426a859c8d3b25df4508cda9"
+                        g_string: "089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"
                       }
                       locallyFree: "\000\000\000\000\000\000\000\000"
                       connective_used: false
@@ -1692,7 +1698,7 @@ news {
                         methodName: "hexToBytes"
                         target {
                           exprs {
-                            g_string: "08976c55241ea248915d153e082c75a9"
+                            g_string: "0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0"
                           }
                           locallyFree: "\000\000\000\000\000\000\000\000"
                           connective_used: false
@@ -1781,7 +1787,7 @@ news {
                             methodName: "hexToBytes"
                             target {
                               exprs {
-                                g_string: "08976c55241ea248915d153e082c75a9"
+                                g_string: "0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0"
                               }
                               locallyFree: "\000\000\000\000\000\000\000\000"
                               connective_used: false
@@ -1841,7 +1847,7 @@ news {
                                 methodName: "hexToBytes"
                                 target {
                                   exprs {
-                                    g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                                    g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                                   }
                                   locallyFree: "\000\000\000\000\000\000\000\000"
                                   connective_used: false
@@ -1930,7 +1936,7 @@ news {
                                     methodName: "hexToBytes"
                                     target {
                                       exprs {
-                                        g_string: "0897e775426a859c8d3b25df4508cda9"
+                                        g_string: "089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"
                                       }
                                       locallyFree: "\000\000\000\000\000\000\000\000"
                                       connective_used: false
@@ -2019,7 +2025,7 @@ news {
                                         methodName: "hexToBytes"
                                         target {
                                           exprs {
-                                            g_string: "0897e775426a859c8d3b25df4508cda9"
+                                            g_string: "089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"
                                           }
                                           locallyFree: "\000\000\000\000\000\000\000\000"
                                           connective_used: false
@@ -2079,7 +2085,7 @@ news {
                                             methodName: "hexToBytes"
                                             target {
                                               exprs {
-                                                g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                                                g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                                               }
                                               locallyFree: "\000\000\000\000\000\000\000\000"
                                               connective_used: false
@@ -2168,7 +2174,7 @@ news {
                                                 methodName: "hexToBytes"
                                                 target {
                                                   exprs {
-                                                    g_string: "0897dcbcb195efbad3b7ca343f50713e"
+                                                    g_string: "0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"
                                                   }
                                                   locallyFree: "\000\000\000\000\000\000\000\000"
                                                   connective_used: false
@@ -2396,6 +2402,389 @@ connective_used: false
         List(
           Datum.create(Channel(Quote(Registry.registryRoot)),
                        ListChannelWithRandom(Seq(Quote(EMapBody(ParMap(SortedParMap.empty)))), rootRand),
+                       false)),
+        List()
+      )))
+  }
+
+  "Public lookup" should "decode and then call lookup" in {
+    /* lookup par is effectively:
+      new r(`rho:registry:lookup`) in {
+        r!(`rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3`, "result0") |
+        r!(`rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3`, "result1") |
+      }
+      But with the effect of the new already applied.
+    */
+    val lookupPar: Par = Par.fromAscii("""
+sends {
+  chan {
+    quote {
+      ids {
+        id: "\021"
+      }
+    }
+  }
+  data {
+    exprs {
+      g_uri: "rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3"
+    }
+    locallyFree: "\000\000\000\000\000\000\000\000"
+    connective_used: false
+  }
+  data {
+    exprs {
+      g_string: "result0"
+    }
+    locallyFree: "\000\000\000\000\000\000\000\000"
+    connective_used: false
+  }
+  persistent: false
+  locallyFree: "\000\000\000\000\000\000\000\000"
+  connective_used: false
+}
+sends {
+  chan {
+    quote {
+      ids {
+        id: "\021"
+      }
+    }
+  }
+  data {
+    exprs {
+      g_uri: "rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3"
+    }
+    locallyFree: "\000\000\000\000\000\000\000\000"
+    connective_used: false
+  }
+  data {
+    exprs {
+      g_string: "result1"
+    }
+    locallyFree: "\000\000\000\000\000\000\000\000"
+    connective_used: false
+  }
+  persistent: false
+  locallyFree: "\000\000\000\000\000\000\000\000"
+  connective_used: false
+}
+locallyFree: "\000\000\000\000\000\000\000\000"
+connective_used: false""")
+    val completePar                     = lookupPar.addSends(rootSend, branchSend)
+    implicit val rand: Blake2b512Random = baseRand.splitByte(4)
+    val randResult0                     = rand.splitByte(0)
+    randResult0.next; randResult0.next
+    val randResult1 = rand.splitByte(1)
+    randResult1.next; randResult1.next
+
+    val result = withRegistryAndTestSpace { (reducer, space) =>
+      implicit val env    = Env[Par]()
+      val resultTask = for {
+        _ <- reducer.eval(completePar)
+      } yield space.store.toMap
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+
+    def resultChanList(s: String) =
+      List(Channel(Quote(GString(s))))
+
+    result.get(resultChanList("result0")) should be(
+      Some(Row(
+        List(
+          Datum.create(Channel(Quote(GString("result0"))),
+                       ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
+                       false)),
+        List()
+      )))
+    result.get(resultChanList("result1")) should be(
+      Some(Row(
+        List(
+          Datum.create(Channel(Quote(GString("result1"))),
+                       ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
+                       false)),
+        List()
+      )))
+  }
+
+  "Random Registry" should "use the random generator and insert" in {
+    /* register par is effectively:
+      new rr(`rho:registry:register:id`), rl(`rho:registry:lookup`) in {
+        new x, y in {
+          rr!(bundle+{*x}, y) |
+          for(@{uri}, resultChan <- y) {
+            for(@{finalResult} <- resultChan) {
+              @"result0"!(finalResult) |
+              @"result1"!(uri) |
+              rl!(uri, "result2")
+            }
+          }
+        }
+      }
+      But with the effect of the outermost new already applied.
+    */
+    val registerPar: Par = Par.fromAscii("""
+news {
+  bindCount: 2
+  p {
+    sends {
+      chan {
+        quote {
+          ids {
+            id: "\022"
+          }
+          locallyFree: "\000\000\000\000\000\000\000\000"
+          connective_used: false
+        }
+      }
+      data {
+        locallyFree: "\002\000\000\000\000\000\000\000"
+        connective_used: false
+        bundles {
+          body {
+            exprs {
+              e_eval_body {
+                chanVar {
+                  bound_var: 1
+                }
+              }
+            }
+            locallyFree: "\002\000\000\000\000\000\000\000"
+            connective_used: false
+          }
+          writeFlag: true
+          readFlag: false
+        }
+      }
+      data {
+        exprs {
+          e_eval_body {
+            chanVar {
+              bound_var: 0
+            }
+          }
+        }
+        locallyFree: "\001\000\000\000\000\000\000\000"
+        connective_used: false
+      }
+      persistent: false
+      locallyFree: "\003\000\000\000\000\000\000\000"
+      connective_used: false
+    }
+    receives {
+      binds {
+        patterns {
+          quote {
+            exprs {
+              e_var_body {
+                v {
+                  free_var: 0
+                }
+              }
+            }
+            locallyFree: "\000\000\000\000\000\000\000\000"
+            connective_used: true
+          }
+        }
+        patterns {
+          chanVar {
+            free_var: 1
+          }
+        }
+        source {
+          chanVar {
+            bound_var: 0
+          }
+        }
+        freeCount: 2
+      }
+      body {
+        receives {
+          binds {
+            patterns {
+              quote {
+                exprs {
+                  e_var_body {
+                    v {
+                      free_var: 0
+                    }
+                  }
+                }
+                locallyFree: "\000\000\000\000\000\000\000\000"
+                connective_used: true
+              }
+            }
+            source {
+              chanVar {
+                bound_var: 0
+              }
+            }
+            freeCount: 1
+          }
+          body {
+            sends {
+              chan {
+                quote {
+                  exprs {
+                    g_string: "result0"
+                  }
+                  locallyFree: "\000\000\000\000\000\000\000\000"
+                  connective_used: false
+                }
+              }
+              data {
+                exprs {
+                  e_var_body {
+                    v {
+                      bound_var: 0
+                    }
+                  }
+                }
+                locallyFree: "\001\000\000\000\000\000\000\000"
+                connective_used: false
+              }
+              persistent: false
+              locallyFree: "\001\000\000\000\000\000\000\000"
+              connective_used: false
+            }
+            sends {
+              chan {
+                quote {
+                  exprs {
+                    g_string: "result1"
+                  }
+                  locallyFree: "\000\000\000\000\000\000\000\000"
+                  connective_used: false
+                }
+              }
+              data {
+                exprs {
+                  e_var_body {
+                    v {
+                      bound_var: 2
+                    }
+                  }
+                }
+                locallyFree: "\004\000\000\000\000\000\000\000"
+                connective_used: false
+              }
+              persistent: false
+              locallyFree: "\004\000\000\000\000\000\000\000"
+              connective_used: false
+            }
+            sends {
+              chan {
+                quote {
+                  ids {
+                    id: "\021"
+                  }
+                  locallyFree: "\000\000\000\000\000\000\000\000"
+                  connective_used: false
+                }
+              }
+              data {
+                exprs {
+                  e_var_body {
+                    v {
+                      bound_var: 2
+                    }
+                  }
+                }
+                locallyFree: "\004\000\000\000\000\000\000\000"
+                connective_used: false
+              }
+              data {
+                exprs {
+                  g_string: "result2"
+                }
+                locallyFree: "\000\000\000\000\000\000\000\000"
+                connective_used: false
+              }
+              persistent: false
+              locallyFree: "\004\000\000\000\000\000\000\000"
+              connective_used: false
+            }
+            locallyFree: "\005\000\000\000\000\000\000\000"
+            connective_used: false
+          }
+          persistent: false
+          bindCount: 1
+          locallyFree: "\003\000\000\000\000\000\000\000"
+          connective_used: false
+        }
+        locallyFree: "\003\000\000\000\000\000\000\000"
+        connective_used: false
+      }
+      persistent: false
+      bindCount: 2
+      locallyFree: "\001\000\000\000\000\000\000\000"
+      connective_used: false
+    }
+    locallyFree: "\003\000\000\000\000\000\000\000"
+    connective_used: false
+  }
+  locallyFree: "\000\000\000\000\000\000\000\000"
+}
+locallyFree: "\000\000\000\000\000\000\000\000"
+connective_used: false""")
+    val completePar                     = registerPar.addSends(rootSend, branchSend)
+    implicit val rand: Blake2b512Random = baseRand.splitByte(5)
+    val newRand = rand.splitByte(2)
+    newRand.next(); newRand.next()
+    val registerRand = newRand.splitByte(0)
+    registerRand.next(); registerRand.next()
+    val partialReturnRand = registerRand.splitByte(0)
+    val insertRand = registerRand.splitByte(1)
+    // Goes directly into root
+    insertRand.next();
+    val merge0Rand = Blake2b512Random.merge(Seq(newRand.splitByte(1), partialReturnRand))
+    val merge1Rand = Blake2b512Random.merge(Seq(merge0Rand, insertRand))
+    val randResult0 = merge1Rand.splitByte(0)
+    val randResult1 = merge1Rand.splitByte(1)
+    val lookupRand = merge1Rand.splitByte(2)
+    lookupRand.next();
+    val randResult2 = lookupRand
+
+    val result = withRegistryAndTestSpace { (reducer, space) =>
+      implicit val env    = Env[Par]()
+      val resultTask = for {
+        _ <- reducer.eval(completePar)
+      } yield space.store.toMap
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+
+    def resultChanList(s: String) =
+      List(Channel(Quote(GString(s))))
+
+    val expectedBundle: Par = Bundle(GPrivate(
+      ByteString.copyFrom(
+        Base16.decode("2abed4680a1dca886783d04584f8b9b600f50848c8192e31e63d89828f635781"))),
+      writeFlag = true,
+      readFlag = false)
+
+    val pp = PrettyPrinter()
+    val actualChan = result.get(resultChanList("result2")).get.data(0).a.channels(0)
+    val actualRand = result.get(resultChanList("result2")).get.data(0).a.randomState
+    result.get(resultChanList("result0")) should be(
+      Some(Row(
+        List(
+          Datum.create(Channel(Quote(GString("result0"))),
+                       ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult0),
+                       false)),
+        List()
+      )))
+    result.get(resultChanList("result1")) should be(
+      Some(Row(
+        List(
+          Datum.create(Channel(Quote(GString("result1"))),
+                       ListChannelWithRandom(Seq(Quote(GUri("rho:id:qcxj3nj5k5hg3xn7r59tjq4ujwyru6o1bxupnkwdo8pime4dnf6ph6"))), randResult1),
+                       false)),
+        List()
+      )))
+    result.get(resultChanList("result2")) should be(
+      Some(Row(
+        List(
+          Datum.create(Channel(Quote(GString("result2"))),
+                       ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult2),
                        false)),
         List()
       )))
