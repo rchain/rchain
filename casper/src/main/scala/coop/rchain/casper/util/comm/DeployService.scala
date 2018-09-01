@@ -23,10 +23,16 @@ object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
+class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
+    extends DeployService[Task]
+    with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
+    ManagedChannelBuilder
+      .forAddress(host, port)
+      .maxInboundMessageSize(maxMessageSize)
+      .usePlaintext(true)
+      .build
   private val blockingStub = DeployServiceGrpc.blockingStub(channel)
 
   def deploy(d: DeployData): Task[(Boolean, String)] = Task.delay {
