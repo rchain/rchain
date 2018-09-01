@@ -266,16 +266,18 @@ object ProcNormalizeMatcher {
         subProcRight: Proc,
         input: ProcVisitInputs,
         constructor: (Par, Par) => T)(implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
-      for {
-        leftResult <- normalizeMatch[M](subProcLeft, input.copy(par = VectorPar()))
-        rightResult <- normalizeMatch[M](
-                        subProcRight,
-                        input.copy(par = VectorPar(), knownFree = leftResult.knownFree))
-      } yield
-        ProcVisitOutputs(
-          input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
-          rightResult.knownFree
-        )
+      sync.suspend {
+        for {
+          leftResult <- normalizeMatch[M](subProcLeft, input.copy(par = VectorPar()))
+          rightResult <- normalizeMatch[M](
+                          subProcRight,
+                          input.copy(par = VectorPar(), knownFree = leftResult.knownFree))
+        } yield
+          ProcVisitOutputs(
+            input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
+            rightResult.knownFree
+          )
+      }
 
     def normalizeIfElse(valueProc: Proc,
                         trueBodyProc: Proc,
