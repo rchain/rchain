@@ -1,19 +1,24 @@
 package coop.rchain.models.rholang.sort
 
-import coop.rchain.models.{Match, MatchCase}
+import cats.effect.Sync
+import coop.rchain.models.{Expr, Match, MatchCase}
+import cats.implicits._
 
 private[sort] object MatchSortMatcher extends Sortable[Match] {
-  def sortMatch(m: Match): ScoredTerm[Match] = {
-    def sortCase(matchCase: MatchCase): ScoredTerm[MatchCase] = {
-      val sortedPattern = Sortable.sortMatch(matchCase.pattern)
-      val sortedBody    = Sortable.sortMatch(matchCase.source)
-      ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
-                 Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
-    }
+  def sortMatch[F[_]: Sync](m: Match): F[ScoredTerm[Match]] = {
 
-    val sortedValue = Sortable.sortMatch(m.target)
-    val scoredCases = m.cases.toList.map(sortCase)
-    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
-               Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
+    def sortCase(matchCase: MatchCase): F[ScoredTerm[MatchCase]] =
+      for {
+        sortedPattern <- Sortable.sortMatch(matchCase.pattern)
+        sortedBody    <- Sortable.sortMatch(matchCase.source)
+      } yield
+        ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
+                   Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
+    for {
+      sortedValue <- Sortable.sortMatch(m.target)
+      scoredCases <- m.cases.toList.map(sortCase).sequence
+    } yield
+      ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
+                 Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
   }
 }
