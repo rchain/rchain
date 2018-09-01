@@ -170,9 +170,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] =
     for {
-      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
+      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal,
+                                                                     conf.server.maxMessageSize)
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
+                             .acquireInternalServer[Effect](conf.grpcServer.portInternal,
+                                                            conf.server.maxMessageSize,
+                                                            runtime)
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {

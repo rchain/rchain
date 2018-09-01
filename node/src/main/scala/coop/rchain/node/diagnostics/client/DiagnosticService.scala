@@ -25,12 +25,16 @@ object DiagnosticsService {
   def apply[F[_]](implicit ev: DiagnosticsService[F]): DiagnosticsService[F] = ev
 }
 
-class GrpcDiagnosticsService(host: String, port: Int)
+class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
     extends DiagnosticsService[Task]
     with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
+    ManagedChannelBuilder
+      .forAddress(host, port)
+      .maxInboundMessageSize(maxMessageSize)
+      .usePlaintext(true)
+      .build
   private val blockingStub = DiagnosticsGrpc.blockingStub(channel)
 
   def listPeers: Task[Seq[PeerNode]] =
