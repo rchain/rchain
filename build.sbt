@@ -4,13 +4,18 @@ import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
+//allow stopping sbt tasks using ctrl+c without killing sbt itself
+Global / cancelable := true
+
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.4",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
-    Resolver.sonatypeRepo("snapshots")),
+    Resolver.sonatypeRepo("snapshots"),
+    "jitpack" at "https://jitpack.io"
+  ),
   scalafmtOnCompile := true
 )
 

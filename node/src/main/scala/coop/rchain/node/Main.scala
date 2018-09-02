@@ -43,12 +43,17 @@ object Main {
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
-      new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.portInternal)
+      new GrpcReplClient(conf.grpcServer.host,
+                         conf.grpcServer.portInternal,
+                         conf.server.maxMessageSize)
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcServer.host,
-                                                    conf.grpcServer.portInternal)
+                                                    conf.grpcServer.portInternal,
+                                                    conf.server.maxMessageSize)
     implicit val deployService: GrpcDeployService =
-      new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.portExternal)
+      new GrpcDeployService(conf.grpcServer.host,
+                            conf.grpcServer.portExternal,
+                            conf.server.maxMessageSize)
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
