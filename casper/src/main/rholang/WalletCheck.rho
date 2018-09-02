@@ -1,20 +1,23 @@
+//scalapackage coop.rchain.rholang.wallet
+
 // WalletCheck: holds funds until a public key with the given hash is presented,
 //     then creates a wallet with that public key and those funds.
 
 // create: makes a wallet check
 //
-// bytearray hash: the hash of the public key
+// string ethAddr: the address of the funds on Ethereum (pre-issuance)
 // Purse purse: the funds to put in the wallet
-contract @["WalletCheck", "create"](@hash, @purse) = {
+contract @["WalletCheck", "create"](@ethAddr, @purse) = {
   new doneStore in {
     doneStore!(false) |
     
     // claims the wallet by presenting the preimage of the hash
     //
-    // bytearray pubkey
+    // string pubkey: Base16 encoded public key. It should be true that
+    //                "0x" + Base16.encode(keccak256.hash(Base16.decode(pubkey)).takeRight(20)) == ethAddr
     // name statusOut
-    // bytearray sig: signature of [pubKey, statusOut]
-    contract @hash(@[pubKey, statusOut], @sig) = {
+    // string sig: signature of [pubKey, statusOut]
+    contract @ethAddr(@[pubKey, statusOut], @sig) = {
       
       // Make sure the purse hasn't already been claimed
       for (@done <- doneStore) {
@@ -24,20 +27,22 @@ contract @["WalletCheck", "create"](@hash, @purse) = {
         } else {
 
           // Verify signature 
-          new verifiedOut in {
-            @"secp256k1Verify"!([pubKey, statusOut].toByteArray(), sig, pubKey, *verifiedOut) |
-            for (@verified <- verifiedOut) {
-              if (verified) {
-                new hashOut in {
-
+          new verifiedOut, calcAddrOut, hashOut in {
+            @"keccak256Hash"!([pubKey, statusOut].toByteArray(), *hashOut) |
+            for(@dataHash <- hashOut) {
+              //need to verify the signature using the provided plue 1 extra byte (for some reason...)
+              @"secp256k1Verify"!(dataHash, sig.hexToBytes(), ("04" ++ pubKey).hexToBytes(), *verifiedOut) |
+              for (@verified <- verifiedOut) {
+                if (verified) {
                   // Check that given pubKey is the preimage of hash
-                  @"keccak256Hash"!(pubKey.toByteArray(), *hashOut) |
-                  for (@pkHash <- hashOut) {
-                    if (pkHash == hash) {
+                  @["WalletCheck", "publicToAddr"]!(pubKey, *calcAddrOut) |
+                  for (@calcAddr <- calcAddrOut) {
+                    //drop the "0x" from the Ethereum address then convert to bytes
+                    if (calcAddr == ethAddr.slice(2, ethAddr.length()).hexToBytes()) {
                       new walletOut in {
 
                         // Create the wallet
-                        @"BasicWallet"!(purse, "secp256k1", pubKey, *walletOut) |
+                        @"BasicWallet"!(purse, "secp256k1", "04" ++ pubKey, *walletOut) |
 
                         // Advertise the private name on a forgeable one
                         // TODO: This is completely insecure.  Once the
@@ -57,15 +62,27 @@ contract @["WalletCheck", "create"](@hash, @purse) = {
                       @statusOut!([false, "Public key is not the preimage of hash"])
                     }
                   }
+                } else {
+                  doneStore!(done) |
+                  @statusOut!([false, "Signature verification failed"])
                 }
-              } else {
-                doneStore!(done) |
-                @statusOut!([false, "Signature verification failed"])
               }
             }
           }
         }
       }
+    }
+  }
+} |
+
+//computes the ethereum address from a public key
+//string pubKey
+//returns bytearray
+contract @["WalletCheck", "publicToAddr"](@pubKey, ret) = {
+  new hashOut in {
+    @"keccak256Hash"!(pubKey.hexToBytes(), *hashOut) |
+    for(@pkHash <- hashOut) {
+      ret!(pkHash.slice(12, 32))
     }
   }
 }

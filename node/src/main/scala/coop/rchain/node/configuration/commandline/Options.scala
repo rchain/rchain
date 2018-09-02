@@ -2,6 +2,7 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
 
+import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
 import coop.rchain.shared.StoreType
@@ -34,6 +35,33 @@ object Converter {
     val argType: ArgType.V = ArgType.FLAG
   }
 
+  private def nameConverter[A](onPub: List[String] => A,
+                               onPriv: List[String] => A,
+                               argType0: ArgType.V) = new ValueConverter[List[String] => A] {
+    import cats.instances.either._
+    import cats.instances.option._
+    import cats.syntax.traverse._
+
+    override def parse(s: List[(String, List[String])]) = {
+      val optMap  = s.toMap
+      val typeOpt = optMap.get("type").orElse(optMap.get("t"))
+
+      typeOpt.traverse[Either[String, ?], List[String] => A] {
+        case "priv" :: _ => Right(onPriv)
+        case "pub" :: _  => Right(onPub)
+        case _           => Left("Bad option value. Use \"pub\" or \"priv\"")
+      }
+    }
+
+    override val argType = argType0
+  }
+
+  implicit val nameProviderConverter =
+    nameConverter[Name](names => PubName(names.head), names => PrivName(names.head), ArgType.SINGLE)
+
+  implicit val namesProviderConverter =
+    nameConverter[List[Name]](_.map(PubName), _.map(PrivName), ArgType.LIST)
+
   implicit val finiteDurationConverter: ValueConverter[FiniteDuration] =
     new ValueConverter[FiniteDuration] {
 
@@ -63,7 +91,6 @@ object Converter {
       }
     val argType: ArgType.V = ArgType.SINGLE
   }
-
 }
 
 object Options {
@@ -82,8 +109,8 @@ object Options {
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
-  import Options.Flag
   import Converter._
+  import Options.Flag
 
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"
@@ -289,6 +316,35 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "View list of blocks on the main chain in the current Casper view on an existing running node.")
   }
   addSubcommand(showBlocks)
+
+  def listenAtName[R](name: String, desc: String)(
+      implicit conv: ValueConverter[List[String] => R]) = new Subcommand(name) {
+    descr(desc)
+
+    val typeOfName =
+      opt[List[String] => R](required = true,
+                             descr = "Type of the specified name",
+                             name = "type",
+                             short = 't')
+
+    val content =
+      opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')
+
+    val name: ScallopOption[R] =
+      for {
+        content <- content
+        f       <- typeOfName
+      } yield f(content)
+  }
+
+  val dataAtName =
+    listenAtName[Name]("listen-data-at-name", "Listen for data at the specified name")
+
+  val contAtName =
+    listenAtName[List[Name]]("listen-cont-at-name", "Listen for continuation at the specified name")
+
+  addSubcommand(dataAtName)
+  addSubcommand(contAtName)
 
   val propose = new Subcommand("propose") {
     descr(

@@ -12,11 +12,12 @@ import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import org.scalatest._
+import org.scalatest.concurrent.TimeLimits
 import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
-class VarMatcherSpec extends FlatSpec with Matchers {
+class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
@@ -42,9 +43,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       target: T,
       pattern: P,
       expectedCaptures: Option[FreeMap]): String = {
-    val targetString       = printer.buildString(target)
-    val patternString      = printer.buildString(pattern)
-    val capturesStringsMap = prettyCaptures(expectedCaptures)
+
+    def truncate(s: String): String = if (s.length > 120) s.substring(0, 120) + "..." else s
+
+    val targetString       = truncate(printer.buildString(target))
+    val patternString      = truncate(printer.buildString(pattern))
+    val capturesStringsMap = truncate(prettyCaptures(expectedCaptures).toString)
 
     s"""
        |     Matching:  $patternString
@@ -100,6 +104,17 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
         .withConnectiveUsed(true), depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(8))))
+  }
+
+  "Matching huge list of targets with no patterns and a reminder" should "better be quick" in {
+    //This is a very common case in rspace that can be handled in linear time, yet was quadratic for a short while
+    val target: Par = Par(exprs = Seq.fill(1000)(GInt(1): Expr))
+    val pattern: Par = EVar(FreeVar(0))
+
+    import org.scalatest.time.SpanSugar._
+    failAfter(5 seconds) {
+      assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> target)))
+    }
   }
 
   "Matching a send's channel" should "work" in {

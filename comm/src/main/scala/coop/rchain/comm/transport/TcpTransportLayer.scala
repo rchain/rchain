@@ -81,10 +81,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
       for {
-        _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
         _ <- s.connections.get(peer) match {
-              case Some(c) => Task.delay(c.shutdown()).attempt.void
-              case _       => Task.unit // ignore if connection does not exists already
+              case Some(c) =>
+                log
+                  .debug(s"Disconnecting from peer ${peer.toAddress}")
+                  .map(kp(Try(c.shutdown())))
+                  .void
+              case _ => Task.unit // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }
@@ -214,8 +217,7 @@ object TransportState {
   def empty: TransportState = TransportState()
 }
 
-class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
-    implicit scheduler: Scheduler)
+class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
     extends GrpcService.TransportLayer {
 
   def send(request: TLRequest): Task[TLResponse] =

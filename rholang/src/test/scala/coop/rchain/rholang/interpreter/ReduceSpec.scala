@@ -71,6 +71,23 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "evalExpr" should "handle long addition" in {
+    implicit val errorLog = new ErrorLog()
+    implicit val costAccounting =
+      CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val result = withTestSpace { space =>
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val addExpr      = EPlus(GInt(Int.MaxValue), GInt(Int.MaxValue))
+      implicit val env = Env[Par]()
+      val resultTask   = reducer.evalExpr(addExpr)
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+
+    val expected = Seq(Expr(GInt(2 * Int.MaxValue.toLong)))
+    result.exprs should be(expected)
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   "evalExpr" should "leave ground values alone" in {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =

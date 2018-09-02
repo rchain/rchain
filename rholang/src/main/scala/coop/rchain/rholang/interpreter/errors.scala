@@ -11,7 +11,9 @@ object errors {
   type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
   def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
 
-  trait InterpreterError                                          extends Throwable
+  trait InterpreterError extends Throwable {
+    override def getMessage = toString
+  }
   final case class NormalizerError(override val toString: String) extends InterpreterError
   final case class SyntaxError(override val toString: String)     extends InterpreterError
   final case class UnboundVariableRef(varName: String, line: Int, col: Int)
@@ -73,10 +75,12 @@ object errors {
     override def toString: String =
       s"Top level free variables are not allowed: $freeVars."
   }
-  final case class SubstituteError(override val toString: String)     extends InterpreterError
-  final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError
-  final case class SortMatchError(override val toString: String)      extends InterpreterError
-  final case class ReduceError(override val toString: String)         extends InterpreterError
+  final case class SubstituteError(override val toString: String) extends InterpreterError
+  final case class UnrecognizedInterpreterError(throwable: Throwable)
+      extends RuntimeException(throwable)
+      with InterpreterError
+  final case class SortMatchError(override val toString: String) extends InterpreterError
+  final case class ReduceError(override val toString: String)    extends InterpreterError
   final case class MethodNotDefined(method: String, otherType: String) extends InterpreterError {
     override def toString: String =
       s"Error: Method `$method` is not defined on $otherType."

@@ -8,8 +8,13 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
-import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
+import coop.rchain.casper.helper.{
+  BlockStoreTestFixture,
+  BlockUtil,
+  CasperEffect,
+  HashSetCasperTestNode
+}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -25,8 +30,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -68,10 +73,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       result <- EitherT(Task.race(casper.createBlock.value, casper.createBlock.value).map(_.merge))
     } yield result
     //have a timeout so that the test will either pass or fail in finite time
-    val raceResult: Option[BlockMessage] =
+    val raceResult: CreateBlockStatus =
       testProgram.value.map(_.right.get).timeout(5.seconds).unsafeRunSync(scheduler)
 
-    raceResult shouldBe None
+    raceResult shouldBe LockUnavailable
     cleanUp()
   }
 
@@ -83,7 +88,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val testProgram = for {
       casper <- casperEff
       _      <- casper.deploy(deploy)
-      block  <- casper.createBlock.map(_.get)
+      block  <- casper.createBlock.map { case Created(block) => block }
       result <- EitherT(
                  Task.racePair(casper.addBlock(block).value, casper.addBlock(block).value).flatMap {
                    case Left((statusA, running)) =>
@@ -107,10 +112,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploy = ProtoUtil.basicDeployData(0)
     MultiParentCasper[Id].deploy(deploy)
 
-    val Some(block) = MultiParentCasper[Id].createBlock
-    val deploys     = block.body.get.deploys.flatMap(_.deploy)
-    val parents     = ProtoUtil.parentHashes(block)
-    val storage     = blockTuplespaceContents(block)
+    val Created(block) = MultiParentCasper[Id].createBlock
+    val deploys        = block.body.get.deploys.flatMap(_.deploy)
+    val parents        = ProtoUtil.parentHashes(block)
+    val storage        = blockTuplespaceContents(block)
 
     parents.size should be(1)
     parents.head should be(genesis.blockHash)
@@ -127,7 +132,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploy = ProtoUtil.basicDeployData(0)
     MultiParentCasper[Id].deploy(deploy)
 
-    val Some(signedBlock) = MultiParentCasper[Id].createBlock
+    val Created(signedBlock) = MultiParentCasper[Id].createBlock
 
     MultiParentCasper[Id].addBlock(signedBlock)
 
@@ -156,10 +161,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
     ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2))
 
-    val Some(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[Id].createBlock
+    val Created(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[
+      Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock1)
 
-    val Some(signedBlock2) = MultiParentCasper[Id].deploy(deployDatas(1)) *> MultiParentCasper[Id].createBlock
+    val Created(signedBlock2) = MultiParentCasper[Id].deploy(deployDatas(1)) *> MultiParentCasper[
+      Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock2)
     val storage = blockTuplespaceContents(signedBlock2)
 
@@ -180,8 +187,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex.map(s =>
       ProtoUtil.sourceDeploy(s._1, startTime + s._2))
     deploys.foreach(MultiParentCasper[Id].deploy(_))
-    val block = MultiParentCasper[Id].createBlock.get
-    val _     = MultiParentCasper[Id].addBlock(block)
+    val Created(block) = MultiParentCasper[Id].createBlock
+    val _              = MultiParentCasper[Id].addBlock(block)
 
     MultiParentCasper[Id].contains(block) shouldBe true
     node.tearDown()
@@ -191,7 +198,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
 
-    val Some(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
+    val Created(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
       Id].createBlock
     val invalidBlock = block.withSig(ByteString.EMPTY)
 
@@ -208,7 +215,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, otherSk)
     import node._
 
-    val Some(signedBlock) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
       Id].createBlock
 
     MultiParentCasper[Id].addBlock(signedBlock)
@@ -224,7 +231,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes      = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
     val deployData = ProtoUtil.basicDeployData(0)
 
-    val Some(signedBlock) = nodes(0).casperEff.deploy(deployData) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock) = nodes(0).casperEff
+      .deploy(deployData) *> nodes(0).casperEff.createBlock
 
     nodes(0).casperEff.addBlock(signedBlock)
     nodes(1).receive()
@@ -245,7 +253,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes      = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
     val deployData = ProtoUtil.basicDeployData(1)
 
-    val Some(signedBlock1Prime) = nodes(0).casperEff
+    val Created(signedBlock1Prime) = nodes(0).casperEff
       .deploy(deployData) *> nodes(0).casperEff.createBlock
 
     nodes(0).casperEff.addBlock(signedBlock1Prime)
@@ -270,8 +278,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       ProtoUtil.basicDeployData(2)
     )
 
-    val Some(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val Some(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
+    val Created(block0) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val Created(block1) = nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
     nodes(0).casperEff.addBlock(block0)
     nodes(1).casperEff.addBlock(block1)
     nodes(0).receive()
@@ -280,7 +288,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).receive()
 
     //multiparent block joining block0 and block1 since they do not conflict
-    val Some(multiparentBlock) = nodes(0).casperEff
+    val Created(multiparentBlock) = nodes(0).casperEff
       .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(multiparentBlock)
     nodes(1).receive()
@@ -302,24 +310,24 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .withTimestamp(deployDatas(0).timestamp)
       .withUser(deployDatas(0).user) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
 
-    val Some(signedBlock1) = nodes(0).casperEff
+    val Created(signedBlock1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(signedBlock1)
     nodes(1).receive() // receive block1
 
-    val Some(signedBlock2) = nodes(0).casperEff
+    val Created(signedBlock2) = nodes(0).casperEff
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(signedBlock2)
     nodes(1).receive() // receive block2
 
-    val Some(signedBlock3) = nodes(0).casperEff
+    val Created(signedBlock3) = nodes(0).casperEff
       .deploy(deployDatas(2)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(signedBlock3)
     nodes(1).receive() // receive block3
 
     nodes(1).casperEff.contains(signedBlock3) should be(true)
 
-    val Some(signedBlock4) = nodes(1).casperEff
+    val Created(signedBlock4) = nodes(1).casperEff
       .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(signedBlock4) // should fail
     nodes(0).receive()                        // doesn't receive anything as signedBlock4 is invalid
@@ -348,14 +356,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "@2!(2)"
     ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2))
 
-    val Some(signedBlock1) = nodes(0).casperEff
+    val Created(signedBlock1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
 
     nodes(0).casperEff.addBlock(signedBlock1)
     nodes(1).receive()
     nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
 
-    val Some(signedBlock2) = nodes(0).casperEff
+    val Created(signedBlock2) = nodes(0).casperEff
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
 
     nodes(0).casperEff.addBlock(signedBlock2)
@@ -385,8 +393,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
 
     // Creates a pair that constitutes equivocation blocks
-    val Some(signedBlock1)      = node.casperEff.deploy(ProtoUtil.basicDeployData(0)) *> node.casperEff.createBlock
-    val Some(signedBlock1Prime) = node.casperEff.deploy(ProtoUtil.basicDeployData(1)) *> node.casperEff.createBlock
+    val Created(signedBlock1)      = node.casperEff.deploy(ProtoUtil.basicDeployData(0)) *> node.casperEff.createBlock
+    val Created(signedBlock1Prime) = node.casperEff.deploy(ProtoUtil.basicDeployData(1)) *> node.casperEff.createBlock
 
     node.casperEff.addBlock(signedBlock1)
     node.casperEff.addBlock(signedBlock1Prime)
@@ -407,9 +415,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deployDatas = (0 to 5).map(i => ProtoUtil.basicDeployData(i))
 
     // Creates a pair that constitutes equivocation blocks
-    val Some(signedBlock1) = nodes(0).casperEff
+    val Created(signedBlock1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-    val Some(signedBlock1Prime) = nodes(0).casperEff
+    val Created(signedBlock1Prime) = nodes(0).casperEff
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
 
     nodes(1).casperEff.addBlock(signedBlock1)
@@ -425,9 +433,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1Prime) should be(false)
     nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
 
-    val Some(signedBlock2) = nodes(1).casperEff
+    val Created(signedBlock2) = nodes(1).casperEff
       .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
-    val Some(signedBlock3) = nodes(2).casperEff
+    val Created(signedBlock3) = nodes(2).casperEff
       .deploy(deployDatas(3)) *> nodes(2).casperEff.createBlock
 
     nodes(2).casperEff.addBlock(signedBlock3)
@@ -440,7 +448,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock3) should be(true)
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
 
-    val Some(signedBlock4) = nodes(1).casperEff
+    val Created(signedBlock4) = nodes(1).casperEff
       .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
 
     nodes(1).casperEff.addBlock(signedBlock4)
@@ -477,9 +485,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys         = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
     val deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d)))
 
-    val Some(signedBlock) = nodes(0).casperEff
+    val Created(signedBlock) = nodes(0).casperEff
       .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
-    val signedInvalidBlock = signedBlock.withSeqNum(-2) // Invalid seq num
+    val signedInvalidBlock =
+      BlockUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
 
     val blockWithInvalidJustification =
       buildBlockWithInvalidJustification(nodes, deploysWithCost, signedInvalidBlock)
@@ -501,13 +510,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
     (0 to 9).foreach { i =>
-      val deploy      = ProtoUtil.basicDeployData(i)
-      val Some(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
+      val deploy         = ProtoUtil.basicDeployData(i)
+      val Created(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
 
       nodes(0).casperEff.addBlock(block)
       nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
     }
-    val Some(block) = nodes(0).casperEff
+    val Created(block) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData(10)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block)
 
@@ -531,48 +540,56 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
     val deployDatas           = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
 
-    val Some(block1) = nodes(0).casperEff.deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
+    val Created(block1) = nodes(0).casperEff
+      .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block1)
     nodes(1).receive()
     nodes(2).receive()
 
-    val Some(block2) = nodes(1).casperEff.deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
+    val Created(block2) = nodes(1).casperEff
+      .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(block2)
     nodes(0).receive()
     nodes(2).receive()
 
-    val Some(block3) = nodes(2).casperEff.deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
+    val Created(block3) = nodes(2).casperEff
+      .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
     nodes(2).casperEff.addBlock(block3)
     nodes(0).receive()
     nodes(1).receive()
 
-    val Some(block4) = nodes(0).casperEff.deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
+    val Created(block4) = nodes(0).casperEff
+      .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block4)
     nodes(1).receive()
     nodes(2).receive()
 
-    val Some(block5) = nodes(1).casperEff.deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
+    val Created(block5) = nodes(1).casperEff
+      .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(block5)
     nodes(0).receive()
     nodes(2).receive()
 
     nodes(0).casperEff.lastFinalizedBlock should be(genesisWithEqualBonds)
 
-    val Some(block6) = nodes(2).casperEff.deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
+    val Created(block6) = nodes(2).casperEff
+      .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
     nodes(2).casperEff.addBlock(block6)
     nodes(0).receive()
     nodes(1).receive()
 
     nodes(0).casperEff.lastFinalizedBlock should be(block1)
 
-    val Some(block7) = nodes(0).casperEff.deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
+    val Created(block7) = nodes(0).casperEff
+      .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
     nodes(0).casperEff.addBlock(block7)
     nodes(1).receive()
     nodes(2).receive()
 
     nodes(0).casperEff.lastFinalizedBlock should be(block2)
 
-    val Some(block8) = nodes(1).casperEff.deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
+    val Created(block8) = nodes(1).casperEff
+      .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
     nodes(1).casperEff.addBlock(block8)
     nodes(0).receive()
     nodes(2).receive()
@@ -603,7 +620,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _,
                         "rchain")
   }
 }
@@ -628,7 +644,7 @@ object HashSetCasperTest {
   def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
-  def buildGenesis(wallets: Seq[Wallet],
+  def buildGenesis(wallets: Seq[PreWallet],
                    bonds: Map[Array[Byte], Int],
                    deployTimestamp: Long): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
