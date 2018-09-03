@@ -18,6 +18,8 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
 
+import scala.util.Random
+
 trait StorageActionsTests
     extends StorageTestsBase[String, Pattern, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
@@ -1044,6 +1046,7 @@ trait StorageActionsTests
 
   def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)],
+                            reportName: String,
                             differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
@@ -1055,12 +1058,12 @@ trait StorageActionsTests
           val contentsTest   = actualContents == expectedContents
 
           if (contentsTest) {
-            logger.debug(s"$num: store had expected contents")
+            logger.debug(s"$num: store had expected contents ($reportName)")
           } else {
-            logger.error(s"$num: store had unexpected contents")
+            logger.error(s"$num: store had unexpected contents ($reportName)")
 
             if (differenceReport) {
-              logger.error("difference report")
+              logger.error(s"difference report ($reportName)")
               for ((expectedChannels, expectedRow) <- expectedContents) {
                 val actualRow = actualContents.get(expectedChannels)
 
@@ -1370,7 +1373,7 @@ trait StorageActionsTests
       space.store.toMap shouldBe contents1
   }
 
-  def getData(): Seq[TestProduceMap] = {
+  def getData(): (Seq[TestProduceMap], Seq[TestProduceMap]) = {
     val vec = Vector(
       Map("襥Ⱕ녌莊阧喨䕫⮠䌱" -> ("衐촑쥌胎䴮픚", false), "돥냽㜳昗" -> ("㏡瀄ヿ넙肳諙骫⾹빏ᷲ", false)),
       Map(
@@ -1490,16 +1493,49 @@ trait StorageActionsTests
       )
     )
 
-    val res = vec.map(_.map {
+    def fixStr(s: String): String = s.map(_ => (0x31 + Random.nextInt(0x7e - 0x31)).toChar)
+
+    val resRand = vec.map(_.map {
       case (channel, datumArgs) =>
         channel -> Datum.create(channel, datumArgs._1, datumArgs._2)
     })
-    res
+
+    val resAscii = vec.map(_.map {
+      case (channel, datumArgs) => {
+        val asciiChannel = fixStr(channel)
+        val asciiData    = fixStr(datumArgs._1)
+        asciiChannel -> Datum.create(asciiChannel, asciiData, datumArgs._2)
+      }
+    })
+    (resRand, resAscii)
   }
 
-  "BUG when resetting to a bunch of checkpoints made with produces, the store" should
+  "BUG(ascii_chars) when resetting to a bunch of checkpoints made with produces, the store" should
     "have the expected contents" in {
-    val data = getData()
+
+    val data = getData()._2
+    withTestSpace { space =>
+      logger.debug(s"Test: ${data.length} stages")
+
+      val states = data.zipWithIndex.map {
+        case (produces, chunkNo) =>
+          produces.foreach {
+            case (channel, datum) =>
+              space.produce(channel, datum.a, datum.persist)
+          }
+          val num  = "%02d".format(chunkNo)
+          val size = "%02d".format(produces.size)
+          logger.debug(s"$num: checkpointing $size produces")
+          (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
+      }
+
+      validateIndexedStates(space, states, "ascii_chars", true)
+    }
+  }
+
+  "BUG(random_chars) when resetting to a bunch of checkpoints made with produces, the store" should
+    "have the expected contents" in {
+    val data = getData()._1
 
     withTestSpace { space =>
       logger.debug(s"Test: ${data.length} stages")
@@ -1516,7 +1552,7 @@ trait StorageActionsTests
           (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
       }
 
-      validateIndexedStates(space, states)
+      validateIndexedStates(space, states, "random_chars", true)
     }
   }
 
@@ -1538,7 +1574,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "gen_random_1")
       }
     }
     check(prop)
@@ -1562,7 +1598,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "gen_random_2")
       }
     }
     check(prop)
@@ -1591,7 +1627,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "gen_random_3")
       }
     }
     check(prop)
