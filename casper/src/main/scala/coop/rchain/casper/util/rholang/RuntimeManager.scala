@@ -181,19 +181,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                 Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
               else if (errors.nonEmpty) doReplayEval(rem, hash)
               else {
-                val newCheckpoint = runtime.replaySpace.createCheckpoint()
-                doReplayEval(rem, newCheckpoint.root)
+                Try(runtime.replaySpace.createCheckpoint()) match {
+                  case Success(newCheckpoint) =>
+                    doReplayEval(rem, newCheckpoint.root)
+                  case Failure(_) =>
+                    // TODO: Match _ for type of exception
+                    Left(none[Deploy] -> UnusedCommEvent)
+                }
               }
           }
 
-        case _ => {
-          val replayData = runtime.replaySpace.getReplayData
-          if (replayData.isEmpty) {
-            Right(ByteString.copyFrom(hash.bytes.toArray))
-          } else {
-            Left(none[Deploy] -> UnusedCommEvent)
-          }
-        }
+        case _ => Right(ByteString.copyFrom(hash.bytes.toArray))
       }
 
     doReplayEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray))

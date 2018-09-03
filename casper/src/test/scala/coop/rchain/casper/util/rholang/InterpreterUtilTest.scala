@@ -357,7 +357,7 @@ class InterpreterUtilTest
     tsHash should be(Some(computedTsHash))
   }
 
-  "validateBlockCheckpoint" should "pass linked list test" in {
+  it should "pass linked list test" in {
     val deploys = Vector(
       """
         |contract @"recursionTest"(@list) = {
@@ -405,7 +405,7 @@ class InterpreterUtilTest
     tsHash should be(Some(computedTsHash))
   }
 
-  "validateBlockCheckpoint" should "pass persistent produce test with causality" in {
+  it should "pass persistent produce test with causality" in {
     val deploys =
       Vector("""new x, y, delay in {
               contract delay(@n) = {
@@ -457,7 +457,7 @@ class InterpreterUtilTest
     tsHash should be(Some(computedTsHash))
   }
 
-  "validateBlockCheckpoint" should "pass tests involving primitives" in {
+  it should "pass tests involving primitives" in {
     val deploys =
       Vector(
         """
@@ -506,7 +506,7 @@ class InterpreterUtilTest
     tsHash should be(Some(computedTsHash))
   }
 
-  "validateBlockCheckpoint" should "pass tests involving pick" in {
+  it should "pass tests involving races" in {
     (0 to 10).foreach { _ =>
       val deploys =
         Vector(
@@ -547,5 +547,37 @@ class InterpreterUtilTest
 
       tsHash should be(Some(computedTsHash))
     }
+  }
+
+  it should "return None for logs containing extra comm events" in {
+    val deploys = (0 until 1).map(i => {
+      val code = s"for(_ <- @$i){ Nil } | @$i!($i)"
+      val term = InterpreterUtil.mkTerm(code).right.get
+      ProtoUtil.termDeployNow(term)
+    })
+
+    val (Right((computedTsHash, processedDeploys)), _) =
+      computeDeploysCheckpoint[Id](Seq.empty,
+                                   deploys,
+                                   BlockMessage(),
+                                   initState,
+                                   knownStateHashes,
+                                   runtimeManager)
+    val intProcessedDeploys = processedDeploys.map(ProcessedDeployUtil.fromInternal)
+    //create single deploy with log that includes excess comm events
+    val badProcessedDeploy = intProcessedDeploys.head.copy(
+      log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log)
+    val chain: BlockDag =
+      createBlock[StateWithChain](Seq.empty,
+                                  deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
+                                  tsHash = computedTsHash)
+        .runS(initState)
+    val block = chain.idToBlocks(0)
+
+    val (Right(tsHash), _) =
+      validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
+
+    tsHash should be(None)
+
   }
 }

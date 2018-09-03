@@ -257,10 +257,15 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  def createCheckpoint(): Checkpoint = {
-    val root = store.createCheckpoint()
-    Checkpoint(root, Seq.empty)
-  }
+  def createCheckpoint(): Checkpoint =
+    if (replayData.get.isEmpty) {
+      val root = store.createCheckpoint()
+      Checkpoint(root, Seq.empty)
+    } else {
+      val msg = "unused comm event"
+      logger.error(msg)
+      throw new ReplayException(msg)
+    }
 
   def getReplayData: ReplayData = replayData.get
 
