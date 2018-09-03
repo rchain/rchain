@@ -133,15 +133,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
         replays.get(consumeRef) match {
           case None =>
-            runMatcher(None) match {
-              case None =>
-                storeWaitingContinuation(replays, consumeRef, None)
-              case Some(_) =>
-                val msg = "untraced event resulted in a comm event"
-                logger.error(msg)
-                replayData.put(replays)
-                throw new ReplayException(msg)
-            }
+            storeWaitingContinuation(replays, consumeRef, None)
           case Some(comms) =>
             val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
               getCommOrDataCandidates(comms.iterator().asScala.toList)
@@ -269,16 +261,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
         replays.get(produceRef) match {
           case None =>
-            runMatcher(None, produceRef, groupedChannels) match {
-              case None =>
-                storeDatum(replays, produceRef, None)
-              case Some(ProduceCandidate(channels, _, _, _)) =>
-                logger.debug(s"produce: matching continuation found at <channels: $channels>")
-                val msg = "untraced event resulted in a comm event"
-                logger.error(msg)
-                replayData.put(replays)
-                throw new ReplayException(msg)
-            }
+            storeDatum(replays, produceRef, None)
           case Some(comms) =>
             val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
               getCommOrProduceCandidate(comms.iterator().asScala.toList)

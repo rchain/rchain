@@ -57,20 +57,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       space.store.isEmpty shouldBe true
   }
 
-  "Creating a COMM Event that is not contained in the trace log" should "throw a ReplayException" in
-    withTestSpaces { (space, replaySpace) =>
-      val ch1 = "ch1"
-
-      val initialCheckpoint = space.createCheckpoint()
-      replaySpace.rig(initialCheckpoint.root, initialCheckpoint.log)
-
-      replaySpace.consume(List(ch1), List(Wildcard), "continuation", false)
-
-      assertThrows[ReplayException] {
-        replaySpace.produce(ch1, data = "datum1", persist = false)
-      }
-    }
-
   "Creating a COMM Event" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
       val channels     = List("ch1")
