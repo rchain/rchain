@@ -163,7 +163,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                 val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
                   case (Datum(_, _, source), _) => comm.produces.contains(source)
                 }
-                c -> { if (c == channel) (Datum(data, persist, produceRef), -1) +: as else as }
+                c -> { if (c == channel) Seq((Datum(data, persist, produceRef), -1)) else as }
               }.toMap
               extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
                 case None             => runMatcher(comm, produceRef, remaining)
