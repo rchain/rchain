@@ -649,10 +649,12 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       mm.get(cr).map(_.size).value shouldBe 2
 
       replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.produce(channels(0), datum, persist = false)
 
       mm.get(cr).map(_.size).value shouldBe 1
 
-      replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.produce(channels(0), datum, persist = false)
 
       mm.get(cr) shouldBe None
   }
