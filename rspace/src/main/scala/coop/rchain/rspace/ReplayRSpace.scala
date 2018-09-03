@@ -51,16 +51,11 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         throw new IllegalArgumentException(msg)
       }
       store.withTxn(store.createTxnWrite()) { txn =>
-        def runMatcher(maybeComm: Option[COMM]): Option[Seq[DataCandidate[C, R]]] = {
+        def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
           val channelToIndexedData = channels.map { (c: C) =>
             c -> {
-              maybeComm match {
-                case Some(comm) =>
-                  store.getData(txn, Seq(c)).zipWithIndex.filter {
-                    case (Datum(_, _, source), _) => comm.produces.contains(source)
-                  }
-                case None =>
-                  Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+              store.getData(txn, Seq(c)).zipWithIndex.filter {
+                case (Datum(_, _, source), _) => comm.produces.contains(source)
               }
             }
           }.toMap
@@ -114,12 +109,12 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
               logger.error(msg)
               throw new IllegalArgumentException(msg)
             case commRef :: Nil =>
-              runMatcher(Some(commRef)) match {
+              runMatcher(commRef) match {
                 case Some(x) => Right(x)
                 case None    => Left(commRef)
               }
             case commRef :: rem =>
-              runMatcher(Some(commRef)) match {
+              runMatcher(commRef) match {
                 case Some(x) => Right(x)
                 case None    => getCommOrDataCandidates(rem)
               }
@@ -153,35 +148,25 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         @tailrec
-        def runMatcher(maybeComm: Option[COMM],
+        def runMatcher(comm: COMM,
                        produceRef: Produce,
                        groupedChannels: Seq[Seq[C]]): Option[ProduceCandidate[C, P, R, K]] =
           groupedChannels match {
             case Nil => None
             case channels :: remaining =>
               val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-                maybeComm match {
-                  case Some(comm) =>
-                    store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
-                      case (WaitingContinuation(_, _, _, source), _) =>
-                        comm.consume == source
-                    }
-                  case None =>
-                    Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
+                store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
+                  case (WaitingContinuation(_, _, _, source), _) =>
+                    comm.consume == source
                 }
               val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
-                val as = maybeComm match {
-                  case Some(comm) =>
-                    store.getData(txn, Seq(c)).zipWithIndex.filter {
-                      case (Datum(_, _, source), _) => comm.produces.contains(source)
-                    }
-                  case None =>
-                    Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+                val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
+                  case (Datum(_, _, source), _) => comm.produces.contains(source)
                 }
                 c -> { if (c == channel) (Datum(data, persist, produceRef), -1) +: as else as }
               }.toMap
               extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
-                case None             => runMatcher(maybeComm, produceRef, remaining)
+                case None             => runMatcher(comm, produceRef, remaining)
                 case produceCandidate => produceCandidate
               }
           }
@@ -248,12 +233,12 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
               logger.error(msg)
               throw new IllegalArgumentException(msg)
             case commRef :: Nil =>
-              runMatcher(Some(commRef), produceRef, groupedChannels) match {
+              runMatcher(commRef, produceRef, groupedChannels) match {
                 case Some(x) => Right(x)
                 case None    => Left(commRef)
               }
             case commRef :: rem =>
-              runMatcher(Some(commRef), produceRef, groupedChannels) match {
+              runMatcher(commRef, produceRef, groupedChannels) match {
                 case Some(x) => Right(x)
                 case None    => getCommOrProduceCandidate(rem)
               }
