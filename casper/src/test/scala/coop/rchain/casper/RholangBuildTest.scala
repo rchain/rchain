@@ -28,7 +28,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val emptyStateHash              = runtimeManager.emptyStateHash
   val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
   val proofOfStakeDeploy =
-    ProtoUtil.termDeploy(new ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
+    ProtoUtil.termDeploy(ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
   val genesis =
     Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
   activeRuntime.close()
