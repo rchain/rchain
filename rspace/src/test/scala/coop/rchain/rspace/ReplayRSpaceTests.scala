@@ -612,7 +612,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replaySpace.getReplayData shouldBe empty
     }
 
-  "consuming" should "correctly remove things from replay data" in withTestSpaces {
+  "Replay rspace" should "correctly remove things from replay data" in withTestSpaces {
     (space, replaySpace) =>
       val emptyPoint = space.createCheckpoint()
 
@@ -657,51 +657,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replaySpace.produce(channels(0), datum, persist = false)
 
       mm.get(cr) shouldBe None
-  }
-
-  "producing" should "correctly remove things from replay data" in withTestSpaces {
-    (space, replaySpace) =>
-      val emptyPoint = space.createCheckpoint()
-
-      val channels = List("ch1")
-      val patterns = List[Pattern](Wildcard)
-      val k        = "continuation"
-      val datum    = "datum"
-
-      val pr = Produce.create(channels(0), datum, persist = false)
-
-      consumeMany(
-        space,
-        range = 0 to 1,
-        shuffle = false,
-        channelsCreator = const(channels),
-        patterns = patterns,
-        continuationCreator = const(k),
-        persist = false
-      )
-      produceMany(
-        space,
-        range = 0 to 1,
-        shuffle = false,
-        channelCreator = const(channels(0)),
-        datumCreator = const(datum),
-        persist = false
-      )
-      val rigPoint = space.createCheckpoint()
-
-      replaySpace.rig(emptyPoint.root, rigPoint.log)
-
-      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.getReplayData
-
-      mm.get(pr).map(_.size).value shouldBe 2
-
-      replaySpace.produce(channels(0), datum, persist = false)
-
-      mm.get(pr).map(_.size).value shouldBe 1
-
-      replaySpace.produce(channels(0), datum, persist = false)
-
-      mm.get(pr) shouldBe None
   }
 
   "producing" should "return same, stable checkpoint root hashes" in {
