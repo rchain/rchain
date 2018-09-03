@@ -511,19 +511,18 @@ class InterpreterUtilTest
       val deploys =
         Vector(
           """
-            |      contract @"loop"(@xs) = {
-            |        match xs {
-            |          [] => {
-            |            for (@winner <- @"ch") {
-            |              @"return"!(winner)
-            |            }
-            |          }
-            |          [first, ...rest] => {
-            |            @"ch"!(first) | @"loop"!(rest)
-            |          }
-            |        }
-            |      } |
-            |      @"loop"!(["a","b","c","d"])
+            | contract @"loop"(@xs) = {
+            |   match xs {
+            |     [] => {
+            |       for (@winner <- @"ch") {
+            |         @"return"!(winner)
+            |       }
+            |     }
+            |     [first, ...rest] => {
+            |       @"ch"!(first) | @"loop"!(rest)
+            |     }
+            |   }
+            | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
         ).map(s =>
           ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
