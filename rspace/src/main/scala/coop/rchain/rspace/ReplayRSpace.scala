@@ -262,7 +262,8 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       val root = store.createCheckpoint()
       Checkpoint(root, Seq.empty)
     } else {
-      val msg = "unused comm event"
+      // TODO: Make error message more informative
+      val msg = s"unused comm event: replayData multimap has ${replayData.get.size} elements left"
       logger.error(msg)
       throw new ReplayException(msg)
     }
