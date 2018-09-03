@@ -23,10 +23,16 @@ object ReplClient {
   def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] with Closeable {
+class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
+    extends ReplClient[Task]
+    with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
+    ManagedChannelBuilder
+      .forAddress(host, port)
+      .maxInboundMessageSize(maxMessageSize)
+      .usePlaintext(true)
+      .build
   private val stub = ReplGrpc.stub(channel)
 
   def run(line: String): Task[Either[Throwable, String]] =

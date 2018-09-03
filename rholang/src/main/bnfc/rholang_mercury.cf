@@ -1,3 +1,8 @@
+-- Custom integer token according to https://github.com/BNFC/bnfc/issues/153#issuecomment-152612231
+-- notice this shadows the built-in Integer token, which might be a problem if we need integers
+-- in the grammar for other purposes than the integer literal.
+position token Long digit+;
+
 -- A program is just a process. We put the coercions first, because that's what
 -- bnfc uses to determine the starting production.
 _. Proc  ::= Proc1 ;
@@ -125,7 +130,7 @@ BoolTrue.   Bool ::= "true" ;
 BoolFalse.  Bool ::= "false" ;
 -- Ground types:
 GroundBool.    Ground ::= Bool ;
-GroundInt.     Ground ::= Integer ;
+GroundInt.     Ground ::= Long ;
 GroundString.  Ground ::= String ;
 GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;

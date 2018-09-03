@@ -22,9 +22,10 @@ import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreT
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
+import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rspace.Checkpoint
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Log, Time}
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event._
 import coop.rchain.shared.AttemptOps._
@@ -48,6 +49,8 @@ class InterpreterUtilTest
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
   val emptyStateHash   = runtimeManager.emptyStateHash
   val knownStateHashes = Set[StateHash](emptyStateHash)
+
+  implicit val logEff = new LogStub[Id]
 
   private def computeBlockCheckpoint(
       b: BlockMessage,

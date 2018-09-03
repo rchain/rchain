@@ -217,8 +217,7 @@ object TransportState {
   def empty: TransportState = TransportState()
 }
 
-class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
-    implicit scheduler: Scheduler)
+class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
     extends GrpcService.TransportLayer {
 
   def send(request: TLRequest): Task[TLResponse] =

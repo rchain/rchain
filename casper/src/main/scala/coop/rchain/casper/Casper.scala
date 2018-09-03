@@ -501,6 +501,10 @@ sealed abstract class MultiParentCasperInstances {
             handleInvalidBlockEffect(status, block)
           case InvalidShardId =>
             handleInvalidBlockEffect(status, block)
+          case InvalidBlockHash =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidDeployCount =>
+            handleInvalidBlockEffect(status, block)
           case Processing =>
             throw new RuntimeException(s"A block should not be processing at this stage.")
           case BlockException(ex) =>
