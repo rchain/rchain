@@ -69,7 +69,7 @@ object InterpreterUtil {
         (Left(BlockException(ex)).rightCast[Option[StateHash]] -> knownStateHashes).pure[F]
       case Right(parentStateHash) =>
         runtimeManager.replayComputeState(parentStateHash, internalDeploys) match {
-          case Left((deploy, status)) =>
+          case Left((Some(deploy), status)) =>
             status match {
               case InternalErrors(exs) =>
                 (Left(
@@ -84,14 +84,16 @@ object InterpreterUtil {
                 Log[F].warn(
                   s"Found replay status mismatch; replay failure is $replay.isFailed and orig failure is $orig.isFailed") *> (Right(
                   none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
-              case UntracedCommEvent(ex: ReplayException) =>
-                Log[F].warn(s"Found untraced comm event ${ex.getMessage}") *> (Right(
-                  none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
               case UnknownFailure =>
                 Log[F].warn(s"Found unknown failure") *> (Right(none[StateHash])
                   .leftCast[BlockException] -> knownStateHashes).pure[F]
             }
-
+          case Left((None, status)) =>
+            status match {
+              case UnusedCommEvent =>
+                Log[F].warn(s"Found unused comm event") *> (Right(none[StateHash])
+                  .leftCast[BlockException] -> knownStateHashes).pure[F]
+            }
           case Right(computedStateHash) =>
             if (tsHash.contains(computedStateHash)) {
               // state hash in block matches computed hash!
