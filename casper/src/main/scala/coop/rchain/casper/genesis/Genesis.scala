@@ -48,7 +48,7 @@ object Genesis {
       BasicWallet,
       WalletCheck,
       new PreWalletRev(wallets),
-      new ProofOfStake(validators)
+      ProofOfStake(validators)
     ).map(compiledSourceDeploy(_, timestamp))
 
   def withContracts(initial: BlockMessage,
