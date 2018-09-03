@@ -282,7 +282,7 @@ sealed abstract class MultiParentCasperInstances {
                            CreateBlockStatus.noNewDeploys.pure[F]
                          }
               signedBlock = proposal.map(
-                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, vId.signFunction, shardId)
+                signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
               )
               _ <- Sync[F].delay { createBlockLock.unlock() }
             } yield signedBlock,
@@ -500,6 +500,10 @@ sealed abstract class MultiParentCasperInstances {
           case InvalidRepeatDeploy =>
             handleInvalidBlockEffect(status, block)
           case InvalidShardId =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidBlockHash =>
+            handleInvalidBlockEffect(status, block)
+          case InvalidDeployCount =>
             handleInvalidBlockEffect(status, block)
           case Processing =>
             throw new RuntimeException(s"A block should not be processing at this stage.")

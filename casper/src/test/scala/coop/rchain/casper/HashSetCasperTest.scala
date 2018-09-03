@@ -8,8 +8,13 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
-import coop.rchain.casper.helper.{BlockStoreTestFixture, CasperEffect, HashSetCasperTestNode}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
+import coop.rchain.casper.helper.{
+  BlockStoreTestFixture,
+  BlockUtil,
+  CasperEffect,
+  HashSetCasperTestNode
+}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -25,8 +30,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.collection.immutable
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -482,7 +487,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val Created(signedBlock) = nodes(0).casperEff
       .deploy(deploys(0).raw.get) *> nodes(0).casperEff.createBlock
-    val signedInvalidBlock = signedBlock.withSeqNum(-2) // Invalid seq num
+    val signedInvalidBlock =
+      BlockUtil.resignBlock(signedBlock.withSeqNum(-2), nodes(0).validatorId.privateKey) // Invalid seq num
 
     val blockWithInvalidJustification =
       buildBlockWithInvalidJustification(nodes, deploysWithCost, signedInvalidBlock)
@@ -614,7 +620,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
                         validators(1),
                         validatorKeys(1),
                         "ed25519",
-                        Ed25519.sign _,
                         "rchain")
   }
 }
@@ -639,7 +644,7 @@ object HashSetCasperTest {
   def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
-  def buildGenesis(wallets: Seq[Wallet],
+  def buildGenesis(wallets: Seq[PreWallet],
                    bonds: Map[Array[Byte], Int],
                    deployTimestamp: Long): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")

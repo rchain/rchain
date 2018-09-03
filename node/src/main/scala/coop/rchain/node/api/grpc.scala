@@ -34,10 +34,12 @@ object GrpcServer {
   def acquireInternalServer[
       F[_]: Capture: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: ConnectionsCell: Futurable](
       port: Int,
+      maxMessageSize: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
+        .maxMessageSize(maxMessageSize)
         .addService(ReplGrpc.bindService(new ReplGrpcService(runtime), scheduler))
         .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
         .build
@@ -45,10 +47,12 @@ object GrpcServer {
 
   def acquireExternalServer[
       F[_]: Capture: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
-      port: Int)(implicit scheduler: Scheduler): F[Server] =
+      port: Int,
+      maxMessageSize: Int)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
+        .maxMessageSize(maxMessageSize)
         .addService(DeployServiceGrpc.bindService(new DeployGrpcService[F], scheduler))
         .build
     }

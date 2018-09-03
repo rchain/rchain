@@ -46,7 +46,9 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
     }
 
-  def close(): Unit = {
+  override def close(): Unit = {
+    super.close()
+
     _dbTrie.close()
     _dbRoot.close()
     _dbPastRoots.close()

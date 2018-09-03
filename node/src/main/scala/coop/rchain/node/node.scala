@@ -170,15 +170,18 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] =
     for {
-      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
+      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal,
+                                                                     conf.server.maxMessageSize)
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
+                             .acquireInternalServer[Effect](conf.grpcServer.portInternal,
+                                                            conf.server.maxMessageSize,
+                                                            runtime)
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {
                      val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                      BlazeBuilder[IO]
-                       .bindHttp(conf.server.httpPort, "localhost")
+                       .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(jsonrpc.service, "/")
                        .mountService(Lykke.service, "/lykke")
                        .mountService(prometheusService, "/metrics")
@@ -187,7 +190,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       metricsServer <- LiftIO[Task].liftIO {
                         val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                         BlazeBuilder[IO]
-                          .bindHttp(conf.server.metricsPort, "localhost")
+                          .bindHttp(conf.server.metricsPort, "0.0.0.0")
                           .mountService(prometheusService, "/")
                           .mountService(prometheusService, "/metrics")
                           .start
