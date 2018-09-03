@@ -176,6 +176,7 @@ message NoApprovedBlockAvailable {
 
 // --------- Core Protocol  --------
 message BlockMessage {
+  option (scalapb.message).annotations = "@coop.rchain.models.macros.GenerateSafe";
   bytes                  blockHash      = 1; // obtained by hashing the information in the header
   Header                 header         = 2;
   Body                   body           = 3;
@@ -189,6 +190,7 @@ message BlockMessage {
 }
 
 message Header {
+  option (scalapb.message).annotations = "@coop.rchain.models.macros.GenerateSafe";
   repeated bytes parentsHashList = 1; //list of parent block hashes
   bytes postStateHash      = 2;
   bytes deploysHash        = 3;
@@ -206,6 +208,7 @@ message ProcessedDeploy {
 }
 
 message Body {
+  option (scalapb.message).annotations = "@coop.rchain.models.macros.GenerateSafe";
   RChainState              postState    = 1;
   repeated ProcessedDeploy deploys      = 2;
   bytes                    extraBytes   = 3;
@@ -217,6 +220,7 @@ message Justification {
 }
 
 message RChainState {
+  option (scalapb.message).annotations = "@coop.rchain.models.macros.GenerateSafe";
   bytes tuplespace = 1; //hash of the tuplespace contents
 
   //Internals of what will be the "blessed" PoS contract

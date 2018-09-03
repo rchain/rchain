@@ -122,9 +122,16 @@ lazy val models = (project in file("models"))
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  )
+  .dependsOn(rspace, modelsMacros)
+
+lazy val modelsMacros = (project in file("models/macros")).settings(commonSettings: _*).settings(
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
     )
   )
-  .dependsOn(rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
