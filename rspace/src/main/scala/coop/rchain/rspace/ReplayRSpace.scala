@@ -73,10 +73,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
           logger.debug(s"""|consume: no data found,
                            |storing <(patterns, continuation): ($patterns, $continuation)>
                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-          replayData.put(maybeCommRef match {
-            case Some(commRef: COMM) => replays.removeBinding(consumeRef, commRef)
-            case None                => replays
-          })
+          replayData.put(replays)
           None
         }
 
@@ -94,10 +91,9 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                 if (!persistData) {
                   store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                 }
-                replays.removeBinding(prodRef, commRef)
             }
           logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-          replayData.put(replays.removeBinding(consumeRef, commRef))
+          replayData.put(replaysLessCommRef(replays, commRef))
           Some((continuation, mats.map(_.datum.a)))
         }
 
@@ -177,10 +173,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
           store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
           logger.debug(s"""|produce: no matching continuation found
                            |storing <data: $data> at <channel: $channel>""".stripMargin)
-          replayData.put(maybeCommRef match {
-            case Some(commRef: COMM) => replays.removeBinding(produceRef, commRef)
-            case None                => replays
-          })
+          replayData.put(replays)
           None
         }
 
@@ -209,10 +202,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                     store.removeJoin(txn, candidateChannel, channels)
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              replayData.put(
-                replays
-                  .removeBinding(produceRef, commRef)
-                  .removeBinding(consumeRef, commRef))
+              replayData.put(replaysLessCommRef(replays, commRef))
               Some((continuation, dataCandidates.map(_.datum.a)))
           }
 
@@ -258,6 +248,13 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             }
         }
       }
+    }
+
+  private def replaysLessCommRef(replays: ReplayData,
+                                 commRef: COMM): MultisetMultiMap[IOEvent, COMM] =
+    commRef.produces.foldLeft(replays.removeBinding(commRef.consume, commRef)) {
+      case (updatedReplays, produceRef) =>
+        updatedReplays.removeBinding(produceRef, commRef)
     }
 
   def createCheckpoint(): Checkpoint = {
