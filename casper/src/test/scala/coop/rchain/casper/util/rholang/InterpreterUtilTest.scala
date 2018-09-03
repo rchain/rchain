@@ -505,4 +505,48 @@ class InterpreterUtilTest
 
     tsHash should be(Some(computedTsHash))
   }
+
+  "validateBlockCheckpoint" should "pass tests involving pick" in {
+    (0 to 10).foreach { _ =>
+      val deploys =
+        Vector(
+          """
+            |      contract @"loop"(@xs) = {
+            |        match xs {
+            |          [] => {
+            |            for (@winner <- @"ch") {
+            |              @"return"!(winner)
+            |            }
+            |          }
+            |          [first, ...rest] => {
+            |            @"ch"!(first) | @"loop"!(rest)
+            |          }
+            |        }
+            |      } |
+            |      @"loop"!(["a","b","c","d"])
+            |""".stripMargin
+        ).map(s =>
+          ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
+
+      val (Right((computedTsHash, processedDeploys)), _) =
+        computeDeploysCheckpoint[Id](Seq.empty,
+                                     deploys,
+                                     BlockMessage(),
+                                     initState,
+                                     knownStateHashes,
+                                     runtimeManager)
+      val chain: BlockDag =
+        createBlock[StateWithChain](
+          Seq.empty,
+          deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+          tsHash = computedTsHash)
+          .runS(initState)
+      val block = chain.idToBlocks(0)
+
+      val (Right(tsHash), _) =
+        validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
+
+      tsHash should be(Some(computedTsHash))
+    }
+  }
 }
