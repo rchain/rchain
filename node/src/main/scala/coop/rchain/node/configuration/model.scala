@@ -21,7 +21,7 @@ case class Server(
     storeType: StoreType,
     maxNumOfConnections: Int,
     maxMessageSize: Int,
-    threadPoolSize: Int
+    threadPoolSize: Option[Int]
 )
 
 case class GrpcServer(
