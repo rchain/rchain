@@ -111,8 +111,7 @@ object BlockApproverProtocol {
             .forall(
               d =>
                 genesisBlessedTerms.contains(d.deploy.term.get) && genesisBlessedDeploys
-                  .filter(dd => deployDataEq.eqv(dd, d.deploy.raw.get))
-                  .nonEmpty)
+                  .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get)))
             .either(())
             .or("Candidate deploys do not match expected deploys.")
       _ <- (blockDeploys.size == genesisBlessedContracts.size)
