@@ -184,9 +184,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                 Try(runtime.replaySpace.createCheckpoint()) match {
                   case Success(newCheckpoint) =>
                     doReplayEval(rem, newCheckpoint.root)
-                  case Failure(_) =>
-                    // TODO: Match _ for type of exception
-                    Left(none[Deploy] -> UnusedCommEvent)
+                  case Failure(ex: ReplayException) =>
+                    Left(none[Deploy] -> UnusedCommEvent(ex))
                 }
               }
           }

@@ -90,8 +90,8 @@ object InterpreterUtil {
             }
           case Left((None, status)) =>
             status match {
-              case UnusedCommEvent =>
-                Log[F].warn(s"Found unused comm event") *> (Right(none[StateHash])
+              case UnusedCommEvent(ex: ReplayException) =>
+                Log[F].warn(s"Found unused comm event ${ex.getMessage}") *> (Right(none[StateHash])
                   .leftCast[BlockException] -> knownStateHashes).pure[F]
             }
           case Right(computedStateHash) =>
