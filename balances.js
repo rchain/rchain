@@ -1,3 +1,20 @@
+/// balances.js -- RHOC balance reporting
+
+// Copyright (C) 2018 dc <dc@dapp.org>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 const R    = require('ramda');
 const fs   = require('fs');
 const Web3 = require('web3');
@@ -40,7 +57,7 @@ const write = (key) => {
   return rhocBalance(key).then(bal => {
     return isContract(key).then(c => {
       console.log('Key:', key, 'Balance:', bal, 'Contract:', c);
-      writeStream.write(key+','+bal+','+c+'\n');
+      if(bal > 0) writeStream.write(key+','+bal+','+c+'\n');
     })
   })
   .catch(e => error(e, key));
