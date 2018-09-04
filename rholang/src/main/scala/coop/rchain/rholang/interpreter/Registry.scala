@@ -605,9 +605,9 @@ class Registry(private val space: PureRSpace[Task,
                   } else if (parMap.ps.size != 2) {
                     localFail()
                   } else {
-                    val it = (parMap.ps - parByteArray(head)).iterator
+                    val shrunkMap = (parMap.ps - parByteArray(head))
                     for {
-                      _ <- Function.tupled(mergeWithParent(_, _))(it.next)
+                      _ <- Function.tupled(mergeWithParent(_, _))(shrunkMap.head)
                       _ <- succeed(ps(2), ret, callRand)
                     } yield ()
                   }
@@ -705,15 +705,15 @@ class Registry(private val space: PureRSpace[Task,
 
   val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
     Map(
-      lookupRef             -> lookup,
-      lookupCallbackRef     -> lookupCallback,
-      insertRef             -> insert,
-      insertCallbackRef     -> insertCallback,
-      deleteRef             -> delete,
-      deleteRootCallbackRef -> deleteRootCallback,
-      deleteCallbackRef     -> deleteCallback,
-      publicLookupRef       -> publicLookup,
-      publicRegisterRandomRef       -> publicRegisterRandom
+      lookupRef               -> lookup,
+      lookupCallbackRef       -> lookupCallback,
+      insertRef               -> insert,
+      insertCallbackRef       -> insertCallback,
+      deleteRef               -> delete,
+      deleteRootCallbackRef   -> deleteRootCallback,
+      deleteCallbackRef       -> deleteCallback,
+      publicLookupRef         -> publicLookup,
+      publicRegisterRandomRef -> publicRegisterRandom
     )
 }
 
@@ -728,7 +728,7 @@ object Registry {
     "rho:registry:testing:lookup" -> byteName(10),
     "rho:registry:testing:insert" -> byteName(12),
     "rho:registry:testing:delete" -> byteName(14),
-    "rho:registry:lookup" -> byteName(17),
-    "rho:registry:insertRandom" -> byteName(18)
+    "rho:registry:lookup"         -> byteName(17),
+    "rho:registry:insertRandom"   -> byteName(18)
   )
 }
