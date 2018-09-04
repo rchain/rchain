@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.PrettyPrinter.buildString
@@ -54,7 +55,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
-      implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
+      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
     val runtime = runtimeContainer.take()
     val result  = replayEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
@@ -151,7 +152,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                                                      cost,
                                                      newCheckpoint.log,
                                                      DeployStatus.fromErrors(errors))
-
           if (errors.isEmpty) doEval(rem, newCheckpoint.root, acc :+ deployResult)
           else doEval(rem, hash, acc :+ deployResult)
 
@@ -161,13 +161,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
   }
 
-  private def replayEval(
-      terms: Seq[InternalProcessedDeploy],
-      runtime: Runtime,
-      initHash: StateHash)(implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
+  private def replayEval(terms: Seq[InternalProcessedDeploy],
+                         runtime: Runtime,
+                         initHash: StateHash)(
+      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
 
     def doReplayEval(terms: Seq[InternalProcessedDeploy],
-                     hash: Blake2b256Hash): Either[(Deploy, Failed), StateHash] =
+                     hash: Blake2b256Hash): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
           implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -175,15 +175,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           //TODO: compare replay deploy cost to given deploy cost
           val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
           DeployStatus.fromErrors(errors) match {
-            case ute: UntracedCommEvent => Left(deploy -> ute)
-            case int: InternalErrors    => Left(deploy -> int)
+            case int: InternalErrors => Left(Some(deploy) -> int)
             case replayStatus =>
               if (status.isFailed != replayStatus.isFailed)
-                Left(deploy -> ReplayStatusMismatch(replayStatus, status))
+                Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
               else if (errors.nonEmpty) doReplayEval(rem, hash)
               else {
-                val newCheckpoint = runtime.replaySpace.createCheckpoint()
-                doReplayEval(rem, newCheckpoint.root)
+                Try(runtime.replaySpace.createCheckpoint()) match {
+                  case Success(newCheckpoint) =>
+                    doReplayEval(rem, newCheckpoint.root)
+                  case Failure(ex: ReplayException) =>
+                    Left(none[Deploy] -> UnusedCommEvent(ex))
+                }
               }
           }
 

@@ -47,7 +47,7 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree)),
                    Node(Score.EMAP, sortedPars.map(_.score): _*))
       case GByteArray(ba) =>
-        ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toString)))
+        ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8)))
       case _ => //TODO(mateusz.gorski): rethink it
         throw new IllegalArgumentException("GroundSortMatcher passed unknown Expr instance")
     }
