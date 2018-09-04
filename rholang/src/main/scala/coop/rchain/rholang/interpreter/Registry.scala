@@ -13,12 +13,14 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{ISpace, IStore}
+import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
 import org.lightningj.util.ZBase32
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -36,7 +38,8 @@ import scala.collection.{Seq => RootSeq}
   * if tag is 0, this is the stored data.
   * if tag is 1, this is a name where the process recurs.
   */
-class Registry(private val space: ISpace[Channel,
+class Registry(private val space: PureRSpace[Task,
+  Channel,
                                          BindPattern,
                                          ListChannelWithRandom,
                                          ListChannelWithRandom,
@@ -126,15 +129,20 @@ class Registry(private val space: ISpace[Channel,
       freeCount = 2))
 
   def testInstall(): Unit = {
-    space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
-    space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
-    space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
-    space.install(publicLookupChannels,
-                  publicLookupPatterns,
-                  TaggedContinuation(ScalaBodyRef(publicLookupRef)))
-    space.install(publicRegisterRandomChannels,
-                  publicRegisterRandomPatterns,
-                  TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
+    import monix.execution.Scheduler.Implicits.global
+    val installTask: Task[Unit] =
+      for {
+        _ <- space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
+        _ <- space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
+        _ <- space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
+        _ <- space.install(publicLookupChannels,
+                      publicLookupPatterns,
+                      TaggedContinuation(ScalaBodyRef(publicLookupRef)))
+        _ <- space.install(publicRegisterRandomChannels,
+                      publicRegisterRandomPatterns,
+                      TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
+      } yield Unit
+    Await.result(installTask.runAsync, 1.seconds)
   }
 
   private val lookupCallbackRef: Long = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
@@ -171,11 +179,11 @@ class Registry(private val space: ISpace[Channel,
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   private def handleResult(
-      result: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): Task[Unit] =
-    result match {
+      resultTask: Task[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): Task[Unit] =
+    resultTask.flatMap(result => result match {
       case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
       case None                           => Task.unit
-    }
+    })
 
   private def singleSend(chan: Quote, data: Channel, rand: Blake2b512Random): Task[Unit] =
     handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand, None), false))
