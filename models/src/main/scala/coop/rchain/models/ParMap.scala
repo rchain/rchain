@@ -22,13 +22,13 @@ object ParMap {
     new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize)
 
   def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean, locallyFree: BitSet): ParMap =
-    new ParMap(SortedParMap(seq), connectiveUsed, Coeval.delay(locallyFree).memoize)
+    new ParMap(SortedParMap(seq), connectiveUsed, Coeval.pure(locallyFree).memoize)
 
   def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean): ParMap =
-    ParMap(seq, connectiveUsed, Coeval.delay(updateLocallyFree(seq)))
+    ParMap(seq, connectiveUsed, Coeval.pure(updateLocallyFree(seq)))
 
   def apply(map: SortedParMap): ParMap =
-    ParMap(map, connectiveUsed(map), Coeval.delay(updateLocallyFree(map.toSeq)))
+    ParMap(map, connectiveUsed(map), Coeval.pure(updateLocallyFree(map.toSeq)))
 
   def connectiveUsed(map: SortedParMap): Boolean =
     map.sortedMap.exists { case (k, v) => k.connectiveUsed || v.connectiveUsed }

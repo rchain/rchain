@@ -45,7 +45,6 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       toTask: F[_] => Task[_])(implicit scheduler: Scheduler): F[CasperPacketHandler[F]] =
     if (conf.approveGenesis) {
       for {
-        //TODO: refactor
         walletsFile <- Genesis.toFile[F](conf.walletsFile, conf.genesisPath.resolve("wallets.txt"))
         wallets     <- Genesis.getWallets[F](walletsFile, conf.walletsFile)
         timestamp   <- conf.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
@@ -71,8 +70,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                              runtimeManager,
                                              conf.shardId,
                                              conf.deployTimestamp)
-        validatorId      <- ValidatorIdentity.fromConfig[F](conf)
-        bondedValidators <- Genesis.getBondedValidators[F](conf.bondsFile)
+        validatorId <- ValidatorIdentity.fromConfig[F](conf)
+        bondedValidators = genesis.body
+          .flatMap(_.postState.map(_.bonds.map(_.validator).toSet))
+          .getOrElse(Set.empty)
         abp <- ApproveBlockProtocol
                 .of[F](genesis,
                        bondedValidators,
