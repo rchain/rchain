@@ -578,6 +578,50 @@ class InterpreterUtilTest
       validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
 
     tsHash should be(None)
+  }
 
+  it should "pass map update test" in {
+    (0 to 10).foreach { _ =>
+      val deploys =
+        Vector(
+          """
+            | @"mapStore"!({}) |
+            | contract @"store"(@value) = {
+            |   new key in {
+            |     for (@map <- @"mapStore") {
+            |       @"mapStore"!(map.set(*key.toByteArray(), value))
+            |     }
+            |   }
+            | }
+            |""".stripMargin,
+          """
+            |@"store"!("1")
+          """.stripMargin,
+          """
+            |@"store"!("2")
+          """.stripMargin
+        ).map(s =>
+          ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
+
+      val (Right((computedTsHash, processedDeploys)), _) =
+        computeDeploysCheckpoint[Id](Seq.empty,
+                                     deploys,
+                                     BlockMessage(),
+                                     initState,
+                                     knownStateHashes,
+                                     runtimeManager)
+      val chain: BlockDag =
+        createBlock[StateWithChain](
+          Seq.empty,
+          deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
+          tsHash = computedTsHash)
+          .runS(initState)
+      val block = chain.idToBlocks(0)
+
+      val (Right(tsHash), _) =
+        validateBlockCheckpoint[Id](block, block, chain, knownStateHashes, runtimeManager)
+
+      tsHash should be(Some(computedTsHash))
+    }
   }
 }
