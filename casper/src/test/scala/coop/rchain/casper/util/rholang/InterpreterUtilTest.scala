@@ -580,7 +580,7 @@ class InterpreterUtilTest
     tsHash should be(None)
   }
 
-  "validateBlockCheckpoint" should "pass map update test" in {
+  it should "pass map update test" in {
     (0 to 10).foreach { _ =>
       val deploys =
         Vector(
@@ -601,7 +601,7 @@ class InterpreterUtilTest
             |@"store"!("2")
           """.stripMargin
         ).map(s =>
-          ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis()))
+          ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
 
       val (Right((computedTsHash, processedDeploys)), _) =
         computeDeploysCheckpoint[Id](Seq.empty,
