@@ -15,7 +15,7 @@ import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.Seq
+import scala.collection.immutable.{Seq, Set}
 import coop.rchain.rspace.test.ArbitraryInstances._
 
 import scala.util.Random
@@ -1048,19 +1048,42 @@ trait StorageActionsTests
                             indexedStates: Seq[(State, Int)],
                             reportName: String,
                             differenceReport: Boolean = false): Boolean = {
+    final case class SetRow[P, A, K](data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
+
+    def convertMap(m: Map[Seq[String], Row[Pattern, String, StringsCaptor]])
+      : Map[Seq[String], SetRow[Pattern, String, StringsCaptor]] =
+      m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
+
     val tests: Seq[Any] = indexedStates
       .map {
-        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
+        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
           val num = "%02d".format(chunkNo)
 
-          val actualContents = space.store.toMap
-          val contentsTest   = actualContents == expectedContents
+          val expectedContents = convertMap(rawExpectedContents)
+          val actualContents   = convertMap(space.store.toMap)
 
-          if (contentsTest) {
-            logger.debug(s"$num: store had expected contents ($reportName)")
-          } else {
-            logger.error(s"$num: store had unexpected contents ($reportName)")
+          val contentsTest = expectedContents == actualContents
+
+          val actualJoins = space.store.joinMap
+
+          val joinsTest =
+            expectedJoins.forall {
+              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
+                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
+                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
+                expected.equals(actual)
+            }
+
+          val result = contentsTest && joinsTest
+          if (!result) {
+            if (!contentsTest) {
+              logger.error(s"$num: store had unexpected contents ($reportName)")
+            }
+
+            if (!joinsTest) {
+              logger.error(s"$num: store had unexpected joins ($reportName)")
+            }
 
             if (differenceReport) {
               logger.error(s"difference report ($reportName)")
@@ -1091,24 +1114,7 @@ trait StorageActionsTests
               }
             }
           }
-
-          val actualJoins = space.store.joinMap
-
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
-                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          if (joinsTest) {
-            logger.debug(s"$num: store had expected joins")
-          } else {
-            logger.error(s"$num: store had unexpected joins")
-          }
-
-          contentsTest && joinsTest
+          result
       }
     !tests.contains(false)
   }
