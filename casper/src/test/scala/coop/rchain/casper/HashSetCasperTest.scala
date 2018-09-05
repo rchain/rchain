@@ -66,29 +66,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
-  it should "not allow multiple threads to propose a block at the same time" in {
-    val scheduler            = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
-
-    //deploy runs forever, so processing it cannot be completed
-    val deploy =
-      ProtoUtil.sourceDeploy("@0!!(Nil) | for(_ <= @0){ Nil }", System.currentTimeMillis())
-    val testProgram = for {
-      casper <- casperEff
-      d      <- casper.deploy(deploy)
-      _      = assert(d.isRight)
-      //In the race, one thread starts processing (can never complete) and the other sees
-      //a proposal is already in progress and so returns None immediately.
-      result <- EitherT(Task.race(casper.createBlock.value, casper.createBlock.value).map(_.merge))
-    } yield result
-    //have a timeout so that the test will either pass or fail in finite time
-    val raceResult: CreateBlockStatus =
-      testProgram.value.map(_.right.get).timeout(5.seconds).unsafeRunSync(scheduler)
-
-    raceResult shouldBe LockUnavailable
-    cleanUp()
-  }
-
   it should "not allow multiple threads to process the same block" in {
     val scheduler            = Scheduler.fixedPool("three-threads", 3)
     val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)

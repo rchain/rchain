@@ -74,7 +74,6 @@ class MultiParentCasperImpl[
   private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
 
   private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
-  private val createBlockLock  = new SyncLock
 
   def addBlock(b: BlockMessage): F[BlockStatus] =
     for {
@@ -201,25 +200,21 @@ class MultiParentCasperImpl[
    */
   def createBlock: F[CreateBlockStatus] = validatorId match {
     case Some(vId @ ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
-      Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
-        for {
-          dag            <- blockDag
-          orderedHeads   <- estimator(dag)
-          p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
-          r              <- remDeploys(dag, p)
-          justifications = toJustification(dag.latestMessages)
-          proposal <- if (r.nonEmpty || p.length > 1) {
-                       createProposal(p, r, justifications)
-                     } else {
-                       CreateBlockStatus.noNewDeploys.pure[F]
-                     }
-          signedBlock = proposal.map(
-            signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
-          )
-          _ <- Sync[F].delay { createBlockLock.unlock() }
-        } yield signedBlock,
-        CreateBlockStatus.lockUnavailable.pure[F]
-      )
+      for {
+        dag            <- blockDag
+        orderedHeads   <- estimator(dag)
+        p              <- chooseNonConflicting[F](orderedHeads, genesis, dag)
+        r              <- remDeploys(dag, p)
+        justifications = toJustification(dag.latestMessages)
+        proposal <- if (r.nonEmpty || p.length > 1) {
+                     createProposal(p, r, justifications)
+                   } else {
+                     CreateBlockStatus.noNewDeploys.pure[F]
+                   }
+        signedBlock = proposal.map(
+          signBlock(_, dag, publicKey, privateKey, sigAlgorithm, shardId)
+        )
+      } yield signedBlock
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
 
