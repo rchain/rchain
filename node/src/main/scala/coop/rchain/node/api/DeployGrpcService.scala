@@ -1,6 +1,7 @@
 package coop.rchain.node.api
 
 import cats._
+import cats.effect.Sync
 import com.google.protobuf.empty.Empty
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -17,7 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 private[api] class DeployGrpcService[
-    F[_]: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
+    F[_]: Sync: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
     implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
