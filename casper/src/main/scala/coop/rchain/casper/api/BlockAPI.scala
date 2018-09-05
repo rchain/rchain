@@ -72,6 +72,7 @@ object BlockAPI {
                            .pure[F]
                        case Created(block) => casper.addBlock(block).map(addResponse(_, block))
                      }
+            _ <- Sync[F].delay { createBlockLock.unlock() }
           } yield result,
           DeployServiceResponse(success = false, "Error: There is another propose in progress.")
             .pure[F]
