@@ -25,7 +25,7 @@ import scala.collection.mutable
 object CasperEffect {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def apply(sk: Array[Byte], genesis: BlockMessage, shardId: String = "rchain")(
+  def apply(sk: Array[Byte], genesis: BlockMessage.BlockMessageSafe, shardId: String = "rchain")(
       implicit scheduler: Scheduler): (Effect[MultiParentCasper[Effect]], () => Unit) = {
     val blockStoreDir            = BlockStoreTestFixture.dbDir
     val runtimeDir               = BlockStoreTestFixture.dbDir

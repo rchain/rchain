@@ -6,7 +6,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
   ApprovedBlockReceivedHandler,
@@ -80,12 +80,13 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val metrics = new MetricsNOP[Task]
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap   = Ref.unsafe[Task, Map[BlockHash, BlockMessage]](Map.empty)
+    implicit val blockMap =
+      Ref.unsafe[Task, Map[BlockHash, BlockMessage.BlockMessageSafe]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(blockDag: BlockDag,
-                                            estimate: BlockMessage): Task[Float] =
+                                            estimate: BlockMessage.BlockMessageSafe): Task[Float] =
         Task.pure(1.0f)
     }
   }
@@ -102,9 +103,10 @@ class CasperPacketHandlerSpec extends WordSpec {
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap))
         val packetHandler     = new CasperPacketHandlerImpl[Task](ref)
-        val expectedCandidate = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+        val expectedCandidate = ApprovedBlockCandidate(Some(genesis.underlying), requiredSigs)
 
-        val unapprovedBlock  = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
+        val unapprovedBlock =
+          BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis.underlying)
         val unapprovedPacket = BlockApproverProtocolTest.unapprovedToPacket(unapprovedBlock)
         val test = for {
           packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
@@ -178,7 +180,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
         val test = for {
           sigs <- Ref.of[Task, Set[Signature]](Set.empty)
-          abp = ApproveBlockProtocol.unsafe[Task](genesis,
+          abp = ApproveBlockProtocol.unsafe[Task](genesis.underlying,
                                                   Set(ByteString.copyFrom(validatorPk)),
                                                   requiredSigns,
                                                   duration,
@@ -193,10 +195,10 @@ class CasperPacketHandlerSpec extends WordSpec {
             .approveBlockInterval(interval, shardId, runtimeManager, Some(validatorId), refCasper)
             .forkAndForget
             .runAsync
-          blockApproval = ApproveBlockProtocolTest.approval(ApprovedBlockCandidate(Some(genesis),
-                                                                                   requiredSigns),
-                                                            validatorSk,
-                                                            validatorPk)
+          blockApproval = ApproveBlockProtocolTest.approval(
+            ApprovedBlockCandidate(Some(genesis.underlying), requiredSigns),
+            validatorSk,
+            validatorPk)
           blockApprovalPacket = Packet(transport.BlockApproval.id, blockApproval.toByteString)
           _                   <- casperPacketHandler.handle(local)(blockApprovalPacket)
           //wait until casper is defined, with 1 minute timeout (indicating failure)
@@ -276,7 +278,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
         val genesis = HashSetCasperTest.createGenesis(Map.empty)
 
-        val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+        val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis.underlying))
 
         val approvedBlock: ApprovedBlock = ApprovedBlock(
           candidate = Some(approvedBlockCandidate),
@@ -352,7 +354,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       import fixture._
 
       val genesis                = HashSetCasperTest.createGenesis(Map.empty)
-      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
+      val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis.underlying))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
         sigs = Seq(
@@ -372,8 +374,9 @@ class CasperPacketHandlerSpec extends WordSpec {
       transportLayer.setResponses(_ => p => Right(p))
 
       "respond to BlockMessage messages " in {
-        val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
-        val packet       = Packet(transport.BlockMessage.id, blockMessage.toByteString)
+        val blockMessage =
+          BlockUtil.emptySafeBlock.withBlockHash(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
+        val packet = Packet(transport.BlockMessage.id, blockMessage.toByteString)
         val test: Task[Unit] = for {
           _ <- casperPacketHandler.handle(local)(packet)
           _ = assert(casper.store.contains(blockMessage.blockHash))

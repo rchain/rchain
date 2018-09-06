@@ -18,7 +18,12 @@ import cats.effect.Bracket
 import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
+import coop.rchain.casper.helper.{
+  BlockGenerator,
+  BlockStoreFixture,
+  BlockStoreTestFixture,
+  BlockUtil
+}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
@@ -53,8 +58,8 @@ class InterpreterUtilTest
   implicit val logEff = new LogStub[Id]
 
   private def computeBlockCheckpoint(
-      b: BlockMessage,
-      genesis: BlockMessage,
+      b: BlockMessage.BlockMessageSafe,
+      genesis: BlockMessage.BlockMessageSafe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager): (StateHash, Set[StateHash], Seq[ProcessedDeploy]) = {
@@ -101,7 +106,8 @@ class InterpreterUtilTest
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
+      : F[BlockMessage.BlockMessageSafe] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploysCost)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1DeploysCost)
@@ -160,12 +166,12 @@ class InterpreterUtilTest
 
   private def injectPostStateHash(chain: BlockDag,
                                   id: Int,
-                                  b: BlockMessage,
+                                  b: BlockMessage.BlockMessageSafe,
                                   postGenStateHash: StateHash,
                                   processedDeploys: Seq[ProcessedDeploy]) = {
-    val updatedBlockPostState = b.body.get.postState.get.withTuplespace(postGenStateHash)
+    val updatedBlockPostState = b.body.postState.withTuplespace(postGenStateHash)
     val updatedBlockBody =
-      b.body.get.withPostState(updatedBlockPostState).withDeploys(processedDeploys)
+      b.body.withPostState(updatedBlockPostState).withDeploys(processedDeploys)
     val updatedBlock = b.withBody(updatedBlockBody)
     BlockStore[Id].put(b.blockHash, updatedBlock)
     chain.copy(idToBlocks = chain.idToBlocks.updated(id, updatedBlock))
@@ -208,7 +214,8 @@ class InterpreterUtilTest
      *         \    /
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
+      : F[BlockMessage.BlockMessageSafe] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploysWithCost)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
@@ -257,7 +264,7 @@ class InterpreterUtilTest
   def computeSingleProcessedDeploy(deploy: Deploy*): Seq[InternalProcessedDeploy] = {
     val (Right((_, result)), _) = computeDeploysCheckpoint[Id](Seq.empty,
                                                                deploy,
-                                                               BlockMessage(),
+                                                               BlockUtil.emptySafeBlock,
                                                                initState,
                                                                knownStateHashes,
                                                                runtimeManager)
@@ -340,7 +347,7 @@ class InterpreterUtilTest
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty,
                                    deploys,
-                                   BlockMessage(),
+                                   BlockUtil.emptySafeBlock,
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
@@ -388,7 +395,7 @@ class InterpreterUtilTest
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty,
                                    deploys,
-                                   BlockMessage(),
+                                   BlockUtil.emptySafeBlock,
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
@@ -440,7 +447,7 @@ class InterpreterUtilTest
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty,
                                    deploys,
-                                   BlockMessage(),
+                                   BlockUtil.emptySafeBlock,
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
@@ -489,7 +496,7 @@ class InterpreterUtilTest
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty,
                                    deploys,
-                                   BlockMessage(),
+                                   BlockUtil.emptySafeBlock,
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)

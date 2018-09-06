@@ -330,13 +330,19 @@ object ApproveBlockProtocolTest {
     val bonds      = HashSetCasperTest.createBonds(Seq(pk))
     val genesis    = HashSetCasperTest.createGenesis(bonds)
     val validators = validatorsPk.map(ByteString.copyFrom(_))
-    val candidate  = ApprovedBlockCandidate(Some(genesis), requiredSigs)
+    val candidate  = ApprovedBlockCandidate(Some(genesis.underlying), requiredSigs)
     val sigs       = Ref.unsafe[Task, Set[Signature]](Set.empty)
     val startTime  = System.currentTimeMillis()
 
     val node = HashSetCasperTestNode.standalone(genesis, sk)
     val protocol = ApproveBlockProtocol
-      .unsafe[Task](genesis, validators, requiredSigs, duration, interval, sigs, startTime)
+      .unsafe[Task](genesis.underlying,
+                    validators,
+                    requiredSigs,
+                    duration,
+                    interval,
+                    sigs,
+                    startTime)
 
     TestFixture(lab, protocol, candidate, startTime, sigs)
   }

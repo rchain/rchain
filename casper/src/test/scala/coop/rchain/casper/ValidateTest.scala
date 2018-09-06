@@ -52,7 +52,7 @@ class ValidateTest
 
   def createChain[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage] =
+      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage.BlockMessageSafe] =
     (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
@@ -63,7 +63,7 @@ class ValidateTest
 
   def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      validatorLength: Int): F[BlockMessage] = {
+      validatorLength: Int): F[BlockMessage.BlockMessageSafe] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
@@ -87,22 +87,19 @@ class ValidateTest
       .map(_._1)
   }
 
-  def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
+  def signedBlock(i: Int)(implicit chain: BlockDag,
+                          sk: Array[Byte]): BlockMessage.BlockMessageSafe = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
     ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
   }
 
-  implicit class ChangeBlockNumber(b: BlockMessage) {
-    def withBlockNumber(n: Long): BlockMessage = {
-      val body     = b.body.getOrElse(Body())
-      val state    = body.postState.getOrElse(RChainState())
-      val newState = state.withBlockNumber(n)
+  implicit class ChangeBlockNumber(b: BlockMessage.BlockMessageSafe) {
+    def withBlockNumber(n: Long): BlockMessage.BlockMessageSafe = {
+      val newState  = b.body.postState.withBlockNumber(n)
+      val newHeader = b.header.withPostStateHash(ProtoUtil.protoHash(newState))
 
-      val header    = b.header.getOrElse(Header())
-      val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
-
-      b.withBody(body.withPostState(newState)).withHeader(newHeader)
+      b.withBody(b.body.withPostState(newState)).withHeader(newHeader)
     }
   }
 
@@ -160,7 +157,7 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](1).runS(initState)
       val block                    = chain.idToBlocks(0)
 
-      val modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
+      val modifiedTimestampHeader = block.header.withTimestamp(99999999)
       Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
         Left(InvalidUnslashableBlock))
       Validate.timestamp[Id](block, chain) should be(Right(Valid))
@@ -175,7 +172,7 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
 
-      val modifiedTimestampHeader = block.header.get.withTimestamp(-1)
+      val modifiedTimestampHeader = block.header.withTimestamp(-1)
       Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
         Left(InvalidUnslashableBlock))
       Validate.timestamp[Id](block, chain) should be(Right(Valid))
@@ -275,13 +272,13 @@ class ValidateTest
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
+      def latestMessages(messages: Seq[BlockMessage.BlockMessageSafe]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
 
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
-          parents: Seq[BlockMessage],
-          justifications: Seq[BlockMessage],
-          validator: Int): F[BlockMessage] =
+          parents: Seq[BlockMessage.BlockMessageSafe],
+          justifications: Seq[BlockMessage.BlockMessageSafe],
+          validator: Int): F[BlockMessage.BlockMessageSafe] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -290,7 +287,8 @@ class ValidateTest
           justifications = latestMessages(justifications)
         )
 
-      def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+      def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]
+        : F[BlockMessage.BlockMessageSafe] =
         for {
           b0 <- createBlock[F](Seq.empty, bonds = bonds)
           b1 <- createValidatorBlock[F](Seq(b0), Seq.empty, 0)
@@ -331,7 +329,11 @@ class ValidateTest
                             sk,
                             "ed25519",
                             "rchain"),
-        BlockMessage(),
+        BlockMessage.BlockMessageSafe
+          .create(
+            BlockMessage().withBody(Body().withPostState(RChainState())).withHeader(Header())
+          )
+          .get,
         chain,
         "rchain"
       ) should be(Left(InvalidBlockNumber))
@@ -349,13 +351,13 @@ class ValidateTest
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      def latestMessages(messages: Seq[BlockMessage]): Map[Validator, BlockHash] =
+      def latestMessages(messages: Seq[BlockMessage.BlockMessageSafe]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
 
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
-          parents: Seq[BlockMessage],
-          justifications: Seq[BlockMessage],
-          validator: Int): F[BlockMessage] =
+          parents: Seq[BlockMessage.BlockMessageSafe],
+          justifications: Seq[BlockMessage.BlockMessageSafe],
+          validator: Int): F[BlockMessage.BlockMessageSafe] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -364,7 +366,8 @@ class ValidateTest
           justifications = latestMessages(justifications)
         )
 
-      def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+      def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]
+        : F[BlockMessage.BlockMessageSafe] =
         for {
           b0 <- createBlock[F](Seq.empty, bonds = bonds)
           b1 <- createValidatorBlock[F](Seq(b0), Seq(b0, b0), 0)
@@ -387,9 +390,15 @@ class ValidateTest
       val justificationsWithRegression =
         Seq(Justification(validators(0), b1.blockHash), Justification(validators(1), b4.blockHash))
       val blockWithJustificationRegression =
-        BlockMessage()
-          .withSender(validators(1))
-          .withJustifications(justificationsWithRegression)
+        BlockMessage.BlockMessageSafe
+          .create(
+            BlockMessage()
+              .withSender(validators(1))
+              .withJustifications(justificationsWithRegression)
+              .withHeader(Header())
+              .withBody(Body().withPostState(RChainState()))
+          )
+          .get
       Validate.justificationRegressions[Id](blockWithJustificationRegression, b0, chain) should be(
         Left(JustificationRegression))
       log.warns.size should be(1)
@@ -416,8 +425,8 @@ class ValidateTest
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
     val modifiedBonds     = Seq.empty[Bond]
-    val modifiedPostState = genesis.body.get.postState.get.withBonds(modifiedBonds)
-    val modifiedBody      = genesis.body.get.withPostState(modifiedPostState)
+    val modifiedPostState = genesis.body.postState.withBonds(modifiedBonds)
+    val modifiedBody      = genesis.body.withPostState(modifiedPostState)
     val modifiedGenesis   = genesis.withBody(modifiedBody)
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
@@ -425,30 +434,40 @@ class ValidateTest
   }
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in {
-    val (sk, pk) = Ed25519.newKeyPair
-    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis =
-      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    val (sk, pk)          = Ed25519.newKeyPair
+    val block             = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis           = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    val genesisUnderlying = genesis.underlying
 
-    Validate.formatOfFields[Id](genesis) should be(true)
-    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
-    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
-    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
-    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
-    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
-    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
-    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](genesisUnderlying) should be(Right(genesis))
+    Validate.formatOfFields[Id](genesisUnderlying.withBlockHash(ByteString.EMPTY)) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.clearHeader) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.clearBody) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.withSig(ByteString.EMPTY)) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.withSigAlgorithm("")) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.withShardId("")) should be(
+      Left(InvalidUnslashableBlock))
+    Validate.formatOfFields[Id](genesisUnderlying.withBody(genesis.body.underlying.clearPostState)) should be(
+      Left(InvalidUnslashableBlock))
     Validate.formatOfFields[Id](
-      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
-    ) should be(false)
+      genesis.withHeader(genesis.header.withPostStateHash(ByteString.EMPTY)).underlying
+    ) should be(Left(InvalidUnslashableBlock))
     Validate.formatOfFields[Id](
-      genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
-    ) should be(false)
+      genesis.withHeader(genesis.header.withDeploysHash(ByteString.EMPTY)).underlying
+    ) should be(Left(InvalidUnslashableBlock))
     Validate.formatOfFields[Id](
-      genesis.withBody(
-        genesis.body.get
-          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
-    ) should be(false)
+      genesis
+        .withBody(
+          genesis.body
+            .withDeploys(genesis.body.deploys.map(_.withLog(List(Event(EventInstance.Empty)))))
+        )
+        .underlying
+    ) should be(Left(InvalidUnslashableBlock))
   }
 
   "Block hash format validation" should "fail on invalid hash" in {
@@ -467,7 +486,7 @@ class ValidateTest
     val genesis  = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
     Validate.deployCount[Id](genesis) should be(Right(Valid))
     Validate.deployCount[Id](
-      genesis.withHeader(genesis.header.get.withDeployCount(100))
+      genesis.withHeader(genesis.header.withDeployCount(100))
     ) should be(Left(InvalidDeployCount))
   }
 }

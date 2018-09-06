@@ -40,7 +40,7 @@ import monix.eval.Task
 class HashSetCasperTestNode(name: String,
                             val local: PeerNode,
                             tle: TransportLayerTestImpl[Id],
-                            val genesis: BlockMessage,
+                            val genesis: BlockMessage.BlockMessageSafe,
                             sk: Array[Byte],
                             logicalTime: LogicalTime[Id],
                             storageSize: Long = 1024L * 1024,
@@ -69,7 +69,8 @@ class HashSetCasperTestNode(name: String,
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
-  val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
+  val approvedBlock = ApprovedBlock(
+    candidate = Some(ApprovedBlockCandidate(block = Some(genesis.underlying))))
 
   implicit val casperEff =
     MultiParentCasper
@@ -103,7 +104,7 @@ class HashSetCasperTestNode(name: String,
 }
 
 object HashSetCasperTestNode {
-  def standalone(genesis: BlockMessage, sk: Array[Byte])(
+  def standalone(genesis: BlockMessage.BlockMessageSafe, sk: Array[Byte])(
       implicit scheduler: Scheduler): HashSetCasperTestNode = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
@@ -114,7 +115,7 @@ object HashSetCasperTestNode {
     new HashSetCasperTestNode(name, identity, tle, genesis, sk, logicalTime)
   }
 
-  def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
+  def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage.BlockMessageSafe)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
     val n                            = sks.length
     val names                        = (1 to n).map(i => s"node-$i")

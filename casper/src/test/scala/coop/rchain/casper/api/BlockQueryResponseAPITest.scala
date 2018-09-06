@@ -25,7 +25,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   val genesisHashString = "00000000"
   val version           = 0L
 
-  def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
+  def genesisBlock(genesisHashString: String, version: Long): BlockMessage.BlockMessageSafe = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val blockNumber = 0L
     val timestamp   = 1527191663L
@@ -34,9 +34,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
     val body   = Body().withPostState(ps)
     val header = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
-    BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
+    BlockMessage.BlockMessageSafe
+      .create(
+        BlockMessage().withBlockHash(genesisHash).withHeader(header).withBody(body)
+      )
+      .get
   }
-  val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
+  val genesisBlock: BlockMessage.BlockMessageSafe = genesisBlock(genesisHashString, version)
 
   val secondHashString                 = "123456789101112131415161718192"
   val blockHash: BlockHash             = ProtoUtil.stringToByteString(secondHashString)
@@ -52,13 +56,17 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   val secondBlockSenderString: String  = "3456789101112131415161718192"
   val secondBlockSender: ByteString    = ProtoUtil.stringToByteString(secondBlockSenderString)
   val shardId: String                  = "abcdefgh"
-  val secondBlock: BlockMessage =
-    BlockMessage()
-      .withBlockHash(blockHash)
-      .withHeader(header)
-      .withBody(body)
-      .withSender(secondBlockSender)
-      .withShardId(shardId)
+  val secondBlock: BlockMessage.BlockMessageSafe =
+    BlockMessage.BlockMessageSafe
+      .create(
+        BlockMessage()
+          .withBlockHash(blockHash)
+          .withHeader(header)
+          .withBody(body)
+          .withSender(secondBlockSender)
+          .withShardId(shardId)
+      )
+      .get
 
   val faultTolerance = -1f
 
@@ -67,7 +75,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
       implicit val casperEffect = NoOpsCasperEffect(
-        HashMap[BlockHash, BlockMessage](
+        HashMap[BlockHash, BlockMessage.BlockMessageSafe](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
           (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
@@ -87,7 +95,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       val blockInfo = blockQueryResponse.blockInfo.get
       blockQueryResponse.status should be("Success")
       blockInfo.blockHash should be(secondHashString)
-      blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+      blockInfo.blockSize should be(secondBlock.underlying.serializedSize.toString)
       blockInfo.blockNumber should be(blockNumber)
       blockInfo.version should be(version)
       blockInfo.deployCount should be(deployCount)
@@ -101,7 +109,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
     implicit blockStore =>
       implicit val casperEffect = NoOpsCasperEffect(
-        HashMap[BlockHash, BlockMessage](
+        HashMap[BlockHash, BlockMessage.BlockMessageSafe](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
           (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)

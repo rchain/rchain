@@ -40,7 +40,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
-    node.casperEff.addBlock(block)
+    node.casperEff.addBlock(block.underlying)
 
     val listeningName =
       Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
@@ -65,7 +65,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
 
     val Created(block1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block1)
+    nodes(0).casperEff.addBlock(block1.underlying)
     nodes(1).receive()
     nodes(2).receive()
 
@@ -81,19 +81,19 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
 
     val Created(block2) = nodes(1).casperEff
       .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(block2)
+    nodes(1).casperEff.addBlock(block2.underlying)
     nodes(0).receive()
     nodes(2).receive()
 
     val Created(block3) = nodes(2).casperEff
       .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-    nodes(2).casperEff.addBlock(block3)
+    nodes(2).casperEff.addBlock(block3.underlying)
     nodes(0).receive()
     nodes(1).receive()
 
     val Created(block4) = nodes(0).casperEff
       .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block4)
+    nodes(0).casperEff.addBlock(block4.underlying)
     nodes(1).receive()
     nodes(2).receive()
 
@@ -111,19 +111,19 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
 
     val Created(block5) = nodes(1).casperEff
       .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(block5)
+    nodes(1).casperEff.addBlock(block5.underlying)
     nodes(0).receive()
     nodes(2).receive()
 
     val Created(block6) = nodes(2).casperEff
       .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-    nodes(2).casperEff.addBlock(block6)
+    nodes(2).casperEff.addBlock(block6.underlying)
     nodes(0).receive()
     nodes(1).receive()
 
     val Created(block7) = nodes(0).casperEff
       .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-    nodes(0).casperEff.addBlock(block7)
+    nodes(0).casperEff.addBlock(block7.underlying)
     nodes(1).receive()
     nodes(2).receive()
 
@@ -160,7 +160,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
-    node.casperEff.addBlock(block)
+    node.casperEff.addBlock(block.underlying)
 
     val listeningNamesShuffled1 =
       Channels(

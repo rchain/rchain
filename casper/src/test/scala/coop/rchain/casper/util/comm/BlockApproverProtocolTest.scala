@@ -22,7 +22,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10)
     val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
-    val unapproved                 = createUnapproved(n, node.genesis)
+    val unapproved                 = createUnapproved(n, node.genesis.underlying)
     import node._
 
     approver.unapprovedBlockPacketHandler[Id](node.local, unapproved)
@@ -38,7 +38,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     val (validatorSk, validatorPk) = Ed25519.newKeyPair
     val bonds                      = Map(validatorPk -> 10)
     val (approver, node)           = createProtocol(n, Seq.empty, validatorSk, bonds)
-    val differentUnapproved1       = createUnapproved(n / 2, node.genesis) //wrong number of signatures
+    val differentUnapproved1       = createUnapproved(n / 2, node.genesis.underlying) //wrong number of signatures
     val differentUnapproved2       = createUnapproved(n, BlockMessage.defaultInstance) //wrong block
     import node._
 

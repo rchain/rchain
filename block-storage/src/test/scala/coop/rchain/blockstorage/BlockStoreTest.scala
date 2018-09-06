@@ -1,11 +1,10 @@
 package coop.rchain.blockstorage
 
 import scala.language.higherKinds
-
 import cats._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.protocol.{BlockMessage, Header}
+import coop.rchain.casper.protocol.{BlockMessage, Body, Header, RChainState}
 import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import org.scalacheck._
@@ -14,6 +13,7 @@ import org.scalacheck.Gen._
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+
 import scala.util.control.NonFatal
 
 trait BlockStoreTest
@@ -26,9 +26,14 @@ trait BlockStoreTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage =
-    BlockMessage(blockHash = bh)
-      .withHeader(Header().withVersion(v).withTimestamp(ts))
+  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage.BlockMessageSafe =
+    BlockMessage.BlockMessageSafe
+      .create(
+        BlockMessage(blockHash = bh)
+          .withHeader(Header().withVersion(v).withTimestamp(ts))
+          .withBody(Body().withPostState(RChainState()))
+      )
+      .getOrElse(sys.error("Invalid conversion to block message"))
 
   private[this] implicit def liftToBlockHash(s: String): BlockHash = ByteString.copyFromUtf8(s)
   private[this] implicit def liftToBlockStoreElement(
@@ -41,17 +46,20 @@ trait BlockStoreTest
 
   private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
 
-  private[this] val blockStoreElementGen: Gen[(String, BlockMessage)] =
+  private[this] val blockStoreElementGen: Gen[(ByteString, BlockMessage.BlockMessageSafe)] =
     for {
       hash      <- arbitrary[BlockHash]
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
-    } yield
-      (hash.toStringUtf8,
-       BlockMessage(blockHash = hash)
-         .withHeader(Header().withVersion(version).withTimestamp(timestamp)))
+      message = BlockMessage(blockHash = hash)
+        .withHeader(Header().withVersion(version).withTimestamp(timestamp))
+        .withBody(Body().withPostState(RChainState()))
+      safeMessage = BlockMessage.BlockMessageSafe
+        .create(message)
+        .getOrElse(sys.error("Invalid generated block message"))
+    } yield (hash, safeMessage)
 
-  private[this] val blockStoreElementsGen: Gen[List[(String, BlockMessage)]] =
+  private[this] val blockStoreElementsGen: Gen[List[(ByteString, BlockMessage.BlockMessageSafe)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
 
   def withStore[R](f: BlockStore[Id] => R): R
@@ -109,7 +117,7 @@ trait BlockStoreTest
         items.foreach(store.put(_))
         items.foreach {
           case (k, v) =>
-            val w = store.find(_ == ByteString.copyFrom(k.getBytes()))
+            val w = store.find(_ == ByteString.copyFrom(k.toByteArray))
             w should have size 1
             w.head._2 shouldBe v
         }
@@ -124,7 +132,7 @@ trait BlockStoreTest
       forAll(blockStoreElementsGen, minSize(0), sizeRange(10)) { blockStoreElements =>
         val items = blockStoreElements.map {
           case (hash, elem) =>
-            (hash, elem, toBlockMessage(hash, 200L, 20000L))
+            (hash, elem, toBlockMessage(hash.toStringUtf8, 200L, 20000L))
         }
         items.foreach { case (k, v1, _) => store.put(k, v1) }
         items.foreach { case (k, v1, _) => store.get(k) shouldBe Some(v1) }

@@ -37,7 +37,8 @@ class DagOperationsTest
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
+      : F[BlockMessage.BlockMessageSafe] =
       for {
         genesis <- createBlock[F](Seq.empty)
         b1      <- createBlock[F](Seq(genesis.blockHash))

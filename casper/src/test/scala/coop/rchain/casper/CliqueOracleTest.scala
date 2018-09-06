@@ -34,7 +34,8 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
     val v1Bond                   = Bond(v1, 2)
     val v2Bond                   = Bond(v2, 3)
     val bonds                    = Seq(v1Bond, v2Bond)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
+      : F[BlockMessage.BlockMessageSafe] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
         b2 <- createBlock[F](Seq(genesis.blockHash),
@@ -101,7 +102,8 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
       val v2Bond                   = Bond(v2, 20)
       val v3Bond                   = Bond(v3, 15)
       val bonds                    = Seq(v1Bond, v2Bond, v3Bond)
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
+        : F[BlockMessage.BlockMessageSafe] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
           b2 <- createBlock[F](
