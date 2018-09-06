@@ -316,12 +316,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
     override def handleBlockMessage(b: BlockMessage): F[Option[Packet]] =
       for {
-        isOldBlock <- MultiParentCasper[F].contains(b)
-        _ <- if (isOldBlock) {
-              Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
-            } else {
-              handleNewBlock[F](b)
-            }
+        _ <- handleNewBlock[F](b)
       } yield none[Packet]
 
     override def handleBlockRequest(peer: PeerNode, br: BlockRequest): F[Option[Packet]] =

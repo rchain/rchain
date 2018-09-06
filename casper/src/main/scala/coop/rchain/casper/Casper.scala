@@ -35,7 +35,7 @@ import scala.concurrent.SyncVar
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[BlockStatus]
-  def contains(b: BlockMessage): F[Boolean]
+  def contains(b: BlockMessage.BlockMessageSafe): F[Boolean]
   def deploy(d: DeployData): F[Either[Throwable, Unit]]
   def estimator(dag: BlockDag): F[A]
   def createBlock: F[CreateBlockStatus]
@@ -167,10 +167,24 @@ sealed abstract class MultiParentCasperInstances {
                          result <- validateFields match {
                                     case Left(invalid) => Monad[F].pure[BlockStatus](invalid)
                                     case Right(blockSafe) =>
-                                      internalAddBlock(blockSafe).flatMap(status =>
-                                        Capture[F].capture {
-                                          processingBlocks.update(_ - b.blockHash); status
-                                      })
+                                      for {
+                                        isOldBlock <- contains(blockSafe)
+                                        result <- if (isOldBlock) {
+                                                   for {
+                                                     _ <- Log[F].info(
+                                                           s"Received block ${PrettyPrinter
+                                                             .buildString(b.blockHash)} again.")
+                                                     result <- Monad[F].pure[BlockStatus](
+                                                                InvalidUnslashableBlock)
+                                                   } yield result
+                                                 } else {
+                                                   internalAddBlock(blockSafe).flatMap(status =>
+                                                     Capture[F].capture {
+                                                       processingBlocks.update(_ - b.blockHash);
+                                                       status
+                                                   })
+                                                 }
+                                      } yield result
                                   }
                        } yield result
                      case Left(ex) =>
@@ -238,9 +252,8 @@ sealed abstract class MultiParentCasperInstances {
           ft <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
         } yield ft > faultToleranceThreshold
 
-      def contains(b: BlockMessage): F[Boolean] =
-//        BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
-        BlockStore[F].contains(b.blockHash)
+      def contains(b: BlockMessage.BlockMessageSafe): F[Boolean] =
+        BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
 
       def deploy(d: DeployData): F[Either[Throwable, Unit]] =
         InterpreterUtil.mkTerm(d.term) match {
