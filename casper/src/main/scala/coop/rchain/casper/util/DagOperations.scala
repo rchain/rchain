@@ -35,15 +35,17 @@ object DagOperations {
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
-  def greatestCommonAncestorF[F[_]: Monad: BlockStore](b1: BlockMessage,
-                                                       b2: BlockMessage,
-                                                       genesis: BlockMessage,
-                                                       dag: BlockDag): F[BlockMessage] =
+  def greatestCommonAncestorF[F[_]: Monad: BlockStore](
+      b1: BlockMessage.BlockMessageSafe,
+      b2: BlockMessage.BlockMessageSafe,
+      genesis: BlockMessage.BlockMessageSafe,
+      dag: BlockDag): F[BlockMessage.BlockMessageSafe] =
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      def commonAncestorChild(b: BlockMessage,
-                              commonAncestors: Set[BlockMessage]): F[List[BlockMessage]] = {
+      def commonAncestorChild(b: BlockMessage.BlockMessageSafe,
+                              commonAncestors: Set[BlockMessage.BlockMessageSafe])
+        : F[List[BlockMessage.BlockMessageSafe]] = {
         val childrenHashes = dag.childMap.getOrElse(b.blockHash, HashSet.empty[BlockHash])
         for {
           children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
@@ -52,10 +54,13 @@ object DagOperations {
       }
 
       for {
-        b1Ancestors     <- bfTraverseF[F, BlockMessage](List(b1))(ProtoUtil.unsafeGetParents[F]).toSet
-        b2Ancestors     <- bfTraverseF[F, BlockMessage](List(b2))(ProtoUtil.unsafeGetParents[F]).toSet
+        b1Ancestors <- bfTraverseF[F, BlockMessage.BlockMessageSafe](List(b1))(
+                        ProtoUtil.unsafeGetParents[F]).toSet
+        b2Ancestors <- bfTraverseF[F, BlockMessage.BlockMessageSafe](List(b2))(
+                        ProtoUtil.unsafeGetParents[F]).toSet
         commonAncestors = b1Ancestors.intersect(b2Ancestors)
-        gca <- bfTraverseF[F, BlockMessage](List(genesis))(commonAncestorChild(_, commonAncestors))
+        gca <- bfTraverseF[F, BlockMessage.BlockMessageSafe](List(genesis))(
+                commonAncestorChild(_, commonAncestors))
                 .findF(
                   b =>
                     dag.childMap

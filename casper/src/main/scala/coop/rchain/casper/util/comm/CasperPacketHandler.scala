@@ -235,12 +235,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                            capserHandlerInternal)
                  case Some(approvedBlock) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
+                   val blockSafe = BlockMessage.BlockMessageSafe
+                     .create(blockMessage)
+                     .getOrElse(sys.error("Approved block is malformed"))
                    for {
-                     _ <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                     casper <- MultiParentCasper.hashSetCasper[F](runtimeManager,
-                                                                  validatorId,
-                                                                  blockMessage,
-                                                                  shardId)
+                     _ <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
+                     casper <- MultiParentCasper
+                                .hashSetCasper[F](runtimeManager, validatorId, blockSafe, shardId)
                      _   <- MultiParentCasperRef[F].set(casper)
                      _   <- Log[F].info("Making a transition to ApprovedBlockRecievedHandler state.")
                      abh = new ApprovedBlockReceivedHandler[F](casper, approvedBlock)
@@ -483,10 +484,13 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  for {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
-                   _            <- BlockStore[F].put(blockMessage.blockHash, blockMessage)
-                   _            <- LastApprovedBlock[F].set(b)
+                   blockSafe = BlockMessage.BlockMessageSafe
+                     .create(blockMessage)
+                     .getOrElse(sys.error("Approved block is malformed"))
+                   _ <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
+                   _ <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
-                              .hashSetCasper[F](runtimeManager, validatorId, blockMessage, shardId)
+                              .hashSetCasper[F](runtimeManager, validatorId, blockSafe, shardId)
                  } yield Option(casper)
                } else
                  Log[F]

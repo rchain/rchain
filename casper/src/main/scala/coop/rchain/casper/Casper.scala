@@ -41,13 +41,13 @@ trait Casper[F[_], A] {
   def createBlock: F[CreateBlockStatus]
 }
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
+trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage.BlockMessageSafe]] {
   def blockDag: F[BlockDag]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float]
-  def lastFinalizedBlock: F[BlockMessage]
+  def lastFinalizedBlock: F[BlockMessage.BlockMessageSafe]
   def storageContents(hash: ByteString): F[String]
   // TODO: Refactor hashSetCasper to take a RuntimeManager[F] just like BlockStore[F]
   def getRuntimeManager: F[Option[RuntimeManager]]
@@ -65,7 +65,7 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
+      genesis: BlockMessage.BlockMessageSafe,
       shardId: String)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
     val genesisBonds          = ProtoUtil.bonds(genesis)
     val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
@@ -99,7 +99,7 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Sync: Monad: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
+      genesis: BlockMessage.BlockMessageSafe,
       initialDag: BlockDag,
       postGenesisStateHash: StateHash,
       shardId: String)(implicit scheduler: Scheduler) =
@@ -119,8 +119,8 @@ sealed abstract class MultiParentCasperInstances {
           Set[StateHash](emptyStateHash, postGenesisStateHash)
         )
 
-      private val blockBuffer: mutable.HashSet[BlockMessage] =
-        new mutable.HashSet[BlockMessage]()
+      private val blockBuffer: mutable.HashSet[BlockMessage.BlockMessageSafe] =
+        new mutable.HashSet[BlockMessage.BlockMessageSafe]()
       private val blockBufferDependencyDagState =
         new AtomicMonadState[F, DoublyLinkedDag[BlockHash]](AtomicAny(BlockDependencyDag.empty))
 
@@ -135,8 +135,9 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockHash]()
 
       // TODO: Extract hardcoded fault tolerance threshold
-      private val faultToleranceThreshold     = 0f
-      private val lastFinalizedBlockContainer = Ref.unsafe[F, BlockMessage](genesis)
+      private val faultToleranceThreshold = 0f
+      private val lastFinalizedBlockContainer =
+        Ref.unsafe[F, BlockMessage.BlockMessageSafe](genesis)
 
       private val processingBlocks = new AtomicSyncVar(Set.empty[BlockHash])
       private val createBlockLock  = new SyncLock
@@ -161,8 +162,17 @@ sealed abstract class MultiParentCasperInstances {
                            s"Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
                          .map(_ => BlockStatus.processing)
                      case Right((_, true)) =>
-                       internalAddBlock(b).flatMap(status =>
-                         Capture[F].capture { processingBlocks.update(_ - b.blockHash); status })
+                       for {
+                         validateFields <- Validate.formatOfFields[F](b)
+                         result <- validateFields match {
+                                    case Left(invalid) => Monad[F].pure[BlockStatus](invalid)
+                                    case Right(blockSafe) =>
+                                      internalAddBlock(blockSafe).flatMap(status =>
+                                        Capture[F].capture {
+                                          processingBlocks.update(_ - b.blockHash); status
+                                      })
+                                  }
+                       } yield result
                      case Left(ex) =>
                        Log[F]
                          .warn(
@@ -171,14 +181,12 @@ sealed abstract class MultiParentCasperInstances {
                    }
         } yield result
 
-      def internalAddBlock(b: BlockMessage): F[BlockStatus] =
+      def internalAddBlock(b: BlockMessage.BlockMessageSafe): F[BlockStatus] =
         for {
-          validFormat <- Validate.formatOfFields[F](b)
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
-          attempt <- if (!validFormat) InvalidUnslashableBlock.pure[F]
-                    else if (!validSig) InvalidUnslashableBlock.pure[F]
+          attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
                     else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
@@ -204,8 +212,9 @@ sealed abstract class MultiParentCasperInstances {
           _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
         } yield attempt
 
-      private def updateLastFinalizedBlock(dag: BlockDag,
-                                           lastFinalizedBlock: BlockMessage): F[BlockMessage] =
+      private def updateLastFinalizedBlock(
+          dag: BlockDag,
+          lastFinalizedBlock: BlockMessage.BlockMessageSafe): F[BlockMessage.BlockMessageSafe] =
         for {
           childrenHashes <- dag.childMap
                              .getOrElse(lastFinalizedBlock.blockHash, Set.empty[BlockHash])
@@ -213,7 +222,7 @@ sealed abstract class MultiParentCasperInstances {
           children <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
           maybeFinalizedChild <- ListContrib.findM(
                                   children,
-                                  (block: BlockMessage) =>
+                                  (block: BlockMessage.BlockMessageSafe) =>
                                     isGreaterThanFaultToleranceThreshold(dag, block))
           newFinalizedBlock <- maybeFinalizedChild match {
                                 case Some(finalizedChild) =>
@@ -222,14 +231,16 @@ sealed abstract class MultiParentCasperInstances {
                               }
         } yield newFinalizedBlock
 
-      private def isGreaterThanFaultToleranceThreshold(dag: BlockDag,
-                                                       block: BlockMessage): F[Boolean] =
+      private def isGreaterThanFaultToleranceThreshold(
+          dag: BlockDag,
+          block: BlockMessage.BlockMessageSafe): F[Boolean] =
         for {
           ft <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
         } yield ft > faultToleranceThreshold
 
       def contains(b: BlockMessage): F[Boolean] =
-        BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
+//        BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
+        BlockStore[F].contains(b.blockHash)
 
       def deploy(d: DeployData): F[Either[Throwable, Unit]] =
         InterpreterUtil.mkTerm(d.term) match {
@@ -249,7 +260,7 @@ sealed abstract class MultiParentCasperInstances {
             Applicative[F].pure(Left(new Exception(s"Error in parsing term: \n$err")))
         }
 
-      def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
+      def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage.BlockMessageSafe]] =
         for {
           lastFinalizedBlock <- lastFinalizedBlockContainer.get
           rankedEstimates    <- Estimator.tips[F](dag, lastFinalizedBlock)
@@ -291,21 +302,22 @@ sealed abstract class MultiParentCasperInstances {
         case None => CreateBlockStatus.readOnlyMode.pure[F]
       }
 
-      def lastFinalizedBlock: F[BlockMessage] = lastFinalizedBlockContainer.get
+      def lastFinalizedBlock: F[BlockMessage.BlockMessageSafe] = lastFinalizedBlockContainer.get
 
       // TODO: Optimize for large number of deploys accumulated over history
-      private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
+      private def remDeploys(dag: BlockDag, p: Seq[BlockMessage.BlockMessageSafe]): F[Seq[Deploy]] =
         for {
           result <- Capture[F].capture { deployHist.clone() }
           _ <- DagOperations
-                .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
+                .bfTraverseF[F, BlockMessage.BlockMessageSafe](p.toList)(
+                  ProtoUtil.unsafeGetParents[F])
                 .foreach(b =>
                   Capture[F].capture {
-                    b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
+                    b.body.deploys.flatMap(_.deploy).foreach(result -= _)
                 })
         } yield result.toSeq
 
-      private def createProposal(p: Seq[BlockMessage],
+      private def createProposal(p: Seq[BlockMessage.BlockMessageSafe],
                                  r: Seq[Deploy],
                                  justifications: Seq[Justification]): F[CreateBlockStatus] =
         for {
@@ -341,14 +353,17 @@ sealed abstract class MultiParentCasperInstances {
                              .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
                            val header = blockHeader(body, p.map(_.blockHash), version, now)
                            val block  = unsignedBlockProto(body, header, justifications, shardId)
-                           CreateBlockStatus.created(block)
+                           val blockSafe = BlockMessage.BlockMessageSafe
+                             .create(block)
+                             .getOrElse(sys.error("Created block is malformed"))
+                           CreateBlockStatus.created(blockSafe)
                          })
                    }
         } yield result
 
       private def updateKnownStateHashes(
           knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
-          p: Seq[BlockMessage],
+          p: Seq[BlockMessage.BlockMessageSafe],
           r: Seq[Deploy]): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
         knownStateHashesContainer
           .modify[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])])] {
@@ -393,7 +408,7 @@ sealed abstract class MultiParentCasperInstances {
        * We want to catch equivocations only after we confirm that the block completing
        * the equivocation is otherwise valid.
        */
-      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
+      private def attemptAdd(b: BlockMessage.BlockMessageSafe): F[BlockStatus] =
         for {
           dag                  <- Capture[F].capture { _blockDag.get }
           postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
@@ -433,7 +448,7 @@ sealed abstract class MultiParentCasperInstances {
         } yield status
 
       // TODO: Handle slashing
-      private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
+      private def addEffects(status: BlockStatus, block: BlockMessage.BlockMessageSafe): F[Unit] =
         status match {
           //Add successful! Send block to peers, log success, try to add other blocks
           case Valid =>
@@ -512,7 +527,8 @@ sealed abstract class MultiParentCasperInstances {
               .buildString(block.blockHash)}: ${ex.getMessage}")
         }
 
-      private def handleMissingDependency(hash: BlockHash, parentBlock: BlockMessage): F[Unit] =
+      private def handleMissingDependency(hash: BlockHash,
+                                          parentBlock: BlockMessage.BlockMessageSafe): F[Unit] =
         for {
           _ <- blockBufferDependencyDagState.modify(
                 blockBufferDependencyDag =>
@@ -521,7 +537,8 @@ sealed abstract class MultiParentCasperInstances {
           _ <- CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
         } yield ()
 
-      private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
+      private def handleInvalidBlockEffect(status: BlockStatus,
+                                           block: BlockMessage.BlockMessageSafe): F[Unit] =
         for {
           _ <- Log[F].warn(
                 s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}.")
@@ -529,7 +546,7 @@ sealed abstract class MultiParentCasperInstances {
           _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
         } yield ()
 
-      private def addToState(block: BlockMessage): F[Unit] =
+      private def addToState(block: BlockMessage.BlockMessageSafe): F[Unit] =
         BlockStore[F].put {
           _blockDag.update(bd => {
             val hash = block.blockHash

@@ -28,11 +28,11 @@ object CommUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
-      b: BlockMessage): F[Unit] = {
+      b: BlockMessage.BlockMessageSafe): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
       _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
-      _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
+      _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b.underlying)} to peers")
     } yield ()
   }
 

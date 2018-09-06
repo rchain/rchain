@@ -23,8 +23,9 @@ object Estimator {
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
     */
-  def tips[F[_]: Monad: BlockStore](blockDag: BlockDag,
-                                    genesis: BlockMessage): F[IndexedSeq[BlockMessage]] = {
+  def tips[F[_]: Monad: BlockStore](
+      blockDag: BlockDag,
+      genesis: BlockMessage.BlockMessageSafe): F[IndexedSeq[BlockMessage.BlockMessageSafe]] = {
     @tailrec
     def sortChildren(blocks: IndexedSeq[BlockHash],
                      childMap: Map[BlockHash, Set[BlockHash]],
@@ -124,7 +125,8 @@ object Estimator {
 
     for {
       scoresMap <- Foldable[List].foldM(blockDag.latestMessages.toList, Map.empty[BlockHash, Int]) {
-                    case (acc, (validator: Validator, latestBlock: BlockMessage)) =>
+                    case (acc,
+                          (validator: Validator, latestBlock: BlockMessage.BlockMessageSafe)) =>
                       for {
                         postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
                                                         acc,

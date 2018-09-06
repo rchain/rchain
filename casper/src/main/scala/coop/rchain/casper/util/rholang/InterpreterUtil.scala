@@ -29,8 +29,8 @@ object InterpreterUtil {
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      genesis: BlockMessage,
+      b: BlockMessage.BlockMessageSafe,
+      genesis: BlockMessage.BlockMessageSafe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
@@ -59,7 +59,7 @@ object InterpreterUtil {
   private def processPossiblePreStateHash[F[_]: Monad: Log: BlockStore](
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager,
-      tsHash: Option[StateHash],
+      tsHash: StateHash,
       internalDeploys: Seq[InternalProcessedDeploy],
       possiblePreStateHash: Either[Throwable, StateHash],
       updatedStateHashes: Set[StateHash])(implicit scheduler: Scheduler)
@@ -95,7 +95,7 @@ object InterpreterUtil {
                   .leftCast[BlockException] -> knownStateHashes).pure[F]
             }
           case Right(computedStateHash) =>
-            if (tsHash.contains(computedStateHash)) {
+            if (tsHash == computedStateHash) {
               // state hash in block matches computed hash!
               (Right(Option(computedStateHash))
                 .leftCast[BlockException] -> (updatedStateHashes + computedStateHash)).pure[F]
@@ -103,15 +103,15 @@ object InterpreterUtil {
               // state hash in block does not match computed hash -- invalid!
               // return no state hash, do not update the state hash set
               Log[F].warn(
-                s"Tuplespace hash ${tsHash.getOrElse(ByteString.EMPTY)} does not match computed hash $computedStateHash.") *> (Right(
+                s"Tuplespace hash $tsHash does not match computed hash $computedStateHash.") *> (Right(
                 none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
             }
         }
     }
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockMessage.BlockMessageSafe],
       deploys: Seq[Deploy],
-      genesis: BlockMessage,
+      genesis: BlockMessage.BlockMessageSafe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
@@ -129,13 +129,14 @@ object InterpreterUtil {
           Left(err) -> updatedStateHashes
       }
 
-  private def computeParentsPostState[F[_]: Monad: BlockStore](parents: Seq[BlockMessage],
-                                                               genesis: BlockMessage,
-                                                               dag: BlockDag,
-                                                               knownStateHashes: Set[StateHash],
-                                                               runtimeManager: RuntimeManager)(
+  private def computeParentsPostState[F[_]: Monad: BlockStore](
+      parents: Seq[BlockMessage.BlockMessageSafe],
+      genesis: BlockMessage.BlockMessageSafe,
+      dag: BlockDag,
+      knownStateHashes: Set[StateHash],
+      runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): F[(Either[Throwable, StateHash], Set[StateHash])] = {
-    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
+    val parentTuplespaces = parents.map(p => p -> ProtoUtil.tuplespace(p))
 
     if (parentTuplespaces.isEmpty) {
       //no parents to base off of, so use default
@@ -160,15 +161,16 @@ object InterpreterUtil {
                   DagOperations.greatestCommonAncestorF[F](gca, parent, genesis, dag)
               }
 
-        gcaStateHash = ProtoUtil.tuplespace(gca).get
+        gcaStateHash = ProtoUtil.tuplespace(gca)
         _ = assert(
           knownStateHashes.contains(gcaStateHash),
           "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
 
         // TODO: Have proper merge of tuplespaces instead of recomputing.
         ancestors <- DagOperations
-                      .bfTraverseF[F, BlockMessage](parentTuplespaces.map(_._1).toList) { block =>
-                        if (block == gca) List.empty[BlockMessage].pure[F]
+                      .bfTraverseF[F, BlockMessage.BlockMessageSafe](
+                        parentTuplespaces.map(_._1).toList) { block =>
+                        if (block == gca) List.empty[BlockMessage.BlockMessageSafe].pure[F]
                         else ProtoUtil.unsafeGetParents[F](block)
                       }
                       .filter(_ != gca) //do not include gca deploys
@@ -189,8 +191,8 @@ object InterpreterUtil {
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
-      b: BlockMessage,
-      genesis: BlockMessage,
+      b: BlockMessage.BlockMessageSafe,
+      genesis: BlockMessage.BlockMessageSafe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
