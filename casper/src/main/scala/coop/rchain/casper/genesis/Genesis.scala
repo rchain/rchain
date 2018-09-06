@@ -56,7 +56,7 @@ object Genesis {
                     wallets: Seq[PreWallet],
                     startHash: StateHash,
                     runtimeManager: RuntimeManager,
-                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage =
+                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage.BlockMessageSafe =
     withContracts(defaultBlessedTerms(timestamp, validators, wallets),
                   initial,
                   startHash,
@@ -65,7 +65,8 @@ object Genesis {
   def withContracts(blessedTerms: List[Deploy],
                     initial: BlockMessage,
                     startHash: StateHash,
-                    runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
+                    runtimeManager: RuntimeManager)(
+      implicit scheduler: Scheduler): BlockMessage.BlockMessageSafe = {
     val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
 
     val stateWithContracts = for {
@@ -83,7 +84,9 @@ object Genesis {
 
     val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+    val block = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+
+    BlockMessage.BlockMessageSafe.create(block).getOrElse(sys.error("Genesis is malformed"))
   }
 
   def withoutContracts(bonds: Map[Array[Byte], Int],
@@ -109,14 +112,14 @@ object Genesis {
   }
 
   //TODO: Decide on version number and shard identifier
-  def fromInputFiles[F[_]: Monad: Capture: Log: Time](
-      maybeBondsPath: Option[String],
-      numValidators: Int,
-      genesisPath: Path,
-      maybeWalletsPath: Option[String],
-      runtimeManager: RuntimeManager,
-      shardId: String,
-      deployTimestamp: Option[Long])(implicit scheduler: Scheduler): F[BlockMessage] =
+  def fromInputFiles[F[_]: Monad: Capture: Log: Time](maybeBondsPath: Option[String],
+                                                      numValidators: Int,
+                                                      genesisPath: Path,
+                                                      maybeWalletsPath: Option[String],
+                                                      runtimeManager: RuntimeManager,
+                                                      shardId: String,
+                                                      deployTimestamp: Option[Long])(
+      implicit scheduler: Scheduler): F[BlockMessage.BlockMessageSafe] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
       _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>

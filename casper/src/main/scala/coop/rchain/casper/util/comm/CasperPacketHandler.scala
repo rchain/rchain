@@ -75,7 +75,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           .flatMap(_.postState.map(_.bonds.map(_.validator).toSet))
           .getOrElse(Set.empty)
         abp <- ApproveBlockProtocol
-                .of[F](genesis,
+                .of[F](genesis.underlying,
                        bondedValidators,
                        conf.requiredSigs,
                        conf.approveGenesisDuration,

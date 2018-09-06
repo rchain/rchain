@@ -80,12 +80,20 @@ object GenerateSafe {
       case (cl @ q"@..$_ final case class $tpname (..$params) extends { ..$_ } with ..$_ { $_ => ..$_ }")
             :: ModuleDef(mods, tmname, template)
             :: Nil =>
-        val safeTpname = TypeName(tpname + "Safe")
-        val safeTmname = safeTpname.toTermName
-        val safeTp     = q"""
-          final case class $safeTpname (..${generateParams(params)}, underlying: $tpname) {
+        val safeTpname      = TypeName(tpname + "Safe")
+        val safeTmname      = safeTpname.toTermName
+        val generatedParams = generateParams(params)
+        val generatedWithMethods = generatedParams.map { param =>
+          val capitalizedName = param.name.toString.capitalize
+          val value           = if (param.tpt.toString.endsWith("Safe")) q"v.underlying" else q"v"
+          val withMethod      = TermName("with" + capitalizedName)
+          q"def $withMethod(v: ${param.tpt}): $safeTpname = copy(${param.name} = v, underlying = underlying.$withMethod($value))"
+        }
+        val safeTp = q"""
+          final case class $safeTpname (..$generatedParams, underlying: $tpname) {
             def toByteString: com.google.protobuf.ByteString = underlying.toByteString
             def toByteArray: Array[Byte] = underlying.toByteArray
+            ..$generatedWithMethods
           }
           """
 
