@@ -469,7 +469,7 @@ If you want to capture the value you matched, you can use the and logcial connec
 
 8) We send the current value on `valueStore` again, allowing other messages to be processed (i.e. releasing the lock), and we send the current value back to the client on the `ack` channel.
 
-11) In concurrently with the `get` contract, we run a contract listening on `set`.
+11) Concurrently with the `get` contract, we run a contract listening on `set`.
 
 12) We block until there's a message on `valueStore`, then read it.  We throw away the message that we read.
 
