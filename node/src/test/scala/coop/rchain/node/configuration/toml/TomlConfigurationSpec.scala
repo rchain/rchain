@@ -17,7 +17,6 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |[server]
       |host = "localhost"
       |port = 10
-      |metrics-port = 11
       |http-port = 12
       |no-upnp = false
       |default-timeout = 1000
@@ -65,7 +64,6 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
     // server
     root.server.flatMap(_.host) shouldEqual Some("localhost")
     root.server.flatMap(_.port) shouldEqual Some(10)
-    root.server.flatMap(_.metricsPort) shouldEqual Some(11)
     root.server.flatMap(_.httpPort) shouldEqual Some(12)
     root.server.flatMap(_.noUpnp) shouldEqual Some(false)
     root.server.flatMap(_.defaultTimeout) shouldEqual Some(1000)
