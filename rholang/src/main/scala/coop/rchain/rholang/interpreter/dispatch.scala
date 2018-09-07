@@ -1,17 +1,17 @@
 package coop.rchain.rholang.interpreter
 
-import cats.Parallel
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.implicits._
 import cats.mtl.FunctorTell
+import cats.{Monad, Parallel}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.ISpace
-import cats.implicits._
-import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.pure.{FISpace, MVarRSpace, PureRSpace}
 
 trait Dispatch[M[_], A, K] {
 
@@ -73,12 +73,12 @@ object RholangOnlyDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace: PureRSpace[M,
-                              Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation] =
+    val pureSpace: FISpace[M,
+                           Channel,
+                           BindPattern,
+                           ListChannelWithRandom,
+                           ListChannelWithRandom,
+                           TaggedContinuation] =
       new PureRSpace(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
@@ -137,19 +137,15 @@ object RholangAndScalaDispatcher {
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace: PureRSpace[M,
-                              Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation] =
-      new PureRSpace(tuplespace)
-    lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
-    lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
-      new RholangAndScalaDispatcher(reducer, dispatchTable)
-    lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    dispatcher
-  }
+      ft: FunctorTell[M, Throwable],
+      m: Monad[M],
+      c: Concurrent[M]): M[Dispatch[M, ListChannelWithRandom, TaggedContinuation]] =
+    MVarRSpace.create(tuplespace).map { pureSpace =>
+      lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
+      lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
+        new RholangAndScalaDispatcher(reducer, dispatchTable)
+      lazy val reducer: Reduce[M] =
+        new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
+      dispatcher
+    }
 }

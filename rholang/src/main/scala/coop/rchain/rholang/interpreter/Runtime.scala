@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -17,6 +18,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.collection.immutable
 
@@ -122,10 +124,12 @@ object Runtime {
       dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
+      RholangAndScalaDispatcher.create(space, dispatchTable, urnMap).unsafeRunSync(Scheduler.global)
 
     lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-      RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
+      RholangAndScalaDispatcher
+        .create(replaySpace, replayDispatchTable, urnMap)
+        .unsafeRunSync(Scheduler.global)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
       (byteName(0), 1, None, 0L),

@@ -7,7 +7,7 @@ import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
 import coop.rchain.rholang.interpreter.errors.ReduceError
-import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.pure.{FISpace, PureRSpace}
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
@@ -22,12 +22,12 @@ trait TuplespaceAlg[F[_]] {
 
 object TuplespaceAlg {
   def rspaceTuplespace[F[_], M[_]](
-      pureRSpace: PureRSpace[F,
-                             Channel,
-                             BindPattern,
-                             ListChannelWithRandom,
-                             ListChannelWithRandom,
-                             TaggedContinuation],
+      pureRSpace: FISpace[F,
+                          Channel,
+                          BindPattern,
+                          ListChannelWithRandom,
+                          ListChannelWithRandom,
+                          TaggedContinuation],
       dispatcher: => Dispatch[F, ListChannelWithRandom, TaggedContinuation])(
       implicit F: Sync[F],
       P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
