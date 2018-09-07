@@ -868,6 +868,6 @@ This is just like a web browser being willing to run the JavaScript code it gets
 
 ## Conclusion
 
-RChain is a language designed for use on a blockchain, but we have not mentioned anything about nodes, namespaces, wallets, Rev and phlogiston, network structure, or Casper.  A forthcoming document will address all these issues and more.
+Rholang is a language designed for use on a blockchain, but we have not mentioned anything about nodes, namespaces, wallets, Rev and phlogiston, network structure, or Casper.  A forthcoming document will address all these issues and more.
 
 We hope that the foregoing examples spark a desire to write more code and demonstrate the ease of expressing concurrent designs.
