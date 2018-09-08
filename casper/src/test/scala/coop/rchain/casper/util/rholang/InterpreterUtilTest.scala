@@ -537,7 +537,7 @@ class InterpreterUtilTest
       val (Right((computedTsHash, processedDeploys)), _) =
         computeDeploysCheckpoint[Id](Seq.empty,
                                      deploys,
-                                     BlockMessage(),
+                                     BlockUtil.emptySafeBlock,
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
@@ -566,7 +566,7 @@ class InterpreterUtilTest
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty,
                                    deploys,
-                                   BlockMessage(),
+                                   BlockUtil.emptySafeBlock,
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
@@ -607,13 +607,12 @@ class InterpreterUtilTest
           """
             |@"store"!("2")
           """.stripMargin
-        ).map(s =>
-          ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
+        ).map(s => ProtoUtil.termDeployNow(InterpreterUtil.mkTerm(s).right.get))
 
       val (Right((computedTsHash, processedDeploys)), _) =
         computeDeploysCheckpoint[Id](Seq.empty,
                                      deploys,
-                                     BlockMessage(),
+                                     BlockUtil.emptySafeBlock,
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
