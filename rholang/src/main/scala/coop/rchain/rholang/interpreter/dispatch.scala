@@ -140,7 +140,14 @@ object RholangAndScalaDispatcher {
       ft: FunctorTell[M, Throwable],
       m: Monad[M],
       c: Concurrent[M]): M[Dispatch[M, ListChannelWithRandom, TaggedContinuation]] =
-    MVarRSpace.create(tuplespace).map { pureSpace =>
+//    MVarRSpace.create(tuplespace).map { pureSpace =>
+    s.delay {
+      val pureSpace = new PureRSpace[M,
+                                     Channel,
+                                     BindPattern,
+                                     ListChannelWithRandom,
+                                     ListChannelWithRandom,
+                                     TaggedContinuation](tuplespace)
       lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
       lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
         new RholangAndScalaDispatcher(reducer, dispatchTable)

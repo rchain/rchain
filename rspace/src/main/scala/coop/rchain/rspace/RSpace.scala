@@ -46,13 +46,12 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         throw new IllegalArgumentException(msg)
       }
 
-      store.withTxn(store.createTxnWrite()) { txn =>
-        logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
-                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+      logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
+                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+      val consumeRef = Consume.create(channels, patterns, continuation, persist)
 
-        val consumeRef = Consume.create(channels, patterns, continuation, persist)
+      val options: Option[Seq[DataCandidate[C, R]]] = store.withTxn(store.createTxnRead()) { txn =>
         eventLog.update(consumeRef +: _)
-
         /*
          * Here, we create a cache of the data at each channel as `channelToIndexedData`
          * which is used for finding matches.  When a speculative match is found, we can
@@ -65,22 +64,26 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         val channelToIndexedData = channels.map { (c: C) =>
           c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
         }.toMap
+        extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+      }
 
-        val options: Option[Seq[DataCandidate[C, R]]] =
-          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-
-        options match {
-          case None =>
+      options match {
+        case None =>
+          store.withTxn(store.createTxnWrite()) { txn =>
             store.putWaitingContinuation(
               txn,
               channels,
               WaitingContinuation(patterns, continuation, persist, consumeRef))
-            for (channel <- channels) store.addJoin(txn, channel, channels)
+            for (channel <- channels) {
+              store.addJoin(txn, channel, channels)
+            }
             logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
             None
-          case Some(dataCandidates) =>
+          }
+        case Some(dataCandidates) =>
+          store.withTxn(store.createTxnWrite()) { txn =>
             consumeCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
@@ -96,87 +99,99 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
               }
             logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
             Some((continuation, dataCandidates.map(_.datum.a)))
-        }
+          }
       }
     }
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
+      val groupedChannels: Seq[Seq[C]] = store.withTxn(store.createTxnRead()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
         logger.debug(s"""|produce: searching for matching continuations
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
+        groupedChannels
+      }
+      val produceRef = Produce.create(channel, data, persist)
+      eventLog.update(produceRef +: _)
 
-        val produceRef = Produce.create(channel, data, persist)
-        eventLog.update(produceRef +: _)
-
-        /*
-         * Find produce candidate
-         *
-         * Could also be implemented with a lazy `foldRight`.
-         */
-        @tailrec
-        def extractProduceCandidate(groupedChannels: Seq[Seq[C]],
-                                    batChannel: C,
-                                    data: Datum[A]): Option[ProduceCandidate[C, P, R, K]] =
-          groupedChannels match {
-            case Nil => None
-            case channels :: remaining =>
-              val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
+      /*
+       * Find produce candidate
+       *
+       * Could also be implemented with a lazy `foldRight`.
+       */
+      @tailrec
+      def extractProduceCandidate(groupedChannels: Seq[Seq[C]],
+                                  batChannel: C,
+                                  data: Datum[A]): Option[ProduceCandidate[C, P, R, K]] =
+        groupedChannels match {
+          case Nil => None
+          case channels :: remaining =>
+            val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
+              store.withTxn(store.createTxnRead()) { txn =>
                 Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
-              /*
-               * Here, we create a cache of the data at each channel as `channelToIndexedData`
-               * which is used for finding matches.  When a speculative match is found, we can
-               * remove the matching datum from the remaining data candidates in the cache.
-               *
-               * Put another way, this allows us to speculatively remove matching data without
-               * affecting the actual store contents.
-               *
-               * In this version, we also add the produced data directly to this cache.
-               */
-              val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
-                val as = Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-                c -> {
-                  if (c == batChannel) (data, -1) +: as else as
-                }
-              }.toMap
-              extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
-                case None             => extractProduceCandidate(remaining, batChannel, data)
-                case produceCandidate => produceCandidate
               }
-          }
+            /*
+             * Here, we create a cache of the data at each channel as `channelToIndexedData`
+             * which is used for finding matches.  When a speculative match is found, we can
+             * remove the matching datum from the remaining data candidates in the cache.
+             *
+             * Put another way, this allows us to speculatively remove matching data without
+             * affecting the actual store contents.
+             *
+             * In this version, we also add the produced data directly to this cache.
+             */
+            val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
+              val as = store.withTxn(store.createTxnRead()) { txn =>
+                Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+              }
+              c -> {
+                if (c == batChannel) (data, -1) +: as else as
+              }
+            }.toMap
+            extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
+              case None             => extractProduceCandidate(remaining, batChannel, data)
+              case produceCandidate => produceCandidate
+            }
+        }
 
-        extractProduceCandidate(groupedChannels, channel, Datum(data, persist, produceRef)) match {
-          case Some(
-              ProduceCandidate(channels,
-                               WaitingContinuation(_, continuation, persistK, consumeRef),
-                               continuationIndex,
-                               dataCandidates)) =>
-            produceCommCounter.increment()
+      extractProduceCandidate(groupedChannels, channel, Datum(data, persist, produceRef)) match {
+        case Some(
+            ProduceCandidate(channels,
+                             WaitingContinuation(_, continuation, persistK, consumeRef),
+                             continuationIndex,
+                             dataCandidates)) =>
+          produceCommCounter.increment()
 
-            eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
+          eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
-            if (!persistK) {
+          if (!persistK) {
+            store.withTxn(store.createTxnWrite()) { txn =>
               store.removeWaitingContinuation(txn, channels, continuationIndex)
             }
-            dataCandidates
-              .sortBy(_.datumIndex)(Ordering[Int].reverse)
-              .foreach {
-                case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                  if (!persistData && dataIndex >= 0) {
+          }
+          dataCandidates
+            .sortBy(_.datumIndex)(Ordering[Int].reverse)
+            .foreach {
+              case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                if (!persistData && dataIndex >= 0) {
+                  store.withTxn(store.createTxnWrite()) { txn =>
                     store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                   }
+                }
+                store.withTxn(store.createTxnRead()) { txn =>
                   store.removeJoin(txn, candidateChannel, channels)
-              }
-            logger.debug(s"produce: matching continuation found at <channels: $channels>")
-            Some(continuation, dataCandidates.map(_.datum.a))
-          case None =>
-            logger.debug(s"produce: no matching continuation found")
+                }
+            }
+          logger.debug(s"produce: matching continuation found at <channels: $channels>")
+          Some(continuation, dataCandidates.map(_.datum.a))
+        case None =>
+          logger.debug(s"produce: no matching continuation found")
+          store.withTxn(store.createTxnWrite()) { txn =>
             store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-            logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-            None
-        }
+          }
+          logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
+          None
       }
     }
 
