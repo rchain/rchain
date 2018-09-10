@@ -13,8 +13,7 @@ import scodec.bits.ByteVector
 object ArbitraryInstances {
 
   val arbNonEmptyString =
-    //Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
-    Arbitrary(Gen.nonEmptyListOf[Char](Gen.choose[Char](0x31.toChar, 0x7e.toChar)).map(_.mkString))
+    Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
   implicit val arbitraryPattern: Arbitrary[Pattern] = {
     val genWildcard: Gen[Pattern] = Gen.const(Wildcard)
