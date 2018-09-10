@@ -18,6 +18,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
+import coop.rchain.shared.ByteStringOps._
 
 import scala.concurrent.duration._
 
@@ -73,7 +74,6 @@ object HandleMessages {
         _ <- ConnectionsCell[F].modify(_.removeConn[F](sender))
         _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       } yield handledWithoutMessage)
-
   }
 
   def handlePacket[F[_]: Monad: Time: TransportLayer: ErrorHandler: Log: PacketHandler: RPConfAsk](
@@ -87,16 +87,23 @@ object HandleMessages {
         _     <- ErrorHandler[F].raiseError[Unit](error)
       } yield notHandled(error)
 
-    maybePacket.fold(handleNone)(
-      p =>
-        for {
-          local               <- RPConfAsk[F].reader(_.local)
-          maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
-          maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
-            ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
-        } yield
-          maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
-            handledWithMessage(m)))
+    def handleCompression(p: Packet): Option[Packet] =
+      if (p.compressed)
+        p.content.decompress.map(decompressedContent =>
+          Packet(p.typeId, compressed = false, decompressedContent))
+      else
+        Some(p)
+
+    maybePacket.flatMap(handleCompression).fold(handleNone) { p =>
+      for {
+        local               <- RPConfAsk[F].reader(_.local)
+        maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
+        maybeResponsePacketMessage = maybeResponsePacket.map(pr =>
+          ProtocolHelper.upstreamMessage(local, AnyProto.pack(pr)))
+      } yield
+        maybeResponsePacketMessage.fold(notHandled(noResponseForRequest))(m =>
+          handledWithMessage(m))
+    }
   }
 
   def handleProtocolHandshake[

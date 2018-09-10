@@ -6,9 +6,9 @@ import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
+import coop.rchain.shared.ByteStringOps._
 
 object CommMessages {
-
   def protocolHandshake(src: PeerNode): routing.Protocol = {
     val ph = ProtocolHandshake()
     ProtocolHelper.upstreamMessage(src, AnyProto.pack(ph))
@@ -45,7 +45,7 @@ object CommMessages {
   }
 
   def packet(src: PeerNode, pType: PacketType, content: ByteString): routing.Protocol = {
-    val p = Packet(pType.id, content)
+    val p = toPacket(pType, content)
     ProtocolHelper.upstreamMessage(src, AnyProto.pack(p))
   }
 
@@ -53,6 +53,13 @@ object CommMessages {
     case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Packet))
     case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
   }
+
+  def toPacket(pType: PacketType, content: ByteString): Packet =
+    // Compressed data can be bigger than uncompressed data if input is too small
+    if (content.size() > 1000)
+      Packet(pType.id, compressed = true, content.compress)
+    else
+      Packet(pType.id, compressed = false, content)
 
   def disconnect(src: PeerNode): routing.Protocol = {
     val d = Disconnect()
