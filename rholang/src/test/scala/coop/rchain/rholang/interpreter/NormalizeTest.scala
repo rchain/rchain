@@ -135,21 +135,23 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     val mapData = new ListKeyValuePair()
     mapData.add(
       new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
-    mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
-    val map = new PCollect(new CollectMap(mapData))
+    mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
     result.par should be(
       inputs.par.prepend(
-        ParMap(
-          List[(Par, Par)]((GInt(7), GString("Seven")),
-                           (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))),
-          locallyFree = BitSet(0, 1),
-          connectiveUsed = false
-        ),
-        0
+        ParMap(List[(Par, Par)]((GInt(7), GString("Seven")), (EVar(BoundVar(1)), EEvalBody(ChanVar(FreeVar(1))))),
+          locallyFree = BitSet(1),
+          connectiveUsed = true,
+          remainder = Some(Var(FreeVar(0)))),
+        depth = 0
       ))
-    result.knownFree should be(inputs.knownFree)
+    val newBindings = List(
+      ("Z", ProcSort, 0, 0),
+      ("Q", NameSort, 0, 0)
+    )
+    result.knownFree should be(inputs.knownFree.newBindings(newBindings)._1)
   }
 }
 
@@ -258,18 +260,14 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val pPercentPercent =
       new PPercentPercent(
         new PGround(new GroundString("Hi ${name}")),
-        new PCollect(new CollectMap(mapData))
+        new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
     result.par should be(
       inputs.par.prepend(
         EPercentPercent(
           GString("Hi ${name}"),
-          ParMap(
-            seq = List[(Par, Par)]((GString("name"), GString("Alice"))),
-            connectiveUsed = false,
-            locallyFree = BitSet()
-          )
+          ParMap(seq = List[(Par, Par)]((GString("name"), GString("Alice"))))
         )
       , 0))
     result.knownFree should be(inputs.knownFree)

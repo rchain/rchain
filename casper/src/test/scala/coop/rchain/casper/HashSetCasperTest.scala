@@ -2,11 +2,13 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.Id
+import cats.{Id, Monad}
 import cats.data.EitherT
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.helper.{
@@ -17,14 +19,21 @@ import coop.rchain.casper.helper.{
 }
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.shared.{Log, Time}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -55,29 +64,6 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     logEff.infos.size should be(1)
     logEff.infos.head.contains("Received Deploy") should be(true)
     node.tearDown()
-  }
-
-  it should "not allow multiple threads to propose a block at the same time" in {
-    val scheduler            = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
-
-    //deploy runs forever, so processing it cannot be completed
-    val deploy =
-      ProtoUtil.sourceDeploy("@0!!(Nil) | for(_ <= @0){ Nil }", System.currentTimeMillis())
-    val testProgram = for {
-      casper <- casperEff
-      d      <- casper.deploy(deploy)
-      _      = assert(d.isRight)
-      //In the race, one thread starts processing (can never complete) and the other sees
-      //a proposal is already in progress and so returns None immediately.
-      result <- EitherT(Task.race(casper.createBlock.value, casper.createBlock.value).map(_.merge))
-    } yield result
-    //have a timeout so that the test will either pass or fail in finite time
-    val raceResult: CreateBlockStatus =
-      testProgram.value.map(_.right.get).timeout(5.seconds).unsafeRunSync(scheduler)
-
-    raceResult shouldBe LockUnavailable
-    cleanUp()
   }
 
   it should "not allow multiple threads to process the same block" in {

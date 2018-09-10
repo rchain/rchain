@@ -138,7 +138,7 @@ token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 CollectList.   Collection ::= "[" [Proc] ProcRemainder "]" ;
 CollectTuple.  Collection ::= Tuple;
 CollectSet.    Collection ::= "Set" "(" [Proc] ProcRemainder")" ;
-CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
+CollectMap.    Collection ::= "{" [KeyValuePair] ProcRemainder"}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
 
