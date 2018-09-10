@@ -96,7 +96,7 @@ object RholangCLI {
           case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
-            Console.err.print(ie.toString)
+            ie.printStackTrace(System.err)
           case Left(th) =>
             th.printStackTrace(Console.err)
         }
