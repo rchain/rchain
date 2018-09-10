@@ -84,7 +84,7 @@ object RholangCLI {
       Console.println("Errors received during evaluation:")
       for {
         error <- errors
-      } Console.println(error.toString())
+      } Console.println(error.getMessage)
     }
 
   @tailrec
@@ -96,7 +96,7 @@ object RholangCLI {
           case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
-            Console.err.print(ie.toString)
+            Console.err.print(ie.getMessage)
           case Left(th) =>
             th.printStackTrace(Console.err)
         }
@@ -119,7 +119,7 @@ object RholangCLI {
     Interpreter
       .buildNormalizedTerm(source)
       .runAttempt
-      .fold(_.printStackTrace(System.err), processTerm)
+      .fold(_.printStackTrace(Console.err), processTerm)
   }
 
   @tailrec
