@@ -60,9 +60,10 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def createBlock[F[_]: Sync: Monad: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
+  def createBlock[F[_]: Sync: MultiParentCasperRef: Log]: F[DeployServiceResponse] =
     MultiParentCasperRef.withCasper[F, DeployServiceResponse](
       casper =>
+        // TODO: Use Bracket: See https://github.com/rchain/rchain/pull/1436#discussion_r215520914
         Monad[F].ifM(Sync[F].delay { createBlockLock.tryLock() })(
           for {
             maybeBlock <- casper.createBlock

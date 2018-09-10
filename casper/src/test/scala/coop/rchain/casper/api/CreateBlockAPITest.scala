@@ -26,7 +26,6 @@ import org.scalatest.{FlatSpec, Matchers}
 class CreateBlockAPITest extends FlatSpec with Matchers {
   import HashSetCasperTest._
   import CasperEffect.Effect
-  implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)

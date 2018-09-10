@@ -18,7 +18,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 private[api] class DeployGrpcService[
-    F[_]: Sync: Monad: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
+    F[_]: Sync: Capture: MultiParentCasperRef: Log: Futurable: SafetyOracle: BlockStore](
     implicit ev: ExecutionContext)
     extends DeployServiceGrpc.DeployService {
   override def doDeploy(d: DeployData): Future[DeployServiceResponse] =
