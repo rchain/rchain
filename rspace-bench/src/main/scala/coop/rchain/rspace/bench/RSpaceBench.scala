@@ -1,31 +1,26 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rspace.history.InMemoryTrieStore
 import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
 
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.util._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util.{getK, runK}
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
-import monix.execution.{CancelableFuture, Scheduler}
-import coop.rchain.shared.PathOps._
-
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
-
+import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
-import java.util.concurrent.TimeUnit;
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: ISpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
+  var space: FreudianSpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)

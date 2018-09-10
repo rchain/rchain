@@ -5,7 +5,7 @@ import coop.rchain.rspace._
 
 import scala.collection.immutable.Seq
 
-class PureRSpace[F[_], C, P, A, R, K](space: ISpace[C, P, A, R, K]) {
+class PureRSpace[F[_], C, P, A, R, K](space: FreudianSpace[C, P, A, R, K]) {
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, A, R],

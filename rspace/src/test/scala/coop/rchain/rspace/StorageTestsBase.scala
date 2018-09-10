@@ -13,7 +13,7 @@ import scodec.Codec
 
 trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = ISpace[C, P, A, A, K]
+  type T = FreudianSpace[C, P, A, A, K]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
