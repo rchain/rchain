@@ -38,11 +38,11 @@ trait StorageActionsTests
 
   type TestGNAT = GNAT[String, Pattern, String, StringsCaptor]
 
-  case class State(
-      checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
-      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
-  )
+//  case class State(
+//      checkpoint: Blake2b256Hash,
+//      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
+//      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
+//  )
 
   "produce" should
     "persist a piece of data in the store" in withTestSpace { space =>
@@ -1044,80 +1044,80 @@ trait StorageActionsTests
     checkpoint2.root shouldBe emptyCheckpoint.root
   }
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)],
-                            reportName: String,
-                            differenceReport: Boolean = false): Boolean = {
-    final case class SetRow[P, A, K](data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
-
-    def convertMap(m: Map[Seq[String], Row[Pattern, String, StringsCaptor]])
-      : Map[Seq[String], SetRow[Pattern, String, StringsCaptor]] =
-      m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
-
-    val tests: Seq[Any] = indexedStates
-      .map {
-        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
-
-          val expectedContents = convertMap(rawExpectedContents)
-          val actualContents   = convertMap(space.store.toMap)
-
-          val contentsTest = expectedContents == actualContents
-
-          val actualJoins = space.store.joinMap
-
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
-                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          val result = contentsTest && joinsTest
-          if (!result) {
-            if (!contentsTest) {
-              logger.error(s"$num: store had unexpected contents ($reportName)")
-            }
-
-            if (!joinsTest) {
-              logger.error(s"$num: store had unexpected joins ($reportName)")
-            }
-
-            if (differenceReport) {
-              logger.error(s"difference report ($reportName)")
-              for ((expectedChannels, expectedRow) <- expectedContents) {
-                val actualRow = actualContents.get(expectedChannels)
-
-                actualRow match {
-                  case Some(row) =>
-                    if (row != expectedRow) {
-                      logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
-                    }
-                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
-                }
-              }
-
-              for ((actualChannels, actualRow) <- actualContents) {
-                val expectedRow = expectedContents.get(actualChannels)
-
-                expectedRow match {
-                  case Some(row) =>
-                    if (row != actualRow) {
-                      logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
-                    }
-                  case None => logger.error(s"key [$actualChannels] not found in expected records")
-                }
-              }
-            }
-          }
-          result
-      }
-    !tests.contains(false)
-  }
+//  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
+//                            indexedStates: Seq[(State, Int)],
+//                            reportName: String,
+//                            differenceReport: Boolean = false): Boolean = {
+//    final case class SetRow[P, A, K](data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
+//
+//    def convertMap(m: Map[Seq[String], Row[Pattern, String, StringsCaptor]])
+//      : Map[Seq[String], SetRow[Pattern, String, StringsCaptor]] =
+//      m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
+//
+//    val tests: Seq[Any] = indexedStates
+//      .map {
+//        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
+//          space.reset(checkpoint)
+//          val num = "%02d".format(chunkNo)
+//
+//          val expectedContents = convertMap(rawExpectedContents)
+//          val actualContents   = convertMap(space.store.toMap)
+//
+//          val contentsTest = expectedContents == actualContents
+//
+//          val actualJoins = space.store.joinMap
+//
+//          val joinsTest =
+//            expectedJoins.forall {
+//              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
+//                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
+//                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
+//                expected.equals(actual)
+//            }
+//
+//          val result = contentsTest && joinsTest
+//          if (!result) {
+//            if (!contentsTest) {
+//              logger.error(s"$num: store had unexpected contents ($reportName)")
+//            }
+//
+//            if (!joinsTest) {
+//              logger.error(s"$num: store had unexpected joins ($reportName)")
+//            }
+//
+//            if (differenceReport) {
+//              logger.error(s"difference report ($reportName)")
+//              for ((expectedChannels, expectedRow) <- expectedContents) {
+//                val actualRow = actualContents.get(expectedChannels)
+//
+//                actualRow match {
+//                  case Some(row) =>
+//                    if (row != expectedRow) {
+//                      logger.error(
+//                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+//                    }
+//                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+//                }
+//              }
+//
+//              for ((actualChannels, actualRow) <- actualContents) {
+//                val expectedRow = expectedContents.get(actualChannels)
+//
+//                expectedRow match {
+//                  case Some(row) =>
+//                    if (row != actualRow) {
+//                      logger.error(
+//                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+//                    }
+//                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+//                }
+//              }
+//            }
+//          }
+//          result
+//      }
+//    !tests.contains(false)
+//  }
 
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(

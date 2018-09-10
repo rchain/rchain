@@ -2,6 +2,8 @@ package coop.rchain.rspace
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
+import com.google.common.collect.HashMultiset
+import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
@@ -9,11 +11,18 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+import scala.collection.immutable.{Seq, Set}
 import scodec.Codec
 
 trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
 
   type T = ISpace[C, P, A, A, K]
+
+  case class State(
+      checkpoint: Blake2b256Hash,
+      contents: Map[Seq[C], Row[P, A, K]],
+      joins: Map[Blake2b256Hash, Seq[Seq[C]]]
+  )
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -25,6 +34,80 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
   def withTestSpace[S](f: T => S): S
+
+  def validateIndexedStates(space: T,
+                            indexedStates: Seq[(State, Int)],
+                            reportName: String,
+                            differenceReport: Boolean = false): Boolean = {
+    final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
+
+    def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
+      m.map { case (channels, row) => channels -> SetRow(row.data.toSet, row.wks.toSet) }
+
+    val tests: Seq[Any] = indexedStates
+      .map {
+        case (State(checkpoint, rawExpectedContents, expectedJoins), chunkNo) =>
+          space.reset(checkpoint)
+          val num = "%02d".format(chunkNo)
+
+          val expectedContents = convertMap(rawExpectedContents)
+          val actualContents   = convertMap(space.store.toMap)
+
+          val contentsTest = expectedContents == actualContents
+
+          val actualJoins = space.store.joinMap
+
+          val joinsTest =
+            expectedJoins.forall {
+              case (hash: Blake2b256Hash, expecteds: Seq[Seq[C]]) =>
+                val expected = HashMultiset.create[Seq[C]](expecteds.asJava)
+                val actual   = HashMultiset.create[Seq[C]](actualJoins(hash).asJava)
+                expected.equals(actual)
+            }
+
+          val result = contentsTest && joinsTest
+          if (!result) {
+            if (!contentsTest) {
+              logger.error(s"$num: store had unexpected contents ($reportName)")
+            }
+
+            if (!joinsTest) {
+              logger.error(s"$num: store had unexpected joins ($reportName)")
+            }
+
+            if (differenceReport) {
+              logger.error(s"difference report ($reportName)")
+              for ((expectedChannels, expectedRow) <- expectedContents) {
+                val actualRow = actualContents.get(expectedChannels)
+
+                actualRow match {
+                  case Some(row) =>
+                    if (row != expectedRow) {
+                      logger.error(
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                    }
+                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+                }
+              }
+
+              for ((actualChannels, actualRow) <- actualContents) {
+                val expectedRow = expectedContents.get(actualChannels)
+
+                expectedRow match {
+                  case Some(row) =>
+                    if (row != actualRow) {
+                      logger.error(
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                    }
+                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+                }
+              }
+            }
+          }
+          result
+      }
+    !tests.contains(false)
+  }
 }
 
 class InMemoryStoreTestsBase
