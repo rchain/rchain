@@ -41,7 +41,7 @@ object TestSetUtil {
       implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
     val rand              = Blake2b512Random(128)
-    val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.MAX_VALUE)
     eval_term(LinkedList.term, runtime)(implicitly, rand.splitShort(0), costAccountingAlg)
     eval_term(TestSet.term, runtime)(implicitly, rand.splitShort(1), costAccountingAlg)
 

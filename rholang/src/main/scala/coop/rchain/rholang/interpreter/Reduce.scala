@@ -219,7 +219,6 @@ object Reduce {
     override def inj(par: Par)(implicit rand: Blake2b512Random,
                                costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _ <- costAccountingAlg.setCost(CostAccount.zero)
         _ <- eval(par)(Env[Par](), rand, costAccountingAlg)
       } yield ()
 
@@ -387,10 +386,11 @@ object Reduce {
                                                        1,
                                                        env,
                                                        costAccountingAlg)
-                (cost, matchResult) = SpatialMatcher
-                  .spatialMatch(target, pattern)
-                  .runWithCost
-                _ <- costAccountingAlg.modify(_.charge(cost))
+                phloLeft <- costAccountingAlg.getCost()
+                result <- Sync[M].fromEither(
+                           SpatialMatcher.spatialMatch(target, pattern).runWithCost(phloLeft))
+                (phloRemaining, matchResult) = result
+                _                            <- costAccountingAlg.setCost(phloRemaining)
                 res <- matchResult match {
                         case None =>
                           Applicative[M].pure(Left((target, caseRem)))
@@ -651,11 +651,14 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
-            (cost, matchResult) = SpatialMatcher
-              .spatialMatch(substTarget, substPattern)
-              .runWithCost
-
-            _ <- costAccountingAlg.modify(_.charge(cost))
+            phloLeft     <- costAccountingAlg.getCost()
+            result <- Sync[M].fromEither(
+                       SpatialMatcher
+                         .spatialMatch(substTarget, substPattern)
+                         .runWithCost(phloLeft))
+            // phlo represents phlo left after running the spatial matcher
+            (phlo, matchResult) = result
+            _                   <- costAccountingAlg.setCost(phlo)
           } yield GBool(matchResult.isDefined)
 
         case EPercentPercentBody(EPercentPercent(p1, p2)) =>

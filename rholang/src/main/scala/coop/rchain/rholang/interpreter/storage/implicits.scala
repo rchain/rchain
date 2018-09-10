@@ -32,7 +32,9 @@ object implicits {
       def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] = {
         val (cost, resultMatch) = SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost
+          .runWithCost()
+          .right
+          .get //FIXME
 
         resultMatch
           .map {

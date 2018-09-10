@@ -93,6 +93,7 @@ object errors {
     override def toString: String =
       s"Error: Method `$method` expects $expected Par argument(s), but got $actual argument(s)."
   }
+  final case class OutOfPhloError() extends InternalError
   final case class OperatorNotDefined(op: String, otherType: String) extends InterpreterError {
     override def toString: String =
       s"Error: Operator `$op` is not defined on $otherType."
