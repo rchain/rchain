@@ -76,9 +76,10 @@ object errors {
       s"Top level free variables are not allowed: $freeVars."
   }
   final case class SubstituteError(override val toString: String) extends InterpreterError
-  final case class UnrecognizedInterpreterError(throwable: Throwable)
-      extends RuntimeException(throwable)
-      with InterpreterError
+  final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError {
+    override def getMessage: String = throwable.getMessage
+    override def toString: String   = throwable.getLocalizedMessage
+  }
   final case class SortMatchError(override val toString: String) extends InterpreterError
   final case class ReduceError(override val toString: String)    extends InterpreterError
   final case class MethodNotDefined(method: String, otherType: String) extends InterpreterError {
