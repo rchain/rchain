@@ -115,14 +115,9 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
           (GInt(2), GInt(1)),
           (GInt(1), GInt(1))
-        ),
-        locallyFree = BitSet(),
-        connectiveUsed = false
-      )
+        ))
     val sortedParGround: Par =
-      ParMap(Seq[(Par, Par)]((GInt(1), GInt(1)), (GInt(2), GInt(1))),
-             locallyFree = BitSet(),
-             connectiveUsed = false)
+      ParMap(Seq[(Par, Par)]((GInt(1), GInt(1)), (GInt(2), GInt(1))))
 
     val result = Sortable.sortMatch(parGround)
     result.term should be(sortedParGround)
