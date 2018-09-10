@@ -77,8 +77,7 @@ object errors {
   }
   final case class SubstituteError(override val toString: String) extends InterpreterError
   final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError {
-    override def getMessage: String = throwable.getMessage
-    override def toString: String   = throwable.getLocalizedMessage
+    override def toString: String   = s"UnrecognizedInterpreterError(${throwable.getMessage})"
   }
   final case class SortMatchError(override val toString: String) extends InterpreterError
   final case class ReduceError(override val toString: String)    extends InterpreterError
