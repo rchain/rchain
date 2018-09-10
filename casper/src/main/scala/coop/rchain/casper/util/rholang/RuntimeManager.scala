@@ -98,7 +98,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
-    assert(data.length == 1, "Data length for bonds map was not 1.")
+    assert(data.length == 1, s"Data length ${data.length} for bonds map was not 1.")
     val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
     as.channels.head match {
       case Channel(Quote(p)) =>
