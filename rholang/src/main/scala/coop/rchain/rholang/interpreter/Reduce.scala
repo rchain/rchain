@@ -698,7 +698,7 @@ object Reduce {
             v1 <- evalSingleExpr(p1)
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
-                       case (GString(lhs), EMapBody(ParMap(rhs, _, _))) =>
+                       case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
                          for {
                            result <- rhs.iterator
                                       .map {
@@ -948,13 +948,15 @@ object Reduce {
                   locallyFreeUnion(base.locallyFree, other.locallyFree),
                   None
                 )))
-          case (EMapBody(base @ ParMap(baseMap, _, _)), EMapBody(other @ ParMap(otherMap, _, _))) =>
+          case (EMapBody(base @ ParMap(baseMap, _, _, _)),
+                EMapBody(other @ ParMap(otherMap, _, _, _))) =>
             costAccountingAlg.charge(ADD_COST * baseMap.size) *>
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap((baseMap ++ otherMap.sortedMap).toSeq,
                          base.connectiveUsed || other.connectiveUsed,
-                         locallyFreeUnion(base.locallyFree, other.locallyFree))
+                         locallyFreeUnion(base.locallyFree, other.locallyFree),
+                         None)
                 )
               )
           case (other, _) =>
@@ -990,7 +992,7 @@ object Reduce {
                          base.connectiveUsed || other.connectiveUsed,
                          locallyFreeUnion(base.locallyFree, other.locallyFree),
                          None)))
-          case (EMapBody(ParMap(basePs, _, _)), EMapBody(ParMap(otherPs, _, _))) =>
+          case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
             val newMap = basePs -- otherPs.keys
             costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
               Applicative[M].pure[Expr](
@@ -1051,12 +1053,13 @@ object Reduce {
                        base.connectiveUsed || par.connectiveUsed,
                        base.locallyFree.map(b => b | par.locallyFree),
                        None)))
-          case EMapBody(base @ ParMap(basePs, _, _)) =>
+          case EMapBody(base @ ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
               EMapBody(
                 ParMap(basePs - par,
                        base.connectiveUsed || par.connectiveUsed,
-                       base.locallyFree.map(b => b | par.locallyFree))))
+                       base.locallyFree.map(b => b | par.locallyFree),
+                       None)))
           case other =>
             s.raiseError(MethodNotDefined("delete", other.typ))
         }
@@ -1079,7 +1082,7 @@ object Reduce {
         baseExpr.exprInstance match {
           case ESetBody(ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](GBool(basePs.contains(par)))
           case other =>
             s.raiseError(MethodNotDefined("contains", other.typ))
@@ -1101,7 +1104,7 @@ object Reduce {
     private[this] val get: Method = new Method() {
       def get(baseExpr: Expr, key: Par): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, VectorPar()))
           case other =>
             s.raiseError(MethodNotDefined("get", other.typ))
@@ -1123,7 +1126,7 @@ object Reduce {
     private[this] val getOrElse: Method = new Method {
       def getOrElse(baseExpr: Expr, key: Par, default: Par): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](basePs.getOrElse(key, default))
           case other =>
             s.raiseError(MethodNotDefined("getOrElse", other.typ))
@@ -1146,7 +1149,7 @@ object Reduce {
     private[this] val set: Method = new Method() {
       def set(baseExpr: Expr, key: Par, value: Par): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](ParMap(SortedParMap(basePs + (key -> value))))
           case other =>
             s.raiseError(MethodNotDefined("set", other.typ))
@@ -1169,7 +1172,7 @@ object Reduce {
     private[this] val keys: Method = new Method() {
       def keys(baseExpr: Expr): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](ParSet(basePs.keys.toSeq))
           case other =>
             s.raiseError(MethodNotDefined("keys", other.typ))
@@ -1189,7 +1192,7 @@ object Reduce {
     private[this] val size: Method = new Method() {
       def size(baseExpr: Expr): M[Par] =
         baseExpr.exprInstance match {
-          case EMapBody(ParMap(basePs, _, _)) =>
+          case EMapBody(ParMap(basePs, _, _, _)) =>
             Applicative[M].pure[Par](GInt(basePs.size))
           case ESetBody(ParSet(ps, _, _, _)) =>
             Applicative[M].pure[Par](GInt(ps.size))
