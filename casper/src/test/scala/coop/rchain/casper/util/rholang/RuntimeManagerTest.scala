@@ -34,7 +34,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val result = runtimeManager.captureResults(
       hash,
       InterpreterUtil
-        .mkTerm(s""" for(@nn <- @"nn"){ @[nn, "value"]!("$captureChannel") } """)
+        .mkTerm(s""" for(@nn <- @"nn"){ @(nn, "value")!("$captureChannel") } """)
         .right
         .get,
       captureChannel)

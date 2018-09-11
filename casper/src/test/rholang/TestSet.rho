@@ -1,6 +1,6 @@
 //scalapackage coop.rchain.rholang.unittest
 
-//requires LinkedList
+//requires ListOps
 contract @"TestSet"(desc, @tests) = {
   new addTests, execTests, testsCh in {
     contract execTests(return) = {
@@ -17,12 +17,12 @@ contract @"TestSet"(desc, @tests) = {
           }
         } |
         for(@tests <- testsCh) {
-          @["LinkedList", "fold"]!(tests, true, *combinator, *return)
+          @("ListOps", "fold")!(tests, true, *combinator, *return)
         }
       }
     } |
     contract addTests(@tests) = {
-      new toContract, linkedListCh in {
+      new toContract in {
         contract toContract(@test, return) = {
           match test {
             [functionCh, answer] => {
@@ -42,18 +42,14 @@ contract @"TestSet"(desc, @tests) = {
             }
           }
         } |
-        //Transform to linked list in order to have easy map and fold methods
-        @["LinkedList", "fromList"]!(tests, *linkedListCh) |
-        for(@linkedList <- linkedListCh) {
-          @["LinkedList", "map"]!(linkedList, *toContract, *testsCh)
-        }
+        @("ListOps", "map")!(tests, *toContract, *testsCh)
       }
     } |
     addTests!(tests) |
     execTests!(*desc)
   }
 } |
-contract @["TestSet", "after"](desc, continuation) = {
+contract @("TestSet", "after")(desc, continuation) = {
   for(@result <- desc) {
     if (result) {
       desc!(result) | { *continuation }
