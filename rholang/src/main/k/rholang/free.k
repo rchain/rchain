@@ -16,15 +16,15 @@ imports MATCHING-WITH-PAR
 
 // First we construct the syntax for our nodes
 syntax Ints ::= List{ Int, ","}
-syntax HigherProcsOrChans ::= List{HigherProcOrChan, ","}
+syntax HigherProcsOrHigherNames ::= List{HigherProcOrHigherName, ","}
 syntax NodeSyntax ::=
             // For normal nodes, the syntax is
-            //[ Id ][ Proc/Chan ][ Parent ][ Children ]{ Multiset of free vars }[ Node constructed ]
-             "[" Int "][" HigherProcOrChan "][" Exp "][" List "]{" List "}[" Bool "]"
+            //[ Id ][ Proc/Name ][ Parent ][ Children ]{ Multiset of free vars }[ Node constructed ]
+             "[" Int "][" HigherPat "][" Exp "][" List "]{" List "}[" Bool "]"
             // Nodes corresponding to binders (bnodes) are given the syntax
-            // [ Id ][ Parent ][ Plus ID ; Plus Process/Channel ][ Minus ID ; Minus Process/Channel
+            // [ Id ][ Parent ][ Plus ID ; Plus Process/Name ][ Minus ID ; Minus Process/Name
             //                                        ]{ Multiset of free vars }[ Node constructed ]
-            | "[" Int "][" Exp "][" Int ";" HigherProcsOrChans "][" List ";" HigherProcsOrChans "]{"
+            | "[" Int "][" Exp "][" Int ";" HigherPats "][" List ";" HigherPats "]{"
                                                                                   List "}[" Bool "]"
             // Syntax for the calculation of figuring out if (a) there are duplicate binding
             // variables (resulting in bad syntax; will return an error), and (b) which are
@@ -39,7 +39,7 @@ syntax NodeSyntax ::=
 
 
 // Initiating the check
-rule <thread> ... <k> fv(MATCHTYPE:String , TOBECHECKED:HigherProcOrChan , VAR:Id)
+rule <thread> ... <k> fv(MATCHTYPE:String , TOBECHECKED:HigherPat , VAR:Id)
                                               => #(VARPAUSE)[MATCHTYPE , TOBECHECKED , VAR] ... </k>
               (.Bag => <FreeVars>
                   <node> [0][ TOBECHECKED ]["base"][ .List ]{ .List }[ false ] </node>
@@ -52,18 +52,18 @@ rule <thread> ... <k> fv(MATCHTYPE:String , TOBECHECKED:HigherProcOrChan , VAR:I
 // *** Send
 // If at the base node, just abstract it up a node. It's easier to work with it this way.
 rule <thread> ... <FreeVars> ...
-                   <node> [ID:Int][ C:Chan!(P:HigherProcs) ][ "base" ][ (.List
+                   <node> [ID:Int][ C:HigherNamePat!(P:HigherProcPats) ][ "base" ][ (.List
                                    => ListItem(NEWID)) ]{ FREEVARS:List }[ (false
                                    => true) ] </node>
-          (.Bag => <node> [NEWID][ C:Chan!(P:HigherProcs) ][ ID ][ .List ]{ .List }[false]  </node>)
+          (.Bag => <node> [NEWID][ C:HigherNamePat!(P:HigherProcPats) ][ ID ][ .List ]{ .List }[false]  </node>)
                    <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
               ... </FreeVars> ... </thread>
 
-// First go through the list, making a new node for each process in the HigherProcs
+// First go through the list, making a new node for each process in the HigherProcPats
 rule <thread> ...
         <FreeVars> ...
-         <node> [ID:Int][ (C:Chan!(PHead1:HigherProc , PHead2:HigherProc , PTail:HigherProcs)
-                      => C:Chan!(PHead2:HigherProc, PTail:HigherProcs)) ][ PARENT:Int ][ (.List
+         <node> [ID:Int][ (C:HigherNamePat!(PHead1:HigherProcPat , PHead2:HigherProcPat , PTail:HigherProcPats)
+                      => C:HigherNamePat!(PHead2:HigherProcPat, PTail:HigherProcPats)) ][ PARENT:Int ][ (.List
                       => ListItem(NEWID)) ListOfChildren:List ]{ FREEVARS:List }[ false ] </node>
          (.Bag => <node> [NEWID][ PHead1 ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
@@ -72,7 +72,7 @@ rule <thread> ...
 // When we only have one process left
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ C:Chan!(LastProc:HigherProc) ][ PARENT:Int ][ ListOfChildren:List (.List
+          <node> [ID:Int][ C:HigherNamePat!(LastProc:HigherProcPat) ][ PARENT:Int ][ ListOfChildren:List (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false => true) ] </node>
  (.Bag => <node> [NEWID][ C ][ ID ][ .List ]{ .List }[false]  </node>
           <node> [NEWID +Int 1][ LastProc ][ ID ][ .List ]{ .List }[false]  </node>)
@@ -83,17 +83,17 @@ rule <thread> ...
 // If at the base node, just abstract it up a node. It's easier to work with it this way.
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ C:Chan!!(P:HigherProcs) ][ "base" ][ (.List
+          <node> [ID:Int][ C:HigherNamePat!!(P:HigherProcPats) ][ "base" ][ (.List
                                    => ListItem(NEWID)) ]{ FREEVARS:List }[ (false => true) ] </node>
- (.Bag => <node> [NEWID][ C:Chan!(P:HigherProcs) ][ ID ][ .List ]{ .List }[false]  </node>)
+ (.Bag => <node> [NEWID][ C:HigherNamePat!(P:HigherProcPats) ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
     ... </FreeVars> ... </thread>
 
-// First go through the list, making a new node for each process in the HigherProcs
+// First go through the list, making a new node for each process in the HigherProcPats
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ (C:Chan!!(PHead1:HigherProc , PHead2:HigherProc , PTail:HigherProcs)
-                        => C:Chan!(PHead2:HigherProc, PTail:HigherProcs)) ][ PARENT:Int ][ (.List
+          <node> [ID:Int][ (C:HigherNamePat!!(PHead1:HigherProcPat , PHead2:HigherProcPat , PTail:HigherProcPats)
+                        => C:HigherNamePat!(PHead2:HigherProcPat, PTail:HigherProcPats)) ][ PARENT:Int ][ (.List
                         => ListItem(NEWID)) ListOfChildren:List ]{ FREEVARS:List }[ false ] </node>
  (.Bag => <node> [NEWID][ PHead1 ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
@@ -102,7 +102,7 @@ rule <thread> ...
 // When we only have one process left
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ C:Chan!!(LastProc:HigherProc) ][ PARENT:Int ][ ListOfChildren:List (.List
+          <node> [ID:Int][ C:HigherNamePat!!(LastProc:HigherProcPat) ][ PARENT:Int ][ ListOfChildren:List (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false => true) ] </node>
          (.Bag => <node> [NEWID][ C ][ ID ][ .List ]{ .List }[false]  </node>
                   <node> [NEWID +Int 1][ LastProc ][ ID ][ .List ]{ .List }[false]  </node>)
@@ -112,7 +112,7 @@ rule <thread> ...
 // *** Quote
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ @ P:HigherProc ][ PARENT:Exp ][ (.List
+          <node> [ID:Int][ @ P:HigherProcPat ][ PARENT:Exp ][ (.List
                                   => ListItem(NEWID)) ]{ FREEVARS:List }[ (false => true) ] </node>
  (.Bag => <node> [NEWID][ P ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
@@ -120,7 +120,7 @@ rule <thread> ...
 // *** Eval
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ * C:Chan ][ PARENT:Exp ][ (.List
+          <node> [ID:Int][ * C:HigherNamePat ][ PARENT:Exp ][ (.List
                                   => ListItem(NEWID)) ]{ FREEVARS:List }[ (false
                                   => true) ] </node>
  (.Bag => <node> [NEWID][ C ][ ID ][ .List ]{ .List }[false]  </node>)
@@ -129,7 +129,7 @@ rule <thread> ...
 // *** Par
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ P1:HigherProc | P2:HigherProc ][ PARENT:Exp ][ (.List
+          <node> [ID:Int][ P1:HigherProcPat | P2:HigherProcPat ][ PARENT:Exp ][ (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false
             => true) ] </node>
          (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
@@ -137,11 +137,92 @@ rule <thread> ...
          <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
     ... </FreeVars> ... </thread>
 
+
+
+// Logical "and"
+// For a conjunction of HigherProcesses
+rule <thread> ...
+        <FreeVars> ...
+          <node> [ID:Int][ P1:HigherProcPat /\ P2:HigherProcPat ][ PARENT:Exp ][ (.List
+            => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false
+            => true) ] </node>
+         (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
+                  <node> [NEWID +Int 1][ P2 ][ ID ][ .List ]{ .List }[false]  </node>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+    ... </FreeVars> ... </thread>
+
+
+// Logical "or"
+// For a statement P1 \/ P2, we do not bind any variables in either P1 or P2. Thus if we hit a
+// logical "or", we check for any free variables at all. Any variables here are free variables
+// in the entire statement.
+
+// For HigherProcecesses
+ // Make the 'ornode'
+rule <thread> ...
+       <FreeVars> ...
+         <node>
+           [ID:Int][ P1:HigherProcPat \/ P2:HigherProcPat ][ PARENT:Exp ][
+           .List => ListItem(NEWID) ]{ FREEVARS:List }[(false => true)]
+         </node>
+         (.Bag => <ornode>
+           [NEWID][ P1:HigherProcPat \/ P2:HigherProcPat ][ ID ][ .List ]{ FREEVARS:List }[false]
+         </ornode>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
+   ... </FreeVars> ... </thread>
+ // Continue building the tree
+rule <thread> ...
+       <FreeVars> ...
+         <ornode>
+           [ID:Int][ P1:HigherProcPat \/ P2:HigherProcPat ][ PARENT:Exp ][ (.List
+           => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[(false => true)]
+         </ornode>
+         (.Bag => <node> [NEWID][ P1 ][ ID ][ .List ]{ .List }[false]  </node>
+                  <node> [NEWID +Int 1][ P2 ][ ID ][ .List ]{ .List }[false]  </node>)
+         <NodeCounter> (NEWID:Int => NEWID +Int 2) </NodeCounter>
+   ... </FreeVars> ... </thread>
+
+// Absorb children into ornodes
+// (Now for both HigherNames and HigherProcesses)
+rule <thread> ...
+        <FreeVars> ...
+          <ornode>
+            [ID:Int][ P:HigherPat ][ PARENT:Exp ][
+            ChildrenListHead:List (ListItem(ChildID:Int) => .) ChildrenListTail:List
+            ]{ (.List => ChildFreeVars) FreeVars:List }[ true ]
+          </ornode>
+          (<node> [ChildID][ Q:HigherPat ][ ID ][ .List ]{ ChildFreeVars:List }[true] </node>
+                => .)
+    ... </FreeVars> ... </thread>
+// Once you've absorbed all the children into the ornode, transport its free
+// variables to the base's free variable list
+rule <thread> ...
+        <FreeVars> ...
+          <ornode>
+            [ID:Int][ P:HigherPat ][ PARENT:Int ][ .List ]{
+            (ListItem(X:Id) => .) FreeVars:List }[ true ]
+          </ornode>
+          <node> [0][ Q:HigherPat ][ "base" ][ BaseChildren:List ]{
+          (.List => ListItem(X)) BaseFreeVars:List }[true]  </node>
+    ... </FreeVars> ... </thread>
+// Then delete the ornode
+rule <thread> ...
+        <FreeVars> ...
+          (<ornode>
+            [ID:Int][ P:HigherPat ][ PARENT:Int ][ .List ]{ .List }[ true ]
+          </ornode> => .)
+          <node> [PARENT][ Q:HigherPat ][ GrandParentId:Exp ][
+          ChildrenListHead:List (ListItem(ID) => .) ChildrenListTail:List
+          ]{ FreeVars:List }[true] </node>
+    ... </FreeVars> ... </thread>
+
+
+
 // Rules for binding operations
 // Listen
 rule <thread> ...
         <FreeVars> ...
-                  <node> [ID:Int][ for( C:Chans <- D:Chan ){ P:HigherProc } ][ PARENT:Exp ][ (.List
+            <node> [ID:Int][ for( C:HigherNamePats <- D:HigherNamePat ){ P:HigherProcPat } ][ PARENT:Exp ][ (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false => true) ] </node>
          (.Bag => <node> [NEWID][ D ][ ID ][ .List ]{ .List }[false]  </node>
                   <bnode> [NEWID +Int 1][ ID ][ .K ; P ][ .List ; C ]{ .List }[false]  </bnode>)
@@ -150,7 +231,7 @@ rule <thread> ...
 // Persistent Listen
 rule <thread> ...
         <FreeVars> ...
-                  <node> [ID:Int][ for( C:Chans <= D:Chan ){ P:HigherProc } ][ PARENT:Exp ][ (.List
+                  <node> [ID:Int][ for( C:HigherNamePats <= D:HigherNamePat ){ P:HigherProcPat } ][ PARENT:Exp ][ (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false => true) ] </node>
          (.Bag => <node> [NEWID][ D ][ ID ][ .List ]{ .List }[false]  </node>
                   <bnode> [NEWID +Int 1][ ID ][ .K ; P ][ .List ; C ]{ .List }[false]  </bnode>)
@@ -159,7 +240,7 @@ rule <thread> ...
 // Contract
 rule <thread> ...
         <FreeVars> ...
-                <node> [ID:Int][ contract D:Chan (C:Chans) = {P:HigherProc} ][ PARENT:Exp ][ (.List
+                <node> [ID:Int][ contract D:HigherNamePat (C:HigherNamePats) = {P:HigherProcPat} ][ PARENT:Exp ][ (.List
             => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{ FREEVARS:List }[ (false => true) ] </node>
        (.Bag => <node> [NEWID][ D ][ ID ][ .List ]{ .List }[false]  </node>
                 <bnode> [NEWID +Int 1][ ID ][ .K ; P ][ .List ; C ]{ .List }[false]  </bnode>)
@@ -168,7 +249,7 @@ rule <thread> ...
 // New
 rule <thread> ...
         <FreeVars> ...
-            <node> [ID:Int][ new X:Ids in { P:HigherProc } ][ PARENT:Exp ][ (.List
+            <node> [ID:Int][ new X:Ids in { P:HigherProcPat } ][ PARENT:Exp ][ (.List
                                    => ListItem(NEWID)) ]{ FREEVARS:List }[ (false => true) ] </node>
    (.Bag => <bnode> [NEWID][ ID ][ .K ; P ][ .List ; X ]{ .List }[false]  </bnode>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
@@ -178,14 +259,12 @@ rule <thread> ...
 // If it's at the base, make another node so we're not tampering with the base process stored
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ match P:HigherProcOrChan {
-                  Q:HigherProcOrChan => { R:HigherProc }
-                  Q2:HigherProcOrChan => { R2:HigherProc }
+          <node> [ID:Int][ match P:HigherPat {
+                  Q:HigherPat => { R:HigherProcPat }
                   HigherMatchCases } ][ "base" ][ (.List
                   => ListItem(NEWID)) ]{ FREEVARS:List }[ (false
                   => true) ] </node>
- (.Bag => <node> [NEWID][ match P:HigherProcOrChan { Q:HigherProcOrChan => { R:HigherProc }
-                  Q2:HigherProcOrChan => { R2:HigherProc }
+ (.Bag => <node> [NEWID][ match P:HigherPat { Q:HigherPat => { R:HigherProcPat }
                   HigherMatchCases } ][ ID ][ .List ]{ .List }[ false ]
                   </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
@@ -194,14 +273,14 @@ rule <thread> ...
 // First make all the bnodes. Leave the node's bool at false for now
 rule <thread> ...
         <FreeVars> ...
-          <node> [ID:Int][ match P:HigherProcOrChan {
-                                    Q:HigherProcOrChan => { R:HigherProc }
-                                    Q2:HigherProcOrChan => { R2:HigherProc }
+          <node> [ID:Int][ match P:HigherPat {
+                                    Q:HigherPat => { R:HigherProcPat }
+                                    Q2:HigherPat => { R2:HigherProcPat }
                                     HigherMatchCases }
                           ][ PARENT:Int ][ ListOfChildren:List ]{ FREEVARS:List }[ false ]
                           =>
-                [ID:Int][ match P:HigherProcOrChan {
-                                    Q2:HigherProcOrChan => { R2:HigherProc }
+                [ID:Int][ match P:HigherPat {
+                                    Q2:HigherPat => { R2:HigherProcPat }
                                     HigherMatchCases }
                         ][ PARENT ][ ListOfChildren:List ListItem(NEWID) ]{ FREEVARS:List }[ false ]
           </node>
@@ -213,8 +292,8 @@ rule <thread> ...
 // matching, and change the node's bool to true
 rule <thread> ...
         <FreeVars> ...
-            <node> [ID:Int][ match P:HigherProcOrChan {
-                                    Q:HigherProcOrChan => { R:HigherProc }
+            <node> [ID:Int][ match P:HigherPat {
+                                    Q:HigherPat => { R:HigherProcPat }
                                                   } ][ PARENT:Int ][
                          ListOfChildren:List (.List => ListItem(NEWID) ListItem(NEWID +Int 1)) ]{
                          FREEVARS:List }[ (false => true) ] </node>
@@ -255,6 +334,16 @@ rule <thread> ...
   ... </FreeVars>
  ... </thread>
 
+// Semantics for wildcards. Wildcards can only occur in patterns, so they cannot contribute to the
+// overall number of free variables. We just delete them.
+rule <thread> ...
+      <FreeVars> ...
+          <node>
+            [ID:Int][ X:Wildcard ][ PARENT:Exp ][ .List ]{ .List }[ (false => true) ]
+          </node>
+  ... </FreeVars>
+ ... </thread>
+
 
 // Semantics for building the "bnode"s
 // We need bnodes because we need to keep track of which variables certain constructs bind, and
@@ -266,8 +355,8 @@ rule <thread> ...
 rule <thread> ...
       <FreeVars> ...
         <bnode>
-        [ID:Int][PARENT:Exp][ .K ; PlusProc:HigherProc ][.List ; C:HigherProcsOrChans]{.List}[false]
-          => [ID:Int][PARENT:Exp][ NEWID ; .K ][.List ; C:HigherProcsOrChans]{.List}[false] </bnode>
+        [ID:Int][PARENT:Exp][ .K ; PlusProc:HigherProcPat ][.List ; C:HigherPats]{.List}[false]
+          => [ID:Int][PARENT:Exp][ NEWID ; .K ][.List ; C:HigherPats]{.List}[false] </bnode>
         (.Bag => <node> [NEWID][ PlusProc ][ ID ][ .List ]{ .List }[false]  </node>)
         <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
   ... </FreeVars>
@@ -278,10 +367,10 @@ rule <thread> ...
       <FreeVars> ...
         <bnode>
            [ID:Int][PARENT:Exp][PlusID:Int ; .K ][ MinusIDs:List ;
-           MinusChan1:HigherProcOrChan , MinusChan2:HigherProcOrChan , MinusChans:HigherProcsOrChans
+           MinusChan1:HigherPat , MinusChan2:HigherPat , MinusChans:HigherPats
            ]{.List}[false] =>
            [ID:Int][PARENT:Exp][PlusID:Int ; .K ][ MinusIDs:List ListItem(NEWID) ;
-           MinusChan2:HigherProcOrChan , MinusChans:HigherProcsOrChans ]{.List}[false]</bnode>
+           MinusChan2:HigherPat , MinusChans:HigherPats ]{.List}[false]</bnode>
          (.Bag => <node> [NEWID][ MinusChan1 ][ ID ][ .List ]{ .List }[false]  </node>)
          <NodeCounter> (NEWID:Int => NEWID +Int 1) </NodeCounter>
    ... </FreeVars>
@@ -289,7 +378,7 @@ rule <thread> ...
 
 rule <thread> ...
         <FreeVars> ...
-          <bnode> [ID:Int][PARENT:Exp][PlusID:Int ; .K ][ MinusIDs:List ; MinusChan:HigherProcOrChan
+          <bnode> [ID:Int][PARENT:Exp][PlusID:Int ; .K ][ MinusIDs:List ; MinusChan:HigherPat
                   ]{.List}[false] =>
                   [ID:Int][PARENT:Exp][PlusID:Int ; .K ][ MinusIDs:List ListItem(NEWID) ; .K
                   ]{.List}[false]</bnode>
@@ -313,9 +402,9 @@ rule <thread> ...
 // nodes. When something no longer has any children listed, all of its children have been
 // deconstructed. So we deconstruct that node, passing on its list of free vars to its parent
 rule <thread> ... <FreeVars> ...
-                     (<node> [ID:Int][ ProcOrChan:HigherProcOrChan ][ PARENT:Int ][ .List ]{
+                     (<node> [ID:Int][ ProcOrName:HigherPat ][ PARENT:Int ][ .List ]{
                                                               ChildVars:List }[ true ] </node> => .)
-                      <node> [PARENT][ParentProcOrChan:HigherProcOrChan][GRANDPARENT:Exp][
+                      <node> [PARENT][ParentProcOrName:HigherPat][GRANDPARENT:Exp][
                                   ChildrenListHead:List (ListItem(ID) => .) ChildrenListTail:List ]{
                                   (.List => ChildVars) ParentVars:List }[true] </node>
               ... </FreeVars> ... </thread>
@@ -430,7 +519,7 @@ rule <thread> ...
 // list of free vars may return an error or be successful.
 rule <thread> ...
       (<FreeVars> ...
-           <node> [ID:Int][BaseProc:HigherProcOrChan]["base"][.List]{FreeVars:List}[true] </node>
+           <node> [ID:Int][BaseProc:HigherPat]["base"][.List]{FreeVars:List}[true] </node>
   ... </FreeVars> => .)
            <k> #(VARPAUSE)[ MATCHTYPE:String , BaseProc , Z:Id ]
                           =>  #(VARPAUSE)[ MATCHTYPE:String , BaseProc , Z:Id ][ FreeVars ] ... </k>

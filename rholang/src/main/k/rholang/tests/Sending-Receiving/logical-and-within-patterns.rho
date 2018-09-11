@@ -3,10 +3,10 @@
 // sent and sends it over @Nil.
 
 // This will nondeterministically either rewrite to:
-//     @Nil!(@1!("first succeeds"))
+//     @Nil!(@Nil!("first succeeds"))
 //     @Nil!("second succeeds")
 // or
-//     @Nil!(@2!("second succeeds"))
+//     @Nil!(@Nil!("second succeeds"))
 //     @Nil!("first succeeds")
 //
 // depending on which send matches with the receive first.
