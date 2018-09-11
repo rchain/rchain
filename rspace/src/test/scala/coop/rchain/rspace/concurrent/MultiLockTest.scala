@@ -4,7 +4,7 @@ import org.scalatest._
 
 import monix.eval.Task
 
-class MutliLockTest extends FlatSpec with Matchers {
+class MultiLockTest extends FlatSpec with Matchers {
 
   import monix.execution.Scheduler
   implicit val s = Scheduler.fixedPool("Maciej", 8)
