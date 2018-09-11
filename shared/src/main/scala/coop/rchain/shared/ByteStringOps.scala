@@ -5,7 +5,10 @@ import java.io._
 import com.google.protobuf.ByteString
 import coop.rchain.shared.Resources._
 import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream.Parameters
-import org.apache.commons.compress.compressors.lz4.{FramedLZ4CompressorInputStream, FramedLZ4CompressorOutputStream}
+import org.apache.commons.compress.compressors.lz4.{
+  FramedLZ4CompressorInputStream,
+  FramedLZ4CompressorOutputStream
+}
 
 import scala.util.control.NonFatal
 
@@ -22,7 +25,7 @@ object ByteStringOps {
       }
   }
 
-  private def compressLZ4(bs: ByteString): ByteString = {
+  private def compressLZ4(bs: ByteString): ByteString =
     withResource(bs.newInput()) { is =>
       withResource(new PipedOutputStream()) { pos =>
         withResource(new PipedInputStream(pos)) { pis =>
@@ -45,7 +48,6 @@ object ByteStringOps {
         }
       }
     }
-  }
 
   private def decompressLZ4(bs: ByteString): ByteString = {
     val pos = new PipedOutputStream()

@@ -59,6 +59,13 @@ object HandleMessages {
         }
       }
 
+  def handleCompression(p: Packet): Option[Packet] =
+    if (p.compressed)
+      p.content.decompress.map(decompressedContent =>
+        Packet(p.typeId, compressed = false, decompressedContent))
+    else
+      Some(p)
+
   def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
       sender: PeerNode,
       maybeDisconnect: Option[Disconnect]): F[CommunicationResponse] = {
@@ -86,13 +93,6 @@ object HandleMessages {
         error = unknownCommError(errorMsg)
         _     <- ErrorHandler[F].raiseError[Unit](error)
       } yield notHandled(error)
-
-    def handleCompression(p: Packet): Option[Packet] =
-      if (p.compressed)
-        p.content.decompress.map(decompressedContent =>
-          Packet(p.typeId, compressed = false, decompressedContent))
-      else
-        Some(p)
 
     maybePacket.flatMap(handleCompression).fold(handleNone) { p =>
       for {

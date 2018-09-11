@@ -10,6 +10,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.comm.transport
+import coop.rchain.comm.transport.CommMessages.toPacket
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
@@ -56,7 +57,7 @@ object BlockApproverProtocolTest {
     UnapprovedBlock(Some(ApprovedBlockCandidate(Some(block), requiredSigs)), 0L, 0L)
 
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
-    Packet(transport.UnapprovedBlock.id, u.toByteString)
+    toPacket(transport.UnapprovedBlock, u.toByteString)
 
   def createProtocol(
       requiredSigs: Int,
