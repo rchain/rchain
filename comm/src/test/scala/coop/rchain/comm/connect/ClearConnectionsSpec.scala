@@ -132,9 +132,12 @@ class ClearConnectionsSpec
 
   private def conf(maxNumOfConnections: Int, numOfConnectionsPinged: Int = 5): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = FiniteDuration(1, MILLISECONDS),
-             local = peer("src"))
+      RPConf(
+        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        defaultTimeout = FiniteDuration(1, MILLISECONDS),
+        local = peer("src"),
+        blockDistribution = BlockDistributionConf(1, 2.0)
+      )
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =

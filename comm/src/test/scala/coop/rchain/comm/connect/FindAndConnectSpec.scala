@@ -113,9 +113,12 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
       defaultTimeout: FiniteDuration
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = defaultTimeout,
-             local = peer("src"))
+      RPConf(
+        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        defaultTimeout = defaultTimeout,
+        local = peer("src"),
+        blockDistribution = BlockDistributionConf(1, 2.0)
+      )
     )
 
   implicit def eiterTrpConfAsk: RPConfAsk[Effect] =

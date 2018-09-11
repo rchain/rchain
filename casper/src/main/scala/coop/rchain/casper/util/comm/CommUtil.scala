@@ -22,6 +22,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 
 import scala.concurrent.duration._
+import scala.util.{Random, Try}
 
 object CommUtil {
 
@@ -31,8 +32,27 @@ object CommUtil {
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
-      _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
-      _ <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
+      minPeersBroadcastCount <- RPConfAsk[F].reader(_.blockDistribution.minPeersBroadcastCount)
+      peersBroadcastDecreaseRate <- RPConfAsk[F].reader(
+                                     _.blockDistribution.peersBroadcastDecreaseRate)
+      peers <- ConnectionsCell[F].read
+      peersWithoutSender = peers.filterNot(c =>
+        java.util.Arrays.equals(c.key.toArray, b.sender.toByteArray))
+      chosenPeersCnt = Math.max(
+        minPeersBroadcastCount,
+        Try(
+          math
+            .round(peersWithoutSender.size / math.pow(peersBroadcastDecreaseRate, b.creatorDist))
+            .toInt
+        ).getOrElse(0)
+      )
+      chosenPeers = Random
+        .shuffle(peersWithoutSender)
+        .take(chosenPeersCnt) // TODO: replace with Blake2b512Random?
+      local <- RPConfAsk[F].reader(_.local)
+      msg   = packet(local, transport.BlockMessage, serializedBlock)
+      _     <- TransportLayer[F].broadcast(chosenPeers, msg)
+      _     <- Log[F].info(s"Sent ${PrettyPrinter.buildString(b)} to peers")
     } yield ()
   }
 
