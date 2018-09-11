@@ -30,7 +30,7 @@ import scala.concurrent.duration._
 
 trait PersistentStoreTester {
   def withTestSpace[R](
-      f: ISpace[Channel,
+      f: FreudianSpace[Channel,
                 BindPattern,
                 ListChannelWithRandom,
                 ListChannelWithRandom,

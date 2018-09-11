@@ -20,7 +20,7 @@ import scala.util.Random
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
   def consumeMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: FreudianSpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelsCreator: Int => List[C],
@@ -32,7 +32,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     }
 
   def produceMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: FreudianSpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelCreator: Int => C,

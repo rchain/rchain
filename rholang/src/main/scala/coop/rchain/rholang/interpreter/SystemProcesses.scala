@@ -8,7 +8,7 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{ISpace, IStore}
+import coop.rchain.rspace.{FreudianSpace, ISpace, IStore}
 import monix.eval.Task
 import coop.rchain.models.rholang.implicits._
 
@@ -23,11 +23,11 @@ object SystemProcesses {
       Task(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  def stdoutAck(space: ISpace[Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation],
+  def stdoutAck(space: FreudianSpace[Channel,
+                                     BindPattern,
+                                     ListChannelWithRandom,
+                                     ListChannelWithRandom,
+                                     TaggedContinuation],
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
@@ -45,11 +45,11 @@ object SystemProcesses {
       Task(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(space: ISpace[Channel,
-                              BindPattern,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation],
+  def stderrAck(space: FreudianSpace[Channel,
+                                     BindPattern,
+                                     ListChannelWithRandom,
+                                     ListChannelWithRandom,
+                                     TaggedContinuation],
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
@@ -76,11 +76,11 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(space: ISpace[Channel,
-                                    BindPattern,
-                                    ListChannelWithRandom,
-                                    ListChannelWithRandom,
-                                    TaggedContinuation],
+  def secp256k1Verify(space: FreudianSpace[Channel,
+                                           BindPattern,
+                                           ListChannelWithRandom,
+                                           ListChannelWithRandom,
+                                           TaggedContinuation],
                       dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
@@ -96,11 +96,11 @@ object SystemProcesses {
       }
   }
 
-  def ed25519Verify(space: ISpace[Channel,
-                                  BindPattern,
-                                  ListChannelWithRandom,
-                                  ListChannelWithRandom,
-                                  TaggedContinuation],
+  def ed25519Verify(space: FreudianSpace[Channel,
+                                         BindPattern,
+                                         ListChannelWithRandom,
+                                         ListChannelWithRandom,
+                                         TaggedContinuation],
                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
@@ -119,11 +119,11 @@ object SystemProcesses {
         "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
   }
 
-  def sha256Hash(space: ISpace[Channel,
-                               BindPattern,
-                               ListChannelWithRandom,
-                               ListChannelWithRandom,
-                               TaggedContinuation],
+  def sha256Hash(space: FreudianSpace[Channel,
+                                      BindPattern,
+                                      ListChannelWithRandom,
+                                      ListChannelWithRandom,
+                                      TaggedContinuation],
                  dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
@@ -141,11 +141,11 @@ object SystemProcesses {
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
-  def keccak256Hash(space: ISpace[Channel,
-                                  BindPattern,
-                                  ListChannelWithRandom,
-                                  ListChannelWithRandom,
-                                  TaggedContinuation],
+  def keccak256Hash(space: FreudianSpace[Channel,
+                                         BindPattern,
+                                         ListChannelWithRandom,
+                                         ListChannelWithRandom,
+                                         TaggedContinuation],
                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
@@ -163,11 +163,11 @@ object SystemProcesses {
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
-  def blake2b256Hash(space: ISpace[Channel,
-                                   BindPattern,
-                                   ListChannelWithRandom,
-                                   ListChannelWithRandom,
-                                   TaggedContinuation],
+  def blake2b256Hash(space: FreudianSpace[Channel,
+                                          BindPattern,
+                                          ListChannelWithRandom,
+                                          ListChannelWithRandom,
+                                          TaggedContinuation],
                      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
