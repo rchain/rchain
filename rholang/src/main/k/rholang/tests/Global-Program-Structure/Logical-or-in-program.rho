@@ -1,0 +1,7 @@
+// This shows that the program cannot be a pair of logically connected processes.
+// In this we show for the "or" process
+
+// A successful run will return in StdOut
+//   "Error: Program of the form Process1 \\/ Process2."
+
+@10!(10) \/ @20!(20)

@@ -5,7 +5,7 @@ new value, add, sub in {
   contract value(@nn, return) = {
     new nnValue in {
       contract nnValue(return) = {
-        @[nn, "value"]!(*return)
+        @(nn, "value")!(*return)
       } |
       return!(*nnValue)
     }
@@ -13,7 +13,7 @@ new value, add, sub in {
   contract add(@nn, @x, return) = {
     new nnAdd in {
       contract nnAdd(return) = {
-        @[nn, "add"]!(x, *return)
+        @(nn, "add")!(x, *return)
       } |
       return!(*nnAdd)
     }
@@ -21,7 +21,7 @@ new value, add, sub in {
   contract sub(@nn, @x, return) = {
     new nnSub in {
       contract nnSub(return) = {
-        @[nn, "sub"]!(x, *return)
+        @(nn, "sub")!(x, *return)
       } |
       return!(*nnSub)
     }

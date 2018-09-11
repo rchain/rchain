@@ -36,7 +36,7 @@ class Runtime private (val reducer: Reduce[Task],
 
 object Runtime {
 
-  type RhoISpace       = CPARK[ISpace]
+  type RhoISpace       = CPARK[FreudianSpace]
   type RhoRSpace       = CPARK[RSpace]
   type RhoReplayRSpace = CPARK[ReplayRSpace]
 

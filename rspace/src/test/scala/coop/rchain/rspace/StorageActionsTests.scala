@@ -1042,7 +1042,7 @@ trait StorageActionsTests
     checkpoint2.root shouldBe emptyCheckpoint.root
   }
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
+  def validateIndexedStates(space: FreudianSpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)],
                             differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates

@@ -25,7 +25,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     serializeA: Serialize[A],
     serializeK: Serialize[K]
 ) extends RSpaceOps[C, P, A, R, K](store, branch)
-    with ISpace[C, P, A, R, K] {
+    with FreudianSpace[C, P, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -87,7 +87,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
           mats
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .foreach {
-              case DataCandidate(candidateChannel, Datum(_, persistData, prodRef), dataIndex) =>
+              case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                 if (!persistData) {
                   store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                 }

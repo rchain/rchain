@@ -23,7 +23,6 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.rspace.trace.Event

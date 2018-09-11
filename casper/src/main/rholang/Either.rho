@@ -1,10 +1,10 @@
 //scalapackage coop.rchain.rholang.collection
 
-//Requires LinkedList
+//Requires ListOps
 //Represents Either[A, B] as ("Left", A) or ("Right", B)
 
 //Right-biased flatMap; f must also return an Either
-contract @["Either", "flatMap"](@either, f, return) = {
+contract @("Either", "flatMap")(@either, f, return) = {
   match either {
     ("Right", value) => { f!(value, *return) }
     ("Left", _)      => { return!(either) }
@@ -12,7 +12,7 @@ contract @["Either", "flatMap"](@either, f, return) = {
 } |
 
 //Right-biased map to transform an Either
-contract @["Either", "map"](@either, f, return) = {
+contract @("Either", "map")(@either, f, return) = {
   match either {
     ("Right", value) => {
       new mappedResultCh in {
@@ -34,14 +34,11 @@ contract @["Either", "map"](@either, f, return) = {
 //  r2 <- f2(r1)
 //  ...
 //} yield fn
-contract @["Either", "compose"](@input, @functions, return) = {
-  new combinator, llCh in {
+contract @("Either", "compose")(@input, @functions, return) = {
+  new combinator in {
     contract combinator(@head, @accumulatedValue, return) = {
-      @["Either", "flatMap"]!(accumulatedValue, head, *return)
+      @("Either", "flatMap")!(accumulatedValue, head, *return)
     } |
-    @["LinkedList", "fromList"]!(functions, *llCh) |
-    for(@ll <- llCh) {
-      @["LinkedList", "fold"]!(ll, ("Right", input), *combinator, *return)
-    }
+    @("ListOps", "fold")!(functions, ("Right", input), *combinator, *return)
   }
 }

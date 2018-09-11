@@ -19,9 +19,7 @@ class BasicWalletSpec extends FlatSpec with Matchers {
   val runtime = TestSetUtil.runtime("rholang-basic-wallet-test")
   val tests   = TestSetUtil.getTests("./casper/src/test/rholang/BasicWalletTest.rho").toList
 
-  TestSetUtil.runTests(BasicWalletTest.term,
-                       List(NonNegativeNumber.term, MakeMint.term, BasicWallet.term),
-                       runtime)
+  TestSetUtil.runTests(BasicWalletTest, List(NonNegativeNumber, MakeMint, BasicWallet), runtime)
   val tuplespace = StoragePrinter.prettyPrint(runtime.space.store)
 
   "BasicWallet rholang contract" should tests.head in {
