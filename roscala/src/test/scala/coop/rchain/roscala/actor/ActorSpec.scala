@@ -232,46 +232,46 @@ class ActorSpec extends VmSpecUtils {
     "(block (increase foo 1) (increase foo 2))" should "increase value by 3" inMultimode {
 
       /** Testing `QueueMbox`
-        *
-        * Warning: This might not test `QueueMbox` when run in
-        * multi-threaded mode since the ordering of scheduled tasks is
-        * of importance here.
-        *
-        * The first message will lock up the mailbox of `foo`.
-        * The second message arrives at the mailbox of `foo` before
-        * the first message got processed (and the mailbox got
-        * unlocked again). This turns the locked mailbox into a
-        * `QueueMbox` where the second message, `2`, gets enqueued.
-        *
-        * Then the first message gets processed.
-        * The processing results in a call to `Actor.update` which sets
-        * `i` to `1`.
-        * `Actor.update` also calls `QueueMbox.nextMsg`.
-        *
-        * In `QueueMbox.nextMsg` two things happen:
-        * 1) The mailbox of `foo` becomes the (singleton) `LockedMbox`
-        * 2) The second message, `2`, gets dequeued and scheduled which
-        * invokes the `increase` method on the argument `2`
-        *
-        * At some point after `QueueMbox.nextMsg` the `increase` method
-        * will run and increase `i` by `2`.
-        *
-        * litvec:
-        *   0:   {BlockExpr}
-        * codevec:
-        *   0:   fork 8
-        *   1:   alloc 2
-        *   2:   xfer global[foo],arg[0]
-        *   4:   lit 1,arg[1]
-        *   5:   xfer global[increase],trgt
-        *   7:   xmit/nxt 2
-        *   8:   alloc 2
-        *   9:   xfer global[foo],arg[0]
-        *   11:  lit 2,arg[1]
-        *   12:  xfer global[increase],trgt
-        *   14:  xmit/nxt 2
-        *
-        */
+     *
+     * Warning: This might not test `QueueMbox` when run in
+     * multi-threaded mode since the ordering of scheduled tasks is
+     * of importance here.
+     *
+     * The first message will lock up the mailbox of `foo`.
+     * The second message arrives at the mailbox of `foo` before
+     * the first message got processed (and the mailbox got
+     * unlocked again). This turns the locked mailbox into a
+     * `QueueMbox` where the second message, `2`, gets enqueued.
+     *
+     * Then the first message gets processed.
+     * The processing results in a call to `Actor.update` which sets
+     * `i` to `1`.
+     * `Actor.update` also calls `QueueMbox.nextMsg`.
+     *
+     * In `QueueMbox.nextMsg` two things happen:
+     * 1) The mailbox of `foo` becomes the (singleton) `LockedMbox`
+     * 2) The second message, `2`, gets dequeued and scheduled which
+     * invokes the `increase` method on the argument `2`
+     *
+     * At some point after `QueueMbox.nextMsg` the `increase` method
+     * will run and increase `i` by `2`.
+     *
+     * litvec:
+     *   0:   {BlockExpr}
+     * codevec:
+     *   0:   fork 8
+     *   1:   alloc 2
+     *   2:   xfer global[foo],arg[0]
+     *   4:   lit 1,arg[1]
+     *   5:   xfer global[increase],trgt
+     *   7:   xmit/nxt 2
+     *   8:   alloc 2
+     *   9:   xfer global[foo],arg[0]
+     *   11:  lit 2,arg[1]
+     *   12:  xfer global[increase],trgt
+     *   14:  xmit/nxt 2
+     *
+     */
       val fixture                   = defineActor
       implicit val m: SymbolOffsets = fixture.symbolOffsets
 
@@ -297,7 +297,7 @@ class ActorSpec extends VmSpecUtils {
 
       fixture.foo.extension.slot.unsafeGet(0) shouldBe Fixnum(3)
     }
-    */
+     */
 
     "Failing to unlock" should "turn an EmptyMbox into a LockedMbox" inMultimode {
 

@@ -1,16 +1,17 @@
 package coop.rchain.rholang.interpreter
 
+import cats.Id
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{FreudianSpace, ISpace, IStore}
-import monix.eval.Task
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.errors.OutOfPhloError
+import coop.rchain.rholang.interpreter.storage.implicits._
+import monix.eval.Task
 
 import scala.util.Try
 
@@ -23,11 +24,17 @@ object SystemProcesses {
       Task(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  def stdoutAck(space: FreudianSpace[Channel,
-                                     BindPattern,
-                                     ListChannelWithRandom,
-                                     ListChannelWithRandom,
-                                     TaggedContinuation],
+  private implicit class ProduceOps(
+      res: Id[
+        Either[OutOfPhloError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+    def foldResult(
+        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
+      res.fold(err => Task.raiseError(OutOfPhloError), _.fold(Task.unit) {
+        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
+      })
+  }
+
+  def stdoutAck(space: RhoISpace,
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
@@ -36,7 +43,7 @@ object SystemProcesses {
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
                    false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
   }
 
@@ -45,11 +52,7 @@ object SystemProcesses {
       Task(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(space: FreudianSpace[Channel,
-                                     BindPattern,
-                                     ListChannelWithRandom,
-                                     ListChannelWithRandom,
-                                     TaggedContinuation],
+  def stderrAck(space: RhoISpace,
                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
@@ -58,7 +61,7 @@ object SystemProcesses {
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
                    false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
   }
 
@@ -76,11 +79,7 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(space: FreudianSpace[Channel,
-                                           BindPattern,
-                                           ListChannelWithRandom,
-                                           ListChannelWithRandom,
-                                           TaggedContinuation],
+  def secp256k1Verify(space: RhoISpace,
                       dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
@@ -92,15 +91,11 @@ object SystemProcesses {
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
                    false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
   }
 
-  def ed25519Verify(space: FreudianSpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
+  def ed25519Verify(space: RhoISpace,
                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
@@ -112,18 +107,14 @@ object SystemProcesses {
           .produce(ack,
                    ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
                    false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException(
         "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
   }
 
-  def sha256Hash(space: FreudianSpace[Channel,
-                                      BindPattern,
-                                      ListChannelWithRandom,
-                                      ListChannelWithRandom,
-                                      TaggedContinuation],
+  def sha256Hash(space: RhoISpace,
                  dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
@@ -135,17 +126,13 @@ object SystemProcesses {
                                   rand,
                                   cost),
             false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
-  def keccak256Hash(space: FreudianSpace[Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
+  def keccak256Hash(space: RhoISpace,
                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
@@ -157,17 +144,13 @@ object SystemProcesses {
                                   rand,
                                   cost),
             false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
-  def blake2b256Hash(space: FreudianSpace[Channel,
-                                          BindPattern,
-                                          ListChannelWithRandom,
-                                          ListChannelWithRandom,
-                                          TaggedContinuation],
+  def blake2b256Hash(space: RhoISpace,
                      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
     : Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
@@ -179,7 +162,7 @@ object SystemProcesses {
                                   rand,
                                   cost),
             false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+          .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
