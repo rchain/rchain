@@ -254,12 +254,6 @@ object InMemoryStore {
                             branch: Branch)(implicit sc: Serialize[C],
                                             sp: Serialize[P],
                                             sa: Serialize[A],
-                                            sk: Serialize[K]): InMemoryStore[T, C, P, A, K] = {
-    implicit val codecK: Codec[K] = sk.toCodec
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-
-    new InMemoryStore[T, C, P, A, K](trieStore, branch)
-  }
+                                            sk: Serialize[K]): InMemoryStore[T, C, P, A, K] =
+    new InMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
 }

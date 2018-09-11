@@ -87,7 +87,7 @@ class ReplayRSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
           mats
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .foreach {
-              case DataCandidate(candidateChannel, Datum(_, persistData, prodRef), dataIndex) =>
+              case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                 if (!persistData) {
                   store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                 }
