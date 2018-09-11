@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 
 import java.nio.file.Files
 
-import cats.{Applicative, ApplicativeError, Id, Monad}
+import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
 import cats.effect.Sync
@@ -19,8 +19,9 @@ import coop.rchain.casper.util.comm.CasperPacketHandler.{
   CasperPacketHandlerInternal
 }
 import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
 import coop.rchain.comm.CommError.ErrorHandler
@@ -40,20 +41,20 @@ import monix.execution.Scheduler
 import scala.collection.mutable
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
-import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
 
-class HashSetCasperTestNode[F[_]: Sync: Capture](
-    name: String,
-    val local: PeerNode,
-    tle: TransportLayerTestImpl[F],
-    val genesis: BlockMessage,
-    sk: Array[Byte],
-    logicalTime: LogicalTime[F],
-    implicit val errorHandlerEff: ErrorHandler[F],
-    storageSize: Long,
-    shardId: String = "rchain")(implicit scheduler: Scheduler) {
+class HashSetCasperTestNode[F[_]](name: String,
+                                  val local: PeerNode,
+                                  tle: TransportLayerTestImpl[F],
+                                  val genesis: BlockMessage,
+                                  sk: Array[Byte],
+                                  logicalTime: LogicalTime[F],
+                                  implicit val errorHandlerEff: ErrorHandler[F],
+                                  storageSize: Long,
+                                  shardId: String = "rchain")(implicit scheduler: Scheduler,
+                                                              syncF: Sync[F],
+                                                              captureF: Capture[F]) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
@@ -65,8 +66,6 @@ class HashSetCasperTestNode[F[_]: Sync: Capture](
   val dir                        = BlockStoreTestFixture.dbDir
   implicit val blockStore =
     LMDBBlockStore.create[F](LMDBBlockStore.Config(path = dir, mapSize = storageSize))
-  // pre-population removed from internals of Casper
-  blockStore.put(genesis.blockHash, genesis)
   implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
   implicit val rpConfAsk         = createRPConfAsk[F](local)
 
@@ -85,7 +84,7 @@ class HashSetCasperTestNode[F[_]: Sync: Capture](
   val dag                   = BlockDag().copy(latestMessages = initialLatestMessages)
   val postGenesisStateHash  = genesis.body.get.postState.get.tuplespace
   implicit val casperEff = new MultiParentCasperImpl[F](runtimeManager,
-                                                        validatorId.some,
+                                                        Some(validatorId),
                                                         genesis,
                                                         dag,
                                                         postGenesisStateHash,
@@ -100,7 +99,18 @@ class HashSetCasperTestNode[F[_]: Sync: Capture](
     casperPacketHandler.handle
   )
 
-  def receive(): Unit = tle.receive(p => handle[F](p, defaultTimeout))
+  def initialize(): F[Unit] =
+    // pre-population removed from internals of Casper
+    blockStore.put(genesis.blockHash, genesis) *>
+      InterpreterUtil
+        .validateBlockCheckpoint[F](genesis,
+                                    genesis,
+                                    dag,
+                                    Set(runtimeManager.emptyStateHash),
+                                    runtimeManager)
+        .void
+
+  def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout))
 
   def tearDown(): Unit = {
     tearDownNode()
@@ -116,25 +126,26 @@ class HashSetCasperTestNode[F[_]: Sync: Capture](
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def standaloneF[F[_]: Sync: Capture](genesis: BlockMessage,
-                                       sk: Array[Byte],
-                                       storageSize: Long = 1024L * 1024)(
+  def standaloneF[F[_]](genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler,
-      errorHandler: ErrorHandler[F]): HashSetCasperTestNode[F] = {
+      errorHandler: ErrorHandler[F],
+      syncF: Sync[F],
+      captureF: Capture[F]): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
       new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
-    new HashSetCasperTestNode[F](name,
-                                 identity,
-                                 tle,
-                                 genesis,
-                                 sk,
-                                 logicalTime,
-                                 errorHandler,
-                                 storageSize)
+    val result = new HashSetCasperTestNode[F](name,
+                                              identity,
+                                              tle,
+                                              genesis,
+                                              sk,
+                                              logicalTime,
+                                              errorHandler,
+                                              storageSize)
+    result.initialize.map(_ => result)
   }
   def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): HashSetCasperTestNode[Id] = {
@@ -143,13 +154,18 @@ object HashSetCasperTestNode {
   }
   def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): HashSetCasperTestNode[Effect] =
-    standaloneF[Effect](genesis, sk, storageSize)
+    standaloneF[Effect](genesis, sk, storageSize)(scheduler,
+                                                  ApplicativeError_[Effect, CommError],
+                                                  syncEffectInstance,
+                                                  Capture[Effect]).value.unsafeRunSync.right.get
 
-  def networkF[F[_]: Sync: Capture](sks: IndexedSeq[Array[Byte]],
-                                    genesis: BlockMessage,
-                                    storageSize: Long = 1024L * 1024)(
+  def networkF[F[_]](sks: IndexedSeq[Array[Byte]],
+                     genesis: BlockMessage,
+                     storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler,
-      errorHandler: ErrorHandler[F]): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
+      errorHandler: ErrorHandler[F],
+      syncF: Sync[F],
+      captureF: Capture[F]): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
     val n     = sks.length
     val names = (1 to n).map(i => s"node-$i")
     val peers = names.map(peerNode(_, 40400))
@@ -181,9 +197,10 @@ object HashSetCasperTestNode {
       if n.local != m.local
     } yield (n, m)
 
-    val connected = pairs.toList.traverse {
+    val connected = Traverse[List].traverse(pairs.toList) {
       case (n, m) =>
-        n.connectionsCell.modify(_.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff))
+        n.initialize *> n.connectionsCell.modify(
+          _.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff))
     }
 
     connected.map(_ => nodes)
@@ -199,7 +216,10 @@ object HashSetCasperTestNode {
                  genesis: BlockMessage,
                  storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
-    networkF[Effect](sks, genesis, storageSize)
+    networkF[Effect](sks, genesis, storageSize)(scheduler,
+                                                ApplicativeError_[Effect, CommError],
+                                                syncEffectInstance,
+                                                Capture[Effect])
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
