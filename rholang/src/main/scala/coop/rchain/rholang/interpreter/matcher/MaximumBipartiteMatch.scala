@@ -76,14 +76,12 @@ trait MaximumBipartiteMatch[P, T, R, F[_]] {
         FlatMap[MBM].ifM(notSeen(candidate))(
           //that is a new candidate, let's try to match it
           liftF(matchFunction(p, candidate.value)).flatMap {
-            _ match {
-              case Some(matchResult) =>
-                //this candidate matches the pattern, let's try to assign it a match
-                addSeen(candidate) >> tryClaimMatch(candidate, pattern, matchResult)
-              case None =>
-                //this candidate doesn't match, proceed to the others
-                findMatch((p, candidates))
-            }
+            case Some(matchResult) =>
+              //this candidate matches the pattern, let's try to assign it a match
+              addSeen(candidate) >> tryClaimMatch(candidate, pattern, matchResult)
+            case None =>
+              //this candidate doesn't match, proceed to the others
+              findMatch((p, candidates))
           },
           //we've seen this candidate already, proceed to the others
           findMatch((p, candidates))
