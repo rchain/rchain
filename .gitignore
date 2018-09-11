@@ -37,6 +37,9 @@ lib_managed/
 src_managed/
 boot/
 
+# Triplequote Hydra
+.hydra
+
 # BNFC
 ###################
 rholang/bnfc/
