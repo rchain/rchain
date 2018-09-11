@@ -184,16 +184,23 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def removeJoin(txn: Transaction, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def removeJoin(notxn: Transaction, channel: C, channels: Seq[C]): Unit = {
     val joinedChannelHash = hashChannels(Seq(channel))
-    fetchJoin(txn, joinedChannelHash) match {
+    withTxn(createTxnRead()) { txn =>
+      fetchJoin(txn, joinedChannelHash)
+    } match {
       case Some(joins) if joins.contains(channels) =>
-        if (getWaitingContinuation(txn, channels).isEmpty) {
+        if (withTxn(createTxnRead()) { txn =>
+              getWaitingContinuation(txn, channels)
+            }.isEmpty) {
           val newJoins = removeFirst(joins)(_ == channels)
           if (newJoins.nonEmpty)
-            insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
-          else
-            _dbJoins.delete(txn, joinedChannelHash)
+            withTxn(createTxnWrite()) { txn =>
+              insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
+            } else
+            withTxn(createTxnWrite()) { txn =>
+              _dbJoins.delete(txn, joinedChannelHash)
+            }
         }
       case None =>
         ()
