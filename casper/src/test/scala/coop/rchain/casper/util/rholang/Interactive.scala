@@ -19,6 +19,24 @@ import scala.collection.mutable
 /**
   * This is a really handy class for working interactively with
   * Rholang at the Scala console.
+  *
+  * {{{
+  * >>> import coop.rchain.casper.util.rholang.Interactive
+  * >>> val itp = Interactive()
+  * >>> itp.eval(""" @0!(0) """)
+  * >>> itp.checkpoint("send-zero")
+  * >>> itp.tuplespace.split('|').filter(_.contains("!")).head.trim
+  * "@{0}!(0)"
+  * >>> itp.restore("empty") //empty checkpoint exists by default
+  * true
+  * >>> itp.tuplespace.split('|').exists(_.contains("!"))
+  * false
+  * >>> itp.restore("send-zero")
+  * true
+  * >>> itp.tuplespace.split('|').filter(_.contains("!")).head.trim
+  * "@{0}!(0)"
+  * >>> itp.cleanUp()
+  * }}}
   */
 class Interactive private (runtime: Runtime) {
   private implicit val rand              = Blake2b512Random(128)

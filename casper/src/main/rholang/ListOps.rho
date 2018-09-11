@@ -61,6 +61,50 @@ contract @("ListOps", "map")(@list, function, return) = {
     @("ListOps", "fold")!(list, [], *combinator, *return)
   }
 } |
+contract @("ListOps", "parMap")(@list, function, return) = {
+  new namesListCh, startProcess, getOutput in {
+    contract startProcess(@x, ret) = { new outCh in { function!(x, *outCh) | ret!(*outCh) } } |
+    contract getOutput(name, ret)  = { for(@result <- name){ ret!(result) } } |    
+
+    //map each element to a name listening for the result of the function
+    @("ListOps", "map")!(list, *startProcess, *namesListCh) |
+    for(@namesList <- namesListCh) {
+      //map each name to its result
+      @("ListOps", "map")!(namesList, *getOutput, *return)
+    }
+  }
+} |
+contract @("ListOps", "unorderedParMap")(@list, function, return) = {
+  new mapLoop, collect, startCount, completeCount, accCh in {
+    //Spawn processes, each computing one element
+    //also processes listening for the result
+    contract mapLoop(@l, @count)= {
+      match l {
+        [hd ...tl] => {
+          new ch in { function!(hd, *ch) | for(@r <- ch){collect!(r)} | mapLoop!(tl, count + 1) }
+        }
+        _  => { startCount!(count) }
+      }
+    } |
+    //add a result to our accumulating list
+    contract collect(@result) = {
+      for(@sc <- startCount; @cc <- completeCount; @acc <- accCh) {
+        startCount!(sc) |
+        if (sc == cc + 1) { //all started processes completed!
+          @("ListOps", "prepend")!(result, acc, *return)
+        } else {            //still waiting on some
+          completeCount!(cc + 1) |
+          @("ListOps", "prepend")!(result, acc, *accCh)
+        }
+      }
+    } |
+    match list {
+      [] => { return!([]) }
+      _  => { mapLoop!(list, 0) | completeCount!(0) | accCh!([]) }
+      
+    }
+  }
+} |
 contract @("ListOps", "foreach")(@list, proc, isDone) = {
   new combinator, nilReturn in {
     contract combinator(@head, @accumulatedValue, return) = {
