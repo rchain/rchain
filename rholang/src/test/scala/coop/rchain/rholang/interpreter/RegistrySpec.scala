@@ -569,8 +569,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val registerString = """
       new rr(`rho:registry:insertRandom`), rl(`rho:registry:lookup`), x, y in {
         rr!(bundle+{*x}, *y) |
-        for(@{uri}, resultChan <- y) {
-          for(@{finalResult} <- resultChan) {
+        for(@uri, resultChan <- y) {
+          for(@finalResult <- resultChan) {
             @"result0"!(finalResult) |
             @"result1"!(uri) |
             rl!(uri, "result2")
