@@ -10,6 +10,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.{ISpace, IStore}
 import monix.eval.Task
 
 import scala.util.Try

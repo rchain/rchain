@@ -5,8 +5,8 @@ object Dependencies {
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
   val circeVersion  = "0.9.1"
-  val http4sVersion = "0.18.0"
-  val kamonVersion  = "1.0.0"
+  val http4sVersion = "0.19.0-M1"
+  val kamonVersion  = "1.1.0"
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
@@ -26,8 +26,10 @@ object Dependencies {
   val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
-  val jline               = ("org.scala-lang"             % "jline"                      % "2.10.7").exclude("org.fusesource.jansi", "jansi")
-  val kalium              = "coop.rchain"                 % "kalium"                    % "0.8.1-SNAPSHOT"
+  val jline               = ("org.scala-lang"             % "jline"                     % "2.10.7")
+    .exclude("org.fusesource.jansi", "jansi")
+  // see https://jitpack.io/#rchain/kalium
+  val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lightningj          = "org.lightningj"              % "lightningj"                % "0.4.2-Beta-2"
@@ -55,7 +57,8 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
-  val secp256k1Java       = "coop.rchain"                 % "secp256k1-java"            % "0.1-SNAPSHOT"
+  // see https://jitpack.io/#rchain/secp256k1-java
+  val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
 
   // format: on

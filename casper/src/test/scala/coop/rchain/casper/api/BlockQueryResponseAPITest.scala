@@ -14,6 +14,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.catscontrib.effect.implicits.syncId
 
 import scala.collection.immutable.HashMap
 
@@ -37,15 +38,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
-  val secondHashString     = "123456789101112131415161718192"
-  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber          = 1L
-  val timestamp            = 1527191665L
-  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
-  val deployCount          = 10
-  val randomDeploys: IndexedSeq[DeployCost] =
-    (0 until deployCount).map(_ => DeployCost.defaultInstance)
-  val body: Body                       = Body().withPostState(ps).withNewCode(randomDeploys)
+  val secondHashString                 = "123456789101112131415161718192"
+  val blockHash: BlockHash             = ProtoUtil.stringToByteString(secondHashString)
+  val blockNumber                      = 1L
+  val timestamp                        = 1527191665L
+  val ps: RChainState                  = RChainState().withBlockNumber(blockNumber)
+  val deployCount                      = 10
+  val randomDeploys                    = (0 until deployCount).map(ProtoUtil.basicProcessedDeploy(_))
+  val body: Body                       = Body().withPostState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
   val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
@@ -66,18 +66,25 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
+      implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))
-      implicit val logEff = new LogStub[Id]
-      implicit val constructorEffect =
-        MultiParentCasperConstructor
-          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-      val q                                            = BlockQuery(hash = secondBlockQuery)
-      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
-      val blockInfo                                    = blockQueryResponse.blockInfo.get
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
+      implicit val logEff = new LogStub[Id]()(syncId)
+      implicit val casperRef = {
+        val tmp = MultiParentCasperRef.of[Id]
+        tmp.set(casperEffect)
+        tmp
+      }
+      implicit val turanOracleEffect: SafetyOracle[Id] =
+        SafetyOracle.turanOracle[Id](syncId, blockStore)
+      val q = BlockQuery(hash = secondBlockQuery)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
+                                                                     casperRef,
+                                                                     logEff,
+                                                                     turanOracleEffect,
+                                                                     blockStore)
+      val blockInfo = blockQueryResponse.blockInfo.get
       blockQueryResponse.status should be("Success")
       blockInfo.blockHash should be(secondHashString)
       blockInfo.blockSize should be(secondBlock.serializedSize.toString)
@@ -93,17 +100,24 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
 
   "getBlockQueryResponse" should "return error when no block exists" in withStore {
     implicit blockStore =>
-      implicit val casperEffect = NoOpsCasperEffect.testCasper[Id](
+      implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))
-      implicit val logEff = new LogStub[Id]
-      implicit val constructorEffect =
-        MultiParentCasperConstructor
-          .successCasperConstructor[Id](ApprovedBlock.defaultInstance, casperEffect)
-      implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-      val q                                            = BlockQuery(hash = badTestHashQuery)
-      val blockQueryResponse                           = BlockAPI.getBlockQueryResponse[Id](q)
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
+      implicit val logEff = new LogStub[Id]()(syncId)
+      implicit val casperRef = {
+        val tmp = MultiParentCasperRef.of[Id]
+        tmp.set(casperEffect)
+        tmp
+      }
+      implicit val turanOracleEffect: SafetyOracle[Id] =
+        SafetyOracle.turanOracle[Id](syncId, blockStore)
+      val q = BlockQuery(hash = badTestHashQuery)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
+                                                                     casperRef,
+                                                                     logEff,
+                                                                     turanOracleEffect,
+                                                                     blockStore)
       blockQueryResponse.status should be(
         s"Error: Failure to find block with hash ${badTestHashQuery}")
   }

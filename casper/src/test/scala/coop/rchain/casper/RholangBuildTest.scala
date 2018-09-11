@@ -7,11 +7,11 @@ import cats.implicits._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator}
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.protocol.Deploy
+import coop.rchain.casper.protocol.{Deploy, DeployData}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.LinkedList
+import coop.rchain.rholang.collection.ListOps
 import coop.rchain.rholang.interpreter.Runtime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -27,7 +27,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val runtimeManager              = RuntimeManager.fromRuntime(activeRuntime)
   val emptyStateHash              = runtimeManager.emptyStateHash
   val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-  val proofOfStakeDeploy          = ProtoUtil.termDeploy(new ProofOfStake(proofOfStakeValidators).term)
+  val proofOfStakeDeploy =
+    ProtoUtil.termDeploy(ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
   val genesis =
     Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
   activeRuntime.close()
@@ -38,14 +39,13 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy = ProtoUtil.sourceDeploy(LinkedList.code)
+    val llDeploy = ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis())
     val deploys = Vector(
-      "@[\"LinkedList\", \"fromList\"]!([2, 3, 5, 7], \"primes\")",
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
-      "for(@primes <- @\"primes\"){ @\"primes\"!(primes) | @[\"LinkedList\", \"map\"]!(primes, \"double\", \"dprimes\") }"
-    ).map(ProtoUtil.sourceDeploy)
+      "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
+    ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2))
 
-    val Some(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
+    val Created(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
       deploys.traverse(MultiParentCasper[Id].deploy) *>
       MultiParentCasper[Id].createBlock
     MultiParentCasper[Id].addBlock(signedBlock)
@@ -53,8 +53,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val storage = HashSetCasperTest.blockTuplespaceContents(signedBlock)
 
     logEff.warns should be(Nil)
-    storage.contains("@{\"primes\"}!([2, [3, [5, [7, []]]]])") should be(true)
-    storage.contains("@{\"dprimes\"}!([4, [6, [10, [14, []]]]])") should be(true)
+    storage.contains("@{\"dprimes\"}!([4, 6, 10, 14])") should be(true)
   }
 
 }

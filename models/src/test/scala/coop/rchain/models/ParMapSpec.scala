@@ -16,8 +16,7 @@ class ParMapSpec extends FlatSpec with Matchers {
         (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0)))),
         (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
         (GInt(2), ParSet(Seq[Par](GInt(2))))
-      ),
-      connectiveUsed = false
+      )
     )
 
     val sortedMap = ParMap(
@@ -27,8 +26,7 @@ class ParMapSpec extends FlatSpec with Matchers {
         (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
         (GInt(2), ParSet(Seq[Par](GInt(2)))),
         (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))
-      ),
-      connectiveUsed = false
+      )
     )
 
     val expr = Expr(EMapBody(sortedMap))

@@ -53,7 +53,7 @@ trait HistoryActionsTests
       joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
+  def validateIndexedStates(space: FreudianSpace[String, Pattern, String, String, StringsCaptor],
                             indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
@@ -465,9 +465,7 @@ trait HistoryActionsTests
                                                     expectedProduce1,
                                                     expectedConsume)
   }
-}
 
-class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryActionsTests {
   "an install" should "not be persisted to the history trie" in withTestSpace { space =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
@@ -525,4 +523,6 @@ class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryAction
   }
 }
 
+class MixedStoreHistoryActionsTests extends MixedStoreTestsBase with HistoryActionsTests
+class LMDBStoreHistoryActionsTests  extends LMDBStoreTestsBase with HistoryActionsTests
 class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests

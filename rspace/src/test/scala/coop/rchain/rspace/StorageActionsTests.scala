@@ -16,7 +16,6 @@ import scodec.Codec
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-
 import coop.rchain.rspace.test.ArbitraryInstances._
 
 trait StorageActionsTests
@@ -1019,20 +1018,75 @@ trait StorageActionsTests
       checkpoint1.log shouldBe empty
   }
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)]): Boolean = {
+  "clear" should "reset to the same hash on multiple runs" in withTestSpace { space =>
+    val store           = space.store
+    val key             = List("ch1")
+    val patterns        = List(Wildcard)
+    val emptyCheckpoint = space.createCheckpoint()
+
+    //put some data so the checkpoint is != empty
+    space.consume(key, patterns, new StringsCaptor, persist = false)
+    val checkpoint0 = space.createCheckpoint()
+    checkpoint0.log should not be empty
+
+    space.createCheckpoint()
+    space.clear()
+
+    //force clearing of trie store state
+    store.createCheckpoint()
+    space.clear()
+
+    //the checkpointing mechanism should not interfere with the empty root
+    val checkpoint2 = space.createCheckpoint()
+    checkpoint2.log shouldBe empty
+    checkpoint2.root shouldBe emptyCheckpoint.root
+  }
+
+  def validateIndexedStates(space: FreudianSpace[String, Pattern, String, String, StringsCaptor],
+                            indexedStates: Seq[(State, Int)],
+                            differenceReport: Boolean = false): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
           space.reset(checkpoint)
           val num = "%02d".format(chunkNo)
 
-          val contentsTest = space.store.toMap == expectedContents
+          val actualContents = space.store.toMap
+          val contentsTest   = actualContents == expectedContents
 
           if (contentsTest) {
             logger.debug(s"$num: store had expected contents")
           } else {
             logger.error(s"$num: store had unexpected contents")
+
+            if (differenceReport) {
+              logger.error("difference report")
+              for ((expectedChannels, expectedRow) <- expectedContents) {
+                val actualRow = actualContents.get(expectedChannels)
+
+                actualRow match {
+                  case Some(row) =>
+                    if (row != expectedRow) {
+                      logger.error(
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                    }
+                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
+                }
+              }
+
+              for ((actualChannels, actualRow) <- actualContents) {
+                val expectedRow = expectedContents.get(actualChannels)
+
+                expectedRow match {
+                  case Some(row) =>
+                    if (row != actualRow) {
+                      logger.error(
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                    }
+                  case None => logger.error(s"key [$actualChannels] not found in expected records")
+                }
+              }
+            }
           }
 
           val actualJoins = space.store.joinMap
@@ -1145,57 +1199,64 @@ trait StorageActionsTests
         .value shouldBe gnat2
     }
 
-  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in withTestSpace {
-    space =>
-      forAll { (data: TestProduceMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
-            case (channel, datum) =>
-              GNAT(List(channel),
-                   List(datum),
-                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
-          }.toList
+  "produce a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
+    forAll { (data: TestProduceMap) =>
+      if (data.nonEmpty) {
+        withTestSpace { space =>
+          val gnats: Seq[TestGNAT] =
+            data.map {
+              case (channel, datum) =>
+                GNAT(List(channel),
+                     List(datum),
+                     List.empty[WaitingContinuation[Pattern, StringsCaptor]])
+            }.toList
 
-        gnats.foreach {
-          case GNAT(List(channel), List(datum), _) =>
-            space.produce(channel, datum.a, datum.persist)
+          gnats.foreach {
+            case GNAT(List(channel), List(datum), _) =>
+              space.produce(channel, datum.a, datum.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
-  }
+    }
 
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
-    withTestSpace { space =>
-      forAll { (data: TestConsumeMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
+    forAll { (data: TestConsumeMap) =>
+      val gnats: Seq[TestGNAT] =
+        data
+          .filter(_._1.nonEmpty) //channels == Seq.empty will faill in consume
+          .map {
             case (channels, wk) =>
               GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
+          }
+          .toList
 
-        gnats.foreach {
-          case GNAT(channels, _, List(wk)) =>
-            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+      withTestSpace { space =>
+        if (gnats.nonEmpty) {
+          gnats.foreach {
+            case GNAT(channels, _, List(wk)) =>
+              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+          }
+
+          val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
+
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+
+          val _ = space.createCheckpoint()
+
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
         }
-
-        val channelHashes = gnats.map(gnat => space.store.hashChannels(gnat.channels))
-
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
-
-        val _ = space.createCheckpoint()
-
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
       }
     }
 
@@ -1475,6 +1536,27 @@ trait StorageActionsTests
     }
     ex.getMessage shouldBe "Installing can be done only on startup"
   }
+
+  "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {
+    val channel  = "ch1"
+    val key      = List(channel)
+    val patterns = List(Wildcard)
+
+    space =>
+      space.close()
+      //using some nulls here to ensure that exception is thrown even before args check
+      an[RSpaceClosedException] shouldBe thrownBy(
+        space.install(key, patterns, null)
+      )
+
+      an[RSpaceClosedException] shouldBe thrownBy(
+        space.consume(key, patterns, null, false)
+      )
+
+      an[RSpaceClosedException] shouldBe thrownBy(
+        space.produce(channel, null, false)
+      )
+  }
 }
 
 class InMemoryStoreStorageActionsTests
@@ -1486,4 +1568,10 @@ class LMDBStoreActionsTests
     extends LMDBStoreTestsBase
     with StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll {}
+    with BeforeAndAfterAll
+
+class MixedStoreActionsTests
+    extends MixedStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll

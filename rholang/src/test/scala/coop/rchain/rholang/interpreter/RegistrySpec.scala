@@ -26,7 +26,8 @@ trait RegistryTester extends PersistentStoreTester {
     CostAccountingAlg.unsafe[Task](CostAccount.zero)
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task], 
-          ISpace[Channel,
+          FreudianSpace[
+                 Channel,
                  BindPattern,
                  ListChannelWithRandom,
                  ListChannelWithRandom,

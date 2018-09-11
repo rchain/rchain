@@ -1,0 +1,4 @@
+// We need to check for globally free variables before we run any programs.
+
+// The following example should not work, since x is globally free.
+for( _ <- @Nil){ x } | @Nil!(Nil)

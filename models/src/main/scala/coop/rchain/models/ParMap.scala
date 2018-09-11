@@ -7,36 +7,42 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import coop.rchain.models.rholang.implicits._
 
-case class ParMap(ps: SortedParMap, connectiveUsed: Boolean, locallyFree: Coeval[BitSet]) {
+case class ParMap(ps: SortedParMap,
+                  connectiveUsed: Boolean,
+                  locallyFree: Coeval[BitSet],
+                  remainder: Option[Var]) {
 
   override def equals(o: scala.Any): Boolean = o match {
-    case parMap: ParMap => this.ps == parMap.ps
+    case parMap: ParMap => this.ps == parMap.ps && this.remainder == parMap.remainder
     case _              => false
   }
 
-  override def hashCode(): Int = Objects.hash(ps)
+  override def hashCode(): Int = Objects.hash(ps, remainder)
 }
 
 object ParMap {
-  def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean, locallyFree: Coeval[BitSet]): ParMap =
-    new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize)
+  def apply(seq: Seq[(Par, Par)],
+            connectiveUsed: Boolean,
+            locallyFree: Coeval[BitSet],
+            remainder: Option[Var]) =
+    new ParMap(SortedParMap(seq), connectiveUsed, locallyFree.memoize, remainder)
 
-  def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean, locallyFree: BitSet): ParMap =
-    new ParMap(SortedParMap(seq), connectiveUsed, Coeval.delay(locallyFree).memoize)
-
-  def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean): ParMap =
-    ParMap(seq, connectiveUsed, Coeval.delay(updateLocallyFree(seq)))
+  def apply(seq: Seq[(Par, Par)],
+            connectiveUsed: Boolean,
+            locallyFree: BitSet,
+            remainder: Option[Var]): ParMap =
+    apply(seq, connectiveUsed, Coeval.pure(locallyFree), remainder)
 
   def apply(seq: Seq[(Par, Par)]): ParMap =
-    ParMap(SortedParMap(seq))
+    apply(seq, connectiveUsed(seq), updateLocallyFree(seq), None)
 
   def apply(map: SortedParMap): ParMap =
-    ParMap(map, connectiveUsed(map), Coeval.delay(updateLocallyFree(map.toSeq)))
+    apply(map.toSeq)
 
-  def connectiveUsed(map: SortedParMap): Boolean =
-    map.sortedMap.exists { case (k, v) => k.connectiveUsed || v.connectiveUsed }
+  private def connectiveUsed(map: Seq[(Par, Par)]): Boolean =
+    map.exists { case (k, v) => k.connectiveUsed || v.connectiveUsed }
 
-  def updateLocallyFree(ps: Seq[(Par, Par)]): BitSet =
+  private def updateLocallyFree(ps: Seq[(Par, Par)]): BitSet =
     ps.foldLeft(BitSet()) {
       case (acc, (key, value)) =>
         acc | key.locallyFree | value.locallyFree

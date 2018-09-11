@@ -21,7 +21,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, R, K] {
+) extends FreudianSpace[C, P, A, R, K] {
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
@@ -114,7 +114,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     val emptyRootHash: Blake2b256Hash =
       store.withTxn(store.createTxnRead()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.getAllPastRoots(trieTxn).last
+          store.trieStore.getEmptyRoot(trieTxn)
         }
       }
     reset(emptyRootHash)

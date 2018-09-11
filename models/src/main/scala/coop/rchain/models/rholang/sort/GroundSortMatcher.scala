@@ -27,23 +27,29 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         val sortedPars = gs.ps.sortedPars
           .map(par => Sortable.sortMatch(par))
           .sorted
-        ScoredTerm(ESetBody(
-                     ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
-                            gs.connectiveUsed,
-                            gs.locallyFree)),
-                   Node(Score.ESET, sortedPars.map(_.score): _*))
+        val remainderScoreOpt = gs.remainder.map(_ => Leaf(Score.REMAINDER))
+        ScoredTerm(
+          ESetBody(
+            ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
+                   gs.connectiveUsed,
+                   gs.locallyFree,
+                   gs.remainder)),
+          Node(Leaf(Score.ESET) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
+        )
       case EMapBody(gm) =>
         def sortKeyValuePair(key: Par, value: Par): ScoredTerm[(Par, Par)] = {
           val sortedKey   = Sortable.sortMatch(key)
           val sortedValue = Sortable.sortMatch(value)
           ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
-
-        val sortedPars = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
-        ScoredTerm(EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree)),
-                   Node(Score.EMAP, sortedPars.map(_.score): _*))
+        val sortedPars        = gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sorted
+        val remainderScoreOpt = gm.remainder.map(_ => Leaf(Score.REMAINDER))
+        ScoredTerm(
+          EMapBody(ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, gm.remainder)),
+          Node(Leaf(Score.EMAP) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
+        )
       case GByteArray(ba) =>
-        ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toString)))
+        ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8)))
       case _ => //TODO(mateusz.gorski): rethink it
         throw new IllegalArgumentException("GroundSortMatcher passed unknown Expr instance")
     }

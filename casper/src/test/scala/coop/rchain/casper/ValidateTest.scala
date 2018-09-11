@@ -24,7 +24,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
@@ -90,15 +89,19 @@ class ValidateTest
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _, "rchain")
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body  = b.body.getOrElse(Body())
-      val state = body.postState.getOrElse(RChainState())
+      val body     = b.body.getOrElse(Body())
+      val state    = body.postState.getOrElse(RChainState())
+      val newState = state.withBlockNumber(n)
 
-      b.withBody(body.withPostState(state.withBlockNumber(n)))
+      val header    = b.header.getOrElse(Header())
+      val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
+
+      b.withBody(body.withPostState(newState)).withHeader(newHeader)
     }
   }
 
@@ -282,7 +285,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -308,11 +311,7 @@ class ValidateTest
       (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
         false)
       log.warns.size should be(3)
-      log.warns.last
-        .contains("justification is empty, but block has non-genesis parents") should be(true)
-      log.warns
-        .dropRight(1)
-        .forall(_.contains("block parents did not match estimate based on justification")) should be(
+      log.warns.forall(_.contains("block parents did not match estimate based on justification")) should be(
         true)
   }
 
@@ -322,9 +321,15 @@ class ValidateTest
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
+      val (sk, pk)                 = Ed25519.newKeyPair
 
       Validate.blockSummary[Id](
-        block.withBlockNumber(17).withSeqNum(1),
+        ProtoUtil.signBlock(block.withBlockNumber(17).withSeqNum(1),
+                            BlockDag(),
+                            pk,
+                            sk,
+                            "ed25519",
+                            "rchain"),
         BlockMessage(),
         chain,
         "rchain"
@@ -354,7 +359,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -400,11 +405,12 @@ class ValidateTest
     val emptyStateHash    = runtimeManager.emptyStateHash
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
-    val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
-                                        initial,
-                                        emptyStateHash,
-                                        runtimeManager)
+    val proofOfStakeStubPar    = ProofOfStake(proofOfStakeValidators).term
+    val genesis = Genesis.withContracts(
+      List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
+      initial,
+      emptyStateHash,
+      runtimeManager)
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
@@ -417,32 +423,50 @@ class ValidateTest
     activeRuntime.close()
   }
 
-  "Field format validation" should "succeed on a valid block and fail on empty fields" in withStore {
-    implicit blockStore =>
-      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      implicit val chain           = createChain[StateWithChain](1).runS(initState)
-      implicit val (sk, _)         = Ed25519.newKeyPair
-      val genesis                  = signedBlock(0)
-      Validate.formatOfFields[Id](genesis) should be(true)
-      Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
-      Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
-      Validate.formatOfFields[Id](genesis.clearBody) should be(false)
-      Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
-      Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
-      Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
-      Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(
-        false)
-      Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withNewCodeHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withHeader(genesis.header.get.withCommReductionsHash(ByteString.EMPTY))
-      ) should be(false)
-      Validate.formatOfFields[Id](
-        genesis.withBody(genesis.body.get.withCommReductions(List(Event(EventInstance.Empty))))
-      ) should be(false)
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis =
+      ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+
+    Validate.formatOfFields[Id](genesis) should be(true)
+    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withBody(
+        genesis.body.get
+          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
+    ) should be(false)
+  }
+
+  "Block hash format validation" should "fail on invalid hash" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    Validate.blockHash[Id](genesis) should be(Right(Valid))
+    Validate.blockHash[Id](
+      genesis.withBlockHash(ByteString.copyFromUtf8("123"))
+    ) should be(Left(InvalidBlockHash))
+  }
+
+  "Block deploy count validation" should "fail on invalid number of deploys" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    Validate.deployCount[Id](genesis) should be(Right(Valid))
+    Validate.deployCount[Id](
+      genesis.withHeader(genesis.header.get.withDeployCount(100))
+    ) should be(Left(InvalidDeployCount))
   }
 }

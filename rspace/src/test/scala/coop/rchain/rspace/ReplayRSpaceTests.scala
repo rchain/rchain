@@ -20,7 +20,7 @@ import scala.util.Random
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
 
   def consumeMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: FreudianSpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelsCreator: Int => List[C],
@@ -32,7 +32,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
     }
 
   def produceMany[C, P, A, R, K](
-      space: ISpace[C, P, A, R, K],
+      space: FreudianSpace[C, P, A, R, K],
       range: Range,
       shuffle: Boolean,
       channelCreator: Int => C,
@@ -56,20 +56,6 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       space.reset(root0)
       space.store.isEmpty shouldBe true
   }
-
-  "Creating a COMM Event that is not contained in the trace log" should "throw a ReplayException" in
-    withTestSpaces { (space, replaySpace) =>
-      val ch1 = "ch1"
-
-      val initialCheckpoint = space.createCheckpoint()
-      replaySpace.rig(initialCheckpoint.root, initialCheckpoint.log)
-
-      replaySpace.consume(List(ch1), List(Wildcard), "continuation", false)
-
-      assertThrows[ReplayException] {
-        replaySpace.produce(ch1, data = "datum1", persist = false)
-      }
-    }
 
   "Creating a COMM Event" should "replay correctly" in
     withTestSpaces { (space, replaySpace) =>
@@ -626,7 +612,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       replaySpace.getReplayData shouldBe empty
     }
 
-  "consuming" should "correctly remove things from replay data" in withTestSpaces {
+  "Replay rspace" should "correctly remove things from replay data" in withTestSpaces {
     (space, replaySpace) =>
       val emptyPoint = space.createCheckpoint()
 
@@ -663,57 +649,14 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       mm.get(cr).map(_.size).value shouldBe 2
 
       replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.produce(channels(0), datum, persist = false)
 
       mm.get(cr).map(_.size).value shouldBe 1
 
-      replaySpace.consume(channels, patterns, k, persist = false)
+      replaySpace.produce(channels(0), datum, persist = false)
 
       mm.get(cr) shouldBe None
-  }
-
-  "producing" should "correctly remove things from replay data" in withTestSpaces {
-    (space, replaySpace) =>
-      val emptyPoint = space.createCheckpoint()
-
-      val channels = List("ch1")
-      val patterns = List[Pattern](Wildcard)
-      val k        = "continuation"
-      val datum    = "datum"
-
-      val pr = Produce.create(channels(0), datum, persist = false)
-
-      consumeMany(
-        space,
-        range = 0 to 1,
-        shuffle = false,
-        channelsCreator = const(channels),
-        patterns = patterns,
-        continuationCreator = const(k),
-        persist = false
-      )
-      produceMany(
-        space,
-        range = 0 to 1,
-        shuffle = false,
-        channelCreator = const(channels(0)),
-        datumCreator = const(datum),
-        persist = false
-      )
-      val rigPoint = space.createCheckpoint()
-
-      replaySpace.rig(emptyPoint.root, rigPoint.log)
-
-      val mm: mutable.Map[IOEvent, Multiset[COMM]] = replaySpace.getReplayData
-
-      mm.get(pr).map(_.size).value shouldBe 2
-
-      replaySpace.produce(channels(0), datum, persist = false)
-
-      mm.get(pr).map(_.size).value shouldBe 1
-
-      replaySpace.produce(channels(0), datum, persist = false)
-
-      mm.get(pr) shouldBe None
   }
 
   "producing" should "return same, stable checkpoint root hashes" in {
@@ -820,6 +763,27 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
 
       val checkpoint1 = replaySpace.createCheckpoint()
       checkpoint1.log shouldBe empty
+    }
+
+  "after close rspace" should "throw RSpaceClosedException on all store operations" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel  = "ch1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
+
+      replaySpace.close()
+      //using some nulls here to ensure that exception is thrown even before args check
+      an[RSpaceClosedException] shouldBe thrownBy(
+        replaySpace.install(key, patterns, null)
+      )
+
+      an[RSpaceClosedException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, null, false)
+      )
+
+      an[RSpaceClosedException] shouldBe thrownBy(
+        replaySpace.produce(channel, null, false)
+      )
     }
 }
 

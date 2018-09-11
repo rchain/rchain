@@ -1,16 +1,24 @@
 package coop.rchain.node.configuration
 
+import java.io.File
 import java.net.InetAddress
 import java.nio.file.{Path, Paths}
 
+import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
+import coop.rchain.node.configuration.toml.error._
 import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.StoreType
+import coop.rchain.shared.StoreType._
 
 import monix.eval.Task
+
+import scala.concurrent.duration._
 
 object Configuration {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -35,8 +43,9 @@ object Configuration {
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
   private val DefaultTimeout                    = 2000
+  private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultInMemoryStore: Boolean     = false
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -44,17 +53,48 @@ object Configuration {
   private val DefaultKeyFileName                = "node.key.pem"
   private val DefaultSecureRandomNonBlocking    = false
   private val DefaultMaxNumOfConnections        = 500
+  private val DefaultRequiredSigns              = 0
+  private val DefaultApprovalProtocolDuration   = 5.minutes
+  private val DefaultApprovalProtocolInterval   = 5.seconds
+  private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
+  private val DefaultThreadPoolSize: Int        = 4000
+
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
     .right
     .get
   private val DefaultShardId = "rchain"
 
+  private def loadConfigurationFile(configFile: File)(
+      implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
+    for {
+      _       <- log.info(s"Using configuration file: $configFile")
+      configE <- Task.delay(toml.TomlConfiguration.from(configFile))
+      exit <- configE.fold(
+               {
+                 case ConfigurationParseError(e) =>
+                   Log[Task]
+                     .error(s"Can't parse the configuration: $e")
+                     .as(true)
+                 case ConfigurationAstError(e) =>
+                   Log[Task]
+                     .error(s"The structure of the configuration is not valid: $e")
+                     .as(true)
+                 case ConfigurationFileNotFound(f) =>
+                   Log[Task]
+                     .warn(s"Configuration file $f not found")
+                     .as(false)
+               },
+               kp(Task.now(false))
+             )
+      _      = if (exit) System.exit(1)
+      config <- Task.pure(configE.toOption)
+    } yield config
+
   def apply(arguments: Seq[String])(implicit log: Log[Task]): Task[Configuration] =
     for {
       options <- Task.delay(commandline.Options(arguments))
       profile <- Task.pure(options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile))
-      _       <- log.info(s"Starting with profile ${profile.name}")
       result  <- apply(options, subcommand(options), profile)
     } yield result
 
@@ -63,21 +103,19 @@ object Configuration {
     if (command == Run) {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
+        _          = System.setProperty("rnode.data.dir", dataDir.toString)
         configFile <- Task.delay(options.configFile.getOrElse(dataDir.resolve("rnode.toml")).toFile)
-        _          <- log.info(s"Using configuration file: $configFile")
-        configE    <- Task.delay(toml.TomlConfiguration.from(configFile))
-        _ <- configE match {
-              case Right(_) => Task.unit
-              case Left(e)  => log.warn(s"Can't load the configuration file: $e")
-            }
-        config <- Task.pure(configE.toOption)
+        config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+        _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
         result <- Task.pure(apply(effectiveDataDir, options, config))
+        _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
       val dataDir = profile.dataDir._1()
+      System.setProperty("rnode.data.dir", dataDir.toString)
       Task.pure(
         new Configuration(
           command,
@@ -90,10 +128,13 @@ object Configuration {
             DefaultTimeout,
             DefaultBootstrapServer,
             DefaultStandalone,
+            DefaultGenesisValidator,
             dataDir,
             DefaultMapSize,
-            false,
-            DefaultMaxNumOfConnections
+            DefaultStoreType,
+            DefaultMaxNumOfConnections,
+            DefaultMaxMessageSize,
+            DefaultThreadPoolSize
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -117,7 +158,12 @@ object Configuration {
             dataDir.resolve("genesis"),
             None,
             createGenesis = false,
-            DefaultShardId
+            shardId = DefaultShardId,
+            approveGenesis = false,
+            requiredSigs = -1,
+            approveGenesisDuration = 100.days,
+            approveGenesisInterval = 1.day,
+            deployTimestamp = None
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -132,9 +178,14 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy) =>
+      case Some(options.deploy)      =>
+        //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+        Deploy(from.getOrElse("0x"),
+               phloLimit.getOrElse(0),
+               phloPrice.getOrElse(0),
+               nonce.getOrElse(0),
+               location())
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
@@ -173,10 +224,25 @@ object Configuration {
       get(_.run.bootstrap, _.server.flatMap(_.bootstrap), DefaultBootstrapServer)
     val standalone: Boolean =
       get(_.run.standalone, _.server.flatMap(_.standalone), DefaultStandalone)
+    val genesisValidator: Boolean =
+      get(_.run.genesisValidator, _.server.flatMap(_.genesisValidator), DefaultGenesisValidator)
+    val requiredSigs =
+      get(_.run.requiredSigs, _.validators.flatMap(_.requiredSigs), DefaultRequiredSigns)
+    val genesisApproveInterval =
+      get(_.run.interval,
+          _.validators.flatMap(_.approveGenesisInterval),
+          DefaultApprovalProtocolInterval)
+    val genesisAppriveDuration =
+      get(_.run.duration,
+          _.validators.flatMap(_.approveGenesisDuration),
+          DefaultApprovalProtocolDuration)
+
+    val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
+
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
-    val inMemoryStore: Boolean =
-      get(_.run.inMemoryStore, _.server.flatMap(_.inMemoryStore), DefaultInMemoryStore)
+    val storeType: StoreType =
+      get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
     val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
                                          _.server.flatMap(_.casperBlockStoreSize),
                                          DefaultCasperBlockStoreSize)
@@ -206,6 +272,13 @@ object Configuration {
     val maxNumOfConnections = get(_.run.maxNumOfConnections,
                                   _.server.flatMap(_.maxNumOfConnections),
                                   DefaultMaxNumOfConnections)
+
+    val maxMessageSize: Int =
+      get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+
+    val threadPoolSize =
+      get(_.run.threadPoolSize, _.server.flatMap(_.threadPoolSize), DefaultThreadPoolSize)
+
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
     val server = Server(
@@ -217,10 +290,13 @@ object Configuration {
       defaultTimeout,
       bootstrap,
       standalone,
+      genesisValidator,
       dataDir,
       mapSize,
-      inMemoryStore,
-      maxNumOfConnections
+      storeType,
+      maxNumOfConnections,
+      maxMessageSize,
+      threadPoolSize
     )
     val grpcServer = GrpcServer(
       grpcHost,
@@ -245,8 +321,13 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        requiredSigs,
+        shardId,
         standalone,
-        shardId
+        genesisValidator,
+        genesisApproveInterval,
+        genesisAppriveDuration,
+        deployTimestamp
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),
@@ -269,14 +350,21 @@ object Configuration {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
       case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy) =>
+      case Some(options.deploy)      =>
+        //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from(), phloLimit(), phloPrice(), nonce(), location())
+        Deploy(from.getOrElse("0x"),
+               phloLimit.getOrElse(0),
+               phloPrice.getOrElse(0),
+               nonce.getOrElse(0),
+               location())
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showBlocks) => ShowBlocks
       case Some(options.run)        => Run
+      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName) => ContAtName(options.contAtName.name())
       case _                        => Help
     }
 }
