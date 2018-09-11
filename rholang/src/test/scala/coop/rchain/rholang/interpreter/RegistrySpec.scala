@@ -15,6 +15,7 @@ import coop.rchain.rspace.pure.PureRSpace
 import java.io.StringReader
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.lightningj.util.ZBase32
 import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -569,32 +570,29 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val registerString = """
       new rr(`rho:registry:insertRandom`), rl(`rho:registry:lookup`), x, y in {
         rr!(bundle+{*x}, *y) |
-        for(@uri, resultChan <- y) {
-          for(@finalResult <- resultChan) {
-            @"result0"!(finalResult) |
-            @"result1"!(uri) |
-            rl!(uri, "result2")
-          }
+        for(@{uri /\ Uri} <- y) {
+          @"result0"!(uri) |
+          rl!(uri, "result1")
         }
       }"""
     val registerPar: Par = Interpreter.buildNormalizedTerm(new StringReader(registerString)).value
     val completePar                     = registerPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(5)
     val newRand = rand.splitByte(2)
-    newRand.next(); newRand.next()
+    val registeredName = newRand.next();
+    newRand.next()
     val registerRand = newRand.splitByte(0)
+    // Once for Uri and twice for temporary channels to handle the insert.
+    val uriBytes = registerRand.next();
     registerRand.next(); registerRand.next()
-    val partialReturnRand = registerRand.splitByte(0)
-    val insertRand = registerRand.splitByte(1)
+    val insertRand = registerRand
     // Goes directly into root
     insertRand.next();
-    val merge0Rand = Blake2b512Random.merge(Seq(newRand.splitByte(1), partialReturnRand))
-    val merge1Rand = Blake2b512Random.merge(Seq(merge0Rand, insertRand))
-    val randResult0 = merge1Rand.splitByte(0)
-    val randResult1 = merge1Rand.splitByte(1)
-    val lookupRand = merge1Rand.splitByte(2)
+    val merge0Rand = Blake2b512Random.merge(Seq(newRand.splitByte(1), insertRand))
+    val randResult0 = merge0Rand.splitByte(0)
+    val lookupRand = merge0Rand.splitByte(1)
     lookupRand.next();
-    val randResult2 = lookupRand
+    val randResult1 = lookupRand
 
     val result = withRegistryAndTestSpace { (reducer, space) =>
       implicit val env    = Env[Par]()
@@ -608,16 +606,23 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       List(Channel(Quote(GString(s))))
 
     val expectedBundle: Par = Bundle(GPrivate(
-      ByteString.copyFrom(
-        Base16.decode("2abed4680a1dca886783d04584f8b9b600f50848c8192e31e63d89828f635781"))),
+      ByteString.copyFrom(registeredName)),
       writeFlag = true,
       readFlag = false)
+
+    // Mimic the uri creation
+    val fullKey = new Array[Byte](34)
+    Array.copy(uriBytes, 0, fullKey, 0, 32)
+    val crc = Registry.CRC14.compute(fullKey.view.slice(0, 32))
+    fullKey(32) = (crc & 0xff).toByte
+    fullKey(33) = ((crc & 0xff00) >>> 6).toByte
+    val expectedUri = "rho:id:" + ZBase32.encodeToString(fullKey, 270)
 
     result.get(resultChanList("result0")) should be(
       Some(Row(
         List(
           Datum.create(Channel(Quote(GString("result0"))),
-                       ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult0),
+                       ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
                        false)),
         List()
       )))
@@ -625,15 +630,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(Row(
         List(
           Datum.create(Channel(Quote(GString("result1"))),
-                       ListChannelWithRandom(Seq(Quote(GUri("rho:id:qcxj3nj5k5hg3xn7r59tjq4ujwyru6o1bxupnkwdo8pime4dnf6ph6"))), randResult1),
-                       false)),
-        List()
-      )))
-    result.get(resultChanList("result2")) should be(
-      Some(Row(
-        List(
-          Datum.create(Channel(Quote(GString("result2"))),
-                       ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult2),
+                       ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
                        false)),
         List()
       )))

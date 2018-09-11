@@ -62,24 +62,25 @@ object Runtime {
   type Ref       = Long
 
   object BodyRefs {
-    val STDOUT: Long                     = 0L
-    val STDOUT_ACK: Long                 = 1L
-    val STDERR: Long                     = 2L
-    val STDERR_ACK: Long                 = 3L
-    val ED25519_VERIFY: Long             = 4L
-    val SHA256_HASH: Long                = 5L
-    val KECCAK256_HASH: Long             = 6L
-    val BLAKE2B256_HASH: Long            = 7L
-    val SECP256K1_VERIFY: Long           = 9L
-    val REG_LOOKUP: Long                 = 10L
-    val REG_LOOKUP_CALLBACK: Long        = 11L
-    val REG_INSERT: Long                 = 12L
-    val REG_INSERT_CALLBACK: Long        = 13L
-    val REG_DELETE: Long                 = 14L
-    val REG_DELETE_ROOT_CALLBACK: Long   = 15L
-    val REG_DELETE_CALLBACK: Long        = 16L
-    val REG_PUBLIC_LOOKUP: Long          = 17L
-    val REG_PUBLIC_REGISTER_RANDOM: Long = 18L
+    val STDOUT: Long                              = 0L
+    val STDOUT_ACK: Long                          = 1L
+    val STDERR: Long                              = 2L
+    val STDERR_ACK: Long                          = 3L
+    val ED25519_VERIFY: Long                      = 4L
+    val SHA256_HASH: Long                         = 5L
+    val KECCAK256_HASH: Long                      = 6L
+    val BLAKE2B256_HASH: Long                     = 7L
+    val SECP256K1_VERIFY: Long                    = 9L
+    val REG_LOOKUP: Long                          = 10L
+    val REG_LOOKUP_CALLBACK: Long                 = 11L
+    val REG_INSERT: Long                          = 12L
+    val REG_INSERT_CALLBACK: Long                 = 13L
+    val REG_DELETE: Long                          = 14L
+    val REG_DELETE_ROOT_CALLBACK: Long            = 15L
+    val REG_DELETE_CALLBACK: Long                 = 16L
+    val REG_PUBLIC_LOOKUP: Long                   = 17L
+    val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
+    val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
   }
 
   private def introduceSystemProcesses(space: RhoISpace,
