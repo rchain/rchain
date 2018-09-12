@@ -29,4 +29,4 @@ contract @"makeWide"(@n, ret) = {
     }
   }
 } |
-@"makeWide"!(100, "myWide")
+@"makeWide"!(300, "myWide")

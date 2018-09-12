@@ -11,6 +11,7 @@ import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
+import org.openjdk.jmh.infra.Blackhole
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -21,10 +22,10 @@ class WideBench {
 
   @Benchmark
   @Threads(1)
-  def wideReduce(state: WideBenchState): Unit = {
+  def wideReduce(bh: Blackhole, state: WideBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val runTask            = createTest(state.term, state)
-    processErrors(Await.result(runTask.runAsync, Duration.Inf))
+    bh.consume(processErrors(Await.result(runTask.runAsync, Duration.Inf)))
   }
 }
 
@@ -41,7 +42,7 @@ object WideBench {
     private val mapSize: Long         = 1024 * 1024 * 1024
 
     lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
-    val rand: Blake2b512Random                  = Blake2b512Random(128)
+    def rand: Blake2b512Random                  = Blake2b512Random(128)
     val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
     var setupTerm: Option[Par]                  = None
     var term: Option[Par]                       = None
@@ -62,7 +63,7 @@ object WideBench {
             case _: Exception =>
         })
 
-    @Setup
+    @Setup(value = Level.Iteration)
     def doSetup(): Unit = {
       deleteOldStorage()
 
@@ -90,11 +91,14 @@ object WideBench {
 }
 
 object WideEvalBenchState {
-  def processErrors(errors: Vector[Throwable]): Unit = if (errors.nonEmpty) {
-    throw new RuntimeException(
-      errors
-        .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n"))
+  def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
+    if (errors.nonEmpty) {
+      throw new RuntimeException(
+        errors
+          .map(_.toString())
+          .mkString("Errors received during evaluation:\n", "\n", "\n"))
+    }
+    errors
   }
 
   def createTest(t: Option[Par], state: WideBenchState): Task[Vector[Throwable]] = {
