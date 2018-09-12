@@ -22,11 +22,9 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class RevIssuanceTest extends FlatSpec with Matchers {
   "Rev" should "be issued and accessible based on inputs from Ethereum" in {
-    val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
-    val storageSize: Long = 1024L * 1024
-    val activeRuntime     = Runtime.create(storageDirectory, storageSize)
-    val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-    val emptyHash         = runtimeManager.emptyStateHash
+    val activeRuntime  = TestSetUtil.runtime("rev-issuance")
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val emptyHash      = runtimeManager.emptyStateHash
 
     val ethAddress      = "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
     val initBalance     = 37
@@ -78,7 +76,7 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val transferDeploy = ProtoUtil.termDeployNow(
       mkTerm(s"""
        |for(@wallet <- @"$pubKey") {
-       |  @[wallet, "transfer"]!($amount, $nonce, "${Base16
+       |  @(wallet, "transfer")!($amount, $nonce, "${Base16
                   .encode(transferSig)}", "$destination", "$transferStatusOut")
        |}
      """.stripMargin).right.get)
@@ -101,6 +99,5 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     assert(transferResult.nonEmpty)
 
     activeRuntime.close()
-    storageDirectory.recursivelyDelete()
   }
 }
