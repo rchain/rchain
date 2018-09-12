@@ -21,7 +21,9 @@ object MaximumBipartiteMatch {
 /**
   * Implements the MaximumBipartiteMatch algorithm, according to:
   * http://olympiad.cs.uct.ac.za/presentations/camp2_2017/bipartitematching-robin.pdf
-  * (mainly the "Alternative approach" section)
+  * (mainly the "Alternative approach" section), with one slight difference:
+  * we demand that all elements of the passed Seq[P] are assigned a match.
+  * Otherwise findMatch returns None via the effect F.
   * <p/>
   * The `matchFunction: (P, T) => F[Option[R]]` must return a `Some` for a matching
   * (P, T) pair, and a `None` otherwise. The values returned via the `Option[R]` return
