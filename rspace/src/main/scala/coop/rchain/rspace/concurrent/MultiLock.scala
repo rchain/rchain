@@ -15,19 +15,55 @@ class DefaultMultiLock[K] extends MultiLock[K] {
   private[this] val locks = TrieMap.empty[K, Semaphore]
 
   def acquire[R](keys: Seq[K])(thunk: => R)(implicit o: Ordering[K]): R = {
+    val sortedKeys = keys.sorted
     for {
-      k         <- keys.sorted
+      k         <- sortedKeys
       semaphore = locks.getOrElseUpdate(k, new Semaphore(1))
       _         = semaphore.acquire()
     } yield (())
     val r = thunk
 
     for {
-      k         <- keys.sorted
+      k         <- sortedKeys
       semaphore = locks.get(k).getOrElse(throw new Exception("This cannot happen"))
       _         = semaphore.release()
     } yield (())
     r
   }
+
+}
+
+import cats._
+import cats.implicits._
+import cats.effect.Concurrent
+import cats.effect.implicits._
+import cats.effect.concurrent.Semaphore
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
+
+class FunctionalMultiLock[F[_]: Concurrent, K] {
+
+  private[this] val locks = TrieMap.empty[K, Semaphore[F]]
+
+  def acquire[R](keys: List[K])(thunk: => R)(implicit o: Ordering[K]): F[R] =
+    (for {
+      k <- keys.sorted.pure[F] //Seq
+      semaphores <- (k.map { ks => // s <- Semaphore[F](1) //F
+                     Semaphore[F](1).map { l =>
+                       locks.getOrElseUpdate(ks, l)
+                     }
+                   }).sequence
+      openLocks <- (semaphores
+                    .map(ss => {
+                      ss.acquire.map { _ =>
+                        ss
+                      }
+                    }))
+                    .sequence
+      res = thunk
+      //_   = openLocks.map(_.release)
+      _ <- openLocks.map(_.release).sequence
+    } yield (res))
 
 }
