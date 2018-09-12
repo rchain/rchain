@@ -2,7 +2,7 @@ package coop.rchain.models.rholang.sort
 
 import cats.effect.Sync
 import coop.rchain.models.Connective.ConnectiveInstance._
-import coop.rchain.models.{Connective, Expr, VarRef}
+import coop.rchain.models.{Connective, Par, VarRef}
 import coop.rchain.models.rholang.implicits._
 import cats.implicits._
 
@@ -11,13 +11,13 @@ private[sort] object ConnectiveSortMatcher extends Sortable[Connective] {
     c.connectiveInstance match {
       case ConnAndBody(cb) =>
         for {
-          pars <- cb.ps.toList.traverse(par => Sortable.sortMatch(par))
+          pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
                      Node(Score.CONNECTIVE_AND, pars.map(_.score): _*))
       case ConnOrBody(cb) =>
         for {
-          pars <- cb.ps.toList.traverse(par => Sortable.sortMatch(par))
+          pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
                      Node(Score.CONNECTIVE_OR, pars.map(_.score): _*))
