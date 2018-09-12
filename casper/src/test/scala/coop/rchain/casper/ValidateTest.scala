@@ -24,7 +24,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint

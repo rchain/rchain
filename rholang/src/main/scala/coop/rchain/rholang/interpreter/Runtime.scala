@@ -11,6 +11,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -36,7 +37,7 @@ class Runtime private (val reducer: Reduce[Task],
 
 object Runtime {
 
-  type RhoISpace       = CPARK[ISpace]
+  type RhoISpace       = CPARK[FreudianSpace]
   type RhoRSpace       = CPARK[RSpace]
   type RhoReplayRSpace = CPARK[ReplayRSpace]
 
@@ -46,8 +47,13 @@ object Runtime {
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _]] =
-    F[Channel, BindPattern, ListChannelWithRandom, ListChannelWithRandom, TaggedContinuation]
+  private type CPARK[F[_, _, _, _, _, _]] =
+    F[Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation]
 
   type Name      = Par
   type Arity     = Int

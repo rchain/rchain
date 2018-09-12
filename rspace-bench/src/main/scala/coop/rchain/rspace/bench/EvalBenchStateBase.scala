@@ -21,25 +21,9 @@ trait EvalBenchStateBase {
   val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
   var term: Option[Par]                       = None
 
-  /**
-    * until we add flag 'delete_lmdb_dir_on_close' for benchmarks and unit-tests
-    * this prevents periodic out of disk space failures
-    */
-  def deleteOldStorages(): Unit =
-    dbDir.getParent.toFile.listFiles
-      .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
-      .filter(_.getName.startsWith("rchain-storage-test-"))
-      .foreach(dir =>
-        try {
-          println(s"deleting... $dir")
-          dir.toPath.recursivelyDelete()
-        } catch {
-          case _: Exception =>
-      })
-
   @Setup
   def doSetup(): Unit = {
-    deleteOldStorages()
+    EvalBenchStateBase.deleteOldStorage(dbDir)
 
     term = Interpreter.buildNormalizedTerm(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)
@@ -58,4 +42,23 @@ trait EvalBenchStateBase {
     new InputStreamReader(
       Option(getClass.getResourceAsStream(path))
         .getOrElse(throw new FileNotFoundException(path)))
+}
+
+object EvalBenchStateBase {
+
+  /**
+    * until we add flag 'delete_lmdb_dir_on_close' for benchmarks and unit-tests
+    * this prevents periodic out of disk space failures
+    */
+  def deleteOldStorage(dbDir: Path): Unit =
+    dbDir.getParent.toFile.listFiles
+      .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
+      .filter(_.getName.startsWith("rchain-storage-test-"))
+      .foreach(dir =>
+        try {
+          println(s"deleting... $dir")
+          dir.toPath.recursivelyDelete()
+        } catch {
+          case _: Exception =>
+      })
 }

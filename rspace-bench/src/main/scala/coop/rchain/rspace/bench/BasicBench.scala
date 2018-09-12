@@ -18,14 +18,15 @@ class BasicBench {
 
     val space = state.testSpace
 
-    space.consume(List("ch1", "ch2"),
-                  List(StringMatch("bad"), StringMatch("finger")),
-                  new StringsCaptor,
-                  false)
+    space
+      .consume(List("ch1", "ch2"),
+               List(StringMatch("bad"), StringMatch("finger")),
+               new StringsCaptor,
+               false)
 
     val r1 = space.produce("ch1", "bad", false)
 
-    assert(r1.isEmpty)
+    assert(r1.right.get.isEmpty)
 
     val r2 = space.produce("ch2", "finger", false)
 
@@ -49,8 +50,9 @@ object BasicBench {
     val testStore: LMDBStore[String, Pattern, String, StringsCaptor] =
       LMDBStore.create[String, Pattern, String, StringsCaptor](context)
 
-    val testSpace: RSpace[String, Pattern, String, String, StringsCaptor] =
-      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, Branch("bench"))
+    val testSpace: RSpace[String, Pattern, Nothing, String, String, StringsCaptor] =
+      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
+                                                                             Branch("bench"))
 
     @TearDown
     def tearDown() = {

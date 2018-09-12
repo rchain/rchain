@@ -30,8 +30,9 @@ import scala.concurrent.duration._
 
 trait PersistentStoreTester {
   def withTestSpace[R](
-      f: ISpace[Channel,
+      f: FreudianSpace[Channel,
                 BindPattern,
+                OutOfPhlogistonsError.type,
                 ListChannelWithRandom,
                 ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
@@ -39,6 +40,7 @@ trait PersistentStoreTester {
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,
                               BindPattern,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation](context, Branch("test"))

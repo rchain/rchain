@@ -19,7 +19,8 @@ import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
@@ -53,8 +54,9 @@ trait HistoryActionsTests
       joins: Map[Blake2b256Hash, Seq[Seq[String]]]
   )
 
-  def validateIndexedStates(space: ISpace[String, Pattern, String, String, StringsCaptor],
-                            indexedStates: Seq[(State, Int)]): Boolean = {
+  def validateIndexedStates(
+      space: FreudianSpace[String, Pattern, Nothing, String, String, StringsCaptor],
+      indexedStates: Seq[(State, Int)]): Boolean = {
     val tests: Seq[Any] = indexedStates
       .map {
         case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
@@ -258,7 +260,7 @@ trait HistoryActionsTests
 
       val r1 = space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe None
+      r1 shouldBe Right(None)
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 
