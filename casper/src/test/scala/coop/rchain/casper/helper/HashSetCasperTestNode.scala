@@ -176,18 +176,22 @@ object HashSetCasperTestNode {
     val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodes =
-      names.zip(peers).zip(sks).map {
-        case ((n, p), sk) =>
-          val tle = new TransportLayerTestImpl[F](p, msgQueues)
-          new HashSetCasperTestNode[F](n,
-                                       p,
-                                       tle,
-                                       genesis,
-                                       sk,
-                                       logicalTime,
-                                       errorHandler,
-                                       storageSize)
-      }
+      names
+        .zip(peers)
+        .zip(sks)
+        .map {
+          case ((n, p), sk) =>
+            val tle = new TransportLayerTestImpl[F](p, msgQueues)
+            new HashSetCasperTestNode[F](n,
+                                         p,
+                                         tle,
+                                         genesis,
+                                         sk,
+                                         logicalTime,
+                                         errorHandler,
+                                         storageSize)
+        }
+        .toVector
 
     import Connections._
     //make sure all nodes know about each other
@@ -197,13 +201,14 @@ object HashSetCasperTestNode {
       if n.local != m.local
     } yield (n, m)
 
-    val connected = Traverse[List].traverse(pairs.toList) {
-      case (n, m) =>
-        n.initialize *> n.connectionsCell.modify(
-          _.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff))
-    }
-
-    connected.map(_ => nodes)
+    for {
+      _ <- nodes.traverse(_.initialize).void
+      _ <- pairs.foldLeft(().pure[F]) {
+            case (f, (n, m)) =>
+              f.flatMap(_ =>
+                n.connectionsCell.modify(_.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff)))
+          }
+    } yield nodes
   }
   def network(sks: IndexedSeq[Array[Byte]],
               genesis: BlockMessage,
