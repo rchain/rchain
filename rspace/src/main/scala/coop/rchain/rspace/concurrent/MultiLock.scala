@@ -3,9 +3,7 @@ package coop.rchain.rspace.concurrent
 import scala.collection.concurrent.TrieMap
 
 trait MultiLock[K] {
-
   def acquire[R](keys: Seq[K])(thunk: => R)(implicit o: Ordering[K]): R
-
 }
 
 class DefaultMultiLock[K] extends MultiLock[K] {
