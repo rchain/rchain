@@ -9,7 +9,7 @@ private[sort] object SendSortMatcher extends Sortable[Send] {
   def sortMatch[F[_]: Sync](s: Send): F[ScoredTerm[Send]] =
     for {
       sortedChan <- Sortable.sortMatch(s.chan)
-      sortedData <- s.data.toList.map(Sortable.sortMatch(_)).sequence
+      sortedData <- s.data.toList.traverse(Sortable.sortMatch(_))
       sortedSend = Send(
         chan = sortedChan.term,
         data = sortedData.map(_.term.get),

@@ -19,7 +19,7 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
       case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value))).pure[F]
       case EListBody(gl) =>
         for {
-          sortedPars <- gl.ps.toList.map(par => Sortable.sortMatch(par)).sequence
+          sortedPars <- gl.ps.toList.traverse(par => Sortable.sortMatch(par))
         } yield
           ScoredTerm(EListBody(gl.withPs(sortedPars.map(_.term.get))),
                      Node(Score.ELIST, sortedPars.map(_.score): _*))
@@ -53,7 +53,7 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
           } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
 
         for {
-          pars              <- gm.ps.sortedMap.map(kv => sortKeyValuePair(kv._1, kv._2)).sequence
+          pars              <- gm.ps.sortedMap.traverse(kv => sortKeyValuePair(kv._1, kv._2))
           sortedPars        = pars.sorted
           remainderScoreOpt = gm.remainder.map(_ => Leaf(Score.REMAINDER))
         } yield

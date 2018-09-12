@@ -10,7 +10,7 @@ object ReceiveSortMatcher extends Sortable[Receive] {
     val patterns = bind.patterns
     val source   = bind.source
     for {
-      sortedPatterns <- patterns.toList.map(channel => Sortable.sortMatch(channel)).sequence
+      sortedPatterns <- patterns.toList.traverse(channel => Sortable.sortMatch(channel))
       sortedChannel  <- Sortable.sortMatch(source)
       sortedRemainder <- bind.remainder match {
                           case Some(bindRemainder) =>
@@ -30,7 +30,7 @@ object ReceiveSortMatcher extends Sortable[Receive] {
   // This function will then sort the insides of the preordered binds.
   def sortMatch[F[_]: Sync](r: Receive): F[ScoredTerm[Receive]] =
     for {
-      sortedBinds     <- r.binds.toList.map(bind => sortBind(bind)).sequence
+      sortedBinds     <- r.binds.toList.traverse(bind => sortBind(bind))
       persistentScore = if (r.persistent) 1 else 0
       sortedBody      <- Sortable.sortMatch(r.body)
     } yield

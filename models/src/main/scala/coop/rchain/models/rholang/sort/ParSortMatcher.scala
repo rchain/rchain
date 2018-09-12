@@ -7,13 +7,13 @@ import cats.implicits._
 private[sort] object ParSortMatcher extends Sortable[Par] {
   def sortMatch[F[_]: Sync](par: Par): F[ScoredTerm[Par]] =
     for {
-      sends       <- par.sends.toList.map(s => Sortable.sortMatch(s)).sequence
-      receives    <- par.receives.toList.map(r => Sortable.sortMatch(r)).sequence
-      exprs       <- par.exprs.toList.map(e => Sortable.sortMatch(e)).sequence
-      news        <- par.news.toList.map(n => Sortable.sortMatch(n)).sequence
-      matches     <- par.matches.toList.map(m => Sortable.sortMatch(m)).sequence
-      bundles     <- par.bundles.toList.map(b => Sortable.sortMatch(b)).sequence
-      connectives <- par.connectives.toList.map(c => Sortable.sortMatch(c)).sequence
+      sends       <- par.sends.toList.traverse(s => Sortable.sortMatch(s))
+      receives    <- par.receives.toList.traverse(r => Sortable.sortMatch(r))
+      exprs       <- par.exprs.toList.traverse(e => Sortable.sortMatch(e))
+      news        <- par.news.toList.traverse(n => Sortable.sortMatch(n))
+      matches     <- par.matches.toList.traverse(m => Sortable.sortMatch(m))
+      bundles     <- par.bundles.toList.traverse(b => Sortable.sortMatch(b))
+      connectives <- par.connectives.toList.traverse(c => Sortable.sortMatch(c))
       ids         = par.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
       sortedPar = Par(
         sends = sends.sorted.map(_.term),
