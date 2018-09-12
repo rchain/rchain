@@ -16,7 +16,7 @@ private[sort] object MatchSortMatcher extends Sortable[Match] {
                    Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
     for {
       sortedValue <- Sortable.sortMatch(m.target)
-      scoredCases <- m.cases.toList.map(sortCase).sequence
+      scoredCases <- m.cases.toList.traverse(sortCase)
     } yield
       ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
                  Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
