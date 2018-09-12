@@ -37,7 +37,6 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import coop.rchain.node.service._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Failure, Success, Try}
 
@@ -181,8 +180,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
-                       .mountService(jsonrpc.service, "/")
-                       .mountService(Lykke.service, "/lykke")
                        .mountService(prometheusService, "/metrics")
                        .start
                    }.toEffect
