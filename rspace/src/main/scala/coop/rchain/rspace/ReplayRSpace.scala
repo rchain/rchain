@@ -24,8 +24,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch)
-    with FreudianSpace[C, P, E, A, R, K] {
+) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
