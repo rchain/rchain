@@ -49,8 +49,9 @@ object StringExamples {
 
   object implicits {
 
-    implicit object stringMatch extends Match[Pattern, String, String] {
-      def get(p: Pattern, a: String): Option[String] = Some(a).filter(p.isMatch)
+    implicit object stringMatch extends Match[Pattern, Nothing, String, String] {
+      def get(p: Pattern, a: String): Either[Nothing, Option[String]] =
+        Right(Some(a).filter(p.isMatch))
     }
 
     implicit object stringSerialize extends Serialize[String] {

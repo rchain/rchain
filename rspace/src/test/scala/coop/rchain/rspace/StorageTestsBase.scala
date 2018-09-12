@@ -11,9 +11,9 @@ import coop.rchain.shared.PathOps._
 import org.scalatest._
 import scodec.Codec
 
-trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = FreudianSpace[C, P, A, A, K]
+  type T = FreudianSpace[C, P, E, A, A, K]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -28,7 +28,7 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
 }
 
 class InMemoryStoreTestsBase
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   override def withTestSpace[S](f: T => S): S = {
@@ -47,7 +47,8 @@ class InMemoryStoreTestsBase
       String,
       StringsCaptor](trieStore, branch)
 
-    val testSpace = RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, branch)
+    val testSpace =
+      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -69,7 +70,7 @@ class InMemoryStoreTestsBase
 }
 
 class LMDBStoreTestsBase
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -84,7 +85,7 @@ class LMDBStoreTestsBase
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -107,7 +108,7 @@ class LMDBStoreTestsBase
 }
 
 class MixedStoreTestsBase
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
@@ -126,7 +127,7 @@ class MixedStoreTestsBase
         testBranch)
 
     val testSpace =
-      RSpace.create[String, Pattern, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
