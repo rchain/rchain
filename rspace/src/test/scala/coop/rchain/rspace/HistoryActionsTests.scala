@@ -43,7 +43,6 @@ trait HistoryActionsTests
         store.trieStore.getRoot(trieTxn, branch).get
       }
     }
-
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
       "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
