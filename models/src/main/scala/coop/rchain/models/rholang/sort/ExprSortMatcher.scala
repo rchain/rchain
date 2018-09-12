@@ -145,7 +145,7 @@ private[sort] object ExprSortMatcher extends Sortable[Expr] {
                         Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score))
       case EMethodBody(em) =>
         for {
-          args         <- em.arguments.toList.traverse(par => Sortable.sortMatch(par))
+          args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
           sortedTarget <- Sortable.sortMatch(em.target)
         } yield
           constructExpr(

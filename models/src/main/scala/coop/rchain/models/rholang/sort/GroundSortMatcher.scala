@@ -19,13 +19,13 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
       case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value))).pure[F]
       case EListBody(gl) =>
         for {
-          sortedPars <- gl.ps.toList.traverse(par => Sortable.sortMatch(par))
+          sortedPars <- gl.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(EListBody(gl.withPs(sortedPars.map(_.term.get))),
                      Node(Score.ELIST, sortedPars.map(_.score): _*))
       case ETupleBody(gt) =>
         for {
-          sortedPars <- gt.ps.toList.traverse(par => Sortable.sortMatch(par))
+          sortedPars <- gt.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
           ScoredTerm(ETupleBody(gt.withPs(sortedPars.map(_.term.get))),
                      Node(Score.ETUPLE, sortedPars.map(_.score): _*))
@@ -33,7 +33,7 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
         for {
-          pars              <- gs.ps.sortedPars.traverse(par => Sortable.sortMatch(par))
+          pars              <- gs.ps.sortedPars.traverse(Sortable[Par].sortMatch[F])
           sortedPars        = pars.sorted
           remainderScoreOpt = gs.remainder.map(_ => Leaf(Score.REMAINDER))
         } yield
