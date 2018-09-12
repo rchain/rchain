@@ -102,7 +102,11 @@ def create_node(node, add_cmdline):
         network  = ctx.args.network,
         hostname = node.name,
         volumes  = volumes,
-        command  = cmdline
+        command  = cmdline,
+        mem_limit   = ctx.args.memory,
+        environment = {
+            'JAVA_OTPS': ('-Xmx' + ctx.args.memory),
+        }
     )
     return c
 
@@ -147,6 +151,11 @@ parser.add_argument(
         type    = str,
         default = '',
         help    = '')
+parser.add_argument(
+        '--memory', '-m',
+        type    = str,
+        default = '16g',
+        help    = 'set docker memory limit for all nodes')
 
 ########################################
 

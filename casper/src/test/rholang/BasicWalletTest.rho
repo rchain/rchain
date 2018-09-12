@@ -1,6 +1,6 @@
 //scalapackage coop.rchain.rholang.wallet
 
-//requires BasicWallet, MakeMint, TestSet, LinkedList
+//requires BasicWallet, MakeMint, TestSet, ListOps
 @"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
 @"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
 @"sig0"!("04f9a5f223fdf61ceaa290d04df2c171892d46cee31faad55061896b16340558d27e6b27d55a7133ec6ebf07433a059d1e3c2fd2ea864ad01de69e05f860180e") |
@@ -10,7 +10,7 @@
 contract @"deposit"(@wallet, @amount, @otherPurse, return) = {
   new deposit in {
     contract deposit(return) = {
-      @[wallet, "deposit"]!(amount, otherPurse, *return)
+      @(wallet, "deposit")!(amount, otherPurse, *return)
     } |
     return!(*deposit)
   }
@@ -20,7 +20,7 @@ contract @"transfer"(@wallet, @amount, @nonce, @sig, destination, contractReturn
   new transfer, status in {
     contract transfer(return) = {
       //send to known channel so that I can make the right signature
-      @[wallet, "transfer"]!(amount, nonce, sig, "myWithdraw", *status) |
+      @(wallet, "transfer")!(amount, nonce, sig, "myWithdraw", *status) |
       for(@result <- status){ 
         match result {
           "Success" => {for(@purse <- @"myWithdraw"){ destination!(purse) }}
@@ -36,7 +36,7 @@ contract @"transfer"(@wallet, @amount, @nonce, @sig, destination, contractReturn
 contract @"getBalance"(@wallet, return) = {
   new getBalance in {
     contract getBalance(return) = {
-      @[wallet, "getBalance"]!(*return)
+      @(wallet, "getBalance")!(*return)
     } |
     return!(*getBalance)
   }
@@ -45,16 +45,16 @@ contract @"getBalance"(@wallet, return) = {
 contract @"getNonce"(@wallet, return) = {
   new getNonce in {
     contract getNonce(return) = {
-      @[wallet, "getNonce"]!(*return)
+      @(wallet, "getNonce")!(*return)
     } |
     return!(*getNonce)
   }
 } |
 
 @"MakeMint"!("mint") | for(@mint <- @"mint") {
-  @[mint, "makePurse"]!(100, "purse") |
-  @[mint, "makePurse"]!(30, "otherPurse") |
-  @[mint, "makePurse"]!(74, "ethereumPurse") |
+  @(mint, "makePurse")!(100, "purse") |
+  @(mint, "makePurse")!(30, "otherPurse") |
+  @(mint, "makePurse")!(74, "ethereumPurse") |
   for(
     @purse <- @"purse"; 
     @otherPurse <- @"otherPurse"; 
@@ -113,7 +113,7 @@ contract @"getNonce"(@wallet, return) = {
         ]
       ) |
       
-      @["TestSet", "after"]!("Wallet deposit should work as expected.", {
+      @("TestSet", "after")!("Wallet deposit should work as expected.", {
         @"TestSet"!(
           "Wallet transfer should not accept invalid signatures or nonces.",
           [
@@ -122,7 +122,7 @@ contract @"getNonce"(@wallet, return) = {
           ]
         ) |
         
-        @["TestSet", "after"]!("Wallet transfer should not accept invalid signatures or nonces.", {
+        @("TestSet", "after")!("Wallet transfer should not accept invalid signatures or nonces.", {
           for(doTransfer <- @"transfer0Nonce") {
             @"transfer0Nonce"!(*doTransfer) |
             doTransfer!("status") | for(@wPurse <- @"wPurse"; @"Success" <- @"status") {

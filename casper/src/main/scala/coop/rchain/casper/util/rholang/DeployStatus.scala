@@ -16,7 +16,7 @@ sealed trait DeployStatus { self =>
 }
 final case object Succeeded                                                     extends DeployStatus
 sealed trait Failed                                                             extends DeployStatus
-final case class UntracedCommEvent(ex: ReplayException)                         extends Failed
+final case class UnusedCommEvent(ex: ReplayException)                           extends Failed
 final case class ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) extends Failed
 final case object UnknownFailure                                                extends Failed
 final case class UserErrors(errors: Vector[Throwable])                          extends Failed
@@ -32,10 +32,10 @@ object DeployStatus {
 
     internalErrors
       .collectFirst { case ex: ReplayException => ex }
-      .fold(
+      .fold[DeployStatus](
         if (internalErrors.nonEmpty) InternalErrors(internalErrors)
         else if (userErrors.nonEmpty) UserErrors(userErrors)
         else Succeeded
-      )(UntracedCommEvent(_))
+      )(ex => UnusedCommEvent(ex))
   }
 }

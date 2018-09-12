@@ -22,7 +22,7 @@ import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.rholang.collection.{Either, LinkedList}
+import coop.rchain.rholang.collection.{Either, ListOps}
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
 import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
@@ -41,14 +41,14 @@ object Genesis {
                           validators: Seq[ProofOfStakeValidator],
                           wallets: Seq[PreWallet]): List[Deploy] =
     List(
-      LinkedList,
+      ListOps,
       Either,
       NonNegativeNumber,
       MakeMint,
       BasicWallet,
       WalletCheck,
       new PreWalletRev(wallets),
-      new ProofOfStake(validators)
+      ProofOfStake(validators)
     ).map(compiledSourceDeploy(_, timestamp))
 
   def withContracts(initial: BlockMessage,

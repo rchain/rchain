@@ -108,7 +108,7 @@ object HandleMessages {
 
     def notHandledHandshake(error: CommError): F[CommunicationResponse] =
       Log[F]
-        .warn(s"Not adding. Could receive Pong message back from $peer, reason: $error")
+        .warn(s"Not adding. Could not receive Pong message back from $peer, reason: $error")
         .as(notHandled(error))
 
     def handledHandshake(local: PeerNode): F[CommunicationResponse] =

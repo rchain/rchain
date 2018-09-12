@@ -37,7 +37,6 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import coop.rchain.node.service._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Failure, Success, Try}
 
@@ -154,8 +153,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   case class Servers(
       grpcServerExternal: Server,
       grpcServerInternal: Server,
-      httpServer: Http4sServer[IO],
-      metricsServer: Http4sServer[IO]
+      httpServer: Http4sServer[IO]
   )
 
   def acquireServers(runtime: Runtime)(
@@ -170,34 +168,26 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] =
     for {
-      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal)
+      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal,
+                                                                     conf.server.maxMessageSize)
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer[Effect](conf.grpcServer.portInternal, runtime)
+                             .acquireInternalServer[Effect](conf.grpcServer.portInternal,
+                                                            conf.server.maxMessageSize,
+                                                            runtime)
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {
                      val prometheusService = NewPrometheusReporter.service(prometheusReporter)
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
-                       .mountService(jsonrpc.service, "/")
-                       .mountService(Lykke.service, "/lykke")
                        .mountService(prometheusService, "/metrics")
                        .start
                    }.toEffect
-      metricsServer <- LiftIO[Task].liftIO {
-                        val prometheusService = NewPrometheusReporter.service(prometheusReporter)
-                        BlazeBuilder[IO]
-                          .bindHttp(conf.server.metricsPort, "0.0.0.0")
-                          .mountService(prometheusService, "/")
-                          .mountService(prometheusService, "/metrics")
-                          .start
-                      }.toEffect
-
       _ <- Task.delay {
             Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
           }.toEffect
-    } yield Servers(grpcServerExternal, grpcServerInternal, httpServer, metricsServer)
+    } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
 
   def startServers(servers: Servers)(
       implicit
@@ -219,10 +209,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       loc <- rpConfAsk.reader(_.local)
       msg = CommMessages.disconnect(loc)
       _   <- transport.shutdown(msg)
-      _   <- log.info("Shutting down metrics server...")
-      _   <- LiftIO[Task].liftIO(servers.metricsServer.shutdown)
-      _   <- Task.delay(Kamon.stopAllReporters())
       _   <- log.info("Shutting down HTTP server....")
+      _   <- Task.delay(Kamon.stopAllReporters())
       _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown)
       _   <- log.info("Shutting down interpreter runtime ...")
       _   <- Task.delay(runtime.close)

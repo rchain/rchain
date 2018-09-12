@@ -44,6 +44,17 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
+  implicit def forTuple[A, B, C, D](
+      implicit matcherAC: SpatialMatcher[A, C],
+      matcherBD: SpatialMatcher[B, D]
+  ): SpatialMatcher[(A, B), (C, D)] = new SpatialMatcher[(A, B), (C, D)] {
+    override def spatialMatch(target: (A, B), pattern: (C, D)): OptionalFreeMapWithCost[Unit] =
+      matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
+
+    override def nonDetMatch(target: (A, B), pattern: (C, D)): NonDetFreeMapWithCost[Unit] =
+      matcherAC.nonDetMatch(target._1, pattern._1) >> matcherBD.nonDetMatch(target._2, pattern._2)
+  }
+
   def fromFunction[T, P](fn: (T, P) => OptionalFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
       override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
@@ -685,6 +696,13 @@ trait SpatialMatcherInstances {
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
           val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
           val merger          = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+            .toDet()
+
+        case (EMapBody(ParMap(tlist, _, _, _)), EMapBody(ParMap(plist, _, _, rem))) =>
+          val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
+          val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
+          val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
           listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
             .toDet()
 

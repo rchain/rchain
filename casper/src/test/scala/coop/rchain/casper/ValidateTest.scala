@@ -24,7 +24,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
@@ -406,7 +405,7 @@ class ValidateTest
     val emptyStateHash    = runtimeManager.emptyStateHash
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
+    val proofOfStakeStubPar    = ProofOfStake(proofOfStakeValidators).term
     val genesis = Genesis.withContracts(
       List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
       initial,
@@ -454,7 +453,7 @@ class ValidateTest
   "Block hash format validation" should "fail on invalid hash" in {
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    val genesis  = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
     Validate.blockHash[Id](genesis) should be(Right(Valid))
     Validate.blockHash[Id](
       genesis.withBlockHash(ByteString.copyFromUtf8("123"))
@@ -464,7 +463,7 @@ class ValidateTest
   "Block deploy count validation" should "fail on invalid number of deploys" in {
     val (sk, pk) = Ed25519.newKeyPair
     val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
-    val genesis = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
+    val genesis  = ProtoUtil.signBlock(block, BlockDag(), pk, sk, "ed25519", "rchain")
     Validate.deployCount[Id](genesis) should be(Right(Valid))
     Validate.deployCount[Id](
       genesis.withHeader(genesis.header.get.withDeployCount(100))
