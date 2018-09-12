@@ -8,6 +8,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
@@ -29,6 +30,7 @@ trait RegistryTester extends PersistentStoreTester {
           FreudianSpace[
                  Channel,
                  BindPattern,
+                 OutOfPhlogistonsError.type,
                  ListChannelWithRandom,
                  ListChannelWithRandom,
                  TaggedContinuation]) => R

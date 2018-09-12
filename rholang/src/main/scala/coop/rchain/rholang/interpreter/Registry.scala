@@ -38,12 +38,7 @@ import scala.concurrent.Await
   * if tag is 0, this is the stored data.
   * if tag is 1, this is a name where the process recurs.
   */
-class Registry(private val space: PureRSpace[Task,
-  Channel,
-                                         BindPattern,
-                                         ListChannelWithRandom,
-                                         ListChannelWithRandom,
-                                         TaggedContinuation],
+class Registry(private val space: Runtime.RhoPureSpace,
                private val dispatcher: Runtime.RhoDispatch) {
   import Registry._
   private def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
@@ -167,11 +162,12 @@ class Registry(private val space: PureRSpace[Task,
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
-  private def handleResult(
-      resultTask: Task[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): Task[Unit] =
+  private def handleResult[E <: Throwable](
+      resultTask: Task[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): Task[Unit] =
     resultTask.flatMap({
-      case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-      case None                           => Task.unit
+      case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
+      case Right(None) => Task.unit
+      case Left(err) => Task.raiseError(err)
     })
 
   private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): Task[Unit] =

@@ -11,6 +11,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -52,11 +53,22 @@ object Runtime {
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _]] =
-    F[Channel, BindPattern, ListChannelWithRandom, ListChannelWithRandom, TaggedContinuation]
+  private type CPARK[F[_, _, _, _, _, _]] =
+    F[Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation]
 
-  private type TCPARK[F[_[_], _, _, _, _, _]] =
-    F[Task, Channel, BindPattern, ListChannelWithRandom, ListChannelWithRandom, TaggedContinuation]
+  private type TCPARK[F[_[_], _, _, _, _, _, _]] =
+    F[Task,
+      Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation]
 
   type Name      = Par
   type Arity     = Int
@@ -119,27 +131,26 @@ object Runtime {
         Context.createMixed(dataDir, mapSize)
     }
 
-    val space: RhoRSpace              = RSpace.create(context, Branch.MASTER)
-    val replaySpace: RhoReplayRSpace  = ReplayRSpace.create(context, Branch.REPLAY)
-    val pureSpace: RhoPureSpace       = new PureRSpace(space)
-    val pureReplaySpace: RhoPureSpace = new PureRSpace(replaySpace)
+    val space: RhoRSpace             = RSpace.create(context, Branch.MASTER)
+    val replaySpace: RhoReplayRSpace = ReplayRSpace.create(context, Branch.REPLAY)
 
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(pureSpace: RhoPureSpace, dispatcher: RhoDispatch): RhoDispatchMap = {
+    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch): RhoDispatchMap = {
       import BodyRefs._
-      val registry = new Registry(pureSpace, dispatcher)
+      val pureSpace: RhoPureSpace = new PureRSpace(space)
+      val registry                = new Registry(pureSpace, dispatcher)
       Map(
         STDOUT                     -> SystemProcesses.stdout,
-        STDOUT_ACK                 -> SystemProcesses.stdoutAck(pureSpace, dispatcher),
+        STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
         STDERR                     -> SystemProcesses.stderr,
-        STDERR_ACK                 -> SystemProcesses.stderrAck(pureSpace, dispatcher),
-        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(pureSpace, dispatcher),
-        SHA256_HASH                -> SystemProcesses.sha256Hash(pureSpace, dispatcher),
-        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(pureSpace, dispatcher),
-        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(pureSpace, dispatcher),
-        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(pureSpace, dispatcher),
+        STDERR_ACK                 -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(space, dispatcher),
         REG_LOOKUP                 -> (registry.lookup(_)),
         REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
         REG_INSERT                 -> (registry.insert(_)),
@@ -160,10 +171,10 @@ object Runtime {
                                        "rho:io:stderrAck" -> byteName(3))
 
     lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(pureSpace, dispatcher)
+      dispatchTableCreator(space, dispatcher)
 
     lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(pureReplaySpace, replayDispatcher)
+      dispatchTableCreator(replaySpace, replayDispatcher)
 
     lazy val dispatcher: RhoDispatch =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
