@@ -22,7 +22,7 @@ import org.scalatest.enablers.Definition
 
 trait StorageActionsTests
     extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
-    with CastTestHelpers
+    with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 

@@ -19,7 +19,7 @@ import scala.util.Random
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with CastTestHelpers {
+    with TestImplicitHelpers {
 
   def consumeMany[C, P, A, R, K](
       space: FreudianSpace[C, P, Nothing, A, R, K],
@@ -73,7 +73,7 @@ trait ReplayRSpaceTests
       val rigPont       = space.createCheckpoint()
 
       resultConsume shouldBe Right(None)
-      resultProduce.right.get shouldBe defined
+      resultProduce shouldBe defined
 
       replaySpace.rig(emptyPoint.root, rigPont.log)
 
@@ -685,12 +685,12 @@ trait ReplayRSpaceTests
       space.install(key, patterns, continuation)
       replaySpace.install(key, patterns, continuation)
 
-      space.produce(channel, datum, persist = false).right.get shouldBe defined
+      space.produce(channel, datum, persist = false) shouldBe defined
       val afterProduce = space.createCheckpoint()
 
       replaySpace.rig(afterProduce.root, afterProduce.log)
 
-      replaySpace.produce(channel, datum, persist = false).right.get shouldBe defined
+      replaySpace.produce(channel, datum, persist = false) shouldBe defined
   }
 
   "reset" should

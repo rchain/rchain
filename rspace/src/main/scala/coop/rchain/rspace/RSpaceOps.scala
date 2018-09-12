@@ -71,7 +71,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
 
     options match {
       case Left(e) =>
-        throw new RuntimeException(s"Installing should always be valid: $e")
+        throw new RuntimeException(s"Install never result in an invalid match: $e")
       case Right(None) =>
         installs.update(_.updated(channels, Install(patterns, continuation, m)))
         store.installWaitingContinuation(

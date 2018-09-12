@@ -20,7 +20,7 @@ import scala.collection.immutable.Seq
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests
     extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
-    with CastTestHelpers
+    with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
@@ -264,7 +264,7 @@ trait HistoryActionsTests
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 
-      r2.right.get shouldBe defined
+      r2 shouldBe defined
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 

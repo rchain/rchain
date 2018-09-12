@@ -105,7 +105,7 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
 
         maybeTuple match {
           case Left(e) =>
-            extractDataCandidates(tail, channelToIndexedData, Left(e) +: acc)
+            (Left(e) +: acc).reverse
           case Right(Some((cand, rem))) =>
             extractDataCandidates(tail,
                                   channelToIndexedData.updated(channel, rem),

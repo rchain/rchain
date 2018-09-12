@@ -13,7 +13,7 @@ import scodec.Codec
 
 trait StorageExamplesTests
     extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with CastTestHelpers {
+    with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
     "return a continuation and the produced data" in withTestSpace { space =>

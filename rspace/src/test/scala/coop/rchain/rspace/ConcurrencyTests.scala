@@ -12,7 +12,7 @@ import scala.concurrent.duration.Duration
 
 trait ConcurrencyTests
     extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
-    with CastTestHelpers {
+    with TestImplicitHelpers {
 
   def version: String
 
