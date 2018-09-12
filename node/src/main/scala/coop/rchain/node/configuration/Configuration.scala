@@ -36,9 +36,8 @@ object Configuration {
 
   private val DefaultPort                       = 40400
   private val DefaultGrpcPortExternal           = 40401
-  private val DefaultHttPort                    = 40402
-  private val DefaultMetricsPort                = 40403
-  private val DefaultGrpcPortInternal           = 40404
+  private val DefaultGrpcPortInternal           = 40402
+  private val DefaultHttPort                    = 40403
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
@@ -123,7 +122,6 @@ object Configuration {
             None,
             DefaultPort,
             DefaultHttPort,
-            DefaultMetricsPort,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -213,10 +211,8 @@ object Configuration {
       get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
     // Server
-    val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
-    val metricsPort: Int =
-      get(_.run.metricsPort, _.server.flatMap(_.metricsPort), DefaultMetricsPort)
+    val port: Int       = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
+    val httpPort: Int   = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -285,7 +281,6 @@ object Configuration {
       host,
       port,
       httpPort,
-      metricsPort,
       noUpnp,
       defaultTimeout,
       bootstrap,
