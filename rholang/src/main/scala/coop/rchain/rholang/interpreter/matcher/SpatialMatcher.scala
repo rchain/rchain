@@ -1,9 +1,8 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.arrow.FunctionK
 import cats.data.{OptionT, State, StateT}
 import cats.implicits._
-import cats.{MonadError, Eval => _}
+import cats.{Monad, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -19,6 +18,7 @@ import coop.rchain.rholang.interpreter.matcher.StreamT._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
+import scala.collection.mutable
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -284,30 +284,32 @@ object SpatialMatcher extends SpatialMatcherInstances {
     )
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
-    def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
-      if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
-
-    val maximumBipartiteMatch = MaximumBipartiteMatch((pattern: Pattern, t: T) => {
-      val matchEffect = pattern match {
-        case Term(p) =>
-          if (!lf.connectiveUsed(p)) {
-            //match using `==` if pattern is a concrete term
-            guard(t == p).modifyCost(_.charge(COMPARISON_COST))
-          } else {
-            spatialMatch(t, p)
-          }
-        case Remainder(_) =>
-          //Remainders can't match non-concrete terms, because they can't be captured.
-          //They match everything that's concrete though.
-          guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
+    val matchFunction: (Pattern, T) => OptionalFreeMapWithCost[Option[FreeMap]] =
+      (pattern: Pattern, t: T) => {
+        val matchEffect = pattern match {
+          case Term(p) =>
+            if (!lf.connectiveUsed(p)) {
+              //match using `==` if pattern is a concrete term
+              guard(t == p).modifyCost(_.charge(COMPARISON_COST))
+            } else {
+              spatialMatch(t, p)
+            }
+          case Remainder(_) =>
+            //Remainders can't match non-concrete terms, because they can't be captured.
+            //They match everything that's concrete though.
+            guard(lf.locallyFree(t, 0).isEmpty).modifyCost(_.charge(COMPARISON_COST))
+        }
+        isolateState(matchEffect).attemptOpt
       }
-      matchEffect.attempt.map(_.isRight)
-    })
+    val maximumBipartiteMatch = MaximumBipartiteMatch(memoizeInHashMap(matchFunction))
 
     for {
       matchesOpt             <- maximumBipartiteMatch.findMatches(allPatterns, targets)
       matches                <- OptionalFreeMapWithCost.liftF(matchesOpt)
-      remainderTargets       = matches.collect { case (target, _: Remainder) => target }
+      freeMaps               = matches.map(_._3)
+      updatedFreeMap         <- aggregateUpdates(freeMaps)
+      _                      <- StateT.set[OptionT[State[CostAccount, ?], ?], FreeMap](updatedFreeMap)
+      remainderTargets       = matches.collect { case (target, _: Remainder, _) => target }
       remainderTargetsSet    = remainderTargets.toSet
       remainderTargetsSorted = targets.filter(remainderTargetsSet.contains)
       _ <- varLevel match {
@@ -326,6 +328,38 @@ object SpatialMatcher extends SpatialMatcherInstances {
           }
     } yield Unit
   }
+
+  private def guard(predicate: => Boolean): OptionalFreeMapWithCost[Unit] =
+    if (predicate) OptionalFreeMapWithCost.pure(()) else OptionalFreeMapWithCost.emptyMap
+
+  private def isolateState[S, F[_]: Monad](f: StateT[F, S, _]): StateT[F, S, S] =
+    for {
+      initState   <- StateT.get[F, S]
+      _           <- f
+      resultState <- StateT.get[F, S]
+      _           <- StateT.set[F, S](initState)
+    } yield resultState
+
+  private def memoizeInHashMap[A, B, C](f: (A, B) => C): (A, B) => C = {
+    val memo = mutable.HashMap[(A, B), C]()
+    (a, b) =>
+      memo.getOrElseUpdate((a, b), f(a, b))
+  }
+
+  private def aggregateUpdates(freeMaps: Seq[FreeMap]): OptionalFreeMapWithCost[FreeMap] =
+    for {
+      currentFreeMap <- StateT.get[OptionT[State[CostAccount, ?], ?], FreeMap]
+      _ <- guard {
+            //The correctness of isolating MBM from changing FreeMap relies
+            //on our ability to aggregate the var assignments from subsequent matches.
+            //This means all the variables populated by MBM must not duplicate each other.
+            //TODO start using MonadError in the interpreter and raise errors for violated assertions
+            val currentVars = currentFreeMap.keys.toSet
+            val addedVars   = freeMaps.flatMap(_.keys.filterNot(currentVars.contains))
+            addedVars.size == addedVars.distinct.size
+          }
+      updatedFreeMap = freeMaps.fold(currentFreeMap)(_ ++ _)
+    } yield updatedFreeMap
 
   private def handleRemainder[T](
       remainderTargets: Seq[T],
