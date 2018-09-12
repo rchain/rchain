@@ -7,11 +7,11 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.rspace.bench.WideBench.WideBenchState
-import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
+import coop.rchain.catscontrib.TaskContrib._
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -25,7 +25,7 @@ class WideBench {
   def wideReduce(bh: Blackhole, state: WideBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val runTask            = createTest(state.term, state)
-    bh.consume(processErrors(Await.result(runTask.runAsync, Duration.Inf)))
+    bh.consume(processErrors(runTask.unsafeRunSync))
   }
 }
 
@@ -47,25 +47,9 @@ object WideBench {
     var setupTerm: Option[Par]                  = None
     var term: Option[Par]                       = None
 
-    /**
-      * until we add flag 'delete_lmdb_dir_on_close' for benchmarks and unit-tests
-      * this prevents periodic out of disk space failures
-      */
-    def deleteOldStorage(): Unit =
-      dbDir.getParent.toFile.listFiles
-        .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
-        .filter(_.getName.startsWith("rchain-storage-test-"))
-        .foreach(dir =>
-          try {
-            println(s"deleting... $dir")
-            dir.toPath.recursivelyDelete()
-          } catch {
-            case _: Exception =>
-        })
-
     @Setup(value = Level.Iteration)
     def doSetup(): Unit = {
-      deleteOldStorage()
+      EvalBenchStateBase.deleteOldStorage(dbDir)
 
       setupTerm =
         Interpreter.buildNormalizedTerm(resourceFileReader(rhoSetupScriptPath)).runAttempt match {
