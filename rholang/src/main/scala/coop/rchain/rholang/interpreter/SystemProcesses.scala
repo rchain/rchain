@@ -9,7 +9,7 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.errors.OutOfPhloError
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import monix.eval.Task
 
@@ -26,10 +26,10 @@ object SystemProcesses {
 
   private implicit class ProduceOps(
       res: Id[
-        Either[OutOfPhloError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+        Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
     def foldResult(
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
-      res.fold(err => Task.raiseError(OutOfPhloError), _.fold(Task.unit) {
+      res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
         case (cont, channels) => _dispatch(dispatcher)(cont, channels)
       })
   }

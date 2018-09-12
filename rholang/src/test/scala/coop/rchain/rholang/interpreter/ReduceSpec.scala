@@ -32,7 +32,7 @@ trait PersistentStoreTester {
   def withTestSpace[R](
       f: FreudianSpace[Channel,
                 BindPattern,
-                OutOfPhloError.type,
+                OutOfPhlogistonsError.type,
                 ListChannelWithRandom,
                 ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
@@ -40,7 +40,7 @@ trait PersistentStoreTester {
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,
                               BindPattern,
-                              OutOfPhloError.type,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation](context, Branch("test"))

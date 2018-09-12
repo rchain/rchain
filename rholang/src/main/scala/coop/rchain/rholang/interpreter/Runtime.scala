@@ -11,7 +11,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.errors.OutOfPhloError
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
@@ -50,7 +50,7 @@ object Runtime {
   private type CPARK[F[_, _, _, _, _, _]] =
     F[Channel,
       BindPattern,
-      OutOfPhloError.type,
+      OutOfPhlogistonsError.type,
       ListChannelWithRandom,
       ListChannelWithRandom,
       TaggedContinuation]

@@ -6,7 +6,7 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
-import coop.rchain.rholang.interpreter.errors.{OutOfPhloError, ReduceError}
+import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, ReduceError}
 import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
@@ -25,7 +25,7 @@ object TuplespaceAlg {
       pureRSpace: PureRSpace[F,
                              Channel,
                              BindPattern,
-                             OutOfPhloError.type,
+                             OutOfPhlogistonsError.type,
                              ListChannelWithRandom,
                              ListChannelWithRandom,
                              TaggedContinuation],
@@ -37,7 +37,7 @@ object TuplespaceAlg {
                          persistent: Boolean): F[CostAccount] = {
       // TODO: Handle the environment in the store
       def go(
-          res: Either[OutOfPhloError.type,
+          res: Either[OutOfPhlogistonsError.type,
                       Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): F[CostAccount] =
         res match {
           case Right(Some((continuation, dataList))) =>
@@ -71,7 +71,7 @@ object TuplespaceAlg {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
           def go(
-              res: Either[OutOfPhloError.type,
+              res: Either[OutOfPhlogistonsError.type,
                           Option[(TaggedContinuation, Seq[ListChannelWithRandom])]])
             : F[CostAccount] =
             res match {

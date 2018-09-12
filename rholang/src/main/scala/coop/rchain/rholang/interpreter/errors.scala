@@ -66,7 +66,7 @@ object errors {
   final case class UnexpectedBundleContent(message: String)     extends InterpreterError(message)
   final case class UnrecognizedNormalizerError(message: String) extends InterpreterError(message)
 
-  final case object OutOfPhloError extends InterpreterError("Computation run out of phlogistons.")
+  final case object OutOfPhlogistonsError extends InterpreterError("Computation ran out of phlogistons.")
 
   final case class TopLevelWildcardsNotAllowedError(wildcards: String)
       extends InterpreterError(s"Top level wildcards are not allowed: $wildcards.")

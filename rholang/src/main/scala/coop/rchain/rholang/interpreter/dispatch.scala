@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.{FreudianSpace, ISpace}
 import cats.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.errors.OutOfPhloError
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.pure.PureRSpace
 
 trait Dispatch[M[_], A, K] {
@@ -73,7 +73,7 @@ object RholangOnlyDispatcher {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
-                              OutOfPhloError.type,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation] =
@@ -135,7 +135,7 @@ object RholangAndScalaDispatcher {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
-                              OutOfPhloError.type,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation] =
