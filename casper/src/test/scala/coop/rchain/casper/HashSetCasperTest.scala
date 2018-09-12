@@ -223,10 +223,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     received should be(true)
 
     nodes.foreach(_.tearDownNode())
-    nodes.foreach { node =>
-      validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock)
-      }
+    validateBlockStore(nodes(0)) { blockStore =>
+      blockStore.get(signedBlock.blockHash) shouldBe
+        Some(signedBlock)
+    }
+    validateBlockStore(nodes(1)) { blockStore =>
+      blockStore.get(signedBlock.blockHash) shouldBe Some(signedBlock.withCreatorDist(1))
     }
   }
 
@@ -244,10 +246,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
 
     nodes.foreach(_.tearDownNode())
-    nodes.foreach { node =>
-      validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
-      }
+    validateBlockStore(nodes(0)) { blockStore =>
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe
+        Some(signedBlock1Prime)
+    }
+    validateBlockStore(nodes(1)) { blockStore =>
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe
+        Some(signedBlock1Prime.withCreatorDist(1))
     }
   }
 
@@ -321,12 +326,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       1)
     nodes.foreach(_.tearDownNode())
 
-    nodes.foreach { node =>
-      validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-        blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
-        blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
-      }
+    validateBlockStore(nodes(0)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+      blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
+    }
+    validateBlockStore(nodes(1)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1.withCreatorDist(1))
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2.withCreatorDist(1))
+      blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3.withCreatorDist(1))
     }
   }
 
@@ -362,11 +370,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
 
     nodes.foreach(_.tearDownNode())
-    nodes.foreach { node =>
-      validateBlockStore(node) { blockStore =>
-        blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
-        blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
-      }
+    validateBlockStore(nodes(0)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2)
+    }
+    validateBlockStore(nodes(1)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1.withCreatorDist(1))
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2.withCreatorDist(1))
+    }
+    validateBlockStore(nodes(2)) { blockStore =>
+      blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1.withCreatorDist(2))
+      blockStore.get(signedBlock2.blockHash) shouldBe Some(signedBlock2.withCreatorDist(1))
     }
   }
 
@@ -457,7 +471,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     }
     validateBlockStore(nodes(2)) { blockStore =>
       blockStore.get(signedBlock3.blockHash) shouldBe Some(signedBlock3)
-      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime)
+      blockStore.get(signedBlock1Prime.blockHash) shouldBe Some(signedBlock1Prime.withCreatorDist(1))
     }
   }
 
@@ -567,7 +581,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).receive()
     nodes(2).receive()
 
-    nodes(0).casperEff.lastFinalizedBlock should be(block2)
+    nodes(0).casperEff.lastFinalizedBlock should be(block2.withCreatorDist(1))
 
     val Created(block8) = nodes(1).casperEff
       .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -575,7 +589,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).receive()
     nodes(2).receive()
 
-    nodes(0).casperEff.lastFinalizedBlock should be(block3)
+    nodes(0).casperEff.lastFinalizedBlock should be(block3.withCreatorDist(1))
 
     nodes.foreach(_.tearDown())
   }
