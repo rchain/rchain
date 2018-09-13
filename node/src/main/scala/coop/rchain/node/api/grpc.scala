@@ -44,7 +44,7 @@ object GrpcServer {
     }
 
   def acquireExternalServer[
-      F[_]: Sync: Capture: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
+      F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
       port: Int,
       maxMessageSize: Int)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

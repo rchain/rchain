@@ -113,7 +113,7 @@ trait ScoreTree {
   }
 
   // Effectively a tuple that groups the term to its score tree.
-  case class ScoredTerm[T](term: T, score: Tree[ScoreAtom])
+  case class ScoredTerm[+T](term: T, score: Tree[ScoreAtom])
 
   /**
     * Total order of all terms

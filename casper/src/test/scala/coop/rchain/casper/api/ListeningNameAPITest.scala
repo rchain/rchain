@@ -18,6 +18,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable
 import scala.collection.immutable.BitSet
+import coop.rchain.catscontrib.effect.implicits._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture {
 
