@@ -15,29 +15,22 @@ class DefaultMultiLock[K] extends MultiLock[K] {
   private[this] val locks = TrieMap.empty[K, Semaphore]
 
   def acquire[R](keys: Seq[K])(thunk: => R)(implicit o: Ordering[K]): R = {
+    // TODO: keys should be a Set[K]
     val sortedKeys = keys.toSet.toList.sorted
     for {
       k         <- sortedKeys
       semaphore = locks.getOrElseUpdate(k, new Semaphore(1))
-      _ = {
-        semaphore.acquire()
-      }
+      _         = semaphore.acquire()
     } yield ()
-    val r = try {
+    try {
       thunk
-    } catch {
-      case ex: Throwable =>
-        throw ex
     } finally {
       for {
         k         <- sortedKeys
-        semaphore = locks.getOrElse(k, throw new Exception("This cannot happen"))
-        _ = {
-          semaphore.release()
-        }
+        semaphore = locks.getOrElse(k, throw new Exception(s"Couldn't find lock for channel $k"))
+        _         = semaphore.release()
       } yield ()
     }
-    r
   }
 
 }
