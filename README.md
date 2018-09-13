@@ -177,16 +177,9 @@ TBD
 
 ### Installing and running on macOS via Homebrew
 
-#### Installing Homebrew - https://brew.sh
-```bash
-> /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-```
+TBD
 
-#### Installing rnode
-```bash
-> brew install rchain/rchain/rnode
-```
-## Deverloper guide
+## Developer guide
 
 For getting started with development of RChain please refer to the [Developer guide](DEVELOPER.md)
 
