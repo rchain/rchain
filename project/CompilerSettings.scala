@@ -1,3 +1,5 @@
+import java.lang.Runtime.getRuntime
+
 import sbt._
 import sbt.Keys._
 
@@ -23,7 +25,8 @@ object CompilerSettings {
       "-encoding", "UTF-8",
       "-feature",
       "-language:_",
-      "-unchecked"
+      "-unchecked",
+      "-Ybackend-parallelism", getRuntime.availableProcessors().toString
     )
     // format: on
 

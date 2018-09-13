@@ -1,6 +1,6 @@
 package coop.rchain.comm.transport
 
-import java.io.{ByteArrayInputStream, File}
+import java.io.ByteArrayInputStream
 
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
@@ -11,7 +11,6 @@ import coop.rchain.shared.{Cell, Log, LogSource}
 
 import scala.concurrent.duration._
 import scala.util._
-import scala.concurrent.Future
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
@@ -82,11 +81,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
       for {
-        _ <- log.debug(s"Disconnecting from peer ${peer.toAddress}")
         _ <- s.connections.get(peer) match {
-              case Some(c) => Task.delay(c.shutdown()).attempt.void
-              case _ =>
-                log.warn(s"Can't disconnect from peer ${peer.toAddress}. Connection not found.")
+              case Some(c) =>
+                log
+                  .debug(s"Disconnecting from peer ${peer.toAddress}")
+                  .map(kp(Try(c.shutdown())))
+                  .void
+              case _ => Task.unit // ignore if connection does not exists already
             }
       } yield s.copy(connections = s.connections - peer)
     }
@@ -104,18 +105,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
     withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
-      .doOnFinish {
-        case None    => Task.unit
-        case Some(e) =>
-          // TODO: Add other human readable messages for status codes
-          val msg = e match {
-            case sre: StatusRuntimeException if sre.getStatus.getCode == Status.Code.UNAVAILABLE =>
-              "The service is currently unavailable"
-            case _ =>
-              e.getMessage
-          }
-          log.warn(s"Failed to send a message to peer ${peer.toAddress}: $msg")
-      }
 
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,
@@ -157,13 +146,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  private def buildServer(transportLayer: TransportLayerGrpc.TransportLayer): Task[Server] =
+  private def buildServer(transportLayer: GrpcService.TransportLayer): Task[Server] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
         .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
-        .addService(TransportLayerGrpc.bindService(transportLayer, scheduler))
+        .addService(GrpcService.bindService(transportLayer))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
@@ -228,11 +217,10 @@ object TransportState {
   def empty: TransportState = TransportState()
 }
 
-class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
-    implicit scheduler: Scheduler)
-    extends TransportLayerGrpc.TransportLayer {
+class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
+    extends GrpcService.TransportLayer {
 
-  def send(request: TLRequest): Future[TLResponse] =
+  def send(request: TLRequest): Task[TLResponse] =
     request.protocol
       .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
         dispatch(protocol) map {
@@ -241,7 +229,6 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])(
           case HandledWithMessage(response) => returnProtocol(response)
         }
       }
-      .runAsync
 
   private def returnProtocol(protocol: Protocol): TLResponse =
     TLResponse(TLResponse.Payload.Protocol(protocol))

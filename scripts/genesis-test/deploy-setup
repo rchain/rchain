@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+
+import sys
+assert sys.version_info >= (3, 6)
+
+import argparse
+import tempfile
+import os, os.path
+import shutil
+from pathlib import Path
+
+import docker
+import oyaml as yaml
+
+########################################
+
+TMPDIR_PREFIX = 'rchain-genesis-setup_'
+PORT = 40400
+
+dockercli = docker.from_env()
+
+########################################
+
+def dict2obj(d):
+    if isinstance(d, list):
+        return [dict2obj(x) for x in d]
+    if isinstance(d, dict):
+        class C(object):
+            pass
+        o = C()
+        for k in d:
+            o.__dict__[k] = dict2obj(d[k])
+        return o
+    return d
+
+def log_info(msg):
+    print(msg)
+
+########################################
+
+class Node:
+    def __init__(self, ctx, node_yaml):
+        self.__dict__.update(node_yaml.__dict__)
+        self.ctx = ctx
+        self.data_dir = ctx.base_dir / node_yaml.name
+        self.key_file = self.data_dir / 'node.key.pem'
+        self.fqdn = self.name + '.' + ctx.args.network
+        self.url = 'rnode://{}@{}:{}'.format(node_yaml.addr, self.fqdn, PORT)
+        self.container_name = ctx.args.container_prefix + node_yaml.name
+
+class Context:
+    def __init__(self, setup_yaml, args):
+        self.__dict__.update(setup_yaml.__dict__)
+        self.base_dir = Path(args.base_dir or tempfile.mkdtemp(prefix = TMPDIR_PREFIX))
+        self.args = args
+        self.bonds_file = self.base_dir / 'bonds.txt'
+        self.wallets_file = self.base_dir / 'wallets.txt'
+        self.bootstrap = Node(self, self.bootstrap)
+        self.validators = [ Node(self, node_yaml) for node_yaml in self.validators ]
+
+########################################
+
+def init_node_files(node):
+    os.mkdir(node.data_dir)
+    with open(node.key_file, 'w') as f:
+        print(node.sk_pem, file=f)
+
+def init_files(ctx):
+    init_node_files(ctx.bootstrap)
+    with open(ctx.bonds_file, 'w') as f:
+        for node in ctx.validators:
+            init_node_files(node)
+            w = node.wallet
+            print(w.pk, w.balance, file=f)
+    with open(ctx.wallets_file, 'w') as f:
+        for w in ctx.wallets:
+            print('ed25519', w.pk, w.balance, file=f)
+
+def create_node(node, add_cmdline):
+    ctx = node.ctx
+    volumes = {
+        ctx.bonds_file   : { 'bind': '/tmp/bonds.txt' },
+        ctx.wallets_file : { 'bind': '/tmp/wallets.txt' },
+        node.data_dir    : { 'bind': ctx.args.rnode_directory },
+        node.key_file    : { 'bind': ctx.args.rnode_directory + '/node.key.pem' },
+    }
+    common_cmdline = [
+        'run',
+        '--deploy-timestamp', ctx.deploy_timestamp,
+        '--bonds-file', '/tmp/bonds.txt',
+        '--wallets-file', '/tmp/wallets.txt',
+        '--required-sigs', ctx.required_sigs,
+        '--no-upnp',
+        '--host', node.fqdn,
+        '--port', PORT,
+    ]
+    cmdline = [ str(arg) for arg in common_cmdline + add_cmdline ]
+    c = dockercli.containers.run(ctx.args.image,
+        name     = node.container_name,
+        user     = 'root',
+        detach   = True,
+        network  = ctx.args.network,
+        hostname = node.name,
+        volumes  = volumes,
+        command  = cmdline,
+        mem_limit   = ctx.args.memory,
+        environment = {
+            'JAVA_OTPS': ('-Xmx' + ctx.args.memory),
+        }
+    )
+    return c
+
+def create_bootstrap_node(ctx):
+    return create_node(ctx.bootstrap, [
+        '--standalone',
+        '--duration', ctx.approval_duration,
+        '--interval', ctx.approval_interval,
+    ])
+
+def create_validator_node(node):
+    return create_node(node, [
+        '--genesis-validator',
+        '--bootstrap', node.ctx.bootstrap.url,
+        '--validator-private-key', node.wallet.sk,
+    ])
+
+########################################
+
+parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument(
+        'setup_file',
+        type    = argparse.FileType('r'))
+parser.add_argument(
+        '--base-dir',
+        type    = str)
+parser.add_argument(
+        '--image',
+        type    = str,
+        default = 'coop.rchain/rnode:latest')
+parser.add_argument(
+        '--network',
+        type    = str,
+        default = 'rchain.coop')
+parser.add_argument(
+        '--rnode-directory',
+        type    = str,
+        default = '/var/lib/rnode',
+        help    = 'rnode container root directory on each container')
+parser.add_argument(
+        '--container-prefix',
+        type    = str,
+        default = '',
+        help    = '')
+parser.add_argument(
+        '--memory', '-m',
+        type    = str,
+        default = '16g',
+        help    = 'set docker memory limit for all nodes')
+
+########################################
+
+args = parser.parse_args()
+setup_yaml = dict2obj(yaml.load(args.setup_file))
+ctx = Context(setup_yaml, args)
+try:
+    init_files(ctx)
+    log_info(f'Context initialized in {ctx.base_dir}')
+except Exception as e:
+    shutil.rmtree(ctx.base_dir)
+    raise e
+
+bootstrap_container  = create_bootstrap_node(ctx)
+validator_containers = [ create_validator_node(node) for node in ctx.validators ]
+
+#shutil.rmtree(ctx.base_dir)

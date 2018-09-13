@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.Reader
 
-import cats.MonadError
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
@@ -34,17 +34,17 @@ object Interpreter {
   private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
   private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory())
 
+  implicit lazy val sync = implicitly[Sync[Coeval]]
+
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
         term    <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
         inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-        outputs <- normalizeTerm[Coeval](term, inputs)
-        par <- Coeval.delay(
-                Sortable
-                  .sortMatch(outputs.par)
-                  .term)
-      } yield par
+        outputs <- normalizeTerm(term, inputs)
+        sorted <- Sortable[Par]
+                   .sortMatch(outputs.par)
+      } yield sorted.term
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
     }
@@ -63,20 +63,20 @@ object Interpreter {
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] =
+      implicit sync: Sync[M]): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
         if (normalizedTerm.knownFree.wildcards.isEmpty) {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
-          err.raiseError(
+          sync.raiseError(
             TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
         }
       } else normalizedTerm.pure[M]

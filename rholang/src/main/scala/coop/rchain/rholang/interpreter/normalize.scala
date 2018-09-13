@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Applicative, Functor, Monad, MonadError}
+import cats.effect.Sync
+import cats.{Applicative, Functor, Monad}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -40,7 +41,7 @@ object GroundNormalizeMatcher {
   def normalizeMatch(g: AbsynGround): Expr =
     g match {
       case gb: GroundBool   => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
-      case gi: GroundInt    => GInt(gi.integer_)
+      case gi: GroundInt    => GInt(gi.long_.toLong) //TODO raise NumberFormatException in a pure way
       case gs: GroundString => GString(gs.string_)
       case gu: GroundUri    => GUri(stripUri(gu.uri_))
     }
@@ -51,7 +52,7 @@ object GroundNormalizeMatcher {
 
 object RemainderNormalizeMatcher {
   def handleProcVar[M[_]](pv: ProcVar, knownFree: DebruijnLevelMap[VarSort])(
-      implicit err: MonadError[M, InterpreterError]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+      implicit sync: Sync[M]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
         (Option(Var(Wildcard(Var.WildcardMsg()))), knownFree.addWildcard(pvw.line_num, pvw.col_num))
@@ -63,13 +64,13 @@ object RemainderNormalizeMatcher {
               knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
             (Option(Var(FreeVar(newBindingsPair._2))), newBindingsPair._1).pure[M]
           case Some((_, _, line, col)) =>
-            err.raiseError(
+            sync.raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, line, col, pvv.line_num, pvv.col_num))
         }
     }
 
   def normalizeMatchProc[M[_]](r: ProcRemainder, knownFree: DebruijnLevelMap[VarSort])(
-      implicit err: MonadError[M, InterpreterError]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+      implicit err: Sync[M]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
     r match {
       case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[M]
       case pr: ProcRemainderVar =>
@@ -77,7 +78,7 @@ object RemainderNormalizeMatcher {
     }
 
   def normalizeMatchName[M[_]](nr: NameRemainder, knownFree: DebruijnLevelMap[VarSort])(
-      implicit err: MonadError[M, InterpreterError]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+      implicit err: Sync[M]): M[(Option[Var], DebruijnLevelMap[VarSort])] =
     nr match {
       case _: NameRemainderEmpty => (None: Option[Var], knownFree).pure[M]
       case nr: NameRemainderVar =>
@@ -86,9 +87,8 @@ object RemainderNormalizeMatcher {
 }
 
 object CollectionNormalizeMatcher {
-  import scala.collection.JavaConverters._
   def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[CollectVisitOutputs] = {
+      implicit sync: Sync[M]): M[CollectVisitOutputs] = {
     def foldMatch[T](knownFree: DebruijnLevelMap[VarSort],
                      listproc: List[Proc],
                      constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => T)(
@@ -112,8 +112,10 @@ object CollectionNormalizeMatcher {
         }
     }
 
-    def foldMatchMap(listProc: List[AbsynKeyValuePair]): M[CollectVisitOutputs] = {
-      val init = (Vector[(Par, Par)](), input.knownFree, BitSet(), false)
+    def foldMatchMap(knownFree: DebruijnLevelMap[VarSort],
+                     remainder: Option[Var],
+                     listProc: List[AbsynKeyValuePair]) = {
+      val init = (Vector[(Par, Par)](), knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
           e match {
@@ -133,8 +135,20 @@ object CollectionNormalizeMatcher {
           }
         }
         .map { folded =>
-          val resultKnownFree = folded._2
-          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3), resultKnownFree)
+          val resultKnownFree         = folded._2
+          val remainderConnectiveUsed = remainder.exists(HasLocallyFree[Var].connectiveUsed(_))
+          val remainderLocallyFree =
+            remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
+
+          CollectVisitOutputs(
+            ParMap(
+              seq = folded._1.reverse,
+              connectiveUsed = folded._4 || remainderConnectiveUsed,
+              locallyFree = folded._3 | remainderLocallyFree,
+              remainder = remainder
+            ),
+            resultKnownFree
+          )
         }
     }
 
@@ -161,19 +175,38 @@ object CollectionNormalizeMatcher {
           case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
+
       case cs: CollectSet =>
-        val constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => ParSet =
-          (pars, locallyFree, connectiveUsed) =>
-            ParSet(pars, connectiveUsed, Coeval.delay(locallyFree.get))
-        foldMatch(input.knownFree, cs.listproc_.toList, constructor)
-      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cs.procremainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => ParSet =
+                optionalRemainder =>
+                  (pars, locallyFree, connectiveUsed) => {
+                    val tmpParSet =
+                      ParSet(pars, connectiveUsed, Coeval.delay(locallyFree.get), optionalRemainder)
+                    tmpParSet.copy(
+                      connectiveUsed = tmpParSet.connectiveUsed || optionalRemainder.isDefined)
+                }
+
+              foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
+          }
+
+      case cm: CollectMap =>
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cm.procremainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.toList)
+          }
     }
   }
 }
 
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[NameVisitOutputs] =
+      implicit err: Sync[M]): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
         val wildcardBindResult = input.knownFree.addWildcard(wc.line_num, wc.col_num)
@@ -217,7 +250,7 @@ object NameNormalizeMatcher {
 
 object ProcNormalizeMatcher {
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] = {
+      implicit sync: Sync[M]): M[ProcVisitOutputs] = {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
       normalizeMatch[M](subProc, input.copy(par = VectorPar()))
@@ -361,7 +394,7 @@ object ProcNormalizeMatcher {
                                  input.knownFree)
                   .pure[M]
               case Some((_, NameSort, line, col)) =>
-                err.raiseError(
+                sync.raiseError(
                   UnexpectedProcContext(pvv.var_, line, col, pvv.line_num, pvv.col_num))
               case None =>
                 input.knownFree.get(pvv.var_) match {
@@ -373,7 +406,7 @@ object ProcNormalizeMatcher {
                                        .withConnectiveUsed(true),
                                      newBindingsPair._1).pure[M]
                   case Some((_, _, line, col)) =>
-                    err.raiseError(
+                    sync.raiseError(
                       UnexpectedReuseOfProcContextFree(pvv.var_,
                                                        line,
                                                        col,
@@ -391,7 +424,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         input.env.getDeep(p.var_) match {
           case None =>
-            err.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
+            sync.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
           case Some(((idx, kind, line, col), depth)) =>
             kind match {
               case ProcSort =>
@@ -401,7 +434,7 @@ object ProcNormalizeMatcher {
                                                        input.env.depth),
                                      input.knownFree).pure[M]
                   case _ =>
-                    err.raiseError(UnexpectedProcContext(p.var_, line, col, p.line_num, p.col_num))
+                    sync.raiseError(UnexpectedProcContext(p.var_, line, col, p.line_num, p.col_num))
                 }
               case NameSort =>
                 p.varrefkind_ match {
@@ -410,7 +443,7 @@ object ProcNormalizeMatcher {
                                                        input.env.depth),
                                      input.knownFree).pure[M]
                   case _ =>
-                    err.raiseError(UnexpectedNameContext(p.var_, line, col, p.line_num, p.col_num))
+                    sync.raiseError(UnexpectedNameContext(p.var_, line, col, p.line_num, p.col_num))
                 }
             }
         }
@@ -431,7 +464,6 @@ object ProcNormalizeMatcher {
                              nameMatchResult.knownFree))
 
       case p: PMethod => {
-        import scala.collection.JavaConverters._
         for {
           targetResult <- normalizeMatch[M](p.proc_, input.copy(par = Par()))
           target       = targetResult.par
@@ -504,7 +536,6 @@ object ProcNormalizeMatcher {
         normalizeMatch[M](p.proc_, input)
 
       case p: PSend => {
-        import scala.collection.JavaConverters._
         for {
           nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
                               p.name_,
@@ -541,7 +572,6 @@ object ProcNormalizeMatcher {
       }
 
       case p: PContr => {
-        import scala.collection.JavaConverters._
         // A free variable can only be used once in any of the parameters.
         // And we start with the empty free variable map because these free
         // variables aren't free in the surrounding context: they're binders
@@ -684,8 +714,8 @@ object ProcNormalizeMatcher {
           bindingsProcessed                                                <- processBindings(sources)
           bindingsFree                                                     = bindingsProcessed.map(binding => binding._5).foldLeft(BitSet())(_ | _)
           bindingsTrimmed                                                  = bindingsProcessed.map(b => (b._1, b._2, b._3, b._4))
-          receipts = ReceiveBindsSortMatcher
-            .preSortBinds[M, VarSort](bindingsTrimmed)
+          receipts <- ReceiveBindsSortMatcher
+                       .preSortBinds[M, VarSort](bindingsTrimmed)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {
@@ -693,22 +723,19 @@ object ProcNormalizeMatcher {
                             case (_, (shadowingVar, line, col) :: _) =>
                               val Some((_, _, firstUsageLine, firstUsageCol)) =
                                 env.get(shadowingVar)
-                              err.raiseError(
+                              sync.raiseError(
                                 UnexpectedReuseOfNameContextFree(shadowingVar,
                                                                  firstUsageLine,
                                                                  firstUsageCol,
                                                                  line,
                                                                  col))
                         })
-          bindCount = mergedFrees.countNoWildcards
-          binds     = receipts.map(receipt => receipt._1)
-          bindingsConnectiveUsed = binds
-            .flatMap(_.patterns)
-            .exists(c => ChannelLocallyFree.connectiveUsed(c))
+          bindCount  = mergedFrees.countNoWildcards
+          binds      = receipts.map(receipt => receipt._1)
           updatedEnv = input.env.absorbFree(mergedFrees)._1
           bodyResult <- normalizeMatch[M](p.proc_,
                                           ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
-          connective = sourcesConnectives || bodyResult.par.connectiveUsed || bindingsConnectiveUsed
+          connective = sourcesConnectives || bodyResult.par.connectiveUsed
         } yield
           ProcVisitOutputs(
             input.par.prepend(
@@ -726,14 +753,15 @@ object ProcNormalizeMatcher {
       }
 
       case p: PPar =>
-        for {
-          result       <- normalizeMatch[M](p.proc_1, input)
-          chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
-          chainedRes   <- normalizeMatch[M](p.proc_2, chainedInput)
-        } yield chainedRes
+        sync.suspend {
+          for {
+            result       <- normalizeMatch[M](p.proc_1, input)
+            chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
+            chainedRes   <- normalizeMatch[M](p.proc_2, chainedInput)
+          } yield chainedRes
+        }
 
       case p: PNew => {
-        import scala.collection.JavaConverters._
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
@@ -774,7 +802,7 @@ object ProcNormalizeMatcher {
             wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
               freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
           }
-          err.raiseError(
+          sync.raiseError(
             UnexpectedBundleContent(
               s"Bundle's content shouldn't have free variables or wildcards.$errMsg"))
         }
@@ -800,12 +828,11 @@ object ProcNormalizeMatcher {
         } yield res
 
       case p: PMatch => {
-        import scala.collection.JavaConverters._
 
         def liftCase(c: Case): M[(Proc, Proc)] = c match {
           case ci: CaseImpl => Applicative[M].pure[(Proc, Proc)]((ci.proc_1, ci.proc_2))
           case _ =>
-            err.raiseError(UnrecognizedNormalizerError("Unexpected Case implementation."))
+            sync.raiseError(UnrecognizedNormalizerError("Unexpected Case implementation."))
         }
 
         for {
@@ -857,7 +884,7 @@ object ProcNormalizeMatcher {
           .map(n => n.copy(par = n.par ++ input.par))
 
       case _ =>
-        err.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
+        sync.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
     }
   }
 

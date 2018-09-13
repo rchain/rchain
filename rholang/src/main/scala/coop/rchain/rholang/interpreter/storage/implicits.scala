@@ -10,6 +10,7 @@ import coop.rchain.rholang.interpreter.matcher._
 import OptionalFreeMapWithCost._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
@@ -26,15 +27,16 @@ object implicits {
     }
 
   implicit val matchListQuote
-    : StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] =
-    new StorageMatch[BindPattern, ListChannelWithRandom, ListChannelWithRandom] {
+    : StorageMatch[BindPattern, OutOfPhlogistonsError.type, ListChannelWithRandom, ListChannelWithRandom] =
+    new StorageMatch[BindPattern, OutOfPhlogistonsError.type, ListChannelWithRandom, ListChannelWithRandom] {
 
-      def get(pattern: BindPattern, data: ListChannelWithRandom): Option[ListChannelWithRandom] = {
+      def get(pattern: BindPattern, data: ListChannelWithRandom)
+        : Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] = {
         val (cost, resultMatch) = SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
           .runWithCost
 
-        resultMatch
+        val result = resultMatch
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
               val remainderMap = pattern.remainder match {
@@ -53,6 +55,7 @@ object implicits {
                                     data.randomState,
                                     Some(CostAccount.toProto(cost)))
           }
+        Right(result)
       }
     }
 

@@ -8,6 +8,7 @@ import com.typesafe.config.Config
 import javax.management.ObjectName
 import kamon.MetricReporter
 import kamon.metric._
+import java.time.Instant
 
 class JmxReporter extends MetricReporter {
 
@@ -32,15 +33,15 @@ class JmxReporter extends MetricReporter {
   def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
     snapshotAccumulator.add(snapshot)
     val currentData = snapshotAccumulator.peek()
-    preparedResult.set(NodeMetricsSnapshotBean(currentData.metrics))
+    preparedResult.set(NodeMetricsSnapshotBean(currentData))
   }
 
 }
 
-private[diagnostics] class NodeMetricsSnapshotBean(metrics: MetricsSnapshot) extends NodeMXBean {
+private[diagnostics] class NodeMetricsSnapshotBean(snapshot: PeriodSnapshot) extends NodeMXBean {
 
-  private lazy val counters = toMap(metrics.counters)
-  private lazy val gauges   = toMap(metrics.gauges)
+  private lazy val counters = toMap(snapshot.metrics.counters)
+  private lazy val gauges   = toMap(snapshot.metrics.gauges)
 
   private def toMap(metricValues: Seq[MetricValue]): Map[String, MetricValue] =
     metricValues.map(v => v.name -> v).toMap
@@ -68,12 +69,18 @@ private[diagnostics] class NodeMetricsSnapshotBean(metrics: MetricsSnapshot) ext
 
   lazy val getPeers: Long =
     getValue("peers", gauges)
+
+  lazy val getFrom: Long = snapshot.from.toEpochMilli
+
+  lazy val getTo: Long = snapshot.to.toEpochMilli
+
 }
 
 private[diagnostics] object NodeMetricsSnapshotBean {
   def apply(): NodeMetricsSnapshotBean =
-    new NodeMetricsSnapshotBean(MetricsSnapshot(Nil, Nil, Nil, Nil))
-  def apply(metrics: MetricsSnapshot): NodeMetricsSnapshotBean =
+    new NodeMetricsSnapshotBean(
+      PeriodSnapshot(Instant.EPOCH, Instant.EPOCH, MetricsSnapshot(Nil, Nil, Nil, Nil)))
+  def apply(metrics: PeriodSnapshot): NodeMetricsSnapshotBean =
     new NodeMetricsSnapshotBean(metrics)
 }
 
@@ -86,4 +93,6 @@ private[diagnostics] class NodeMetricsBean(bean: AtomicReference[NodeMetricsSnap
   def getP2pEncryptionHandshakeReceiverCount: Long = bean.get.getP2pEncryptionHandshakeReceiverCount
   def getP2pProtocolHandshakeReceiverCount: Long   = bean.get.getP2pProtocolHandshakeReceiverCount
   def getPeers: Long                               = bean.get.getPeers
+  def getFrom: Long                                = bean.get.getFrom
+  def getTo: Long                                  = bean.get.getTo
 }

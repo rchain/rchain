@@ -10,10 +10,10 @@ import coop.rchain.metrics.Metrics
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_], E] private ()(implicit
-                                          monadF: Monad[F],
-                                          refF: Ref[F, Map[BlockHash, BlockMessage]],
-                                          metricsF: Metrics[F])
+class InMemBlockStore[F[_]] private ()(implicit
+                                       monadF: Monad[F],
+                                       refF: Ref[F, Map[BlockHash, BlockMessage]],
+                                       metricsF: Metrics[F])
     extends BlockStore[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
@@ -54,10 +54,10 @@ class InMemBlockStore[F[_], E] private ()(implicit
 }
 
 object InMemBlockStore {
-  def create[F[_], E](implicit
-                      monadF: Monad[F],
-                      refF: Ref[F, Map[BlockHash, BlockMessage]],
-                      metricsF: Metrics[F]): BlockStore[F] =
+  def create[F[_]](implicit
+                   monadF: Monad[F],
+                   refF: Ref[F, Map[BlockHash, BlockMessage]],
+                   metricsF: Metrics[F]): BlockStore[F] =
     new InMemBlockStore()
 
   def createWithId: BlockStore[Id] = {

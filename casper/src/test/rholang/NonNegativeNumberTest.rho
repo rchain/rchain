@@ -5,7 +5,7 @@ new value, add, sub in {
   contract value(@nn, return) = {
     new nnValue in {
       contract nnValue(return) = {
-        @[nn, "value"]!(*return)
+        @(nn, "value")!(*return)
       } |
       return!(*nnValue)
     }
@@ -13,7 +13,7 @@ new value, add, sub in {
   contract add(@nn, @x, return) = {
     new nnAdd in {
       contract nnAdd(return) = {
-        @[nn, "add"]!(x, *return)
+        @(nn, "add")!(x, *return)
       } |
       return!(*nnAdd)
     }
@@ -21,7 +21,7 @@ new value, add, sub in {
   contract sub(@nn, @x, return) = {
     new nnSub in {
       contract nnSub(return) = {
-        @[nn, "sub"]!(x, *return)
+        @(nn, "sub")!(x, *return)
       } |
       return!(*nnSub)
     }
@@ -31,7 +31,11 @@ new value, add, sub in {
   @"NonNegativeNumber"!(15, "properBal") |
   @"NonNegativeNumber"!(100, "addTest") |
   @"NonNegativeNumber"!(100, "subTest") |
-  @"NonNegativeNumber"!(2147483597, "overflowTest") |
+  // Somehow putting the literal value of `Long.MaxValue - 50` below makes `sbt casper/test:compile` fail.
+  // Just as if the tools underneath used a version of rholang that can't parse 64bit ints
+  // The number below is:
+  // (2^31 * 2^31) + (2^31 * 2^31 - 1 - 50) = (2^62 + 2^62 - 1 - 50) = 2^63 - 1 - 50 = Long.MaxValue - 50
+  @"NonNegativeNumber"!((2147483647 + 1) * (2147483647 + 1) + ((2147483647 + 1) * (2147483647 + 1) - 1 - 50), "overflowTest") |
 
   for(
     @negBal <- @"negBal"; 

@@ -16,18 +16,18 @@ import scala.util.Random
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K]
-) extends ISpace[C, P, A, R, K] {
+) extends FreudianSpace[C, P, E, A, R, K] {
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
 
-  private[this] val installs: SyncVar[Installs[C, P, A, R, K]] = {
-    val installs = new SyncVar[Installs[C, P, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
+    val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -41,7 +41,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
   private[this] def install(txn: store.Transaction,
                             channels: Seq[C],
                             patterns: Seq[P],
-                            continuation: K)(implicit m: Match[P, A, R]): Option[(K, Seq[R])] = {
+                            continuation: K)(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -65,11 +65,14 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    val options: Option[Seq[DataCandidate[C, R]]] =
+    val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
       extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+        .map(_.sequence)
 
     options match {
-      case None =>
+      case Left(e) =>
+        throw new RuntimeException(s"Install never result in an invalid match: $e")
+      case Right(None) =>
         installs.update(_.updated(channels, Install(patterns, continuation, m)))
         store.installWaitingContinuation(
           txn,
@@ -79,14 +82,14 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
-      case Some(_) =>
+      case Right(Some(_)) =>
         throw new RuntimeException("Installing can be done only on startup")
     }
 
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
+      implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] =
     Kamon.withSpan(installSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         install(txn, channels, patterns, continuation)
@@ -114,7 +117,7 @@ abstract class RSpaceOps[C, P, A, R, K](val store: IStore[C, P, A, K], val branc
     val emptyRootHash: Blake2b256Hash =
       store.withTxn(store.createTxnRead()) { txn =>
         store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.getAllPastRoots(trieTxn).last
+          store.trieStore.getEmptyRoot(trieTxn)
         }
       }
     reset(emptyRootHash)

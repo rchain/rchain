@@ -1,11 +1,12 @@
 package coop.rchain.models
 
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import com.google.protobuf.ByteString
+import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.serialization.implicits._
-import testImplicits._
-import BitSetBytesMapper._
+import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
+import org.scalatest.prop.PropertyChecks
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
@@ -17,7 +18,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
   }
 
   "Par" should "Pass round-trip serialization" in {
-    forAll { (par: Par) =>
+    forAll { par: Par =>
       val result = rtt(par)
       result.right.get should be(par)
     }
@@ -25,14 +26,28 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 }
 
 class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
-  "BitSetBytesMapper" should "Pass round-trip serialization on empty bitset" in {
-    val emptyBitSet = BitSet()
-    byteStringToBitSet(bitSetToByteString(emptyBitSet)) should be(emptyBitSet)
+  "BitSetBytesMapper" should "encode example BitSet-s as expected" in {
+    checkMapping(BitSet(), byteString())
+    checkMapping(BitSet(0), byteString(1))
+    checkMapping(BitSet(1), byteString(2))
+    checkMapping(BitSet(0, 1), byteString(3))
+    checkMapping(BitSet(7), byteString(-128))
+    checkMapping(BitSet(8), byteString(0, 1))
+    checkMapping(BitSet(63), byteString(0, 0, 0, 0, 0, 0, 0, -128))
+    checkMapping(BitSet(64), byteString(0, 0, 0, 0, 0, 0, 0, 0, 1))
   }
 
-  "BitSetBytesMapper" should "Pass round-trip serialization on a long bitset" in {
-    val nonEmptyBitSet = BitSet(0, 3, 4, 8, 13, 14, 17, 19, 21, 22, 24, 25, 26, 27, 36, 41, 44, 46,
-      47, 50, 51, 53, 56, 57, 58, 60, 63, 65, 66, 67, 68, 70, 72, 88, 910, 911)
-    byteStringToBitSet(bitSetToByteString(nonEmptyBitSet)) should be(nonEmptyBitSet)
+  it should "correctly do an encode-decode round-trip for all possible BitSet-s" in {
+    forAll(checkRoundtrip _)
   }
+
+  private def checkMapping(bitSet: BitSet, byteString: ByteString): Assertion = {
+    bitSetToByteString(bitSet).toByteArray should be(byteString.toByteArray)
+    byteStringToBitSet(byteString) should be(bitSet)
+  }
+
+  private def byteString(bytes: Byte*): ByteString = ByteString.copyFrom(Array[Byte](bytes: _*))
+
+  private def checkRoundtrip(bitSet: BitSet): Assertion =
+    byteStringToBitSet(bitSetToByteString(bitSet)) should be(bitSet)
 }

@@ -27,3 +27,7 @@ case object BlockApproval extends PacketType {
 case object UnapprovedBlock extends PacketType {
   val id = "UnapprovedBlock"
 }
+
+case object NoApprovedBlockAvailable extends PacketType {
+  val id = "NoApprovedBlockAvailable"
+}
