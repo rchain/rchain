@@ -10,7 +10,9 @@ import scala.concurrent.Await
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 
-trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
+trait ConcurrencyTests
+    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    with TestImplicitHelpers {
 
   def version: String
 
@@ -32,11 +34,11 @@ trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, Entries
             persist = false
           )
 
-          r1 shouldBe None
+          r1 shouldBe Right(None)
 
           val r2 = space.produce(channel, bob, persist = false)
 
-          r2 shouldBe None
+          r2 shouldBe Right(None)
 
           val r3 = space.produce(channel, bob, persist = false)
 
@@ -104,18 +106,19 @@ trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, Entries
         for (_ <- 1 to iterations) {
           val r1 = space.produce(channel, bob, persist = false)
 
-          r1 shouldBe None
+          r1 shouldBe Right(None)
 
           val r2 = space.produce(channel, bob, persist = false)
 
-          r2 shouldBe None
+          r2 shouldBe Right(None)
 
-          val r3 = space.consume(
-            List(channel, channel),
-            List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
-            new EntriesCaptor,
-            persist = false
-          )
+          val r3 = space
+            .consume(
+              List(channel, channel),
+              List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
+              new EntriesCaptor,
+              persist = false
+            )
 
           r3 shouldBe defined
 

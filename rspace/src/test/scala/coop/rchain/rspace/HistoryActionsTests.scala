@@ -16,7 +16,8 @@ import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
 trait HistoryActionsTests
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
 
@@ -211,7 +212,7 @@ trait HistoryActionsTests
 
       val r1 = space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe None
+      r1 shouldBe Right(None)
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 

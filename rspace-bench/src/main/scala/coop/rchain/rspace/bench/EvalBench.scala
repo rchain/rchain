@@ -1,10 +1,9 @@
 package coop.rchain.rspace.bench
 
-import cats.implicits._
-import org.openjdk.jmh.annotations._
 import monix.eval.Task
-import monix.execution.{ExecutionModel, Scheduler}
 import monix.execution.schedulers.{CanBlock, TrampolineScheduler}
+import monix.execution.{ExecutionModel, Scheduler}
+import org.openjdk.jmh.annotations._
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -25,8 +24,8 @@ class EvalBench {
         .mkString("Errors received during evaluation:\n", "\n", "\n"))
   }
 
-  def createTest(state: MVCEPPBenchState): Task[Vector[Throwable]] = {
-    val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholand term"))
+  def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
+    val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
       .inj(par)(state.rand, state.costAccountAlg)
       .map(_ => state.runtime.readAndClearErrorVector())
