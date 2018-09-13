@@ -27,7 +27,6 @@ class MultiLockTest extends FlatSpec with Matchers {
         v = m.getOrElse(k, 0) + 1
         _ = m.put(k, v)
       } yield ()
-      //Thread.sleep(10000)
     }
   }
 
@@ -84,7 +83,6 @@ class MultiLockTest extends FlatSpec with Matchers {
           v = m.getOrElse(k, 0) + 1
           _ = m.put(k, v)
         } yield ()
-        //Thread.sleep(10000)
       }
 
     (for {
