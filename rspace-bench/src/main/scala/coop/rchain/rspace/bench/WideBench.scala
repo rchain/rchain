@@ -37,9 +37,9 @@ object WideBench {
     val rhoScriptSource: String    = "/rholang/wide.rho"
     import WideEvalBenchState._
 
-    implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 8)
+    implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 200)
     private lazy val dbDir: Path      = Files.createTempDirectory("rchain-storage-test-")
-    private val mapSize: Long         = 1024 * 1024 * 1024
+    private val mapSize: Long         = 1024L * 1024L * 1024L * 10L
 
     lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
     def rand: Blake2b512Random                  = Blake2b512Random(128)
@@ -77,6 +77,7 @@ object WideBench {
 object WideEvalBenchState {
   def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
     if (errors.nonEmpty) {
+      errors.foreach(_.printStackTrace())
       throw new RuntimeException(
         errors
           .map(_.toString())

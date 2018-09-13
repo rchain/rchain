@@ -74,7 +74,7 @@ object Context {
       .create()
       .setMapSize(mapSize)
       .setMaxDbs(8)
-      .setMaxReaders(126)
+      .setMaxReaders(2048)
       .open(path.toFile, flags: _*)
 
   def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean)(

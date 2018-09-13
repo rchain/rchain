@@ -146,20 +146,27 @@ class LMDBStore[C, P, A, K] private (
     fetchGNAT(txn, channelsHash).map(_.wks).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: Transaction,
+  private[rspace] def removeWaitingContinuation(outer: Transaction,
                                                 channels: Seq[C],
                                                 index: Int): Unit = {
     val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash) match {
+    this.withTxn(this.createTxnRead()) { txn =>
+      fetchGNAT(txn, channelsHash)
+    } match {
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
         if (newContinuations.nonEmpty)
-          insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
-        else
-          deleteGNAT(txn, channelsHash, gnat)
+          this.withTxn(this.createTxnWrite()) { txn =>
+            insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+          } else
+          this.withTxn(this.createTxnWrite()) { txn =>
+            deleteGNAT(txn, channelsHash, gnat)
+          }
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
-        insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+        this.withTxn(this.createTxnWrite()) { txn =>
+          insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+        }
       case None =>
         throw new Exception("Attempted to remove a continuation from a value that doesn't exist")
     }

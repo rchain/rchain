@@ -200,7 +200,7 @@ class RSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
             if (!persistK) {
-              store.withTxn(store.createTxnWrite()) { txn =>
+              store.withTxn(store.createTxnRead()) { txn =>
                 store.removeWaitingContinuation(txn, channels, continuationIndex)
               }
             }
