@@ -4,34 +4,6 @@ imports JOINS
 // *******************************************************************
 //                          FREE
 // *******************************************************************
-// Some syntax specifically for the "free" module
-// First we construct the syntax for our nodes
-syntax Ints ::= List{ Int, ","}
-
-syntax Set ::= "List2Set(" List ")"
-syntax List ::= "Set2List(" Set ")"
-
-syntax HigherProcsOrHigherNames ::= List{HigherProcOrHigherName, ","}
-              | HigherProcs
-              | HigherNames
-
-// Sets and Lists
-syntax SetOrList ::= Set
-              | List
-
-syntax NodeSyntax ::=
-            // For normal nodes, the syntax is
-            //[ Id ][ Proc/Name ][ Parent ][ Children ]{ Set of free vars }[ Node constructed ]
-      "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}[" Bool "]"
-            // Nodes corresponding to binders (bnodes) are given the syntax
-            // [ Id ][ Parent ][ Plus ID ; Plus Process/Name ][ Minus ID ; Minus Process/Name
-            //                                        ]{ Set of free vars }[ Node constructed (T/F)]
-    | "[" Int "][" Exp "][" Int ";" HigherPats "][" List ";" HigherPats "]{" SetOrList "}[" Bool "]"
-            // We need to make sure that a binder doesn't try to bind two variables twice. To do
-            // this, we put a special marker on those elements corresponding to a binder
-          //| "[" Int "][" HigherPat "][" Exp "][" List "]{" SetOrList "}{" List "}{""}[" Bool "]"
-
-
 
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 /// The "fv( )" function: collects free variables of any statement

@@ -11,55 +11,6 @@ imports MATCH-PROCESS
 // string to each instance of the match function.
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
-// Some syntax specifically for the "matching-function" module
-// Some needed syntax for matching
-// This distinguishes between Processes and Names with and without variables
-syntax ProcOrName ::= Id
-              | ProcOrNameNoVars
-              | Name
-              | Proc
-
-syntax HigherProcOrHigherName ::= Id
-              | HigherProcOrHigherNameNoVars
-              | HigherName
-              | HigherProc
-
-// For matching, we need to make a distinction between variables and no variables
-syntax ProcOrNameNoVars ::= NameNoVars
-              | ProcNoVars
-
-syntax HigherProcOrHigherNameNoVars ::= HigherNameNoVars
-              | HigherProcNoVars
-
-syntax StringlessMatchFormSyntax ::=
-              // Quote, Eval and Var
-                "[" HigherPat "]"
-              // Listen and Persistent Listen, as well as Contracts
-              | "[" HigherNamePat "][" HigherNamePat "][" HigherProcPat "]"
-              // New
-              | "[" Ids "][" HigherProcPat "]"
-              // Send
-              | "[" HigherNamePat "][" HigherProcPat "]"
-              // Match
-              | "[" HigherProcPat "][" HigherMatchCasesPat "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-              // Logical And's and Or's
-              | "[" String "][" HigherPat "][" HigherPat "]"
-              // Nil
-              | "[" "]"
-              // Hashed new HigherNames
-              | "[" Int "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-
-// Syntax which is needed for various matching operations
-syntax CanBeStdMatched ::= Id
-              | "intostdmatchform(" HigherPat ")"
-              | "intostdtfmatchform(" HigherPat ")"
-              | String StringlessMatchFormSyntax
-              | Ground
-              | HigherNameNoVars
-              | KResult
-
 // Now the semantics of the match function
 // Take the tuples one at a time
 rule <thread> ... <k> ... aritymatch[ S:String ](
