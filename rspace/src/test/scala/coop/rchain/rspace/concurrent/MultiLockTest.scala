@@ -59,11 +59,11 @@ class MultiLockTest extends FlatSpec with Matchers {
 
     (for {
       _ <- acquire(m)(Seq("a", "b"))
-      _ <- Task.delay {
-            try { tested.acquire(Seq("a", "c")) { throw new Exception() } } catch {
-              case _: Exception =>
+      _ <- Task
+            .delay {
+              tested.acquire(Seq("a", "c")) { throw new Exception() }
             }
-          }
+            .onErrorRecoverWith { case _: Exception => Task.now(()) }
       _ <- acquire(m)(Seq("a", "c"))
     } yield ()).unsafeRunSync
 
