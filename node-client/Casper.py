@@ -4,23 +4,54 @@ Usage:
   $ export FLASK_APP=Casper.py
   $ flask run
 
-  Navigate to http://localhost:5000/api/block/<block_hash>
-
 We assume the RChain node is running and that it is listening on port
 5000. Double-check that you see this message in the logs:
 
-  Server started, listening on 50000
+  Server started, listening on 5000
+
+There are 2 api provided in the flask app.
+
+1. Navigate to http://localhost:5000/api/blocks
+
+This api shows all the blocks in the chain.
 
 The output should be something like:
-  {
-    "blockHash": "9310ded826...",
-    "blockNumber": "1",
-    "parentsHashList": "['6b52036b26fcc8bc17140c8aad712f65e97d7b7d603727d5934bbbc3f893db9b']",
-    "status": "Success",
-    "tsDesc": "@{11}!(11) | for( x0 <= @{\"stdout\"} ) { Nil } | for( x0 <= @{\"stderr\"} ) { Nil } | for( x0, x1 <= @{\"stderrAck\"} ) { Nil } | for( x0, x1 <= @{\"stdoutAck\"} ) { Nil }"
-  }
+{
+    "blocks": [
+        {
+            "faultTolerance": "-0.8666666746139526",
+            "hash": "8a50ce909d3605b43538fbe2da92289cb14549223c3dd726bef647535db5153b",
+            "merkleroot": "00a956e671e3ba40d09cb68e8b22f4f5fdab68f68713d2046a6811ad13e6f521",
+            "pool_info": {},
+            "shardId": "rchain",
+            "size": "40519",
+            "time": "0",
+            "tupleSpaceDump": "@{\"proofOfStake\"}!(.........",
+            "txlength": "8"
+        }
+        ],
+    "length": 1
+}
 
-Tested with rnode-assembly-0.3.1.jar from commit 2424b43caae May 22 2018.
+2. Navigate to http://localhost:5000/api/block/<block_hash>
+
+This api shows the specific block by the block_hash you offer.
+
+The output should be something like:
+{
+    "faultTolerance": "-0.8666666746139526",
+    "hash": "8a50ce909d3605b43538fbe2da92289cb14549223c3dd726bef647535db5153b",
+    "merkleroot": "00a956e671e3ba40d09cb68e8b22f4f5fdab68f68713d2046a6811ad13e6f521",
+    "pool_info": {},
+    "shardId": "rchain",
+    "size": "40519",
+    "time": "0",
+    "tupleSpaceDump": "@{\"proofOfStake\"}!({\"00f3bd4ebf3f2723e........",
+    "tx": [],
+    "txlength": "8"
+}
+
+Tested with rnode-0.6.4 Sep 13 2018.
 
 '''
 
@@ -39,7 +70,7 @@ import math
 
 def buildCasperCh(argv, stdout, insecure_channel,
          host='127.0.0.1',
-         port=50000):
+         port=40401):
     channel = insecure_channel('%s:%s' % (host, port))
     return CasperMessage_pb2_grpc.DeployServiceStub(channel)
 
@@ -75,9 +106,9 @@ def blocks():
     req = CasperMessage_pb2.google_dot_protobuf_dot_empty__pb2.Empty()
     output = casperCh.showBlocks(req)
     blocks = []
-    for block in output.blocks:
+    for block in output:
         block_dict = {"pool_info": {}}
         for field in block.ListFields():
             add_field_to_block_dict(block_dict, field)
         blocks.append(block_dict)
-    return jsonify({"blocks": blocks, "length": output.length})
+    return jsonify({"blocks": blocks, "length": len(blocks)})
