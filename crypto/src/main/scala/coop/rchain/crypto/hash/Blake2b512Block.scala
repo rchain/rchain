@@ -9,28 +9,28 @@ import org.scalacheck.{Arbitrary, Gen}
 import scalapb.TypeMapper
 
 /**
-Block oriented Blake2b512 class.
-
-We're using some of the tree hashing parameters to achieve online tree hashing,
-where the structure of the tree is provided by the application. This precludes
-using the depth counters. Also, because we are online, we can't know before-hand
-that a node is the last in a level, or is offset. When we hash the root, we know
-that it is the root, but since we are only publishing the root hash, and not the
-sub-tree, this is sufficient protection against extension.
-
-I've checked that we should be fine against the criteria here.
-See: "Sufficient conditions for sound tree and sequential hashing modes" by
-Guido Bertoni, Joan Daemen, Michaël Peeters, and Gilles Van Assche
-
-    We also have data at every level, so we're using the fanout parameter to
-distinguish child-hashes from data. To make it convenient for block-orientation,
-we will null-pad an odd number of child hashes. This means that the fanout varies per-node
-rather than being set for the whole instance. Where applicable, we are setting
-the other tree-parameters accordingly. Namely, max-depth to 255 (unlimited) and
-inner hash length to 64.
-
-This class is an abbreviated version of Blake2bDigest.java from BouncyCastle
-https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/crypto/digests/Blake2bDigest.java
+  *Block oriented Blake2b512 class.
+ **
+ We're using some of the tree hashing parameters to achieve online tree hashing,
+  *where the structure of the tree is provided by the application. This precludes
+  *using the depth counters. Also, because we are online, we can't know before-hand
+  *that a node is the last in a level, or is offset. When we hash the root, we know
+  *that it is the root, but since we are only publishing the root hash, and not the
+  *sub-tree, this is sufficient protection against extension.
+ **
+ I've checked that we should be fine against the criteria here.
+  *See: "Sufficient conditions for sound tree and sequential hashing modes" by
+  *Guido Bertoni, Joan Daemen, Michaël Peeters, and Gilles Van Assche
+ **
+ We also have data at every level, so we're using the fanout parameter to
+  *distinguish child-hashes from data. To make it convenient for block-orientation,
+  *we will null-pad an odd number of child hashes. This means that the fanout varies per-node
+  *rather than being set for the whole instance. Where applicable, we are setting
+  *the other tree-parameters accordingly. Namely, max-depth to 255 (unlimited) and
+  *inner hash length to 64.
+ **
+ This class is an abbreviated version of Blake2bDigest.java from BouncyCastle
+  *https://github.com/bcgit/bc-java/blob/master/core/src/main/java/org/bouncycastle/crypto/digests/Blake2bDigest.java
   */
 class Blake2b512Block {
   import Blake2b512Block._

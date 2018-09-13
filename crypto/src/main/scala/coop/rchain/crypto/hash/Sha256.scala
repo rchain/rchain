@@ -3,8 +3,8 @@ package coop.rchain.crypto.hash
 import java.security.MessageDigest
 
 /**
-Sha256 hashing algorithm
-
+  *Sha256 hashing algorithm
+  *
   * {{{
   * >>> import coop.rchain.crypto.codec._
   *

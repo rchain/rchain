@@ -128,12 +128,12 @@ class LocationSpec extends WordSpec with Matchers {
     }
 
     /** TODO: Uncomment when setLex add logic to deal with the case that `numberOfSlot` is smaller than `offset`
-    {
-      val variable = LexVariable(indirect = false, level = 0, offset = 100)
-      val res      = Location.store(variable, testCtxt, RblString("test"))
-
-      res shouldBe true
-    }
+    *{
+    *val variable = LexVariable(indirect = false, level = 0, offset = 100)
+    *val res      = Location.store(variable, testCtxt, RblString("test"))
+ **
+ res shouldBe true
+    *}
     */
   }
 

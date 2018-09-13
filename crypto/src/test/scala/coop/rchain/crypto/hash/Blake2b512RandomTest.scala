@@ -133,8 +133,7 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
 
   it should "roll over when enough byte-splits have occurred" in {
     val b2Random = Blake2b512Random(emptyMsg)
-    val rollover = 0.to(112).foldLeft(b2Random) { (rand, n) =>
-      rand.splitByte(n.toByte)
+    val rollover = 0.to(112).foldLeft(b2Random) { (rand, n) => rand.splitByte(n.toByte)
     }
     val res1 = rollover.next()
     val res2 = rollover.next()
@@ -146,8 +145,7 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
   it should "correctly handle nexts that are then rolled over" in {
     val b2Random = Blake2b512Random(emptyMsg)
     b2Random.next()
-    val rollover = 0.to(112).foldLeft(b2Random) { (rand, n) =>
-      rand.splitByte(n.toByte)
+    val rollover = 0.to(112).foldLeft(b2Random) { (rand, n) => rand.splitByte(n.toByte)
     }
     val res1 = rollover.next()
     val res2 = rollover.next()

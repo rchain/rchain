@@ -12,8 +12,8 @@ class Rev[A](rhoCode: A => String, wallets: Seq[A]) extends CompiledRholangSourc
     |    //TODO: How should the revMint unforgeable name be exposed (if at all)?
     |
     |    //public contract for making empty rev purses
-    |    contract @["Rev", "makePurse"](return) = {
-    |       @[revMint, "makePurse"]!(0, *return)
+    |    contract @("Rev", "makePurse")(return) = {
+    |       @(revMint, "makePurse")!(0, *return)
     |    } |
     |
     |    //basic wallets which exist from genesis

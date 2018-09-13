@@ -9,7 +9,7 @@ Global / cancelable := true
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.4",
+  scalaVersion := "2.12.6",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -137,7 +137,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.6.3",
+    version := "0.6.4",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",

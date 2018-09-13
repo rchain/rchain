@@ -1,0 +1,21 @@
+// Wildcard match
+// The following should match
+
+match for(x <- @Nil){ x!(Nil) }
+{
+  for(z <- @Nil){ _ } => { @Nil!(Nil) }
+}
+
+// despite the fact that
+//    match for(x <- @Nil){ x!(Nil) }
+//    {
+//      for(z <- @Nil){ w } => { @Nil!(Nil) }
+//    }
+// does not, due to the fact that we're trying to
+// bind w to the statement x!(Nil), which has a
+// free variable in it.
+//
+// The principle illustrated here is that, since
+// a wildcard doesn't bind to anything, patterns with
+// wildcards are strictly more general than patterns
+// with variables

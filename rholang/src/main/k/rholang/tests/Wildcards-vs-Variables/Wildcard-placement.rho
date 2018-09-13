@@ -1,0 +1,6 @@
+// This example is to illustrate the placement of wildcards. While
+// we can write
+//    for( x <- @Nil ){ x!(Nil) }
+// we cannot write the following program:
+
+for( _ <- @Nil ){ _!(Nil) }

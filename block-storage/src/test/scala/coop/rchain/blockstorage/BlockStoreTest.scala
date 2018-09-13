@@ -66,16 +66,16 @@ trait BlockStoreTest
 
   // TODO: move to `shared` along with code in coop.rchain.rspace.test.ArbitraryInstances
   /**
-   Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
-
-   Distinct list of elements from a given arbitrary
+    *Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0
+ **
+ Distinct list of elements from a given arbitrary
     */
   def distinctListOf[T: Arbitrary] =
     distinctListOfGen(arbitrary[T])(_ == _)
 
   /**
-   Distinct list of elements from a given generator
-   with a maximum number of elements to discard
+    *Distinct list of elements from a given generator
+    *with a maximum number of elements to discard
     */
   def distinctListOfGen[T](gen: Gen[T], maxDiscarded: Int = 1000)(
       comp: (T, T) => Boolean): Gen[List[T]] = {

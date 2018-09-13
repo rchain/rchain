@@ -3,27 +3,31 @@ import Keys._
 import sbt.io.Path.relativeTo
 
 /*
- * There doesn't seem to be a good way to have a plugin defined in 
+ * There doesn't seem to be a good way to have a plugin defined in
  * one sub-project be used in another sub-project. So we need to
  * call an assembled jar instead, building it if necessary.
  */
 object Rholang {
 
   def jarOutDated(jar: File, jarSources: File): Boolean = {
-    val scalaFiles = (jarSources ** "*.scala").get
+    val scalaFiles   = (jarSources ** "*.scala").get
     val latestSource = scalaFiles.maxBy(_.lastModified())
-    
+
     (!jar.exists()) || (jar.lastModified() < latestSource.lastModified())
   }
 
-  def constructArtifacts(jar: File, rhoSourceDir: File, srcManaged: File, resources: File): Seq[File] = {
+  def constructArtifacts(jar: File,
+                         rhoSourceDir: File,
+                         srcManaged: File,
+                         resources: File): Seq[File] = {
     import scala.sys.process._
 
-    val command = 
-      s"java -jar ${jar.getAbsolutePath()} ${rhoSourceDir.getAbsolutePath()} ${srcManaged.getAbsolutePath()} ${resources.getAbsolutePath()}"
-      
+    val command =
+      s"java -jar ${jar.getAbsolutePath()} ${rhoSourceDir.getAbsolutePath()} ${srcManaged
+        .getAbsolutePath()} ${resources.getAbsolutePath()}"
+
     val status = command.!
-    
+
     if (status == 0) {
       (srcManaged ** "*.scala").get
     } else {
@@ -31,9 +35,10 @@ object Rholang {
     }
   }
 
-  val rholangSource = settingKey[File]("Default Rholang source directory.")
+  val rholangSource             = settingKey[File]("Default Rholang source directory.")
   val rholangProtoBuildAssembly = taskKey[File]("Rholang proto build Jar")
-  val rholangScalaProto = taskKey[Seq[File]]("Generates managed Scala sources and proto from Rholang.")
+  val rholangScalaProto =
+    taskKey[Seq[File]]("Generates managed Scala sources and proto from Rholang.")
 
   lazy val rholangSettings = Seq(
     exportJars := true,

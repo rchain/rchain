@@ -45,6 +45,7 @@ object Ed25519 {
     * }}}
     *
     * Input values
+    *
     * @param data The data which was signed, must be exactly 32 bytes
     * @param signature The signature
     * @param pub The public key which did the signing
@@ -82,6 +83,7 @@ object Ed25519 {
     * }}}
     *
     * Input values
+    *
     * @param data Message hash, 32 bytes
     * @param sec Secret key, 32 bytes
     *

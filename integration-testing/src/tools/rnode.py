@@ -2,7 +2,7 @@ import logging
 import re
 import tempfile
 import tools.resources as resources
-from tools.util import log_box
+from tools.util import log_box, make_tempfile, make_tempdir
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -88,8 +88,14 @@ class Node:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-def __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, memory, cpuset_cpus):
-    deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="rchain-integration-test")
+def __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, extra_volumes, allowed_peers, memory, cpuset_cpus):
+    deploy_dir = make_tempdir("rchain-integration-test")
+
+    hosts_allow_file_content = \
+        "ALL:ALL" if allowed_peers == None else "\n".join(f"ALL: {peer}" for peer in allowed_peers)
+
+    hosts_allow_file = make_tempfile(f"hosts-allow-{name}", hosts_allow_file_content)
+    hosts_deny_file = make_tempfile(f"hosts-deny-{name}", "ALL: ALL")
 
     container  = docker_client.containers.run( image,
                                                name=name,
@@ -99,6 +105,8 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                mem_limit=memory,
                                                network=network,
                                                volumes=[
+                                                           f"{hosts_allow_file}:/etc/hosts.allow",
+                                                           f"{hosts_deny_file}:/etc/hosts.deny",
                                                            f"{bonds_file}:{rnode_bonds_file}",
                                                            f"{deploy_dir}:{rnode_deploy_dir}"
                                                        ] + extra_volumes,
@@ -106,7 +114,7 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                hostname=name)
     return Node(container, deploy_dir, docker_client, rnode_timeout)
 
-def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_timeout, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_timeout, allowed_peers = None, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create bootstrap node.
     """
@@ -126,25 +134,30 @@ def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_ti
 
     logging.info(f"Starting bootstrap node {name}\ncommand:`{command}`")
 
-    return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, memory, cpuset_cpus)
+    return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, volumes, allowed_peers, memory, cpuset_cpus)
 
-def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, rnode_timeout, image=default_image, memory="1024m", cpuset_cpus="0"):
+def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, rnode_timeout, allowed_peers = None, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
     Create peer nodes
     """
     assert len(set(key_pairs)) == len(key_pairs), "There shouldn't be any duplicates in the key pairs"
+
+    def peer_name(i): return f"peer{i}.{network}"
+
+    if allowed_peers == None:
+        allowed_peers = [bootstrap.name] + [peer_name(i) for i in range(0, len(key_pairs))]
 
     bootstrap_address = bootstrap.get_rnode_address()
 
     logging.info(f"Create {len(key_pairs)} peer nodes to connect to bootstrap {bootstrap_address}.")
 
     def create_peer(i, key_pair):
-        name = f"peer{i}.{network}"
+        name = peer_name(i)
         command = f"run --bootstrap {bootstrap_address} --validator-private-key {key_pair.private_key} --validator-public-key {key_pair.public_key} --host {name}"
 
         logging.info(f"Starting peer node {name} with command: `{command}`")
 
-        return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], memory, cpuset_cpus)
+        return __create_node_container(docker_client, image, name, network, bonds_file, command, rnode_timeout, [], allowed_peers, memory, cpuset_cpus)
 
     return [ create_peer(i, key_pair)
              for i, key_pair in enumerate(key_pairs)]

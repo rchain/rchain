@@ -58,6 +58,7 @@ object Secp256k1 {
     * }}}
     *
     * Input values
+    *
     * @param data The data which was signed, must be exactly 32 bytes
     * @param signature The signature
     * @param pub The public key which did the signing
@@ -86,6 +87,7 @@ object Secp256k1 {
     * }}}
     *
     * Input values
+    *
     * @param data Message hash, 32 bytes
     * @param sec Secret key, 32 bytes
     *
@@ -110,6 +112,7 @@ object Secp256k1 {
     * }}}
     *
     * Input value
+    *
     * @param seckey ECDSA Secret key, 32 bytes
     *
     * Return value

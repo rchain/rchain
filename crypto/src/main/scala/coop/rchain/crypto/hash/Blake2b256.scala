@@ -7,8 +7,8 @@ import scodec.bits.ByteVector
 import scala.collection.immutable.Seq
 
 /**
-Blake2b256 hashing algorithm
-
+  *Blake2b256 hashing algorithm
+  *
   * {{{
   * >>> import coop.rchain.crypto.codec._
   *

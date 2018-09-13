@@ -2,14 +2,13 @@ package coop.rchain.node.api
 
 import coop.rchain.node.diagnostics
 import coop.rchain.p2p.effects._
-
 import io.grpc.{Server, ServerBuilder}
 import io.grpc.netty.NettyServerBuilder
+
 import scala.concurrent.Future
-
 import cats._
+import cats.effect.Sync
 import cats.implicits._
-
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
@@ -23,7 +22,6 @@ import coop.rchain.node.model.diagnostics._
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-
 import io.grpc.{Server, ServerBuilder}
 import monix.execution.Scheduler
 
@@ -46,7 +44,7 @@ object GrpcServer {
     }
 
   def acquireExternalServer[
-      F[_]: Capture: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
+      F[_]: Sync: Capture: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
       port: Int,
       maxMessageSize: Int)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

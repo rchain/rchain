@@ -6,6 +6,7 @@ trait HasLocallyFree[T] {
 
   /** Return true if a connective (including free variables and wildcards) is
     *  used anywhere in {@code source}.
+    *
     *  @param source the object in question
     *  Specifically looks for constructions that make a pattern non-concrete.
     *  A non-concrete pattern cannot be viewed as if it were a term.
@@ -14,6 +15,7 @@ trait HasLocallyFree[T] {
 
   /** Returns a bitset representing which variables are locally free if the term
     *  is located at depth {@code depth}
+    *
     *  @param source the object in question
     *  @param depth pattern nesting depth
     *  This relies on cached values based on the actual depth of a term and will
@@ -27,4 +29,18 @@ trait HasLocallyFree[T] {
     *  etc.
     */
   def locallyFree(source: T, depth: Int): BitSet
+}
+
+object HasLocallyFree {
+  def apply[T](implicit ev: HasLocallyFree[T]) = ev
+
+  implicit def forTuple[A: HasLocallyFree, B: HasLocallyFree]: HasLocallyFree[(A, B)] =
+    new HasLocallyFree[(A, B)] {
+      override def connectiveUsed(source: (A, B)): Boolean =
+        HasLocallyFree[A].connectiveUsed(source._1) || HasLocallyFree[B].connectiveUsed(source._2)
+
+      override def locallyFree(source: (A, B), depth: Int): BitSet =
+        HasLocallyFree[A].locallyFree(source._1, depth) | HasLocallyFree[B].locallyFree(source._2,
+                                                                                        depth)
+    }
 }

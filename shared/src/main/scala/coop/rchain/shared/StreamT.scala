@@ -94,9 +94,10 @@ sealed abstract class StreamT[F[_], +A] { self =>
       implicit monad: Monad[F],
       traverse: Traverse[F]): Eval[F[B]] = self match {
     case SCons(curr, lazyTail) =>
-      val mappedLazyTail = lazyTail.flatMap { tailF =>
-        monad.map(tailF)(_.foldRight(lb)(f)).flatSequence
-      }
+      val mappedLazyTail =
+        lazyTail.flatMap { tailF =>
+          monad.map(tailF)(_.foldRight(lb)(f)).flatSequence
+        }
       f(curr, mappedLazyTail)
 
     case SLazy(lazyTail) =>

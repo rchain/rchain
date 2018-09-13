@@ -3,8 +3,8 @@ package coop.rchain.crypto.hash
 import org.bouncycastle.crypto.digests.KeccakDigest
 
 /**
-Keccak256 hashing algorithm
-
+  *Keccak256 hashing algorithm
+  *
   * {{{
   * >>> import coop.rchain.crypto.codec._
   *

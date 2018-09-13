@@ -10,7 +10,6 @@ case class Server(
     host: Option[String],
     port: Int,
     httpPort: Int,
-    metricsPort: Int,
     noUpnp: Boolean,
     defaultTimeout: Int,
     bootstrap: PeerNode,

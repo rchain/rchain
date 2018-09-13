@@ -10,7 +10,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 
@@ -63,13 +63,11 @@ trait IStoreTests
       (channel: String, datumValue: String, index: Int) =>
         val store = space.store
         val key   = List(channel)
-        val data = List.tabulate(size) { i =>
-          Datum.create(channel, datumValue + i, false)
+        val data = List.tabulate(size) { i => Datum.create(channel, datumValue + i, false)
         }
 
         store.withTxn(store.createTxnWrite()) { txn =>
-          data.foreach { d =>
-            store.putDatum(txn, key, d)
+          data.foreach { d => store.putDatum(txn, key, d)
           }
           store.removeDatum(txn, key, index - 1)
           store.getData(txn, key) should contain theSameElementsAs (data.filterNot(

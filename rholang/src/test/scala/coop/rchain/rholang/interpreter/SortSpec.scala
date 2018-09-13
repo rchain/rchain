@@ -6,6 +6,8 @@ import coop.rchain.models.rholang.sort.Sortable
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.rholang.sort.ScoredTerm
 
+import scala.collection.immutable.BitSet
+
 class SortSpec extends FlatSpec with Matchers {
 
   "GroundSortMatcher" should "discern sets with and without remainder" in {
@@ -15,9 +17,25 @@ class SortSpec extends FlatSpec with Matchers {
     )
   }
 
+  it should "discern maps with and without remainder" in {
+    assertOrder[Expr](
+      ParMap(Seq.empty),
+      ParMap(Seq.empty,
+             connectiveUsed = false,
+             locallyFree = BitSet(),
+             remainder = Some(Var(FreeVar(0))))
+    )
+  }
+
   private def assertOrder[T: Sortable](smaller: T, bigger: T): Any = {
-    val left: ScoredTerm[T]  = Sortable[T].sortMatch(smaller)
-    val right: ScoredTerm[T] = Sortable[T].sortMatch(bigger)
+    val left: ScoredTerm[T]  = checkSortingAndScore(smaller)
+    val right: ScoredTerm[T] = checkSortingAndScore(bigger)
     assert(Ordering[ScoredTerm[T]].compare(left, right) < 0)
+  }
+
+  def checkSortingAndScore[T: Sortable](term: T): ScoredTerm[T] = {
+    val scored: ScoredTerm[T] = Sortable[T].sortMatch(term)
+    assert(scored.term == term, "Either input term not sorted or sorting returned wrong results")
+    scored
   }
 }

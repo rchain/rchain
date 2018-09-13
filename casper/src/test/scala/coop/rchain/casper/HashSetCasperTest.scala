@@ -2,29 +2,33 @@ package coop.rchain.casper
 
 import java.nio.file.Files
 
-import cats.Id
+import cats.{Id, Monad}
 import cats.data.EitherT
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
-import coop.rchain.casper.helper.{
-  BlockStoreTestFixture,
-  BlockUtil,
-  CasperEffect,
-  HashSetCasperTestNode
-}
+import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.TaskContrib.TaskOps
+import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
 import coop.rchain.comm.transport.CommMessages.packet
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.shared.{Log, Time}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -57,38 +61,15 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
-  it should "not allow multiple threads to propose a block at the same time" in {
-    val scheduler            = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
-
-    //deploy runs forever, so processing it cannot be completed
-    val deploy =
-      ProtoUtil.sourceDeploy("@0!!(Nil) | for(_ <= @0){ Nil }", System.currentTimeMillis())
-    val testProgram = for {
-      casper <- casperEff
-      d      <- casper.deploy(deploy)
-      _      = assert(d.isRight)
-      //In the race, one thread starts processing (can never complete) and the other sees
-      //a proposal is already in progress and so returns None immediately.
-      result <- EitherT(Task.race(casper.createBlock.value, casper.createBlock.value).map(_.merge))
-    } yield result
-    //have a timeout so that the test will either pass or fail in finite time
-    val raceResult: CreateBlockStatus =
-      testProgram.value.map(_.right.get).timeout(5.seconds).unsafeRunSync(scheduler)
-
-    raceResult shouldBe LockUnavailable
-    cleanUp()
-  }
-
   it should "not allow multiple threads to process the same block" in {
-    val scheduler            = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)(scheduler)
+    val scheduler = Scheduler.fixedPool("three-threads", 3)
+    val node      = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)(scheduler)
+    val casper    = node.casperEff
 
     val deploy = ProtoUtil.basicDeployData(0)
     val testProgram = for {
-      casper <- casperEff
-      _      <- casper.deploy(deploy)
-      block  <- casper.createBlock.map { case Created(block) => block }
+      _     <- casper.deploy(deploy)
+      block <- casper.createBlock.map { case Created(block) => block }
       result <- EitherT(
                  Task
                    .racePair(casper.addBlock(block.underlying).value,
@@ -105,7 +86,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       testProgram.value.unsafeRunSync(scheduler).right.get
 
     threadStatuses should matchPattern { case (Processing, Valid) | (Valid, Processing) => }
-    cleanUp()
+    node.tearDown()
   }
 
   it should "create blocks based on deploys" in {
@@ -365,7 +346,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(0).casperEff.addBlock(signedBlock1.underlying)
     nodes(1).receive()
-    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
+    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
     val Created(signedBlock2) = nodes(0).casperEff
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
@@ -425,11 +406,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
 
     nodes(1).casperEff.addBlock(signedBlock1.underlying)
-    nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
-    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
+    nodes(0).transportLayerEff.clear(nodes(0).local) //nodes(0) misses this block
+    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
     nodes(0).casperEff.addBlock(signedBlock1Prime.underlying)
-    nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
+    nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     nodes(2).receive()
 
     nodes(1).casperEff.contains(signedBlock1) should be(true)
@@ -444,10 +425,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(2).casperEff.addBlock(signedBlock3.underlying)
     nodes(1).casperEff.addBlock(signedBlock2.underlying)
-    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) ignores block2
-    nodes(1).receive() // receives block3; asks for block1'
-    nodes(2).receive() // receives request for block1'; sends block1'
-    nodes(1).receive() // receives block1'; adds both block3 and block1'
+    nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) ignores block2
+    nodes(1).receive()                               // receives block3; asks for block1'
+    nodes(2).receive()                               // receives request for block1'; sends block1'
+    nodes(1).receive()                               // receives block1'; adds both block3 and block1'
 
     nodes(1).casperEff.contains(signedBlock3) should be(true)
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
@@ -499,8 +480,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).casperEff.addBlock(blockWithInvalidJustification.underlying)
     nodes(0).transportLayerEff
-      .msgQueues(nodes(0).local)
-      .clear // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
+      .clear(nodes(0).local) // nodes(0) rejects normal adding process for blockThatPointsToInvalidBlock
+
     val signedInvalidBlockPacketMessage =
       packet(nodes(1).local, transport.BlockMessage, signedInvalidBlock.toByteString)
     nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
@@ -518,7 +499,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       val Created(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
 
       nodes(0).casperEff.addBlock(block.underlying)
-      nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
+      nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     }
     val Created(block) = nodes(0).casperEff
       .deploy(ProtoUtil.basicDeployData(10)) *> nodes(0).casperEff.createBlock
@@ -604,7 +585,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[HashSetCasperTestNode],
+      nodes: IndexedSeq[HashSetCasperTestNode[Id]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage.BlockMessageSafe) = {
     val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
@@ -634,7 +615,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 }
 
 object HashSetCasperTest {
-  def validateBlockStore[R](node: HashSetCasperTestNode)(f: BlockStore[Id] => R) = {
+  def validateBlockStore[R](node: HashSetCasperTestNode[Id])(f: BlockStore[Id] => R) = {
     val bs = BlockStoreTestFixture.create(node.dir)
     f(bs)
     bs.close()

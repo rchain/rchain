@@ -5,7 +5,7 @@ import org.abstractj.kalium.keys._
 import org.abstractj.kalium.NaCl.Sodium.{CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES}
 
 /**
-Curve25519 elliptic curve cryptography
+  *Curve25519 elliptic curve cryptography
   * {{{
   * >>> import coop.rchain.crypto.codec._
   * >>> val bobSec = Base16.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
