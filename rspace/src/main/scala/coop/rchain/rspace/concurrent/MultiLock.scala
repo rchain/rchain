@@ -15,6 +15,7 @@ class DefaultMultiLock[K] extends MultiLock[K] {
   private[this] val locks = TrieMap.empty[K, Semaphore]
 
   def acquire[R](keys: Seq[K])(thunk: => R)(implicit o: Ordering[K]): R = {
+    // TODO: keys should be a Set[K]
     val sortedKeys = keys.toSet.toList.sorted
     for {
       k         <- sortedKeys

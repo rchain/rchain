@@ -70,6 +70,17 @@ class MultiLockTest extends FlatSpec with Matchers {
     m.toList should contain theSameElementsAs (Map("a" -> 2, "b" -> 1, "c" -> 1).toList)
   }
 
+  it should "not try to lock channels with same name twice" in {
+
+    val m = mutable.Map.empty[String, Int]
+
+    (for {
+      _ <- acquire(m)(Seq("a", "a"))
+    } yield ()).unsafeRunSync
+
+    m.toList should contain theSameElementsAs (Map("a" -> 2).toList)
+  }
+
   import cats.effect.{Concurrent, IO}
   "FunctionalMultiLock" should "not allow concurrent modifications of same keys" in {
     val tested = new FunctionalMultiLock[IO, String]()
