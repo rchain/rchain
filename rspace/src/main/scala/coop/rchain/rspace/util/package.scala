@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Id
 import coop.rchain.rspace.internal.GNAT
 import scodec.bits.ByteVector
 
@@ -13,10 +14,13 @@ package object util {
   def getK[A, K](t: Option[(K, A)]): K =
     t.map(_._1).get
 
+  def getK[A, K](e: Either[_, Option[(K, A)]]): K =
+    e.map(_.map(_._1).get).right.get
+
   /** Runs a continuation with the accompanying data
     */
-  def runK[T](t: Option[((T) => Unit, T)]): Unit =
-    t.foreach { case (k, data) => k(data) }
+  def runK[T](e: Id[Either[Nothing, Option[((T) => Unit, T)]]]): Unit =
+    e.right.get.foreach { case (k, data) => k(data) }
 
   /** Runs a list of continuations with the accompanying data
     */

@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
-import coop.rchain.casper.helper.CasperEffect
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
@@ -25,7 +25,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
   import HashSetCasperTest._
-  import CasperEffect.Effect
+  import HashSetCasperTestNode.Effect
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
@@ -42,9 +42,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   }
 
   "createBlock" should "not allow simultaneous calls" in {
-    implicit val scheduler   = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)
-    val sleepyCasper         = casperEff.map(c => new SleepingMultiParentCasperImpl[Effect](c))
+    implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+    val node               = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper             = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
@@ -64,7 +64,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     )
 
     val (response1, response2) = (for {
-      casper    <- sleepyCasper
       casperRef <- MultiParentCasperRef.of[Effect]
       _         <- casperRef.set(casper)
       result    <- testProgram(casperRef)
@@ -74,7 +73,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     response2.success shouldBe false
     response2.message shouldBe "Error: There is another propose in progress."
 
-    cleanUp()
+    node.tearDown()
   }
 }
 
