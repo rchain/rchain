@@ -613,13 +613,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       writeFlag = true,
       readFlag = false)
 
-    // Mimic the uri creation
-    val fullKey = new Array[Byte](34)
-    Array.copy(uriBytes, 0, fullKey, 0, 32)
-    val crc = Registry.CRC14.compute(fullKey.view.slice(0, 32))
-    fullKey(32) = (crc & 0xff).toByte
-    fullKey(33) = ((crc & 0xff00) >>> 6).toByte
-    val expectedUri = "rho:id:" + ZBase32.encodeToString(fullKey, 270)
+    val expectedUri = Registry.buildURI(uriBytes)
 
     result.get(resultChanList("result0")) should be(
       Some(Row(

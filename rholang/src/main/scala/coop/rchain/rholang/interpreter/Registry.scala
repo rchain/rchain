@@ -655,16 +655,11 @@ class Registry(private val space: Runtime.RhoPureSpace,
           if (valPar.serializedSize > 1024)
             localFail()
           else {
-            val fullKey = new Array[Byte](34)
-            Array.copy(rand.next(), 0, fullKey, 0, 32)
-            val crc = CRC14.compute(fullKey.view.slice(0, 32))
-            fullKey(32) = (crc & 0xff).toByte
-            fullKey(33) = ((crc & 0xff00) >>> 6).toByte
-            val partialKey: Par = parByteArray(ByteString.copyFrom(fullKey, 0, 32))
+            val bytes = rand.next()
+            val partialKey: Par = parByteArray(ByteString.copyFrom(bytes))
             val curryChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
-            val uri             = "rho:id:" + ZBase32.encodeToString(fullKey, 270)
-            val uriPar: Par     = GUri(uri)
+            val uriPar: Par     = GUri(buildURI(bytes))
             val args = RootSeq(
               ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)),
                                     rand))
@@ -692,7 +687,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
     }
 
   def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] = {
-    println("publicRegisterInsertCallback called.")
     args match {
       case Seq(
           ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
@@ -707,7 +701,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
             fail(ret, valRand)
         }
       case _ =>
-        println(s"args didn't match: ${args}")
         Task.unit
     }
   }
@@ -763,4 +756,12 @@ object Registry {
       b.foldLeft(INIT_REMAINDER)(update(_, _))
   }
 
+  def buildURI(arr: Array[Byte]): String = {
+    val fullKey = new Array[Byte](34)
+    Array.copy(arr, 0, fullKey, 0, 32)
+    val crc = CRC14.compute(fullKey.view.slice(0, 32))
+    fullKey(32) = (crc & 0xff).toByte
+    fullKey(33) = ((crc & 0xff00) >>> 6).toByte
+    "rho:id:" + ZBase32.encodeToString(fullKey, 270)
+  }
 }
