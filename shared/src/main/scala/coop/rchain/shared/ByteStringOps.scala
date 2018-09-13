@@ -4,7 +4,6 @@ import java.io._
 import java.util.concurrent.{Callable, Executors}
 
 import com.google.protobuf.ByteString
-import coop.rchain.shared.Resources._
 import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream.Parameters
 import org.apache.commons.compress.compressors.lz4.{
   FramedLZ4CompressorInputStream,
@@ -21,29 +20,50 @@ object ByteStringOps {
     def decompress: Option[ByteString] = decompressLZ4(bs)
   }
 
-  private def compressLZ4(bs: ByteString): ByteString =
-    withResource(bs.newInput()) { is =>
-      withResource(new PipedOutputStream()) { pos =>
-        withResource(new PipedInputStream(pos)) { pis =>
-          new Thread {
-            override def run(): Unit =
-              // Write compressed data to [[PipedOutputStream]]
-              withResource(new FramedLZ4CompressorOutputStream(pos, Parameters.DEFAULT)) { lz4os =>
-                val data  = new Array[Byte](8192)
-                var count = is.read(data)
+  private def compressLZ4(bs: ByteString): ByteString = {
+    val pos = new PipedOutputStream()
+    val pis = new PipedInputStream(pos)
+    val is  = bs.newInput()
 
-                while (count != -1) {
-                  lz4os.write(data, 0, count)
-                  count = is.read(data)
-                }
-              }
-          }.start()
+    // Writes compressed data into `pos`
+    val producer = new Runnable {
+      override def run(): Unit = {
+        var lz4os: FramedLZ4CompressorOutputStream = null
+        try {
+          lz4os = new FramedLZ4CompressorOutputStream(pos, Parameters.DEFAULT)
+          val data  = new Array[Byte](8192)
+          var count = is.read(data)
 
-          // Read compressed data into [[ByteString]]
-          ByteString.readFrom(pis)
+          while (count != -1) {
+            lz4os.write(data, 0, count)
+            count = is.read(data)
+          }
+        } finally {
+          if (lz4os != null) lz4os.close()
+          is.close()
+          pos.close()
         }
       }
     }
+
+    // Reads into [[ByteString]] from `pis`
+    val consumer = new Callable[ByteString] {
+      override def call(): ByteString =
+        try {
+          ByteString.readFrom(pis)
+        } finally {
+          pis.close()
+        }
+    }
+
+    // Needs a thread pool with at least two threads
+    val es = Executors.newFixedThreadPool(2)
+    es.submit(producer)
+    val bytestring = es.submit(consumer)
+    es.shutdown()
+
+    bytestring.get()
+  }
 
   private def decompressLZ4(bs: ByteString): Option[ByteString] = {
     val pos = new PipedOutputStream()
@@ -52,9 +72,10 @@ object ByteStringOps {
 
     // Writes decompressed data into `pos`
     val producer = new Callable[Try[Unit]] {
-      override def call(): Try[Unit] =
+      override def call(): Try[Unit] = {
+        var lz4is: FramedLZ4CompressorInputStream = null
         try {
-          val lz4is = new FramedLZ4CompressorInputStream(is)
+          lz4is = new FramedLZ4CompressorInputStream(is)
           val data  = new Array[Byte](8192)
           var count = lz4is.read(data)
 
@@ -63,23 +84,25 @@ object ByteStringOps {
             count = lz4is.read(data)
           }
 
-          lz4is.close()
           Success(())
         } catch {
           case e: IOException => Failure(e)
         } finally {
+          if (lz4is != null) lz4is.close()
           is.close()
           pos.close()
         }
+      }
     }
 
     // Reads into [[ByteString]] from `pis`
     val consumer = new Callable[ByteString] {
-      override def call(): ByteString = {
-        val bs = ByteString.readFrom(pis)
-        pis.close()
-        bs
-      }
+      override def call(): ByteString =
+        try {
+          ByteString.readFrom(pis)
+        } finally {
+          pis.close()
+        }
     }
 
     // Needs a thread pool with at least two threads

@@ -1,5 +1,4 @@
 package coop.rchain.shared
-import scala.util.control.NonFatal
 
 object Resources {
 
@@ -12,30 +11,10 @@ object Resources {
     * @param a A given resource implementing [[AutoCloseable]]
     * @param f A function that takes this resource as its argument
     */
-  def withResource[A <: AutoCloseable, B](r: => A)(f: A => B): B = {
-    val resource: A = r
-    require(resource != null, "resource is null")
-    var exception: Throwable = null
+  def withResource[A <: AutoCloseable, B](a: A)(f: A => B): B =
     try {
-      f(resource)
-    } catch {
-      case NonFatal(e) =>
-        exception = e
-        throw e
+      f(a)
     } finally {
-      closeAndAddSuppressed(exception, resource)
-    }
-  }
-
-  def closeAndAddSuppressed(e: Throwable, resource: AutoCloseable): Unit =
-    if (e != null) {
-      try {
-        resource.close()
-      } catch {
-        case NonFatal(suppressed) =>
-          e.addSuppressed(suppressed)
-      }
-    } else {
-      resource.close()
+      a.close()
     }
 }
