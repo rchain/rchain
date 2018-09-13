@@ -3,7 +3,6 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.implicits._
-import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -13,8 +12,6 @@ import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
-import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
@@ -47,51 +44,6 @@ trait HistoryActionsTests
         store.trieStore.getRoot(trieTxn, branch).get
       }
     }
-
-  case class State(
-      checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
-      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
-  )
-
-  def validateIndexedStates(
-      space: FreudianSpace[String, Pattern, Nothing, String, String, StringsCaptor],
-      indexedStates: Seq[(State, Int)]): Boolean = {
-    val tests: Seq[Any] = indexedStates
-      .map {
-        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
-
-          val contentsTest = space.store.toMap == expectedContents
-
-          if (contentsTest) {
-            logger.debug(s"$num: store had expected contents")
-          } else {
-            logger.error(s"$num: store had unexpected contents")
-          }
-
-          val actualJoins = space.store.joinMap
-
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
-                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          if (joinsTest) {
-            logger.debug(s"$num: store had expected joins")
-          } else {
-            logger.error(s"$num: store had unexpected joins")
-          }
-
-          contentsTest && joinsTest
-      }
-    !tests.contains(false)
-  }
-
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
       "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
@@ -385,7 +337,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_reset")
       }
     }
     check(prop)
@@ -409,7 +361,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "consumes_reset")
       }
     }
     check(prop)
@@ -438,7 +390,7 @@ trait HistoryActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_consumes_reset")
       }
     }
     check(prop)

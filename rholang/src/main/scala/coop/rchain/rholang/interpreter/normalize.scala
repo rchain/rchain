@@ -714,8 +714,8 @@ object ProcNormalizeMatcher {
           bindingsProcessed                                                <- processBindings(sources)
           bindingsFree                                                     = bindingsProcessed.map(binding => binding._5).foldLeft(BitSet())(_ | _)
           bindingsTrimmed                                                  = bindingsProcessed.map(b => (b._1, b._2, b._3, b._4))
-          receipts = ReceiveBindsSortMatcher
-            .preSortBinds[M, VarSort](bindingsTrimmed)
+          receipts <- ReceiveBindsSortMatcher
+                       .preSortBinds[M, VarSort](bindingsTrimmed)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {

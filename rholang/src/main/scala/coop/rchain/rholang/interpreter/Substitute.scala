@@ -125,7 +125,7 @@ object Substitute {
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        substituteNoSort(term).map(channelSubst => Sortable.sortMatch(channelSubst).term)
+        substituteNoSort(term).flatMap(channelSubst => Sortable.sortMatch(channelSubst)).map(_.term)
     }
 
   implicit def substitutePar[M[_]: Sync]: Substitute[M, Par] =
@@ -199,7 +199,7 @@ object Substitute {
             )
         } yield par
       override def substitute(term: Par)(implicit depth: Int, env: Env[Par]): M[Par] =
-        substituteNoSort(term).map(par => Sortable.sortMatch(par).term)
+        substituteNoSort(term).flatMap(par => Sortable.sortMatch(par)).map(_.term)
     }
 
   implicit def substituteSend[M[_]: Sync]: Substitute[M, Send] =
@@ -217,7 +217,7 @@ object Substitute {
           )
         } yield send
       override def substitute(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
-        substituteNoSort(term).map(send => Sortable.sortMatch(send).term)
+        substituteNoSort(term).flatMap(send => Sortable.sortMatch(send)).map(_.term)
     }
 
   implicit def substituteReceive[M[_]: Sync]: Substitute[M, Receive] =
@@ -246,7 +246,7 @@ object Substitute {
           )
         } yield rec
       override def substitute(term: Receive)(implicit depth: Int, env: Env[Par]): M[Receive] =
-        substituteNoSort(term).map(rec => Sortable.sortMatch(rec).term)
+        substituteNoSort(term).flatMap(rec => Sortable.sortMatch(rec)).map(_.term)
 
     }
 
@@ -258,7 +258,7 @@ object Substitute {
           neu    = New(term.bindCount, newSub, term.uri, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
-        substituteNoSort(term).map(newSub => Sortable.sortMatch(newSub).term)
+        substituteNoSort(term).flatMap(newSub => Sortable.sortMatch(newSub)).map(_.term)
     }
 
   implicit def substituteMatch[M[_]: Sync]: Substitute[M, Match] =
@@ -277,7 +277,7 @@ object Substitute {
           mat = Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed)
         } yield mat
       override def substitute(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
-        substituteNoSort(term).map(mat => Sortable.sortMatch(mat).term)
+        substituteNoSort(term).flatMap(mat => Sortable.sortMatch(mat)).map(_.term)
     }
 
   implicit def substituteExpr[M[_]: Sync]: Substitute[M, Expr] =
