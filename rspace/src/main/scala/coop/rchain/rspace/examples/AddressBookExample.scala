@@ -20,6 +20,11 @@ object AddressBookExample {
 
   case class Channel(name: String)
 
+  /* Ordering for Channel */
+
+  implicit val channelOrdering: Ordering[Channel] =
+    (x: Channel, y: Channel) => x.name.compare(y.name)
+
   /* Here we define a type for data */
 
   case class Name(first: String, last: String)

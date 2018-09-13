@@ -34,12 +34,18 @@ class MultiLockTest extends FlatSpec with Matchers {
     }
 
     (for {
-      _ <- acquire(Seq("a", "b")).fork
-      _ <- acquire(Seq("d", "c")).fork
-      _ <- acquire(Seq("a", "c")).fork
-      _ <- acquire(Seq("c", "a")).fork
-      _ <- acquire(Seq("a", "c")).fork
-      _ <- acquire(Seq("a", "d")).fork
+      f1 <- acquire(Seq("a", "b")).fork
+      f2 <- acquire(Seq("d", "c")).fork
+      f3 <- acquire(Seq("a", "c")).fork
+      f4 <- acquire(Seq("c", "a")).fork
+      f5 <- acquire(Seq("a", "c")).fork
+      f6 <- acquire(Seq("a", "d")).fork
+      _  <- f1.join
+      _  <- f2.join
+      _  <- f3.join
+      _  <- f4.join
+      _  <- f5.join
+      _  <- f6.join
     } yield ()).unsafeRunSync
 
     m.toList should contain theSameElementsAs (Map("d" -> 2, "b" -> 1, "c" -> 4, "a" -> 5).toList)

@@ -802,7 +802,8 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): S
+      sk: Serialize[K],
+      oC: Ordering[C]): S
 }
 
 trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
@@ -811,7 +812,8 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
                                                                           sc: Serialize[C],
                                                                           sp: Serialize[P],
                                                                           sa: Serialize[A],
-                                                                          sk: Serialize[K]): S = {
+                                                                          sk: Serialize[K],
+                                                                          oC: Ordering[C]): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -835,7 +837,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
                                                                           sc: Serialize[C],
                                                                           sp: Serialize[P],
                                                                           sa: Serialize[A],
-                                                                          sk: Serialize[K]): S = {
+                                                                          sk: Serialize[K],
+                                                                          oC: Ordering[C]): S = {
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
