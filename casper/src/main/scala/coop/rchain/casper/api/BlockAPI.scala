@@ -136,18 +136,18 @@ object BlockAPI {
   }
 
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
-    : F[IndexedSeq[BlockMessage.BlockMessageSafe]] =
+    : F[IndexedSeq[BlockMessage.Safe]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       estimates <- MultiParentCasper[F].estimator(dag)
       tip       = estimates.head
-      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage.BlockMessageSafe])
+      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage.Safe])
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       sortedListeningName: Channel,
-      block: BlockMessage.BlockMessageSafe)(
+      block: BlockMessage.Safe)(
       implicit channelCodec: Codec[Channel]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.tuplespace(block)
@@ -163,7 +163,7 @@ object BlockAPI {
       F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
       sortedListeningNames: immutable.Seq[Channel],
-      block: BlockMessage.BlockMessageSafe)(
+      block: BlockMessage.Safe)(
       implicit channelCodec: Codec[Channel]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash = ProtoUtil.tuplespace(block)
@@ -181,7 +181,7 @@ object BlockAPI {
     }
 
   private def isListeningNameReduced(
-      block: BlockMessage.BlockMessageSafe,
+      block: BlockMessage.Safe,
       sortedListeningName: immutable.Seq[Channel])(implicit channelCodec: Codec[Channel]) = {
     val serializedLog = block.body.deploys.flatMap(_.log)
     val log =
@@ -205,7 +205,7 @@ object BlockAPI {
         dag        <- MultiParentCasper[F].blockDag
         estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
-        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage.BlockMessageSafe])
+        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage.Safe])
         blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
@@ -241,8 +241,8 @@ object BlockAPI {
   }
 
   private def getBlockInfo[A, F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
-      block: BlockMessage.BlockMessageSafe,
-      constructor: (BlockMessage.BlockMessageSafe,
+      block: BlockMessage.Safe,
+      constructor: (BlockMessage.Safe,
                     Long,
                     Int,
                     BlockHash,
@@ -277,15 +277,15 @@ object BlockAPI {
                   initialFault)
 
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
-      block: BlockMessage.BlockMessageSafe): F[BlockInfo] =
+      block: BlockMessage.Safe): F[BlockInfo] =
     getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
   private def getBlockInfoWithoutTuplespace[
       F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
-      block: BlockMessage.BlockMessageSafe): F[BlockInfoWithoutTuplespace] =
+      block: BlockMessage.Safe): F[BlockInfoWithoutTuplespace] =
     getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F])
 
   private def constructBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
-      block: BlockMessage.BlockMessageSafe,
+      block: BlockMessage.Safe,
       version: Long,
       deployCount: Int,
       tsHash: BlockHash,
@@ -312,7 +312,7 @@ object BlockAPI {
     )
   private def constructBlockInfoWithoutTuplespace[
       F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
-      block: BlockMessage.BlockMessageSafe,
+      block: BlockMessage.Safe,
       version: Long,
       deployCount: Int,
       tsHash: BlockHash,
@@ -338,7 +338,7 @@ object BlockAPI {
 
   private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
       q: BlockQuery,
-      dag: BlockDag): F[Option[BlockMessage.BlockMessageSafe]] =
+      dag: BlockDag): F[Option[BlockMessage.Safe]] =
     for {
       findResult <- BlockStore[F].find(h => {
                      Base16.encode(h.toByteArray).startsWith(q.hash)
@@ -348,7 +348,7 @@ object BlockAPI {
         case Some((_, block)) =>
           Some(block)
         case None =>
-          none[BlockMessage.BlockMessageSafe]
+          none[BlockMessage.Safe]
       }
 
   private def addResponse(status: BlockStatus, block: BlockMessage): DeployServiceResponse =

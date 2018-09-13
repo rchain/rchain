@@ -16,7 +16,7 @@ object GenerateSafe {
     def convertToSafeType(typ: Trees#Tree): c.Tree =
       typ match {
         case Select(qualifier, name) =>
-          Select(Select(qualifier, name.toTermName), TypeName(name + "Safe"))
+          Select(Select(qualifier, name.toTermName), TypeName("Safe"))
         case _ =>
           c.abort(c.enclosingPosition, "Unsupported type")
       }
@@ -24,7 +24,7 @@ object GenerateSafe {
     def convertToSafeTerm(typ: Trees#Tree): c.Tree =
       typ match {
         case Select(qualifier, name) =>
-          Select(Select(qualifier, name.toTermName), TermName(name + "Safe"))
+          Select(Select(qualifier, name.toTermName), TermName("Safe"))
         case _ =>
           c.abort(c.enclosingPosition, "Unsupported type")
       }
@@ -80,17 +80,15 @@ object GenerateSafe {
       case (cl @ q"@..$_ final case class $tpname (..$params) extends { ..$_ } with ..$_ { $_ => ..$_ }")
             :: ModuleDef(mods, tmname, template)
             :: Nil =>
-        val safeTpname      = TypeName(tpname + "Safe")
-        val safeTmname      = safeTpname.toTermName
         val generatedParams = generateParams(params)
         val generatedWithMethods = generatedParams.map { param =>
           val capitalizedName = param.name.toString.capitalize
           val value           = if (param.tpt.toString.endsWith("Safe")) q"v.underlying" else q"v"
           val withMethod      = TermName("with" + capitalizedName)
-          q"def $withMethod(v: ${param.tpt}): $safeTpname = copy(${param.name} = v, underlying = underlying.$withMethod($value))"
+          q"def $withMethod(v: ${param.tpt}): Safe = copy(${param.name} = v, underlying = underlying.$withMethod($value))"
         }
         val safeTp = q"""
-          final case class $safeTpname (..$generatedParams, underlying: $tpname) {
+          final case class Safe (..$generatedParams, underlying: $tpname) {
             def toByteString: com.google.protobuf.ByteString = underlying.toByteString
             def toByteArray: Array[Byte] = underlying.toByteArray
             ..$generatedWithMethods
@@ -98,12 +96,12 @@ object GenerateSafe {
           """
 
         val safeTm = q"""
-          object $safeTmname {
-            def create(underlying: $tpname): Option[$safeTpname] =
+          object Safe {
+            def create(underlying: $tpname): Option[Safe] =
               if (List[Option[Any]](..${unsafeParams(params)}).forall(_.isDefined)) {
                 ..${generateCreatorBody(params)}
                 if (List[Option[Any]](..${unsafeSecondParams(params)}).forall(_.isDefined)) {
-                  Some($safeTmname(..${generateConstructorArguments(params)}, underlying))
+                  Some(Safe(..${generateConstructorArguments(params)}, underlying))
                 } else {
                   None
                 }

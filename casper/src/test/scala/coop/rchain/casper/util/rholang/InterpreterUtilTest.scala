@@ -57,8 +57,8 @@ class InterpreterUtilTest
   implicit val logEff = new LogStub[Id]
 
   private def computeBlockCheckpoint(
-      b: BlockMessage.BlockMessageSafe,
-      genesis: BlockMessage.BlockMessageSafe,
+      b: BlockMessage.Safe,
+      genesis: BlockMessage.Safe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager): (StateHash, Set[StateHash], Seq[ProcessedDeploy]) = {
@@ -105,8 +105,7 @@ class InterpreterUtilTest
      *           |
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-      : F[BlockMessage.BlockMessageSafe] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploysCost)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1DeploysCost)
@@ -165,7 +164,7 @@ class InterpreterUtilTest
 
   private def injectPostStateHash(chain: BlockDag,
                                   id: Int,
-                                  b: BlockMessage.BlockMessageSafe,
+                                  b: BlockMessage.Safe,
                                   postGenStateHash: StateHash,
                                   processedDeploys: Seq[ProcessedDeploy]) = {
     val updatedBlockPostState = b.body.postState.withTuplespace(postGenStateHash)
@@ -213,8 +212,7 @@ class InterpreterUtilTest
      *         \    /
      *         genesis
      */
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-      : F[BlockMessage.BlockMessageSafe] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
       for {
         genesis <- createBlock[F](Seq.empty, deploys = genesisDeploysWithCost)
         b1      <- createBlock[F](Seq(genesis.blockHash), deploys = b1DeploysWithCost)

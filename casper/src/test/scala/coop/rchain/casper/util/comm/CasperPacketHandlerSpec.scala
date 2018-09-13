@@ -81,12 +81,12 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockMap =
-      Ref.unsafe[Task, Map[BlockHash, BlockMessage.BlockMessageSafe]](Map.empty)
+      Ref.unsafe[Task, Map[BlockHash, BlockMessage.Safe]](Map.empty)
     implicit val blockStore = InMemBlockStore.create[Task]
     implicit val casperRef  = MultiParentCasperRef.unsafe[Task](None)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(blockDag: BlockDag,
-                                            estimate: BlockMessage.BlockMessageSafe): Task[Float] =
+                                            estimate: BlockMessage.Safe): Task[Float] =
         Task.pure(1.0f)
     }
   }

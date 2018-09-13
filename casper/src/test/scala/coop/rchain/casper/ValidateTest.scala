@@ -51,7 +51,7 @@ class ValidateTest
 
   def createChain[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage.BlockMessageSafe] =
+      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage.Safe] =
     (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
@@ -62,7 +62,7 @@ class ValidateTest
 
   def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      validatorLength: Int): F[BlockMessage.BlockMessageSafe] = {
+      validatorLength: Int): F[BlockMessage.Safe] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
@@ -86,15 +86,14 @@ class ValidateTest
       .map(_._1)
   }
 
-  def signedBlock(i: Int)(implicit chain: BlockDag,
-                          sk: Array[Byte]): BlockMessage.BlockMessageSafe = {
+  def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage.Safe = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
     ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
   }
 
-  implicit class ChangeBlockNumber(b: BlockMessage.BlockMessageSafe) {
-    def withBlockNumber(n: Long): BlockMessage.BlockMessageSafe = {
+  implicit class ChangeBlockNumber(b: BlockMessage.Safe) {
+    def withBlockNumber(n: Long): BlockMessage.Safe = {
       val newState  = b.body.postState.withBlockNumber(n)
       val newHeader = b.header.withPostStateHash(ProtoUtil.protoHash(newState))
 
@@ -271,13 +270,13 @@ class ValidateTest
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      def latestMessages(messages: Seq[BlockMessage.BlockMessageSafe]): Map[Validator, BlockHash] =
+      def latestMessages(messages: Seq[BlockMessage.Safe]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
 
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
-          parents: Seq[BlockMessage.BlockMessageSafe],
-          justifications: Seq[BlockMessage.BlockMessageSafe],
-          validator: Int): F[BlockMessage.BlockMessageSafe] =
+          parents: Seq[BlockMessage.Safe],
+          justifications: Seq[BlockMessage.Safe],
+          validator: Int): F[BlockMessage.Safe] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -287,7 +286,7 @@ class ValidateTest
         )
 
       def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+        : F[BlockMessage.Safe] =
         for {
           b0 <- createBlock[F](Seq.empty, bonds = bonds)
           b1 <- createValidatorBlock[F](Seq(b0), Seq.empty, 0)
@@ -328,7 +327,7 @@ class ValidateTest
                             sk,
                             "ed25519",
                             "rchain"),
-        BlockMessage.BlockMessageSafe
+        BlockMessage.Safe
           .create(
             BlockMessage().withBody(Body().withPostState(RChainState())).withHeader(Header())
           )
@@ -350,13 +349,13 @@ class ValidateTest
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      def latestMessages(messages: Seq[BlockMessage.BlockMessageSafe]): Map[Validator, BlockHash] =
+      def latestMessages(messages: Seq[BlockMessage.Safe]): Map[Validator, BlockHash] =
         messages.map(b => b.sender -> b.blockHash).toMap
 
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
-          parents: Seq[BlockMessage.BlockMessageSafe],
-          justifications: Seq[BlockMessage.BlockMessageSafe],
-          validator: Int): F[BlockMessage.BlockMessageSafe] =
+          parents: Seq[BlockMessage.Safe],
+          justifications: Seq[BlockMessage.Safe],
+          validator: Int): F[BlockMessage.Safe] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -366,7 +365,7 @@ class ValidateTest
         )
 
       def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+        : F[BlockMessage.Safe] =
         for {
           b0 <- createBlock[F](Seq.empty, bonds = bonds)
           b1 <- createValidatorBlock[F](Seq(b0), Seq(b0, b0), 0)
@@ -389,7 +388,7 @@ class ValidateTest
       val justificationsWithRegression =
         Seq(Justification(validators(0), b1.blockHash), Justification(validators(1), b4.blockHash))
       val blockWithJustificationRegression =
-        BlockMessage.BlockMessageSafe
+        BlockMessage.Safe
           .create(
             BlockMessage()
               .withSender(validators(1))

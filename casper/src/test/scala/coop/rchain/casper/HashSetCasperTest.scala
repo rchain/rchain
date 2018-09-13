@@ -584,10 +584,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
-  private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[HashSetCasperTestNode[Id]],
-      deploys: immutable.IndexedSeq[ProcessedDeploy],
-      signedInvalidBlock: BlockMessage.BlockMessageSafe) = {
+  private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode[Id]],
+                                                 deploys: immutable.IndexedSeq[ProcessedDeploy],
+                                                 signedInvalidBlock: BlockMessage.Safe) = {
     val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
@@ -600,7 +599,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Seq(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
-      BlockMessage.BlockMessageSafe
+      BlockMessage.Safe
         .create(
           BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
         )
@@ -622,7 +621,7 @@ object HashSetCasperTest {
     node.dir.recursivelyDelete()
   }
 
-  def blockTuplespaceContents(block: BlockMessage.BlockMessageSafe)(
+  def blockTuplespaceContents(block: BlockMessage.Safe)(
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.postState.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
@@ -631,12 +630,12 @@ object HashSetCasperTest {
   def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Int] =
     validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage.BlockMessageSafe =
+  def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage.Safe =
     buildGenesis(Seq.empty, bonds, 0L)
 
   def buildGenesis(wallets: Seq[PreWallet],
                    bonds: Map[Array[Byte], Int],
-                   deployTimestamp: Long): BlockMessage.BlockMessageSafe = {
+                   deployTimestamp: Long): BlockMessage.Safe = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024

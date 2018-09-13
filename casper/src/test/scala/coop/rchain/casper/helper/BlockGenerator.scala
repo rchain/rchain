@@ -28,17 +28,16 @@ object BlockGenerator {
 
   def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Id]): BlockStore[F] =
     new BlockStore[F] {
-      override def get(blockHash: BlockHash): F[Option[BlockMessage.BlockMessageSafe]] =
+      override def get(blockHash: BlockHash): F[Option[BlockMessage.Safe]] =
         Monad[F].pure(idBs.get(blockHash))
 
-      override def asMap(): F[Map[BlockHash, BlockMessage.BlockMessageSafe]] =
+      override def asMap(): F[Map[BlockHash, BlockMessage.Safe]] =
         Monad[F].pure(idBs.asMap())
 
-      override def put(f: => (BlockHash, BlockMessage.BlockMessageSafe)): F[Unit] =
+      override def put(f: => (BlockHash, BlockMessage.Safe)): F[Unit] =
         Monad[F].pure(idBs.put(f))
 
-      override def find(
-          p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.BlockMessageSafe)]] =
+      override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.Safe)]] =
         Monad[F].pure(idBs.find(p))
 
       override def clear(): F[Unit] = Monad[F].pure(idBs.clear())
@@ -56,7 +55,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain"): F[BlockMessage.BlockMessageSafe] =
+      shardId: String = "rchain"): F[BlockMessage.Safe] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -79,7 +78,7 @@ trait BlockGenerator {
           Justification(creator, latestBlockHash)
       }
       serializedBlockHash = ByteString.copyFrom(blockHash)
-      block = BlockMessage.BlockMessageSafe
+      block = BlockMessage.Safe
         .create(
           BlockMessage(serializedBlockHash,
                        Some(header),

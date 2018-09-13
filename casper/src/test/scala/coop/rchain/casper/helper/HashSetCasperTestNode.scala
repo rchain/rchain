@@ -47,7 +47,7 @@ import monix.eval.Task
 class HashSetCasperTestNode[F[_]](name: String,
                                   val local: PeerNode,
                                   tle: TransportLayerTestImpl[F],
-                                  val genesis: BlockMessage.BlockMessageSafe,
+                                  val genesis: BlockMessage.Safe,
                                   sk: Array[Byte],
                                   logicalTime: LogicalTime[F],
                                   implicit val errorHandlerEff: ErrorHandler[F],
@@ -127,7 +127,7 @@ class HashSetCasperTestNode[F[_]](name: String,
 object HashSetCasperTestNode {
   type Effect[A] = EitherT[Task, CommError, A]
 
-  def standaloneF[F[_]](genesis: BlockMessage.BlockMessageSafe,
+  def standaloneF[F[_]](genesis: BlockMessage.Safe,
                         sk: Array[Byte],
                         storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler,
@@ -150,16 +150,12 @@ object HashSetCasperTestNode {
                                               storageSize)
     result.initialize.map(_ => result)
   }
-  def standalone(genesis: BlockMessage.BlockMessageSafe,
-                 sk: Array[Byte],
-                 storageSize: Long = 1024L * 1024)(
+  def standalone(genesis: BlockMessage.Safe, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): HashSetCasperTestNode[Id] = {
     implicit val errorHandlerEff = errorHandler
     standaloneF[Id](genesis, sk, storageSize)
   }
-  def standaloneEff(genesis: BlockMessage.BlockMessageSafe,
-                    sk: Array[Byte],
-                    storageSize: Long = 1024L * 1024)(
+  def standaloneEff(genesis: BlockMessage.Safe, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): HashSetCasperTestNode[Effect] =
     standaloneF[Effect](genesis, sk, storageSize)(scheduler,
                                                   ApplicativeError_[Effect, CommError],
@@ -167,7 +163,7 @@ object HashSetCasperTestNode {
                                                   Capture[Effect]).value.unsafeRunSync.right.get
 
   def networkF[F[_]](sks: IndexedSeq[Array[Byte]],
-                     genesis: BlockMessage.BlockMessageSafe,
+                     genesis: BlockMessage.Safe,
                      storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler,
       errorHandler: ErrorHandler[F],
@@ -218,14 +214,14 @@ object HashSetCasperTestNode {
     } yield nodes
   }
   def network(sks: IndexedSeq[Array[Byte]],
-              genesis: BlockMessage.BlockMessageSafe,
+              genesis: BlockMessage.Safe,
               storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
     implicit val errorHandlerEff = errorHandler
     networkF[Id](sks, genesis, storageSize)
   }
   def networkEff(sks: IndexedSeq[Array[Byte]],
-                 genesis: BlockMessage.BlockMessageSafe,
+                 genesis: BlockMessage.Safe,
                  storageSize: Long = 1024L * 1024)(
       implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
     networkF[Effect](sks, genesis, storageSize)(scheduler,

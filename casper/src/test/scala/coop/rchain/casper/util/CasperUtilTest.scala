@@ -27,8 +27,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
   "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-      : F[BlockMessage.BlockMessageSafe] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
@@ -47,8 +46,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-      : F[BlockMessage.BlockMessageSafe] =
+    def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
@@ -75,8 +73,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val v1                       = ByteString.copyFromUtf8("Validator One")
       val v2                       = ByteString.copyFromUtf8("Validator Two")
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY)
           b2      <- createBlock[F](Seq(genesis.blockHash), v2)
@@ -130,8 +127,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val deploys                  = (0 until 6).map(basicProcessedDeploy)
 
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
         for {
           genesis <- createBlock[F](Seq())
           b2      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(0)))

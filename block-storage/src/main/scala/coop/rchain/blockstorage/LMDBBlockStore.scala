@@ -65,7 +65,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
-  def put(f: => (BlockHash, BlockMessage.BlockMessageSafe)): F[Unit] =
+  def put(f: => (BlockHash, BlockMessage.Safe)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
       ret <- withWriteTxn { txn =>
@@ -76,13 +76,13 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage.BlockMessageSafe]] =
+  def get(blockHash: BlockHash): F[Option[BlockMessage.Safe]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
       ret <- withReadTxn { txn =>
               Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(
                 r =>
-                  BlockMessage.BlockMessageSafe
+                  BlockMessage.Safe
                     .create(
                       BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput())
                     )
@@ -90,7 +90,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.BlockMessageSafe)]] =
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.Safe)]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
       ret <- withReadTxn { txn =>
@@ -101,7 +101,7 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
                   .map {
                     case (key, value) =>
                       val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
-                      val blockSafe = BlockMessage.BlockMessageSafe
+                      val blockSafe = BlockMessage.Safe
                         .create(msg)
                         .getOrElse(sys.error("Stored block is malformed"))
                       (key, blockSafe)
@@ -113,19 +113,18 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
 
   @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
               since = "0.5")
-  def asMap(): F[Map[BlockHash, BlockMessage.BlockMessageSafe]] =
+  def asMap(): F[Map[BlockHash, BlockMessage.Safe]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
       ret <- withReadTxn { txn =>
               blocks
                 .iterate(txn)
                 .asScala
-                .foldLeft(Map.empty[BlockHash, BlockMessage.BlockMessageSafe]) {
-                  (acc: Map[BlockHash, BlockMessage.BlockMessageSafe],
-                   x: CursorIterator.KeyVal[ByteBuffer]) =>
+                .foldLeft(Map.empty[BlockHash, BlockMessage.Safe]) {
+                  (acc: Map[BlockHash, BlockMessage.Safe], x: CursorIterator.KeyVal[ByteBuffer]) =>
                     val hash = ByteString.copyFrom(x.key())
                     val msg  = BlockMessage.parseFrom(ByteString.copyFrom(x.`val`()).newCodedInput())
-                    val blockSafe = BlockMessage.BlockMessageSafe
+                    val blockSafe = BlockMessage.Safe
                       .create(msg)
                       .getOrElse(sys.error("Stored block is malformed"))
                     acc.updated(hash, blockSafe)

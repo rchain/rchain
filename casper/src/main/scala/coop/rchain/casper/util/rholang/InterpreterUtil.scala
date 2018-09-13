@@ -29,8 +29,8 @@ object InterpreterUtil {
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage.BlockMessageSafe,
-      genesis: BlockMessage.BlockMessageSafe,
+      b: BlockMessage.Safe,
+      genesis: BlockMessage.Safe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
@@ -109,9 +109,9 @@ object InterpreterUtil {
         }
     }
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
-      parents: Seq[BlockMessage.BlockMessageSafe],
+      parents: Seq[BlockMessage.Safe],
       deploys: Seq[Deploy],
-      genesis: BlockMessage.BlockMessageSafe,
+      genesis: BlockMessage.Safe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
@@ -129,12 +129,11 @@ object InterpreterUtil {
           Left(err) -> updatedStateHashes
       }
 
-  private def computeParentsPostState[F[_]: Monad: BlockStore](
-      parents: Seq[BlockMessage.BlockMessageSafe],
-      genesis: BlockMessage.BlockMessageSafe,
-      dag: BlockDag,
-      knownStateHashes: Set[StateHash],
-      runtimeManager: RuntimeManager)(
+  private def computeParentsPostState[F[_]: Monad: BlockStore](parents: Seq[BlockMessage.Safe],
+                                                               genesis: BlockMessage.Safe,
+                                                               dag: BlockDag,
+                                                               knownStateHashes: Set[StateHash],
+                                                               runtimeManager: RuntimeManager)(
       implicit scheduler: Scheduler): F[(Either[Throwable, StateHash], Set[StateHash])] = {
     val parentTuplespaces = parents.map(p => p -> ProtoUtil.tuplespace(p))
 
@@ -168,10 +167,10 @@ object InterpreterUtil {
 
         // TODO: Have proper merge of tuplespaces instead of recomputing.
         ancestors <- DagOperations
-                      .bfTraverseF[F, BlockMessage.BlockMessageSafe](
-                        parentTuplespaces.map(_._1).toList) { block =>
-                        if (block == gca) List.empty[BlockMessage.BlockMessageSafe].pure[F]
-                        else ProtoUtil.unsafeGetParents[F](block)
+                      .bfTraverseF[F, BlockMessage.Safe](parentTuplespaces.map(_._1).toList) {
+                        block =>
+                          if (block == gca) List.empty[BlockMessage.Safe].pure[F]
+                          else ProtoUtil.unsafeGetParents[F](block)
                       }
                       .filter(_ != gca) //do not include gca deploys
                       .toList
@@ -191,8 +190,8 @@ object InterpreterUtil {
   }
 
   private[casper] def computeBlockCheckpointFromDeploys[F[_]: Monad: BlockStore](
-      b: BlockMessage.BlockMessageSafe,
-      genesis: BlockMessage.BlockMessageSafe,
+      b: BlockMessage.Safe,
+      genesis: BlockMessage.Safe,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)

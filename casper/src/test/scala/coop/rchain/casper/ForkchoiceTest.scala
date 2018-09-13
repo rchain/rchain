@@ -34,8 +34,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
           b2 <- createBlock[F](Seq(genesis.blockHash),
@@ -76,8 +75,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
           forkchoice <- Estimator.tips[F](
-                         chain.copy(latestMessages =
-                           HashMap.empty[Validator, BlockMessage.BlockMessageSafe]),
+                         chain.copy(latestMessages = HashMap.empty[Validator, BlockMessage.Safe]),
                          genesis)
           _ = forkchoice.head should be(genesis)
         } yield ()
@@ -92,8 +90,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
           b2 <- createBlock[F](Seq(genesis.blockHash),
@@ -134,7 +131,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b6      = chain.idToBlocks(6)
       val b8      = chain.idToBlocks(8)
 
-      val latestBlocks = HashMap[Validator, BlockMessage.BlockMessageSafe](v1 -> b8, v2 -> b6)
+      val latestBlocks = HashMap[Validator, BlockMessage.Safe](v1 -> b8, v2 -> b6)
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
@@ -155,8 +152,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val v2Bond = Bond(v2, 20)
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]
-        : F[BlockMessage.BlockMessageSafe] =
+      def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage.Safe] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
           b2 <- createBlock[F](
@@ -202,7 +198,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b8      = chain.idToBlocks(8)
 
       val latestBlocks =
-        HashMap[Validator, BlockMessage.BlockMessageSafe](v1 -> b6, v2 -> b8, v3 -> b7)
+        HashMap[Validator, BlockMessage.Safe](v1 -> b6, v2 -> b8, v3 -> b7)
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {

@@ -26,8 +26,8 @@ trait BlockStoreTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
-  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage.BlockMessageSafe =
-    BlockMessage.BlockMessageSafe
+  private[this] def toBlockMessage(bh: String, v: Long, ts: Long): BlockMessage.Safe =
+    BlockMessage.Safe
       .create(
         BlockMessage(blockHash = bh)
           .withHeader(Header().withVersion(v).withTimestamp(ts))
@@ -46,7 +46,7 @@ trait BlockStoreTest
 
   private[this] implicit val arbitraryHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
 
-  private[this] val blockStoreElementGen: Gen[(ByteString, BlockMessage.BlockMessageSafe)] =
+  private[this] val blockStoreElementGen: Gen[(ByteString, BlockMessage.Safe)] =
     for {
       hash      <- arbitrary[BlockHash]
       version   <- arbitrary[Long]
@@ -54,12 +54,12 @@ trait BlockStoreTest
       message = BlockMessage(blockHash = hash)
         .withHeader(Header().withVersion(version).withTimestamp(timestamp))
         .withBody(Body().withPostState(RChainState()))
-      safeMessage = BlockMessage.BlockMessageSafe
+      safeMessage = BlockMessage.Safe
         .create(message)
         .getOrElse(sys.error("Invalid generated block message"))
     } yield (hash, safeMessage)
 
-  private[this] val blockStoreElementsGen: Gen[List[(ByteString, BlockMessage.BlockMessageSafe)]] =
+  private[this] val blockStoreElementsGen: Gen[List[(ByteString, BlockMessage.Safe)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
 
   def withStore[R](f: BlockStore[Id] => R): R

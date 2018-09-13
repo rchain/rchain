@@ -7,7 +7,7 @@ object implicits {
       SignatureAlgorithms.lookup(b.sigAlgorithm)
   }
 
-  implicit class RichBlockMessageSafe(b: BlockMessage.BlockMessageSafe) {
+  implicit class RichBlockMessageSafe(b: BlockMessage.Safe) {
     def signFunction: (Array[Byte], Array[Byte]) => Array[Byte] =
       SignatureAlgorithms.lookup(b.sigAlgorithm)
   }

@@ -22,8 +22,8 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  def isInMainChain[F[_]: Monad: BlockStore](candidate: BlockMessage.BlockMessageSafe,
-                                             target: BlockMessage.BlockMessageSafe): F[Boolean] =
+  def isInMainChain[F[_]: Monad: BlockStore](candidate: BlockMessage.Safe,
+                                             target: BlockMessage.Safe): F[Boolean] =
     if (candidate == target) {
       true.pure[F]
     } else {
@@ -41,9 +41,9 @@ object ProtoUtil {
       }
     }
 
-  def getMainChain[F[_]: Monad: BlockStore](estimate: BlockMessage.BlockMessageSafe,
-                                            acc: IndexedSeq[BlockMessage.BlockMessageSafe])
-    : F[IndexedSeq[BlockMessage.BlockMessageSafe]] = {
+  def getMainChain[F[_]: Monad: BlockStore](
+      estimate: BlockMessage.Safe,
+      acc: IndexedSeq[BlockMessage.Safe]): F[IndexedSeq[BlockMessage.Safe]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
@@ -58,7 +58,7 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage.BlockMessageSafe] =
+  def unsafeGetBlock[F[_]: Monad: BlockStore](hash: BlockHash): F[BlockMessage.Safe] =
     for {
       maybeBlock <- BlockStore[F].get(hash)
       block = maybeBlock match {
@@ -68,7 +68,7 @@ object ProtoUtil {
       }
     } yield block
 
-  def creatorJustification(block: BlockMessage.BlockMessageSafe): Option[Justification] =
+  def creatorJustification(block: BlockMessage.Safe): Option[Justification] =
     block.justifications
       .find {
         case Justification(validator: Validator, _) =>
@@ -76,10 +76,10 @@ object ProtoUtil {
       }
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
-      b: BlockMessage.BlockMessageSafe,
-      seqNum: SequenceNumber): F[Option[BlockMessage.BlockMessageSafe]] =
+      b: BlockMessage.Safe,
+      seqNum: SequenceNumber): F[Option[BlockMessage.Safe]] =
     if (b.seqNum == seqNum) {
-      Option[BlockMessage.BlockMessageSafe](b).pure[F]
+      Option[BlockMessage.Safe](b).pure[F]
     } else {
       DagOperations
         .bfTraverseF(List(b)) { block =>
@@ -89,10 +89,9 @@ object ProtoUtil {
     }
 
   def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
-      block: BlockMessage.BlockMessageSafe,
+      block: BlockMessage.Safe,
       validator: Validator,
-      goalFunc: BlockMessage.BlockMessageSafe => Boolean = _ => false)
-    : F[List[BlockMessage.BlockMessageSafe]] = {
+      goalFunc: BlockMessage.Safe => Boolean = _ => false): F[List[BlockMessage.Safe]] = {
     val maybeCreatorJustificationHash =
       block.justifications.find(_.validator == validator)
     maybeCreatorJustificationHash match {
@@ -102,19 +101,19 @@ object ProtoUtil {
           maybeCreatorJustificationAsList = maybeCreatorJustification match {
             case Some(creatorJustification) =>
               if (goalFunc(creatorJustification)) {
-                List.empty[BlockMessage.BlockMessageSafe]
+                List.empty[BlockMessage.Safe]
               } else {
                 List(creatorJustification)
               }
             case None =>
-              List.empty[BlockMessage.BlockMessageSafe]
+              List.empty[BlockMessage.Safe]
           }
         } yield maybeCreatorJustificationAsList
-      case None => List.empty[BlockMessage.BlockMessageSafe].pure[F]
+      case None => List.empty[BlockMessage.Safe].pure[F]
     }
   }
 
-  def weightMap(blockMessage: BlockMessage.BlockMessageSafe): Map[ByteString, Int] =
+  def weightMap(blockMessage: BlockMessage.Safe): Map[ByteString, Int] =
     weightMap(blockMessage.body.postState.underlying)
 
   private def weightMap(state: RChainState): Map[ByteString, Int] =
@@ -125,22 +124,21 @@ object ProtoUtil {
   def weightMapTotal(weights: Map[ByteString, Int]): Int =
     weights.values.sum
 
-  def minTotalValidatorWeight(blockMessage: BlockMessage.BlockMessageSafe,
-                              maxCliqueMinSize: Int): Int = {
+  def minTotalValidatorWeight(blockMessage: BlockMessage.Safe, maxCliqueMinSize: Int): Int = {
     val sortedWeights = weightMap(blockMessage).values.toList.sorted
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
   def mainParent[F[_]: Monad: BlockStore](
-      blockMessage: BlockMessage.BlockMessageSafe): F[Option[BlockMessage.BlockMessageSafe]] = {
+      blockMessage: BlockMessage.Safe): F[Option[BlockMessage.Safe]] = {
     val maybeParentHash = blockMessage.header.parentsHashList.headOption
     maybeParentHash match {
       case Some(parentHash) => BlockStore[F].get(parentHash)
-      case None             => none[BlockMessage.BlockMessageSafe].pure[F]
+      case None             => none[BlockMessage.Safe].pure[F]
     }
   }
 
-  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage.BlockMessageSafe,
+  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage.Safe,
                                                    validator: ByteString): F[Int] =
     for {
       maybeMainParent <- mainParent[F](b)
@@ -149,28 +147,27 @@ object ProtoUtil {
         .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage.BlockMessageSafe): F[Int] =
+  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage.Safe): F[Int] =
     weightFromValidator[F](b, b.sender)
 
-  def parentHashes(b: BlockMessage.BlockMessageSafe): Seq[ByteString] =
+  def parentHashes(b: BlockMessage.Safe): Seq[ByteString] =
     b.header.parentsHashList
 
-  def unsafeGetParents[F[_]: Monad: BlockStore](
-      b: BlockMessage.BlockMessageSafe): F[List[BlockMessage.BlockMessageSafe]] =
+  def unsafeGetParents[F[_]: Monad: BlockStore](b: BlockMessage.Safe): F[List[BlockMessage.Safe]] =
     b.header.parentsHashList.toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
-  def deploys(b: BlockMessage.BlockMessageSafe): Seq[ProcessedDeploy] =
+  def deploys(b: BlockMessage.Safe): Seq[ProcessedDeploy] =
     b.body.deploys
 
-  def tuplespace(b: BlockMessage.BlockMessageSafe): ByteString =
+  def tuplespace(b: BlockMessage.Safe): ByteString =
     b.body.postState.tuplespace
 
-  def bonds(b: BlockMessage.BlockMessageSafe): Seq[Bond] =
+  def bonds(b: BlockMessage.Safe): Seq[Bond] =
     b.body.postState.bonds
 
-  def blockNumber(b: BlockMessage.BlockMessageSafe): Long =
+  def blockNumber(b: BlockMessage.Safe): Long =
     b.body.postState.blockNumber
 
   /*
@@ -179,9 +176,9 @@ object ProtoUtil {
    * TODO: Update the logic of this function to make use of the trace logs and
    * say that two blocks don't conflict if they act on disjoint sets of channels
    */
-  def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage.BlockMessageSafe,
-                                         b2: BlockMessage.BlockMessageSafe,
-                                         genesis: BlockMessage.BlockMessageSafe,
+  def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage.Safe,
+                                         b2: BlockMessage.Safe,
+                                         genesis: BlockMessage.Safe,
                                          dag: BlockDag): F[Boolean] =
     for {
       gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
@@ -189,10 +186,10 @@ object ProtoUtil {
                  //blocks which already exist in each other's chains do not conflict
                  false.pure[F]
                } else {
-                 def getDeploys(b: BlockMessage.BlockMessageSafe) =
+                 def getDeploys(b: BlockMessage.Safe) =
                    for {
                      bAncestors <- DagOperations
-                                    .bfTraverseF[F, BlockMessage.BlockMessageSafe](List(b))(
+                                    .bfTraverseF[F, BlockMessage.Safe](List(b))(
                                       ProtoUtil.unsafeGetParents[F])
                                     .toList
                      deploys = bAncestors
@@ -209,16 +206,14 @@ object ProtoUtil {
                }
     } yield result
 
-  def chooseNonConflicting[F[_]: Monad: BlockStore](
-      blocks: Seq[BlockMessage.BlockMessageSafe],
-      genesis: BlockMessage.BlockMessageSafe,
-      dag: BlockDag): F[Seq[BlockMessage.BlockMessageSafe]] = {
-    def nonConflicting(
-        b: BlockMessage.BlockMessageSafe): BlockMessage.BlockMessageSafe => F[Boolean] =
+  def chooseNonConflicting[F[_]: Monad: BlockStore](blocks: Seq[BlockMessage.Safe],
+                                                    genesis: BlockMessage.Safe,
+                                                    dag: BlockDag): F[Seq[BlockMessage.Safe]] = {
+    def nonConflicting(b: BlockMessage.Safe): BlockMessage.Safe => F[Boolean] =
       conflicts[F](_, b, genesis, dag).map(b => !b)
 
     blocks.toList
-      .foldM(List.empty[BlockMessage.BlockMessageSafe]) {
+      .foldM(List.empty[BlockMessage.Safe]) {
         case (acc, b) =>
           Monad[F].ifM(acc.forallM(nonConflicting(b)))(
             (b :: acc).pure[F],
@@ -228,8 +223,8 @@ object ProtoUtil {
       .map(_.reverse)
   }
 
-  def toJustification(latestMessages: collection.Map[Validator, BlockMessage.BlockMessageSafe])
-    : Seq[Justification] =
+  def toJustification(
+      latestMessages: collection.Map[Validator, BlockMessage.Safe]): Seq[Justification] =
     latestMessages.toSeq.map {
       case (validator, block) =>
         Justification()
@@ -246,8 +241,8 @@ object ProtoUtil {
 
   def toLatestMessage[F[_]: Monad: BlockStore](
       justifications: Seq[Justification],
-      dag: BlockDag): F[immutable.Map[Validator, BlockMessage.BlockMessageSafe]] =
-    justifications.toList.foldM(Map.empty[Validator, BlockMessage.BlockMessageSafe]) {
+      dag: BlockDag): F[immutable.Map[Validator, BlockMessage.Safe]] =
+    justifications.toList.foldM(Map.empty[Validator, BlockMessage.Safe]) {
       case (acc, Justification(validator, hash)) =>
         for {
           block <- ProtoUtil.unsafeGetBlock[F](hash)
@@ -294,7 +289,7 @@ object ProtoUtil {
     hashByteArrays(items: _*)
   }
 
-  def hashSignedBlock(header: Header.HeaderSafe,
+  def hashSignedBlock(header: Header.Safe,
                       sender: ByteString,
                       sigAlgorithm: String,
                       seqNum: Int,
@@ -309,12 +304,12 @@ object ProtoUtil {
       extraBytes.toByteArray
     )
 
-  def signBlock(blockSafe: BlockMessage.BlockMessageSafe,
+  def signBlock(blockSafe: BlockMessage.Safe,
                 dag: BlockDag,
                 pk: Array[Byte],
                 sk: Array[Byte],
                 sigAlgorithm: String,
-                shardId: String): BlockMessage.BlockMessageSafe = {
+                shardId: String): BlockMessage.Safe = {
 
     val header = blockSafe.header
     val block  = blockSafe.underlying
@@ -335,7 +330,7 @@ object ProtoUtil {
       .withBlockHash(blockHash)
       .withShardId(shardId)
 
-    BlockMessage.BlockMessageSafe
+    BlockMessage.Safe
       .create(signedBlock)
       .getOrElse(sys.error("A valid block became malformed after signing"))
   }

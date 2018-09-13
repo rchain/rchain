@@ -12,11 +12,11 @@ import scala.language.higherKinds
 
 class InMemBlockStore[F[_]] private ()(implicit
                                        monadF: Monad[F],
-                                       refF: Ref[F, Map[BlockHash, BlockMessage.BlockMessageSafe]],
+                                       refF: Ref[F, Map[BlockHash, BlockMessage.Safe]],
                                        metricsF: Metrics[F])
     extends BlockStore[F] {
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage.BlockMessageSafe]] =
+  def get(blockHash: BlockHash): F[Option[BlockMessage.Safe]] =
     for {
       _     <- metricsF.incrementCounter("block-store-get")
       state <- refF.get
@@ -24,19 +24,19 @@ class InMemBlockStore[F[_]] private ()(implicit
 
   @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
               since = "0.5")
-  def asMap(): F[Map[BlockHash, BlockMessage.BlockMessageSafe]] =
+  def asMap(): F[Map[BlockHash, BlockMessage.Safe]] =
     for {
       _     <- metricsF.incrementCounter("block-store-as-map")
       state <- refF.get
     } yield state
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.BlockMessageSafe)]] =
+  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.Safe)]] =
     for {
       _     <- metricsF.incrementCounter("block-store-find")
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq
 
-  def put(f: => (BlockHash, BlockMessage.BlockMessageSafe)): F[Unit] =
+  def put(f: => (BlockHash, BlockMessage.Safe)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter("block-store-put")
       _ <- refF.update { state =>
@@ -56,7 +56,7 @@ class InMemBlockStore[F[_]] private ()(implicit
 object InMemBlockStore {
   def create[F[_]](implicit
                    monadF: Monad[F],
-                   refF: Ref[F, Map[BlockHash, BlockMessage.BlockMessageSafe]],
+                   refF: Ref[F, Map[BlockHash, BlockMessage.Safe]],
                    metricsF: Metrics[F]): BlockStore[F] =
     new InMemBlockStore()
 
@@ -68,8 +68,7 @@ object InMemBlockStore {
     InMemBlockStore.create(syncId, refId, metrics)
   }
 
-  def emptyMapRef[F[_]](
-      implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage.BlockMessageSafe]]] =
-    Ref[F].of(Map.empty[BlockHash, BlockMessage.BlockMessageSafe])
+  def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessage.Safe]]] =
+    Ref[F].of(Map.empty[BlockHash, BlockMessage.Safe])
 
 }

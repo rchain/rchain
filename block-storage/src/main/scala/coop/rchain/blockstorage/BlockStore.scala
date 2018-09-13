@@ -10,23 +10,22 @@ import scala.language.higherKinds
 trait BlockStore[F[_]] {
   import BlockStore.BlockHash
 
-  def put(blockHash: BlockHash, blockMessage: BlockMessage.BlockMessageSafe): F[Unit] =
+  def put(blockHash: BlockHash, blockMessage: BlockMessage.Safe): F[Unit] =
     put((blockHash, blockMessage))
 
-  def get(blockHash: BlockHash): F[Option[BlockMessage.BlockMessageSafe]]
+  def get(blockHash: BlockHash): F[Option[BlockMessage.Safe]]
 
-  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.BlockMessageSafe)]]
+  def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.Safe)]]
 
-  def put(f: => (BlockHash, BlockMessage.BlockMessageSafe)): F[Unit]
+  def put(f: => (BlockHash, BlockMessage.Safe)): F[Unit]
 
-  def apply(blockHash: BlockHash)(
-      implicit applicativeF: Applicative[F]): F[BlockMessage.BlockMessageSafe] =
+  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage.Safe] =
     get(blockHash).map(_.get)
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
 
-  def asMap(): F[Map[BlockHash, BlockMessage.BlockMessageSafe]]
+  def asMap(): F[Map[BlockHash, BlockMessage.Safe]]
 
   def clear(): F[Unit]
 

@@ -80,17 +80,17 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[BlockStatus]              = underlying.addBlock(b)
-  def contains(b: BlockMessage.BlockMessageSafe): F[Boolean] = underlying.contains(b)
-  def deploy(d: DeployData): F[Either[Throwable, Unit]]      = underlying.deploy(d)
-  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage.BlockMessageSafe]] =
+  def addBlock(b: BlockMessage): F[BlockStatus]         = underlying.addBlock(b)
+  def contains(b: BlockMessage.Safe): F[Boolean]        = underlying.contains(b)
+  def deploy(d: DeployData): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage.Safe]] =
     underlying.estimator(dag)
   def blockDag: F[BlockDag] = underlying.blockDag
   def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
     underlying.normalizedInitialFault(weights)
-  def lastFinalizedBlock: F[BlockMessage.BlockMessageSafe] = underlying.lastFinalizedBlock
-  def storageContents(hash: ByteString): F[String]         = underlying.storageContents(hash)
-  def getRuntimeManager: F[Option[RuntimeManager]]         = underlying.getRuntimeManager
+  def lastFinalizedBlock: F[BlockMessage.Safe]     = underlying.lastFinalizedBlock
+  def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)
+  def getRuntimeManager: F[Option[RuntimeManager]] = underlying.getRuntimeManager
 
   override def createBlock: F[CreateBlockStatus] =
     for {

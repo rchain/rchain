@@ -5,14 +5,13 @@ import coop.rchain.casper.util.ProtoUtil.hashSignedBlock
 import coop.rchain.casper.util.implicits._
 
 object BlockUtil {
-  val emptySafeBlock = BlockMessage.BlockMessageSafe
+  val emptySafeBlock = BlockMessage.Safe
     .create(
       BlockMessage().withHeader(Header()).withBody(Body().withPostState(RChainState()))
     )
     .get
 
-  def resignBlock(b: BlockMessage.BlockMessageSafe,
-                  sk: Array[Byte]): BlockMessage.BlockMessageSafe = {
+  def resignBlock(b: BlockMessage.Safe, sk: Array[Byte]): BlockMessage.Safe = {
     val blockHash =
       hashSignedBlock(b.header, b.sender, b.sigAlgorithm, b.seqNum, b.shardId, b.extraBytes)
     val sig = ByteString.copyFrom(b.signFunction(blockHash.toByteArray, sk))

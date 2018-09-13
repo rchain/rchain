@@ -43,8 +43,7 @@ trait SafetyOracle[F[_]] {
     * @param estimate Block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
-  def normalizedFaultTolerance(blockDag: BlockDag,
-                               estimate: BlockMessage.BlockMessageSafe): F[Float]
+  def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage.Safe): F[Float]
 }
 
 object SafetyOracle extends SafetyOracleInstances {
@@ -54,8 +53,7 @@ object SafetyOracle extends SafetyOracleInstances {
 sealed abstract class SafetyOracleInstances {
   def turanOracle[F[_]: Monad: BlockStore]: SafetyOracle[F] =
     new SafetyOracle[F] {
-      def normalizedFaultTolerance(blockDag: BlockDag,
-                                   estimate: BlockMessage.BlockMessageSafe): F[Float] =
+      def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage.Safe): F[Float] =
         for {
           totalWeight              <- computeTotalWeight(estimate)
           minMaxCliqueWeight       <- computeMinMaxCliqueWeight(blockDag, estimate)
@@ -66,7 +64,7 @@ sealed abstract class SafetyOracleInstances {
       // To have a maximum clique of half the total weight,
       // you need at least twice the weight of the candidateWeights to be greater than the total weight
       private def computeMinMaxCliqueWeight(blockDag: BlockDag,
-                                            estimate: BlockMessage.BlockMessageSafe): F[Int] =
+                                            estimate: BlockMessage.Safe): F[Int] =
         for {
           candidateWeights <- computeCandidateWeights(blockDag, estimate)
           totalWeight      <- computeTotalWeight(estimate)
@@ -84,14 +82,13 @@ sealed abstract class SafetyOracleInstances {
                                }
         } yield minMaxCliqueWeight
 
-      private def computeTotalWeight(estimate: BlockMessage.BlockMessageSafe): F[Int] =
+      private def computeTotalWeight(estimate: BlockMessage.Safe): F[Int] =
         for {
           mainParentWeightMap <- computeMainParentWeightMap(estimate)
         } yield weightMapTotal(mainParentWeightMap)
 
-      private def computeCandidateWeights(
-          blockDag: BlockDag,
-          estimate: BlockMessage.BlockMessageSafe): F[Map[Validator, Int]] =
+      private def computeCandidateWeights(blockDag: BlockDag,
+                                          estimate: BlockMessage.Safe): F[Map[Validator, Int]] =
         for {
           weights <- computeMainParentWeightMap(estimate)
           candidateWeights <- weights.toList.traverse {
@@ -113,8 +110,7 @@ sealed abstract class SafetyOracleInstances {
                              }
         } yield candidateWeights.flatten.toMap
 
-      private def computeMainParentWeightMap(
-          estimate: BlockMessage.BlockMessageSafe): F[Map[BlockHash, Int]] =
+      private def computeMainParentWeightMap(estimate: BlockMessage.Safe): F[Map[BlockHash, Int]] =
         for {
           estimateMainParent <- mainParent[F](estimate)
           mainParentWeightMap = estimateMainParent match {
@@ -141,7 +137,7 @@ sealed abstract class SafetyOracleInstances {
           }
 
       private def agreementGraphEdgeCount(blockDag: BlockDag,
-                                          estimate: BlockMessage.BlockMessageSafe,
+                                          estimate: BlockMessage.Safe,
                                           candidates: Map[Validator, Int]): F[Int] = {
         def findAgreeingJustificationHash(justificationHashes: List[BlockHash],
                                           validator: Validator): F[Option[BlockHash]] =
@@ -171,13 +167,13 @@ sealed abstract class SafetyOracleInstances {
           }
         }
 
-        def filterChildren(candidate: BlockMessage.BlockMessageSafe,
-                           validator: Validator): F[List[BlockMessage.BlockMessageSafe]] =
+        def filterChildren(candidate: BlockMessage.Safe,
+                           validator: Validator): F[List[BlockMessage.Safe]] =
           blockDag.latestMessages.get(validator) match {
             case Some(latestMessageByValidator) =>
               for {
                 potentialChildren <- DagOperations
-                                      .bfTraverseF[F, BlockMessage.BlockMessageSafe](
+                                      .bfTraverseF[F, BlockMessage.Safe](
                                         List(latestMessageByValidator)) { block =>
                                         ProtoUtil.getCreatorJustificationAsList[F](
                                           block,
@@ -191,7 +187,7 @@ sealed abstract class SafetyOracleInstances {
                              (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
                            }
               } yield children
-            case None => List.empty[BlockMessage.BlockMessageSafe].pure[F]
+            case None => List.empty[BlockMessage.Safe].pure[F]
           }
 
         def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
@@ -211,7 +207,7 @@ sealed abstract class SafetyOracleInstances {
                                                      result = if (isSenderSecond) {
                                                        Some(justificationBlock)
                                                      } else {
-                                                       none[BlockMessage.BlockMessageSafe]
+                                                       none[BlockMessage.Safe]
                                                      }
                                                    } yield result)
                 _                        = assert(justificationBlockSecondList.flatten.length == 1)
@@ -251,8 +247,8 @@ sealed abstract class SafetyOracleInstances {
       }
 
       // TODO: Change to isInBlockDAG
-      private def computeCompatibility(candidate: BlockMessage.BlockMessageSafe,
-                                       target: BlockMessage.BlockMessageSafe): F[Boolean] =
+      private def computeCompatibility(candidate: BlockMessage.Safe,
+                                       target: BlockMessage.Safe): F[Boolean] =
         isInMainChain[F](candidate, target)
 
       // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)

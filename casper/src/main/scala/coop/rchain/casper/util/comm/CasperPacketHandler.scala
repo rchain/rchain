@@ -233,7 +233,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                            capserHandlerInternal)
                  case Some(approvedBlock) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
-                   val blockSafe = BlockMessage.BlockMessageSafe
+                   val blockSafe = BlockMessage.Safe
                      .create(blockMessage)
                      .getOrElse(sys.error("Approved block is malformed"))
                    for {
@@ -477,7 +477,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  for {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
-                   blockSafe = BlockMessage.BlockMessageSafe
+                   blockSafe = BlockMessage.Safe
                      .create(blockMessage)
                      .getOrElse(sys.error("Approved block is malformed"))
                    _ <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
