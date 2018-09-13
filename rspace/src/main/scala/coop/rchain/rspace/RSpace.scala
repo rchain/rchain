@@ -14,14 +14,13 @@ import scala.collection.immutable.Seq
 import scala.util.Random
 import kamon._
 
-class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class RSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends RSpaceOps[C, P, A, R, K](store, branch)
-    with FreudianSpace[C, P, A, R, K] {
+) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -32,8 +31,8 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   private[this] val produceSpan   = Kamon.buildSpan("rspace.produce")
   protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
-  def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
+  override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+      implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
@@ -66,11 +65,14 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
           c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
         }.toMap
 
-        val options: Option[Seq[DataCandidate[C, R]]] =
+        val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
+            .map(_.sequence)
 
         options match {
-          case None =>
+          case Left(e) =>
+            Left(e)
+          case Right(None) =>
             store.putWaitingContinuation(
               txn,
               channels,
@@ -79,8 +81,8 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-            None
-          case Some(dataCandidates) =>
+            Right(None)
+          case Right(Some(dataCandidates)) =>
             consumeCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
@@ -95,13 +97,13 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                   ()
               }
             logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-            Some((continuation, dataCandidates.map(_.datum.a)))
+            Right(Some((continuation, dataCandidates.map(_.datum.a))))
         }
       }
     }
 
-  def produce(channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, A, R]): Option[(K, Seq[R])] =
+  override def produce(channel: C, data: A, persist: Boolean)(
+      implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
@@ -117,11 +119,12 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
          * Could also be implemented with a lazy `foldRight`.
          */
         @tailrec
-        def extractProduceCandidate(groupedChannels: Seq[Seq[C]],
-                                    batChannel: C,
-                                    data: Datum[A]): Option[ProduceCandidate[C, P, R, K]] =
+        def extractProduceCandidate(
+            groupedChannels: Seq[Seq[C]],
+            batChannel: C,
+            data: Datum[A]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
           groupedChannels match {
-            case Nil => None
+            case Nil => Right(None)
             case channels :: remaining =>
               val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
                 Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
@@ -142,17 +145,20 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                 }
               }.toMap
               extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
-                case None             => extractProduceCandidate(remaining, batChannel, data)
-                case produceCandidate => produceCandidate
+                case Left(e)                 => Left(e)
+                case Right(None)             => extractProduceCandidate(remaining, batChannel, data)
+                case Right(produceCandidate) => Right(produceCandidate)
               }
           }
 
         extractProduceCandidate(groupedChannels, channel, Datum(data, persist, produceRef)) match {
-          case Some(
-              ProduceCandidate(channels,
-                               WaitingContinuation(_, continuation, persistK, consumeRef),
-                               continuationIndex,
-                               dataCandidates)) =>
+          case Left(e) => Left(e)
+          case Right(
+              Some(
+                ProduceCandidate(channels,
+                                 WaitingContinuation(_, continuation, persistK, consumeRef),
+                                 continuationIndex,
+                                 dataCandidates))) =>
             produceCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
@@ -170,12 +176,12 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
                   store.removeJoin(txn, candidateChannel, channels)
               }
             logger.debug(s"produce: matching continuation found at <channels: $channels>")
-            Some(continuation, dataCandidates.map(_.datum.a))
-          case None =>
+            Right(Some(continuation, dataCandidates.map(_.datum.a)))
+          case Right(None) =>
             logger.debug(s"produce: no matching continuation found")
             store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
-            None
+            Right(None)
         }
       }
     }
@@ -190,15 +196,15 @@ class RSpace[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
 object RSpace {
 
-  def create[C, P, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): RSpace[C, P, A, R, K] =
+      sk: Serialize[K]): RSpace[C, P, E, A, R, K] =
     create(context.createStore(branch), branch)
 
-  def createInMemory[C, P, A, R, K](
+  def createInMemory[C, P, E, A, R, K](
       trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
                             Blake2b256Hash,
                             GNAT[C, P, A, K]],
@@ -206,7 +212,7 @@ object RSpace {
                       sc: Serialize[C],
                       sp: Serialize[P],
                       sa: Serialize[A],
-                      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
+                      sk: Serialize[K]): RSpace[C, P, E, A, R, K] = {
 
     val mainStore = InMemoryStore
       .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
@@ -215,19 +221,19 @@ object RSpace {
     create(mainStore, branch)
   }
 
-  def create[C, P, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  def create[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): RSpace[C, P, A, R, K] = {
+      sk: Serialize[K]): RSpace[C, P, E, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val space = new RSpace[C, P, A, R, K](store, branch)
+    val space = new RSpace[C, P, E, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

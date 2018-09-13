@@ -6,7 +6,7 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
-import coop.rchain.rholang.interpreter.errors.ReduceError
+import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, ReduceError}
 import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
@@ -25,6 +25,7 @@ object TuplespaceAlg {
       pureRSpace: PureRSpace[F,
                              Channel,
                              BindPattern,
+                             OutOfPhlogistonsError.type,
                              ListChannelWithRandom,
                              ListChannelWithRandom,
                              TaggedContinuation],
@@ -35,24 +36,26 @@ object TuplespaceAlg {
                          data: ListChannelWithRandom,
                          persistent: Boolean): F[CostAccount] = {
       // TODO: Handle the environment in the store
-      def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[CostAccount] =
-        res
-          .map {
-            case (continuation, dataList) =>
-              val rspaceMatchCost =
-                dataList
-                  .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
-                  .toList
-                  .combineAll
-              if (persistent) {
-                List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
-                     produce(channel, data, persistent)).parSequence
-                  .map(_.combineAll + rspaceMatchCost)
-              } else {
-                dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
-              }
-          }
-          .getOrElse(F.pure(CostAccount.zero))
+      def go(
+          res: Either[OutOfPhlogistonsError.type,
+                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): F[CostAccount] =
+        res match {
+          case Right(Some((continuation, dataList))) =>
+            val rspaceMatchCost =
+              dataList
+                .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
+                .toList
+                .combineAll
+            if (persistent) {
+              List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
+                   produce(channel, data, persistent)).parSequence
+                .map(_.combineAll + rspaceMatchCost)
+            } else {
+              dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
+            }
+
+          case Right(None) => F.pure(CostAccount.zero)
+        }
 
       for {
         res  <- pureRSpace.produce(channel, data, persist = persistent)
@@ -67,9 +70,12 @@ object TuplespaceAlg {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          def go(res: Option[(TaggedContinuation, Seq[ListChannelWithRandom])]): F[CostAccount] =
+          def go(
+              res: Either[OutOfPhlogistonsError.type,
+                          Option[(TaggedContinuation, Seq[ListChannelWithRandom])]])
+            : F[CostAccount] =
             res match {
-              case Some((continuation, dataList)) =>
+              case Right(Some((continuation, dataList))) =>
                 val rspaceMatchCost =
                   dataList
                     .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
@@ -84,7 +90,7 @@ object TuplespaceAlg {
                 } else {
                   dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
                 }
-              case None => F.pure(CostAccount.zero)
+              case Right(None) => F.pure(CostAccount.zero)
             }
 
           for {

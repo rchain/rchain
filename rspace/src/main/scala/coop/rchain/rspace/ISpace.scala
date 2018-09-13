@@ -8,11 +8,12 @@ import scala.collection.immutable.Seq
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
+  * @tparam E a type representing an illegal state in matching algorithm
   * @tparam A a type representing an arbitrary piece of data
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait ISpace[F[_], C, P, A, R, K] {
+trait ISpace[F[_], C, P, E, A, R, K] {
 
   /** Searches the store for data matching all the given patterns at the given channels.
     *
@@ -38,10 +39,10 @@ trait ISpace[F[_], C, P, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, A, R]): F[Option[(K, Seq[R])]]
+      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, A, R]): F[Option[(K, Seq[R])]]
+      implicit m: Match[P, E, A, R]): F[Option[(K, Seq[R])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -67,7 +68,7 @@ trait ISpace[F[_], C, P, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, A, R]): F[Option[(K, Seq[R])]]
+      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
 
   /** Creates a checkpoint.
     *
