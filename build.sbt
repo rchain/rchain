@@ -7,6 +7,11 @@ import com.typesafe.sbt.packager.docker._
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
+//disallow any unresolved version conflicts at all for faster feedback
+Global / conflictManager := ConflictManager.strict
+//resolve all version conflicts explicitly
+Global / dependencyOverrides := Dependencies.overrides
+
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.6",

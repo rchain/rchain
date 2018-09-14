@@ -177,7 +177,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {
-                     val prometheusService = NewPrometheusReporter.service(prometheusReporter)
+                     val prometheusService     = NewPrometheusReporter.service(prometheusReporter)
+                     implicit val contextShift = IO.contextShift(scheduler)
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
@@ -305,15 +306,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
             }
         } *> exit0.as(Right(())))
 
-  private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] = new Timer[Effect] {
-    override def clockRealTime(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(timerTask.clockRealTime(unit))
-    override def clockMonotonic(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(timerTask.clockMonotonic(unit))
-    override def sleep(duration: FiniteDuration): Effect[Unit] =
-      EitherT.liftF(timerTask.sleep(duration))
-    override def shift: Effect[Unit] = EitherT.liftF(timerTask.shift)
-  }
+  private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] =
+    Timer.deriveEitherT(Functor[Task], timerTask)
 
   private val syncEffect = SyncInstances.syncEffect[CommError](commError => {
     new Exception(s"CommError: $commError")
@@ -337,7 +331,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     rpConnections        <- effects.rpConnections.toEffect
     log                  = effects.log
     time                 = effects.time
-    timerTask            = Timer[Task]
+    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
