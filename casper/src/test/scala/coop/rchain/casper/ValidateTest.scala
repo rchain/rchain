@@ -202,7 +202,7 @@ class ValidateTest
     Validate.blockNumber[Id](block.withBlockNumber(17)) should be(Left(InvalidBlockNumber))
     Validate.blockNumber[Id](block) should be(Right(Valid))
     log.warns.size should be(1)
-    log.warns.head.contains("is not one more than parent number") should be(true)
+    log.warns.head.contains("is not one more than maximum parent number") should be(true)
   }
 
   it should "return true for sequential numbering" in withStore { implicit blockStore =>
