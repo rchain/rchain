@@ -7,7 +7,7 @@ import cats.{Id, Monad}
 import cats.implicits._
 import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.shared.Time
 
@@ -16,7 +16,7 @@ class DagOperationsTest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
-  val initState = BlockDag().copy(currentId = -1)
+  val initState = IndexedBlockDag.empty.copy(currentId = -1)
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     val stream = DagOperations.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))

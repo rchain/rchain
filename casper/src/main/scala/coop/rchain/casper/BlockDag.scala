@@ -6,11 +6,9 @@ import coop.rchain.casper.protocol.BlockMessage
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-final case class BlockDag(idToBlocks: Map[Int, BlockMessage],
-                          childMap: Map[BlockHash, Set[BlockHash]],
+final case class BlockDag(childMap: Map[BlockHash, Set[BlockHash]],
                           latestMessages: Map[Validator, BlockMessage],
                           latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
-                          currentId: Int,
                           currentSeqNum: Map[Validator, Int])
 
 object BlockDag {
@@ -19,13 +17,11 @@ object BlockDag {
     def empty: LatestMessages = HashMap.empty[Validator, BlockHash]
   }
 
-  def apply(): BlockDag =
+  val empty: BlockDag =
     new BlockDag(
-      HashMap.empty[Int, BlockMessage],
       HashMap.empty[BlockHash, HashSet[BlockHash]],
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[Validator, LatestMessages],
-      0,
       HashMap.empty[Validator, Int]
     )
 }
