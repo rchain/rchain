@@ -27,6 +27,6 @@
   "devDependencies": {
     "eslint-config-react": "^1.1.7",
     "eslint-config-standard-react": "^6.0.0",
-    "serve": "^6.1.0"
+    "serve": "^7.0.0"
   }
 }

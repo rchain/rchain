@@ -1,17 +1,17 @@
 module SENDING-RECEIVING
 imports PROCESSES-SEMANTICS
 
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
-// SENDING AND RECEIVING
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
-
-// Some syntax for the data we need to keep on our in and out cells
-syntax InOutData ::= Int ";" List
+// *******************************************************************
+//                        SENDING-RECEIVING
+// *******************************************************************
+// Some syntax specifically for the "sending-receiving" module
+// for the data we need to keep on our in and out cells
+syntax InOutData ::= Int ";" Set
 
 
 // Put "sends" in out-cells, and "receives" in in-cells
 // Gives each in- and out- cell an ID for matching purposes
-// The "InData" and "OutData" are of the form: Id ; List of Outs/Ins (respectively) that
+// The "InData" and "OutData" are of the form: Id ; Set of Outs/Ins (respectively) that
 // are possible matches
 // There is nontrivial nondeterminism in this rewrite rule, in the order
 // in which the parallel processes are spawned. This doesn't affect the
@@ -19,38 +19,37 @@ syntax InOutData ::= Int ";" List
 // numbers land, etc.
 
 rule <thread>
-        (<k> C:HigherName!(P:HigherProcs) </k> => <out> C!(P) </out>)
-        (.Bag => <OutData> I ; L </OutData> )
+        (<k> C:HigherNamePat!(P:HigherProcPats) </k> => .Bag)
+        (.Bag => <Out> C!(P) </Out>)
+        (.Bag => <OutData> !I:Int ; L </OutData> )
      </thread>
-     <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
-     <GlobalListofOutIds> ... .List => ListItem(I) ... </GlobalListofOutIds>
-     <GlobalListofInIds> L:List </GlobalListofInIds> [outcreation]
+     <GlobalSetofOutIds> ... .Set => SetItem(!I:Int) </GlobalSetofOutIds>
+     <GlobalSetofInIds> L:Set </GlobalSetofInIds> [outcreation]
 
-rule <thread> <k> for(D:HigherNamePats <- C:HigherName){ Q:HigherProc } => . </k>
-       (.Bag => <in> for(D <- C){ Q:HigherProc } </in> )
-       (.Bag => <InData> I ; L </InData> )
+rule <thread> <k> for(D:HigherNamePats <- C:HigherNamePat){ Q:HigherProcPat } => .K </k>
+       (.Bag => <In> for(D <- C){ Q:HigherProcPat } </In> )
+       (.Bag => <InData> !I:Int ; L </InData> )
     </thread>
-    <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
-    <GlobalListofOutIds> L:List </GlobalListofOutIds>
-    <GlobalListofInIds> ... .List => ListItem(I) ... </GlobalListofInIds> [increation]
+    <GlobalSetofOutIds> L:Set </GlobalSetofOutIds>
+    <GlobalSetofInIds> ... .Set => SetItem(!I:Int) </GlobalSetofInIds> [increation]
 
-// Verify the ID of one is in the list of the other
+// Verify the ID of one is in the Set of the other
 // If they are, combine the two threads and begin
 // checking if there is a match.
-// (a) the receive's ID is in the list of the send
+// (a) the receive's ID is in the Set of the send
 rule
     // Delete this thread, to abosrbed it into the other thread
     // (we do this by emptying all the cells, which rewrites to . )
     <thread>
-        <out> C:HigherName!(P:HigherProcs) => . </out>
-        <OutData> I:Int ; L:List => . </OutData>
+        <Out> C:HigherNamePat!(P:HigherProcPats) => .K </Out>
+        <OutData> I:Int ; L:Set => .K </OutData>
      </thread>
      // Combine the two threads
      <thread>
-        <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
-        <InData> J ; ListHead:List (ListItem(I) => .) ListTail:List </InData>
+        <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
+        <InData> J ; (SetItem(I) => .Set) SetTail:Set </InData>
         // Import all the information from the out-cell
-        (.Bag => <out> C:HigherName!(P:HigherProcs) </out>)
+        (.Bag => <Out> C:HigherNamePat!(P:HigherProcPats) </Out>)
         (.Bag => <OutData> I ; L </OutData>)
         // Begin checking the match in the k-cell
         (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
@@ -60,11 +59,11 @@ rule
 
 // (b) the send's ID is in the list of the receive
 rule <thread>
-       <out> C:HigherName!(P:HigherProcs) </out>
-       <OutData> J ; ListHead:List (ListItem(I) => .) ListTail:List </OutData>
+       <Out> C:HigherNamePat!(P:HigherProcPats) </Out>
+       <OutData> J ; (SetItem(I) => .Set) SetTail:Set </OutData>
        // Absorb all the information from the in-thread
-       (.Bag => <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>)
-       (.Bag => <InData> I:Int ; L:List </InData>)
+       (.Bag => <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>)
+       (.Bag => <InData> I:Int ; L:Set </InData>)
        // Begin checking the match in the k-cell
        (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
        // Keep the body of the listen statement to rewrite as we go along
@@ -73,43 +72,43 @@ rule <thread>
     // Delete this thread, as we abosrbed it into the other thread
     // (we do this by emptying all the cells, which rewrites to . )
     <thread> ...
-       <in> for(D:HigherNamePats <- C){ Q:HigherProc } => . </in>
-       <InData> I ; L => . </InData>
+       <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } => .K </In>
+       <InData> I ; L => .K </InData>
     </thread> [sendreceivematch]
 
 
-// If there is ever a $(MATCHFAIL), we have not matched and we separate the thread
+// If there is ever a #(MATCHFAIL), we have not matched and we separate the thread
 // into their original in- and out-threads.
 rule <thread> ...
         // The trigger
-        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => . </k>
+        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => .K </k>
         // Check to make sure the receive is not persistent
-        <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
+        <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
         // Keep the in-thread intact, deleting everything else
-        <out> O => . </out>
-        <OutData> S:Int ; L:List => . </OutData>
-        <subst> B => . </subst>
+        <Out> O => .K </Out>
+        <OutData> S:Int ; L:Set => .K </OutData>
+        <subst> B => .K </subst>
     ... </thread>
     // Recreate the out-thread; these will not try to match each other again
     (.Bag => <thread>
-        <out> O </out>
+        <Out> O </Out>
         <OutData> S ; L </OutData>
     </thread>)
 
 // The same for a fail in matching a HigherName
 rule <thread> ...
         // The trigger
-        <k> #(MATCHFAIL)[ "HIGHERNAMEMATCH" ] ~> REST:K => . </k>
+        <k> #(MATCHFAIL)[ "HIGHERNAMEMATCH" ] ~> REST:K => .K </k>
         // Check to make sure the receive is not persistent
-        <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
+        <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
         // Keep the in-thread intact, deleting everything else
-        <out> O => . </out>
-        <OutData> S:Int ; L:List => . </OutData>
-        <subst> B => . </subst>
+        <Out> O => .K </Out>
+        <OutData> S:Int ; L:Set => .K </OutData>
+        <subst> B => .K </subst>
     ... </thread>
     // Recreate the out-thread; these will not try to match each other again
     (.Bag => <thread>
-        <out> O </out>
+        <Out> O </Out>
         <OutData> S ; L </OutData>
     </thread>)
 
@@ -117,15 +116,15 @@ rule <thread> ...
 // When we've finished matching, we're ready to execute Q after having replaced all the
 // variables
 rule <thread>
-        <in> for(D:HigherNamePats <- C){ P:HigherProc } => . </in>
-        <InData> I1:Int ; L1:List => . </InData>
-        <out> O => . </out>
-        <OutData> I2:Int ; L2:List => . </OutData>
-        <subst> Q:HigherProc  => . </subst>
+        <In> for(D:HigherNamePats <- C){ P:HigherProcPat } => .K </In>
+        <InData> I1:Int ; L1:Set => .K </InData>
+        <Out> O => .K </Out>
+        <OutData> I2:Int ; L2:Set => .K </OutData>
+        <subst> Q:HigherProcPat  => .K </subst>
      </thread>
      (.Bag => <thread> <k> Q </k> </thread>)
-     <GlobalListofOutIds> ... ListItem(I2) => . ... </GlobalListofOutIds>
-     <GlobalListofInIds> ... ListItem(I1) => . ... </GlobalListofInIds>
+     <GlobalSetofOutIds> SetItem(I2) => .Set ... </GlobalSetofOutIds>
+     <GlobalSetofInIds> SetItem(I1) => .Set ... </GlobalSetofInIds>
 
 // For good housekeeping, delete HigherNames from <InData> and <OutData> cells
 // that aren't on the same HigherName

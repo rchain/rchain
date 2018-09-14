@@ -1193,9 +1193,9 @@ object Reduce {
       def size(baseExpr: Expr): M[Par] =
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _, _)) =>
-            Applicative[M].pure[Par](GInt(basePs.size))
+            Applicative[M].pure[Par](GInt(basePs.size.toLong))
           case ESetBody(ParSet(ps, _, _, _)) =>
-            Applicative[M].pure[Par](GInt(ps.size))
+            Applicative[M].pure[Par](GInt(ps.size.toLong))
           case other =>
             s.raiseError(MethodNotDefined("size", other.typ))
         }
@@ -1215,9 +1215,9 @@ object Reduce {
       def length(baseExpr: Expr): M[Expr] =
         baseExpr.exprInstance match {
           case GString(string) =>
-            Applicative[M].pure[Expr](GInt(string.length))
+            Applicative[M].pure[Expr](GInt(string.length.toLong))
           case EListBody(EList(ps, _, _, _)) =>
-            Applicative[M].pure[Expr](GInt(ps.length))
+            Applicative[M].pure[Expr](GInt(ps.length.toLong))
           case other =>
             s.raiseError(MethodNotDefined("length", other.typ))
         }
