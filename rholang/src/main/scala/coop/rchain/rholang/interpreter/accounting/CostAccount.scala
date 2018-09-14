@@ -13,7 +13,8 @@ case class CostAccount(idx: Int, cost: Cost) {
 }
 
 object CostAccount {
-  def toProto(c: CostAccount): PCost   = PCost(c.cost.value.toLong, c.idx)
+  def apply(value: Long): CostAccount  = CostAccount(0, Cost(value))
+  def toProto(c: CostAccount): PCost   = PCost(c.idx, c.cost.value)
   def fromProto(c: PCost): CostAccount = CostAccount(c.iterations, Cost(c.cost))
   def MAX_VALUE: CostAccount           = CostAccount(0, Cost(BigInt(Integer.MAX_VALUE)))
 
