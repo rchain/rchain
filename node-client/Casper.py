@@ -38,8 +38,8 @@ import json
 import math
 
 def buildCasperCh(argv, stdout, insecure_channel,
-         host='127.0.0.1',
-         port=50000):
+                  host='127.0.0.1',
+                  port=40401):
     channel = insecure_channel('%s:%s' % (host, port))
     return CasperMessage_pb2_grpc.DeployServiceStub(channel)
 
@@ -48,8 +48,8 @@ casperCh = buildCasperCh(argv, stdout, insecure_channel)
 
 
 rename = {"blockHash": "hash", "blockNumber": "height", "blockSize": "size",
-           "timestamp": "time", "deployCount": "txlength", "mainParentHash": "previousblockhash",
-           "tupleSpaceHash": "merkleroot"}
+          "timestamp": "time", "deployCount": "txlength", "mainParentHash": "previousblockhash",
+          "tupleSpaceHash": "merkleroot"}
 
 value_adjuster = {"time": lambda milliseconds : math.floor(milliseconds / 1000)}
 
@@ -75,9 +75,9 @@ def blocks():
     req = CasperMessage_pb2.google_dot_protobuf_dot_empty__pb2.Empty()
     output = casperCh.showBlocks(req)
     blocks = []
-    for block in output.blocks:
+    for block in output:
         block_dict = {"pool_info": {}}
         for field in block.ListFields():
             add_field_to_block_dict(block_dict, field)
         blocks.append(block_dict)
-    return jsonify({"blocks": blocks, "length": output.length})
+    return jsonify({"blocks": blocks, "length": len(blocks)})
