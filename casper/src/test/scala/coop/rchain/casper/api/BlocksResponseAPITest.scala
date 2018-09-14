@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper._
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreTestFixture, NoOpsCasperEffect}
+import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.p2p.EffectsTestInstances.LogStub
@@ -27,7 +27,7 @@ class BlocksResponseAPITest
 
   implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
-  val initState = BlockDag()
+  val initState = IndexedBlockDag.empty
   val v1        = ByteString.copyFromUtf8("Validator One")
   val v2        = ByteString.copyFromUtf8("Validator Two")
   val v3        = ByteString.copyFromUtf8("Validator Three")
@@ -36,7 +36,8 @@ class BlocksResponseAPITest
   val v3Bond    = Bond(v3, 15)
   val bonds     = Seq(v1Bond, v2Bond, v3Bond)
 
-  implicit def timeState[A]: Time[StateWithChain] = Time.stateTTime[BlockDag, Id](syncId, timeEff)
+  implicit def timeState[A]: Time[StateWithChain] =
+    Time.stateTTime[IndexedBlockDag, Id](syncId, timeEff)
 
   val createChain =
     for {
@@ -78,8 +79,8 @@ class BlocksResponseAPITest
              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
     } yield b8
 
-  val chain: BlockDag = createChain.runS(initState)
-  val genesis         = chain.idToBlocks(1)
+  val chain: IndexedBlockDag = createChain.runS(initState)
+  val genesis                = chain.idToBlocks(1)
 
   implicit val blockStoreEffect = BlockStore[Id]
   implicit val casperEffect: MultiParentCasper[Id] =
