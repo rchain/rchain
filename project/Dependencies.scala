@@ -33,8 +33,7 @@ object Dependencies {
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lightningj          = ("org.lightningj"             % "lightningj"                % "0.4.2-Beta-2")
-    .exclude("com.google.api.grpc", "googleapis-common-protos")
-    .excludeAll(ExclusionRule(organization = "io.netty"))
+    .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
