@@ -25,7 +25,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.HashMap
 
 class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStore {
     implicit blockStore =>

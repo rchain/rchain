@@ -23,7 +23,7 @@ import coop.rchain.shared.Time
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
 
   "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
