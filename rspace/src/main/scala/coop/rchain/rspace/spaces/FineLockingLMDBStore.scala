@@ -1,10 +1,10 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.spaces
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import internal._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
+import coop.rchain.rspace._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.canonicalize
 import coop.rchain.shared.ByteVectorOps._
@@ -19,12 +19,7 @@ import scodec.bits._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
-/**
-  * The main store class.
-  *
-  * To create an instance, use [[LMDBStore.create]].
-  */
-class LMDBStore[C, P, A, K] private (
+class FineLockingLMDBStore[C, P, A, K] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
@@ -88,9 +83,13 @@ class LMDBStore[C, P, A, K] private (
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, _)) =>
-        insertGNAT(txn, channelsHash, gnat.copy(data = datum +: currData))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertGNAT(txnW, channelsHash, gnat.copy(data = datum +: currData))
+        }
       case None =>
-        insertGNAT(txn, channelsHash, GNAT(channels, Seq(datum), Seq.empty))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertGNAT(txnW, channelsHash, GNAT(channels, Seq(datum), Seq.empty))
+        }
     }
   }
 
@@ -134,9 +133,13 @@ class LMDBStore[C, P, A, K] private (
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
-        insertGNAT(txn, channelsHash, gnat.copy(wks = continuation +: currContinuations))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertGNAT(txnW, channelsHash, gnat.copy(wks = continuation +: currContinuations))
+        }
       case None =>
-        insertGNAT(txn, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertGNAT(txnW, channelsHash, GNAT(channels, Seq.empty, Seq(continuation)))
+        }
     }
   }
 
@@ -154,12 +157,17 @@ class LMDBStore[C, P, A, K] private (
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
         if (newContinuations.nonEmpty)
-          insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
-        else
-          deleteGNAT(txn, channelsHash, gnat)
+          this.withTxn(this.createTxnWrite()) { txnW =>
+            insertGNAT(txnW, channelsHash, gnat.copy(wks = newContinuations))
+          } else
+          this.withTxn(this.createTxnWrite()) { txnW =>
+            deleteGNAT(txnW, channelsHash, gnat)
+          }
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
-        insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertGNAT(txnW, channelsHash, gnat.copy(wks = newContinuations))
+        }
       case None =>
         throw new Exception("Attempted to remove a continuation from a value that doesn't exist")
     }
@@ -176,9 +184,13 @@ class LMDBStore[C, P, A, K] private (
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if !joins.contains(channels) =>
-        insertJoin(txn, joinedChannelHash, channels +: joins)
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertJoin(txnW, joinedChannelHash, channels +: joins)
+        }
       case None =>
-        insertJoin(txn, joinedChannelHash, Seq(channels))
+        this.withTxn(this.createTxnWrite()) { txnW =>
+          insertJoin(txnW, joinedChannelHash, Seq(channels))
+        }
       case _ =>
         ()
     }
@@ -191,9 +203,12 @@ class LMDBStore[C, P, A, K] private (
         if (getWaitingContinuation(txn, channels).isEmpty) {
           val newJoins = removeFirst(joins)(_ == channels)
           if (newJoins.nonEmpty)
-            insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
-          else
-            _dbJoins.delete(txn, joinedChannelHash)
+            this.withTxn(this.createTxnWrite()) { txnW =>
+              insertJoin(txnW, joinedChannelHash, removeFirst(joins)(_ == channels))
+            } else
+            this.withTxn(this.createTxnWrite()) { txnW =>
+              _dbJoins.delete(txnW, joinedChannelHash)
+            }
         }
       case None =>
         ()
@@ -213,10 +228,11 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  private[rspace] def clear(txn: Transaction): Unit = {
-    _dbGNATs.drop(txn)
-    _dbJoins.drop(txn)
-  }
+  private[rspace] def clear(txn: Transaction): Unit =
+    this.withTxn(this.createTxnWrite()) { txnW =>
+      _dbGNATs.drop(txnW)
+      _dbJoins.drop(txnW)
+    }
 
   override def close(): Unit = {
     super.close()
@@ -267,14 +283,14 @@ class LMDBStore[C, P, A, K] private (
     }
 }
 
-object LMDBStore {
+object FineLockingLMDBStore {
 
-  def create[C, P, A, K](context: LMDBContext[C, P, A, K], branch: Branch = Branch.MASTER)(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+  def create[C, P, A, K](context: FineGrainedLMDBContext[C, P, A, K],
+                         branch: Branch = Branch.MASTER)(implicit
+                                                         sc: Serialize[C],
+                                                         sp: Serialize[P],
+                                                         sa: Serialize[A],
+                                                         sk: Serialize[K]): IStore[C, P, A, K] = {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
@@ -283,11 +299,11 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](context.env,
-                              context.path,
-                              dbGnats,
-                              dbJoins,
-                              context.trieStore,
-                              branch)
+    new FineLockingLMDBStore[C, P, A, K](context.env,
+                                         context.path,
+                                         dbGnats,
+                                         dbJoins,
+                                         context.trieStore,
+                                         branch)
   }
 }

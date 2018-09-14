@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, 
 import java.nio.file.{Files, Path}
 
 import cats.implicits._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
@@ -288,11 +289,11 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.store.close()
+    space.close()
   }
 
   private[this] def withSpace(
-      f: RSpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit) = {
+      f: IdISpace[Channel, Pattern, Nothing, Entry, Entry, Printer] => Unit) = {
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store

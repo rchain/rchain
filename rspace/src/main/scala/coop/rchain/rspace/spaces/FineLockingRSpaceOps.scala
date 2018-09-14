@@ -1,8 +1,9 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.spaces
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.rspace._
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
@@ -12,11 +13,11 @@ import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+abstract class FineLockingRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K],
+                                                      val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -48,7 +49,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
       throw new IllegalArgumentException(msg)
     }
     logger.debug(s"""|install: searching for data matching <patterns: $patterns>
-                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
 
@@ -74,13 +75,15 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
         throw new RuntimeException(s"Install never result in an invalid match: $e")
       case Right(None) =>
         installs.update(_.updated(channels, Install(patterns, continuation, m)))
-        store.installWaitingContinuation(
-          txn,
-          channels,
-          WaitingContinuation(patterns, continuation, persist = true, consumeRef))
+        store.withTxn(store.createTxnWrite()) { txnW =>
+          store.installWaitingContinuation(
+            txnW,
+            channels,
+            WaitingContinuation(patterns, continuation, persist = true, consumeRef))
+        }
         for (channel <- channels) store.addJoin(txn, channel, channels)
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
-                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
       case Right(Some(_)) =>
         throw new RuntimeException("Installing can be done only on startup")
@@ -91,7 +94,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] =
     Kamon.withSpan(installSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
+      store.withTxn(store.createTxnRead()) { txn =>
         install(txn, channels, patterns, continuation)
       }
     }
@@ -101,7 +104,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
     history.lookup(store.trieStore, root, channelsHash)
 
   override def reset(root: Blake2b256Hash): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
         val leaves = store.trieStore.getLeaves(trieTxn, root)

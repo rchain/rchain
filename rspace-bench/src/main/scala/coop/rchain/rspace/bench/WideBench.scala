@@ -6,12 +6,13 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
-import coop.rchain.rspace.bench.WideBench.WideBenchState
+import coop.rchain.rspace.bench.WideBench.{CoarseBenchState, FineBenchState, WideBenchState}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.shared.StoreType
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -22,7 +23,15 @@ class WideBench {
 
   @Benchmark
   @Threads(1)
-  def wideReduce(bh: Blackhole, state: WideBenchState): Unit = {
+  def wideReduceCoarse(bh: Blackhole, state: CoarseBenchState): Unit = {
+    implicit val scheduler = state.scheduler
+    val runTask            = createTest(state.term, state)
+    bh.consume(processErrors(runTask.unsafeRunSync))
+  }
+
+  @Benchmark
+  @Threads(1)
+  def wideReduceFine(bh: Blackhole, state: FineBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val runTask            = createTest(state.term, state)
     bh.consume(processErrors(runTask.unsafeRunSync))
@@ -32,16 +41,25 @@ class WideBench {
 object WideBench {
 
   @State(Scope.Benchmark)
-  class WideBenchState {
+  class FineBenchState extends WideBenchState {
+    override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize, StoreType.FineLockingLMDB)
+  }
+
+  @State(Scope.Benchmark)
+  class CoarseBenchState extends WideBenchState {
+    override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize)
+  }
+
+  abstract class WideBenchState {
     val rhoSetupScriptPath: String = "/rholang/wide-setup.rho"
     val rhoScriptSource: String    = "/rholang/wide.rho"
     import WideEvalBenchState._
 
-    implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 200)
-    private lazy val dbDir: Path      = Files.createTempDirectory("rchain-storage-test-")
-    private val mapSize: Long         = 1024L * 1024L * 1024L * 10L
+    implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 300)
+    lazy val dbDir: Path              = Files.createTempDirectory("rchain-storage-test-")
+    val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-    lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
+    val runtime: Runtime
     def rand: Blake2b512Random                  = Blake2b512Random(128)
     val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
     var setupTerm: Option[Par]                  = None
@@ -63,7 +81,7 @@ object WideBench {
       }
 
       //make sure we always start from clean rspace
-      runtime.replaySpace.clear()
+//      runtime.replaySpace.clear()
       runtime.space.clear()
       processErrors(Await.result(createTest(setupTerm, this).runAsync, Duration.Inf))
     }

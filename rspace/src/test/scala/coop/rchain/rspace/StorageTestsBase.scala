@@ -3,6 +3,8 @@ import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
+import coop.rchain.rspace.ISpace.IdISpace
+
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -11,12 +13,13 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+
 import scala.collection.immutable.{Seq, Set}
 import scodec.Codec
 
 trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = FreudianSpace[C, P, E, A, A, K]
+  type T = IdISpace[C, P, E, A, A, K]
 
   case class State(
       checkpoint: Blake2b256Hash,
