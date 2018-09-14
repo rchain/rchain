@@ -10,7 +10,9 @@ case class IndexedBlockDag(dag: BlockDag, idToBlocks: Map[Int, BlockMessage], cu
   def latestMessages: Map[Validator, BlockMessage] = dag.latestMessages
   def latestMessagesOfLatestMessages: Map[Validator, LatestMessages] =
     dag.latestMessagesOfLatestMessages
-  def currentSeqNum: Map[Validator, Int] = dag.currentSeqNum
+  def currentSeqNum: Map[Validator, Int]  = dag.currentSeqNum
+  def topoSort: Vector[Vector[BlockHash]] = dag.topoSort
+  def sortOffset: Long                    = dag.sortOffset
 
   def withLatestMessages(latestMessages: Map[Validator, BlockMessage]): IndexedBlockDag =
     this.copy(dag = dag.copy(latestMessages = latestMessages))
@@ -24,12 +26,16 @@ object IndexedBlockDag {
             latestMessages: Map[Validator, BlockMessage],
             latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
             currentId: Int,
-            currentSeqNum: Map[Validator, Int]): IndexedBlockDag = IndexedBlockDag(
+            currentSeqNum: Map[Validator, Int],
+            topoSort: Vector[Vector[BlockHash]],
+            sortOffset: Long): IndexedBlockDag = IndexedBlockDag(
     BlockDag(
       childMap,
       latestMessages,
       latestMessagesOfLatestMessages,
-      currentSeqNum
+      currentSeqNum,
+      topoSort,
+      sortOffset
     ),
     idToBlocks,
     currentId

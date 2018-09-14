@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{ProtoUtil, TopologicalSortUtil}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -100,12 +100,15 @@ trait BlockGenerator {
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
       updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
+      updatedSort       = TopologicalSortUtil.update(chain.topoSort, chain.sortOffset, block)
       newChain = IndexedBlockDag(idToBlocks,
                                  childMap,
                                  latestMessages,
                                  latestMessagesOfLatestMessages,
                                  nextId,
-                                 updatedSeqNumbers)
+                                 updatedSeqNumbers,
+                                 updatedSort,
+                                 chain.sortOffset)
       _ <- blockDagState[F].set(newChain)
     } yield block
 }

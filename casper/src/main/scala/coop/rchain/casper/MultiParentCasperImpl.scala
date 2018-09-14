@@ -459,6 +459,8 @@ class MultiParentCasperImpl[
       _blockDag.update(bd => {
         val hash = block.blockHash
 
+        val updatedSort = TopologicalSortUtil.update(bd.topoSort, bd.sortOffset, block)
+
         //add current block as new child to each of its parents
         val newChildMap = parentHashes(block).foldLeft(bd.childMap) {
           case (acc, p) =>
@@ -467,6 +469,7 @@ class MultiParentCasperImpl[
         }
 
         val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
+
         bd.copy(
           //Assume that a non-equivocating validator must include
           //its own latest message in the justification. Therefore,
@@ -478,7 +481,8 @@ class MultiParentCasperImpl[
           latestMessagesOfLatestMessages = bd.latestMessagesOfLatestMessages
             .updated(block.sender, toLatestMessageHashes(block.justifications)),
           childMap = newChildMap,
-          currentSeqNum = newSeqNum
+          currentSeqNum = newSeqNum,
+          topoSort = updatedSort
         )
       })
       (block.blockHash, block)
