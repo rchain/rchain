@@ -258,10 +258,15 @@ class MultiParentCasperImpl[
                        case _ => ().pure[F]
                      }
                      .map(_ => {
+                       val maxBlockNumber: Long =
+                         p.foldLeft(-1L) {
+                           case (acc, block) => math.max(acc, blockNumber(block))
+                         }
+
                        val postState = RChainState()
                          .withTuplespace(computedStateHash)
                          .withBonds(bonds(p.head))
-                         .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
+                         .withBlockNumber(maxBlockNumber + 1)
 
                        val body = Body()
                          .withPostState(postState)

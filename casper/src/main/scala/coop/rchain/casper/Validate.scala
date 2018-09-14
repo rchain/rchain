@@ -171,7 +171,7 @@ object Validate {
       repeatedDeployStatus <- timestampStatus.joinRight.traverse(_ =>
                                Validate.repeatDeploy[F](block, dag))
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
-                            Validate.blockNumber[F](block, dag))
+                            Validate.blockNumber[F](block))
       parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
@@ -273,27 +273,24 @@ object Validate {
 
   // Agnostic of non-parent justifications
   def blockNumber[F[_]: Monad: Log: BlockStore](
-      b: BlockMessage,
-      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+      b: BlockMessage): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      maybeMainParent       <- ProtoUtil.parentHashes(b).headOption.traverse(ProtoUtil.unsafeGetBlock[F])
-      maybeMainParentNumber = maybeMainParent.map(ProtoUtil.blockNumber)
-      number                = ProtoUtil.blockNumber(b)
-      result                = maybeMainParentNumber.fold(number == 0)(_ + 1 == number)
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+      maxBlockNumber = parents.foldLeft(-1L) {
+        case (acc, p) => math.max(acc, ProtoUtil.blockNumber(p))
+      }
+      number = ProtoUtil.blockNumber(b)
+      result = maxBlockNumber + 1 == number
       status <- if (result) {
                  Applicative[F].pure(Right(Valid))
                } else {
-                 val log = maybeMainParentNumber.fold(
-                   Log[F].warn(
-                     ignore(b, s"block number $number is not zero, but block has no parents.")
-                   )
-                 )(n => {
-                   Log[F].warn(
-                     ignore(b, s"block number $number is not one more than parent number $n.")
-                   )
-                 })
+                 val logMessage =
+                   if (parents.isEmpty)
+                     s"block number $number is not zero, but block has no parents."
+                   else
+                     s"block number $number is not one more than maximum parent number $maxBlockNumber."
                  for {
-                   _ <- log
+                   _ <- Log[F].warn(ignore(b, logMessage))
                  } yield Left(InvalidBlockNumber)
                }
     } yield status
