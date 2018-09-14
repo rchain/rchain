@@ -9,7 +9,7 @@ case "$SUBPROJECT" in "rosette")
     ./run.sh rbl/rosette/tests/simple_add.rbl
     ;;
 
-"core")
+"core" | core-java10)
 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage scalafmtCheck test rspace/it:test coverageReport rspace:tut
 
