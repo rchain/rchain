@@ -24,9 +24,8 @@ object SystemProcesses {
       Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  private implicit class ProduceOps(
-      res: Id[
-        Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+  private implicit class ProduceOps(res: Id[
+    Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
     def foldResult(
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
