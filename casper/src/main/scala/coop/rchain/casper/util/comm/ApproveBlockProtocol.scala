@@ -70,7 +70,7 @@ object ApproveBlockProtocol {
       duration: FiniteDuration,
       interval: FiniteDuration): F[ApproveBlockProtocol[F]] =
     for {
-      now   <- Timer[F].clockRealTime(MILLISECONDS)
+      now   <- implicitly[Timer[F]].clock.realTime(MILLISECONDS)
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
     } yield
       new ApproveBlockProtocolImpl[F](block,
@@ -143,12 +143,12 @@ object ApproveBlockProtocol {
           _ <- LastApprovedBlock[F].set(ApprovedBlock(Some(candidate), signatures.toSeq))
           _ <- sendApprovedBlock
         } yield ()
-      } else Timer[F].sleep(interval) >> internalRun()
+      } else implicitly[Timer[F]].sleep(interval) >> internalRun()
 
     private def internalRun(): F[Unit] =
       for {
         _    <- sendUnapprovedBlock
-        t    <- Timer[F].clockRealTime(MILLISECONDS)
+        t    <- implicitly[Timer[F]].clock.realTime(MILLISECONDS)
         sigs <- sigsF.get
         _    <- completeIf(t, sigs)
       } yield ()
