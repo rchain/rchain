@@ -61,8 +61,22 @@ object Dependencies {
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val tomlScala           = "tech.sparse"                %% "toml-scala"                % "0.1.1"
-
   // format: on
+
+  val overrides = Seq(
+    catsCore,
+    catsEffect,
+    shapeless,
+    guava,
+    scodecBits,
+    //overrides for transitive dependencies (we don't use them directly, hence no val-s)
+    "org.typelevel"            %% "machinist"              % "0.6.5",
+    "com.lihaoyi"              %% "sourcecode"             % "0.1.4",
+    "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
+    "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
+    "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7",
+  )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
