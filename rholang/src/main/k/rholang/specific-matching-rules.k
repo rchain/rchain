@@ -1,5 +1,5 @@
 module SPECIFIC-MATCHING-RULES
-imports MATCHING-FUNCTION
+imports EXACT-MATCHING-FUNCTION
 
 // *******************************************************************
 //                   SPECIFIC-MATCHING-RULES
