@@ -104,7 +104,7 @@ rule intostdmatchform(S:String) => "string"[S]
 rule intostdmatchform(B:Bool) => "bool"[B]
 rule intostdmatchform(I:Int) => "int"[I]
 // Misc
-rule intostdmatchform( #(I:Int) ) => "hash"[I]
+rule intostdmatchform( unforgeable(I:Int) ) => "unforgeable"[I]
 rule intostdmatchform( P1:HigherProcPat | P2:HigherProcPat ) => "par"[P1][P2]
 rule intostdmatchform( X:Id ) => "variable"[X]
 rule intostdmatchform( X:Wildcard ) => "wildcard"[ X ]
@@ -248,8 +248,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
           => match[S]( C ; D )
           ~> match[S]( P ; R ) ... </k> ... </thread>
 
-// When the pattern is "hash"
-rule <thread> ... <k> ... matchstdform[S:String]( "hash"[I:Int] ; "hash"[J:Int] ; true)
+// When the pattern is "unforgeable"
+rule <thread> ... <k>... matchstdform[S:String]( "unforgeable"[I:Int] ; "unforgeable"[J:Int] ; true)
           => match[S]( I ; J ) ... </k> ... </thread>
 
 // When the pattern is a "new"
@@ -259,8 +259,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
                                 "new"[X2:Id,L2:Ids][R:HigherProcPat] ;
                                 true)
           => matchstdform[S](
-                    "new"[L1][ P[@ #(!I:Int) / X1] ] ;
-                    "new"[L2][ R[@ #(!I:Int) / X2] ] ;
+                    "new"[L1][ P[@ unforgeable(!I:Int) / X1] ] ;
+                    "new"[L2][ R[@ unforgeable(!I:Int) / X2] ] ;
                     true) ... </k> ... </thread>
 
 // (ii) If either one creates more new variables than the other we fail

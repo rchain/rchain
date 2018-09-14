@@ -300,17 +300,18 @@ rule <thread> ...
     ... </FreeVars> ... </thread>
 
 
-// Constructing with terminal nodes, which are expressions (including #(Int)'s), as well as Nil
+// Constructing with terminal nodes, which are expressions (including unforgeable(Int)'s), as well
+// as Nil
 rule <thread> ...
           <FreeVars> ...
               <node> [ID:Int][ E:Exp ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
       ... </FreeVars>
  ... </thread>
 
-// #(Int)'s
+// unforgeable(Int)'s
 rule <thread> ...
           <FreeVars> ...
-              <node> [ID:Int][ #(I:Int) ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
+              <node> [ID:Int][ unforgeable(I:Int) ][ PARENT:Exp ][ .List ]{ .Set }[ (false => true) ] </node>
       ... </FreeVars>
  ... </thread>
 
