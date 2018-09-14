@@ -3,9 +3,8 @@ package rholang.rosette
 import java.io.FileReader
 import java.nio.file.{Files, Path, Paths}
 
-import monix.execution.Scheduler.Implicits.global
-import coop.rchain.catscontrib.Capture._
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest.FunSuite
 
 import scala.collection.JavaConverters._
@@ -21,20 +20,20 @@ class CompilerTests extends FunSuite {
   def runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
   val testFiles: Iterator[Path] =
-    Files.walk(Paths.get("tests")).iterator().asScala
+    Files.walk(Paths.get(getClass.getResource("/tests").getPath)).iterator().asScala
 
   val failureTestFiles: Iterator[Path] =
-    Files.walk(Paths.get("failure_tests")).iterator().asScala
+    Files.walk(Paths.get(getClass.getResource("/failure_tests").getPath)).iterator().asScala
 
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
-    test(file.toString) {
+    test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
       assert(result.isSuccess)
     }
   }
 
   for (file <- failureTestFiles if file.getFileName.toString.endsWith(".rho")) {
-    test(file.toString) {
+    test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
       assert(result.isFailure)
     }
