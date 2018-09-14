@@ -223,7 +223,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop, lightningj),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
