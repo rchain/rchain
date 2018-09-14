@@ -20,7 +20,7 @@ import scala.concurrent.{Await, Future}
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: FreudianSpace[Channel, Pattern, Entry, Entry, EntriesCaptor] = null
+  var space: FreudianSpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)
@@ -96,7 +96,8 @@ class LMDBBench extends RSpaceBench {
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
+                                                                                  Branch.MASTER)
   }
 
   @TearDown
@@ -119,7 +120,8 @@ class InMemBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
+                                                                                  Branch.MASTER)
   }
 
   @TearDown
@@ -147,7 +149,8 @@ class MixedBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Entry, Entry, EntriesCaptor](testStore, Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
+                                                                                  Branch.MASTER)
   }
 
   @TearDown

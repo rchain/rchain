@@ -130,7 +130,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.6.3",
+    version := "0.6.4",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -295,9 +295,11 @@ lazy val blockStorage = (project in file("block-storage"))
   .dependsOn(shared, models)
 
 lazy val rspace = (project in file("rspace"))
+  .configs(IntegrationTest extend Test)
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(

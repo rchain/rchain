@@ -81,15 +81,14 @@ object BlockAPI {
       DeployServiceResponse(success = false, "Error: Casper instance not available")
     )
 
-  def getListeningNameDataResponse[
-      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       listeningName: Channel): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
         mainChain           <- getMainChainFromTip[F]
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningName = channelSortable.sortMatch(listeningName).term
+        sortedListeningName <- channelSortable.sortMatch[F](listeningName).map(_.term)
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getDataWithBlockInfo[F](runtimeManager,
                                                               sortedListeningName,
@@ -108,15 +107,15 @@ object BlockAPI {
   }
 
   def getListeningNameContinuationResponse[
-      F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       listeningNames: Channels): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
         mainChain           <- getMainChainFromTip[F]
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningNames = immutable.Seq(
-          listeningNames.channels.map(channelSortable.sortMatch(_).term): _*)
+        sortedListeningNames <- listeningNames.channels.toList
+                                     .traverse(channelSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getContinuationsWithBlockInfo[F](runtimeManager,
                                                                        sortedListeningNames,
