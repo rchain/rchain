@@ -12,6 +12,8 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
+import cats.implicits._
+import monix.eval.Coeval
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0)
@@ -27,106 +29,115 @@ case class PrettyPrinter(freeShift: Int,
                          rotation: Int,
                          maxVarCount: Int) {
 
+  import Coeval.pure
+
   def boundId: String     = rotate(baseId)
   def setBaseId(): String = increment(baseId)
 
-  def buildString(e: Expr): String =
+  def buildString(e: Expr): String             = buildStringM(e).value
+  def buildString(v: Var): String              = buildStringM(v).value
+  def buildString(c: Channel): String          = buildStringM(c).value
+  def buildString(m: GeneratedMessage): String = buildStringM(m).value
+
+  def buildStringM(e: Expr): Coeval[String] =
     e.exprInstance match {
-      case ENegBody(ENeg(p)) => "-" + buildString(p).wrapWithBraces
-      case ENotBody(ENot(p)) => "~" + buildString(p).wrapWithBraces
+
+      case ENegBody(ENeg(p)) => pure("-") |+| buildStringM(p).map(_.wrapWithBraces)
+      case ENotBody(ENot(p)) => pure("~") |+| buildStringM(p).map(_.wrapWithBraces)
       case EMultBody(EMult(p1, p2)) =>
-        (buildString(p1) + " * " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" * ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EDivBody(EDiv(p1, p2)) =>
-        (buildString(p1) + " / " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" / ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPercentPercentBody(EPercentPercent(p1, p2)) =>
-        (buildString(p1) + " %% " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" %% ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPlusBody(EPlus(p1, p2)) =>
-        (buildString(p1) + " + " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" + ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EPlusPlusBody(EPlusPlus(p1, p2)) =>
-        (buildString(p1) + " ++ " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" ++ ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMinusBody(EMinus(p1, p2)) =>
-        (buildString(p1) + " - " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" - ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMinusMinusBody(EMinusMinus(p1, p2)) =>
-        (buildString(p1) + " -- " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" -- ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EAndBody(EAnd(p1, p2)) =>
-        (buildString(p1) + " && " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" && ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EOrBody(EOr(p1, p2)) =>
-        (buildString(p1) + " || " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" || ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EEqBody(EEq(p1, p2)) =>
-        (buildString(p1) + " == " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" == ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ENeqBody(ENeq(p1, p2)) =>
-        (buildString(p1) + " != " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" != ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EGtBody(EGt(p1, p2)) =>
-        (buildString(p1) + " > " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" > ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EGteBody(EGte(p1, p2)) =>
-        (buildString(p1) + " >= " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" >= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ELtBody(ELt(p1, p2)) =>
-        (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" < ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case ELteBody(ELte(p1, p2)) =>
-        (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
+        (buildStringM(p1) |+| pure(" <= ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EMatchesBody(EMatches(target, pattern)) =>
-        (buildString(target) + " matches " + buildString(pattern)).wrapWithBraces
+        (buildStringM(target) |+| pure(" matches ") |+| buildStringM(pattern))
+          .map(_.wrapWithBraces)
       case EListBody(EList(s, _, _, remainder)) =>
-        "[" + buildSeq(s) + buildRemainderString(remainder) + "]"
+        pure("[") |+| buildSeq(s) |+| buildRemainderString(remainder) |+| pure("]")
       case ETupleBody(ETuple(s, _, _)) =>
-        "(" + buildSeq(s) + ")"
+        pure("(") |+| buildSeq(s) |+| pure(")")
       case ESetBody(ParSet(pars, _, _, remainder)) =>
-        "Set(" + buildSeq(pars.sortedPars) ++ buildRemainderString(remainder) + ")"
+        pure("Set(") |+| buildSeq(pars.sortedPars) |+| buildRemainderString(remainder) |+| pure(")")
       case EMapBody(ParMap(ps, _, _, remainder)) =>
-        "{" + ("" /: ps.sortedMap.zipWithIndex) {
+        pure("{") |+| (pure("") /: ps.sortedMap.zipWithIndex) {
           case (string, (kv, i)) =>
-            string + buildString(kv._1) + " : " + buildString(kv._2) + {
+            string |+| buildStringM(kv._1) |+| pure(" : ") |+| buildStringM(kv._2) |+| pure {
               if (i != ps.sortedMap.length - 1) ", "
               else ""
             }
-        } + buildRemainderString(remainder) + "}"
+        } |+| buildRemainderString(remainder) |+| pure("}")
 
-      case EVarBody(EVar(v)) => buildString(v)
-      case EEvalBody(chan)   => "*" + buildString(chan)
-      case GBool(b)          => b.toString
-      case GInt(i)           => i.toString
-      case GString(s)        => "\"" + s + "\""
-      case GUri(u)           => s"`$u`"
+      case EVarBody(EVar(v)) => buildStringM(v)
+      case EEvalBody(chan)   => pure("*") |+| buildStringM(chan)
+      case GBool(b)          => pure(b.toString)
+      case GInt(i)           => pure(i.toString)
+      case GString(s)        => pure("\"" + s + "\"")
+      case GUri(u)           => pure(s"`$u`")
       // TODO: Figure out if we can prevent ScalaPB from generating
-      case ExprInstance.Empty => "Nil"
+      case ExprInstance.Empty => pure("Nil")
       case EMethodBody(method) =>
-        "(" + buildString(method.target) + ")." + method.methodName + "(" + method.arguments
-          .map(buildString)
-          .mkString(",") + ")"
-      case ExprInstance.GByteArray(bs) => Base16.encode(bs.toByteArray)
+        val args = method.arguments.map(buildStringM).toList.intercalate(pure(","))
+        pure("(") |+| buildStringM(method.target) |+| pure(")." + method.methodName + "(") |+| args |+| pure(
+          ")")
+      case ExprInstance.GByteArray(bs) => pure(Base16.encode(bs.toByteArray))
       case _                           => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
 
-  private def buildRemainderString(remainder: Option[Var]): String =
-    remainder.fold("")(v => "..." + buildString(v))
+  private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
+    remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  def buildString(v: Var): String =
+  def buildStringM(v: Var): Coeval[String] =
     v.varInstance match {
-      case FreeVar(level)    => s"$freeId${freeShift + level}"
-      case BoundVar(level)   => s"$boundId${boundShift - level - 1}"
-      case Wildcard(_)       => "_"
-      case VarInstance.Empty => "@Nil"
+      case FreeVar(level)    => pure(s"$freeId${freeShift + level}")
+      case BoundVar(level)   => pure(s"$boundId${boundShift - level - 1}")
+      case Wildcard(_)       => pure("_")
+      case VarInstance.Empty => pure("@Nil")
     }
 
-  def buildString(c: Channel): String =
+  def buildStringM(c: Channel): Coeval[String] =
     c.channelInstance match {
-      case Quote(p)              => "@{" + buildString(p) + "}"
-      case ChanVar(cv)           => buildString(cv)
-      case ChannelInstance.Empty => "@Nil"
+      case Quote(p)              => pure("@{") |+| buildStringM(p) |+| pure("}")
+      case ChanVar(cv)           => buildStringM(cv)
+      case ChannelInstance.Empty => pure("@Nil")
     }
 
-  def buildString(t: GeneratedMessage): String =
+  def buildStringM(t: GeneratedMessage): Coeval[String] =
     t match {
-      case v: Var     => buildString(v)
-      case c: Channel => buildString(c)
+      case v: Var     => buildStringM(v)
+      case c: Channel => buildStringM(c)
       case s: Send =>
-        buildString(s.chan) + {
+        buildStringM(s.chan) |+| pure {
           if (s.persistent) "!!("
           else "!("
-        } + buildSeq(s.data) + ")"
+        } |+| buildSeq(s.data) |+| pure(")")
 
       case r: Receive =>
-        val (totalFree, bindsString) = ((0, "") /: r.binds.zipWithIndex) {
+        val (totalFree, bindsString) = ((0, pure("")) /: r.binds.zipWithIndex) {
           case ((previousFree, string), (bind, i)) =>
             val bindString =
               this
@@ -137,57 +148,59 @@ case class PrettyPrinter(freeShift: Int,
                   baseId = setBaseId()
                 )
                 .buildPattern(bind.patterns)
-            (bind.freeCount + previousFree, string + bindString + {
+            (bind.freeCount + previousFree, string |+| bindString |+| pure {
               if (r.persistent) " <= " else " <- "
-            } + buildString(bind.source) + {
+            } |+| buildStringM(bind.source) |+| pure {
               if (i != r.binds.length - 1) " ; "
               else ""
             })
         }
 
-        "for( " + bindsString + " ) { " + this
+        pure("for( ") |+| bindsString |+| pure(" ) { ") |+| this
           .copy(boundShift = boundShift + totalFree)
-          .buildString(r.body) + " }"
+          .buildStringM(r.body) |+| pure(" }")
 
       case b: Bundle =>
-        BundleOps.showInstance.show(b) + "{ " + buildString(b.body) + " }"
+        pure(BundleOps.showInstance.show(b) + "{ ") |+| buildStringM(b.body) |+| pure(" }")
 
       case n: New =>
-        "new " + buildVariables(n.bindCount) + " in { " + this
+        pure("new " + buildVariables(n.bindCount) + " in { ") |+| this
           .copy(boundShift = boundShift + n.bindCount)
-          .buildString(n.p) + " }"
+          .buildStringM(n.p) |+| pure(" }")
 
       case e: Expr =>
-        buildString(e)
+        buildStringM(e)
 
       case m: Match =>
-        "match " + buildString(m.target) + " { " +
-          ("" /: m.cases.zipWithIndex) {
+        pure("match ") |+| buildStringM(m.target) |+| pure(" { ") |+|
+          (pure("") /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
-              string + buildMatchCase(matchCase) + {
+              string |+| buildMatchCase(matchCase) |+| pure {
                 if (i != m.cases.length - 1) " ; "
                 else ""
               }
-          } + " }"
+          } |+| pure(" }")
 
-      case g: GPrivate => "Unforgeable(0x" + Base16.encode(g.id.toByteArray) + ")"
+      case g: GPrivate => pure("Unforgeable(0x" + Base16.encode(g.id.toByteArray) + ")")
       case c: Connective =>
         c.connectiveInstance match {
-          case ConnectiveInstance.Empty => ""
-          case ConnAndBody(value)       => value.ps.map(buildString).mkString("{", " /\\ ", "}")
-          case ConnOrBody(value)        => value.ps.map(buildString).mkString("{", " \\/ ", "}")
-          case ConnNotBody(value)       => "~{" ++ buildString(value) ++ "}"
+          case ConnectiveInstance.Empty => pure("")
+          case ConnAndBody(value) =>
+            pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" /\\ ")) |+| pure("}")
+          case ConnOrBody(value) =>
+            pure("{") |+| value.ps.map(buildStringM).toList.intercalate(pure(" \\/ ")) |+| pure("}")
+          case ConnNotBody(value) => pure("~{") |+| buildStringM(value) |+| pure("}")
           case VarRefBody(value) =>
-            "=" + buildString(Var(FreeVar(value.index)))
-          case _: ConnBool      => "Bool"
-          case _: ConnInt       => "Int"
-          case _: ConnString    => "String"
-          case _: ConnUri       => "Uri"
-          case _: ConnByteArray => "ByteArray"
+            pure("=") |+| buildStringM(Var(FreeVar(value.index)))
+          case _: ConnBool      => pure("Bool")
+          case _: ConnInt       => pure("Int")
+          case _: ConnString    => pure("String")
+          case _: ConnUri       => pure("Uri")
+          case _: ConnByteArray => pure("ByteArray")
         }
 
       case par: Par =>
-        if (isEmpty(par)) "Nil"
+        if (isEmpty(par)) pure("Nil")
         else {
           val list =
             List(par.bundles,
@@ -198,15 +211,16 @@ case class PrettyPrinter(freeShift: Int,
                  par.matches,
                  par.ids,
                  par.connectives)
-          ((false, "") /: list) {
+          ((false, pure("")) /: list) {
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
-                (true, string + { if (prevNonEmpty) " | " else "" } + ("" /: items.zipWithIndex) {
-                  case (_string, (_par, index)) =>
-                    _string + buildString(_par) + {
-                      if (index != items.length - 1) " | " else ""
-                    }
-                })
+                (true,
+                 string |+| pure { if (prevNonEmpty) " | " else "" } |+| (pure("") /: items.zipWithIndex) {
+                   case (_string, (_par, index)) =>
+                     _string |+| buildStringM(_par) |+| pure {
+                       if (index != items.length - 1) " | " else ""
+                     }
+                 })
               } else (prevNonEmpty, string)
           }
         }._2
@@ -233,25 +247,25 @@ case class PrettyPrinter(freeShift: Int,
       .map(i => s"$boundId${boundShift + i}")
       .mkString(", ")
 
-  private def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
-    ("" /: s.zipWithIndex) {
+  private def buildSeq[T <: GeneratedMessage](s: Seq[T]): Coeval[String] =
+    (pure("") /: s.zipWithIndex) {
       case (string, (p, i)) =>
-        string + buildString(p) + {
+        string |+| buildStringM(p) |+| pure {
           if (i != s.length - 1) ", "
           else ""
         }
     }
 
-  private def buildPattern(patterns: Seq[Channel]): String =
-    ("" /: patterns.zipWithIndex) {
+  private def buildPattern(patterns: Seq[Channel]): Coeval[String] =
+    (pure("") /: patterns.zipWithIndex) {
       case (string, (pattern, i)) =>
-        string + buildString(pattern) + {
+        string |+| buildStringM(pattern) |+| pure {
           if (i != patterns.length - 1) ", "
           else ""
         }
     }
 
-  private def buildMatchCase(matchCase: MatchCase): String = {
+  private def buildMatchCase(matchCase: MatchCase): Coeval[String] = {
     val patternFree: Int = matchCase.freeCount
     this
       .copy(
@@ -260,10 +274,10 @@ case class PrettyPrinter(freeShift: Int,
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildString(matchCase.pattern) + " => " +
+      .buildStringM(matchCase.pattern) |+| pure(" => ") |+|
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildString(matchCase.source)
+        .buildStringM(matchCase.source)
   }
 
   private def isEmpty(p: Par) =
