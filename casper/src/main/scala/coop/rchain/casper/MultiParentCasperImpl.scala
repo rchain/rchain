@@ -259,7 +259,7 @@ class MultiParentCasperImpl[
                      }
                      .map(_ => {
                        val maxBlockNumber: Long =
-                         p.foldLeft(0L) {
+                         p.foldLeft(-1L) {
                            case (acc, block) => math.max(acc, blockNumber(block))
                          }
 

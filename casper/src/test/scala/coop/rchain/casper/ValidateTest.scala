@@ -188,8 +188,8 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](1).runS(initState)
       val block                    = chain.idToBlocks(0)
 
-      Validate.blockNumber[Id](block.withBlockNumber(1), chain) should be(Left(InvalidBlockNumber))
-      Validate.blockNumber[Id](block, chain) should be(Right(Valid))
+      Validate.blockNumber[Id](block.withBlockNumber(1)) should be(Left(InvalidBlockNumber))
+      Validate.blockNumber[Id](block) should be(Right(Valid))
       log.warns.size should be(1)
       log.warns.head.contains("not zero, but block has no parents") should be(true)
   }
@@ -199,8 +199,8 @@ class ValidateTest
     val chain                    = createChain[StateWithChain](2).runS(initState)
     val block                    = chain.idToBlocks(1)
 
-    Validate.blockNumber[Id](block.withBlockNumber(17), chain) should be(Left(InvalidBlockNumber))
-    Validate.blockNumber[Id](block, chain) should be(Right(Valid))
+    Validate.blockNumber[Id](block.withBlockNumber(17)) should be(Left(InvalidBlockNumber))
+    Validate.blockNumber[Id](block) should be(Right(Valid))
     log.warns.size should be(1)
     log.warns.head.contains("is not one more than parent number") should be(true)
   }
@@ -210,9 +210,28 @@ class ValidateTest
     val n                        = 6
     val chain                    = createChain[StateWithChain](n).runS(initState)
 
-    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
+    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i)) == Right(Valid)) should be(
       true)
     log.warns should be(Nil)
+  }
+
+  it should "correctly validate a multiparent block where the parents have different block numbers" in withStore {
+    implicit blockStore =>
+      def createBlockWithNumber(n: Long, parentHashes: Seq[ByteString] = Nil): BlockMessage = {
+        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
+        val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
+        val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
+
+        blockStore.put(hash, block)
+        block
+      }
+      val b1 = createBlockWithNumber(3)
+      val b2 = createBlockWithNumber(7)
+      val b3 = createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+
+      Validate.blockNumber[Id](b3) shouldBe Right(Valid)
+      Validate.blockNumber[Id](b3.withBlockNumber(4)) shouldBe Left(InvalidBlockNumber)
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStore {
