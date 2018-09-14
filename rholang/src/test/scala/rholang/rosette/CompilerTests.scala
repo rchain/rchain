@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 import scala.util.Try
 
 class CompilerTests extends FunSuite {
-  val mapSize     = 1024L * 1024L * 1024L
+  val mapSize     = 1024L * 1024L * 10
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
 
