@@ -26,9 +26,14 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote
-    : StorageMatch[BindPattern, OutOfPhlogistonsError.type, ListChannelWithRandom, ListChannelWithRandom] =
-    new StorageMatch[BindPattern, OutOfPhlogistonsError.type, ListChannelWithRandom, ListChannelWithRandom] {
+  implicit val matchListQuote: StorageMatch[BindPattern,
+                                            OutOfPhlogistonsError.type,
+                                            ListChannelWithRandom,
+                                            ListChannelWithRandom] =
+    new StorageMatch[BindPattern,
+                     OutOfPhlogistonsError.type,
+                     ListChannelWithRandom,
+                     ListChannelWithRandom] {
 
       def get(pattern: BindPattern, data: ListChannelWithRandom)
         : Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] = {

@@ -66,7 +66,8 @@ object errors {
   final case class UnexpectedBundleContent(message: String)     extends InterpreterError(message)
   final case class UnrecognizedNormalizerError(message: String) extends InterpreterError(message)
 
-  final case object OutOfPhlogistonsError extends InterpreterError("Computation ran out of phlogistons.")
+  final case object OutOfPhlogistonsError
+      extends InterpreterError("Computation ran out of phlogistons.")
 
   final case class TopLevelWildcardsNotAllowedError(wildcards: String)
       extends InterpreterError(s"Top level wildcards are not allowed: $wildcards.")
@@ -94,8 +95,6 @@ object errors {
 
   final case class OperatorExpectedError(op: String, expected: String, otherType: String)
       extends InterpreterError(s"Error: Operator `$op` is not defined on $otherType.")
-
-  final case class OutOfPhloError() extends InternalError("Computation ran out of phlogistons.")
 
   implicit val monadErrorTask: MonadError[Task, InterpreterError] =
     new MonadError[Task, InterpreterError] {

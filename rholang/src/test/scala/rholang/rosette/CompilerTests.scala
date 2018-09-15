@@ -10,7 +10,6 @@ import org.scalatest.{FunSuite, Matchers}
 import scala.collection.JavaConverters._
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.util.Try
 
 class CompilerTests extends FunSuite with Matchers {
   val mapSize     = 1024L * 1024L * 10
@@ -28,7 +27,10 @@ class CompilerTests extends FunSuite with Matchers {
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
-      result shouldBe Right(runtime)
+      assert(result.isRight)
+      val resRuntime = result.right.get
+      val errorLog   = resRuntime.readAndClearErrorVector()
+      assert(errorLog.isEmpty)
     }
   }
 
