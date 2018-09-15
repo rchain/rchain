@@ -30,8 +30,10 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf     <- Configuration(args)
-        poolSize = conf.server.threadPoolSize
+        conf <- Configuration(args)
+        poolSize <- conf.server.threadPoolSize.fold(Task.delay {
+                     Runtime.getRuntime().availableProcessors() * 2
+                   })(_.pure[Task])
         //TODO create separate scheduler for casper
         scheduler = Scheduler.fixedPool("node-io", poolSize)
         _         <- Task.unit.asyncBoundary(scheduler)
