@@ -1,19 +1,29 @@
-new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactory, r/*(`rho:registry`)*/ in {
+new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactory, r(`rho:registry`) in {
   // create: create a ballot
   //
+  //  string algorithm: name of public key algorithm to use 
   //  Set<bytearray> pubKeySet: set of public keys allowed to vote on this ballot
   //  integer voteQuorumSize: 0 < voteQuorumSize < pubKeySet.size() required for candidate to win
   //  integer cancelQuorumSize: 0 < cancelQuorumSize < pubKeySet.size() required for election to be canceled
-  //  name winnerOut: send winning candidate on this
-  //  name ballotOut: send resulting ballot on this
+  //  ch(process) winnerOut: send winning candidate on this
+  //  ch({"result": false, "reason": string} \/ {"result": true, "ballot": Ballot}) ballotOut: send resulting ballot on this
   //
   // TODO(pyrocto): Need to track whether there are enough outstanding votes to get a quorum.  If not, fail.
-  contract @[*BallotFactory, "create"](@pubKeySet, @voteQuorumSize, @cancelQuorumSize, winnerOut, ballotOut) = {
-    new ballot, votedSetStore, voteMapStore, canceledSetStore, doneStore, 
-        verify/*(`rho:crypto:ed25519Verify`)*/, ret in {
+  contract @[*BallotFactory, "create"](@algorithm /\ String, @pubKeySet, @voteQuorumSize /\ Int, @cancelQuorumSize /\ Int, winnerOut, ballotOut) = {
+    new ballot, votedSetStore, voteMapStore, canceledSetStore, doneStore, verifyStore, 
+        ed25519Verify(`rho:crypto:ed25519Verify`), secp256k1Verify(`rho:crypto:secp256k1Verify`), ret in {
+      new verifyStore in {
+        if (algorithm == "ed25519") {
+          verifyStore!(*ed25519Verify)
+        } else if (algorithm == "secp256k1") {
+          verifyStore!(*secp256k1Verify)
+        } else {
+          ballotOut!({"result": false, "reason": "Unrecognized public key algorithm"})
+        }
+      } |
       @[*r, "register"]!(`rho:uuid`, bundle+{*ballot}, *ret) |
-      for (@[uuid, unregisterBallotToken] <- ret) {
-        ballotOut!(*ballot) |
+      for (@[uuid, unregisterBallotToken] <- ret; verify <- verifyStore) {
+        ballotOut!({"result": true, "ballot": *ballot}) |
       
         // Stores set of keys that have voted
         votedSetStore!(Set()) |
@@ -36,18 +46,18 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
             if (done) {
               votedSetStore!(votedSet) |
               doneStore!(true) |
-              statusOut!(["failure", "Already done."])
+              statusOut!({"result": false, "reason": "Already done."})
             } else {
               // check that the pubkey is in the list
               if (not pubKeySet.contains(pubKey)) {
                 votedSetStore!(votedSet) |
                 doneStore!(false) |
-                statusOut!(["failure", "Invalid key."])
+                statusOut!({"result": false, "reason": "Invalid key."})
               } else {
                 if (votedSet.contains(pubKey)) {
                   votedSetStore!(votedSet) |
                   doneStore!(done) |
-                  statusOut!(["failure", "Already voted."])
+                  statusOut!({"result": false, "reason": "Already voted."})
                 } else {
                   // check the signature
                   new ret in {
@@ -56,7 +66,7 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                       if (not verifyResult) {
                         votedSetStore!(votedSet) |
                         doneStore!(false) |
-                        statusOut!(["failure", "Invalid signature."])
+                        statusOut!({"result": false, "reason": "Invalid signature."})
                       } else {
                         votedSetStore!(votedSet.add(pubKey)) |
                         new currentCountOut, newCountOut in {
@@ -74,13 +84,13 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                               for (@newCount <- newCountOut) {
                                 // Check quorum size
                                 if (newCount < voteQuorumSize) {
-                                  statusOut!(["success", false]) |
+                                  statusOut!({"result": true, "done": false}) |
                                   doneStore!(false)
                                 } else {
                                   // Remove ballot from the registry so it can be garbage collected
                                   @[*r, "unregister"]!(unregisterBallotToken, Nil) |
                                   winnerOut!(candidate) |
-                                  statusOut!(["success", true]) |
+                                  statusOut!({"result": true, "done": true}) |
                                   doneStore!(true)
                                 }
                               }
@@ -106,7 +116,7 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
             if (done) {
               canceledSetStore!(canceledSet) |
               doneStore!(done) |
-              statusOut!(["fail", "Already done."])
+              statusOut!({"result": false, "reason": "Already done."})
             } else {
               // check that the pubkey is in the list
               if (not pubKeySet.contains(pubKey)) {
@@ -118,7 +128,7 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                 if (canceledSet.contains(pubKey)) {
                   canceledSetStore!(canceledSet) |
                   doneStore!(done) |
-                  statusOut!(["fail", "Already canceled."])
+                  statusOut!({"result": false, "reason": "Already canceled."})
                 } else {
                   // check the signature
                   new ret in {
@@ -127,7 +137,7 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                       if (not verifyResult) {
                         canceledSetStore!(canceledSet) |
                         doneStore!(done) |
-                        statusOut!(["fail", "Invalid signature."])
+                        statusOut!({"result": false, "reason": "Invalid signature."})
                       } else {
                         // Add the public key to the set of cancelers
                         // TODO(pyrocto): verify that this can be simplified to just
@@ -139,12 +149,12 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                           for (@canceledSet <- proceed) {
                             canceledSetStore!(canceledSet) |
                             if (canceledSet.size() < cancelQuorumSize) {
-                              statusOut!(["success"]) |
+                              statusOut!({"result": true, "done": false}) |
                               doneStore!(done)
                             } else {
                               // Remove ballot from the registry so it can be garbage collected
                               @[*r, "unregister"]!(unregisterBallotToken, Nil) |
-                              statusOut!(["success"]) |
+                              statusOut!({"result": true, "done": true}) |
                               doneStore!(true)
                             }
                           }
@@ -262,18 +272,22 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
           // The winner will be the result of the attempt to send and will be sent on statusOut
           new ballotOut, winnerOut in {
             @[*BallotFactory, "create"]!(pubKeySet, sendQuorumSize, cancelQuorumSize, *winnerOut, *ballotOut) |
-            for (@statusBallot <- ballotOut) {
-              // Publish the ballot so that owners can send to it from off-chain
-              new infoOut in {
-                @[*r, "register"]!(`rho:uuid`, bundle+{statusBallot}, *infoOut) |
-                for (@[statusBallotUUID, unregisterStatusBallotToken] <- infoOut) {
-                  // Once the winner is received, unregister the ballot so it can be garbage
-                  // collected and forward the result to the client
-                  for (@winner <- winnerOut) {
-                    statusOut!(winner) |
-                    @[*r, "unregister"]!(unregisterStatusBallotToken)
+            for (@success, @statusBallotOrReason <- ballotOut) {
+              if (success) {
+                // Publish the ballot so that owners can send to it from off-chain
+                new infoOut in {
+                  @[*r, "register"]!(`rho:uuid`, bundle+{statusBallotOrReason}, *infoOut) |
+                  for (@[statusBallotUUID, unregisterStatusBallotToken] <- infoOut) {
+                    // Once the winner is received, unregister the ballot so it can be garbage
+                    // collected and forward the result to the client
+                    for (@winner <- winnerOut) {
+                      statusOut!({"result": true, "winner": winner}) |
+                      @[*r, "unregister"]!(unregisterStatusBallotToken)
+                    }
                   }
                 }
+              } else {
+                statusOut!({"result": false, "reason": statusBallotOrReason})
               }
             }
           }
@@ -401,11 +415,11 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                 // Deposit all of it to the depository.
                 @[depositoryPurse, "deposit"]!(balance, purse, *successCh) |
                 for (@false <- successCh) {
-                  statusOut!(["failure", "Could not deposit funds."])
+                  statusOut!({"result": false, "reason": "Could not deposit funds."})
                 } |
                 for (@true <- successCh) {
                   if (balance < depositFee) {
-                    statusOut!(["failure", "Not enough funds to pay the fee."])
+                    statusOut!({"result": false, "reason": "Not enough funds to pay the fee."})
                   } else {
                     // Tell child to mint a wallet containing (balance - depositFee) guarded by @targetPubKey
                     @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
@@ -461,12 +475,12 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
                 // Create new wallet, transfer funds
                 @[purse, "split"]!(balance, *splitPurseOut) |
                 for (@[] <- splitPurseOut) {
-                  statusOut!(["failure", "Could not deposit funds."])
+                  statusOut!({"result": false, "reason": "Could not deposit funds."})
                 } |
                 // Throw away the resulting purse.
                 for (@[_] <- splitPurseOut) {
                   if (balance < depositFee) {
-                    statusOut!(["failure", "Not enough funds to pay the fee."])
+                    statusOut!({"result": false, "reason": "Not enough funds to pay the fee."})
                   } else {
                     // Tell parent to withdraw (balance - depositFee) from depository to a wallet guarded by @targetPubKey
                     @[mailBoxClient, "send"]!([balance - depositFee, targetPubKey], *statusOut)
