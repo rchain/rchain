@@ -12,12 +12,10 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, _}
-import coop.rchain.rholang.interpreter.errors.OutOfPhloError
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._
-import monix.eval.Coeval
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
@@ -334,13 +332,12 @@ object SpatialMatcher extends SpatialMatcherInstances {
       level: Int,
       merger: (Par, Seq[T]) => Par)(implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] =
     for {
-      remainderPar <- StateT.inspect[OptionT[StateT[Either[OutOfPhloError, ?], CostAccount, ?], ?],
-                                     FreeMap,
-                                     Par]((m: FreeMap) => m.getOrElse(level, VectorPar()))
+      remainderPar <- StateT.inspect[OptionT[State[CostAccount, ?], ?], FreeMap, Par](
+                       (m: FreeMap) => m.getOrElse(level, VectorPar()))
       //TODO: enforce sorted-ness of returned terms using types / by verifying the sorted-ness here
       remainderParUpdated = merger(remainderPar, remainderTargets)
-      _ <- StateT.modify[OptionT[StateT[Either[OutOfPhloError, ?], CostAccount, ?], ?], FreeMap](
-            (m: FreeMap) => m + (level -> remainderParUpdated))
+      _ <- StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap]((m: FreeMap) =>
+            m + (level -> remainderParUpdated))
     } yield Unit
 
   case class ParCount(sends: Int = 0,
@@ -460,12 +457,11 @@ trait SpatialMatcherInstances {
               case Nil => OptionalFreeMapWithCost.emptyMap
               case p +: rem =>
                 OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-                  OptionT(StateT((c: CostAccount) => {
-                    spatialMatch(target, p).run(s).value.run(c).flatMap {
+                  OptionT(State((c: CostAccount) => {
+                    spatialMatch(target, p).run(s).value.run(c).value match {
                       case (cost, None) =>
-                        firstMatch(target, rem).run(s).value.run(cost)
-                      case (cost, Some((_, _: Unit))) =>
-                        Right((cost, Some((s, Unit))))
+                        (cost, firstMatch(target, rem).run(s).value.run(c).value._2)
+                      case (cost, Some((_, _: Unit))) => (cost, Some((s, Unit)))
                     }
                   }))
                 })
@@ -474,8 +470,8 @@ trait SpatialMatcherInstances {
         }
         case ConnNotBody(p) =>
           OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-            OptionT(StateT((c: CostAccount) => {
-              spatialMatch(target, p).run(s).value.run(c).map {
+            OptionT(State((c: CostAccount) => {
+              spatialMatch(target, p).run(s).value.run(c).value match {
                 case (cost, None)         => (cost, Some((s, Unit)))
                 case (cost, Some((_, _))) => (cost, None)
               }
@@ -687,8 +683,8 @@ trait SpatialMatcherInstances {
             matchedRem <- foldMatch(tlist, plist, rem)
             _ <- rem match {
                   case Some(Var(FreeVar(level))) =>
-                    StateT.modify[OptionT[StateT[Either[OutOfPhloError, ?], CostAccount, ?], ?],
-                                  FreeMap](m => m + (level -> EList(matchedRem)))
+                    StateT.modify[OptionT[State[CostAccount, ?], ?], FreeMap](m =>
+                      m + (level -> EList(matchedRem)))
                   case _ => OptionalFreeMapWithCost.pure[Unit](())
                 }
           } yield Unit

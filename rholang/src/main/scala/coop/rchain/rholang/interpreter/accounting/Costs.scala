@@ -8,7 +8,6 @@ final case class Cost(value: BigInt) extends AnyVal {
   def *(other: Cost): Cost = Cost(value * other.value)
   def *(other: Int): Cost  = Cost(value * other)
   def +(other: Cost): Cost = Cost(value + other.value)
-  def -(other: Cost): Cost = Cost(value - other.value)
 }
 
 object Cost {

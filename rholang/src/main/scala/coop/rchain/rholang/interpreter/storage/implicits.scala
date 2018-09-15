@@ -34,9 +34,7 @@ object implicits {
         : Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] = {
         val (cost, resultMatch) = SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost()
-          .right
-          .get //FIXME
+          .runWithCost
 
         val result = resultMatch
           .map {
