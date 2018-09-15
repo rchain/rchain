@@ -53,6 +53,13 @@ rosette/src/*.o
 rosette/.vagrant
 Vagrantfile
 
+# node-client
+###################
+node-client/*pb2_grpc.py
+node-client/*pb2.py
+node-client/protobuf
+node-client/.virtualenv
+
 # Actual code editors
 ###################
 *~

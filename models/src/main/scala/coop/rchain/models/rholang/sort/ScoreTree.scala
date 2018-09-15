@@ -31,11 +31,11 @@ trait ScoreTree {
   case class BytesAtom(b: ByteString) extends TaggedAtom
 
   case class ScoreAtom(value: TaggedAtom) {
-    def bsCompare(b1: ByteString, b2: ByteString) = {
+    def bsCompare(b1: ByteString, b2: ByteString): Int = {
       def loop(it1: ByteIterator, it2: ByteIterator): Int =
         if (it1.hasNext) {
           if (it2.hasNext) {
-            val comp = it1.next.byteValue.compareTo(it2.next.byteValue)
+            val comp = it1.nextByte.compareTo(it2.nextByte)
             if (comp == 0)
               loop(it1, it2)
             else
@@ -113,7 +113,7 @@ trait ScoreTree {
   }
 
   // Effectively a tuple that groups the term to its score tree.
-  case class ScoredTerm[T](term: T, score: Tree[ScoreAtom])
+  case class ScoredTerm[+T](term: T, score: Tree[ScoreAtom])
 
   /**
     * Total order of all terms

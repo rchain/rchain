@@ -1,6 +1,10 @@
 module SPECIFIC-MATCHING-RULES
 imports MATCHING-FUNCTION
 
+// *******************************************************************
+//                   SPECIFIC-MATCHING-RULES
+// *******************************************************************
+
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 // Specific rules for each different match function
 // (1) How they interact with variables
@@ -24,20 +28,20 @@ rule <thread> ...
 
 // If there are no free vars, we're left with a #(VARPAUSE)["STDMATCH"]
 rule <thread> ...
-      <k> #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id][.List] => . ... </k>
+      <k> #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id]{.Set} => .K ... </k>
       <subst>  Q => Q[ BaseProc / BindingVar] </subst> ... </thread>
 
 // If there are free vars, the match fails
 rule <thread> ...
       <k>
-      #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id][ListItem(X) FreeVars:List]
+      #(VARPAUSE)["STDMATCH" , BaseProc:HigherPat , BindingVar:Id]{SetItem(X) FreeVars:Set}
       => #(MATCHFAIL)["STDMATCH"]
   ... </k> ... </thread>
 
 // 3. Rules for encountering a wildcard in the second component
 //    We do nothing.
 rule <thread> ...
-          <k> match["STDMATCH"]( P:HigherPat ; X:Wildcard ) => . ... </k>
+          <k> match["STDMATCH"]( P:HigherPat ; X:Wildcard ) => .K ... </k>
      ... </thread>
 
 
@@ -62,19 +66,19 @@ rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherPat ; X:Id )
 
 // If there are no free vars, we're left with a #(VARPAUSE)["TFSTDMATCH"] and we just erase it,
 // signifying a success.
-rule <thread> ... <k> #(VARPAUSE)["TFSTDMATCH" , BaseProc:HigherPat , BindingVar:Id][.List]
-                      => . </k> ... </thread>
+rule <thread> ... <k> #(VARPAUSE)["TFSTDMATCH" , BaseProc:HigherPat , BindingVar:Id]{.Set}
+                      => .K </k> ... </thread>
 
 // If there are free vars, the match fails
 rule <thread> ... <k> #(VARPAUSE)[
                           "TFSTDMATCH" ,
                           BaseProc:HigherPat ,
-                          BindingVar:Id][ListItem(X) FreeVars:List]
+                          BindingVar:Id]{SetItem(X) FreeVars:Set}
                       => #(MATCHFAIL)["TFSTDMATCH"] </k> ... </thread>
 
 // 3. Rules for encountering a wildcard in the second component
 rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherPat ; X:Wildcard )
-              => . ... </k> ... </thread>
+              => .K ... </k> ... </thread>
 
 
 
@@ -90,13 +94,13 @@ rule <thread> ... <k> ... matchstdform["HIGHERNAMEMATCH"](
                             "variable"[X:Id] ;
                             "variable"[Y:Id] ;
                             true)
-                          => . ... </k> ... </thread>
+                          => .K ... </k> ... </thread>
 
 rule <thread> ... <k> ... matchstdform["HIGHERNAMEMATCH"](
                             "wildcard"[ X:Wildcard ] ;
                             "wildcard"[ X:Wildcard ] ;
                             true)
-                          => . ... </k> ... </thread>
+                          => .K ... </k> ... </thread>
 
 
 // The T/F version of the "DoTheseHigherNamesMatch" function
@@ -115,12 +119,12 @@ rule <thread> ... <k> ... matchstdform["TFHIGHERNAMEMATCH"](
                                                 "variable"[X:Id] ;
                                                 "variable"[Y:Id] ;
                                                 true)
-                          => . ... </k> ... </thread>
+                          => .K ... </k> ... </thread>
 
 rule <thread> ... <k> ... matchstdform["TFHIGHERNAMEMATCH"](
                                                 "wildcard"[ X:Wildcard ] ;
                                                 "wildcard"[ X:Wildcard ] ;
                                                 true)
-                          => . ... </k> ... </thread>
+                          => .K ... </k> ... </thread>
 
 endmodule

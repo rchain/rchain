@@ -40,13 +40,13 @@ object NoOpsCasperEffect {
   def apply[F[_]: Sync: BlockStore](
       blockStore: Map[BlockHash, BlockMessage] = Map.empty,
       estimatorFunc: IndexedSeq[BlockMessage] = Vector(BlockMessage()),
-      blockDagFunc: BlockDag = BlockDag()): F[NoOpsCasperEffect[F]] =
+      blockDagFunc: BlockDag = BlockDag.empty): F[NoOpsCasperEffect[F]] =
     for {
       _ <- Sync[F].delay { blockStore.map((BlockStore[F].put _).tupled) }
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc, blockDagFunc)
   def apply[F[_]: Sync: BlockStore](): F[NoOpsCasperEffect[F]] =
-    apply(Map.empty, Vector(BlockMessage()), BlockDag())
+    apply(Map.empty, Vector(BlockMessage()), BlockDag.empty)
   def apply[F[_]: Sync: BlockStore](
       blockStore: Map[BlockHash, BlockMessage]): F[NoOpsCasperEffect[F]] =
-    apply(blockStore, Vector(BlockMessage()), BlockDag())
+    apply(blockStore, Vector(BlockMessage()), BlockDag.empty)
 }
