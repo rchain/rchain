@@ -11,19 +11,28 @@ new BallotFactory, LockoutFactory, MailBoxFactory, DepositoryFactory, MintFactor
   // TODO(pyrocto): Need to track whether there are enough outstanding votes to get a quorum.  If not, fail.
   contract @[*BallotFactory, "create"](@algorithm /\ String, @pubKeySet, @voteQuorumSize /\ Int, @cancelQuorumSize /\ Int, winnerOut, ballotOut) = {
     new ballot, votedSetStore, voteMapStore, canceledSetStore, doneStore, verifyStore, 
-        ed25519Verify(`rho:crypto:ed25519Verify`), secp256k1Verify(`rho:crypto:secp256k1Verify`), ret in {
+        ed25519Verify(`rho:crypto:ed25519Verify`), secp256k1Verify(`rho:crypto:secp256k1Verify`), ret,
+        guardedBallotOut in {
+      // Type guard for ballotOut
+      for (@msg <- guardedBallotOut) {
+        match msg {
+          {"result": false, "reason": String} => ballotOut!(msg)
+          {"result": true, "ballot": _} => ballotOut!(msg)
+          _ => ballotOut!({"result": false, "reason": "Internal error!"})
+        }
+      } |
       new verifyStore in {
         if (algorithm == "ed25519") {
           verifyStore!(*ed25519Verify)
         } else if (algorithm == "secp256k1") {
           verifyStore!(*secp256k1Verify)
         } else {
-          ballotOut!({"result": false, "reason": "Unrecognized public key algorithm"})
+          guardedBallotOut!({"result": false, "reason": "Unrecognized public key algorithm"})
         }
       } |
       @[*r, "register"]!(`rho:uuid`, bundle+{*ballot}, *ret) |
       for (@[uuid, unregisterBallotToken] <- ret; verify <- verifyStore) {
-        ballotOut!({"result": true, "ballot": *ballot}) |
+        guardedBallotOut!({"result": true, "ballot": *ballot}) |
       
         // Stores set of keys that have voted
         votedSetStore!(Set()) |
