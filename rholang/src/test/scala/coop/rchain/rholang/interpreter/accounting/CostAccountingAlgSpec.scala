@@ -42,12 +42,9 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
     test.attempt.map(res => assert(res === Left(OutOfPhlogistonsError)))
 
   it should "fail when cost account goes below zero" in withCostAccAlg() { alg =>
-    // this doesn't make sense for now but because we still
-    // add up costs rather than charge we have to do it this way
-    // TODO: Fix once CostAccountingAlg starts subtracting
-    val negativeCost = Cost(-100)
+    val cost = Cost(100)
     val test = for {
-      _ <- alg.charge(negativeCost)
+      _ <- alg.charge(cost)
       s <- alg.get()
     } yield s
 

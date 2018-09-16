@@ -18,10 +18,9 @@ object CostAccount {
   def apply(value: Long): CostAccount  = CostAccount(0, Cost(value))
   def toProto(c: CostAccount): PCost   = PCost(c.idx, c.cost.value)
   def fromProto(c: PCost): CostAccount = CostAccount(c.iterations, Cost(c.cost))
-  def zero: CostAccount                = CostAccount(0, Cost(0))
 
   implicit val monoidCostAccount: Monoid[CostAccount] = new Monoid[CostAccount] {
-    override def empty: CostAccount = CostAccount.zero
+    override def empty: CostAccount = CostAccount(0)
 
     override def combine(x: CostAccount, y: CostAccount): CostAccount = x + y
   }

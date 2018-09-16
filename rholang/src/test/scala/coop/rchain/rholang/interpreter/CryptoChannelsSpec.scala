@@ -38,7 +38,7 @@ class CryptoChannelsSpec
 
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
   implicit val costAccountingAlg: CostAccountingAlg[Task] =
-    CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[ListChannelWithRandom] =
     storage.implicits.serializeChannels

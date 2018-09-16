@@ -93,13 +93,15 @@ object Interpreter {
     } yield result
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
-    implicit val rand = Blake2b512Random(128)
+    implicit val rand      = Blake2b512Random(128)
+    val evaluatePhlosLimit = CostAccount(Integer.MAX_VALUE)
     for {
       checkpoint     <- Task.now(runtime.space.createCheckpoint())
-      costAccounting <- CostAccountingAlg.of[Task](CostAccount.zero)
+      costAccounting <- CostAccountingAlg.of[Task](evaluatePhlosLimit.zero)
       _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
       errors         <- Task.now(runtime.readAndClearErrorVector())
-      cost           <- costAccounting.get()
+      leftPhlos      <- costAccounting.get()
+      cost           = leftPhlos.copy(cost = evaluatePhlosLimit.cost - leftPhlos.cost)
       _              <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
     } yield EvaluateResult(cost, errors)
   }

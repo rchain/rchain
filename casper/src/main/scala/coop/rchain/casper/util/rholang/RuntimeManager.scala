@@ -143,8 +143,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       terms match {
         case deploy +: rem =>
           runtime.space.reset(hash)
-          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-          val (cost, errors)             = injAttempt(deploy, runtime.reducer, runtime.errorLog)
+          val availablePhlos             = CostAccount(Integer.MAX_VALUE)
+          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](availablePhlos) //FIXME this needs to come from the deploy params
+          val (phlosLeft, errors)        = injAttempt(deploy, runtime.reducer, runtime.errorLog)
+          val cost                       = phlosLeft.copy(cost = availablePhlos.cost.value - phlosLeft.cost)
           val newCheckpoint              = runtime.space.createCheckpoint()
           val deployResult = InternalProcessedDeploy(deploy,
                                                      cost,
@@ -168,10 +170,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                      hash: Blake2b256Hash): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
+          val availablePhlos             = CostAccount(Integer.MAX_VALUE)
+          implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](availablePhlos) // FIXME: This needs to come from the deploy params
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
-          val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
+          val (phlosLeft, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
+          val cost                = phlosLeft.copy(cost = availablePhlos.cost.value - phlosLeft.cost)
           DeployStatus.fromErrors(errors) match {
             case int: InternalErrors => Left(Some(deploy) -> int)
             case replayStatus =>

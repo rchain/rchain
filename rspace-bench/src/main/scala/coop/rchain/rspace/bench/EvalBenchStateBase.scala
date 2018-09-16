@@ -16,10 +16,11 @@ trait EvalBenchStateBase {
   private val mapSize: Long    = 1024 * 1024 * 1024
 
   val rhoScriptSource: String
-  lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
-  val rand: Blake2b512Random                  = Blake2b512Random(128)
-  val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-  var term: Option[Par]                       = None
+  lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
+  val rand: Blake2b512Random = Blake2b512Random(128)
+  val costAccountAlg: CostAccountingAlg[Task] =
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  var term: Option[Par] = None
 
   @Setup
   def doSetup(): Unit = {
