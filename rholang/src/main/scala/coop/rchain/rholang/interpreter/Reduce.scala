@@ -108,9 +108,10 @@ object Reduce {
         persistent: Boolean,
         rand: Blake2b512Random)(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
-        _ <- costAccountingAlg.modify(_.charge(c))
+        _    <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
+        c    <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        phlo <- costAccountingAlg.get().map(_ + c)
+        _    <- costAccountingAlg.set(phlo)
       } yield ()
 
     /**
@@ -133,9 +134,10 @@ object Reduce {
       val srcs                                              = sources.map(q => Channel(q)).toList
       val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
-        _ <- costAccountingAlg.charge(rspaceCost)
-        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
-        _ <- costAccountingAlg.modify(_.charge(c))
+        _    <- costAccountingAlg.charge(rspaceCost)
+        c    <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        phlo <- costAccountingAlg.get().map(_ + c)
+        _    <- costAccountingAlg.set(phlo)
       } yield ()
     }
 
@@ -219,7 +221,7 @@ object Reduce {
     override def inj(par: Par)(implicit rand: Blake2b512Random,
                                costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _ <- costAccountingAlg.setCost(CostAccount.zero)
+        _ <- costAccountingAlg.set(CostAccount.zero)
         _ <- eval(par)(Env[Par](), rand, costAccountingAlg)
       } yield ()
 
@@ -387,10 +389,10 @@ object Reduce {
                                                        1,
                                                        env,
                                                        costAccountingAlg)
-                (cost, matchResult) = SpatialMatcher
+                (phlos, matchResult) = SpatialMatcher
                   .spatialMatch(target, pattern)
                   .runWithCost(CostAccount(0))
-                _ <- costAccountingAlg.modify(_.charge(cost))
+                _ <- costAccountingAlg.charge(phlos.cost)
                 res <- matchResult match {
                         case None =>
                           Applicative[M].pure(Left((target, caseRem)))
@@ -651,11 +653,11 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
-            (cost, matchResult) = SpatialMatcher
+            (phlos, matchResult) = SpatialMatcher
               .spatialMatch(substTarget, substPattern)
               .runWithCost(CostAccount(0))
 
-            _ <- costAccountingAlg.modify(_.charge(cost))
+            _ <- costAccountingAlg.charge(phlos.cost)
           } yield GBool(matchResult.isDefined)
 
         case EPercentPercentBody(EPercentPercent(p1, p2)) =>

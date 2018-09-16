@@ -2,31 +2,27 @@ package coop.rchain.casper.util.rholang
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.PrettyPrinter.buildString
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.{ErrorLog, Reduce, Runtime}
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.{trace, Blake2b256Hash, Checkpoint, ReplayException}
-import monix.execution.Scheduler
-import coop.rchain.rspace.internal.WaitingContinuation
-
-import scala.concurrent.SyncVar
-import scala.util.{Failure, Success, Try}
-import RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
-import coop.rchain.rspace.internal.Datum
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.{ErrorLog, Reduce, Runtime}
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.Produce
+import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.collection.immutable
+import scala.concurrent.SyncVar
+import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
@@ -204,13 +200,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
       case Success(_) =>
         val errors = errorLog.readAndClearErrorVector()
-        val cost   = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+        val cost   = CostAccount.toProto(costAlg.get().unsafeRunSync)
         cost -> errors
 
       case Failure(ex) =>
         val otherErrors = errorLog.readAndClearErrorVector()
         val errors      = otherErrors :+ ex
-        val cost        = CostAccount.toProto(costAlg.getCost().unsafeRunSync)
+        val cost        = CostAccount.toProto(costAlg.get().unsafeRunSync)
         cost -> errors
     }
   }
