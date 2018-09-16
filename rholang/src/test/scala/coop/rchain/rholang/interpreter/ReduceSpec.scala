@@ -31,11 +31,11 @@ import scala.concurrent.duration._
 trait PersistentStoreTester {
   def withTestSpace[R](
       f: FreudianSpace[Channel,
-                BindPattern,
-                OutOfPhlogistonsError.type,
-                ListChannelWithRandom,
-                ListChannelWithRandom,
-                TaggedContinuation] => R): R = {
+                       BindPattern,
+                       OutOfPhlogistonsError.type,
+                       ListChannelWithRandom,
+                       ListChannelWithRandom,
+                       TaggedContinuation] => R): R = {
     val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,
@@ -931,9 +931,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =
       CostAccountingAlg.unsafe[Task](CostAccount.zero)
-    val splitRand = rand.splitByte(42)
-    val resultRand = rand.splitByte(42)
-    val chosenName = resultRand.next
+    val splitRand   = rand.splitByte(42)
+    val resultRand  = rand.splitByte(42)
+    val chosenName  = resultRand.next
     val result0Rand = resultRand.splitByte(0)
     val result1Rand = resultRand.splitByte(1)
     val newProc: New =
@@ -943,12 +943,17 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         p = Par(
           sends = List(
             Send(Quote(GString("result0")), List(EVar(BoundVar(0))), locallyFree = BitSet(0)),
-            Send(Quote(GString("result1")), List(EVar(BoundVar(1))), locallyFree = BitSet(1))),
-          locallyFree = BitSet(0, 1)))
+            Send(Quote(GString("result1")), List(EVar(BoundVar(1))), locallyFree = BitSet(1))
+          ),
+          locallyFree = BitSet(0, 1)
+        )
+      )
 
     val result = withTestSpace { space =>
       def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
-      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42))).reducer
+      val reducer = RholangOnlyDispatcher
+        .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
+        .reducer
       implicit val env = Env[Par]()
       val nthTask      = reducer.eval(newProc)(env, splitRand, costAccounting)
       val inspectTask = for {
@@ -959,6 +964,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel0 = Channel(Quote(GString("result0")))
     val channel1 = Channel(Quote(GString("result1")))
+    // format: off
     result should be(
       HashMap(
         List(channel0) ->
@@ -980,7 +986,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
   }
-
+  // format: on
   "eval of nth method in send position" should "change what is sent" in {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =
@@ -1520,10 +1526,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           EPercentPercent(
             GString("${a} ${b}"),
             EMapBody(
-              ParMap(List[(Par, Par)](
-                                (GString("a"), GString("1 ${b}")),
-                                (GString("b"), GString("2 ${a}"))
-                              ))
+              ParMap(
+                List[(Par, Par)](
+                  (GString("a"), GString("1 ${b}")),
+                  (GString("b"), GString("2 ${a}"))
+                ))
             )
           )
         )
@@ -1609,8 +1616,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val map = EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("getOrElse", map, List(GInt(1), GString("c"))))
       )
@@ -1630,8 +1636,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val map = EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("getOrElse", map, List(GInt(3), GString("c"))))
       )
@@ -1651,16 +1656,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val map = EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("set", map, List(GInt(3), GString("c"))))
       )
 
       Await.result(inspectTask.runAsync, 3.seconds)
     }
-    val resultMap = EMapBody(
-      ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c")))))
+    val resultMap = EMapBody(ParMap(
+      List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")), (GInt(3), GString("c")))))
     result.exprs should be(Seq(Expr(resultMap)))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -1674,16 +1678,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val map = EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("set", map, List(GInt(2), GString("c"))))
       )
 
       Await.result(inspectTask.runAsync, 3.seconds)
     }
-    val resultMap = EMapBody(
-      ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("c")))))
+    val resultMap =
+      EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("c")))))
     result.exprs should be(Seq(Expr(resultMap)))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -1698,9 +1701,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")),
-                                   (GInt(2), GString("b")),
-                                   (GInt(3), GString("c")))))
+        ParMap(
+          List[(Par, Par)]((GInt(1), GString("a")),
+                           (GInt(2), GString("b")),
+                           (GInt(3), GString("c")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("keys", map))
       )
@@ -1725,9 +1729,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")),
-                                   (GInt(2), GString("b")),
-                                   (GInt(3), GString("c")))))
+        ParMap(
+          List[(Par, Par)]((GInt(1), GString("a")),
+                           (GInt(2), GString("b")),
+                           (GInt(3), GString("c")))))
       val inspectTask = reducer.evalExpr(
         EMethodBody(EMethod("size", map))
       )
@@ -1789,17 +1794,18 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
       val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")),
-                                   (GInt(2), GString("b")),
-                                   (GInt(3), GString("c")))))
+        ParMap(
+          List[(Par, Par)]((GInt(1), GString("a")),
+                           (GInt(2), GString("b")),
+                           (GInt(3), GString("c")))))
       val inspectTask = reducer.evalExpr(
         EMinusBody(EMinus(map, GInt(3)))
       )
 
       Await.result(inspectTask.runAsync, 3.seconds)
     }
-    val resultMap = EMapBody(
-      ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+    val resultMap =
+      EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
     result.exprs should be(Seq(Expr(resultMap)))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -1856,10 +1862,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val lhsMap = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
-      val rhsMap = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(3), GString("c")), (GInt(4), GString("d")))))
+      val lhsMap =
+        EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val rhsMap =
+        EMapBody(ParMap(List[(Par, Par)]((GInt(3), GString("c")), (GInt(4), GString("d")))))
       val inspectTask = reducer.evalExpr(
         EPlusPlusBody(EPlusPlus(lhsMap, rhsMap))
       )
@@ -1867,12 +1873,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Await.result(inspectTask.runAsync, 3.seconds)
     }
     val resultMap = EMapBody(
-      ParMap(List[(Par, Par)](
-                (GInt(1), GString("a")),
-                (GInt(2), GString("b")),
-                (GInt(3), GString("c")),
-                (GInt(4), GString("d"))
-              )))
+      ParMap(
+        List[(Par, Par)](
+          (GInt(1), GString("a")),
+          (GInt(2), GString("b")),
+          (GInt(3), GString("c")),
+          (GInt(4), GString("d"))
+        )))
     result.exprs should be(Seq(Expr(resultMap)))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -1927,8 +1934,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
 
-      val map = EMapBody(
-        ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
+      val map         = EMapBody(ParMap(List[(Par, Par)]((GInt(1), GString("a")), (GInt(2), GString("b")))))
       val inspectTask = reducer.eval(EMethodBody(EMethod("add", map, List(GInt(1)))))
 
       Await.result(inspectTask.runAsync, 3.seconds)

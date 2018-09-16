@@ -36,7 +36,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost(CostAccount(0))._2.map(_._1)
+    val result: Option[FreeMap] =
+      spatialMatch(target, pattern).runWithCost(CostAccount(0))._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
     assert(result == expectedCaptures)
   }
@@ -60,9 +61,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   private def prettyCaptures[T <: GeneratedMessage, P <: GeneratedMessage](
-      expectedCaptures: Option[FreeMap]): Option[Map[Int, String]] = {
+      expectedCaptures: Option[FreeMap]): Option[Map[Int, String]] =
     expectedCaptures.map(_.map(c => (c._1, printer.buildString(c._2))))
-  }
 
   private def assertSorted[T <: GeneratedMessage](term: T, termName: String)(
       implicit ts: Sortable[T]): Assertion = {
@@ -104,13 +104,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     val pattern: Par = EList(List(EVar(FreeVar(0)).withConnectiveUsed(true), GInt(9)), BitSet())
       .withConnectiveUsed(true)
       .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
-        .withConnectiveUsed(true), depth = 1)
+                 .withConnectiveUsed(true),
+               depth = 1)
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(8))))
   }
 
   "Matching huge list of targets with no patterns and a reminder" should "better be quick" in {
     //This is a very common case in rspace that can be handled in linear time, yet was quadratic for a short while
-    val target: Par = Par(exprs = Seq.fill(1000)(GInt(1): Expr))
+    val target: Par  = Par(exprs = Seq.fill(1000)(GInt(1): Expr))
     val pattern: Par = EVar(FreeVar(0))
 
     import org.scalatest.time.SpanSugar._
@@ -151,12 +152,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   "Matching extras with free variable" should "work" in {
     val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
     val pattern: Par = EVar(FreeVar(0)).prepend(GInt(8), depth = 1)
-    assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
+    assertSpatialMatch(target,
+                       pattern,
+                       Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
   }
 
   "Matching a singleton list" should "work" in {
-    val target: Expr  = EList(Seq(GInt(1)))
-    val pattern: Expr = EList(Seq(EVar(FreeVar(0))), connectiveUsed = true)
+    val target: Expr   = EList(Seq(GInt(1)))
+    val pattern: Expr  = EList(Seq(EVar(FreeVar(0))), connectiveUsed = true)
     val expectedResult = Some(Map[Int, Par](0 -> GInt(1)))
     assertSpatialMatch(target, pattern, expectedResult)
     assertSpatialMatch(target: Par, pattern: Par, expectedResult)
@@ -166,8 +169,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     //     Matching:  free0 | free1
     //           to:  1 | 1
     // should yield:  Some(Map(0 -> 1 | 1))
-    val target: Par    = GInt(1).prepend(GInt(1), depth = 0)
-    val pattern: Par   = EVar(FreeVar(1)).prepend(EVar(FreeVar(0)), depth = 0).withConnectiveUsed(true)
+    val target: Par = GInt(1).prepend(GInt(1), depth = 0)
+    val pattern: Par =
+      EVar(FreeVar(1)).prepend(EVar(FreeVar(0)), depth = 0).withConnectiveUsed(true)
     val expectedResult = Some(Map[Int, Par](0 -> target))
     assertSpatialMatch(target, pattern, expectedResult)
   }
@@ -268,10 +272,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
   "Matching extras with wildcard and free variable" should "capture in the free variable" in {
-    val target: Par  = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
+    val target: Par = GInt(9).prepend(GInt(8), depth = 0).prepend(GInt(7), depth = 0)
     val pattern: Par =
-      EVar(Wildcard(Var.WildcardMsg())).prepend(EVar(FreeVar(0)), depth = 1).prepend(GInt(8), depth = 1)
-    assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
+      EVar(Wildcard(Var.WildcardMsg()))
+        .prepend(EVar(FreeVar(0)), depth = 1)
+        .prepend(GInt(8), depth = 1)
+    assertSpatialMatch(target,
+                       pattern,
+                       Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7), depth = 0))))
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
@@ -279,7 +287,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     val pattern: Par =
       Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
         .withConnectiveUsed(true)
-    val expectedResult = Some(Map[Int, Par](0 -> GPrivateBuilder("zero"), 1 -> GPrivateBuilder("one")))
+    val expectedResult =
+      Some(Map[Int, Par](0 -> GPrivateBuilder("zero"), 1 -> GPrivateBuilder("one")))
     assertSpatialMatch(sendTarget, pattern, expectedResult)
     val targetPar: Par  = sendTarget
     val patternPar: Par = pattern
@@ -308,9 +317,11 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     )
     val expectedResult =
       Some(
-        Map[Int, Par](
-          0 -> GInt(8),
-          1 -> Send(Quote(GPrivateBuilder("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
+        Map[Int, Par](0 -> GInt(8),
+                      1 -> Send(Quote(GPrivateBuilder("unforgeable")),
+                                List(GInt(9), GInt(10)),
+                                false,
+                                BitSet())))
     assertSpatialMatch(target, pattern, expectedResult)
     val targetPar: Par  = target
     val patternPar: Par = pattern
@@ -402,8 +413,9 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   it should "work with free variables and wildcards" in {
     val target: Expr = ParSet(Seq(GInt(1), GInt(2), GInt(3), GInt(4), GInt(5)))
     val pattern: Expr =
-      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg()))),
-             connectiveUsed = true)
+      ParSet(
+        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg()))),
+        connectiveUsed = true)
     //the captures and their order are somewhat arbitrary and could potentially by changed
     val expectedResult = Some(Map[Int, Par](0 -> GInt(4), 1 -> GInt(3)))
     assertSpatialMatch(target, pattern, expectedResult)
@@ -413,13 +425,14 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSpatialMatch(targetPar, patternPar, expectedResult)
 
     val nonMatchingPattern: Expr =
-      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))), connectiveUsed = true)
+      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))),
+             connectiveUsed = true)
     assertSpatialMatch(target, nonMatchingPattern, None)
   }
 
   it should "work with wildcard remainders" in {
     val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
-    val target: Expr = ParSet(targetElements)
+    val target: Expr   = ParSet(targetElements)
     val pattern: Expr =
       ParSet(Seq(GInt(1), GInt(4)), connectiveUsed = true, remainder = Wildcard(WildcardMsg()))
     val expectedResult = Some(Map[Int, Par]())
@@ -438,9 +451,11 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
 
   it should "work with var remainders" in {
     val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
-    val target: Expr = ParSet(targetElements)
+    val target: Expr   = ParSet(targetElements)
     val pattern: Expr =
-      ParSet(Seq(GInt(1), GInt(4), EVar(FreeVar(0))), connectiveUsed = true, remainder = Var(FreeVar(1)))
+      ParSet(Seq(GInt(1), GInt(4), EVar(FreeVar(0))),
+             connectiveUsed = true,
+             remainder = Var(FreeVar(1)))
     //the captures and their order are somewhat arbitrary and could potentially by changed
     val expectedResult = Some(Map[Int, Par](0 -> GInt(2), 1 -> ParSet(Seq(GInt(3), GInt(5)))))
     assertSpatialMatch(target, pattern, expectedResult)
@@ -469,15 +484,15 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   it should "work with free variables and wildcards" in {
-    val target: Expr = ParMap(
-      Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4)), (GInt(5), GInt(6))))
+    val target: Expr =
+      ParMap(Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4)), (GInt(5), GInt(6))))
     val pattern: Expr =
       ParMap(
         Seq[(Par, Par)](
           (GInt(1), EVar(FreeVar(1))),
           (GInt(3), GInt(4)),
           (EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg())))
-      ),
+        ),
         connectiveUsed = true,
         locallyFree = BitSet(0, 1),
         remainder = None
@@ -505,7 +520,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
 
   it should "work with wildcard remainders" in {
     val targetElements = Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(3), GInt(4)), (GInt(5), GInt(6)))
-    val target: Expr = ParMap(targetElements)
+    val target: Expr   = ParMap(targetElements)
     val pattern: Expr =
       ParMap(Seq[(Par, Par)]((GInt(3), GInt(4))),
              connectiveUsed = true,
@@ -536,28 +551,24 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     val target: Expr   = ParMap(targetElements)
     val pattern: Expr =
       ParMap(Seq[(Par, Par)]((EVar(FreeVar(0)), GInt(4))),
-        connectiveUsed = true,
-        locallyFree = BitSet(),
-        remainder = FreeVar(1))
+             connectiveUsed = true,
+             locallyFree = BitSet(),
+             remainder = FreeVar(1))
     val expectedResult = Some(
       Map[Int, Par](0 -> GInt(3),
-        1 -> ParMap(Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(5), GInt(6))))))
+                    1 -> ParMap(Seq[(Par, Par)]((GInt(1), GInt(2)), (GInt(5), GInt(6))))))
     assertSpatialMatch(target, pattern, expectedResult)
 
     val targetPar: Par  = target
     val patternPar: Par = pattern
     assertSpatialMatch(targetPar, patternPar, expectedResult)
 
-    val allElementsAndRemainder: Expr = ParMap(targetElements,
-      connectiveUsed = true,
-      locallyFree = BitSet(),
-      remainder = FreeVar(0))
+    val allElementsAndRemainder: Expr =
+      ParMap(targetElements, connectiveUsed = true, locallyFree = BitSet(), remainder = FreeVar(0))
     assertSpatialMatch(target, allElementsAndRemainder, Some(Map[Int, Par](0 -> ParMap(Seq.empty))))
 
-    val justRemainder: Expr = ParMap(Seq(),
-      connectiveUsed = true,
-      locallyFree = BitSet(),
-      remainder = FreeVar(0))
+    val justRemainder: Expr =
+      ParMap(Seq(), connectiveUsed = true, locallyFree = BitSet(), remainder = FreeVar(0))
     assertSpatialMatch(target, justRemainder, Some(Map[Int, Par](0 -> ParMap(targetElements))))
   }
 
@@ -725,6 +736,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching a target with var ref and a pattern with a var ref" should "ignore locallyFree" in {
+    // format: off
     val target: Par = New(
       bindCount = 1,
       p = Par(
@@ -751,6 +763,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
           body = Par(),
           persistent = false,
           bindCount = 0))))
+    // format: on
     assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
 
@@ -786,8 +799,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching Bool" should "work" in {
-    val successTarget: Par = GBool(false)
-    val failTarget: Par = GString("Fail")
+    val successTarget: Par  = GBool(false)
+    val failTarget: Par     = GString("Fail")
     val pattern: Connective = Connective(ConnBool(true))
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
@@ -795,8 +808,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching Int" should "work" in {
-    val successTarget: Par = GInt(7)
-    val failTarget: Par = GString("Fail")
+    val successTarget: Par  = GInt(7)
+    val failTarget: Par     = GString("Fail")
     val pattern: Connective = Connective(ConnInt(true))
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
@@ -804,8 +817,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching String" should "work" in {
-    val successTarget: Par = GString("Match me!")
-    val failTarget: Par = GInt(42)
+    val successTarget: Par  = GString("Match me!")
+    val failTarget: Par     = GInt(42)
     val pattern: Connective = Connective(ConnString(true))
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
@@ -813,8 +826,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching Uri" should "work" in {
-    val successTarget: Par = GUri("rho:io:stdout")
-    val failTarget: Par = GString("Fail")
+    val successTarget: Par  = GUri("rho:io:stdout")
+    val failTarget: Par     = GString("Fail")
     val pattern: Connective = Connective(ConnUri(true))
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
@@ -822,8 +835,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
   }
 
   "Matching ByteArray" should "work" in {
-    val successTarget: Par = GByteArray(ByteString.copyFrom(Array[Byte](74, 75)))
-    val failTarget: Par = GString("Fail")
+    val successTarget: Par  = GByteArray(ByteString.copyFrom(Array[Byte](74, 75)))
+    val failTarget: Par     = GString("Fail")
     val pattern: Connective = Connective(ConnByteArray(true))
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
