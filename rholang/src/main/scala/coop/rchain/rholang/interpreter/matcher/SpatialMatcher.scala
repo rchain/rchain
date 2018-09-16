@@ -810,7 +810,7 @@ trait SpatialMatcherInstances {
           target.patterns
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
-            .sum
+            .foldLeft(Cost(0))(_ + _)
         OptionalFreeMapWithCost.emptyMap.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
