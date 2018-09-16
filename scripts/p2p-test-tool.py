@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.6
 # This is a simple script to help with p2p network boot/testing.
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
@@ -152,7 +152,7 @@ def main():
         remove_resources_by_network(args.network)
         boot_p2p_network()
         if not args.skip_convergence_test == True:
-            for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
+            for container in client.containers.list(all=True, filters={"name":f'[bootstrap|peer\d].{args.network}'}):
                 if check_network_convergence(container) != 0:
                     show_logs()
                     show_containers()
