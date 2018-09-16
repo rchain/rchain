@@ -39,8 +39,8 @@ package object matcher {
           }))
         })
 
-      def runWithCost: (CostAccount, Option[(FreeMap, A)]) =
-        s.run(Map.empty).value.run(CostAccount.zero).value
+      def runWithCost(availablePhlos: CostAccount): (CostAccount, Option[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(availablePhlos).value
 
       def toNonDet(): NonDetFreeMapWithCost[A] =
         s.mapK[StreamWithCost](new FunctionK[OptionWithCost, StreamWithCost] {
@@ -96,8 +96,8 @@ package object matcher {
           }))
         })
 
-      def runWithCost: (CostAccount, Stream[(FreeMap, A)]) =
-        s.run(Map.empty).value.run(CostAccount.zero).value
+      def runWithCost(availablePhlos: CostAccount): (CostAccount, Stream[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(availablePhlos).value
 
       def toDet(): OptionalFreeMapWithCost[A] =
         s.mapK[OptionWithCost](new FunctionK[StreamWithCost, OptionWithCost] {

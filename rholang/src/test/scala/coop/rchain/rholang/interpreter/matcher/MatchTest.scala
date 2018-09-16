@@ -13,6 +13,7 @@ import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import monix.eval.Coeval
 import org.scalatest._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import org.scalatest.concurrent.TimeLimits
 import scalapb.GeneratedMessage
 
@@ -35,7 +36,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost._2.map(_._1)
+    val result: Option[FreeMap] = spatialMatch(target, pattern).runWithCost(CostAccount(0))._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
     assert(result == expectedCaptures)
   }

@@ -389,7 +389,7 @@ object Reduce {
                                                        costAccountingAlg)
                 (cost, matchResult) = SpatialMatcher
                   .spatialMatch(target, pattern)
-                  .runWithCost
+                  .runWithCost(CostAccount(0))
                 _ <- costAccountingAlg.modify(_.charge(cost))
                 res <- matchResult match {
                         case None =>
@@ -653,7 +653,7 @@ object Reduce {
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
             (cost, matchResult) = SpatialMatcher
               .spatialMatch(substTarget, substPattern)
-              .runWithCost
+              .runWithCost(CostAccount(0))
 
             _ <- costAccountingAlg.modify(_.charge(cost))
           } yield GBool(matchResult.isDefined)
