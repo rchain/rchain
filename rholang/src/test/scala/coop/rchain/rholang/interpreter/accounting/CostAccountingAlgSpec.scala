@@ -58,7 +58,7 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
   }
 
   it should "fail when tries to charge on the cost account that is already negative" in { alg =>
-    val cost = Cost(1)
+    val cost            = Cost(1)
     val negativeAccount = CostAccount(-100)
     val test = for {
       _ <- alg.set(negativeAccount)
@@ -70,8 +70,7 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
     assert(res === Left(OutOfPhlogistonsError))
   }
 
-  override protected def withFixture(
-      test: OneArgTest): Outcome = {
+  override protected def withFixture(test: OneArgTest): Outcome = {
     val alg = CostAccountingAlg.unsafe[Task](defaultCost)
     test(alg)
   }
