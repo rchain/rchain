@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{Send, _}
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
@@ -84,12 +85,12 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     mapData.add(
       new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
-    val map = new PCollect(new CollectMap(mapData))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par)
-    result shouldBe "{7 : \"" + "Seven" + "\", x0 : *x1}"
+    result shouldBe "{7 : \"" + "Seven" + "\", x0 : *x1...free0}"
   }
 
 }
@@ -130,7 +131,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         EPercentPercentBody(
           EPercentPercent(
             GString("Hello, ${name}"),
-            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice")))))
           )
         ))
     )

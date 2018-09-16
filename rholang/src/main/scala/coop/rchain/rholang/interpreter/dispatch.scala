@@ -9,8 +9,10 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
-import coop.rchain.rspace.ISpace
+import coop.rchain.rspace.{FreudianSpace, ISpace}
 import cats.implicits._
+import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.pure.PureRSpace
 
 trait Dispatch[M[_], A, K] {
@@ -63,12 +65,7 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: S
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: ISpace[Channel,
-                                            BindPattern,
-                                            ListChannelWithRandom,
-                                            ListChannelWithRandom,
-                                            TaggedContinuation],
-                         urnMap: Map[String, Par] = Map.empty)(
+  def create[M[_], F[_]](tuplespace: RhoISpace, urnMap: Map[String, Par] = Map.empty)(
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
@@ -76,6 +73,7 @@ object RholangOnlyDispatcher {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation] =
@@ -127,11 +125,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: ISpace[Channel,
-                         BindPattern,
-                         ListChannelWithRandom,
-                         ListChannelWithRandom,
-                         TaggedContinuation],
+      tuplespace: RhoISpace,
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
       urnMap: Map[String, Par])(
       implicit
@@ -141,6 +135,7 @@ object RholangAndScalaDispatcher {
     val pureSpace: PureRSpace[M,
                               Channel,
                               BindPattern,
+                              OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
                               ListChannelWithRandom,
                               TaggedContinuation] =

@@ -112,8 +112,10 @@ object CollectionNormalizeMatcher {
         }
     }
 
-    def foldMatchMap(listProc: List[AbsynKeyValuePair]): M[CollectVisitOutputs] = {
-      val init = (Vector[(Par, Par)](), input.knownFree, BitSet(), false)
+    def foldMatchMap(knownFree: DebruijnLevelMap[VarSort],
+                     remainder: Option[Var],
+                     listProc: List[AbsynKeyValuePair]) = {
+      val init = (Vector[(Par, Par)](), knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
           e match {
@@ -133,8 +135,20 @@ object CollectionNormalizeMatcher {
           }
         }
         .map { folded =>
-          val resultKnownFree = folded._2
-          CollectVisitOutputs(ParMap(folded._1.reverse, folded._4, folded._3), resultKnownFree)
+          val resultKnownFree         = folded._2
+          val remainderConnectiveUsed = remainder.exists(HasLocallyFree[Var].connectiveUsed(_))
+          val remainderLocallyFree =
+            remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
+
+          CollectVisitOutputs(
+            ParMap(
+              seq = folded._1.reverse,
+              connectiveUsed = folded._4 || remainderConnectiveUsed,
+              locallyFree = folded._3 | remainderLocallyFree,
+              remainder = remainder
+            ),
+            resultKnownFree
+          )
         }
     }
 
@@ -179,7 +193,13 @@ object CollectionNormalizeMatcher {
               foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
           }
 
-      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.toList)
+      case cm: CollectMap =>
+        RemainderNormalizeMatcher
+          .normalizeMatchProc[M](cm.procremainder_, input.knownFree)
+          .flatMap {
+            case (optionalRemainder, knownFree) =>
+              foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.toList)
+          }
     }
   }
 }
@@ -694,8 +714,8 @@ object ProcNormalizeMatcher {
           bindingsProcessed                                                <- processBindings(sources)
           bindingsFree                                                     = bindingsProcessed.map(binding => binding._5).foldLeft(BitSet())(_ | _)
           bindingsTrimmed                                                  = bindingsProcessed.map(b => (b._1, b._2, b._3, b._4))
-          receipts = ReceiveBindsSortMatcher
-            .preSortBinds[M, VarSort](bindingsTrimmed)
+          receipts <- ReceiveBindsSortMatcher
+                       .preSortBinds[M, VarSort](bindingsTrimmed)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {

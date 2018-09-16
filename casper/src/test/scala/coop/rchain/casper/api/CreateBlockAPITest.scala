@@ -1,13 +1,13 @@
 package coop.rchain.casper.api
 
 import cats.effect.{Sync, Timer}
-import cats.{Id, Monad}
+import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.implicits._
 import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
-import coop.rchain.casper.helper.CasperEffect
+import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang._
@@ -25,26 +25,18 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class CreateBlockAPITest extends FlatSpec with Matchers {
   import HashSetCasperTest._
-  import CasperEffect.Effect
+  import HashSetCasperTestNode.Effect
 
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 
-  implicit val timerEff: Timer[Effect] = new Timer[Effect] {
-    override def clockRealTime(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(Timer[Task].clockRealTime(unit))
-    override def clockMonotonic(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(Timer[Task].clockMonotonic(unit))
-    override def sleep(duration: FiniteDuration): Effect[Unit] =
-      EitherT.liftF(Timer[Task].sleep(duration))
-    override def shift: Effect[Unit] = EitherT.liftF(Timer[Task].shift)
-  }
+  implicit val timerEff: Timer[Effect] = Timer.deriveEitherT(Functor[Task], Task.timer)
 
   "createBlock" should "not allow simultaneous calls" in {
-    implicit val scheduler   = Scheduler.fixedPool("three-threads", 3)
-    val (casperEff, cleanUp) = CasperEffect(validatorKeys.head, genesis)
-    val sleepyCasper         = casperEff.map(c => new SleepingMultiParentCasperImpl[Effect](c))
+    implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
+    val node               = HashSetCasperTestNode.standaloneEff(genesis, validatorKeys.head)
+    val casper             = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
@@ -55,7 +47,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       : Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
         t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
-        _  <- Timer[Task].sleep(2.second)
+        _  <- implicitly[Timer[Task]].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
                .createBlock[Effect]).value.fork //should fail because other not done
         r1 <- t1.join
@@ -64,7 +56,6 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     )
 
     val (response1, response2) = (for {
-      casper    <- sleepyCasper
       casperRef <- MultiParentCasperRef.of[Effect]
       _         <- casperRef.set(casper)
       result    <- testProgram(casperRef)
@@ -74,7 +65,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     response2.success shouldBe false
     response2.message shouldBe "Error: There is another propose in progress."
 
-    cleanUp()
+    node.tearDown()
   }
 }
 
@@ -95,7 +86,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: Mult
   override def createBlock: F[CreateBlockStatus] =
     for {
       result <- underlying.createBlock
-      _      <- Timer[F].sleep(5.seconds)
+      _      <- implicitly[Timer[F]].sleep(5.seconds)
     } yield result
 
 }

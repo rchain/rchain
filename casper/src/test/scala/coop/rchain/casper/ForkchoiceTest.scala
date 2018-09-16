@@ -14,7 +14,7 @@ import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -25,7 +25,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.HashMap
 
 class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = BlockDag()
+  val initState = IndexedBlockDag.empty
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStore {
     implicit blockStore =>
@@ -69,13 +69,13 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 
-      val chain: BlockDag = createChain[StateWithChain].runS(initState)
-      val genesis         = chain.idToBlocks(1)
+      val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
+      val genesis                = chain.idToBlocks(1)
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
           forkchoice <- Estimator.tips[F](
-                         chain.copy(latestMessages = HashMap.empty[Validator, BlockMessage]),
+                         chain.withLatestMessages(HashMap.empty[Validator, BlockMessage]),
                          genesis)
           _ = forkchoice.head should be(genesis)
         } yield ()
@@ -125,7 +125,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
 
-      val chain: BlockDag = createChain[StateWithChain].runS(initState)
+      val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
 
       val genesis = chain.idToBlocks(1)
       val b6      = chain.idToBlocks(6)
@@ -135,7 +135,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
-          forkchoice <- Estimator.tips[F](chain.copy(latestMessages = latestBlocks), genesis)
+          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis)
           _          = forkchoice.head should be(b6)
           _          = forkchoice(1) should be(b8)
         } yield ()
@@ -190,7 +190,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
         } yield b8
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
-      val chain: BlockDag          = createChain[StateWithChain].runS(initState)
+      val chain: IndexedBlockDag   = createChain[StateWithChain].runS(initState)
 
       val genesis = chain.idToBlocks(1)
       val b6      = chain.idToBlocks(6)
@@ -202,7 +202,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
-          forkchoice <- Estimator.tips[F](chain.copy(latestMessages = latestBlocks), genesis)
+          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis)
           _          = forkchoice.head should be(b8)
           _          = forkchoice(1) should be(b7)
         } yield ()

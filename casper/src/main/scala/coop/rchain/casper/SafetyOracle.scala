@@ -1,7 +1,6 @@
 package coop.rchain.casper
 
 import cats.{Applicative, Foldable, Monad, Now}
-import cats.mtl.implicits._
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}

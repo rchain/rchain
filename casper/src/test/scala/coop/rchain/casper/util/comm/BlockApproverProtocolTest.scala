@@ -31,7 +31,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
     node.logEff.warns.isEmpty should be(true)
 
-    node.transportLayerEff.msgQueues(node.local).size should be(1)
+    node.transportLayerEff.msgQueues(node.local).get.size should be(1)
   }
 
   it should "log a warning for invalid ApprovedBlockCandidates" in {
@@ -48,7 +48,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 
     node.logEff.warns.count(_.contains("Received unexpected candidate")) should be(2)
 
-    node.transportLayerEff.msgQueues(node.local).isEmpty should be(true)
+    node.transportLayerEff.msgQueues(node.local).get.isEmpty should be(true)
   }
 }
 
@@ -63,7 +63,7 @@ object BlockApproverProtocolTest {
       requiredSigs: Int,
       wallets: Seq[PreWallet],
       sk: Array[Byte],
-      bonds: Map[Array[Byte], Int]): (BlockApproverProtocol, HashSetCasperTestNode) = {
+      bonds: Map[Array[Byte], Int]): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
     import monix.execution.Scheduler.Implicits.global
 
     val runtimeDir     = BlockStoreTestFixture.dbDir

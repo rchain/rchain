@@ -13,7 +13,7 @@ contract @"8over"(@x, ret) = { @"divide"!(8, x, *ret) } |
 //Requires Either, TestSet
 contract @"doubleMap"(@either, ret) = {
   new fn in {
-    contract fn(ret) = { @["Either", "map"]!(either, "double", *ret) } |
+    contract fn(ret) = { @("Either", "map")!(either, "double", *ret) } |
     ret!(*fn)
   }
 } |
@@ -30,7 +30,7 @@ contract @"doubleMap"(@either, ret) = {
 
 contract @"10overFlatMap"(@either, ret) = {
   new fn in {
-    contract fn(ret) = { @["Either", "flatMap"]!(either, "10over", *ret) } |
+    contract fn(ret) = { @("Either", "flatMap")!(either, "10over", *ret) } |
     ret!(*fn)
   }
 } |
@@ -49,7 +49,7 @@ contract @"10overFlatMap"(@either, ret) = {
 
 contract @"composeTest"(@input, @functions, ret) = {
   new fn in {
-    contract fn(ret) = { @["Either", "compose"]!(input, functions, *ret) } |
+    contract fn(ret) = { @("Either", "compose")!(input, functions, *ret) } |
     ret!(*fn)
   }
 } |
