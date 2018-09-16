@@ -386,10 +386,21 @@ object Reduce {
                                                        1,
                                                        env,
                                                        costAccountingAlg)
-                (phlos, matchResult) = SpatialMatcher
-                  .spatialMatch(target, pattern)
-                  .runWithCost(CostAccount(0))
-                _ <- costAccountingAlg.charge(phlos.cost)
+                // since we now decrement available phlos it makes sense to get all of them
+                phloLeft <- costAccountingAlg.get()
+                result <- Sync[M]
+                           .fromEither(
+                             SpatialMatcher
+                               .spatialMatch(target, pattern)
+                               .runWithCost(phloLeft))
+                           .onError {
+                             case OutOfPhlogistonsError =>
+                               costAccountingAlg.set(phloLeft.copy(cost = Cost(0)))
+                           }
+                (phlos, matchResult) = result
+                // we can set it, if we used more than was available any next
+                // get() call will return negative balance and `charge` call will fail
+                _ <- costAccountingAlg.set(phlos)
                 res <- matchResult match {
                         case None =>
                           Applicative[M].pure(Left((target, caseRem)))
@@ -650,11 +661,19 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
-            (phlos, matchResult) = SpatialMatcher
-              .spatialMatch(substTarget, substPattern)
-              .runWithCost(CostAccount(0))
-
-            _ <- costAccountingAlg.charge(phlos.cost)
+            // similarly to a case in the spatial matcher of the `Receive`
+            phloLeft <- costAccountingAlg.get()
+            result <- Sync[M]
+                       .fromEither(
+                         SpatialMatcher
+                           .spatialMatch(substTarget, substPattern)
+                           .runWithCost(phloLeft))
+                       .onError {
+                         case OutOfPhlogistonsError =>
+                           costAccountingAlg.set(phloLeft.copy(cost = Cost(0)))
+                       }
+            (phlos, matchResult) = result
+            _                    <- costAccountingAlg.set(phlos)
           } yield GBool(matchResult.isDefined)
 
         case EPercentPercentBody(EPercentPercent(p1, p2)) =>
