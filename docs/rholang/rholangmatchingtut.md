@@ -13,7 +13,7 @@ The first is that a program cannot have any free variables. It also can't have a
 The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, a join, a logical connective, etc unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, joins, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
 
     1 match for( x <- @Nil ){ Nil } {
-    2     for( x <- y )
+    2     for( x <- y ){ Nil } => { y!(Nil) }
     3 }
 
 *will* match, returning `@Nil!(Nil)`, but
