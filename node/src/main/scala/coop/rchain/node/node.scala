@@ -336,9 +336,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaPort = port - 100 // TODO LOL :)
-    kademliaRPC  = effects.kademliaRPC(kademliaPort)(scheduler, metrics, log)
-    initPeer     = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    kademliaRPC = effects.kademliaRPC(conf.server.kademliaPort)(scheduler, metrics, log)
+    initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
                                                                       time,

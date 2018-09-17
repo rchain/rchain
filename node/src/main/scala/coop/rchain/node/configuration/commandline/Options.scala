@@ -160,6 +160,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val httpPort =
       opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
+    val kademliaPort =
+      opt[Int](descr = "Kademlia port used for node discovery based on Kademlia algorithm")
+
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
