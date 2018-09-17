@@ -494,4 +494,131 @@ object implicits {
           case _ => BitSet()
         }
     }
+
+  implicit val ChannelIsForgeable: IsForgeable[Channel] =
+    new IsForgeable[Channel] {
+      def isForgeable(chan: Channel) =
+        chan.channelInstance match {
+          case Quote(p) => ParIsForgeable(p)
+          case _        => true
+        }
+    }
+
+  implicit val ParIsForgeable: IsForgeable[Par] =
+    new IsForgeable[Par] {
+      def isForgeable(par: Par) =
+        par.ids.isEmpty &&
+          par.sends.forall(SendIsForgeable.apply) &&
+          par.receives.forall(ReceiveIsForgeable.apply) &&
+          par.news.forall(NewIsForgeable.apply) &&
+          par.exprs.forall(ExprIsForgeable.apply) &&
+          par.matches.forall(MatchIsForgeable.apply) &&
+          par.bundles.forall(BundleIsForgeable.apply) &&
+          par.connectives.forall(ConnectiveIsForgeable.apply)
+    }
+
+  implicit val SendIsForgeable: IsForgeable[Send] =
+    new IsForgeable[Send] {
+      def isForgeable(send: Send) =
+        ChannelIsForgeable(send.chan) &&
+          send.data.forall(ParIsForgeable.apply)
+    }
+
+  implicit val ReceiveIsForgeable: IsForgeable[Receive] =
+    new IsForgeable[Receive] {
+      def isForgeable(receive: Receive) =
+        ParIsForgeable(receive.body) &&
+          receive.binds.forall(ReceiveBindIsForgeable.apply)
+    }
+
+  implicit val ReceiveBindIsForgeable: IsForgeable[ReceiveBind] =
+    new IsForgeable[ReceiveBind] {
+      def isForgeable(receiveBind: ReceiveBind) =
+        ChannelIsForgeable(receiveBind.source) &&
+          receiveBind.patterns.forall(ChannelIsForgeable.apply)
+    }
+
+  implicit val NewIsForgeable: IsForgeable[New] =
+    new IsForgeable[New] {
+      def isForgeable(neu: New) =
+        ParIsForgeable(neu.p)
+    }
+
+  implicit val ExprIsForgeable: IsForgeable[Expr] =
+    new IsForgeable[Expr] {
+      def isForgeable(expr: Expr) =
+        expr.exprInstance match {
+          case GBool(_)      => true
+          case GInt(_)       => true
+          case GString(_)    => true
+          case GUri(_)       => true
+          case GByteArray(_) => true
+          case EListBody(e)  => e.ps.forall(ParIsForgeable.apply)
+          case ETupleBody(e) => e.ps.forall(ParIsForgeable.apply)
+          case ESetBody(e)   => e.ps.forall(ParIsForgeable.apply)
+          case EMapBody(e) =>
+            e.ps.forall {
+              case (k, v) =>
+                ParIsForgeable(k) && ParIsForgeable(v)
+            }
+          case EVarBody(_)                => true
+          case EEvalBody(chan)            => ChannelIsForgeable(chan)
+          case ENotBody(ENot(p))          => ParIsForgeable(p)
+          case ENegBody(ENeg(p))          => ParIsForgeable(p)
+          case EMultBody(EMult(p1, p2))   => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EDivBody(EDiv(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EPlusBody(EPlus(p1, p2))   => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EMinusBody(EMinus(p1, p2)) => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case ELtBody(ELt(p1, p2))       => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case ELteBody(ELte(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EGtBody(EGt(p1, p2))       => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EGteBody(EGte(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EEqBody(EEq(p1, p2))       => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case ENeqBody(ENeq(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EAndBody(EAnd(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EOrBody(EOr(p1, p2))       => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EMethodBody(e) =>
+            ParIsForgeable(e.target) && e.arguments.forall(ParIsForgeable.apply)
+          case EMatchesBody(EMatches(target, pattern)) =>
+            ParIsForgeable(target) && ParIsForgeable(pattern)
+          case EPercentPercentBody(EPercentPercent(p1, p2)) =>
+            ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EPlusPlusBody(EPlusPlus(p1, p2))     => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case EMinusMinusBody(EMinusMinus(p1, p2)) => ParIsForgeable(p1) && ParIsForgeable(p2)
+          case ExprInstance.Empty                   => true
+        }
+    }
+  implicit val MatchIsForgeable: IsForgeable[Match] =
+    new IsForgeable[Match] {
+      def isForgeable(mat: Match) =
+        ParIsForgeable(mat.target) && mat.cases.forall(MatchCaseIsForgeable.apply)
+    }
+
+  implicit val MatchCaseIsForgeable: IsForgeable[MatchCase] =
+    new IsForgeable[MatchCase] {
+      def isForgeable(mc: MatchCase) =
+        ParIsForgeable(mc.pattern) && ParIsForgeable(mc.source)
+    }
+
+  implicit val BundleIsForgeable: IsForgeable[Bundle] =
+    new IsForgeable[Bundle] {
+      def isForgeable(bundle: Bundle) = ParIsForgeable(bundle.body)
+    }
+
+  implicit val ConnectiveIsForgeable: IsForgeable[Connective] =
+    new IsForgeable[Connective] {
+      def isForgeable(conn: Connective) =
+        conn.connectiveInstance match {
+          case ConnAndBody(body)        => body.ps.forall(ParIsForgeable.apply)
+          case ConnOrBody(body)         => body.ps.forall(ParIsForgeable.apply)
+          case ConnNotBody(body)        => ParIsForgeable(body)
+          case VarRefBody(_)            => true
+          case _: ConnBool              => true
+          case _: ConnInt               => true
+          case _: ConnString            => true
+          case _: ConnUri               => true
+          case _: ConnByteArray         => true
+          case ConnectiveInstance.Empty => true
+        }
+    }
 }
