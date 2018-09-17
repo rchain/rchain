@@ -746,8 +746,7 @@ class NamePrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter(0, 1).buildString(
         NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value.chan)
-    result shouldBe
-      "@{*x0 | *x0}".stripMargin
+    result shouldBe "@{*x0 | *x0}"
   }
 
 }
