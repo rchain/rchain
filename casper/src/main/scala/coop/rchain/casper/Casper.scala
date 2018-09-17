@@ -70,11 +70,12 @@ sealed abstract class MultiParentCasperInstances {
     val genesisBonds          = ProtoUtil.bonds(genesis)
     val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
     val dag = BlockDag.empty
-      .copy(latestMessages = initialLatestMessages, topoSort = Vector(Vector(genesis.blockHash)))
+      .copy(latestMessages = initialLatestMessages,
+            dataLookup = Map(genesis.blockHash -> BlockMetadata.fromBlock(genesis)),
+            topoSort = Vector(Vector(genesis.blockHash)))
     for {
       validateBlockCheckpointResult <- InterpreterUtil
                                         .validateBlockCheckpoint[F](
-                                          genesis,
                                           genesis,
                                           dag,
                                           Set[StateHash](runtimeManager.emptyStateHash),

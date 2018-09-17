@@ -287,7 +287,6 @@ class MultiParentCasperImpl[
         for {
           possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](p,
                                                                                   r,
-                                                                                  genesis,
                                                                                   _blockDag.get,
                                                                                   knownStateHashes,
                                                                                   runtimeManager)
@@ -330,7 +329,6 @@ class MultiParentCasperImpl[
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](b,
-                                                                 genesis,
                                                                  dag,
                                                                  emptyStateHash,
                                                                  runtimeManager,
@@ -459,7 +457,8 @@ class MultiParentCasperImpl[
       _blockDag.update(bd => {
         val hash = block.blockHash
 
-        val updatedSort = TopologicalSortUtil.update(bd.topoSort, bd.sortOffset, block)
+        val updatedSort   = TopologicalSortUtil.update(bd.topoSort, bd.sortOffset, block)
+        val updatedLookup = bd.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
 
         //add current block as new child to each of its parents
         val newChildMap = parentHashes(block).foldLeft(bd.childMap) {
@@ -482,6 +481,7 @@ class MultiParentCasperImpl[
             .updated(block.sender, toLatestMessageHashes(block.justifications)),
           childMap = newChildMap,
           currentSeqNum = newSeqNum,
+          dataLookup = updatedLookup,
           topoSort = updatedSort
         )
       })

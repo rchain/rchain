@@ -31,7 +31,6 @@ object InterpreterUtil {
   //does not match the computed hash based on the deploys
   def validateBlockCheckpoint[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
@@ -42,7 +41,6 @@ object InterpreterUtil {
     for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
       parentsPostStateResult <- computeParentsPostState[F](parents,
-                                                           genesis,
                                                            dag,
                                                            knownStateHashes,
                                                            runtimeManager)
@@ -112,13 +110,12 @@ object InterpreterUtil {
   def computeDeploysCheckpoint[F[_]: Monad: BlockStore](
       parents: Seq[BlockMessage],
       deploys: Seq[Deploy],
-      genesis: BlockMessage,
       dag: BlockDag,
       knownStateHashes: Set[StateHash],
       runtimeManager: RuntimeManager)(implicit scheduler: Scheduler)
     : F[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])], Set[StateHash])] =
     for {
-      cpps                                       <- computeParentsPostState[F](parents, genesis, dag, knownStateHashes, runtimeManager)
+      cpps                                       <- computeParentsPostState[F](parents, dag, knownStateHashes, runtimeManager)
       (possiblePreStateHash, updatedStateHashes) = cpps
     } yield
       possiblePreStateHash match {
@@ -131,7 +128,6 @@ object InterpreterUtil {
       }
 
   private def computeParentsPostState[F[_]: Monad: BlockStore](parents: Seq[BlockMessage],
-                                                               genesis: BlockMessage,
                                                                dag: BlockDag,
                                                                knownStateHashes: Set[StateHash],
                                                                runtimeManager: RuntimeManager)(
@@ -152,36 +148,31 @@ object InterpreterUtil {
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
-      //made in all histories since the greatest
-      //common ancestor in order to reach the current
-      //state.
+      //made in all of the branches of the DAG being
+      //merged. This is done by computing uncommon ancestors
+      //and applying the deploys in those blocks.
+      implicit val ordering           = BlockDag.deriveOrdering(dag)
+      val indexedParents              = parents.toVector.map(b => dag.dataLookup(b.blockHash))
+      val uncommonAncestors           = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
+      val (initParent, initStateHash) = parentTuplespaces.head
+      assert(
+        knownStateHashes.contains(initStateHash),
+        s"We should have already computed parent state hash when we added the parent tuplespace hash ${buildString(initStateHash)} to our blockDAG."
+      )
+
+      val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
+      //filter out blocks that already included by starting from the chosen initParent
+      val blocksToApply = uncommonAncestors
+        .filterNot { case (_, set) => set.contains(initIndex) }
+        .keys
+        .toVector
+        .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
+
       for {
-        gca <- parents.toList.foldM(parents.head) {
-                case (gca, parent) =>
-                  DagOperations.greatestCommonAncestorF[F](gca, parent, genesis, dag)
-              }
-
-        gcaStateHash = ProtoUtil.tuplespace(gca).get
-        _ = assert(
-          knownStateHashes.contains(gcaStateHash),
-          "We should have already computed state hash for GCA when we added the GCA to our blockDAG.")
-
-        // TODO: Have proper merge of tuplespaces instead of recomputing.
-        ancestors <- DagOperations
-                      .bfTraverseF[F, BlockMessage](parentTuplespaces.map(_._1).toList) { block =>
-                        if (block == gca) List.empty[BlockMessage].pure[F]
-                        else ProtoUtil.unsafeGetParents[F](block)
-                      }
-                      .filter(_ != gca) //do not include gca deploys
-                      .toList
-
-        deploys = ancestors
-          .flatMap(ProtoUtil.deploys(_).reverse.flatMap(ProcessedDeployUtil.toInternal))
-          .toIndexedSeq
-          .reverse
-
+        blocks  <- blocksToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+        deploys = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
       } yield
-        runtimeManager.replayComputeState(gcaStateHash, deploys) match {
+        runtimeManager.replayComputeState(initStateHash, deploys) match {
           case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
           case Left((_, status)) =>
             val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
@@ -209,7 +200,6 @@ object InterpreterUtil {
       result <- computeDeploysCheckpoint[F](
                  parents,
                  deploys,
-                 genesis,
                  dag,
                  knownStateHashes,
                  runtimeManager

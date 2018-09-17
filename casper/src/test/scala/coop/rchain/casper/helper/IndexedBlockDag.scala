@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import coop.rchain.casper.BlockDag
+import coop.rchain.casper.{BlockDag, BlockMetadata}
 import coop.rchain.casper.BlockDag.LatestMessages
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.BlockMessage
@@ -11,6 +11,7 @@ case class IndexedBlockDag(dag: BlockDag, idToBlocks: Map[Int, BlockMessage], cu
   def latestMessagesOfLatestMessages: Map[Validator, LatestMessages] =
     dag.latestMessagesOfLatestMessages
   def currentSeqNum: Map[Validator, Int]  = dag.currentSeqNum
+  def dataLookup: BlockMetadata.Lookup    = dag.dataLookup
   def topoSort: Vector[Vector[BlockHash]] = dag.topoSort
   def sortOffset: Long                    = dag.sortOffset
 
@@ -30,6 +31,7 @@ object IndexedBlockDag {
             latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
             currentId: Int,
             currentSeqNum: Map[Validator, Int],
+            dataLookup: BlockMetadata.Lookup,
             topoSort: Vector[Vector[BlockHash]],
             sortOffset: Long): IndexedBlockDag = IndexedBlockDag(
     BlockDag(
@@ -37,6 +39,7 @@ object IndexedBlockDag {
       latestMessages,
       latestMessagesOfLatestMessages,
       currentSeqNum,
+      dataLookup,
       topoSort,
       sortOffset
     ),
