@@ -18,12 +18,12 @@ trait LMDBOps extends CloseOps {
   protected[rspace] type Transaction = Txn[ByteBuffer]
 
   private[rspace] def createTxnRead() = {
-    failIfClosed()
+    countTransactionOpen()
     env.txnRead
   }
 
   private[rspace] def createTxnWrite() = {
-    failIfClosed()
+    countTransactionOpen()
     env.txnWrite
   }
 
@@ -42,17 +42,12 @@ trait LMDBOps extends CloseOps {
   private[rspace] def withTxn[R](txn: Txn[ByteBuffer])(f: Txn[ByteBuffer] => R): R =
     try {
       val ret: R = f(txn)
-      failIfClosed()
       txn.commit()
       ret
     } catch {
-      case rscex: RSpaceClosedException =>
-        throw rscex
       case ex: Throwable =>
         try {
-          if(isDbOpen) {
-            txn.abort()
-          }
+          txn.abort()
         } catch {
           //  /**
           //   * Commits this transaction.
@@ -72,9 +67,7 @@ trait LMDBOps extends CloseOps {
           //  }
           case ex: NotReadyException =>
             ex.printStackTrace()
-            if(isDbOpen) {
-              TxnOps.manuallyAbortTxn(txn)
-            }
+            TxnOps.manuallyAbortTxn(txn)
           // due to the way LMDBjava tries to handle txn commit
           // IF the DB runs out of space AND this occurs while trying to commit a txn (2)
           // the internal java state (STATE in Txn) will be set to DONE (1) before the Txn is committed
@@ -86,9 +79,9 @@ trait LMDBOps extends CloseOps {
         throw ex
     } finally {
       updateGauges()
-      if(isDbOpen) {
-        txn.close()
-      }
+      //if db closed, the txn is already invalid
+      txn.close()
+      countTransactionClose()
     }
 
   /** The methods:
