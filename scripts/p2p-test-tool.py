@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 # This is a simple script to help with p2p network boot/testing.
 # This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
