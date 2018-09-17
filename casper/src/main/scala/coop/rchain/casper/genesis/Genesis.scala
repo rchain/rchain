@@ -14,7 +14,7 @@ import coop.rchain.casper.genesis.contracts.{
   ProofOfStakeValidator
 }
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil.{blockHeader, compiledSourceDeploy, unsignedBlockProto}
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{EventConverter, Sorting}
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -80,13 +80,20 @@ object Genesis {
       processedDeploys.filterNot(_.status.isFailed).map(ProcessedDeployUtil.fromInternal)
     val sortedDeploys = blockDeploys.map(d => d.copy(log = d.log.sortBy(_.toByteArray)))
 
-    val body = Body(postState = stateWithContracts, deploys = sortedDeploys)
+    val body     = Body(postState = stateWithContracts, deploys = sortedDeploys)
+    val bodySafe = Body.Safe.create(body).get
 
-    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
+    val header     = blockHeader(body, List.empty[ByteString], version, timestamp)
+    val headerSafe = Header.Safe.create(header).get
 
-    val block = unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
+    val blockSafe = unsignedBlockProtoSafe(
+      bodySafe,
+      headerSafe,
+      List.empty[Justification],
+      initial.shardId
+    )
 
-    BlockMessage.Safe.create(block).getOrElse(sys.error("Genesis is malformed"))
+    blockSafe
   }
 
   def withoutContracts(bonds: Map[Array[Byte], Int],

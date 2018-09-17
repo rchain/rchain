@@ -292,11 +292,11 @@ class MultiParentCasperImpl[
                        val body = Body()
                          .withPostState(postState)
                          .withDeploys(persistableDeploys.map(ProcessedDeployUtil.fromInternal))
-                       val header = blockHeader(body, p.map(_.blockHash), version, now)
-                       val block  = unsignedBlockProto(body, header, justifications, shardId)
-                       val blockSafe = BlockMessage.Safe
-                         .create(block)
-                         .getOrElse(sys.error("Created block is malformed"))
+                       val bodySafe   = Body.Safe.create(body).get
+                       val header     = blockHeader(body, p.map(_.blockHash), version, now)
+                       val headerSafe = Header.Safe.create(header).get
+                       val blockSafe =
+                         unsignedBlockProtoSafe(bodySafe, headerSafe, justifications, shardId)
                        CreateBlockStatus.created(blockSafe)
                      })
                }

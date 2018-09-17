@@ -233,9 +233,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                                            capserHandlerInternal)
                  case Some(approvedBlock) =>
                    val blockMessage = approvedBlock.candidate.flatMap(_.block).get
-                   val blockSafe = BlockMessage.Safe
-                     .create(blockMessage)
-                     .getOrElse(sys.error("Approved block is malformed"))
+                   val blockSafe    = BlockMessage.Safe.create(blockMessage).get
                    for {
                      _ <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
                      casper <- MultiParentCasper
@@ -477,11 +475,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                  for {
                    _            <- Log[F].info("Valid ApprovedBlock received!")
                    blockMessage = b.candidate.flatMap(_.block).get
-                   blockSafe = BlockMessage.Safe
-                     .create(blockMessage)
-                     .getOrElse(sys.error("Approved block is malformed"))
-                   _ <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
-                   _ <- LastApprovedBlock[F].set(b)
+                   blockSafe    = BlockMessage.Safe.create(blockMessage).get
+                   _            <- BlockStore[F].put(blockMessage.blockHash, blockSafe)
+                   _            <- LastApprovedBlock[F].set(b)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](runtimeManager, validatorId, blockSafe, shardId)
                  } yield Option(casper)

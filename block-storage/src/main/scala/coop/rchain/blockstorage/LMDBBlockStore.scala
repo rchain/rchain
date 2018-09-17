@@ -12,6 +12,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics
+import coop.rchain.shared.Log.NOPLog
+import coop.rchain.shared.{Log, LogSource}
 import org.lmdbjava._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.Txn.NotReadyException
@@ -20,8 +22,10 @@ import coop.rchain.shared.Resources.withResource
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
     syncF: Sync[F],
-    metricsF: Metrics[F])
+    metricsF: Metrics[F],
+    logF: Log[F])
     extends BlockStore[F] {
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   import LMDBBlockStore.MetricNamePrefix
 
@@ -65,6 +69,15 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   private[this] def withReadTxn[R](f: Txn[ByteBuffer] => R): F[R] =
     withTxn(env.txnRead())(f)
 
+  private[this] def restoreSafe(block: BlockMessage): F[Option[BlockMessage.Safe]] =
+    BlockMessage.Safe.create(block) match {
+      case Some(blockSafe) => Option(blockSafe).pure[F]
+      case None =>
+        for {
+          _ <- Log[F].error("Stored block is malformed")
+        } yield None
+    }
+
   def put(f: => (BlockHash, BlockMessage.Safe)): F[Unit] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
@@ -79,35 +92,32 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def get(blockHash: BlockHash): F[Option[BlockMessage.Safe]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
-      ret <- withReadTxn { txn =>
-              Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(
-                r =>
-                  BlockMessage.Safe
-                    .create(
-                      BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput())
-                    )
-                    .getOrElse(sys.error("Stored block is malformed")))
-            }
+      blockOpt <- withReadTxn { txn =>
+                   Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
+                     BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+                 }
+      ret <- blockOpt.flatTraverse(block => restoreSafe(block))
     } yield ret
 
   override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage.Safe)]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "find")
-      ret <- withReadTxn { txn =>
-              withResource(blocks.iterate(txn)) { iterator =>
-                iterator.asScala
-                  .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                  .withFilter { case (key, _) => p(key) }
-                  .map {
-                    case (key, value) =>
-                      val msg = BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
-                      val blockSafe = BlockMessage.Safe
-                        .create(msg)
-                        .getOrElse(sys.error("Stored block is malformed"))
-                      (key, blockSafe)
+      blockMsgs <- withReadTxn { txn =>
+                    withResource(blocks.iterate(txn)) { iterator =>
+                      iterator.asScala
+                        .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                        .withFilter { case (key, _) => p(key) }
+                        .map {
+                          case (key, value) =>
+                            val msg =
+                              BlockMessage.parseFrom(ByteString.copyFrom(value).newCodedInput())
+                            (key, msg)
+                        }
+                        .toList
+                    }
                   }
-                  .toList
-              }
+      ret <- blockMsgs.traverseFilter {
+              case (key, block) => restoreSafe(block).map(_.map(key -> _))
             }
     } yield ret
 
@@ -116,21 +126,22 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
   def asMap(): F[Map[BlockHash, BlockMessage.Safe]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
-      ret <- withReadTxn { txn =>
-              blocks
-                .iterate(txn)
-                .asScala
-                .foldLeft(Map.empty[BlockHash, BlockMessage.Safe]) {
-                  (acc: Map[BlockHash, BlockMessage.Safe], x: CursorIterator.KeyVal[ByteBuffer]) =>
-                    val hash = ByteString.copyFrom(x.key())
-                    val msg  = BlockMessage.parseFrom(ByteString.copyFrom(x.`val`()).newCodedInput())
-                    val blockSafe = BlockMessage.Safe
-                      .create(msg)
-                      .getOrElse(sys.error("Stored block is malformed"))
-                    acc.updated(hash, blockSafe)
-                }
+      blockMap <- withReadTxn { txn =>
+                   blocks
+                     .iterate(txn)
+                     .asScala
+                     .foldLeft(Map.empty[BlockHash, BlockMessage]) {
+                       (acc: Map[BlockHash, BlockMessage], x: CursorIterator.KeyVal[ByteBuffer]) =>
+                         val hash = ByteString.copyFrom(x.key())
+                         val msg =
+                           BlockMessage.parseFrom(ByteString.copyFrom(x.`val`()).newCodedInput())
+                         acc.updated(hash, msg)
+                     }
+                 }
+      ret <- blockMap.toList.traverseFilter {
+              case (key, block) => restoreSafe(block).map(_.map(key -> _))
             }
-    } yield ret
+    } yield ret.toMap
 
   def clear(): F[Unit] =
     for {
@@ -155,7 +166,8 @@ object LMDBBlockStore {
 
   def create[F[_]](config: Config)(implicit
                                    syncF: Sync[F],
-                                   metricsF: Metrics[F]): LMDBBlockStore[F] = {
+                                   metricsF: Metrics[F],
+                                   logF: Log[F]): LMDBBlockStore[F] = {
     if (Files.notExists(config.path)) Files.createDirectories(config.path)
 
     val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
@@ -172,7 +184,8 @@ object LMDBBlockStore {
 
   def create[F[_]](env: Env[ByteBuffer], path: Path)(implicit
                                                      syncF: Sync[F],
-                                                     metricsF: Metrics[F]): BlockStore[F] = {
+                                                     metricsF: Metrics[F],
+                                                     logF: Log[F]): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
     new LMDBBlockStore[F](env, path, blocks)
   }
@@ -181,6 +194,7 @@ object LMDBBlockStore {
     import coop.rchain.metrics.Metrics.MetricsNOP
     import coop.rchain.catscontrib.effect.implicits._
     implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
-    LMDBBlockStore.create(env, path)(syncId, metrics)
+    implicit val logs: Log[Id]        = new NOPLog[Id]()(syncId)
+    LMDBBlockStore.create(env, path)(syncId, metrics, logs)
   }
 }

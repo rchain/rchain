@@ -352,7 +352,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       syncEffect,
-      Metrics.eitherT(Monad[Task], metrics))
+      Metrics.eitherT(Monad[Task], metrics),
+      Log.eitherTLog(Monad[Task], log))
 
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)

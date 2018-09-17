@@ -284,6 +284,21 @@ object ProtoUtil {
       .withShardId(shardId)
   }
 
+  def unsignedBlockProtoSafe(body: Body.Safe,
+                             header: Header.Safe,
+                             justifications: Seq[Justification],
+                             shardId: String): BlockMessage.Safe = {
+    val hash = hashUnsignedBlock(header.underlying, justifications)
+
+    val block = BlockMessage()
+      .withBlockHash(hash)
+      .withHeader(header.underlying)
+      .withBody(body.underlying)
+      .withJustifications(justifications)
+      .withShardId(shardId)
+    BlockMessage.Safe.create(block).get
+  }
+
   def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
     val items = header.toByteArray +: justifications.map(_.toByteArray)
     hashByteArrays(items: _*)
@@ -312,14 +327,14 @@ object ProtoUtil {
                 shardId: String): BlockMessage.Safe = {
 
     val header = blockSafe.header
-    val block  = blockSafe.underlying
 
     val sender = ByteString.copyFrom(pk)
     val seqNum = dag.currentSeqNum.getOrElse(sender, 0) + 1
 
-    val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
+    val blockHash =
+      hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, blockSafe.extraBytes)
 
-    val sigAlgorithmBlock = block.withSigAlgorithm(sigAlgorithm)
+    val sigAlgorithmBlock = blockSafe.withSigAlgorithm(sigAlgorithm)
 
     val sig = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
 
@@ -330,9 +345,7 @@ object ProtoUtil {
       .withBlockHash(blockHash)
       .withShardId(shardId)
 
-    BlockMessage.Safe
-      .create(signedBlock)
-      .getOrElse(sys.error("A valid block became malformed after signing"))
+    signedBlock
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
