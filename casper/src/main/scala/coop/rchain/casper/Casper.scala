@@ -69,7 +69,7 @@ sealed abstract class MultiParentCasperInstances {
       shardId: String)(implicit scheduler: Scheduler): F[MultiParentCasper[F]] = {
     val genesisBonds          = ProtoUtil.bonds(genesis)
     val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
-    val dag                   = BlockDag().copy(latestMessages = initialLatestMessages)
+    val dag                   = BlockDag.empty.copy(latestMessages = initialLatestMessages)
     for {
       validateBlockCheckpointResult <- InterpreterUtil
                                         .validateBlockCheckpoint[F](

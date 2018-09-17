@@ -166,7 +166,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
                                              rchainShardId,
                                              Some(System.currentTimeMillis()))
     BlockStore[Id].put(genesis.blockHash, genesis)
-    val blockDag = BlockDag()
+    val blockDag = BlockDag.empty
 
     val (maybePostGenesisStateHash, _) = InterpreterUtil
       .validateBlockCheckpoint[Id](

@@ -115,7 +115,7 @@ object BlockAPI {
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         sortedListeningNames <- listeningNames.channels.toList
-                                     .traverse(channelSortable.sortMatch[F](_).map(_.term))
+                                 .traverse(channelSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getContinuationsWithBlockInfo[F](runtimeManager,
                                                                        sortedListeningNames,

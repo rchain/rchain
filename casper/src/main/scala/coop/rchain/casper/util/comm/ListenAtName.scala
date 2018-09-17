@@ -57,7 +57,7 @@ object ListenAtName {
 
     def loop: F[A] =
       for {
-        _    <- Timer[F].sleep(1.second)
+        _    <- implicitly[Timer[F]].sleep(1.second)
         data <- retrieve
         res <- if (breakCond(data)) data.pure[F]
               else loop

@@ -8,6 +8,8 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.{ISpace, IStore}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -24,9 +26,8 @@ object SystemProcesses {
       Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  private implicit class ProduceOps(
-      res: Id[
-        Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+  private implicit class ProduceOps(res: Id[
+    Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
     def foldResult(
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
