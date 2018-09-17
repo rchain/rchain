@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing._
 
+// TODO remove
 /**
   * Utility functions for working with protocol buffers.
   */

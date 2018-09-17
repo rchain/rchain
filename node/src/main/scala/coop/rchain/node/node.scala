@@ -256,12 +256,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val handleCommunication = (pm: Protocol) =>
-      NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
-        case handled       => handled.pure[Effect]
-    }
-
     val info: Effect[Unit] = for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
@@ -281,8 +275,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(handleCommunication)
-      ndFiber <- NodeDiscovery[Task].discover.forever.fork.toEffect
+      _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
+      _       <- NodeDiscovery[Task].discover.fork.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- loop.forever
     } yield ()
@@ -342,8 +336,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
-    initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    kademliaPort = port - 100 // TODO LOL :)
+    kademliaRPC  = effects.kademliaRPC(kademliaPort)(scheduler, metrics, log)
+    initPeer     = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
                                                                       time,

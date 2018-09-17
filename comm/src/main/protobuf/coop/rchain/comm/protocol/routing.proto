@@ -46,6 +46,11 @@ message Protocol {
     }
 }
 
+service KademliaRPCService {
+  rpc SendPing (Ping) returns (Pong) {}
+  rpc SendLookup (Lookup) returns (LookupResponse) {}
+}
+
 service TransportLayer {
   rpc Send (TLRequest) returns (TLResponse) {}
 }

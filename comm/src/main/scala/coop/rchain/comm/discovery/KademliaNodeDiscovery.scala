@@ -2,7 +2,7 @@ package coop.rchain.comm.discovery
 
 import cats._
 import cats.implicits._
-import coop.rchain.catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
@@ -34,18 +34,39 @@ private[discovery] class KademliaNodeDiscovery[
 
   private val id: NodeIdentifier = src.id
 
+  // TODO inline usage
   private[discovery] def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- table.updateLastSeen[F](peer)
       _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
     } yield ()
 
-  def discover: F[Unit] =
+  private def pingHandler: F[Pong] =
     for {
+      _ <- Metrics[F].incrementCounter("ping-recv-count")
+    } yield Pong()
+
+  private def lookupHandler(lookup: Lookup): F[LookupResponse] = {
+    val id = lookup.id.toByteArray
+
+    for {
+      peers <- Capture[F].capture(table.lookup(id))
+      _     <- Metrics[F].incrementCounter("lookup-recv-count")
+    } yield LookupResponse().withNodes(peers.map(ProtocolHelper.node(_)))
+  }
+
+  def discover: F[Unit] = {
+
+    val initRPC = KademliaRPC[F].receive(kp(pingHandler), lookupHandler)
+
+    val findNewAndAdd = for {
       _     <- Time[F].sleep(5000)
       peers <- findMorePeers(10).map(_.toList)
       _     <- peers.traverse(addNode)
     } yield ()
+
+    initRPC *> findNewAndAdd.forever
+  }
 
   /**
     * Return up to `limit` candidate peers.
@@ -90,32 +111,4 @@ private[discovery] class KademliaNodeDiscovery[
 
   def peers: F[Seq[PeerNode]] = Capture[F].capture(table.peers)
 
-  def handleCommunications: Protocol => F[CommunicationResponse] =
-    protocol =>
-      ProtocolHelper.sender(protocol).fold(notHandled(senderNotAvailable).pure[F]) { sender =>
-        table.updateLastSeen[F](sender) >>= kp(protocol match {
-          case Protocol(_, Protocol.Message.Ping(_))        => handlePing
-          case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
-          case _                                            => notHandled(unexpectedMessage(protocol.toString)).pure[F]
-        })
-    }
-
-  private def handlePing: F[CommunicationResponse] =
-    for {
-      _ <- Metrics[F].incrementCounter("ping-recv-count")
-    } yield handledWithMessage(ProtocolHelper.pong(src))
-
-  /**
-    * Validate incoming LOOKUP message and return an answering
-    * LOOKUP_RESPONSE.
-    */
-  private def handleLookup(sender: PeerNode, lookup: Lookup): F[CommunicationResponse] = {
-    val id = lookup.id.toByteArray
-
-    for {
-      peers          <- Capture[F].capture(table.lookup(id))
-      lookupResponse = ProtocolHelper.lookupResponse(src, peers)
-      _              <- Metrics[F].incrementCounter("lookup-recv-count")
-    } yield handledWithMessage(lookupResponse)
-  }
 }

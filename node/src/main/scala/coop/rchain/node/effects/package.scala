@@ -46,33 +46,12 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
+  def kademliaRPC(port: Int)(
       implicit
+      scheduler: Scheduler,
       metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
-    new KademliaRPC[Task] {
-      def ping(node: PeerNode): Task[Boolean] =
-        for {
-          _   <- Metrics[Task].incrementCounter("protocol-ping-sends")
-          req = ProtocolHelper.ping(src)
-          res <- TransportLayer[Task].roundTrip(node, req, timeout)
-        } yield res.toOption.isDefined
-
-      def lookup(key: Seq[Byte], remoteNode: PeerNode): Task[Seq[PeerNode]] =
-        for {
-          _   <- Metrics[Task].incrementCounter("protocol-lookup-send")
-          req = ProtocolHelper.lookup(src, key)
-          r <- TransportLayer[Task]
-                .roundTrip(remoteNode, req, timeout)
-                .map(_.toOption
-                  .map {
-                    case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                      lr.nodes.map(ProtocolHelper.toPeerNode)
-                    case _ => Seq()
-                  }
-                  .getOrElse(Seq()))
-        } yield r
-    }
+      log: Log[Task]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(port)
 
   def tcpTransportLayer(host: String,
                         port: Int,
