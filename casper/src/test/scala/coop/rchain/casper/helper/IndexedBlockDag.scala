@@ -17,7 +17,7 @@ case class IndexedBlockDag(dag: BlockDag, idToBlocks: Map[Int, BlockMessage], cu
   def withLatestMessages(latestMessages: Map[Validator, BlockMessage]): IndexedBlockDag =
     this.copy(dag = dag.copy(latestMessages = latestMessages))
 
-  def withOffset(offset: Long): IndexedBlockDag = 
+  def withOffset(offset: Long): IndexedBlockDag =
     this.copy(dag = dag.copy(sortOffset = offset))
 }
 
