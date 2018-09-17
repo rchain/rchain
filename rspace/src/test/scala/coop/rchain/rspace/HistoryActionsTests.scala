@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
-import cats.implicits._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._

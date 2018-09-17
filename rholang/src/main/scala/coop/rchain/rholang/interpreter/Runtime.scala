@@ -17,6 +17,7 @@ import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
@@ -40,11 +41,16 @@ class Runtime private (val reducer: Reduce[Task],
 object Runtime {
 
   type RhoISpace       = CPARK[IdISpace]
+  type RhoPureSpace    = TCPARK[PureRSpace]
   type RhoRSpace       = CPARK[IdISpace]
   type RhoReplayRSpace = CPARK[ReplayRSpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
+
+  type RhoDispatch    = Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  type RhoSysFunction = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatchMap = Map[Long, RhoSysFunction]
 
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
@@ -57,10 +63,41 @@ object Runtime {
       ListChannelWithRandom,
       TaggedContinuation]
 
+  private type TCPARK[F[_[_], _, _, _, _, _, _]] =
+    F[Task,
+      Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation]
+
   type Name      = Par
   type Arity     = Int
   type Remainder = Option[Var]
   type Ref       = Long
+
+  object BodyRefs {
+    val STDOUT: Long                              = 0L
+    val STDOUT_ACK: Long                          = 1L
+    val STDERR: Long                              = 2L
+    val STDERR_ACK: Long                          = 3L
+    val ED25519_VERIFY: Long                      = 4L
+    val SHA256_HASH: Long                         = 5L
+    val KECCAK256_HASH: Long                      = 6L
+    val BLAKE2B256_HASH: Long                     = 7L
+    val SECP256K1_VERIFY: Long                    = 9L
+    val REG_LOOKUP: Long                          = 10L
+    val REG_LOOKUP_CALLBACK: Long                 = 11L
+    val REG_INSERT: Long                          = 12L
+    val REG_INSERT_CALLBACK: Long                 = 13L
+    val REG_DELETE: Long                          = 14L
+    val REG_DELETE_ROOT_CALLBACK: Long            = 15L
+    val REG_DELETE_CALLBACK: Long                 = 16L
+    val REG_PUBLIC_LOOKUP: Long                   = 17L
+    val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
+    val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
+  }
 
   private def introduceSystemProcesses(space: RhoISpace,
                                        replaySpace: RhoISpace,
@@ -113,19 +150,31 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(
-        space: RhoISpace,
-        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]) = Map(
-      0L -> SystemProcesses.stdout,
-      1L -> SystemProcesses.stdoutAck(space, dispatcher),
-      2L -> SystemProcesses.stderr,
-      3L -> SystemProcesses.stderrAck(space, dispatcher),
-      4L -> SystemProcesses.ed25519Verify(space, dispatcher),
-      5L -> SystemProcesses.sha256Hash(space, dispatcher),
-      6L -> SystemProcesses.keccak256Hash(space, dispatcher),
-      7L -> SystemProcesses.blake2b256Hash(space, dispatcher),
-      9L -> SystemProcesses.secp256k1Verify(space, dispatcher)
-    )
+    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch): RhoDispatchMap = {
+      import BodyRefs._
+      val pureSpace: RhoPureSpace = new PureRSpace(space)
+      val registry                = new Registry(pureSpace, dispatcher)
+      Map(
+        STDOUT                     -> SystemProcesses.stdout,
+        STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
+        STDERR                     -> SystemProcesses.stderr,
+        STDERR_ACK                 -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(space, dispatcher),
+        REG_LOOKUP                 -> (registry.lookup(_)),
+        REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
+        REG_INSERT                 -> (registry.insert(_)),
+        REG_INSERT_CALLBACK        -> (registry.insertCallback(_)),
+        REG_DELETE                 -> (registry.delete(_)),
+        REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
+        REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
+        REG_PUBLIC_LOOKUP          -> (registry.publicLookup(_)),
+        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_))
+      )
+    }
 
     def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
@@ -134,29 +183,32 @@ object Runtime {
                                        "rho:io:stderr"    -> byteName(2),
                                        "rho:io:stderrAck" -> byteName(3))
 
-    lazy val dispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+    lazy val dispatchTable: RhoDispatchMap =
       dispatchTableCreator(space, dispatcher)
 
-    lazy val replayDispatchTable: Map[Ref, Seq[ListChannelWithRandom] => Task[Unit]] =
+    lazy val replayDispatchTable: RhoDispatchMap =
       dispatchTableCreator(replaySpace, replayDispatcher)
 
-    lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+    lazy val dispatcher: RhoDispatch =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+    lazy val replayDispatcher: RhoDispatch =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
-    val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = List(
-      (byteName(0), 1, None, 0L),
-      (byteName(1), 2, None, 1L),
-      (byteName(2), 1, None, 2L),
-      (byteName(3), 2, None, 3L),
-      (GString("ed25519Verify"), 4, None, 4L),
-      (GString("sha256Hash"), 2, None, 5L),
-      (GString("keccak256Hash"), 2, None, 6L),
-      (GString("blake2b256Hash"), 2, None, 7L),
-      (GString("secp256k1Verify"), 4, None, 9L)
-    )
+    val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
+      import BodyRefs._
+      List(
+        (byteName(0), 1, None, STDOUT),
+        (byteName(1), 2, None, STDOUT_ACK),
+        (byteName(2), 1, None, STDERR),
+        (byteName(3), 2, None, STDERR_ACK),
+        (GString("ed25519Verify"), 4, None, ED25519_VERIFY),
+        (GString("sha256Hash"), 2, None, SHA256_HASH),
+        (GString("keccak256Hash"), 2, None, KECCAK256_HASH),
+        (GString("blake2b256Hash"), 2, None, BLAKE2B256_HASH),
+        (GString("secp256k1Verify"), 4, None, SECP256K1_VERIFY)
+      )
+    }
 
     val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
       introduceSystemProcesses(space, replaySpace, procDefs)

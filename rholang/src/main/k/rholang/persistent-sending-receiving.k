@@ -1,36 +1,35 @@
 module PERSISTENT-SENDING-RECEIVING
 imports SENDING-RECEIVING
 
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
-// PERSISTENT SENDING AND RECEIVING
-// ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
+// *******************************************************************
+//                 PERSISTENT-SENDING-RECEIVING
+// *******************************************************************
 
 // 1. Persistent sending
 // We create an "out" cell just as we would have previously.
 rule <thread>
-        (<k> C:HigherName!!(P:HigherProcs) </k> => <out> C!!(P) </out>)
-        (.Bag => <OutData> I ; L </OutData> )
+        (<k> C:HigherNamePat!!(P:HigherProcPats) </k> => <Out> C!!(P) </Out>)
+        (.Bag => <OutData> !I:Int ; L:Set </OutData> )
      </thread>
-     <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
-     <GlobalListofOutIds> ... .List => ListItem(I) ... </GlobalListofOutIds>
-     <GlobalListofInIds> L </GlobalListofInIds> [outcreation]
+     <GlobalSetofOutIds> ... .Set => SetItem(!I:Int) </GlobalSetofOutIds>
+     <GlobalSetofInIds> L </GlobalSetofInIds> [outcreation]
 
 // Verify the ID of one is in the list of the other
 // If they are, begin checking if there is a match.
 // Do this without absorbing the "in" cell.
 
-// (a) the "in"'s ID is in the "send"'s list of receives
+// (a) the "in"'s ID is in the "send"'s set of receives
 rule
     <thread>
-        <out> C:HigherName!!(P:HigherProcs) </out>
-        <OutData> I:Int ; L:List </OutData>
+        <Out> C:HigherNamePat!!(P:HigherProcPats) </Out>
+        <OutData> I:Int ; L:Set </OutData>
      </thread>
      // Combine the two threads
      <thread>
-        <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
-        <InData> J ; ListHead:List (ListItem(I) => .) ListTail:List </InData>
+        <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
+        <InData> J ; (SetItem(I) => .Set) SetTail:Set </InData>
         // Import all the information from the out-cell
-        (.Bag => <out> "persistent" </out>)
+        (.Bag => <Out> "persistent" </Out>)
         // Begin checking the match in the k-cell
         (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
         // Keep the body of the listen statement to rewrite as we go along
@@ -40,14 +39,14 @@ rule
 
 // (b) the (persistent) send's ID is in the receive's list of sends
 rule <thread>
-       <out> C:HigherName!!(P:HigherProcs) </out>
-       <OutData> J:Int ; ListHead:List (ListItem(I) => .) ListTail:List </OutData>
+       <Out> C:HigherNamePat!!(P:HigherProcPats) </Out>
+       <OutData> J:Int ; (SetItem(I) => .Set) SetTail:Set </OutData>
     </thread>
     <thread> ...
-       <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
-       <InData> I:Int ; L:List </InData>
+       <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
+       <InData> I:Int ; L:Set </InData>
        // Import all the information from the out-cell
-       (.Bag => <out> "persistent" </out>)
+       (.Bag => <Out> "persistent" </Out>)
        // Begin checking the match in the k-cell
        (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
        // Keep the body of the listen statement to rewrite as we go along
@@ -58,24 +57,24 @@ rule <thread>
 // into their original in- and out-threads.
 rule <thread> ...
         // The trigger
-        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => . </k>
+        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => .K </k>
         // Check to make sure the receive is not persistent
-        <in> for(D:HigherNamePats <- C){ Q:HigherProc } </in>
+        <In> for(D:HigherNamePats <- C){ Q:HigherProcPat } </In>
         // Delete the rest
-        <out> "persistent" => . </out>
-        <subst> B => . </subst>
+        <Out> "persistent" => .K </Out>
+        <subst> B => .K </subst>
     ... </thread>
 
 // When we've finished matching, we're ready to execute Q after having replaced all the
 // variables
 rule <thread>
-        <in> for(D:HigherNamePats <- C:HigherName){ P:HigherProc } => . </in>
-        <InData> I1:Int ; L1:List => . </InData>
-        <out> "persistent" => . </out>
-        <subst> Q:HigherProc  => . </subst>
+        <In> for(D:HigherNamePats <- C:HigherNamePat){ P:HigherProcPat } => .K </In>
+        <InData> I1:Int ; L1:Set => .K </InData>
+        <Out> "persistent" => .K </Out>
+        <subst> Q:HigherProcPat  => .K </subst>
      </thread>
      (.Bag => <thread> <k> Q </k> </thread>)
-     <GlobalListofInIds> ... ListItem(I1) => . ... </GlobalListofInIds>
+     <GlobalSetofInIds> SetItem(I1) => .Set ... </GlobalSetofInIds>
 
 
 // 2. Persistent receiving
@@ -85,14 +84,13 @@ rule <thread>
 // the "in" cell.
 // Other than that, the structure is essentially the same.
 
-// Put a persistent send into its <in> cell, as expected.
-rule <thread> <k> for(D:HigherNamePats <= C){ Q:HigherProc } => . </k>
-       (.Bag => <in> for(D:HigherNamePats <= C){ Q:HigherProc } </in> )
-       (.Bag => <InData> I:Int ; L:List </InData> )
+// Put a persistent send into its <In> cell, as expected.
+rule <thread> <k> for(D:HigherNamePats <= C){ Q:HigherProcPat } => .K </k>
+       (.Bag => <In> for(D:HigherNamePats <= C){ Q:HigherProcPat } </In> )
+       (.Bag => <InData> !I:Int ; L:Set </InData> )
     </thread>
-    <NewIntGenerator> I => I +Int 1 </NewIntGenerator>
-    <GlobalListofOutIds> L </GlobalListofOutIds>
-    <GlobalListofInIds> ... .List => ListItem(I) ... </GlobalListofInIds> [increation]
+    <GlobalSetofOutIds> L </GlobalSetofOutIds>
+    <GlobalSetofInIds> ... .Set => SetItem(!I:Int) </GlobalSetofInIds> [increation]
 
 // Verify the ID of one is in the list of the other
 // If they are, begin checking if there is a match.
@@ -100,27 +98,27 @@ rule <thread> <k> for(D:HigherNamePats <= C){ Q:HigherProc } => . </k>
 
 // (a) the (persistent) in's ID is in the send's list of receives
 rule <thread>
-       <out> C:HigherName!(P:HigherProcs) </out>
-       <OutData> J:Int ; ListHead:List (ListItem(I) => .) ListTail:List </OutData>
+       <Out> C:HigherNamePat!(P:HigherProcPats) </Out>
+       <OutData> J:Int ; (SetItem(I) => .Set) SetTail:Set </OutData>
        (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
        // Tag this ineraction as persistent
-       (.Bag => <in> "persistent" </in>)
+       (.Bag => <In> "persistent" </In>)
        // Keep the body of the listen statement to rewrite as we go along
        (.Bag => <subst> Q </subst>)
     </thread>
     // Since this receive is persistent, instead of deleting it like we do
     // in the normal receive case, we duplicate it so that it stays around.
     <thread>
-       <in> for(D:HigherNamePats <= C){ Q:HigherProc } </in>
-       <InData> I:Int ; L:List </InData>
+       <In> for(D:HigherNamePats <= C){ Q:HigherProcPat } </In>
+       <InData> I:Int ; L:Set </InData>
     </thread>
 
 // (b) the send's ID is in the (persistent) receive's list of sends
 rule <thread> ...
-       <out> C:HigherName!(P:HigherProcs) </out>
-       <OutData> J:Int ; L:List </OutData>
+       <Out> C:HigherNamePat!(P:HigherProcPats) </Out>
+       <OutData> J:Int ; L:Set </OutData>
        // Tag this ineraction as persistent
-       (.Bag => <in> "persistent" </in>)
+       (.Bag => <In> "persistent" </In>)
        // Begin checking the match in the k-cell
        (.Bag => <k> aritymatch["STDMATCH"]( P ; D ) </k>)
        // Keep the body of the listen statement to rewrite as we go along
@@ -129,8 +127,8 @@ rule <thread> ...
     // Delete this thread, as we abosrbed it into the other thread
     // (we do this by emptying all the cells, which rewrites to . )
     <thread>
-       <in> for(D:HigherNamePats <= C){ Q:HigherProc } </in>
-       <InData> I:Int ; ListHead:List (ListItem(J) => .) ListTail:List </InData>
+       <In> for(D:HigherNamePats <= C){ Q:HigherProcPat } </In>
+       <InData> I:Int ; (SetItem(J) => .Set) SetTail:Set </InData>
     </thread>
 
 
@@ -138,13 +136,13 @@ rule <thread> ...
 // into their original in- and out-threads.
 rule <thread>
         // Keep the out-thread intact, deleting everything else
-        <out> C:HigherName!(P:HigherProcs) </out>
-        <OutData> S:Int ; L:List </OutData>
+        <Out> C:HigherNamePat!(P:HigherProcPats) </Out>
+        <OutData> S:Int ; L:Set </OutData>
         // The trigger
-        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => . </k>
+        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => .K </k>
         // Check to make sure the receive was persistent
-        <in> "persistent" => . </in>
-        <subst> B => . </subst>
+        <In> "persistent" => .K </In>
+        <subst> B => .K </subst>
     </thread>
 
 
@@ -152,89 +150,89 @@ rule <thread>
 // variables
 // Note that we don't delete the "in" cell.
 rule <thread>
-        <in> "persistent" => . </in>
-        <out> C:HigherName!(P:HigherProcs) => . </out>
-        <OutData> I:Int ; L:List => . </OutData>
-        <subst> Q:HigherProc  => . </subst>
+        <In> "persistent" => .K </In>
+        <Out> C:HigherNamePat!(P:HigherProcPats) => .K </Out>
+        <OutData> I:Int ; L:Set => .K </OutData>
+        <subst> Q:HigherProcPat  => .K </subst>
      </thread>
      (.Bag => <thread> <k> Q </k> </thread>)
-     <GlobalListofOutIds> ... ListItem(I) => . ... </GlobalListofOutIds>
+     <GlobalSetofOutIds> SetItem(I) => .Set ... </GlobalSetofOutIds>
 
 
 // 3. Finally, we need semantics for how a persistent send and receive can interact.
 //    We note that allowing them to interact can introduce infinite loops.
-//    Previously, with matching, we have absorbed the data from either an <in> or
-//    <out> cell into (resp.) an <out> or <in> cell, barring the case that one is
+//    Previously, with matching, we have absorbed the data from either an <In> or
+//    <Out> cell into (resp.) an <Out> or <In> cell, barring the case that one is
 //    persistent. Since both are persistent, we create a new cell which will go through
 //    the matching calculations.
 
 // Create the new cell
 rule <thread> ...
-        <out> C:HigherName!!(P:HigherProcs) </out>
-        <OutData> I:Int ; ListHead:List (ListItem(J) => .) ListTail:List </OutData>
+        <Out> C:HigherNamePat!!(P:HigherProcPats) </Out>
+        <OutData> I:Int ; (SetItem(J) => .Set) SetTail:Set </OutData>
      ... </thread>
      <thread> ...
-        <in> for(D:HigherNamePats <= C){ Q:HigherProc } </in>
-        <InData> J:Int ; M:List </InData>
+        <In> for(D:HigherNamePats <= C){ Q:HigherProcPat } </In>
+        <InData> J:Int ; M:Set </InData>
      ... </thread>
      (.Bag => <thread> ...
         <k> aritymatch["STDMATCH"](P ; D) </k>
         <subst> Q </subst>
-        <in> "persistent" </in>
-        <InData> J ; .List </InData>
-        <out> "persistent" </out>
-        <OutData> I ; .List </OutData>
+        <In> "persistent" </In>
+        <InData> J ; .Set </InData>
+        <Out> "persistent" </Out>
+        <OutData> I ; .Set </OutData>
       ... </thread>)
 
 rule <thread> ...
-        <out> C:HigherName!!(P:HigherProcs) </out>
-        <OutData> I:Int ; L:List </OutData>
+        <Out> C:HigherNamePat!!(P:HigherProcPats) </Out>
+        <OutData> I:Int ; L:Set </OutData>
      ... </thread>
      <thread> ...
-        <in> for(D:HigherNamePats <= C){ Q:HigherProc } </in>
-        <InData> J:Int ; ListHead:List (ListItem(I) => .) ListTail:List </InData>
+        <In> for(D:HigherNamePats <= C){ Q:HigherProcPat } </In>
+        <InData> J:Int ; (SetItem(I) => .Set) SetTail:Set </InData>
      ... </thread>
      (.Bag => <thread> ...
         <k> aritymatch["STDMATCH"](P ; D) </k>
         <subst> Q </subst>
-        <in> "persistent" </in>
-        <InData> J ; .List </InData>
-        <out> "persistent" </out>
-        <OutData> I ; .List </OutData>
+        <In> "persistent" </In>
+        <InData> J ; .Set </InData>
+        <Out> "persistent" </Out>
+        <OutData> I ; .Set </OutData>
       ... </thread>)
 
 // If there's been a match, we need to replace the Id number we deleted from the last step
 // This will initiate an infinite loop.
 rule <thread> ...
-        <subst> Q => . </subst>
-        <in> "persistent" => . </in>
-        <InData> J ; .List => . </InData>
-        <out> "persistent" => . </out>
-        <OutData> I ; .List => . </OutData> ...
+        <subst> Q => .K </subst>
+        <In> "persistent" => .K </In>
+        <InData> J ; .Set => .K </InData>
+        <Out> "persistent" => .K </Out>
+        <OutData> I ; .Set => .K </OutData> ...
      </thread>
-     <thread> ... <InData> J ; L:List </InData> ... </thread>
-     <thread> ... <OutData> I ; (.List => ListItem(J)) M:List </OutData> ... </thread>
+     <thread> ... <InData> J ; L:Set </InData> ... </thread>
+     <thread> ... <OutData> I ; (.Set => SetItem(J)) M:Set </OutData> ... </thread>
      (.Bag => <thread> ... <k> Q </k> ... </thread>)
 
 rule <thread> ...
-        <subst> Q => . </subst>
-        <in> "persistent" => . </in>
-        <InData> J ; .List => . </InData>
-        <out> "persistent" => . </out>
-        <OutData> I ; .List => . </OutData> ...
+        <subst> Q => .K </subst>
+        <In> "persistent" => .K </In>
+        <InData> J ; .Set => .K </InData>
+        <Out> "persistent" => .K </Out>
+        <OutData> I ; .Set => .K </OutData> ...
      </thread>
-     <thread> ... <InData> J ; (.List => ListItem(I)) L:List  </InData> ... </thread>
-     <thread> ... <OutData> I ; M:List </OutData> ... </thread>
+     <thread> ... <InData> J ; (.Set => SetItem(I)) L:Set  </InData> ... </thread>
+     <thread> ... <OutData> I ; M:Set </OutData> ... </thread>
      (.Bag => <thread> ... <k> Q </k> ... </thread>)
 
 // If there's been no match, we just delete the cell and they won't try to match again.
 rule <thread> ...
-        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => . </k>
-        <subst> Q => . </subst>
-        <in> "persistent" => . </in>
-        <InData> J ; .List => . </InData>
-        <out> "persistent" => . </out>
-        <OutData> I ; .List => . </OutData>
+        <k> #(MATCHFAIL)[ "STDMATCH" ] ~> REST:K => .K </k>
+        <subst> Q => .K </subst>
+        <In> "persistent" => .K </In>
+        <InData> J ; .Set => .K </InData>
+        <Out> "persistent" => .K </Out>
+        <OutData> I ; .Set => .K </OutData>
      ... </thread>
 
 endmodule

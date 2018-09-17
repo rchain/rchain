@@ -1,9 +1,0 @@
-// Logical connectives are slightly nuanced.
-
-// The first match should not execute due to the
-// free variable in the pattern.
-// Since nothing matches, this will rewrite to Nil.
-match for(@{@Nil!(x \/ Nil)} <- @Nil){ Nil }
-{
-  x => { x }
-}

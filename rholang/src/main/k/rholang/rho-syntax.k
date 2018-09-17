@@ -1,6 +1,8 @@
+require "substitution.k"
+
 module RHO-SYNTAX
 imports SUBSTITUTION
-
+imports DOMAINS-SYNTAX
 
 // We need processes, including variables
 syntax Proc ::= ProcNoVars
@@ -14,7 +16,7 @@ syntax ProcNoVars ::=
               | "for" "(" NamePats "<-" Name ")" "{" Proc "}" [binder(1 -> 3)]
               // Persistent listen
               | "for" "(" NamePats "<=" Name ")" "{" Proc "}" [binder(1 -> 3)]
-              | "contract" Name "(" NamePats ")" "=" "{" Proc "}"
+              | "contract" Name "(" NamePats ")" "=" "{" Proc "}" [binder(2 -> 3)]
               // Send
               | Name "!" "(" Procs ")"
               // Persistent send
@@ -22,9 +24,9 @@ syntax ProcNoVars ::=
               // Evaluate
               | "*" Name
               // New
-              | "new" Ids "in" "{" Proc "}" [binder]
+              | "new" Ids "in" "{" Proc "}" [binder(1 -> 2)]
               // Match
-              | "match" ProcOrName "{" MatchCases "}"
+              | "match" Proc "{" MatchCases "}"
               // Parallel
               | Proc "|" Proc [left,ndbParallelProcesses]
               // Bracket
@@ -47,11 +49,20 @@ syntax Name ::= NameNoVars
 
 // Names and Processes, used specifically for -arity matching
 syntax Names ::= List{ Name, "," }
+            | Ids
 syntax Procs ::= List{ Proc, "," }
+            | Ids
+            | Ints
 syntax NamePats ::= List{ NamePat, "," }
+            | Names
+            | Vars
 syntax ProcPats ::= List{ ProcPat, "," }
+            | Procs
+            | Vars
 syntax Ids   ::= List{Id, ","}
 syntax Vars  ::= List{Var, ","}
+            | Ids
+
 // A list for matching parallel processes
 syntax ParMatchList ::= List{ HigherProc, ";"}
 
@@ -62,15 +73,13 @@ syntax Pat ::=
               NamePat
             // A process pattern
             | ProcPat
-            // Or a ProcOrName
-            | ProcOrName
 
 syntax NamePat ::=
             // Either a variable (incl. wildcards)
               Var
             // Or a Name Pattern
             | NamePatNoVars
-            // Or a Name
+            // Or it could just be a name
             | Name
 
 syntax ProcPat ::=
@@ -78,8 +87,12 @@ syntax ProcPat ::=
               Var
             // Or a Process Pattern
             | ProcPatNoVars
-            // Or a Proc
+            // Or it could just be Proc
             | Proc
+            // logical "and"
+            | ProcPat "/\\" ProcPat [left]
+            // logical "or"
+            > ProcPat "\\/" ProcPat [left]
 
 // For matching, we need to make a distinction between variables and no variables
 syntax NamePatNoVars ::=
@@ -89,13 +102,13 @@ syntax NamePatNoVars ::=
             | "@" ProcPat
 
 syntax ProcPatNoVars ::=
-            // A name pattern can be a standard name
+            // A process pattern can be a standard process
               ProcNoVars
             // It can also be a process with the more general version of variables
             | "for" "(" NamePats "<-" NamePat ")" "{" ProcPat "}" [binder(1 -> 3)]
             // Persistent listen
             | "for" "(" NamePats "<=" NamePat ")" "{" ProcPat "}" [binder(1 -> 3)]
-            | "contract" NamePat "(" NamePats ")" "=" "{" ProcPat "}"
+            | "contract" NamePat "(" NamePats ")" "=" "{" ProcPat "}" [binder(2 -> 3)]
             // Send
             | NamePat "!" "(" ProcPats ")"
             // Persistent send
@@ -103,17 +116,13 @@ syntax ProcPatNoVars ::=
             // Evaluate
             | "*" NamePat
             // New
-            | "new" Ids "in" "{" ProcPat "}" [binder]
+            | "new" Ids "in" "{" ProcPat "}" [binder(1 -> 2)]
             // Match
-            | "match" Pat "{" MatchCasesPat "}"
+            | "match" ProcPat "{" MatchCasesPat "}"
             // Parallel
             | ProcPat "|" ProcPat [left,ndbParallelProcesses]
             // Bracket
             | "{" ProcPat "}" [bracket]
-            // logical "and"
-            | ProcPat "/\\" ProcPat [left]
-            // logical "or"
-            > ProcPat "\\/" ProcPat [left]
 
 
 // Syntax that will show up b/c of the new construct,
@@ -121,28 +130,37 @@ syntax ProcPatNoVars ::=
 
 // We need higher processes, including variables
 syntax HigherProc ::= HigherProcNoVars
+              | ProcPat
               | Id
 
 // Higher Names and Hiher Processes, specifically for sending and listening for tuples
 syntax HigherNames ::= List{ HigherName, "," }
+              | NamePats
+              | Names
 syntax HigherNamePats ::= List{ HigherNamePat, "," }
               | HigherNames
 syntax HigherProcs ::= List{ HigherProc, "," }
+              | Ids
+              | ProcPats
+              | Procs
 syntax HigherProcPats ::= List{ HigherProcPat, "," }
               | HigherProcs
 syntax HigherPats ::= List{ HigherPat, "," }
+              | HigherNamePats
+              | HigherProcPats
+              | HigherProcsOrHigherNames
 
 // We need higher processes, excluding variables
 syntax HigherProcNoVars ::=
                 "for" "(" HigherNamePats "<-" HigherName ")" "{" HigherProc "}" [binder(1 -> 3)]
               | "for" "(" HigherNamePats "<=" HigherName ")" "{" HigherProc "}" [binder(1 -> 3)]
-              | "contract" HigherName "(" HigherNamePats ")" "=" "{" HigherProc "}"
+              | "contract" HigherName "(" HigherNamePats ")" "=" "{" HigherProc "}" [binder(2 -> 3)]
               | HigherName "!" "(" HigherProcs ")"
               | HigherName "!!" "(" HigherProcs ")"
               | "*" HigherName
-              | "new" Ids "in" "{" HigherProc "}" [binder]
-              | "match" HigherProcOrHigherName "{" HigherMatchCases "}"
-              | ProcNoVars
+              | "new" Ids "in" "{" HigherProc "}" [binder(1 -> 2)]
+              | "match" HigherProc "{" HigherMatchCases "}"
+              | ProcPatNoVars
               // Syntax for new names--the whole reason for "Higher" anything
               | "#(" Int ")"
               | HigherProc "|" HigherProc [left]
@@ -152,6 +170,7 @@ syntax HigherProcNoVars ::=
 // contain logical connectives. We need to distinguish between non-variable
 // terms, with no logical connectives, etc and those that are or have them.
 syntax HigherName ::= HigherNameNoVars
+              | NamePat
               | Id
 
 // Patterns for HigherProcs and HigherNames
@@ -177,7 +196,7 @@ syntax HigherNamePat ::=
               Var
             // A name pattern can be a standard name
             | HigherNamePatNoVars
-            // Or a HigherName
+            // Or it could be a HigherName
             | HigherName
 
 // For matching, we need to make a distinction between variables and no variables
@@ -192,8 +211,12 @@ syntax HigherProcPat ::=
               Var
             // A name pattern can be a standard name
             | HigherProcPatNoVars
-            // Or a HigherProc
+            // Or it could be a HigherProc
             | HigherProc
+            // logical "and"
+            | HigherProcPat "/\\" HigherProcPat [left]
+            // logical "or"
+            > HigherProcPat "\\/" HigherProcPat [left]
 
 syntax HigherProcPatNoVars ::=
             // A name pattern can be a standard name
@@ -203,6 +226,7 @@ syntax HigherProcPatNoVars ::=
             // Persistent listen
             | "for" "(" HigherNamePats "<=" HigherNamePat ")" "{" HigherProcPat "}" [binder(1 -> 3)]
             | "contract" HigherNamePat "(" HigherNamePats ")" "=" "{" HigherProcPat "}"
+                                                                                    [binder(2 -> 3)]
             // Send
             | HigherNamePat "!" "(" HigherProcPats ")"
             // Persistent send
@@ -210,23 +234,21 @@ syntax HigherProcPatNoVars ::=
             // Evaluate
             | "*" HigherNamePat
             // New
-            | "new" Ids "in" "{" HigherProcPat "}" [binder]
+            | "new" Ids "in" "{" HigherProcPat "}" [binder(1 -> 2)]
             // Match
-            | "match" HigherPat "{" HigherMatchCasesPat "}"
+            | "match" HigherProcPat "{" HigherMatchCasesPat "}"
+            // Syntax for new names--the whole reason for "Higher" anything
+            | "#(" Int ")"
             // Parallel
             | HigherProcPat "|" HigherProcPat [left,ndbParallelProcesses]
             // Bracket
             | "{" HigherProcPat "}" [bracket]
-            // logical "and"
-            | HigherProcPat "/\\" HigherProcPat [left]
-            // logical "or"
-            > HigherProcPat "\\/" HigherProcPat [left]
 
 
 
 // We need HigherNames, with no variables
 syntax HigherNameNoVars ::= "@" HigherProc
-              | NameNoVars
+              | NamePatNoVars
 
 syntax Exp  ::= Int
               | Bool
@@ -238,7 +260,6 @@ syntax KResult ::= Int
               | HigherNameNoVars
               | Id
               | Bool
-
 
 // In Rholang we distinguish between variables and wildcards
 syntax Var ::=
@@ -252,15 +273,12 @@ syntax Wildcard ::= "_"
 syntax Fun  ::=
               // General matching functions which use the "matching engine" below
                 "match" "[" String "]" "(" HigherPat ";" HigherPat ")"
-              | "aritymatch" "[" String "]" "(" HigherProcs ";" HigherNames ")"
               | "aritymatch" "[" String "]" "(" HigherProcPats ";" HigherNamePats ")"
               | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ")"
                                                                                        [strict(2,3)]
               | "matchstdform" "[" String "]" "(" CanBeStdMatched ";" CanBeStdMatched ";" Bool ")"
                                                                                          [strict(4)]
               // Functions for matching parallel processes
-              | "toparmatchstdform" "(" HigherProcOrHigherName ")"
-              | "fromparmatchstdform" "(" HigherProcOrHigherName ")"
               | "toparmatchstdform" "(" HigherPat ")"
               | "fromparmatchstdform" "(" HigherPat ")"
               // Errors and pauses, dependent on the match function we're using
@@ -269,31 +287,38 @@ syntax Fun  ::=
               | "#(ORPAUSE)[" String "]"
               | "#(MATCHFAIL)[" String "," Int "]"
               | "#(PARPAUSE)[" String "," Int "]"
+              | "#(PARMATCHRESET)[" Int "]"
               | "#(MATCHPAUSE)"
               // For variable matching
               | "#(VARPAUSE)[" String "," HigherPat "," Id "]"
-              | "#(VARPAUSE)[" String "," HigherPat "," Id "][" List "]"
+              | "#(VARPAUSE)[" String "," HigherPat "," Id "]{" Set "}"
               | "#(VARFAIL)"
               // For checking the entire program
               | "#(INITIALCHECK)[" HigherProc "]"
+              | "#(INITIALCHECK)"
               // A function to find free variables
               | "fv(" String "," HigherPat "," Id ")"
               // For determining if the entire program has free variables in it
-              | "fvInitial(" Proc ")"
-              | "fvInitial(" HigherProc ")"
+              | "fvInitial(" HigherPat ")"
 
 // Some syntax specifically for the "match" process
-syntax MatchCase  ::= Pat "=>" "{" Proc "}" [binder]
+syntax MatchCase  ::= ProcPat "=>" "{" Proc "}" [binder]
 syntax MatchCases ::= List{MatchCase, " "}
 // The same but for Higher Processes
-syntax HigherMatchCase  ::= HigherPat "=>" "{" HigherProc "}" [binder]
+syntax HigherMatchCase  ::= HigherProcPat "=>" "{" HigherProc "}" [binder]
+            | MatchCasePat
 syntax HigherMatchCases ::= List{HigherMatchCase, " "}
+            | MatchCasesPat
 // The same but for patterns
-syntax MatchCasePat  ::= Pat "=>" "{" ProcPat "}" [binder]
+syntax MatchCasePat  ::= ProcPat "=>" "{" ProcPat "}" [binder]
+            | MatchCase
 syntax MatchCasesPat ::= List{MatchCasePat, " "}
-// The same but for Higher Processes
-syntax HigherMatchCasePat  ::= HigherPat "=>" "{" HigherProcPat "}" [binder]
-syntax HigherMatchCasesPat ::= List{HigherMatchCasePat, " "}
+            | MatchCases
 
+// The same but for Higher Processes
+syntax HigherMatchCasePat  ::= HigherProcPat "=>" "{" HigherProcPat "}" [binder]
+            | HigherMatchCase
+syntax HigherMatchCasesPat ::= List{HigherMatchCasePat, " "}
+            | HigherMatchCases
 
 endmodule
