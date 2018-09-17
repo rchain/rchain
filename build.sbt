@@ -161,7 +161,7 @@ lazy val node = (project in file("node"))
     /* Dockerization */
     dockerUsername := Some(organization.value),
     dockerUpdateLatest := true,
-    dockerBaseImage := "openjdk:8u171-jre-slim-stretch",
+    dockerBaseImage := "openjdk:11-jre-slim",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value
       Seq(
