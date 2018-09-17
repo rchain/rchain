@@ -1,0 +1,5 @@
+# Coverage of the following flickers notoriously despite no changes being made.
+# We'll ignore them until we find a way to have reliable coverage measurements for them.
+ignore:
+- "roscala/src/main/scala/coop/rchain/roscala/ob/Tuple.scala"
+- "roscala/src/main/scala/coop/rchain/roscala/ob/mbox/QueueMbox.scala"

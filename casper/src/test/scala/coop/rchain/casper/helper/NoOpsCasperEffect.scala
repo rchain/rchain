@@ -39,16 +39,16 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore] private (
 }
 
 object NoOpsCasperEffect {
-  def apply[F[_]: Sync: BlockStore](blockStore: Map[BlockHash, BlockMessage.Safe] = Map.empty,
-                                    estimatorFunc: IndexedSeq[BlockMessage.Safe] = Vector(
-                                      BlockUtil.emptySafeBlock),
-                                    blockDagFunc: BlockDag = BlockDag()): F[NoOpsCasperEffect[F]] =
+  def apply[F[_]: Sync: BlockStore](
+      blockStore: Map[BlockHash, BlockMessage.Safe] = Map.empty,
+      estimatorFunc: IndexedSeq[BlockMessage.Safe] = Vector(BlockUtil.emptySafeBlock),
+      blockDagFunc: BlockDag = BlockDag.empty): F[NoOpsCasperEffect[F]] =
     for {
       _ <- Sync[F].delay { blockStore.map((BlockStore[F].put _).tupled) }
     } yield new NoOpsCasperEffect[F](MutableMap(blockStore.toSeq: _*), estimatorFunc, blockDagFunc)
   def apply[F[_]: Sync: BlockStore](): F[NoOpsCasperEffect[F]] =
-    apply(Map.empty, Vector(BlockUtil.emptySafeBlock), BlockDag())
+    apply(Map.empty, Vector(BlockUtil.emptySafeBlock), BlockDag.empty)
   def apply[F[_]: Sync: BlockStore](
       blockStore: Map[BlockHash, BlockMessage.Safe]): F[NoOpsCasperEffect[F]] =
-    apply(blockStore, Vector(BlockUtil.emptySafeBlock), BlockDag())
+    apply(blockStore, Vector(BlockUtil.emptySafeBlock), BlockDag.empty)
 }

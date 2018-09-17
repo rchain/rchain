@@ -82,7 +82,7 @@ class HashSetCasperTestNode[F[_]](name: String,
 
   val genesisBonds          = ProtoUtil.bonds(genesis)
   val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
-  val dag                   = BlockDag().copy(latestMessages = initialLatestMessages)
+  val dag                   = BlockDag.empty.copy(latestMessages = initialLatestMessages)
   val postGenesisStateHash  = genesis.body.postState.tuplespace
   implicit val casperEff = new MultiParentCasperImpl[F](runtimeManager,
                                                         Some(validatorId),

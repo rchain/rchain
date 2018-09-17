@@ -18,12 +18,7 @@ import cats.effect.Bracket
 import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.helper.{
-  BlockGenerator,
-  BlockStoreFixture,
-  BlockStoreTestFixture,
-  BlockUtil
-}
+import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
@@ -46,7 +41,7 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
-  val initState        = BlockDag().copy(currentId = -1)
+  val initState        = IndexedBlockDag.empty.copy(currentId = -1)
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime    = Runtime.create(storageDirectory, storageSize)
@@ -162,7 +157,7 @@ class InterpreterUtilTest
     b3PostState.contains("@{7}!(7)") should be(true)
   }
 
-  private def injectPostStateHash(chain: BlockDag,
+  private def injectPostStateHash(chain: IndexedBlockDag,
                                   id: Int,
                                   b: BlockMessage.Safe,
                                   postGenStateHash: StateHash,
@@ -348,7 +343,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -396,7 +391,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -448,7 +443,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -497,7 +492,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -538,7 +533,7 @@ class InterpreterUtilTest
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
-      val chain: BlockDag =
+      val chain: IndexedBlockDag =
         createBlock[StateWithChain](
           Seq.empty,
           deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
@@ -571,7 +566,7 @@ class InterpreterUtilTest
     //create single deploy with log that includes excess comm events
     val badProcessedDeploy = intProcessedDeploys.head.copy(
       log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
                                   tsHash = computedTsHash)
@@ -613,7 +608,7 @@ class InterpreterUtilTest
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
-      val chain: BlockDag =
+      val chain: IndexedBlockDag =
         createBlock[StateWithChain](
           Seq.empty,
           deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),

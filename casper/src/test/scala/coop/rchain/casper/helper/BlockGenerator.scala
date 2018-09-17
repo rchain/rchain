@@ -19,12 +19,13 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
 
 object BlockGenerator {
-  implicit val timeEff = new LogicalTime[Id]
+  implicit val timeEff                                                  = new LogicalTime[Id]
+  implicit def indexedBlockDag2BlockDag(ibd: IndexedBlockDag): BlockDag = ibd.dag
 
-  type StateWithChain[A] = StateT[Id, BlockDag, A]
+  type StateWithChain[A] = StateT[Id, IndexedBlockDag, A]
 
-  type BlockDagState[F[_]] = MonadState[F, BlockDag]
-  def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, BlockDag]
+  type BlockDagState[F[_]] = MonadState[F, IndexedBlockDag]
+  def blockDagState[F[_]: Monad: BlockDagState]: BlockDagState[F] = MonadState[F, IndexedBlockDag]
 
   def storeForStateWithChain[F[_]: Monad](idBs: BlockStore[Id]): BlockStore[F] =
     new BlockStore[F] {
@@ -102,12 +103,12 @@ trait BlockGenerator {
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
       updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
-      newChain: BlockDag = BlockDag(idToBlocks,
-                                    childMap,
-                                    latestMessages,
-                                    latestMessagesOfLatestMessages,
-                                    nextId,
-                                    updatedSeqNumbers)
+      newChain = IndexedBlockDag(idToBlocks,
+                                 childMap,
+                                 latestMessages,
+                                 latestMessagesOfLatestMessages,
+                                 nextId,
+                                 updatedSeqNumbers)
       _ <- blockDagState[F].set(newChain)
     } yield block
 }

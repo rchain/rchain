@@ -14,7 +14,7 @@ import cats.mtl.implicits._
 import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.shared.Time
@@ -24,7 +24,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = BlockDag()
+  val initState = IndexedBlockDag.empty
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in withStore { implicit blockStore =>
@@ -67,7 +67,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
                              HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
       } yield b8
 
-    val chain: BlockDag = createChain[StateWithChain].runS(initState)
+    val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
@@ -138,7 +138,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
                                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
         } yield b8
 
-      val chain: BlockDag = createChain[StateWithChain].runS(initState)
+      val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
 
       val genesis = chain.idToBlocks(1)
       val b2      = chain.idToBlocks(2)

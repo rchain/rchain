@@ -7,6 +7,7 @@ import coop.rchain.casper.{BlockDag, BlockException, PrettyPrinter}
 import coop.rchain.casper.PrettyPrinter.buildString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Interpreter
 import java.io.StringReader
@@ -184,7 +185,9 @@ object InterpreterUtil {
         runtimeManager.replayComputeState(gcaStateHash, deploys) match {
           case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
           case Left((_, status)) =>
-            Left(new Exception(s"Failed status while computing parent post state: $status")) -> knownStateHashes
+            val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+            Left(new Exception(
+              s"Failed status while computing post state of $parentHashes: $status")) -> knownStateHashes
         }
     }
   }

@@ -11,7 +11,7 @@ case "$SUBPROJECT" in "rosette")
 
 "core")
 
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage scalafmtCheck test coverageReport rspace:tut
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile coverage scalafmtCheck test rspace/it:test coverageReport rspace:tut
 
     curl -s https://codecov.io/bash >/tmp/codecov
     chmod +x /tmp/codecov

@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.effect.{Sync, Timer}
-import cats.{Id, Monad}
+import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.implicits._
 import cats.mtl.implicits._
@@ -31,15 +31,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
   private val bonds                       = createBonds(validators)
   private val genesis                     = createGenesis(bonds)
 
-  implicit val timerEff: Timer[Effect] = new Timer[Effect] {
-    override def clockRealTime(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(Timer[Task].clockRealTime(unit))
-    override def clockMonotonic(unit: TimeUnit): Effect[Long] =
-      EitherT.liftF(Timer[Task].clockMonotonic(unit))
-    override def sleep(duration: FiniteDuration): Effect[Unit] =
-      EitherT.liftF(Timer[Task].sleep(duration))
-    override def shift: Effect[Unit] = EitherT.liftF(Timer[Task].shift)
-  }
+  implicit val timerEff: Timer[Effect] = Timer.deriveEitherT(Functor[Task], Task.timer)
 
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
@@ -55,7 +47,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
       : Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
         t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
-        _  <- Timer[Task].sleep(2.second)
+        _  <- implicitly[Timer[Task]].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
                .createBlock[Effect]).value.fork //should fail because other not done
         r1 <- t1.join
@@ -95,7 +87,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: Mult
   override def createBlock: F[CreateBlockStatus] =
     for {
       result <- underlying.createBlock
-      _      <- Timer[F].sleep(5.seconds)
+      _      <- implicitly[Timer[F]].sleep(5.seconds)
     } yield result
 
 }

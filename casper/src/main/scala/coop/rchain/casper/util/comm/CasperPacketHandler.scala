@@ -222,7 +222,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         capserHandlerInternal: Ref[F, CasperPacketHandlerInternal[F]])(
         implicit scheduler: Scheduler): F[Unit] =
       for {
-        _                  <- Timer[F].sleep(interval)
+        _                  <- implicitly[Timer[F]].sleep(interval)
         lastApprovedBlockO <- LastApprovedBlock[F].get
         cont <- lastApprovedBlockO match {
                  case None =>

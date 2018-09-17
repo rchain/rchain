@@ -3,7 +3,6 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.Id
-import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{Leaf, LeafPointer, Node, NodePointer, PointerBlock, Skip, Trie}
@@ -14,11 +13,11 @@ import org.scalacheck.Prop
 import org.scalatest._
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
-
-import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest.enablers.Definition
+
+import scala.util.Random
 
 trait StorageActionsTests
     extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
@@ -38,12 +37,6 @@ trait StorageActionsTests
   type TestConsumeMap = Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]
 
   type TestGNAT = GNAT[String, Pattern, String, StringsCaptor]
-
-  case class State(
-      checkpoint: Blake2b256Hash,
-      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]],
-      joins: Map[Blake2b256Hash, Seq[Seq[String]]]
-  )
 
   "produce" should
     "persist a piece of data in the store" in withTestSpace { space =>
@@ -1044,76 +1037,6 @@ trait StorageActionsTests
     checkpoint2.log shouldBe empty
     checkpoint2.root shouldBe emptyCheckpoint.root
   }
-
-  def validateIndexedStates(
-      space: FreudianSpace[String, Pattern, Nothing, String, String, StringsCaptor],
-      indexedStates: Seq[(State, Int)],
-      differenceReport: Boolean = false): Boolean = {
-    val tests: Seq[Any] = indexedStates
-      .map {
-        case (State(checkpoint, expectedContents, expectedJoins), chunkNo) =>
-          space.reset(checkpoint)
-          val num = "%02d".format(chunkNo)
-
-          val actualContents = space.store.toMap
-          val contentsTest   = actualContents == expectedContents
-
-          if (contentsTest) {
-            logger.debug(s"$num: store had expected contents")
-          } else {
-            logger.error(s"$num: store had unexpected contents")
-
-            if (differenceReport) {
-              logger.error("difference report")
-              for ((expectedChannels, expectedRow) <- expectedContents) {
-                val actualRow = actualContents.get(expectedChannels)
-
-                actualRow match {
-                  case Some(row) =>
-                    if (row != expectedRow) {
-                      logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
-                    }
-                  case None => logger.error(s"key [$expectedChannels] not found in actual records")
-                }
-              }
-
-              for ((actualChannels, actualRow) <- actualContents) {
-                val expectedRow = expectedContents.get(actualChannels)
-
-                expectedRow match {
-                  case Some(row) =>
-                    if (row != actualRow) {
-                      logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
-                    }
-                  case None => logger.error(s"key [$actualChannels] not found in expected records")
-                }
-              }
-            }
-          }
-
-          val actualJoins = space.store.joinMap
-
-          val joinsTest =
-            expectedJoins.forall {
-              case (hash: Blake2b256Hash, expecteds: Seq[Seq[String]]) =>
-                val expected = HashMultiset.create[Seq[String]](expecteds.asJava)
-                val actual   = HashMultiset.create[Seq[String]](actualJoins(hash).asJava)
-                expected.equals(actual)
-            }
-
-          if (joinsTest) {
-            logger.debug(s"$num: store had expected joins")
-          } else {
-            logger.error(s"$num: store had unexpected joins")
-          }
-
-          contentsTest && joinsTest
-      }
-    !tests.contains(false)
-  }
-
   "createCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.createCheckpoint().root shouldBe Blake2b256Hash.fromHex(
       "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
@@ -1392,7 +1315,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_reset")
       }
     }
     check(prop)
@@ -1416,7 +1339,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "consumes_reset")
       }
     }
     check(prop)
@@ -1445,7 +1368,7 @@ trait StorageActionsTests
             (State(space.createCheckpoint().root, space.store.toMap, space.store.joinMap), chunkNo)
         }
 
-        validateIndexedStates(space, states)
+        validateIndexedStates(space, states, "produces_consumes_reset")
       }
     }
     check(prop)

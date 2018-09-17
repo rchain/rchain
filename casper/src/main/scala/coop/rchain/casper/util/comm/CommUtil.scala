@@ -105,7 +105,7 @@ object CommUtil {
               }
         } yield ()
 
-      case Nil => Timer[F].sleep(delay) >> requestApprovedBlock[F](delay)
+      case Nil => implicitly[Timer[F]].sleep(delay) >> requestApprovedBlock[F](delay)
     }
 
     for {
