@@ -70,7 +70,7 @@ object RholangOnlyDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace = PureRSpace[M].of(tuplespace)
+    val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
@@ -125,7 +125,7 @@ object RholangAndScalaDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace = PureRSpace[M].of(tuplespace)
+    val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)

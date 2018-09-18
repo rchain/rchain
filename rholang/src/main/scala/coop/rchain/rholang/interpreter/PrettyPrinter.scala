@@ -150,7 +150,7 @@ case class PrettyPrinter(freeShift: Int,
                 .buildPattern(bind.patterns)
             (bind.freeCount + previousFree, string + bindString + {
               if (r.persistent) " <= " else " <- "
-            } + buildString(bind.source) + {
+            } + buildString(bind.source, indent) + {
               if (i != r.binds.length - 1) " ; "
               else ""
             })
@@ -160,18 +160,22 @@ case class PrettyPrinter(freeShift: Int,
           .copy(boundShift = boundShift + totalFree)
           .buildString(r.body, indent + 1)
         if (bodyStr.nonEmpty) {
-          "for( " + bindsString + " ) {\n" + bodyStr + "\n}"
+          "for( " + bindsString + " ) {\n" + (indentStr * (indent + 1)) + bodyStr + "\n" + (indentStr * indent) + "}"
         } else {
           "for( " + bindsString + " ) {" + bodyStr + "}"
         }
 
       case b: Bundle =>
-        BundleOps.showInstance.show(b) + "{ " + buildString(b.body) + " }"
+        BundleOps.showInstance.show(b) + "{ " + (indentStr * (indent + 1)) + buildString(
+          b.body,
+          indent + 1) + " }"
 
       case n: New =>
-        "new " + buildVariables(n.bindCount) + " in {\n" + this
+        "new " + buildVariables(n.bindCount) + " in {\n" +
+          indentStr * (indent + 1) + this
           .copy(boundShift = boundShift + n.bindCount)
-          .buildString(n.p, indent + 1) + "\n}"
+          .buildString(n.p, indent + 1) +
+          "\n" + indentStr * indent + "}"
 
       case e: Expr =>
         buildString(e)
@@ -180,11 +184,11 @@ case class PrettyPrinter(freeShift: Int,
         "match " + buildString(m.target) + " {\n" +
           ("" /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
-              string + buildMatchCase(matchCase) + {
+              string + (indentStr * (indent + 1)) + buildMatchCase(matchCase, indent + 1) + {
                 if (i != m.cases.length - 1) " ;\n"
                 else ""
               }
-          }.split('\n').map(indentStr * (indent + 1) + _).mkString("\n") + "\n}"
+          } + "\n" + (indentStr * indent) + "}"
 
       case g: GPrivate => "Unforgeable(0x" + Base16.encode(g.id.toByteArray) + ")"
       case c: Connective =>
@@ -218,11 +222,11 @@ case class PrettyPrinter(freeShift: Int,
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
                 (true, string + {
-                  if (prevNonEmpty) " |\n" else ""
+                  if (prevNonEmpty) " |\n" + (indentStr * indent) else ""
                 } + ("" /: items.zipWithIndex) {
                   case (_string, (_par, index)) =>
-                    _string + buildString(_par) + {
-                      if (index != items.length - 1) " |\n" else ""
+                    _string + buildString(_par, indent) + {
+                      if (index != items.length - 1) " |\n" + (indentStr * indent) else ""
                     }
                 })
               } else (prevNonEmpty, string)
@@ -232,7 +236,7 @@ case class PrettyPrinter(freeShift: Int,
       case unsupported =>
         throw new Error(s"Attempt to print unknown GeneratedMessage type: ${unsupported.getClass}.")
     }
-    content.split('\n').map(indentStr * indent + _).mkString("\n")
+    content
   }
 
   def increment(id: String): String = {
@@ -271,7 +275,7 @@ case class PrettyPrinter(freeShift: Int,
         }
     }
 
-  private def buildMatchCase(matchCase: MatchCase): String = {
+  private def buildMatchCase(matchCase: MatchCase, indent: Int): String = {
     val patternFree: Int = matchCase.freeCount
     this
       .copy(
@@ -280,10 +284,10 @@ case class PrettyPrinter(freeShift: Int,
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildString(matchCase.pattern) + " => " +
+      .buildString(matchCase.pattern, indent) + " => " +
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildString(matchCase.source)
+        .buildString(matchCase.source, indent)
   }
 
   private def isEmpty(p: Par) =
