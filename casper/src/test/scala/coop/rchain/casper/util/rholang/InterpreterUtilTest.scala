@@ -71,23 +71,23 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
     val genesisDeploysCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b2Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b3Deploys = Vector(
       "@7!(7)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     /*
      * DAG Looks like this:
@@ -177,26 +177,26 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val genesisDeploysWithCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
     val b1Deploys = Vector(
       "@5!(5)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b1DeploysWithCost =
-      b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L, 2)))
+      b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2, 2L)))
 
     val b2Deploys = Vector(
       "@6!(6)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b2DeploysWithCost =
-      b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+      b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b3Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b3DeploysWithCost =
-      b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L, 5)))
+      b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5, 5L)))
 
     /*
      * DAG Looks like this:
@@ -306,7 +306,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
     val deploys          = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
     val invalidHash      = ByteString.EMPTY
     val chain =
       createBlock[StateWithChain](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)

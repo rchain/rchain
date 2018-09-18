@@ -207,7 +207,7 @@ class CryptoChannelsSpec
   override protected def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
-    val size      = 1024L * 1024 * 1024 //borrowed from other places in the code
+    val size      = 1024L * 1024 * 10
     val runtime   = Runtime.create(dbDir, size)
 
     try {

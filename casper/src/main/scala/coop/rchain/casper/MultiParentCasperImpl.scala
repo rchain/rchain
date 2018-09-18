@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.{Applicative, Monad}
 import cats.implicits._
-import cats.mtl.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol._
