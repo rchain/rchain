@@ -7,20 +7,24 @@ import coop.rchain.casper.util.ProtoUtil.blockNumber
 object TopologicalSortUtil {
   type BlockSort = Vector[Vector[BlockHash]]
   def update(sort: BlockSort, offset: Long, block: BlockMessage): BlockSort = {
-    val hash   = block.blockHash
-    val number = (blockNumber(block) - offset).toInt
+    val hash             = block.blockHash
+    val offsetDiff: Long = blockNumber(block) - offset
 
-    if (number == sort.length) {
+    assert(offsetDiff <= Int.MaxValue)
+    val number = offsetDiff.toInt
+
+    //block numbers must be sequential, so a new block can only be
+    //at a known height or 1 greater than a known height
+    assert(number <= sort.length)
+
+    number match {
       //this is a new block height
-      sort :+ Vector(hash)
-    } else if (number < sort.length) {
+      case n if n == sort.length => sort :+ Vector(hash)
+
       //this is another block at a known height
-      val curr = sort(number)
-      sort.updated(number, curr :+ hash)
-    } else {
-      //impossible because block numbers must be sequential
-      throw new Exception("Attempted to add block with invalid block number to state.")
+      case n if n < sort.length =>
+        val curr = sort(number)
+        sort.updated(number, curr :+ hash)
     }
   }
-
 }

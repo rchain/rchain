@@ -134,51 +134,55 @@ object InterpreterUtil {
       implicit scheduler: Scheduler): F[(Either[Throwable, StateHash], Set[StateHash])] = {
     val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
-    if (parentTuplespaces.isEmpty) {
+    parentTuplespaces match {
       //no parents to base off of, so use default
-      (Right(runtimeManager.emptyStateHash).leftCast[Throwable], knownStateHashes).pure[F]
-    } else if (parentTuplespaces.size == 1) {
+      case Seq() =>
+        (Right(runtimeManager.emptyStateHash).leftCast[Throwable], knownStateHashes).pure[F]
+
       //For a single parent we look up its checkpoint
-      val parentStateHash = parentTuplespaces.head._2
-      assert(
-        knownStateHashes.contains(parentStateHash),
-        s"We should have already computed parent state hash when we added the parent tuplespace hash ${buildString(parentStateHash)} to our blockDAG."
-      )
-      (Right(parentStateHash).leftCast[Throwable], knownStateHashes).pure[F]
-    } else {
+      case Seq((_, parentStateHash)) =>
+        assert(
+          knownStateHashes.contains(parentStateHash),
+          "We should have already computed parent state hash when we added " +
+            s"the parent tuplespace hash ${buildString(parentStateHash)} to our blockDAG."
+        )
+        (Right(parentStateHash).leftCast[Throwable], knownStateHashes).pure[F]
+
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
       //made in all of the branches of the DAG being
       //merged. This is done by computing uncommon ancestors
       //and applying the deploys in those blocks.
-      implicit val ordering           = BlockDag.deriveOrdering(dag)
-      val indexedParents              = parents.toVector.map(b => dag.dataLookup(b.blockHash))
-      val uncommonAncestors           = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
-      val (initParent, initStateHash) = parentTuplespaces.head
-      assert(
-        knownStateHashes.contains(initStateHash),
-        s"We should have already computed parent state hash when we added the parent tuplespace hash ${buildString(initStateHash)} to our blockDAG."
-      )
+      case (initParent, initStateHash) +: _ =>
+        implicit val ordering = BlockDag.deriveOrdering(dag)
+        val indexedParents    = parents.toVector.map(b => dag.dataLookup(b.blockHash))
+        val uncommonAncestors = DagOperations.uncommonAncestors(indexedParents, dag.dataLookup)
+        assert(
+          knownStateHashes.contains(initStateHash),
+          "We should have already computed parent state hash when we added " +
+            s"the parent tuplespace hash ${buildString(initStateHash)} to our blockDAG."
+        )
 
-      val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
-      //filter out blocks that already included by starting from the chosen initParent
-      val blocksToApply = uncommonAncestors
-        .filterNot { case (_, set) => set.contains(initIndex) }
-        .keys
-        .toVector
-        .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
+        val initIndex = indexedParents.indexOf(dag.dataLookup(initParent.blockHash))
+        //filter out blocks that already included by starting from the chosen initParent
+        val blocksToApply = uncommonAncestors
+          .filterNot { case (_, set) => set.contains(initIndex) }
+          .keys
+          .toVector
+          .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
 
-      for {
-        blocks  <- blocksToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-        deploys = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
-      } yield
-        runtimeManager.replayComputeState(initStateHash, deploys) match {
-          case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
-          case Left((_, status)) =>
-            val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-            Left(new Exception(
-              s"Failed status while computing post state of $parentHashes: $status")) -> knownStateHashes
-        }
+        for {
+          blocks  <- blocksToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
+          deploys = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+        } yield
+          runtimeManager.replayComputeState(initStateHash, deploys) match {
+            case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)
+            case Left((_, status)) =>
+              val parentHashes = parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
+              Left(
+                new Exception(
+                  s"Failed status while computing post state of $parentHashes: $status")) -> knownStateHashes
+          }
     }
   }
 

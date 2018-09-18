@@ -33,6 +33,20 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
   }
 
+  /**
+    * Determines the ancestors to a set of blocks which are not common to all
+    * blocks in the set. Each starting block is assigned an index (hence the
+    * usage of IndexedSeq) and this is used to refer to that block in the result.
+    * A block B is an ancestor of a starting block with index i if the BitSet for
+    * B contains i.
+    * @param blocks indexed sequence of blocks to determine uncommon ancestors of
+    * @param lookup association of block hashes to data about the block (for DAG
+    *               traversal)
+    * @param topoSort topological sort of the DAG, ensures ancestor computation is
+    *                 done correctly
+    * @return A map from uncommon ancestor blocks to BitSets, where a block B is
+    *         and ancestor of starting block with index i if B's BitSet contains i.
+    */
   def uncommonAncestors(blocks: IndexedSeq[BlockMetadata], lookup: BlockMetadata.Lookup)(
       implicit topoSort: Ordering[BlockMetadata]): Map[BlockMetadata, BitSet] = {
     def parents(b: BlockMetadata): List[BlockMetadata] = b.parents.map(lookup)
