@@ -49,8 +49,9 @@ object DagOperations {
     */
   def uncommonAncestors(blocks: IndexedSeq[BlockMetadata], lookup: BlockMetadata.Lookup)(
       implicit topoSort: Ordering[BlockMetadata]): Map[BlockMetadata, BitSet] = {
+    val commonSet                                      = BitSet(0 until blocks.length: _*)
     def parents(b: BlockMetadata): List[BlockMetadata] = b.parents.map(lookup)
-    def isCommon(set: BitSet): Boolean                 = (0 until blocks.length).forall(set.contains)
+    def isCommon(set: BitSet): Boolean                 = set == commonSet
 
     val initMap = blocks.zipWithIndex.map { case (b, i) => b -> BitSet(i) }.toMap
     val q       = new mutable.PriorityQueue[BlockMetadata]()
@@ -58,22 +59,30 @@ object DagOperations {
 
     @tailrec
     def loop(currMap: Map[BlockMetadata, BitSet],
-             visited: HashSet[BlockMetadata]): Map[BlockMetadata, BitSet] =
+             enqueued: HashSet[BlockMetadata]): Map[BlockMetadata, BitSet] =
       if (q.isEmpty) currMap
       else {
         val currBlock = q.dequeue()
-        val currSet   = currMap.getOrElse(currBlock, BitSet.empty)
-        if (visited(currBlock) || isCommon(currSet)) {
-          //already visited or is common ancestor
-          loop(currMap, visited)
+        //Note: The orElse case should never occur because we traverse in
+        //      reverse topological order (i.e. down parent links)
+        val currSet = currMap.getOrElse(currBlock, BitSet.empty)
+        if (isCommon(currSet)) {
+          //All ancestors of a common ancestor are still common
+          //we need to update the map with the fact they are common
+          //in case one of them would end up in the queue
+          //and not already be marked as common.
+          val newMap = parents(currBlock).foldLeft(currMap) {
+            case (map, p) => map.updated(p, commonSet)
+          }
+          loop(newMap - currBlock, enqueued - currBlock)
         } else {
-          val (newMap, newVisted) = parents(currBlock).foldLeft(currMap -> visited) {
-            case ((map, vstd), p) =>
-              if (!vstd(p)) q.enqueue(p)
-              updatedWith(map, p)(currSet)(_ | currSet) -> (vstd + p)
+          val (newMap, newEnqueued) = parents(currBlock).foldLeft((currMap, enqueued)) {
+            case ((map, enq), p) =>
+              if (!enq(p)) q.enqueue(p)
+              (updatedWith(map, p)(currSet)(_ | currSet), (enq + p))
           }
 
-          loop(newMap, newVisted)
+          loop(newMap, newEnqueued - currBlock)
         }
       }
 

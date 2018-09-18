@@ -172,8 +172,10 @@ object InterpreterUtil {
           .sorted //ensure blocks to apply is topologically sorted to maintain any causal dependencies
 
         for {
-          blocks  <- blocksToApply.traverse(b => ProtoUtil.unsafeGetBlock[F](b.blockHash))
-          deploys = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
+          maybeBlocks <- blocksToApply.traverse(b => BlockStore[F].get(b.blockHash))
+          _           = assert(maybeBlocks.forall(_.isDefined))
+          blocks      = maybeBlocks.flatten
+          deploys     = blocks.flatMap(_.getBody.deploys.flatMap(ProcessedDeployUtil.toInternal))
         } yield
           runtimeManager.replayComputeState(initStateHash, deploys) match {
             case result @ Right(hash) => result.leftCast[Throwable] -> (knownStateHashes + hash)

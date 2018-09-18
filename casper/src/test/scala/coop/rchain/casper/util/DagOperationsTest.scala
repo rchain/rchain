@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
+import coop.rchain.casper.{BlockDag, BlockMetadata, MultiParentCasperInstances}
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
@@ -96,11 +96,11 @@ class DagOperationsTest
 
     val chain      = createChain[StateWithChain].runS(initState)
     val toMetadata = chain.dataLookup
-    val genesis    = toMetadata(chain.idToBlocks(0).blockHash)
 
     val b1 = toMetadata(chain.idToBlocks(1).blockHash)
     val b2 = toMetadata(chain.idToBlocks(2).blockHash)
     val b3 = toMetadata(chain.idToBlocks(3).blockHash)
+    val b4 = toMetadata(chain.idToBlocks(4).blockHash)
     val b5 = toMetadata(chain.idToBlocks(5).blockHash)
     val b6 = toMetadata(chain.idToBlocks(6).blockHash)
     val b7 = toMetadata(chain.idToBlocks(7).blockHash)
@@ -112,6 +112,22 @@ class DagOperationsTest
       b7 -> BitSet(1),
       b5 -> BitSet(1)
     )
+
+    DagOperations.uncommonAncestors(Vector(b6, b2), chain.dataLookup) shouldBe Map(
+      b6 -> BitSet(0),
+      b4 -> BitSet(0),
+      b3 -> BitSet(0)
+    )
+
+    DagOperations.uncommonAncestors(Vector(b2, b4, b5), chain.dataLookup) shouldBe Map(
+      b2 -> BitSet(0),
+      b4 -> BitSet(1),
+      b5 -> BitSet(2),
+      b3 -> BitSet(1, 2)
+    )
+
+    DagOperations.uncommonAncestors(Vector(b1), chain.dataLookup) shouldBe Map
+      .empty[BlockMetadata, BitSet]
   }
 
 }
