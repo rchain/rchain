@@ -102,7 +102,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   "New" should "use 0-based indexing" in {
     val source = Par(news = Seq(New(3, Par())))
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0, x1, x2 in {\n\tNil\n}"
+    val target = "new x0, x1, x2 in {\n  Nil\n}"
     result shouldBe target
   }
 
@@ -183,9 +183,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0 in {
-        |\u0009for( x1 <- x0 ) {
-        |\u0009\u0009*x1
-        |\u0009}
+        |  for( x1 <- x0 ) {
+        |    *x1
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -211,10 +211,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0 in {
-        |\u0009for( x1, x2 <- x0 ) {
-        |\u0009\u0009*x2 |
-        |\u0009\u0009*x1
-        |\u0009}
+        |  for( x1, x2 <- x0 ) {
+        |    *x2 |
+        |    *x1
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -243,10 +243,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0 in {
-        |\u0009for( x1 <- x0 ; x2 <- x0 ) {
-        |\u0009\u0009*x2 |
-        |\u0009\u0009*x1
-        |\u0009}
+        |  for( x1 <- x0 ; x2 <- x0 ) {
+        |    *x2 |
+        |    *x1
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -279,12 +279,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0, x1 in {
-        |\u0009for( x2, x3 <- x1 ; x4, x5 <- x0 ) {
-        |\u0009\u0009*x3 |
-        |\u0009\u0009*x2 |
-        |\u0009\u0009*x5 |
-        |\u0009\u0009*x4
-        |\u0009}
+        |  for( x2, x3 <- x1 ; x4, x5 <- x0 ) {
+        |    *x3 |
+        |    *x2 |
+        |    *x5 |
+        |    *x4
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -320,12 +320,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0, x1 in {
-        |\u0009for( x2, x3 <- x1 ; x4, x5 <- x0 ) {
-        |\u0009\u0009x3!(Nil) |
-        |\u0009\u0009*x2 |
-        |\u0009\u0009*x5 |
-        |\u0009\u0009*x4
-        |\u0009}
+        |  for( x2, x3 <- x1 ; x4, x5 <- x0 ) {
+        |    x3!(Nil) |
+        |    *x2 |
+        |    *x5 |
+        |    *x4
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -353,10 +353,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](source, inputs).value.par)
     val target =
       """new x0 in {
-        |\u0009x0!(*x0) |
-        |\u0009for( x1 <- x0 ) {
-        |\u0009\u0009*x1
-        |\u0009}
+        |  x0!(*x0) |
+        |  for( x1 <- x0 ) {
+        |    *x1
+        |  }
         |}""".stripMargin
     result shouldBe target
   }
@@ -481,7 +481,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput1, inputs).value.par)
     val target =
       """for( x0, @{for( @{y0}, y1 <- @{Nil} ) { y0 | x1 | *y1 }} <- @{Nil} ) {
-        |\u0009x0!(x1)
+        |  x0!(x1)
         |}""".stripMargin
     result shouldBe target
   }
@@ -530,17 +530,17 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value.par)
     result shouldBe
       """new x0, x1 in {
-        |\u0009for( x2, @{x3} <- x1 ; x4, @{x5} <- x0 ) {
-        |\u0009\u0009x2!(x5) |
-        |\u0009\u0009x4!(x3) |
-        |\u0009\u0009for( x6 <- x4 ) {
-        |\u0009\u0009\u0009*x6 |
-        |\u0009\u0009\u0009match *x6 {
-        |\u0009\u0009\u0009\u000942 => Nil ;
-        |\u0009\u0009\u0009\u0009x7 => x3
-        |\u0009\u0009\u0009}
-        |\u0009\u0009}
-        |\u0009}
+        |  for( x2, @{x3} <- x1 ; x4, @{x5} <- x0 ) {
+        |    x2!(x5) |
+        |    x4!(x3) |
+        |    for( x6 <- x4 ) {
+        |      *x6 |
+        |      match *x6 {
+        |        42 => Nil ;
+        |        x7 => x3
+        |      }
+        |    }
+        |  }
         |}""".stripMargin
   }
 
@@ -571,7 +571,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
           .normalizeMatch[Coeval](pNew, inputs)
           .value
           .par)
-    result shouldBe "new x0, x1, x2 in {\n\tx2!(9) |\n\tx1!(8) |\n\tx0!(7)\n}"
+    result shouldBe
+      """new x0, x1, x2 in {
+        |  x2!(9) |
+        |  x1!(8) |
+        |  x0!(7)
+        |}""".stripMargin
   }
 
   "PMatch" should "Print recognize pattern bindings" in {
@@ -600,10 +605,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     result shouldBe
       """@{Nil}!(47) |
         |for( @{x0} <- @{Nil} ) {
-        |\u0009match x0 {
-        |\u0009\u000942 => Nil ;
-        |\u0009\u0009x1 => Nil
-        |\u0009}
+        |  match x0 {
+        |    42 => Nil ;
+        |    x1 => Nil
+        |  }
         |}""".stripMargin
   }
 
@@ -618,8 +623,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par)
     result shouldBe
       """match true {
-        |\u0009true => @{Nil}!(47) ;
-        |\u0009false => Nil
+        |  true => @{Nil}!(47) ;
+        |  false => Nil
         |}""".stripMargin
   }
 
@@ -648,12 +653,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par)
     result shouldBe
       """match (47 == 47) {
-        |\u0009true => new x0 in {
-        |\u0009\u0009x0!(47)
-        |\u0009} ;
-        |\u0009false => new x0 in {
-        |\u0009\u0009x0!(47)
-        |\u0009}
+        |  true => new x0 in {
+        |    x0!(47)
+        |  } ;
+        |  false => new x0 in {
+        |    x0!(47)
+        |  }
         |}""".stripMargin
   }
 
@@ -674,7 +679,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par)
     result shouldBe """for( @{match x0 | x1 { 47 => Nil }} <- @{Nil} ) {
-                      |\u0009Nil
+                      |  Nil
                       |}""".stripMargin
   }
 

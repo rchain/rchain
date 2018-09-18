@@ -27,6 +27,8 @@ case class PrettyPrinter(freeShift: Int,
                          rotation: Int,
                          maxVarCount: Int) {
 
+  val indentStr = "  "
+
   def boundId: String     = rotate(baseId)
   def setBaseId(): String = increment(baseId)
 
@@ -115,7 +117,7 @@ case class PrettyPrinter(freeShift: Int,
         if (b.size > 60) {
           "@{" + b + "}"
         } else {
-          "@{" + b.replaceAll("[\n]\t*", " ") + "}"
+          "@{" + b.replaceAll("[\n](\\s\\s)*", " ") + "}"
         }
       }
       case ChanVar(cv)           => buildString(cv)
@@ -154,9 +156,14 @@ case class PrettyPrinter(freeShift: Int,
             })
         }
 
-        "for( " + bindsString + " ) {\n" + this
+        val bodyStr = this
           .copy(boundShift = boundShift + totalFree)
-          .buildString(r.body, indent + 1) + "\n}"
+          .buildString(r.body, indent + 1)
+        if (bodyStr.nonEmpty) {
+          "for( " + bindsString + " ) {\n" + bodyStr + "\n}"
+        } else {
+          "for( " + bindsString + " ) {" + bodyStr + "}"
+        }
 
       case b: Bundle =>
         BundleOps.showInstance.show(b) + "{ " + buildString(b.body) + " }"
@@ -177,7 +184,7 @@ case class PrettyPrinter(freeShift: Int,
                 if (i != m.cases.length - 1) " ;\n"
                 else ""
               }
-          }.split('\n').map("\t" * (indent + 1) + _).mkString("\n") + "\n}"
+          }.split('\n').map(indentStr * (indent + 1) + _).mkString("\n") + "\n}"
 
       case g: GPrivate => "Unforgeable(0x" + Base16.encode(g.id.toByteArray) + ")"
       case c: Connective =>
@@ -225,7 +232,7 @@ case class PrettyPrinter(freeShift: Int,
       case unsupported =>
         throw new Error(s"Attempt to print unknown GeneratedMessage type: ${unsupported.getClass}.")
     }
-    content.split('\n').map("\t" * indent + _).mkString("\n")
+    content.split('\n').map(indentStr * indent + _).mkString("\n")
   }
 
   def increment(id: String): String = {
