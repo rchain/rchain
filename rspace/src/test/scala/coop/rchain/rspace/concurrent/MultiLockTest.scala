@@ -81,8 +81,12 @@ class MultiLockTest extends FlatSpec with Matchers {
     m.toList should contain theSameElementsAs (Map("a" -> 2).toList)
   }
 
-  import cats.effect.{Concurrent, IO}
   "FunctionalMultiLock" should "not allow concurrent modifications of same keys" in {
+    import cats.effect.{Concurrent, ContextShift, IO}
+
+    implicit val ioContextShift: ContextShift[IO] =
+      IO.contextShift(scala.concurrent.ExecutionContext.Implicits.global)
+
     val tested = new FunctionalMultiLock[IO, String]()
 
     val m = scala.collection.mutable.Map.empty[String, Int]
