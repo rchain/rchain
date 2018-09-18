@@ -70,28 +70,28 @@ class DagOperationsTest
 
   "uncommon ancestors" should "be computed properly" in {
     /*
-     * DAG Looks like this:
+     *  DAG Looks like this:
      *
-     *        b6   b7
-     *       |  \ /  \
-     *       |   b4  b5
-     *       |    \ /
-     *       b2    b3
-     *         \  /
-     *          b1
-     *           |
-     *         genesis
+     *         b6   b7
+     *        |  \ / |
+     *        b4  b5 |
+     *          \ |  |
+     *            b3 |
+     *            |  |
+     *           b1  b2
+     *            |  /
+     *          genesis
      */
     def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq.empty)
         b1      <- createBlock[F](Seq(genesis.blockHash))
-        b2      <- createBlock[F](Seq(b1.blockHash))
+        b2      <- createBlock[F](Seq(genesis.blockHash))
         b3      <- createBlock[F](Seq(b1.blockHash))
         b4      <- createBlock[F](Seq(b3.blockHash))
         b5      <- createBlock[F](Seq(b3.blockHash))
-        b6      <- createBlock[F](Seq(b2.blockHash, b4.blockHash))
-        b7      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
+        b6      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
+        b7      <- createBlock[F](Seq(b2.blockHash, b5.blockHash))
       } yield b7
 
     val chain      = createChain[StateWithChain].runS(initState)
@@ -108,22 +108,23 @@ class DagOperationsTest
     implicit val ordering = BlockDag.deriveOrdering(chain.dag)
     DagOperations.uncommonAncestors(Vector(b6, b7), chain.dataLookup) shouldBe Map(
       b6 -> BitSet(0),
-      b2 -> BitSet(0),
+      b4 -> BitSet(0),
       b7 -> BitSet(1),
-      b5 -> BitSet(1)
+      b2 -> BitSet(1)
     )
 
-    DagOperations.uncommonAncestors(Vector(b6, b2), chain.dataLookup) shouldBe Map(
+    DagOperations.uncommonAncestors(Vector(b6, b3), chain.dataLookup) shouldBe Map(
       b6 -> BitSet(0),
       b4 -> BitSet(0),
-      b3 -> BitSet(0)
+      b5 -> BitSet(0)
     )
 
     DagOperations.uncommonAncestors(Vector(b2, b4, b5), chain.dataLookup) shouldBe Map(
       b2 -> BitSet(0),
       b4 -> BitSet(1),
       b5 -> BitSet(2),
-      b3 -> BitSet(1, 2)
+      b3 -> BitSet(1, 2),
+      b1 -> BitSet(1, 2)
     )
 
     DagOperations.uncommonAncestors(Vector(b1), chain.dataLookup) shouldBe Map

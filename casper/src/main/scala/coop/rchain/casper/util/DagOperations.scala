@@ -60,30 +60,20 @@ object DagOperations {
     @tailrec
     def loop(currMap: Map[BlockMetadata, BitSet],
              enqueued: HashSet[BlockMetadata]): Map[BlockMetadata, BitSet] =
-      if (q.isEmpty) currMap
+      if (q.forall(b => isCommon(currMap(b)))) currMap
       else {
         val currBlock = q.dequeue()
         //Note: The orElse case should never occur because we traverse in
         //      reverse topological order (i.e. down parent links)
         val currSet = currMap.getOrElse(currBlock, BitSet.empty)
-        if (isCommon(currSet)) {
-          //All ancestors of a common ancestor are still common
-          //we need to update the map with the fact they are common
-          //in case one of them would end up in the queue
-          //and not already be marked as common.
-          val newMap = parents(currBlock).foldLeft(currMap) {
-            case (map, p) => map.updated(p, commonSet)
-          }
-          loop(newMap - currBlock, enqueued - currBlock)
-        } else {
-          val (newMap, newEnqueued) = parents(currBlock).foldLeft((currMap, enqueued)) {
-            case ((map, enq), p) =>
-              if (!enq(p)) q.enqueue(p)
-              (updatedWith(map, p)(currSet)(_ | currSet), (enq + p))
-          }
-
-          loop(newMap, newEnqueued - currBlock)
+        val (newMap, newEnqueued) = parents(currBlock).foldLeft((currMap, enqueued)) {
+          case ((map, enq), p) =>
+            if (!enq(p)) q.enqueue(p)
+            (updatedWith(map, p)(currSet)(_ | currSet), (enq + p))
         }
+
+        if (isCommon(currSet)) loop(newMap - currBlock, newEnqueued - currBlock)
+        else loop(newMap, newEnqueued - currBlock)
       }
 
     loop(initMap, HashSet.empty[BlockMetadata]).filter { case (_, set) => !isCommon(set) }
