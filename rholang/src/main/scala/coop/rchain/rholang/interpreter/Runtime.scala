@@ -113,7 +113,7 @@ object Runtime {
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         Seq(
           space.install(channels, patterns, continuation),
-//          replaySpace.install(channels, patterns, continuation)
+          replaySpace.install(channels, patterns, continuation)
         )
     }
 
