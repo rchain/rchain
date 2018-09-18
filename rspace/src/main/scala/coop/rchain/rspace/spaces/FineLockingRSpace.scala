@@ -108,7 +108,7 @@ class FineLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
                 WaitingContinuation(patterns, continuation, persist, consumeRef))
             }
             for (channel <- channels)
-              store.withTxn(store.createTxnRead()) { txn =>
+              store.withTxn(store.createTxnWrite()) { txn =>
                 store.addJoin(txn, channel, channels)
               }
             logger.debug(s"""|consume: no data found,
@@ -206,7 +206,7 @@ class FineLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
             if (!persistK) {
-              store.withTxn(store.createTxnRead()) { txn =>
+              store.withTxn(store.createTxnWrite()) { txn =>
                 store.removeWaitingContinuation(txn, channels, continuationIndex)
               }
             }
@@ -219,7 +219,7 @@ class FineLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
                       store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                     }
                   }
-                  store.withTxn(store.createTxnRead()) { txn =>
+                  store.withTxn(store.createTxnWrite()) { txn =>
                     store.removeJoin(txn, candidateChannel, channels)
                   }
               }
@@ -227,7 +227,7 @@ class FineLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
             Right(Some(continuation, dataCandidates.map(_.datum.a)))
           case Right(None) =>
             logger.debug(s"produce: no matching continuation found")
-            store.withTxn(store.createTxnRead()) { txn =>
+            store.withTxn(store.createTxnWrite()) { txn =>
               store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
             }
             logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")

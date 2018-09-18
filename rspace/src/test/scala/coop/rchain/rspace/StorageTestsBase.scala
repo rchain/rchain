@@ -1,4 +1,6 @@
 package coop.rchain.rspace
+
+import coop.rchain.rspace.spaces.{FineLockingLMDBStore, FineLockingRSpace}
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
@@ -214,6 +216,46 @@ class MixedStoreTestsBase
 
     val testSpace =
       RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+    testStore.withTxn(testStore.createTxnWrite()) { txn =>
+      testStore.withTrieTxn(txn) { trieTxn =>
+        testStore.clear(txn)
+        testStore.trieStore.clear(trieTxn)
+      }
+    }
+    history.initialize(testStore.trieStore, testBranch)
+    val _ = testSpace.createCheckpoint()
+    try {
+      f(testSpace)
+    } finally {
+      testStore.trieStore.close()
+      testStore.close()
+      env.close()
+    }
+  }
+
+  override def afterAll(): Unit =
+    dbDir.recursivelyDelete
+}
+
+class FineLockingTestsBase
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 4096L
+
+  override def withTestSpace[S](f: T => S): S = {
+    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
+    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+
+    val testBranch = Branch("test")
+    val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val testStore =
+      FineLockingLMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+    val testSpace =
+      new FineLockingRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
+                                                                                     testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)

@@ -83,13 +83,9 @@ class FineLockingLMDBStore[C, P, A, K] private (
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, currData, _)) =>
-        this.withTxn(this.createTxnWrite()) { txnW =>
-          insertGNAT(txnW, channelsHash, gnat.copy(data = datum +: currData))
-        }
+        insertGNAT(txn, channelsHash, gnat.copy(data = datum +: currData))
       case None =>
-        this.withTxn(this.createTxnWrite()) { txnW =>
-          insertGNAT(txnW, channelsHash, GNAT(channels, Seq(datum), Seq.empty))
-        }
+        insertGNAT(txn, channelsHash, GNAT(channels, Seq(datum), Seq.empty))
     }
   }
 
@@ -157,17 +153,14 @@ class FineLockingLMDBStore[C, P, A, K] private (
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
         if (newContinuations.nonEmpty)
-          this.withTxn(this.createTxnWrite()) { txnW =>
-            insertGNAT(txnW, channelsHash, gnat.copy(wks = newContinuations))
-          } else
-          this.withTxn(this.createTxnWrite()) { txnW =>
-            deleteGNAT(txnW, channelsHash, gnat)
-          }
+          insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+        else
+          deleteGNAT(txn, channelsHash, gnat)
+
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
-        this.withTxn(this.createTxnWrite()) { txnW =>
-          insertGNAT(txnW, channelsHash, gnat.copy(wks = newContinuations))
-        }
+        insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
+
       case None =>
         throw new Exception("Attempted to remove a continuation from a value that doesn't exist")
     }
@@ -184,13 +177,9 @@ class FineLockingLMDBStore[C, P, A, K] private (
     val joinedChannelHash = hashChannels(Seq(channel))
     fetchJoin(txn, joinedChannelHash) match {
       case Some(joins) if !joins.contains(channels) =>
-        this.withTxn(this.createTxnWrite()) { txnW =>
-          insertJoin(txnW, joinedChannelHash, channels +: joins)
-        }
+        insertJoin(txn, joinedChannelHash, channels +: joins)
       case None =>
-        this.withTxn(this.createTxnWrite()) { txnW =>
-          insertJoin(txnW, joinedChannelHash, Seq(channels))
-        }
+        insertJoin(txn, joinedChannelHash, Seq(channels))
       case _ =>
         ()
     }
@@ -203,12 +192,10 @@ class FineLockingLMDBStore[C, P, A, K] private (
         if (getWaitingContinuation(txn, channels).isEmpty) {
           val newJoins = removeFirst(joins)(_ == channels)
           if (newJoins.nonEmpty)
-            this.withTxn(this.createTxnWrite()) { txnW =>
-              insertJoin(txnW, joinedChannelHash, removeFirst(joins)(_ == channels))
-            } else
-            this.withTxn(this.createTxnWrite()) { txnW =>
-              _dbJoins.delete(txnW, joinedChannelHash)
-            }
+            insertJoin(txn, joinedChannelHash, removeFirst(joins)(_ == channels))
+          else
+            _dbJoins.delete(txn, joinedChannelHash)
+
         }
       case None =>
         ()
@@ -228,11 +215,10 @@ class FineLockingLMDBStore[C, P, A, K] private (
       }
     }
 
-  private[rspace] def clear(txn: Transaction): Unit =
-    this.withTxn(this.createTxnWrite()) { txnW =>
-      _dbGNATs.drop(txnW)
-      _dbJoins.drop(txnW)
-    }
+  private[rspace] def clear(txn: Transaction): Unit = {
+    _dbGNATs.drop(txn)
+    _dbJoins.drop(txn)
+  }
 
   override def close(): Unit = {
     super.close()

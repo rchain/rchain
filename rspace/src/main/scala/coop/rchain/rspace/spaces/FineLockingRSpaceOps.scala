@@ -104,7 +104,7 @@ abstract class FineLockingRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A,
     history.lookup(store.trieStore, root, channelsHash)
 
   override def reset(root: Blake2b256Hash): Unit =
-    store.withTxn(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnWrite()) { txn =>
       store.withTrieTxn(txn) { trieTxn =>
         store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
         val leaves = store.trieStore.getLeaves(trieTxn, root)
