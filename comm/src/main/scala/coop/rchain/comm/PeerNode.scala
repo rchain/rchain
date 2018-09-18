@@ -20,10 +20,7 @@ object NodeIdentifier {
 }
 
 // TODO: Add Show instance
-final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
-  val tcpSocketAddress = new InetSocketAddress(host, tcpPort)
-  val udpSocketAddress = new InetSocketAddress(host, udpPort)
-}
+final case class Endpoint(host: String, tcpPort: Int, udpPort: Int)
 
 // TODO: Add Show instance
 final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
@@ -34,33 +31,21 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   override def toString: String = toAddress
 
   val toAddress: String =
-    s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
+    s"rnode://$sKey@${endpoint.host}:[${endpoint.tcpPort},${endpoint.udpPort}]"
 
 }
 
 object PeerNode {
 
-  final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
+  import scala.util.matching.Regex, Regex._
 
-  def parse(str: String): Either[CommError, PeerNode] =
-    // TODO replace try-catch with Try
-    try {
-      val url: Url = Url.parse(str)
+  def fromAddress(str: String): Either[CommError, PeerNode] = {
+    val template = """rnode\:\/\/(.*?)@(.*?):\[(.*),(.*)\]""".r
 
-      val addy =
-        for {
-          scheme <- url.schemeOption
-          key    <- url.user
-          host   <- url.hostOption
-          port   <- url.port
-        } yield NetworkAddress(scheme, key, host.value, port)
-
-      addy match {
-        case Some(NetworkAddress(_, key, host, port)) =>
-          Right(PeerNode(NodeIdentifier(key), Endpoint(host, port, port)))
-        case _ => Left(ParseError(s"bad address: $url"))
-      }
-    } catch {
-      case NonFatal(_) => Left(ParseError(s"bad address: $str"))
+    str match {
+      case template(key, host, tcpPort, udpPort) =>
+        Right(PeerNode(NodeIdentifier(key), Endpoint(host, tcpPort.toInt, udpPort.toInt)))
+      case _ => Left(ParseError(s"bad address: $str"))
     }
+  }
 }

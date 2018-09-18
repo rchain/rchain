@@ -18,7 +18,7 @@ object Converter {
       s match {
         case (_, uri :: Nil) :: Nil =>
           PeerNode
-            .parse(uri)
+            .fromAddress(uri)
             .map(u => Right(Some(u)))
             .getOrElse(Left("can't parse the rnode bootstrap address"))
         case Nil => Right(None)

@@ -315,7 +315,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     */
   val main: Effect[Unit] = for {
     // 1. set up configurations
-    local          <- EitherT.fromEither[Task](PeerNode.parse(address))
+    local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
     defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
     rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
                                           numOfConnectionsPinged = 10) // TODO read from conf
