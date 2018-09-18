@@ -1287,23 +1287,28 @@ object Reduce {
         "slice"       -> slice
       )
 
+    private val prettyPrinter  = PrettyPrinter()
+    private def pprint(p: Par) = prettyPrinter.buildString(p)
+
     def evalSingleExpr(p: Par)(implicit env: Env[Par],
                                costAccountingAlg: CostAccountingAlg[M]): M[Expr] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
-          ReduceError("Error: parallel or non expression found where expression expected."))
+          ReduceError(
+            "Error: parallel or non expression found where expression expected: " + pprint(p)))
       else
         p.exprs match {
           case (e: Expr) +: Nil => evalExprToExpr(e)
           case _ =>
-            s.raiseError(ReduceError("Error: Multiple expressions given."))
+            s.raiseError(ReduceError("Error: Multiple expressions given: " + pprint(p)))
         }
 
     def evalToLong(p: Par)(implicit env: Env[Par],
                            costAccountingAlg: CostAccountingAlg[M]): M[Long] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
-          ReduceError("Error: parallel or non expression found where expression expected."))
+          ReduceError(
+            "Error: parallel or non expression found where expression expected:" + pprint(p)))
       else
         p.exprs match {
           case Expr(GInt(v)) +: Nil =>
