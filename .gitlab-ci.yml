@@ -42,6 +42,21 @@ deploy:deploy-rnode-to-dockerhub:
     - /^release-.*$/
     - tags 
 
+
+deploy:deploy-java10-rnode-to-dockerhub:
+  stage: deploy
+  tags:
+    - preloaded-ubuntu1804
+  script:
+    - ./scripts/install_bnfc.sh
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
+    - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
+    - sudo docker tag coop.rchain/rnode:latest rchain/rnode:java10
+    - sudo docker push rchain/rnode:java10
+  only:
+    - java-10
+
+
 deploy:deploy-rnode-artifacts:
   stage: deploy 
   tags:

@@ -167,7 +167,7 @@ lazy val node = (project in file("node"))
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "libsodium18"),
+        ExecCmd("RUN", "apt", "install", "-yq", "libsodium23"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
