@@ -3,8 +3,7 @@ package coop.rchain.shared
 import cats._
 import cats.implicits._
 
-import scala.collection.immutable.Stream.cons
-import scala.collection.immutable.{List, Set, Stream}
+import scala.collection.immutable.{List, Set}
 
 sealed abstract class StreamT[F[_], +A] { self =>
 
