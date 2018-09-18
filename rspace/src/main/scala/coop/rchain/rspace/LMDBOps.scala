@@ -1,22 +1,31 @@
 package coop.rchain.rspace
 
+import internal._
+
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import org.lmdbjava.{Dbi, Env, Txn, TxnOps}
 import scodec.Codec
 import coop.rchain.shared.ByteVectorOps._
-import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.PathOps._
 import scodec.bits.BitVector
 import kamon._
 import org.lmdbjava.Txn.NotReadyException
 
-trait LMDBOps {
+trait LMDBOps extends CloseOps {
 
-  private[rspace] def createTxnRead(): Txn[ByteBuffer] = env.txnRead
+  protected[rspace] type Transaction = Txn[ByteBuffer]
 
-  private[rspace] def createTxnWrite(): Txn[ByteBuffer] = env.txnWrite
+  private[rspace] def createTxnRead() = {
+    failIfClosed()
+    env.txnRead
+  }
+
+  private[rspace] def createTxnWrite() = {
+    failIfClosed()
+    env.txnWrite
+  }
 
   protected[this] def databasePath: Path
   protected[this] def env: Env[ByteBuffer]

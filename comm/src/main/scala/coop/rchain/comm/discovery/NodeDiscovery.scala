@@ -10,8 +10,7 @@ import coop.rchain.comm.{CommError, PeerNode, ProtocolHelper}, CommError.CommErr
 import coop.rchain.comm.protocol.routing._
 
 trait NodeDiscovery[F[_]] {
-  def addNode(node: PeerNode): F[Unit]
-  def findMorePeers(limit: Int): F[Seq[PeerNode]]
+  def discover: F[Unit]
   def peers: F[Seq[PeerNode]]
   def handleCommunications: Protocol => F[CommunicationResponse]
 }
@@ -22,9 +21,8 @@ object NodeDiscovery extends NodeDiscoveryInstances {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: NodeDiscovery[F]): NodeDiscovery[T[F, ?]] =
     new NodeDiscovery[T[F, ?]] {
-      def addNode(node: PeerNode): T[F, Unit]            = C.addNode(node).liftM[T]
-      def findMorePeers(limit: Int): T[F, Seq[PeerNode]] = C.findMorePeers(limit).liftM[T]
-      def peers: T[F, Seq[PeerNode]]                     = C.peers.liftM[T]
+      def discover: T[F, Unit]       = C.discover.liftM[T]
+      def peers: T[F, Seq[PeerNode]] = C.peers.liftM[T]
       def handleCommunications: Protocol => T[F, CommunicationResponse] =
         pm => C.handleCommunications(pm).liftM[T]
     }

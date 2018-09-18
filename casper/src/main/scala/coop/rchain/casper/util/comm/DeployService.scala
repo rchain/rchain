@@ -3,12 +3,10 @@ package coop.rchain.casper.util.comm
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import cats.implicits._
-
 import com.google.protobuf.empty.Empty
+import coop.rchain.casper.protocol._
+import coop.rchain.models.Channel
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployData, DeployServiceGrpc}
-
 import monix.eval.Task
 
 trait DeployService[F[_]] {
@@ -17,16 +15,24 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
+  def listenForDataAtName(request: Channel): F[ListeningNameDataResponse]
+  def listenForContinuationAtName(request: Channels): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService(host: String, port: Int) extends DeployService[Task] with Closeable {
+class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
+    extends DeployService[Task]
+    with Closeable {
 
   private val channel: ManagedChannel =
-    ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
+    ManagedChannelBuilder
+      .forAddress(host, port)
+      .maxInboundMessageSize(maxMessageSize)
+      .usePlaintext(true)
+      .build
   private val blockingStub = DeployServiceGrpc.blockingStub(channel)
 
   def deploy(d: DeployData): Task[(Boolean, String)] = Task.delay {
@@ -46,8 +52,24 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
   }
 
   def showBlocks(): Task[String] = Task.delay {
-    val response = blockingStub.showBlocks(Empty())
-    response.toProtoString
+    val response = blockingStub.showBlocks(Empty()).toList
+
+    val showResponses = response
+      .map {
+        case bi =>
+          s"""
+------------- block ${bi.blockNumber} ---------------
+${bi.toProtoString}
+-----------------------------------------------------
+"""
+      }
+      .mkString("\n")
+
+    val showLength =
+      s"""
+Blockchain length: ${response.length}
+"""
+    showResponses + "\n" + showLength
   }
 
   def addBlock(b: BlockMessage): Task[(Boolean, String)] = Task.delay {
@@ -55,5 +77,21 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] wit
     (response.success, response.message)
   }
 
-  override def close(): Unit = channel.shutdown().awaitTermination(3, TimeUnit.SECONDS)
+  def listenForDataAtName(request: Channel): Task[ListeningNameDataResponse] = Task.delay {
+    blockingStub.listenForDataAtName(request)
+  }
+
+  def listenForContinuationAtName(request: Channels): Task[ListeningNameContinuationResponse] =
+    Task.delay {
+      blockingStub.listenForContinuationAtName(request)
+    }
+
+  override def close(): Unit = {
+    val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
+    if (!terminated) {
+      println(
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+      channel.awaitTermination(10, TimeUnit.SECONDS)
+    }
+  }
 }

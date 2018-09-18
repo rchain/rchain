@@ -29,7 +29,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect]
   implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
-  implicit val connectionsCell   = Cell.const[Effect, Connections](Connect.Connections.empty)
+  implicit val connectionsCell   = Cell.unsafe[Effect, Connections](Connect.Connections.empty)
   implicit val rpConfAsk         = createRPConfAsk[Effect](peerNode("src", 40400))
 
   override def beforeEach(): Unit = {
@@ -48,14 +48,6 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         transportLayerEff.requests.size should be(1)
         val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
         upstream.unpack(ProtocolHandshake)
-      }
-      it("should then add remote node to communication layer") {
-        // given
-        transportLayerEff.setResponses(kp(alwaysSuccess))
-        // when
-        Connect.connect[Effect](remote, defaultTimeout)
-        // then
-        nodeDiscoveryEff.nodes should not be empty
       }
     }
 

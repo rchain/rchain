@@ -4,6 +4,8 @@ import java.nio.file.Path
 
 import coop.rchain.comm.PeerNode
 
+import scala.concurrent.duration.FiniteDuration
+
 case class Configuration(
     server: Option[Server],
     grpcServer: Option[GrpcServer],
@@ -14,16 +16,19 @@ case class Configuration(
 case class Server(
     host: Option[String],
     port: Option[Int],
-    metricsPort: Option[Int],
     httpPort: Option[Int],
     noUpnp: Option[Boolean],
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],
     standalone: Option[Boolean],
+    genesisValidator: Option[Boolean],
     mapSize: Option[Long],
+    storeType: Option[String],
     casperBlockStoreSize: Option[Long],
     dataDir: Option[Path],
-    maxNumOfConnections: Option[Int]
+    maxNumOfConnections: Option[Int],
+    maxMessageSize: Option[Int],
+    threadPoolSize: Option[Int]
 )
 
 case class GrpcServer(
@@ -44,5 +49,10 @@ case class Validators(
     publicKey: Option[String],
     privateKey: Option[String],
     sigAlgorithm: Option[String],
-    walletsFile: Option[String]
+    walletsFile: Option[String],
+    shardId: Option[String],
+    requiredSigs: Option[Int],
+    approveGenesisDuration: Option[FiniteDuration],
+    approveGenesisInterval: Option[FiniteDuration],
+    deployTimestamp: Option[Long]
 )

@@ -26,16 +26,16 @@ trait ScoreTree {
   case class Node[T](children: Seq[Tree[T]]) extends Tree[T]
 
   sealed trait TaggedAtom
-  case class IntAtom(i: Int)          extends TaggedAtom
+  case class IntAtom(i: Long)         extends TaggedAtom
   case class StringAtom(s: String)    extends TaggedAtom
   case class BytesAtom(b: ByteString) extends TaggedAtom
 
   case class ScoreAtom(value: TaggedAtom) {
-    def bsCompare(b1: ByteString, b2: ByteString) = {
+    def bsCompare(b1: ByteString, b2: ByteString): Int = {
       def loop(it1: ByteIterator, it2: ByteIterator): Int =
         if (it1.hasNext) {
           if (it2.hasNext) {
-            val comp = it1.next.byteValue.compareTo(it2.next.byteValue)
+            val comp = it1.nextByte.compareTo(it2.nextByte)
             if (comp == 0)
               loop(it1, it2)
             else
@@ -65,20 +65,20 @@ trait ScoreTree {
   }
 
   object ScoreAtom {
-    def apply(value: Int): ScoreAtom        = new ScoreAtom(IntAtom(value))
+    def apply(value: Long): ScoreAtom       = new ScoreAtom(IntAtom(value))
     def apply(value: String): ScoreAtom     = new ScoreAtom(StringAtom(value))
     def apply(value: ByteString): ScoreAtom = new ScoreAtom(BytesAtom(value))
   }
 
   object Leaf {
-    def apply(item: Int)        = new Leaf(ScoreAtom(item))
+    def apply(item: Long)       = new Leaf(ScoreAtom(item))
     def apply(item: String)     = new Leaf(ScoreAtom(item))
     def apply(item: ByteString) = new Leaf(ScoreAtom(item))
   }
 
   object Leaves {
     // Shortcut to be able to write Leaves(1,2,3) instead of Node(Seq(Leaf(1),Leaf(2),Leaf(3)))
-    def apply(children: Int*): Node[ScoreAtom] = new Node(children.map(a => Leaf(a)))
+    def apply(children: Long*): Node[ScoreAtom] = new Node(children.map(a => Leaf(a)))
   }
 
   object Node {
@@ -113,7 +113,7 @@ trait ScoreTree {
   }
 
   // Effectively a tuple that groups the term to its score tree.
-  case class ScoredTerm[T](term: T, score: Tree[ScoreAtom])
+  case class ScoredTerm[+T](term: T, score: Tree[ScoreAtom])
 
   /**
     * Total order of all terms
@@ -139,6 +139,7 @@ trait ScoreTree {
     final val BOUND_VAR = 50
     final val FREE_VAR  = 51
     final val WILDCARD  = 52
+    final val REMAINDER = 53
 
     // Expr
     final val EVAR        = 100
@@ -177,10 +178,15 @@ trait ScoreTree {
     final val BUNDLE_WRITE      = 307
     final val BUNDLE_READ_WRITE = 308
 
-    final val CONNECTIVE_NOT    = 400
-    final val CONNECTIVE_AND    = 401
-    final val CONNECTIVE_OR     = 402
-    final val CONNECTIVE_VARREF = 403
+    final val CONNECTIVE_NOT       = 400
+    final val CONNECTIVE_AND       = 401
+    final val CONNECTIVE_OR        = 402
+    final val CONNECTIVE_VARREF    = 403
+    final val CONNECTIVE_BOOL      = 404
+    final val CONNECTIVE_INT       = 405
+    final val CONNECTIVE_STRING    = 406
+    final val CONNECTIVE_URI       = 407
+    final val CONNECTIVE_BYTEARRAY = 408
 
     final val PAR = 999
   }

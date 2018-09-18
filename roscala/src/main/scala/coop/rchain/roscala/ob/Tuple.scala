@@ -27,6 +27,8 @@ class Tuple(val value: Array[Ob]) extends Ob {
     Tuple(size, this, entriesToSkip, size)
   }
 
+  override def indexedSize(): Fixnum = Fixnum(this.numberOfElements())
+
   override def matches(msg: Ctxt): Boolean = {
     val n = numberOfElements()
 
@@ -66,12 +68,8 @@ class Tuple(val value: Array[Ob]) extends Ob {
         .forall {
           case (e, msgElem) =>
             if (e != msgElem && e != Niv) {
-              if (e.meta.isInstanceOf[Tuple]
-                  && msgElem.meta.isInstanceOf[Tuple]
-                  && e.isInstanceOf[Tuple]
-                  && msgElem.isInstanceOf[Tuple]) {
-                if (e.asInstanceOf[Tuple]
-                      .matches(msgElem.asInstanceOf[Tuple])) {
+              if (e.isInstanceOf[Tuple] && msgElem.isInstanceOf[Tuple]) {
+                if (e.asInstanceOf[Tuple].matches(msgElem.asInstanceOf[Tuple])) {
                   true
                 } else false
               } else false
@@ -110,6 +108,8 @@ class Tuple(val value: Array[Ob]) extends Ob {
 }
 
 object Tuple {
+  val tupleMeta = Meta(extensible = false)
+  val tupleSbo  = new Actor()
 
   def apply(size: Int, master: Tuple, offset: Int, n: Int, init: Option[Ob] = None): Tuple = {
     val slice = master.value.slice(offset, n + offset)
@@ -129,9 +129,9 @@ object Tuple {
     else
       Tuple(Array.fill(n)(b))
 
-  def apply(value: Array[Ob]): Tuple = new Tuple(value)
+  def apply(value: Array[Ob]): Tuple = wire(new Tuple(value))
 
-  def apply(obs: Ob*): Tuple = new Tuple(obs.toArray[Ob])
+  def apply(obs: Ob*): Tuple = wire(new Tuple(obs.toArray[Ob]))
 
   def apply(t1: Tuple, t2: Tuple): Tuple = Tuple(t1.value ++ t2.value)
 
@@ -140,6 +140,13 @@ object Tuple {
   def cons(ob: Ob, t: Tuple): Tuple = Tuple(ob +: t.value)
 
   def concat(t1: Tuple, t2: Tuple): Tuple = apply(t1, t2)
+
+  def wire(tuple: Tuple): Tuple = {
+    tuple.parent = tupleSbo
+    tuple.meta = tupleMeta
+    tuple.meta.refCount.incrementAndGet()
+    tuple
+  }
 }
 
 object Nil extends Tuple(Array.empty[Ob]) {

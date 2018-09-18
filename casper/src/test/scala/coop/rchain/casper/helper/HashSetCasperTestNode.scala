@@ -1,65 +1,73 @@
 package coop.rchain.casper.helper
 
-import cats.{Applicative, ApplicativeError, Id}
+import java.nio.file.Files
+
+import cats.{Applicative, ApplicativeError, Id, Monad, Traverse}
+import cats.data.EitherT
+import cats.effect.concurrent.Ref
+import cats.effect.Sync
 import cats.implicits._
+
+import coop.rchain.blockstorage.LMDBBlockStore
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.casper.util.comm.TransportLayerTestImpl
-import coop.rchain.casper.{
-  MultiParentCasper,
-  MultiParentCasperConstructor,
-  SafetyOracle,
-  ValidatorIdentity
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal
 }
+import coop.rchain.casper.util.comm.TransportLayerTestImpl
+import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
+import coop.rchain.comm.CommError.ErrorHandler
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect
+import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.effects.PacketHandler
-import coop.rchain.comm.rp.{Connect, HandleMessages}
-import HandleMessages.handle
-import Connect._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.rholang.interpreter.Runtime
-import java.nio.file.Files
-
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.shared.Cell
+import coop.rchain.shared.PathOps.RichPath
 import monix.execution.Scheduler
 
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.collection.mutable
-import coop.rchain.shared.PathOps.RichPath
-
+import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.Random
-import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
 
-class HashSetCasperTestNode(name: String,
-                            val local: PeerNode,
-                            tle: TransportLayerTestImpl[Id],
-                            val genesis: BlockMessage,
-                            sk: Array[Byte],
-                            storageSize: Long = 1024L * 1024)(implicit scheduler: Scheduler) {
-
-  import HashSetCasperTestNode.errorHandler
+class HashSetCasperTestNode[F[_]](name: String,
+                                  val local: PeerNode,
+                                  tle: TransportLayerTestImpl[F],
+                                  val genesis: BlockMessage,
+                                  sk: Array[Byte],
+                                  logicalTime: LogicalTime[F],
+                                  implicit val errorHandlerEff: ErrorHandler[F],
+                                  storageSize: Long,
+                                  shardId: String = "rchain")(implicit scheduler: Scheduler,
+                                                              syncF: Sync[F],
+                                                              captureF: Capture[F]) {
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
 
-  implicit val logEff            = new LogStub[Id]
-  implicit val timeEff           = new LogicalTime[Id]
-  implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
+  implicit val logEff            = new LogStub[F]
+  implicit val timeEff           = logicalTime
+  implicit val connectionsCell   = Cell.unsafe[F, Connections](Connect.Connections.empty)
   implicit val transportLayerEff = tle
-  implicit val metricEff         = new Metrics.MetricsNOP[Id]
-  implicit val errorHandlerEff   = errorHandler
+  implicit val metricEff         = new Metrics.MetricsNOP[F]
   val dir                        = BlockStoreTestFixture.dbDir
-  implicit val blockStore        = BlockStoreTestFixture.create(dir)
-  // pre-population removed from internals of Casper
-  blockStore.put(genesis.blockHash, genesis)
-  implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
-  implicit val connectionsCell   = Cell.const[Id, Connections](Connect.Connections.empty)
-  implicit val rpConfAsk         = createRPConfAsk[Id](local)
+  implicit val blockStore =
+    LMDBBlockStore.create[F](LMDBBlockStore.Config(path = dir, mapSize = storageSize))
+  implicit val turanOracleEffect = SafetyOracle.turanOracle[F]
+  implicit val rpConfAsk         = createRPConfAsk[F](local)
 
   val activeRuntime                  = Runtime.create(storageDirectory, storageSize)
   val runtimeManager                 = RuntimeManager.fromRuntime(activeRuntime)
@@ -67,19 +75,42 @@ class HashSetCasperTestNode(name: String,
 
   val validatorId = ValidatorIdentity(Ed25519.toPublic(sk), sk, "ed25519")
 
-  implicit val casperEff =
-    MultiParentCasper
-      .hashSetCasper[Id](runtimeManager, Some(validatorId), genesis, blockStore.asMap())
-  implicit val constructor = MultiParentCasperConstructor
-    .successCasperConstructor[Id](
-      ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis)))),
-      casperEff)
+  val approvedBlock = ApprovedBlock(candidate = Some(ApprovedBlockCandidate(block = Some(genesis))))
 
-  implicit val packetHandlerEff = PacketHandler.pf[Id](
-    casperPacketHandler[Id]
+  implicit val labF = LastApprovedBlock.unsafe[F](Some(approvedBlock))
+
+  val genesisBonds          = ProtoUtil.bonds(genesis)
+  val initialLatestMessages = genesisBonds.map(_.validator -> genesis).toMap
+  val dag                   = BlockDag.empty.copy(latestMessages = initialLatestMessages)
+  val postGenesisStateHash  = genesis.body.get.postState.get.tuplespace
+  implicit val casperEff = new MultiParentCasperImpl[F](runtimeManager,
+                                                        Some(validatorId),
+                                                        genesis,
+                                                        dag,
+                                                        postGenesisStateHash,
+                                                        shardId)
+
+  implicit val multiparentCasperRef = MultiParentCasperRef.unsafe[F](Some(casperEff))
+
+  val handlerInternal = new ApprovedBlockReceivedHandler(casperEff, approvedBlock)
+  val casperPacketHandler =
+    new CasperPacketHandlerImpl[F](Ref.unsafe[F, CasperPacketHandlerInternal[F]](handlerInternal))
+  implicit val packetHandlerEff = PacketHandler.pf[F](
+    casperPacketHandler.handle
   )
 
-  def receive(): Unit = tle.receive(p => handle[Id](p, defaultTimeout))
+  def initialize(): F[Unit] =
+    // pre-population removed from internals of Casper
+    blockStore.put(genesis.blockHash, genesis) *>
+      InterpreterUtil
+        .validateBlockCheckpoint[F](genesis,
+                                    genesis,
+                                    dag,
+                                    Set(runtimeManager.emptyStateHash),
+                                    runtimeManager)
+        .void
+
+  def receive(): F[Unit] = tle.receive(p => handle[F](p, defaultTimeout))
 
   def tearDown(): Unit = {
     tearDownNode()
@@ -93,41 +124,107 @@ class HashSetCasperTestNode(name: String,
 }
 
 object HashSetCasperTestNode {
-  def standalone(genesis: BlockMessage, sk: Array[Byte])(
-      implicit scheduler: Scheduler): HashSetCasperTestNode = {
+  type Effect[A] = EitherT[Task, CommError, A]
+
+  def standaloneF[F[_]](genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler,
+      errorHandler: ErrorHandler[F],
+      syncF: Sync[F],
+      captureF: Capture[F]): F[HashSetCasperTestNode[F]] = {
     val name     = "standalone"
     val identity = peerNode(name, 40400)
     val tle =
-      new TransportLayerTestImpl[Id](identity, Map.empty[PeerNode, mutable.Queue[Protocol]])
+      new TransportLayerTestImpl[F](identity, Map.empty[PeerNode, Ref[F, mutable.Queue[Protocol]]])
+    val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
-    new HashSetCasperTestNode(name, identity, tle, genesis, sk)
+    val result = new HashSetCasperTestNode[F](name,
+                                              identity,
+                                              tle,
+                                              genesis,
+                                              sk,
+                                              logicalTime,
+                                              errorHandler,
+                                              storageSize)
+    result.initialize.map(_ => result)
   }
+  def standalone(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler): HashSetCasperTestNode[Id] = {
+    implicit val errorHandlerEff = errorHandler
+    standaloneF[Id](genesis, sk, storageSize)
+  }
+  def standaloneEff(genesis: BlockMessage, sk: Array[Byte], storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler): HashSetCasperTestNode[Effect] =
+    standaloneF[Effect](genesis, sk, storageSize)(scheduler,
+                                                  ApplicativeError_[Effect, CommError],
+                                                  syncEffectInstance,
+                                                  Capture[Effect]).value.unsafeRunSync.right.get
 
-  def network(sks: IndexedSeq[Array[Byte]], genesis: BlockMessage)(
-      implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode] = {
-    val n         = sks.length
-    val names     = (1 to n).map(i => s"node-$i")
-    val peers     = names.map(peerNode(_, 40400))
-    val msgQueues = peers.map(_ -> new mutable.Queue[Protocol]()).toMap
+  def networkF[F[_]](sks: IndexedSeq[Array[Byte]],
+                     genesis: BlockMessage,
+                     storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler,
+      errorHandler: ErrorHandler[F],
+      syncF: Sync[F],
+      captureF: Capture[F]): F[IndexedSeq[HashSetCasperTestNode[F]]] = {
+    val n     = sks.length
+    val names = (1 to n).map(i => s"node-$i")
+    val peers = names.map(peerNode(_, 40400))
+    val msgQueues = peers
+      .map(_ -> new mutable.Queue[Protocol]())
+      .toMap
+      .mapValues(Ref.unsafe[F, mutable.Queue[Protocol]])
+    val logicalTime: LogicalTime[F] = new LogicalTime[F]
 
     val nodes =
-      names.zip(peers).zip(sks).map {
-        case ((n, p), sk) =>
-          val tle = new TransportLayerTestImpl[Id](p, msgQueues)
-          new HashSetCasperTestNode(n, p, tle, genesis, sk)
-      }
+      names
+        .zip(peers)
+        .zip(sks)
+        .map {
+          case ((n, p), sk) =>
+            val tle = new TransportLayerTestImpl[F](p, msgQueues)
+            new HashSetCasperTestNode[F](n,
+                                         p,
+                                         tle,
+                                         genesis,
+                                         sk,
+                                         logicalTime,
+                                         errorHandler,
+                                         storageSize)
+        }
+        .toVector
 
+    import Connections._
     //make sure all nodes know about each other
-    for {
+    val pairs = for {
       n <- nodes
       m <- nodes
       if n.local != m.local
-    } {
-      n.nodeDiscoveryEff.addNode(m.local)
-    }
+    } yield (n, m)
 
-    nodes
+    for {
+      _ <- nodes.traverse(_.initialize).void
+      _ <- pairs.foldLeft(().pure[F]) {
+            case (f, (n, m)) =>
+              f.flatMap(_ =>
+                n.connectionsCell.modify(_.addConn[F](m.local)(Monad[F], n.logEff, n.metricEff)))
+          }
+    } yield nodes
   }
+  def network(sks: IndexedSeq[Array[Byte]],
+              genesis: BlockMessage,
+              storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler): IndexedSeq[HashSetCasperTestNode[Id]] = {
+    implicit val errorHandlerEff = errorHandler
+    networkF[Id](sks, genesis, storageSize)
+  }
+  def networkEff(sks: IndexedSeq[Array[Byte]],
+                 genesis: BlockMessage,
+                 storageSize: Long = 1024L * 1024)(
+      implicit scheduler: Scheduler): Effect[IndexedSeq[HashSetCasperTestNode[Effect]]] =
+    networkF[Effect](sks, genesis, storageSize)(scheduler,
+                                                ApplicativeError_[Effect, CommError],
+                                                syncEffectInstance,
+                                                Capture[Effect])
 
   val appErrId = new ApplicativeError[Id, CommError] {
     def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
@@ -159,6 +256,10 @@ object HashSetCasperTestNode {
 
     def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
   }
+
+  implicit val syncEffectInstance = SyncInstances.syncEffect[CommError](commError => {
+    new Exception(s"CommError: $commError")
+  }, e => { UnknownCommError(e.getMessage) })
 
   val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
 

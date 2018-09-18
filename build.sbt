@@ -4,13 +4,23 @@ import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
 
+//allow stopping sbt tasks using ctrl+c without killing sbt itself
+Global / cancelable := true
+
+//disallow any unresolved version conflicts at all for faster feedback
+Global / conflictManager := ConflictManager.strict
+//resolve all version conflicts explicitly
+Global / dependencyOverrides := Dependencies.overrides
+
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.4",
+  scalaVersion := "2.12.6",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
-    Resolver.sonatypeRepo("snapshots")),
+    Resolver.sonatypeRepo("snapshots"),
+    "jitpack" at "https://jitpack.io"
+  ),
   scalafmtOnCompile := true
 )
 
@@ -27,7 +37,14 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
   crossScalaVersions := Seq("2.11.12", scalaVersion.value)
 )
 
-lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
+// Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
+// for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
+lazy val profilerSettings = Seq(
+  javaOptions in run ++= sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq,
+  javaOptions in reStart ++= (javaOptions in run).value
+)
+
+lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings ++ profilerSettings
 
 lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
@@ -39,7 +56,8 @@ lazy val shared = (project in file("shared"))
       catsMtl,
       monix,
       scodecCore,
-      scodecBits
+      scodecBits,
+      scalapbRuntimegGrpc,
     )
   )
 
@@ -55,7 +73,11 @@ lazy val casper = (project in file("casper"))
     ),
     rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
   )
-  .dependsOn(blockStorage, comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
+  .dependsOn(
+    blockStorage  % "compile->compile;test->test",
+    comm          % "compile->compile;test->test",
+    shared        % "compile->compile;test->test",
+    crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -63,6 +85,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
+      nettyBoringSsl,
       scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
@@ -74,7 +97,8 @@ lazy val comm = (project in file("comm"))
     ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   ).dependsOn(shared, crypto)
 
@@ -104,7 +128,8 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(rspace)
@@ -113,7 +138,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.5.3",
+    version := "0.6.4",
     name := "rnode",
     maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary := "RChain Node",
@@ -122,7 +147,6 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        nettyBoringSsl,
         jline,
         scallop,
         scalaUri,
@@ -131,7 +155,8 @@ lazy val node = (project in file("node"))
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
@@ -167,7 +192,6 @@ lazy val node = (project in file("node"))
          .map { case (f, p) => f -> s"$base/$p" }
      },
     /* Packaging */
-    mappings in packageZipTarball in Universal += baseDirectory.value / "macos_install.sh" -> "macos_install.sh",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
@@ -208,7 +232,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop, lightningj),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -280,9 +304,11 @@ lazy val blockStorage = (project in file("block-storage"))
   .dependsOn(shared, models)
 
 lazy val rspace = (project in file("rspace"))
+  .configs(IntegrationTest extend Test)
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
@@ -341,7 +367,10 @@ lazy val rspace = (project in file("rspace"))
   .dependsOn(shared, crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
-  .settings(commonSettings, libraryDependencies ++= commonDependencies)
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies,
+  )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
 

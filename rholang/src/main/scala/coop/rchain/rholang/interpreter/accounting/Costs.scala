@@ -4,7 +4,7 @@ import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
-final case class Cost(value: BigInt) extends AnyVal {
+final case class Cost(value: Long) extends AnyVal {
   def *(other: Cost): Cost = Cost(value * other.value)
   def *(other: Int): Cost  = Cost(value * other)
   def +(other: Cost): Cost = Cost(value + other.value)
@@ -12,7 +12,7 @@ final case class Cost(value: BigInt) extends AnyVal {
 
 object Cost {
   implicit val costNumeric: Numeric[Cost] =
-    NumericOps.by[Cost, BigInt](_.value, Cost(_))
+    NumericOps.by[Cost, Long](_.value, Cost(_))
 }
 
 trait Costs {

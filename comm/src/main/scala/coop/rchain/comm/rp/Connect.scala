@@ -1,47 +1,76 @@
 package coop.rchain.comm.rp
 
-import coop.rchain.p2p.effects._
-import coop.rchain.comm.discovery._
-import scala.concurrent.duration._
-import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.metrics.Metrics
-
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats._
+import cats.implicits._
 import cats.mtl._
-import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
-import coop.rchain.shared._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
+import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.metrics.Metrics
+import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 object Connect {
 
   type Connection            = PeerNode
   type Connections           = List[Connection]
   type ConnectionsCell[F[_]] = Cell[F, Connections]
+
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
   }
+
   object Connections {
     def empty: Connections = List.empty[Connection]
     implicit class ConnectionsOps(connections: Connections) {
-      def addConn[F[_]: Applicative](connection: Connection): F[Connections] =
-        (connection :: connections).pure[F]
+
+      def addConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        addConn[F](List(connection))
+
+      def addConn[F[_]: Monad: Log: Metrics](toBeAdded: List[Connection]): F[Connections] = {
+        val ids = toBeAdded.map(_.id)
+        val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
+          case (_, rest) => rest ++ toBeAdded
+        }
+        val size = newConnections.size.toLong
+        Log[F].info(s"Peers: $size.") *>
+          Metrics[F].setGauge("peers", size).as(newConnections)
+      }
+
+      def removeConn[F[_]: Monad: Log: Metrics](connection: Connection): F[Connections] =
+        removeConn[F](List(connection))
+
+      def removeConn[F[_]: Monad: Log: Metrics](toBeRemoved: List[Connection]): F[Connections] = {
+        val ids = toBeRemoved.map(_.id)
+        val newConnections = connections.partition(peer => ids.contains(peer.id)) match {
+          case (_, rest) => rest
+        }
+        val size = newConnections.size.toLong
+        Log[F].info(s"Peers: $size.") *>
+          Metrics[F].setGauge("peers", size).as(newConnections)
+      }
     }
   }
+
   import Connections._
 
   type RPConfAsk[F[_]] = ApplicativeAsk[F, RPConf]
+
   object RPConfAsk {
     def apply[F[_]](implicit ev: ApplicativeAsk[F, RPConf]): ApplicativeAsk[F, RPConf] = ev
   }
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def clearConnections[F[_]: Capture: Monad: ConnectionsCell: RPConfAsk: TransportLayer]: F[Int] = {
+  def clearConnections[
+      F[_]: Capture: Monad: Time: ConnectionsCell: RPConfAsk: TransportLayer: Log: Metrics]
+    : F[Int] = {
 
     def sendHeartbeat(peer: PeerNode): F[(PeerNode, CommErr[RoutingProtocol])] =
       for {
@@ -58,8 +87,9 @@ object Connect {
         results                <- toPing.traverse(sendHeartbeat(_))
         successfulPeers        = results.collect { case (peer, Right(_)) => peer }
         failedPeers            = results.collect { case (peer, Left(_)) => peer }
-        _ <- ConnectionsCell[F]
-              .modify(p => (p.filter(conn => !toPing.contains(conn)) ++ successfulPeers).pure[F])
+        _ <- ConnectionsCell[F].modify { connections =>
+              connections.removeConn[F](toPing) >>= (_.addConn[F](successfulPeers))
+            }
       } yield failedPeers.size
 
     for {
@@ -70,54 +100,22 @@ object Connect {
   }
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      defaultTimeout: FiniteDuration): Int => F[Int] =
-    (lastCount: Int) =>
-      for {
-        _         <- IOUtil.sleep[F](5000L)
-        peers     <- NodeDiscovery[F].findMorePeers(10).map(_.toList)
-        responses <- peers.traverse(connect[F](_, defaultTimeout).attempt)
-        _ <- peers.zip(responses).traverse {
-              case (peer, Left(error)) =>
-                Log[F].warn(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
-              case (_, Right(_)) => ().pure[F]
-            }
-        thisCount <- NodeDiscovery[F].peers.map(_.size)
-        _         <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
-      } yield thisCount
-
-  def connectToBootstrap[
-      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
-      bootstrap: PeerNode,
-      maxNumOfAttempts: Int = 5,
-      defaultTimeout: FiniteDuration): F[Unit] = {
-
-    def connectAttempt(attempt: Int, timeout: FiniteDuration, bootstrapAddr: PeerNode): F[Unit] =
-      if (attempt > maxNumOfAttempts) for {
-        _ <- Log[F].error("Failed to connect to bootstrap node, exiting...")
-        _ <- ErrorHandler[F].raiseError[Unit](couldNotConnectToBootstrap)
-      } yield ()
-      else
-        for {
-          res <- connect[F](bootstrapAddr, timeout).attempt
-          _ <- res match {
-                case Left(error) =>
-                  val msg =
-                    "Failed to connect to bootstrap " +
-                      s"(attempt $attempt / $maxNumOfAttempts). Reason: ${error.message}"
-                  Log[F].warn(msg) *> connectAttempt(attempt + 1,
-                                                     timeout + defaultTimeout,
-                                                     bootstrapAddr)
-                case Right(_) => ().pure[F]
-              }
-        } yield ()
-
+      F[_]: Capture: Monad: Log: Time: Metrics: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
+      conn: (PeerNode, FiniteDuration) => F[Unit]
+  ): F[List[PeerNode]] =
     for {
-      _ <- Log[F].info(s"Bootstrapping from ${bootstrap.toAddress}.")
-      _ <- connectAttempt(attempt = 1, defaultTimeout, bootstrap)
-      _ <- Log[F].info(s"Connected ${bootstrap.toAddress}.")
-    } yield ()
-  }
+      connections      <- ConnectionsCell[F].read
+      tout             <- RPConfAsk[F].reader(_.defaultTimeout)
+      peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
+      responses        <- peers.traverse(conn(_, tout).attempt)
+      peersAndResonses = peers.zip(responses)
+      _ <- peersAndResonses.traverse {
+            case (peer, Left(error)) =>
+              Log[F].debug(s"Failed to connect to ${peer.toAddress}. Reason: ${error.message}")
+            case (peer, Right(_)) =>
+              Log[F].info(s"Connected to ${peer.toAddress}.")
+          }
+    } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
   def connect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](
@@ -131,10 +129,9 @@ object Connect {
       _        <- Log[F].info(s"Initialize protocol handshake to $peerAddr")
       local    <- RPConfAsk[F].reader(_.local)
       ph       = protocolHandshake(local)
-      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout) >>= ErrorHandler[F].fromEither
+      phsresp  <- TransportLayer[F].roundTrip(peer, ph, timeout * 2) >>= ErrorHandler[F].fromEither
       _ <- Log[F].debug(
             s"Received protocol handshake response from ${ProtocolHelper.sender(phsresp)}.")
-      _   <- NodeDiscovery[F].addNode(peer)
       _   <- ConnectionsCell[F].modify(_.addConn[F](peer))
       tsf <- Time[F].currentMillis
       _   <- Metrics[F].record("connect-time-ms", tsf - tss)

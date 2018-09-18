@@ -1,13 +1,8 @@
 package coop.rchain.comm
 
-import coop.rchain.comm.protocol.routing._
-import scala.util.control.NonFatal
-
-import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.catscontrib._
-import Catscontrib._
-
 import com.google.protobuf.ByteString
+import com.google.protobuf.any.{Any => AnyProto}
+import coop.rchain.comm.protocol.routing._
 
 /**
   * Utility functions for working with protocol buffers.
@@ -32,7 +27,6 @@ object ProtocolHelper {
   def header(src: PeerNode): Header =
     Header()
       .withSender(node(src))
-      .withTimestamp(System.currentTimeMillis)
 
   def node(n: PeerNode): Node =
     Node()
@@ -65,11 +59,6 @@ object ProtocolHelper {
       .withHeader(header(src))
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node)))
-
-  def disconnect(src: PeerNode): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withDisconnect(Disconnect())
 
   def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()

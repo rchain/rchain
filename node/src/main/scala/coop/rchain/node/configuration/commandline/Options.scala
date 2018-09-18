@@ -2,10 +2,13 @@ package coop.rchain.node.configuration.commandline
 
 import java.nio.file.Path
 
+import coop.rchain.casper.util.comm.ListenAtName.{Name, PrivName, PubName}
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.BuildInfo
-
+import coop.rchain.shared.StoreType
 import org.rogach.scallop._
+
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 object Converter {
   import Options._
@@ -31,6 +34,63 @@ object Converter {
 
     val argType: ArgType.V = ArgType.FLAG
   }
+
+  private def nameConverter[A](onPub: List[String] => A,
+                               onPriv: List[String] => A,
+                               argType0: ArgType.V) = new ValueConverter[List[String] => A] {
+    import cats.instances.either._
+    import cats.instances.option._
+    import cats.syntax.traverse._
+
+    override def parse(s: List[(String, List[String])]) = {
+      val optMap  = s.toMap
+      val typeOpt = optMap.get("type").orElse(optMap.get("t"))
+
+      typeOpt.traverse[Either[String, ?], List[String] => A] {
+        case "priv" :: _ => Right(onPriv)
+        case "pub" :: _  => Right(onPub)
+        case _           => Left("Bad option value. Use \"pub\" or \"priv\"")
+      }
+    }
+
+    override val argType = argType0
+  }
+
+  implicit val nameProviderConverter =
+    nameConverter[Name](names => PubName(names.head), names => PrivName(names.head), ArgType.SINGLE)
+
+  implicit val namesProviderConverter =
+    nameConverter[List[Name]](_.map(PubName), _.map(PrivName), ArgType.LIST)
+
+  implicit val finiteDurationConverter: ValueConverter[FiniteDuration] =
+    new ValueConverter[FiniteDuration] {
+
+      override def parse(s: List[(String, List[String])]): Either[String, Option[FiniteDuration]] =
+        s match {
+          case (_, duration :: Nil) :: Nil =>
+            val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
+            finiteDuration.fold[Either[String, Option[FiniteDuration]]](
+              Left("Expected finite duration."))(fd => Right(Some(fd)))
+          case Nil => Right(None)
+          case _   => Left("Provide a duration.")
+        }
+
+      override val argType: ArgType.V = ArgType.SINGLE
+    }
+
+  implicit val storeTypeConverter: ValueConverter[StoreType] = new ValueConverter[StoreType] {
+    def parse(s: List[(String, List[String])]): Either[String, Option[StoreType]] =
+      s match {
+        case (_, storeType :: Nil) :: Nil =>
+          StoreType
+            .from(storeType)
+            .map(u => Right(Some(u)))
+            .getOrElse(Left("can't parse the store type"))
+        case Nil => Right(None)
+        case _   => Left("provide the store type")
+      }
+    val argType: ArgType.V = ArgType.SINGLE
+  }
 }
 
 object Options {
@@ -49,8 +109,8 @@ object Options {
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
-  import Options.Flag
   import Converter._
+  import Options.Flag
 
   version(s"RChain Node ${BuildInfo.version}")
   printedName = "rchain"
@@ -91,14 +151,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
                 descr =
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
+    val secureRandomNonBlocking =
+      opt[Flag](descr = "Use a non blocking secure random instance")
+
     val port =
       opt[Int](short = 'p', descr = "Network port to use.")
 
     val httpPort =
       opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
-
-    val metricsPort =
-      opt[Int](descr = "Port used by metrics API.")
 
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
@@ -129,6 +189,31 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val standalone =
       opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
+    val requiredSigs =
+      opt[Int](
+        descr =
+          "Number of signatures from trusted validators required to creating an approved genesis block.")
+
+    val deployTimestamp =
+      opt[Long](
+        descr = "Timestamp for the deploys."
+      )
+
+    val duration =
+      opt[FiniteDuration](
+        short = 'd',
+        descr =
+          "Time window in which BlockApproval messages will be accumulated before checking conditions."
+      )
+
+    val interval =
+      opt[FiniteDuration](
+        short = 'i',
+        descr = "Interval at which condition for creating ApprovedBlock will be checked.")
+
+    val genesisValidator =
+      opt[Flag](descr = "Start a node as a genesis validator.")
+
     val host = opt[String](descr = "Hostname or IP of this node.")
 
     val data_dir =
@@ -136,8 +221,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val map_size = opt[Long](required = false, descr = "Map size (in bytes)")
 
+    val storeType = opt[StoreType](required = false, descr = "Type of RSpace backing store")
+
     val maxNumOfConnections =
       opt[Int](descr = "Maximum number of peers allowed to connect to the node")
+
+    val maxMessageSize =
+      opt[Int](descr = "Maximum size of message that can be sent via transport layer")
+
+    val threadPoolSize =
+      opt[Int](descr = "Maximum number of threads used by rnode")
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
@@ -154,6 +247,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Name of the algorithm to use for signing proposed blocks. " +
         "Currently supported values: ed25519")
 
+    val shardId = opt[String](
+      descr = "Identifier of the shard this node is connected to."
+    )
   }
   addSubcommand(run)
 
@@ -186,24 +282,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
-      required = true,
       validate = addressCheck
     )
 
-    val phloLimit = opt[Int](
-      descr = "The amount of phlo to use for the transaction (unused phlo is refunded).",
-      required = true
-    )
+    val phloLimit =
+      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
 
     val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo.",
-      required = true
+      descr = "The price of phlo for this transaction in units dust/phlo."
     )
 
     val nonce = opt[Int](
-      descr = "This allows to overwrite your own pending transactions that use the same nonce.",
-      required = true
-    )
+      descr = "This allows you to overwrite your own pending transactions that use the same nonce.")
 
     val location = trailArg[String](required = true)
   }
@@ -223,6 +313,35 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "View list of blocks on the main chain in the current Casper view on an existing running node.")
   }
   addSubcommand(showBlocks)
+
+  def listenAtName[R](name: String, desc: String)(
+      implicit conv: ValueConverter[List[String] => R]) = new Subcommand(name) {
+    descr(desc)
+
+    val typeOfName =
+      opt[List[String] => R](required = true,
+                             descr = "Type of the specified name",
+                             name = "type",
+                             short = 't')
+
+    val content =
+      opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')
+
+    val name: ScallopOption[R] =
+      for {
+        content <- content
+        f       <- typeOfName
+      } yield f(content)
+  }
+
+  val dataAtName =
+    listenAtName[Name]("listen-data-at-name", "Listen for data at the specified name")
+
+  val contAtName =
+    listenAtName[List[Name]]("listen-cont-at-name", "Listen for continuation at the specified name")
+
+  addSubcommand(dataAtName)
+  addSubcommand(contAtName)
 
   val propose = new Subcommand("propose") {
     descr(

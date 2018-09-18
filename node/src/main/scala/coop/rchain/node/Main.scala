@@ -1,13 +1,12 @@
 package coop.rchain.node
 
 import java.security.Security
+import java.util.concurrent.{SynchronousQueue, ThreadPoolExecutor, TimeUnit}
 
 import scala.collection.JavaConverters._
 import scala.tools.jline.console._
 import completer.StringsCompleter
-
 import cats.implicits._
-
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
@@ -17,38 +16,44 @@ import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
 import coop.rchain.node.effects._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StringOps._
-
 import monix.eval.Task
-import monix.execution.Scheduler
-import monix.execution.schedulers.SchedulerService
-import org.bouncycastle.jce.provider.BouncyCastleProvider
+import monix.execution.{Scheduler, UncaughtExceptionReporter}
+import monix.execution.UncaughtExceptionReporter.LogExceptionsToStandardErr
+import monix.execution.schedulers.{ExecutorScheduler, SchedulerService, ThreadFactoryBuilder, _}
 
 object Main {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val log: Log[Task]       = effects.log
-  private implicit val io: SchedulerService = Scheduler.io("repl-io")
 
   def main(args: Array[String]): Unit = {
-    Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
     val exec: Task[Unit] =
       for {
-        conf <- Configuration(args)
-        _    <- mainProgram(conf)
+        conf     <- Configuration(args)
+        poolSize = conf.server.threadPoolSize
+        //TODO create separate scheduler for casper
+        scheduler = Scheduler.fixedPool("node-io", poolSize)
+        _         <- Task.unit.asyncBoundary(scheduler)
+        _         <- mainProgram(conf)(scheduler)
       } yield ()
 
-    exec.unsafeRunSync
+    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
   }
 
-  private def mainProgram(conf: Configuration): Task[Unit] = {
+  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
-      new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.portInternal)
+      new GrpcReplClient(conf.grpcServer.host,
+                         conf.grpcServer.portInternal,
+                         conf.server.maxMessageSize)
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcServer.host,
-                                                    conf.grpcServer.portInternal)
+                                                    conf.grpcServer.portInternal,
+                                                    conf.server.maxMessageSize)
     implicit val deployService: GrpcDeployService =
-      new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.portExternal)
+      new GrpcDeployService(conf.grpcServer.host,
+                            conf.grpcServer.portExternal,
+                            conf.server.maxMessageSize)
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
@@ -56,12 +61,14 @@ object Main {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
-      case DeployDemo      => DeployRuntime.deployDemoProgram[Task]
-      case Propose         => DeployRuntime.propose[Task]()
-      case ShowBlock(hash) => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks      => DeployRuntime.showBlocks[Task]()
-      case Run             => nodeProgram(conf)
-      case _               => conf.printHelp()
+      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
+      case Propose           => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks        => DeployRuntime.showBlocks[Task]()
+      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Run               => nodeProgram(conf)
+      case _                 => conf.printHelp()
     }
 
     program.doOnFinish(_ =>
@@ -72,7 +79,7 @@ object Main {
     })
   }
 
-  private def nodeProgram(conf: Configuration): Task[Unit] =
+  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
       result <- new NodeRuntime(conf, host).main.value

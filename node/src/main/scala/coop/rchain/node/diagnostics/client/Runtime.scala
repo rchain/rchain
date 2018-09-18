@@ -4,16 +4,22 @@ import cats._
 import cats.implicits._
 import coop.rchain.node.effects.ConsoleIO
 import coop.rchain.node.model.diagnostics._
-import coop.rchain.shared.LongOps._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.Catscontrib._
 
 import scala.concurrent.duration._
 import coop.rchain.comm.PeerNode
 
 object Runtime {
-  def diagnosticsProgram[F[_]: Monad: ConsoleIO: DiagnosticsService]: F[Unit] =
-    for {
-      peers   <- DiagnosticsService[F].listPeers
-      _       <- ConsoleIO[F].println(showPeers(peers))
+
+  type ErrorHandler[F[_]] = ApplicativeError_[F, Throwable]
+
+  def diagnosticsProgram[F[_]: Monad: ErrorHandler: ConsoleIO: DiagnosticsService]: F[Unit] = {
+    val program = for {
+      peersRP <- DiagnosticsService[F].listPeers
+      _       <- ConsoleIO[F].println(showPeers(peersRP, "connected"))
+      peersND <- DiagnosticsService[F].listDiscoveredPeers
+      _       <- ConsoleIO[F].println(showPeers(peersND, "discovered"))
       core    <- DiagnosticsService[F].nodeCoreMetrics
       _       <- ConsoleIO[F].println(showNodeCoreMetrics(core))
       cpu     <- DiagnosticsService[F].processCpu
@@ -29,11 +35,23 @@ object Runtime {
       _       <- ConsoleIO[F].close
     } yield ()
 
-  def showPeers(peers: Seq[PeerNode]): String =
+    for {
+      result <- program.attempt
+      _ <- result match {
+            case Left(ex) => ConsoleIO[F].println(s"Error: ${processError(ex).getMessage}")
+            case _        => ().pure[F]
+          }
+    } yield ()
+  }
+
+  private def processError(t: Throwable): Throwable =
+    Option(t.getCause).getOrElse(t)
+
+  def showPeers(peers: Seq[PeerNode], peerType: String): String =
     List(
-      "List of peers:",
+      s"List of $peerType peers:",
       peers.map(_.toAddress).mkString("\n")
-    ).mkString("\n")
+    ).mkString("", "\n", "\n")
 
   def showProcessCpu(processCpu: ProcessCpu): String = {
     val time = processCpu.time.map(Duration.fromNanos(_).toMillis).getOrElse(0L)
@@ -110,6 +128,8 @@ object Runtime {
        |  - P2P encryption handshake receivers: ${nodeCoreMetrics.p2PEncryptionHandshakeReceiverCount}
        |  - P2P protocol handshake receivers: ${nodeCoreMetrics.p2PProtocolHandshakeReceiverCount}
        |  - Peers: ${nodeCoreMetrics.peers}
+       |  - From: ${nodeCoreMetrics.from}
+       |  - To: ${nodeCoreMetrics.to}
        |""".stripMargin
 
 }

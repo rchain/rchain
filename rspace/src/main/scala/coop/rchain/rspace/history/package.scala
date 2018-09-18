@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
+import internal._
 import cats.Eq
 import cats.instances.byte._
 import cats.instances.option._
@@ -9,7 +10,6 @@ import cats.syntax.eq._
 import cats.syntax.traverse._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.seq._
-import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -44,7 +44,8 @@ package object history {
           val rootHash = Trie.hash(root)
           store.put(txn, rootHash, root)
           store.putRoot(txn, branch, rootHash)
-          logger.debug(s"workingRootHash: $rootHash")
+          store.putEmptyRoot(txn, rootHash)
+          logger.debug(s"workingRootHash: $rootHash, setup the empty root in trie")
           true
         case Some(_) =>
           false
@@ -105,9 +106,13 @@ package object history {
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
-    store.withTxn(store.createTxnRead()) { (txn: T) =>
-      keys.traverse[Option, V]((k: K) =>
-        store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+    if (keys.isEmpty) {
+      throw new IllegalArgumentException("keys can't be empty")
+    } else {
+      store.withTxn(store.createTxnRead()) { (txn: T) =>
+        keys.traverse[Option, V]((k: K) =>
+          store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+      }
     }
 
   private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],

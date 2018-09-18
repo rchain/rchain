@@ -75,10 +75,13 @@ message NodeCoreMetrics {
   int64 p2pEncryptionHandshakeReceiverCount = 5;
   int64 p2pProtocolHandshakeReceiverCount = 6;
   int64 peers = 7;
+  int64 from = 8;
+  int64 to = 9;
 }
 
 service Diagnostics {
   rpc ListPeers (google.protobuf.Empty) returns (Peers);
+  rpc ListDiscoveredPeers (google.protobuf.Empty) returns (Peers);
   rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
   rpc GetMemoryUsage (google.protobuf.Empty) returns (MemoryUsage);
   rpc GetGarbageCollectors (google.protobuf.Empty) returns (GarbageCollectors);

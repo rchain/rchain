@@ -2,7 +2,7 @@
 
 //based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
 //requires NonNegativeNumber
-contract @["MakeMint", "int2NN"](@x, return) = {
+contract @("MakeMint", "int2NN")(@x, return) = {
   new nnCh in {
     @"NonNegativeNumber"!(x, *nnCh) | for(@nn <- nnCh) {
       return!(nn)
@@ -11,9 +11,9 @@ contract @["MakeMint", "int2NN"](@x, return) = {
 } |
 contract @"MakeMint"(return) = {
   new pairCh, thisMint, internalMakePurse in {
-    contract @[*thisMint, "makePurse"](@init, return) = {
+    contract @(*thisMint, "makePurse")(@init, return) = {
       new balanceCh in {
-        @["MakeMint", "int2NN"]!(init, *balanceCh) | for(@balance <- balanceCh) {
+        @("MakeMint", "int2NN")!(init, *balanceCh) | for(@balance <- balanceCh) {
           internalMakePurse!(balance, *return)
         }
       }
@@ -21,13 +21,13 @@ contract @"MakeMint"(return) = {
     contract internalMakePurse(@balance, return) = {
       //balance must be a name that NonNegativeNumber contract is listening on
       new thisPurse, decr in {
-        contract @[*thisPurse, *decr](@amount, success) = { @[balance, "sub"]!(amount, *success) } |
-        contract @[*thisPurse, "getBalance"](return) = { @[balance, "value"]!(*return) } |
-        contract @[*thisPurse, "sprout"](return) = { @[*thisMint, "makePurse"]!(0, *return) } |
-        contract @[*thisPurse, "split"](@amount, return) = {
+        contract @(*thisPurse, *decr)(@amount, success) = { @(balance, "sub")!(amount, *success) } |
+        contract @(*thisPurse, "getBalance")(return) = { @(balance, "value")!(*return) } |
+        contract @(*thisPurse, "sprout")(return) = { @(*thisMint, "makePurse")!(0, *return) } |
+        contract @(*thisPurse, "split")(@amount, return) = {
           new destPurseCh, successCh in {
-            @[*thisPurse, "sprout"]!(*destPurseCh) | for(@destPurse <- destPurseCh) {
-              @[destPurse, "deposit"]!(amount, *thisPurse, *successCh) |
+            @(*thisPurse, "sprout")!(*destPurseCh) | for(@destPurse <- destPurseCh) {
+              @(destPurse, "deposit")!(amount, *thisPurse, *successCh) |
               for(@success <- successCh) {
                 if (success) {
                   return!([destPurse])
@@ -38,12 +38,12 @@ contract @"MakeMint"(return) = {
             }
           }
         } |
-        contract @[*thisPurse, "getDecr"](return) = { 
+        contract @(*thisPurse, "getDecr")(return) = { 
           new challenge, responseCh, correctAnswerCh in {
             correctAnswerCh!(bundle0{*thisMint | *challenge}) |
             for(@[response, answerCh] <- responseCh; @correctAnswer <- correctAnswerCh) {
               if (response == correctAnswer) {
-                @answerCh!([*thisPurse, *decr])
+                @answerCh!([(*thisPurse, *decr)])
               } else {
                 @answerCh!([])
               }
@@ -51,19 +51,19 @@ contract @"MakeMint"(return) = {
             return!([*challenge, *responseCh])
           }
         } |
-        contract @[*thisPurse, "deposit"](@amount, @src, success) = {
+        contract @(*thisPurse, "deposit")(@amount, @src, success) = {
           new result in {
-            @[src, "getDecr"]!(*result) | //call getDecr function in src
+            @(src, "getDecr")!(*result) | //call getDecr function in src
             for(@[challenge, response] <- result) { 
               @response!([bundle0{*thisMint | challenge}, *result]) | //respond to challenge
               for(@answer <- result) {
                 match answer {
-                  []      => { success!(false) } //did not meet challenge
-                  srcDecr => {
+                  []        => { success!(false) } //did not meet challenge
+                  [srcDecr] => {
                     @srcDecr!(amount, *result) | //call src decr function
                     for(@decrSuccess <- result) {
                       if (decrSuccess) {
-                        @[balance, "add"]!(amount, *success)
+                        @(balance, "add")!(amount, *success)
                       } else {
                         success!(false)  //add transferred amount to this purse
                       }

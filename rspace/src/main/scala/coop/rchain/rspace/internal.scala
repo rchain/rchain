@@ -120,8 +120,18 @@ object internal {
       }
   }
 
-  case class Install[P, A, R, K](patterns: Seq[P], continuation: K, _match: Match[P, A, R])
+  case class Install[P, E, A, R, K](patterns: Seq[P], continuation: K, _match: Match[P, E, A, R])
 
-  type Installs[C, P, A, R, K] = Map[Seq[C], Install[P, A, R, K]]
+  type Installs[C, P, E, A, R, K] = Map[Seq[C], Install[P, E, A, R, K]]
 
+  import scodec.{Attempt, Err}
+
+  implicit class RichAttempt[T](a: Attempt[T]) {
+    def get: T =
+      a match {
+        case Attempt.Successful(res) => res
+        case Attempt.Failure(err) =>
+          throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
+      }
+  }
 }

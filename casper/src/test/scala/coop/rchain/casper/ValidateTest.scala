@@ -13,8 +13,9 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator, Rev}
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture}
+import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBlockDag}
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
@@ -23,7 +24,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.collection.LinkedList
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
@@ -41,7 +41,7 @@ class ValidateTest
     with BlockGenerator
     with BlockStoreFixture {
   implicit val log = new LogStub[Id]
-  val initState    = BlockDag().copy(currentId = -1)
+  val initState    = IndexedBlockDag.empty.copy(currentId = -1)
   val ed25519      = "ed25519"
 
   override def beforeEach(): Unit = {
@@ -86,18 +86,22 @@ class ValidateTest
       .map(_._1)
   }
 
-  def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
+  def signedBlock(i: Int)(implicit chain: IndexedBlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
     val pk    = Ed25519.toPublic(sk)
-    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", Ed25519.sign _)
+    ProtoUtil.signBlock(block, chain, pk, sk, "ed25519", "rchain")
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
     def withBlockNumber(n: Long): BlockMessage = {
-      val body  = b.body.getOrElse(Body())
-      val state = body.postState.getOrElse(RChainState())
+      val body     = b.body.getOrElse(Body())
+      val state    = body.postState.getOrElse(RChainState())
+      val newState = state.withBlockNumber(n)
 
-      b.withBody(body.withPostState(state.withBlockNumber(n)))
+      val header    = b.header.getOrElse(Header())
+      val newHeader = header.withPostStateHash(ProtoUtil.protoHash(newState))
+
+      b.withBody(body.withPostState(newState)).withHeader(newHeader)
     }
   }
 
@@ -184,8 +188,8 @@ class ValidateTest
       val chain                    = createChain[StateWithChain](1).runS(initState)
       val block                    = chain.idToBlocks(0)
 
-      Validate.blockNumber[Id](block.withBlockNumber(1), chain) should be(Left(InvalidBlockNumber))
-      Validate.blockNumber[Id](block, chain) should be(Right(Valid))
+      Validate.blockNumber[Id](block.withBlockNumber(1)) should be(Left(InvalidBlockNumber))
+      Validate.blockNumber[Id](block) should be(Right(Valid))
       log.warns.size should be(1)
       log.warns.head.contains("not zero, but block has no parents") should be(true)
   }
@@ -195,10 +199,10 @@ class ValidateTest
     val chain                    = createChain[StateWithChain](2).runS(initState)
     val block                    = chain.idToBlocks(1)
 
-    Validate.blockNumber[Id](block.withBlockNumber(17), chain) should be(Left(InvalidBlockNumber))
-    Validate.blockNumber[Id](block, chain) should be(Right(Valid))
+    Validate.blockNumber[Id](block.withBlockNumber(17)) should be(Left(InvalidBlockNumber))
+    Validate.blockNumber[Id](block) should be(Right(Valid))
     log.warns.size should be(1)
-    log.warns.head.contains("is not one more than parent number") should be(true)
+    log.warns.head.contains("is not one more than maximum parent number") should be(true)
   }
 
   it should "return true for sequential numbering" in withStore { implicit blockStore =>
@@ -206,9 +210,28 @@ class ValidateTest
     val n                        = 6
     val chain                    = createChain[StateWithChain](n).runS(initState)
 
-    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
+    (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i)) == Right(Valid)) should be(
       true)
     log.warns should be(Nil)
+  }
+
+  it should "correctly validate a multiparent block where the parents have different block numbers" in withStore {
+    implicit blockStore =>
+      def createBlockWithNumber(n: Long, parentHashes: Seq[ByteString] = Nil): BlockMessage = {
+        val blockWithNumber = BlockMessage.defaultInstance.withBlockNumber(n)
+        val header          = blockWithNumber.getHeader.withParentsHashList(parentHashes)
+        val hash            = ProtoUtil.hashUnsignedBlock(header, Nil)
+        val block           = blockWithNumber.withHeader(header).withBlockHash(hash)
+
+        blockStore.put(hash, block)
+        block
+      }
+      val b1 = createBlockWithNumber(3)
+      val b2 = createBlockWithNumber(7)
+      val b3 = createBlockWithNumber(8, Seq(b1.blockHash, b2.blockHash))
+
+      Validate.blockNumber[Id](b3) shouldBe Right(Valid)
+      Validate.blockNumber[Id](b3.withBlockNumber(4)) shouldBe Left(InvalidBlockNumber)
   }
 
   "Sequence number validation" should "only accept 0 as the number for a block with no parents" in withStore {
@@ -281,7 +304,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -307,11 +330,7 @@ class ValidateTest
       (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
         false)
       log.warns.size should be(3)
-      log.warns.last
-        .contains("justification is empty, but block has non-genesis parents") should be(true)
-      log.warns
-        .dropRight(1)
-        .forall(_.contains("block parents did not match estimate based on justification")) should be(
+      log.warns.forall(_.contains("block parents did not match estimate based on justification")) should be(
         true)
   }
 
@@ -321,10 +340,19 @@ class ValidateTest
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
       val chain                    = createChain[StateWithChain](2).runS(initState)
       val block                    = chain.idToBlocks(1)
+      val (sk, pk)                 = Ed25519.newKeyPair
 
-      Validate
-        .blockSummary[Id](block.withBlockNumber(17).withSeqNum(1), BlockMessage(), chain) should be(
-        Left(InvalidBlockNumber))
+      Validate.blockSummary[Id](
+        ProtoUtil.signBlock(block.withBlockNumber(17).withSeqNum(1),
+                            BlockDag.empty,
+                            pk,
+                            sk,
+                            "ed25519",
+                            "rchain"),
+        BlockMessage(),
+        chain,
+        "rchain"
+      ) should be(Left(InvalidBlockNumber))
       log.warns.size should be(1)
   }
 
@@ -350,7 +378,7 @@ class ValidateTest
           parents.map(_.blockHash),
           creator = validators(validator),
           bonds = bonds,
-          deploys = Seq(ProtoUtil.basicDeployCost(0)),
+          deploys = Seq(ProtoUtil.basicProcessedDeploy(0)),
           justifications = latestMessages(justifications)
         )
 
@@ -388,7 +416,7 @@ class ValidateTest
   "Bonds cache validation" should "succeed on a valid block and fail on modified bonds" in {
     val (_, validators)   = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds             = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
-    val initial           = Genesis.withoutContracts(bonds = bonds, version = 0L, timestamp = 0L)
+    val initial           = Genesis.withoutContracts(bonds, 0L, 0L, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
@@ -396,11 +424,12 @@ class ValidateTest
     val emptyStateHash    = runtimeManager.emptyStateHash
 
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
-    val proofOfStakeStubPar    = new ProofOfStake(proofOfStakeValidators).term
-    val genesis = Genesis.withContracts(List(ProtoUtil.termDeploy(proofOfStakeStubPar)),
-                                        initial,
-                                        emptyStateHash,
-                                        runtimeManager)
+    val proofOfStakeStubPar    = ProofOfStake(proofOfStakeValidators).term
+    val genesis = Genesis.withContracts(
+      List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
+      initial,
+      emptyStateHash,
+      runtimeManager)
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
@@ -411,5 +440,52 @@ class ValidateTest
     Validate.bondsCache[Id](modifiedGenesis, runtimeManager) should be(Left(InvalidBondsCache))
 
     activeRuntime.close()
+  }
+
+  "Field format validation" should "succeed on a valid block and fail on empty fields" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis =
+      ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+
+    Validate.formatOfFields[Id](genesis) should be(true)
+    Validate.formatOfFields[Id](genesis.withBlockHash(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.clearHeader) should be(false)
+    Validate.formatOfFields[Id](genesis.clearBody) should be(false)
+    Validate.formatOfFields[Id](genesis.withSig(ByteString.EMPTY)) should be(false)
+    Validate.formatOfFields[Id](genesis.withSigAlgorithm("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withShardId("")) should be(false)
+    Validate.formatOfFields[Id](genesis.withBody(genesis.body.get.clearPostState)) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withPostStateHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withHeader(genesis.header.get.withDeploysHash(ByteString.EMPTY))
+    ) should be(false)
+    Validate.formatOfFields[Id](
+      genesis.withBody(
+        genesis.body.get
+          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
+    ) should be(false)
+  }
+
+  "Block hash format validation" should "fail on invalid hash" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    Validate.blockHash[Id](genesis) should be(Right(Valid))
+    Validate.blockHash[Id](
+      genesis.withBlockHash(ByteString.copyFromUtf8("123"))
+    ) should be(Left(InvalidBlockHash))
+  }
+
+  "Block deploy count validation" should "fail on invalid number of deploys" in {
+    val (sk, pk) = Ed25519.newKeyPair
+    val block    = HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val genesis  = ProtoUtil.signBlock(block, BlockDag.empty, pk, sk, "ed25519", "rchain")
+    Validate.deployCount[Id](genesis) should be(Right(Valid))
+    Validate.deployCount[Id](
+      genesis.withHeader(genesis.header.get.withDeployCount(100))
+    ) should be(Left(InvalidDeployCount))
   }
 }
