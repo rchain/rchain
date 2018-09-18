@@ -11,7 +11,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
 
 trait ConcurrencyTests
-    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Channel, Pattern, Nothing, Null, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   def version: String
@@ -34,15 +34,15 @@ trait ConcurrencyTests
             persist = false
           )
 
-          r1 shouldBe Right(None)
+          assert(r1.isNotFound)
 
           val r2 = space.produce(channel, bob, persist = false)
 
-          r2 shouldBe Right(None)
+          assert(r2.isNotFound)
 
           val r3 = space.produce(channel, bob, persist = false)
 
-          r3 shouldBe defined
+          assert(r3.isFound)
 
           runK(r3)
           getK(r3).results shouldBe List(List(bob, bob))
@@ -106,11 +106,11 @@ trait ConcurrencyTests
         for (_ <- 1 to iterations) {
           val r1 = space.produce(channel, bob, persist = false)
 
-          r1 shouldBe Right(None)
+          assert(r1.isNotFound)
 
           val r2 = space.produce(channel, bob, persist = false)
 
-          r2 shouldBe Right(None)
+          assert(r2.isNotFound)
 
           val r3 = space
             .consume(
@@ -120,7 +120,7 @@ trait ConcurrencyTests
               persist = false
             )
 
-          r3 shouldBe defined
+          assert(r3.isFound)
 
           runK(r3)
           getK(r3).results shouldBe List(List(bob, bob))

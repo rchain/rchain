@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Monoid
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -7,27 +8,28 @@ import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.shared.SyncVarOps._
-
+import coop.rchain.rspace.Match.MatchResult._
+import coop.rchain.rspace.Match.MatchResult
 import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+abstract class RSpaceOps[C, P, E, A, S, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
-    serializeK: Serialize[K]
-) extends FreudianSpace[C, P, E, A, R, K] {
+    serializeK: Serialize[K],
+    monoid: Monoid[S]
+) extends FreudianSpace[C, P, E, A, S, R, K] {
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
 
-  private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
-    val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
+  private[this] val installs: SyncVar[Installs[C, P, E, A, S, R, K]] = {
+    val installs = new SyncVar[Installs[C, P, E, A, S, R, K]]()
     installs.put(Map.empty)
     installs
   }
@@ -38,10 +40,11 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
         install(txn, channels, patterns, continuation)(_match)
     }
 
-  private[this] def install(txn: store.Transaction,
-                            channels: Seq[C],
-                            patterns: Seq[P],
-                            continuation: K)(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
+  private[this] def install(
+      txn: store.Transaction,
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K)(implicit m: Match[P, E, A, S, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -66,8 +69,9 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
     }.toMap
 
     val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-        .map(_.sequence)
+      extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
+        .map(_.map(_.toEither).sequence.map(_.sequence))
+        .value
 
     options match {
       case Left(e) =>
@@ -89,7 +93,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] =
+      implicit m: Match[P, E, A, S, R]): Option[(K, Seq[R])] =
     Kamon.withSpan(installSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         install(txn, channels, patterns, continuation)

@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 import cats.Id
+import coop.rchain.rspace.Match.MatchResult
 import org.scalatest.enablers.Definition
 
 //noinspection ConvertExpressionToSAM
@@ -11,4 +12,17 @@ trait TestImplicitHelpers {
       override def isDefined(thing: Id[Either[E, Option[A]]]): Boolean =
         thing.right.get.isDefined
     }
+
+  implicit def matchResultDefinitionScalatest[R, S, E]: Definition[Id[MatchResult[R, S, E]]] =
+    new Definition[Id[MatchResult[R, S, E]]] {
+      override def isDefined(thing: Id[MatchResult[R, S, E]]): Boolean =
+        thing.isFound
+    }
+
+  implicit def matchResultToEither[R, S, E](m: MatchResult[R, S, E]): Either[E, Option[R]] =
+    m.toEither
+
+  implicit def matchResultIdToEitherId[R, S, E](
+      m: Id[MatchResult[R, S, E]]): Id[Either[E, Option[R]]] =
+    m.toEither
 }

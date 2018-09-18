@@ -19,7 +19,7 @@ package object util {
 
   /** Runs a continuation with the accompanying data
     */
-  def runK[T](e: Id[Either[Nothing, Option[((T) => Unit, T)]]]): Unit =
+  def runK[E, T](e: Id[Either[E, Option[((T) => Unit, T)]]]): Unit =
     e.right.get.foreach { case (k, data) => k(data) }
 
   /** Runs a list of continuations with the accompanying data

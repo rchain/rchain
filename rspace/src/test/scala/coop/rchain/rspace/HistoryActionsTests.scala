@@ -14,11 +14,13 @@ import scodec.Codec
 import scala.collection.immutable.Seq
 
 //noinspection ZeroIndexToHead
-trait HistoryActionsTests
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+trait HistoryActionsTests[E, S2]
+    extends StorageTestsBase[String, Pattern, E, S2, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
+
+  implicit val storageMatch: Match[Pattern, E, String, S2, String]
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
@@ -211,11 +213,11 @@ trait HistoryActionsTests
 
       val r1 = space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
@@ -476,6 +478,18 @@ trait HistoryActionsTests
   }
 }
 
-class MixedStoreHistoryActionsTests extends MixedStoreTestsBase with HistoryActionsTests
-class LMDBStoreHistoryActionsTests  extends LMDBStoreTestsBase with HistoryActionsTests
-class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests
+class MixedStoreHistoryActionsTests
+    extends MixedStoreTestsBase[Nothing, Null]
+    with HistoryActionsTests[Nothing, Null] {
+  override implicit val storageMatch: Match[Pattern, Nothing, String, Null, String] = stringMatch
+}
+class LMDBStoreHistoryActionsTests
+    extends LMDBStoreTestsBase[Nothing, Null]
+    with HistoryActionsTests[Nothing, Null] {
+  override implicit val storageMatch: Match[Pattern, Nothing, String, Null, String] = stringMatch
+}
+class InMemStoreHistoryActionsTests
+    extends InMemoryStoreTestsBase[Nothing, Null]
+    with HistoryActionsTests[Nothing, Null] {
+  override implicit val storageMatch: Match[Pattern, Nothing, String, Null, String] = stringMatch
+}

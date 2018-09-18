@@ -2,6 +2,8 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
+import cats.Monoid
+import coop.rchain.rspace.Match.MatchResult
 import coop.rchain.shared.Language.ignore
 import coop.rchain.rspace.{Match, Serialize}
 import scodec.bits.ByteVector
@@ -48,10 +50,14 @@ object StringExamples {
   }
 
   object implicits {
+    implicit object nullMonoid extends Monoid[Null] {
+      override def empty: Null                     = null
+      override def combine(x: Null, y: Null): Null = null
+    }
 
-    implicit object stringMatch extends Match[Pattern, Nothing, String, String] {
-      def get(p: Pattern, a: String): Either[Nothing, Option[String]] =
-        Right(Some(a).filter(p.isMatch))
+    implicit object stringMatch extends Match[Pattern, Nothing, String, Null, String] {
+      def get(p: Pattern, a: String): MatchResult[String, Null, Nothing] =
+        MatchResult.fromEither(Right(Some(a).filter(p.isMatch)), null)
     }
 
     implicit object stringSerialize extends Serialize[String] {

@@ -20,7 +20,7 @@ import org.scalatest.enablers.Definition
 import scala.util.Random
 
 trait StorageActionsTests
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, Null, String, StringsCaptor]
     with TestImplicitHelpers
     with GeneratorDrivenPropertyChecks
     with Checkers {
@@ -53,7 +53,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r shouldBe Right(None)
+    assert(r.isNotFound)
     //store is not empty - we have 'A' stored
     store.isEmpty shouldBe false
   }
@@ -73,7 +73,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.produce(key.head, "datum2", persist = false)
 
@@ -86,7 +86,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
     //store is not empty - we have 2 As stored
     store.isEmpty shouldBe false
   }
@@ -107,7 +107,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) should not be empty
     }
 
-    r shouldBe Right(None)
+    assert(r.isNotFound)
     //there is a continuation stored in the storage
     store.isEmpty shouldBe false
   }
@@ -138,7 +138,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) should not be empty
     }
 
-    r shouldBe Right(None)
+    assert(r.isNotFound)
     //continuation is left in the storage
     store.isEmpty shouldBe false
   }
@@ -158,7 +158,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.consume(key, List(Wildcard), new StringsCaptor, persist = false)
 
@@ -171,7 +171,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r2 shouldBe defined
+    assert(r2.isFound)
 
     runK(r2)
 
@@ -186,9 +186,9 @@ trait StorageActionsTests
     val r2    = space.produce("ch1", "datum2", persist = false)
     val r3    = space.produce("ch1", "datum3", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
 
     val r4 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -227,7 +227,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val consumeKey     = List("ch1", "ch2")
     val consumeKeyHash = store.hashChannels(consumeKey)
@@ -247,7 +247,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, consumeKey) should not be empty
     }
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
 
     val produceKey2     = List("ch2")
     val produceKey2Hash = store.hashChannels(produceKey2)
@@ -269,7 +269,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, produceKey2) shouldBe Nil
     }
 
-    r3 shouldBe defined
+    assert(r3.isFound)
 
     runK(r3)
 
@@ -300,7 +300,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.produce(produceKey2.head, "datum2", persist = false)
 
@@ -311,7 +311,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, produceKey2) shouldBe Nil
     }
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
 
     val r3 = space.produce(produceKey3.head, "datum3", persist = false)
 
@@ -322,7 +322,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, produceKey3) shouldBe Nil
     }
 
-    r3 shouldBe Right(None)
+    assert(r3.isNotFound)
 
     val r4 = space.consume(List("ch1", "ch2", "ch3"), patterns, new StringsCaptor, persist = false)
 
@@ -333,7 +333,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, consumeKey) shouldBe Nil
     }
 
-    r4 shouldBe defined
+    assert(r4.isFound)
 
     runK(r4)
 
@@ -353,9 +353,9 @@ trait StorageActionsTests
     val r2 = space.produce(key.head, "datum2", persist = false)
     val r3 = space.produce(key.head, "datum3", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
 
     val r4 = space.consume(key, List(Wildcard), captor, persist = false)
     val r5 = space.consume(key, List(Wildcard), captor, persist = false)
@@ -370,9 +370,9 @@ trait StorageActionsTests
 
     val continuations = List(r4, r5, r6)
 
-    continuations.forall(_.right.get.isDefined) shouldBe true
+    continuations.forall(_.isFound) shouldBe true
 
-    continuations.foreach(runK)
+    continuations.map(_.toEither).foreach(runK)
 
     captor.results should contain theSameElementsAs List(List("datum3"),
                                                          List("datum2"),
@@ -394,11 +394,11 @@ trait StorageActionsTests
       val r2 = space.produce("ch1", "datum2", persist = false)
       val r3 = space.produce("ch1", "datum3", persist = false)
 
-      r1 shouldBe defined
-      r2 shouldBe defined
-      r3 shouldBe defined
+      assert(r1.isFound)
+      assert(r2.isFound)
+      assert(r3.isFound)
 
-      List(r1, r2, r3).foreach(runK)
+      List(r1, r2, r3).map(_.toEither).foreach(runK)
 
       getK(r1).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
       getK(r2).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
@@ -423,11 +423,11 @@ trait StorageActionsTests
     val r2 = space.produce("ch1", "datum2", persist = false)
     val r3 = space.produce("ch1", "datum3", persist = false)
 
-    r1 shouldBe defined
-    r2 shouldBe defined
-    r3 shouldBe defined
+    assert(r1.isFound)
+    assert(r2.isFound)
+    assert(r3.isFound)
 
-    List(r1, r2, r3).foreach(runK)
+    List(r1, r2, r3).map(_.toEither).foreach(runK)
 
     getK(r1).results shouldBe List(List("datum1"))
     getK(r2).results shouldBe List(List("datum2"))
@@ -448,13 +448,13 @@ trait StorageActionsTests
     val r2 = space.produce("ch1", "datum1", persist = false)
     val r3 = space.produce("ch2", "datum2", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe defined
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isFound)
 
-    runK(r3)
+    runK(r3.toEither)
 
-    getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+    getK(r3.toEither).results should contain theSameElementsAs List(List("datum1", "datum2"))
 
     store.isEmpty shouldBe true
 
@@ -474,12 +474,12 @@ trait StorageActionsTests
     val r2 = space.produce("ch1", "datum1", persist = false)
     val r3 = space.produce("ch1", "datum1", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe defined
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isFound)
 
-    runK(r3)
-    getK(r3).results shouldBe List(List("datum1", "datum1"))
+    runK(r3.toEither)
+    getK(r3.toEither).results shouldBe List(List("datum1", "datum1"))
 
     store.isEmpty shouldBe true
 
@@ -505,14 +505,14 @@ trait StorageActionsTests
     val r5 = space.produce("ch1", "datum1", persist = false)
     val r6 = space.produce("ch2", "datum2", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
-    r4 shouldBe defined
-    r5 shouldBe Right(None)
-    r6 shouldBe defined
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
+    assert(r4.isFound)
+    assert(r5.isNotFound)
+    assert(r6.isFound)
 
-    List(r4, r6).foreach(runK)
+    List(r4, r6).map(_.toEither).foreach(runK)
 
     getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
     getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
@@ -534,8 +534,8 @@ trait StorageActionsTests
 
     val r2 = space.produce("ch1", "datum1", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getData(txn, List("ch1", "ch2")) shouldBe Nil
@@ -562,15 +562,15 @@ trait StorageActionsTests
     val r3 = space.produce("ch1", "datum1", persist = false)
     val r4 = space.produce("ch2", "datum2", persist = false)
 
-    List(r1, r2, r3, r4).foreach(runK)
+    List(r1, r2, r3, r4).map(_.toEither).foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getData(txn, List("ch1")) shouldBe Nil
       store.getData(txn, List("ch2")) shouldBe Nil
     }
 
-    getK(r3).results should contain theSameElementsAs List(List("datum1"))
-    getK(r4).results should contain theSameElementsAs List(List("datum2"))
+    getK(r3.toEither).results should contain theSameElementsAs List(List("datum1"))
+    getK(r4.toEither).results should contain theSameElementsAs List(List("datum2"))
 
     store.isEmpty shouldBe true
 
@@ -598,12 +598,12 @@ trait StorageActionsTests
         store.getData(txn, List("ch2")) shouldBe List(Datum.create("ch2", "datum2", false))
       }
 
-      r3 shouldBe defined
-      r4 shouldBe Right(None)
+      r3.toEither shouldBe defined
+      r4.toEither shouldBe Right(None)
 
-      runK(r3)
+      runK(r3.toEither)
 
-      getK(r3).results should contain theSameElementsAs List(List("datum1"))
+      getK(r3.toEither).results should contain theSameElementsAs List(List("datum1"))
       //ensure that joins are cleaned-up after all
       store.withTxn(store.createTxnRead()) { txn =>
         store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
@@ -630,14 +630,14 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     // Data exists so the write will not "stick"
     val r2 = space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
     store.isEmpty shouldBe true
 
-    r2 shouldBe defined
+    assert(r2.isFound)
 
     runK(r2)
 
@@ -653,7 +653,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, key) should not be empty
     }
 
-    r3 shouldBe Right(None)
+    assert(r3.isNotFound)
   }
 
   "producing, doing a persistent consume, and producing again on the same channel" should
@@ -672,14 +672,14 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, key) shouldBe Nil
       }
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       // Matching data exists so the write will not "stick"
       val r2 = space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
 
       store.isEmpty shouldBe true
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       runK(r2)
 
@@ -695,7 +695,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, key) should not be empty
       }
 
-      r3 shouldBe Right(None)
+      assert(r3.isNotFound)
 
       val r4 = space.produce(key.head, "datum2", persist = false)
 
@@ -706,7 +706,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, key) should not be empty
       }
 
-      r4 shouldBe defined
+      assert(r4.isFound)
 
       runK(r4)
 
@@ -724,7 +724,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       val r2 = space.produce("ch1", "datum1", persist = false)
 
@@ -733,7 +733,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       runK(r2)
 
@@ -746,7 +746,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
-      r3 shouldBe defined
+      assert(r3.isFound)
 
       runK(r3)
 
@@ -758,14 +758,14 @@ trait StorageActionsTests
 
     val r1 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     // A matching continuation exists so the write will not "stick"
     val r2 = space.produce("ch1", "datum1", persist = true)
 
     store.isEmpty shouldBe true
 
-    r2 shouldBe defined
+    assert(r2.isFound)
 
     runK(r2)
 
@@ -774,7 +774,7 @@ trait StorageActionsTests
     // All matching continuations have been produced, so the write will "stick"
     val r3 = space.produce("ch1", "datum1", persist = true)
 
-    r3 shouldBe Right(None)
+    assert(r3.isNotFound)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getData(txn, List("ch1")) shouldBe List(Datum.create("ch1", "datum1", true))
@@ -788,14 +788,14 @@ trait StorageActionsTests
 
       val r1 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       // A matching continuation exists so the write will not "stick"
       val r2 = space.produce("ch1", "datum1", persist = true)
 
       store.isEmpty shouldBe true
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       runK(r2)
 
@@ -809,7 +809,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
       }
 
-      r3 shouldBe Right(None)
+      assert(r3.isNotFound)
 
       val r4 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -818,7 +818,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
       }
 
-      r4 shouldBe defined
+      assert(r4.isFound)
 
       runK(r4)
 
@@ -835,7 +835,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
@@ -844,7 +844,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
-    r2 shouldBe defined
+    assert(r2.isFound)
 
     runK(r2)
 
@@ -857,7 +857,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
-    r3 shouldBe defined
+    assert(r3.isFound)
 
     runK(r3)
 
@@ -871,9 +871,9 @@ trait StorageActionsTests
     val r2 = space.produce("ch1", "datum2", persist = false)
     val r3 = space.produce("ch1", "datum3", persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
 
     // Matching data exists so the write will not "stick"
     val r4 = space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
@@ -887,7 +887,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
-    r4 shouldBe defined
+    assert(r4.isFound)
 
     runK(r4)
 
@@ -905,7 +905,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
-    r5 shouldBe defined
+    assert(r5.isFound)
 
     runK(r5)
 
@@ -916,7 +916,7 @@ trait StorageActionsTests
 
     store.isEmpty shouldBe true
 
-    r6 shouldBe defined
+    assert(r6.isFound)
 
     runK(r6)
 
@@ -930,7 +930,7 @@ trait StorageActionsTests
       store.getWaitingContinuation(txn, List("ch1")) should not be empty
     }
 
-    r7 shouldBe Right(None)
+    assert(r7.isNotFound)
 
   }
 
@@ -940,7 +940,7 @@ trait StorageActionsTests
 
       val r1 = space.produce(channel, data = "datum", persist = true)
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       val r2 = space.consume(
         List(channel, channel),
@@ -949,7 +949,7 @@ trait StorageActionsTests
         persist = false
       )
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       runK(r2)
 
@@ -966,7 +966,7 @@ trait StorageActionsTests
 
       val r = space.consume(key, patterns, new StringsCaptor, persist = false)
 
-      r shouldBe Right(None)
+      assert(r.isNotFound)
       store.isEmpty shouldBe false
       store.getTrieUpdates.length shouldBe 1
       store.getTrieUpdateCount shouldBe 1
@@ -997,7 +997,7 @@ trait StorageActionsTests
         store.getWaitingContinuation(txn, key) should not be empty
       }
 
-      r shouldBe Right(None)
+      assert(r.isNotFound)
       store.isEmpty shouldBe false
       store.getTrieUpdates.length shouldBe 1
       store.getTrieUpdateCount shouldBe 1
@@ -1194,11 +1194,11 @@ trait StorageActionsTests
 
       val r1 = space.consume(channels, List(Wildcard), new StringsCaptor, persist = false)
 
-      r1 shouldBe Right(None)
+      assert(r1.isNotFound)
 
       val r2 = space.produce(channels.head, "datum", persist = false)
 
-      r2 shouldBe defined
+      assert(r2.isFound)
 
       history.lookup(space.store.trieStore, space.store.trieBranch, channelsHash) shouldBe None
 
@@ -1487,18 +1487,18 @@ trait StorageActionsTests
 }
 
 class InMemoryStoreStorageActionsTests
-    extends InMemoryStoreTestsBase
+    extends InMemoryStoreTestsBase[Nothing, Null]
     with StorageActionsTests
     with JoinOperationsTests
 
 class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
+    extends LMDBStoreTestsBase[Nothing, Null]
     with StorageActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll
 
 class MixedStoreActionsTests
-    extends MixedStoreTestsBase
+    extends MixedStoreTestsBase[Nothing, Null]
     with StorageActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll

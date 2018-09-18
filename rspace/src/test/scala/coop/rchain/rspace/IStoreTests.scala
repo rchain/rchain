@@ -10,7 +10,7 @@ import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    extends StorageTestsBase[String, Pattern, Nothing, Null, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
     with AppendedClues {
 

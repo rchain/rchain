@@ -120,9 +120,11 @@ object internal {
       }
   }
 
-  case class Install[P, E, A, R, K](patterns: Seq[P], continuation: K, _match: Match[P, E, A, R])
+  case class Install[P, E, A, S, R, K](patterns: Seq[P],
+                                       continuation: K,
+                                       _match: Match[P, E, A, S, R])
 
-  type Installs[C, P, E, A, R, K] = Map[Seq[C], Install[P, E, A, R, K]]
+  type Installs[C, P, E, A, S, R, K] = Map[Seq[C], Install[P, E, A, S, R, K]]
 
   import scodec.{Attempt, Err}
 
