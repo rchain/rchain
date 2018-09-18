@@ -356,6 +356,66 @@ class ValidateTest
       log.warns.size should be(1)
   }
 
+  "Justification follow validation" should "return valid for proper justifications and failed otherwise" in withStore {
+    implicit blockStore =>
+      implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
+      val v1                       = ByteString.copyFromUtf8("Validator One")
+      val v2                       = ByteString.copyFromUtf8("Validator Two")
+      val v1Bond                   = Bond(v1, 2)
+      val v2Bond                   = Bond(v2, 3)
+      val bonds                    = Seq(v1Bond, v2Bond)
+
+      def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
+        for {
+          genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
+          b2 <- createBlock[F](Seq(genesis.blockHash),
+                               v2,
+                               bonds,
+                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
+          b3 <- createBlock[F](Seq(genesis.blockHash),
+                               v1,
+                               bonds,
+                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
+          b4 <- createBlock[F](Seq(b2.blockHash),
+                               v2,
+                               bonds,
+                               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash))
+          b5 <- createBlock[F](Seq(b2.blockHash),
+                               v1,
+                               bonds,
+                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash))
+          _ <- createBlock[F](Seq(b4.blockHash),
+                              v2,
+                              bonds,
+                              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
+          b7 <- createBlock[F](Seq(b4.blockHash),
+                               v1,
+                               Seq(),
+                               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
+          b8 <- createBlock[F](Seq(b7.blockHash),
+                               v1,
+                               bonds,
+                               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
+        } yield b8
+
+      val chain   = createChainWithValidators[StateWithChain].runS(initState)
+      val genesis = chain.idToBlocks(1)
+
+      (1 to 6).forall(i =>
+        Validate
+          .justificationFollows[Id](chain.idToBlocks(i), genesis, chain) == Right(Valid)) should be(
+        true)
+
+      Validate
+        .justificationFollows[Id](chain.idToBlocks(7), genesis, chain) == Left(InvalidFollows) should be(
+        true)
+
+      log.warns.size should be(1)
+      log.warns.forall(_.contains(
+        "the justifications of block are not follow from bonds of creator justification block")) should be(
+        true)
+  }
+
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStore {
     implicit blockStore =>
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
