@@ -411,8 +411,7 @@ class ValidateTest
         true)
 
       log.warns.size should be(1)
-      log.warns.forall(_.contains(
-        "the justifications of block are not follow from bonds of creator justification block")) should be(
+      log.warns.forall(_.contains("not follow from bonds of creator justification block")) should be(
         true)
   }
 

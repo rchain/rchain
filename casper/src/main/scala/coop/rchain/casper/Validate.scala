@@ -407,24 +407,21 @@ object Validate {
       genesis: BlockMessage,
       dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
     for {
-      latestMessages <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
-      validators     = latestMessages.keySet
-      creatorLatestBlock <- ProtoUtil.creatorJustification(b).foldM(genesis) {
-                             case (_, Justification(_, latestBlockHash)) =>
-                               for {
-                                 latestBlock <- ProtoUtil.unsafeGetBlock[F](latestBlockHash)
-                               } yield latestBlock
-                           }
-      creatorBonds = ProtoUtil.bonds(creatorLatestBlock).map(_.validator).toSet
-      result       = creatorBonds == validators
+      latestMessages     <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
+      validators         = latestMessages.keySet
+      creatorLatestBlock = latestMessages.getOrElse(b.sender, genesis)
+      creatorBonds       = ProtoUtil.bonds(creatorLatestBlock).map(_.validator).toSet
+      result             = creatorBonds == validators
       status <- if (result) {
                  Applicative[F].pure(Right(Valid))
                } else {
+                 val justifications =
+                   b.justifications.map(it => PrettyPrinter.buildString(it.validator)).mkString(",")
                  for {
                    _ <- Log[F].warn(
                          ignore(
                            b,
-                           "the justifications of block are not follow from bonds of creator justification block"))
+                           s"the justifications of block are ${justifications}, do not follow from bonds of creator justification block"))
                  } yield Left(InvalidFollows)
                }
     } yield status
