@@ -11,6 +11,7 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAl
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.pure.PureRSpace
 import java.io.StringReader
@@ -26,8 +27,8 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount.zero)
   def withRegistryAndTestSpace[R](
-      f: (Reduce[Task], 
-          FreudianSpace[
+      f: (Reduce[Task],
+          IdISpace[
                  Channel,
                  BindPattern,
                  OutOfPhlogistonsError.type,
