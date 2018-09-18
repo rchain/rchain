@@ -3,7 +3,7 @@ package coop.rchain.comm.discovery
 import org.scalatest._
 
 import cats._
-
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
@@ -25,6 +25,8 @@ class DistanceSpec extends FlatSpec with Matchers {
   implicit val ping: KademliaRPC[Id] = new KademliaRPC[Id] {
     def ping(node: PeerNode): Boolean                         = true
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def receive(pingHandler: Ping => Id[Pong],
+                lookupHandler: Lookup => Id[LookupResponse]): Id[Unit] = ()
   }
   implicit val capture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A]       = a
