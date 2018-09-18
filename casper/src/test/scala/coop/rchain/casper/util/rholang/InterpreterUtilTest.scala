@@ -18,7 +18,7 @@ import cats.effect.Bracket
 import cats.mtl.MonadState
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.BlockStore.BlockHash
-import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, BlockStoreTestFixture}
+import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.PCost
@@ -41,7 +41,7 @@ class InterpreterUtilTest
     with Matchers
     with BlockGenerator
     with BlockStoreTestFixture {
-  val initState        = BlockDag().copy(currentId = -1)
+  val initState        = IndexedBlockDag.empty.copy(currentId = -1)
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
   val activeRuntime    = Runtime.create(storageDirectory, storageSize)
@@ -71,23 +71,23 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
     val genesisDeploysCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b2Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b3Deploys = Vector(
       "@7!(7)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     /*
      * DAG Looks like this:
@@ -157,7 +157,7 @@ class InterpreterUtilTest
     b3PostState.contains("@{7}!(7)") should be(true)
   }
 
-  private def injectPostStateHash(chain: BlockDag,
+  private def injectPostStateHash(chain: IndexedBlockDag,
                                   id: Int,
                                   b: BlockMessage,
                                   postGenStateHash: StateHash,
@@ -177,26 +177,26 @@ class InterpreterUtilTest
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val genesisDeploysWithCost =
-      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(0L, 1)))
+      genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
     val b1Deploys = Vector(
       "@5!(5)",
       "for(@a <- @2){ @456!(5 * a) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b1DeploysWithCost =
-      b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2L, 2)))
+      b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(2, 2L)))
 
     val b2Deploys = Vector(
       "@6!(6)"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b2DeploysWithCost =
-      b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+      b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
 
     val b3Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
     ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
     val b3DeploysWithCost =
-      b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5L, 5)))
+      b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(5, 5L)))
 
     /*
      * DAG Looks like this:
@@ -310,7 +310,7 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
     val deploys          = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeployNow)
-    val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1L, 1)))
+    val processedDeploys = deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 1L)))
     val invalidHash      = ByteString.EMPTY
     val chain =
       createBlock[StateWithChain](Seq.empty, deploys = processedDeploys, tsHash = invalidHash)
@@ -343,7 +343,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -391,7 +391,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -443,7 +443,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -492,7 +492,7 @@ class InterpreterUtilTest
                                    initState,
                                    knownStateHashes,
                                    runtimeManager)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
                                   tsHash = computedTsHash)
@@ -533,7 +533,7 @@ class InterpreterUtilTest
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
-      val chain: BlockDag =
+      val chain: IndexedBlockDag =
         createBlock[StateWithChain](
           Seq.empty,
           deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),
@@ -566,7 +566,7 @@ class InterpreterUtilTest
     //create single deploy with log that includes excess comm events
     val badProcessedDeploy = intProcessedDeploys.head.copy(
       log = intProcessedDeploys.head.log ++ intProcessedDeploys.last.log)
-    val chain: BlockDag =
+    val chain: IndexedBlockDag =
       createBlock[StateWithChain](Seq.empty,
                                   deploys = Seq(badProcessedDeploy, intProcessedDeploys.last),
                                   tsHash = computedTsHash)
@@ -608,7 +608,7 @@ class InterpreterUtilTest
                                      initState,
                                      knownStateHashes,
                                      runtimeManager)
-      val chain: BlockDag =
+      val chain: IndexedBlockDag =
         createBlock[StateWithChain](
           Seq.empty,
           deploys = processedDeploys.map(ProcessedDeployUtil.fromInternal),

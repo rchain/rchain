@@ -21,6 +21,7 @@ def parse_config(request):
     converge_timeout = int(request.config.getoption("--converge-timeout"))
     receive_timeout = int(request.config.getoption("--receive-timeout"))
     rnode_timeout = int(request.config.getoption("--rnode-timeout"))
+    blocks = int(request.config.getoption("--blocks"))
 
     def make_timeout(value, base, peer_factor=10): return value if value > 0 else base + peer_count * peer_factor
 
@@ -28,7 +29,8 @@ def parse_config(request):
                      node_startup_timeout = make_timeout(start_timeout, 30, 10),
                      network_converge_timeout = make_timeout(converge_timeout, 200, 10),
                      receive_timeout = make_timeout(receive_timeout, 10, 10),
-                     rnode_timeout = rnode_timeout
+                     rnode_timeout = rnode_timeout,
+                     blocks = blocks
                      )
 
     with log_box(logging.info):

@@ -7,6 +7,11 @@ import com.typesafe.sbt.packager.docker._
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
+//disallow any unresolved version conflicts at all for faster feedback
+Global / conflictManager := ConflictManager.strict
+//resolve all version conflicts explicitly
+Global / dependencyOverrides := Dependencies.overrides
+
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
   scalaVersion := "2.12.6",
@@ -227,7 +232,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop, lightningj),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,

@@ -18,3 +18,6 @@ def pytest_addoption(parser):
     parser.addoption(
         "--rnode-timeout", action="store", default="10", help="timeout in seconds for executing an rnode call (Examples: propose, show-logs etc.). Defaults to 10s"
     )
+    parser.addoption(
+        "--blocks", action="store", default="1", help="The number of deploys per test deploy"
+    )
