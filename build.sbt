@@ -56,7 +56,8 @@ lazy val shared = (project in file("shared"))
       catsMtl,
       monix,
       scodecCore,
-      scodecBits
+      scodecBits,
+      scalapbRuntimegGrpc,
     )
   )
 
@@ -96,7 +97,8 @@ lazy val comm = (project in file("comm"))
     ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   ).dependsOn(shared, crypto)
 
@@ -126,7 +128,8 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(rspace)
@@ -152,7 +155,8 @@ lazy val node = (project in file("node"))
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",

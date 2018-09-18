@@ -14,7 +14,8 @@ Config = collections.namedtuple( "Config",
                                      "node_startup_timeout",
                                      "network_converge_timeout",
                                      "receive_timeout",
-                                     "rnode_timeout"
+                                     "rnode_timeout",
+                                     "blocks"
                                  ])
 
 

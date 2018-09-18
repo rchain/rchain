@@ -33,11 +33,12 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
       .maxInboundMessageSize(maxMessageSize)
       .usePlaintext(true)
       .build
-  private val stub = ReplGrpc.stub(channel)
+
+  private val stub = ReplGrpcMonix.stub(channel)
 
   def run(line: String): Task[Either[Throwable, String]] =
-    Task
-      .fromFuture(stub.run(CmdRequest(line)))
+    stub
+      .run(CmdRequest(line))
       .map(_.output)
       .attempt
       .map(_.leftMap(processError))
@@ -49,8 +50,8 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
   def eval(fileName: String): Task[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)
     if (Files.exists(filePath))
-      Task
-        .fromFuture(stub.eval(EvalRequest(readContent(filePath))))
+      stub
+        .eval(EvalRequest(readContent(filePath)))
         .map(_.output)
         .attempt
         .map(_.leftMap(processError))

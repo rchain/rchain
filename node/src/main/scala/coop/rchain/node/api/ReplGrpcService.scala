@@ -39,8 +39,8 @@ import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
 private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Scheduler)
-    extends ReplGrpc.Repl {
-  def exec(reader: Reader): Future[ReplResponse] =
+    extends ReplGrpcMonix.Repl {
+  def exec(reader: Reader): Task[ReplResponse] =
     Task
       .coeval(buildNormalizedTerm(reader))
       .attempt
@@ -68,12 +68,11 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
       }
       .map(ReplResponse(_))
       .executeAsync
-      .runAsync
 
-  def run(request: CmdRequest): Future[ReplResponse] =
+  def run(request: CmdRequest): Task[ReplResponse] =
     exec(new StringReader(request.line))
 
-  def eval(request: EvalRequest): Future[ReplResponse] =
+  def eval(request: EvalRequest): Task[ReplResponse] =
     exec(new StringReader(request.program))
 
   def runEvaluate(runtime: Runtime, term: Par): Task[EvaluateResult] =
