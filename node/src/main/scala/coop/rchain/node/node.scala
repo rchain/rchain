@@ -328,8 +328,11 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
     rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
                                           numOfConnectionsPinged = 10) // TODO read from conf
+    rpBlockDistribution = BlockDistributionConf(conf.casper.minPeersBroadcastCount,
+                                                conf.casper.peersBroadcastDecreaseRate)
     // 2. create instances of typeclasses
-    rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
+    rpConfAsk = effects.rpConfAsk(
+      RPConf(local, defaultTimeout, rpClearConnConf, rpBlockDistribution))
     tcpConnections       <- effects.tcpConnections.toEffect
     rpConnections        <- effects.rpConnections.toEffect
     log                  = effects.log

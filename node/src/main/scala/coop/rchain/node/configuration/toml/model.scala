@@ -54,5 +54,7 @@ case class Validators(
     requiredSigs: Option[Int],
     approveGenesisDuration: Option[FiniteDuration],
     approveGenesisInterval: Option[FiniteDuration],
-    deployTimestamp: Option[Long]
+    deployTimestamp: Option[Long],
+    minPeersBroadcastCount: Option[Int],
+    peersBroadcastDecreaseRate: Option[Double]
 )

@@ -432,7 +432,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       b: BlockMessage): F[Unit] =
     for {
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.")
-      _ <- MultiParentCasper[F].addBlock(b)
+      _ <- MultiParentCasper[F].addBlock(b.withCreatorDist(b.creatorDist + 1))
     } yield ()
 
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =

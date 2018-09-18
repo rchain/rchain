@@ -199,6 +199,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         descr = "Timestamp for the deploys."
       )
 
+    val minPeersBroadcastCount =
+      opt[Int](
+        descr = "Minimal number of peers whom a block will be sent to"
+      )
+
+    val peersBroadcastDecreaseRate =
+      opt[Double](
+        descr = "Rate at which the number of peers whom a block will be sent to will decrease " +
+          "with distance from the creator."
+      )
+
     val duration =
       opt[FiniteDuration](
         short = 'd',

@@ -57,6 +57,8 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
   private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultMinPeersBroadcastCount     = 1
+  private val DefaultPeersBroadcastDecreaseRate = 2.0
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
@@ -161,7 +163,9 @@ object Configuration {
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
             approveGenesisInterval = 1.day,
-            deployTimestamp = None
+            deployTimestamp = None,
+            minPeersBroadcastCount = DefaultMinPeersBroadcastCount,
+            peersBroadcastDecreaseRate = DefaultPeersBroadcastDecreaseRate
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -234,6 +238,18 @@ object Configuration {
           DefaultApprovalProtocolDuration)
 
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
+    val minPeersBroadcastCount =
+      get(
+        _.run.minPeersBroadcastCount,
+        _.validators.flatMap(_.minPeersBroadcastCount),
+        DefaultMinPeersBroadcastCount
+      )
+    val peersBroadcastDecreaseRate =
+      get(
+        _.run.peersBroadcastDecreaseRate,
+        _.validators.flatMap(_.peersBroadcastDecreaseRate),
+        DefaultPeersBroadcastDecreaseRate
+      )
 
     val host: Option[String] = getOpt(_.run.host, _.server.flatMap(_.host))
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
@@ -322,7 +338,9 @@ object Configuration {
         genesisValidator,
         genesisApproveInterval,
         genesisAppriveDuration,
-        deployTimestamp
+        deployTimestamp,
+        minPeersBroadcastCount,
+        peersBroadcastDecreaseRate
       )
     val blockstorage = LMDBBlockStore.Config(
       dataDir.resolve("casper-block-store"),
