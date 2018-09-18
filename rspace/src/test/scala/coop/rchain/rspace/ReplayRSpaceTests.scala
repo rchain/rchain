@@ -2,6 +2,7 @@ package coop.rchain.rspace
 
 import java.nio.file.Files
 
+import cats.Id
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
@@ -9,6 +10,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal.GNAT
+import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
@@ -723,7 +725,7 @@ trait ReplayRSpaceTests
       replayStore.isEmpty shouldBe true
       replayStore.getTrieUpdates.length shouldBe 0
       replayStore.getTrieUpdateCount shouldBe 0
-      replaySpace.replayData.get shouldBe empty
+      replaySpace.getReplayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
       checkpoint1.log shouldBe empty
@@ -762,12 +764,13 @@ trait ReplayRSpaceTests
       replayStore.isEmpty shouldBe true
       replayStore.getTrieUpdates.length shouldBe 0
       replayStore.getTrieUpdateCount shouldBe 0
-      replaySpace.replayData.get shouldBe empty
+      replaySpace.getReplayData shouldBe empty
 
       val checkpoint1 = replaySpace.createCheckpoint()
       checkpoint1.log shouldBe empty
     }
 
+  /*
   "after close rspace" should "throw RSpaceClosedException on all store operations" in
     withTestSpaces { (space, replaySpace) =>
       val channel  = "ch1"
@@ -787,7 +790,7 @@ trait ReplayRSpaceTests
       an[RSpaceClosedException] shouldBe thrownBy(
         replaySpace.produce(channel, null, false)
       )
-    }
+    }*/
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
@@ -798,7 +801,7 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
     super.withFixture(test)
   }
 
-  def withTestSpaces[S](f: (IdISpace[C, P, E, A, A, K], ReplayRSpace[C, P, E, A, A, K]) => S)(
+  def withTestSpaces[S](f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -809,12 +812,13 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
 
 trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], ReplayRSpace[C, P, E, A, A, K]) => S)(implicit
-                                                                            sc: Serialize[C],
-                                                                            sp: Serialize[P],
-                                                                            sa: Serialize[A],
-                                                                            sk: Serialize[K],
-                                                                            oC: Ordering[C]): S = {
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -834,12 +838,13 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
 
 trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], ReplayRSpace[C, P, E, A, A, K]) => S)(implicit
-                                                                            sc: Serialize[C],
-                                                                            sp: Serialize[P],
-                                                                            sa: Serialize[A],
-                                                                            sk: Serialize[K],
-                                                                            oC: Ordering[C]): S = {
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]): S = {
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
@@ -855,10 +860,39 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
   }
 }
 
+trait FineLockingReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]): S = {
+
+    val dbDir       = Files.createTempDirectory("rchain-storage-test-")
+    val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
+    val replaySpace = FineLockingReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+
+    try {
+      f(space, replaySpace)
+    } finally {
+      space.close()
+      replaySpace.close()
+      context.close()
+      dbDir.recursivelyDelete()
+    }
+  }
+}
 class LMDBReplayRSpaceTests
     extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
 class InMemoryRSpaceTests
     extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    with ReplayRSpaceTests {}
+
+class FineLockingReplayRSpaceTests
+    extends FineLockingReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
