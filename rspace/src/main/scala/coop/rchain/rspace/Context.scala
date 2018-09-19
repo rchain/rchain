@@ -5,7 +5,6 @@ import java.nio.file.Path
 
 import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.GNAT
-import coop.rchain.rspace.spaces.FineGrainedLMDBStore
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.Codec
 
@@ -28,23 +27,6 @@ private[rspace] class LMDBContext[C, P, A, K] private[rspace] (
                                            sa: Serialize[A],
                                            sk: Serialize[K]): IStore[C, P, A, K] =
     LMDBStore.create[C, P, A, K](this, branch)
-
-  def close(): Unit = {
-    trieStore.close()
-    env.close()
-  }
-}
-
-private[rspace] class FineGrainedLMDBContext[C, P, A, K] private[rspace] (
-    val env: Env[ByteBuffer],
-    val path: Path,
-    val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]]
-) extends Context[C, P, A, K] {
-  override def createStore(branch: Branch)(implicit sc: Serialize[C],
-                                           sp: Serialize[P],
-                                           sa: Serialize[A],
-                                           sk: Serialize[K]): IStore[C, P, A, K] =
-    FineGrainedLMDBStore.create[C, P, A, K](this, branch)
 
   def close(): Unit = {
     trieStore.close()
@@ -159,7 +141,7 @@ object Context {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): FineGrainedLMDBContext[C, P, A, K] = {
+      sk: Serialize[K]): LMDBContext[C, P, A, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -170,6 +152,6 @@ object Context {
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
 
-    new FineGrainedLMDBContext[C, P, A, K](env, path, trieStore)
+    new LMDBContext[C, P, A, K](env, path, trieStore)
   }
 }

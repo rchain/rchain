@@ -78,16 +78,14 @@ class FineGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
           case Left(e) =>
             Left(e)
           case Right(None) =>
-            store.withTxn(store.createTxnRead()) { txn =>
+            store.withTxn(store.createTxnWrite()) { txn =>
               store.putWaitingContinuation(
                 txn,
                 channels,
                 WaitingContinuation(patterns, continuation, persist, consumeRef))
-            }
-            for (channel <- channels)
-              store.withTxn(store.createTxnWrite()) { txn =>
+              for (channel <- channels)
                 store.addJoin(txn, channel, channels)
-              }
+            }
             logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))

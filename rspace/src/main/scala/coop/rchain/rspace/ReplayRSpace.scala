@@ -330,8 +330,8 @@ object ReplayRSpace {
       case mixedContext: MixedContext[C, P, A, K] =>
         InMemoryStore.create(mixedContext.trieStore, branch)
 
-      case ctx: FineGrainedLMDBContext[C, P, A, K] =>
-        ctx.createStore(branch)
+//      case ctx: FineGrainedLMDBContext[C, P, A, K] =>
+//        ctx.createStore(branch)
     }
 
     val replaySpace = new ReplayRSpace[C, P, E, A, R, K](mainStore, branch)

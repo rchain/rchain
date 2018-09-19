@@ -64,13 +64,11 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
         def storeWaitingContinuation(replays: ReplayData,
                                      consumeRef: Consume,
                                      maybeCommRef: Option[COMM]): None.type = {
-          store.withTxn(store.createTxnRead()) { txn =>
+          store.withTxn(store.createTxnWrite()) { txn =>
             store.putWaitingContinuation(
               txn,
               channels,
               WaitingContinuation(patterns, continuation, persist, consumeRef))
-          }
-          store.withTxn(store.createTxnWrite()) { txn =>
             for (channel <- channels) store.addJoin(txn, channel, channels)
           }
           logger.debug(s"""|consume: no data found,
@@ -321,8 +319,8 @@ object FineGrainedReplayRSpace {
       case mixedContext: MixedContext[C, P, A, K] =>
         InMemoryStore.create(mixedContext.trieStore, branch)
 
-      case ctx: FineGrainedLMDBContext[C, P, A, K] =>
-        ctx.createStore(branch)
+//      case ctx: FineGrainedLMDBContext[C, P, A, K] =>
+//        ctx.createStore(branch)
     }
 
     val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, R, K](mainStore, branch)

@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.spaces.{FineGrainedLMDBStore, FineGrainedRSpace}
+import coop.rchain.rspace.spaces.FineGrainedRSpace
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
@@ -252,7 +252,7 @@ class FineGrainedTestsBase
     val testBranch = Branch("test")
     val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore =
-      FineGrainedLMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+      LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
       new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
                                                                                      testBranch)
