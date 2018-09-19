@@ -41,7 +41,7 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: S
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
@@ -89,7 +89,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
