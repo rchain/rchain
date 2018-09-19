@@ -45,12 +45,12 @@ package object effects {
     }
   }
 
-  def kademliaRPC(port: Int, timeout: FiniteDuration)(
+  def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       metrics: Metrics[Task],
       log: Log[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
 
   def tcpTransportLayer(host: String,
                         port: Int,

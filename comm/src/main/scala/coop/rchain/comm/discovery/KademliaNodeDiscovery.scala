@@ -41,8 +41,10 @@ private[discovery] class KademliaNodeDiscovery[
       _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
     } yield ()
 
-  private def pingHandler: F[Pong] =
-    Metrics[F].incrementCounter("ping-recv-count").as(Pong())
+  private def pingHandler(ping: Ping): F[Pong] =
+    addNode(ProtocolHelper.toPeerNode(ping.sender.get)) *> Metrics[F]
+      .incrementCounter("ping-recv-count")
+      .as(Pong())
 
   private def lookupHandler(lookup: Lookup): F[LookupResponse] = {
     val id = lookup.id.toByteArray
@@ -50,12 +52,13 @@ private[discovery] class KademliaNodeDiscovery[
     for {
       peers <- Capture[F].capture(table.lookup(id))
       _     <- Metrics[F].incrementCounter("lookup-recv-count")
+      _     <- addNode(ProtocolHelper.toPeerNode(lookup.sender.get))
     } yield LookupResponse().withNodes(peers.map(ProtocolHelper.node(_)))
   }
 
   def discover: F[Unit] = {
 
-    val initRPC = KademliaRPC[F].receive(kp(pingHandler), lookupHandler)
+    val initRPC = KademliaRPC[F].receive(pingHandler, lookupHandler)
 
     val findNewAndAdd = for {
       _     <- Time[F].sleep(5000)

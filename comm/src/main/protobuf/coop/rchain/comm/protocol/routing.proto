@@ -17,17 +17,19 @@ message Node {
 }
 
 message Header {
-    Node   sender         = 1;
+  Node   sender         = 1;
 }
 
 message Ping {
+  Node   sender         = 1;
 }
 
 message Pong {
 }
 
 message Lookup {
-    bytes id = 1;
+  bytes  id     = 1;
+  Node   sender = 2;
 }
         
 message LookupResponse {

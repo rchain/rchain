@@ -14,10 +14,10 @@ import io.grpc._, io.grpc.netty._
 import com.google.protobuf.ByteString
 import scala.concurrent.duration._
 
-class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(implicit
-                                                          scheduler: Scheduler,
-                                                          metrics: Metrics[Task],
-                                                          log: Log[Task])
+class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implicit
+                                                                         scheduler: Scheduler,
+                                                                         metrics: Metrics[Task],
+                                                                         log: Log[Task])
     extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -28,18 +28,21 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(implicit
       channel <- clientChannel(peer)
       pongErr <- Task
                   .fromFuture {
-                    KademliaRPCServiceGrpc.stub(channel).sendPing(Ping())
+                    KademliaRPCServiceGrpc
+                      .stub(channel)
+                      .sendPing(Ping().withSender(ProtocolHelper.node(src)))
                   }
                   .nonCancelingTimeout(timeout)
                   .attempt
-      _ = println(s"ping resopnse: $pongErr")
       _ <- Task.delay(channel.shutdown())
     } yield pongErr.fold(kp(false), kp(true))
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
     for {
-      _       <- Metrics[Task].incrementCounter("protocol-lookup-send")
-      lookup  = Lookup().withId(ByteString.copyFrom(key.toArray))
+      _ <- Metrics[Task].incrementCounter("protocol-lookup-send")
+      lookup = Lookup()
+        .withId(ByteString.copyFrom(key.toArray))
+        .withSender(ProtocolHelper.node(src))
       channel <- clientChannel(peer)
       responseErr <- Task
                       .fromFuture {
@@ -48,7 +51,6 @@ class GrpcKademliaRPC(port: Int, timeout: FiniteDuration)(implicit
                       .nonCancelingTimeout(timeout)
                       .attempt
       _ <- Task.delay(channel.shutdown())
-      _ = println(s"lookup resopnse: $responseErr")
     } yield
       responseErr.fold(
         kp(Seq.empty[PeerNode]),
