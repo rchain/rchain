@@ -64,4 +64,9 @@ object Blake2b256Hash {
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 
   implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(codecBlake2b256Hash)
+
+  implicit val ordering: Ordering[Blake2b256Hash] =
+    (x: Blake2b256Hash, y: Blake2b256Hash) => {
+      x.bytes.toHex.compare(y.bytes.toHex)
+    }
 }

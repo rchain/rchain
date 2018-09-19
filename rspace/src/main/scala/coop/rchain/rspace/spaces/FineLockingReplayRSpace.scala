@@ -31,11 +31,6 @@ class FineLockingReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
 
   implicit val codecC = serializeC.toCodec
 
-  implicit val channelOrdering: Ordering[Blake2b256Hash] =
-    (x: Blake2b256Hash, y: Blake2b256Hash) => {
-      x.bytes.toHex.compare(y.bytes.toHex)
-    }
-
   private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
 
   private def consumeLock(channels: Seq[C])(
