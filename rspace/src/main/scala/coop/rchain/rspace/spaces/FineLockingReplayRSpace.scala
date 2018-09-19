@@ -40,7 +40,6 @@ class FineLockingReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
 
   private def consumeLock(channels: Seq[C])(
       thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] = {
-    //store.failIfClosed()
     val hashes = channels.map(ch => StableHashProvider.hash(ch))
     lock.acquire(hashes)(() => hashes)(thunk)
   }
