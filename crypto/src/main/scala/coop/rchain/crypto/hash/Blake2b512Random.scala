@@ -142,6 +142,7 @@ object Blake2b512Random {
     apply(init, 0, init.length)
 
   def merge(children: Seq[Blake2b512Random]) = {
+    import coop.rchain.crypto.codec.Base16
     @tailrec
     def internalMerge(children: Vector[Blake2b512Random]): Blake2b512Random = {
       val squashedBuilder = Vector.newBuilder[Blake2b512Random]
@@ -150,12 +151,12 @@ object Blake2b512Random {
         val result =
           new Blake2b512Random(Blake2b512Block(slice.size.toByte), ByteBuffer.allocate(128))
         squashedBuilder += result
-        slice.grouped(2).foreach { pair =>
-          pair(0).digest.finalizeInternal(pair(0).lastBlock.array(), 0, chainBlock, 0)
-          if (pair.size > 1) {
-            pair(1).digest.finalizeInternal(pair(1).lastBlock.array(), 0, chainBlock, 64)
-          } else {
-            BLANK_HASH.asReadOnlyBuffer().get(chainBlock, 64, 64)
+        slice.grouped(4).foreach { quad =>
+          for (i <- 0 until quad.size) {
+            quad(i).digest.finalizeInternal(quad(i).lastBlock.array(), 0, chainBlock, i * 32)
+          }
+          if (quad.size != 4) {
+            BLANK_BLOCK.asReadOnlyBuffer().get(chainBlock, quad.size * 32, (4 - quad.size) * 32)
           }
           result.digest.update(chainBlock, 0)
         }
@@ -228,7 +229,6 @@ object Blake2b512Random {
   })
 
   val BLANK_BLOCK = ByteBuffer.allocateDirect(128).asReadOnlyBuffer()
-  val BLANK_HASH  = ByteBuffer.allocateDirect(64).asReadOnlyBuffer()
 
   // For testing only, will result in incorrect results otherwise
   def tweakLength0(rand: Blake2b512Random): Unit =
