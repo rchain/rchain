@@ -59,24 +59,32 @@ object DagOperations {
 
     @tailrec
     def loop(currMap: Map[BlockMetadata, BitSet],
-             enqueued: HashSet[BlockMetadata]): Map[BlockMetadata, BitSet] =
-      if (q.forall(b => isCommon(currMap(b)))) currMap
+             enqueued: HashSet[BlockMetadata],
+             uncommonEnqueued: Set[BlockMetadata]): Map[BlockMetadata, BitSet] =
+      if (uncommonEnqueued.isEmpty) currMap
       else {
         val currBlock = q.dequeue()
         //Note: The orElse case should never occur because we traverse in
         //      reverse topological order (i.e. down parent links)
         val currSet = currMap.getOrElse(currBlock, BitSet.empty)
-        val (newMap, newEnqueued) = parents(currBlock).foldLeft((currMap, enqueued)) {
-          case ((map, enq), p) =>
+        val (newMap, newEnqueued, newUncommon) = parents(currBlock).foldLeft(
+          (currMap, enqueued - currBlock, uncommonEnqueued - currBlock)) {
+          case ((map, enq, unc), p) =>
             if (!enq(p)) q.enqueue(p)
-            (updatedWith(map, p)(currSet)(_ | currSet), (enq + p))
+            val pSet = map.getOrElse(p, BitSet.empty) | currSet
+            val newUnc =
+              if (isCommon(pSet)) unc - p
+              else unc + p
+            (map.updated(p, pSet), enq + p, newUnc)
         }
 
-        if (isCommon(currSet)) loop(newMap - currBlock, newEnqueued - currBlock)
-        else loop(newMap, newEnqueued - currBlock)
+        if (isCommon(currSet)) loop(newMap - currBlock, newEnqueued, newUncommon)
+        else loop(newMap, newEnqueued, newUncommon)
       }
 
-    loop(initMap, HashSet.empty[BlockMetadata]).filter { case (_, set) => !isCommon(set) }
+    loop(initMap, HashSet.empty[BlockMetadata], blocks.toSet).filter {
+      case (_, set) => !isCommon(set)
+    }
   }
 
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
