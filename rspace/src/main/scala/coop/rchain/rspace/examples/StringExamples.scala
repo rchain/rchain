@@ -55,6 +55,11 @@ object StringExamples {
       override def combine(x: Null, y: Null): Null = null
     }
 
+    implicit object integerAdditionMonoid extends Monoid[Int] {
+      override def empty: Int                   = 0
+      override def combine(x: Int, y: Int): Int = x + y
+    }
+
     implicit object stringMatch extends Match[Pattern, Nothing, String, Null, String] {
       def get(p: Pattern, a: String): MatchResult[String, Null, Nothing] =
         MatchResult.fromEither(Right(Some(a).filter(p.isMatch)), null)
