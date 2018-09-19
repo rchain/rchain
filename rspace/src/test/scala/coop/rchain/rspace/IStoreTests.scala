@@ -273,6 +273,6 @@ trait IStoreTests
   }
 }
 
-class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
-class LMDBStoreTests     extends LMDBStoreTestsBase with IStoreTests
-class MixedStoreTests    extends MixedStoreTestsBase with IStoreTests
+class InMemoryStoreTests extends InMemoryStoreTestsBase[Nothing, Null] with IStoreTests
+class LMDBStoreTests     extends LMDBStoreTestsBase[Nothing, Null] with IStoreTests
+class MixedStoreTests    extends MixedStoreTestsBase[Nothing, Null] with IStoreTests
