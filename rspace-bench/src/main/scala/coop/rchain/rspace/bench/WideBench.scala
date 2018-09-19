@@ -88,11 +88,9 @@ object WideBench {
       }
 
       //make sure we always start from clean rspace
-//      runtime.replaySpace.clear()
+      runtime.replaySpace.clear()
       runtime.space.clear()
-      println("setup")
       processErrors(Await.result(createTest(setupTerm, this).runAsync, Duration.Inf))
-      println("setup done")
     }
 
     @TearDown
