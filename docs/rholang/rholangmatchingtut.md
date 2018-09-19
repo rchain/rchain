@@ -4,31 +4,37 @@
 
 Let's clarify the implications of the following sentence from the Rholang tutorial: "There are two kinds of values in Rholang, names and processes. Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or after the `match` keyword."
 
-The first is that a program cannot have any free variables. It also can't have any logical connectives `/\` or `\/`, joins, etc unless they form part of a pattern. Logical connectives, joins and arrows can be used if they are in patterns within the program, and any variable in a program must be at most locally free. For example, the following code snippets are not valid programs, despite the fact that they are valid components of patterns:
+The first is that a program cannot have any globally free variables. It also can't have any logical connectives, wildcards, or expressions using list or set remainders unless they form part of a pattern. For example, the following code snippets are not valid programs, despite the fact that they are valid components of patterns:
 
-* `@Nil!(Nil) /\ @Nil!(Nil)`
-* `@Nil!(Nil) ; @Nil!(Nil)`
-* `@Nil!(Nil) , @Nil!(Nil)`
+* `@Nil!(Nil) /\ @Nil!(Nil)` (logical connective)
+* `for( x <- @"channel" ){ _ }` (wildcard)
+* `[1 , 2 ... x]` (list remainder)
 
-The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, a join, a logical connective, etc unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, joins, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
+The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, logical connectives, wildcards, or expressions using list or set remainders, unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
 
     1 match for( x <- @Nil ){ Nil } {
-    2     for( x <- y ){ Nil } => { y!(Nil) }
+    2       for( x <-   y  ){ Nil } => { y!(Nil) }
     3 }
 
 *will* match, returning `@Nil!(Nil)`, but
 
     1 match for( x <-  @for( x <- @Nil ){ x!(Nil) } ){ Nil } {
-    2       for( x <-  @for( t <- @Nil ){ y } ){ Nil } => { y!(Nil) }
+    2       for( x <-  @for( x <- @Nil ){    y    } ){ Nil } => { y!(Nil) }
     3 }
 
-will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Finally,
+will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Also,
 
-    1 match for( x <- @z!(Nil)){ Nil } {
-    2       for( x <- y){ Nil }  => { y!(Nil) }
-    3 }
+    for( x <- @z!(Nil)){ Nil }
 
-won't compile, due to the globally free variable `z`.
+won't compile, due to the globally free variable `z`,
+
+    for( x <- @{Nil \/ @Nil!(Nil)} ){ Nil }
+
+won't compile, due to a logical connective being where a process should be, and
+
+    for( x <- @{[1, 2 ... z]){ Nil }
+
+won't compile because `z` is free and the given list is a pattern.
 
 ## Name Equivalence
 
@@ -96,7 +102,7 @@ In Rholang, `@` binds tighter than `|`. Thus our first interpretation, `@{{@x!(N
 
     x /\ @y!(Nil) \/ @z!(10)
 
-Like in the example above, we could either interpret this as `{x /\ @y!(Nil)} \/ @z!(10)`, or as `x /\ {@y!(Nil) \/ @z!(10)}`. In Rholang, `/\` takes precedence over `\/` (as is the standard for logical connectives).
+Like in the example above, we could either interpret this as `{x /\ @y!(Nil)} \/ @z!(10)`, or as `x /\ {@y!(Nil) \/ @z!(10)}`. In Rholang, `/\` takes precedence over `\/` (as is the standard for logical connectives), so the first interpretation is correct.
 
 ## Illegal Moves
 There are some illegal moves that we ought to cover. The first has to do with arithmetic operations which, if you recall from the section on name equivalence, are evaluated on the top level, but not anywhere else. Because of this, in Rholang we cannot match parts of arithmetic operations. For example, we might expect
