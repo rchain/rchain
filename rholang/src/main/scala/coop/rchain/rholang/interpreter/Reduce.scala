@@ -108,10 +108,9 @@ object Reduce {
         persistent: Boolean,
         rand: Blake2b512Random)(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _    <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        c    <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
-        phlo <- costAccountingAlg.get().map(_ + c)
-        _    <- costAccountingAlg.set(phlo)
+        _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
+        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
+        _ <- costAccountingAlg.charge(c)
       } yield ()
 
     /**
@@ -134,10 +133,9 @@ object Reduce {
       val srcs                                              = sources.map(q => Channel(q)).toList
       val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
-        _    <- costAccountingAlg.charge(rspaceCost)
-        c    <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
-        phlo <- costAccountingAlg.get().map(_ + c)
-        _    <- costAccountingAlg.set(phlo)
+        _ <- costAccountingAlg.charge(rspaceCost)
+        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
+        _ <- costAccountingAlg.charge(c)
       } yield ()
     }
 
@@ -221,7 +219,6 @@ object Reduce {
     override def inj(par: Par)(implicit rand: Blake2b512Random,
                                costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _ <- costAccountingAlg.set(CostAccount.zero)
         _ <- eval(par)(Env[Par](), rand, costAccountingAlg)
       } yield ()
 
