@@ -44,8 +44,8 @@ message Channel {
 }
 
 message PCost {
-    uint64 cost = 1;
-    int32 iterations = 2;
+    int32 iterations = 1;
+    uint64 cost = 2;
 }
 
 message ListChannelWithRandom {

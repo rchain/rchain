@@ -42,7 +42,7 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: S
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
@@ -70,14 +70,7 @@ object RholangOnlyDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace: PureRSpace[M,
-                              Channel,
-                              BindPattern,
-                              OutOfPhlogistonsError.type,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation] =
-      new PureRSpace(tuplespace)
+    val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
@@ -97,7 +90,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
@@ -132,14 +125,7 @@ object RholangAndScalaDispatcher {
       parallel: Parallel[M, F],
       s: Sync[M],
       ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
-    val pureSpace: PureRSpace[M,
-                              Channel,
-                              BindPattern,
-                              OutOfPhlogistonsError.type,
-                              ListChannelWithRandom,
-                              ListChannelWithRandom,
-                              TaggedContinuation] =
-      new PureRSpace(tuplespace)
+    val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)

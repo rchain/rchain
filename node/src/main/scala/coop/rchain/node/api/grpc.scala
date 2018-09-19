@@ -1,18 +1,12 @@
 package coop.rchain.node.api
 
-import coop.rchain.node.diagnostics
-import coop.rchain.p2p.effects._
-import io.grpc.{Server, ServerBuilder}
-import io.grpc.netty.NettyServerBuilder
-
-import scala.concurrent.Future
 import cats._
 import cats.effect.Sync
-import cats.implicits._
+
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
-import coop.rchain.casper.protocol.DeployServiceGrpc
+import coop.rchain.casper.protocol.CasperMessageGrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
@@ -22,44 +16,48 @@ import coop.rchain.node.model.diagnostics._
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
-import io.grpc.{Server, ServerBuilder}
+
+import io.grpc.netty.NettyServerBuilder
+import io.grpc.Server
+import monix.eval.Task
 import monix.execution.Scheduler
 
 object GrpcServer {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def acquireInternalServer[
-      F[_]: Capture: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: ConnectionsCell: Futurable](
-      port: Int,
-      maxMessageSize: Int,
-      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
-    Capture[F].capture {
+  def acquireInternalServer(port: Int, maxMessageSize: Int, runtime: Runtime)(
+      implicit scheduler: Scheduler,
+      nodeDiscovery: NodeDiscovery[Task],
+      jvmMetrics: JvmMetrics[Task],
+      nodeMetrics: NodeMetrics[Task],
+      connectionsCell: ConnectionsCell[Task]): Task[Server] =
+    Task.delay {
       NettyServerBuilder
         .forPort(port)
         .maxMessageSize(maxMessageSize)
-        .addService(ReplGrpc.bindService(new ReplGrpcService(runtime), scheduler))
-        .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
+        .addService(ReplGrpcMonix.bindService(new ReplGrpcService(runtime), scheduler))
+        .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, scheduler))
         .build
     }
 
   def acquireExternalServer[
-      F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Futurable](
+      F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
         .maxMessageSize(maxMessageSize)
-        .addService(DeployServiceGrpc.bindService(new DeployGrpcService[F], scheduler))
+        .addService(CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, scheduler))
         .build
     }
 
-  def start[F[_]: FlatMap: Capture: Log](serverExternal: Server, serverInternal: Server): F[Unit] =
+  def start(serverExternal: Server, serverInternal: Server)(implicit log: Log[Task]): Task[Unit] =
     for {
-      _ <- Capture[F].capture(serverExternal.start)
-      _ <- Capture[F].capture(serverInternal.start)
-      _ <- Log[F].info("gRPC server started, listening on ")
+      _ <- Task.delay(serverExternal.start)
+      _ <- Task.delay(serverInternal.start)
+      _ <- log.info("gRPC server started, listening on ")
     } yield ()
 
 }

@@ -13,7 +13,7 @@ import scala.concurrent.duration._
 import scala.util._
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
@@ -96,7 +96,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       f: TransportLayerStub => Task[A]): Task[A] =
     for {
       channel <- connection(peer, enforce)
-      stub    <- Task.delay(TransportLayerGrpc.stub(channel))
+      stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case None    => Task.unit
                  case Some(_) => disconnect(peer)
@@ -104,7 +104,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     } yield result
 
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
-    withClient(peer, enforce)(stub => Task.fromFuture(stub.send(request)))
+    withClient(peer, enforce)(_.send(request))
 
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,
@@ -146,13 +146,13 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  private def buildServer(transportLayer: GrpcService.TransportLayer): Task[Server] =
+  private def buildServer(transportLayer: RoutingGrpcMonix.TransportLayer): Task[Server] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
         .maxMessageSize(maxMessageSize)
         .sslContext(serverSslContext)
-        .addService(GrpcService.bindService(transportLayer))
+        .addService(RoutingGrpcMonix.bindService(transportLayer, scheduler))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
@@ -218,7 +218,7 @@ object TransportState {
 }
 
 class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
-    extends GrpcService.TransportLayer {
+    extends RoutingGrpcMonix.TransportLayer {
 
   def send(request: TLRequest): Task[TLResponse] =
     request.protocol
