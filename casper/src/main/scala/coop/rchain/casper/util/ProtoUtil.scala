@@ -113,26 +113,26 @@ object ProtoUtil {
     }
   }
 
-  def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
+  def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     blockMessage.body match {
       case Some(block) =>
         block.postState match {
           case Some(state) => weightMap(state)
-          case None        => Map.empty[ByteString, Int]
+          case None        => Map.empty[ByteString, Long]
         }
-      case None => Map.empty[ByteString, Int]
+      case None => Map.empty[ByteString, Long]
     }
 
-  private def weightMap(state: RChainState): Map[ByteString, Int] =
+  private def weightMap(state: RChainState): Map[ByteString, Long] =
     state.bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
-  def weightMapTotal(weights: Map[ByteString, Int]): Int =
+  def weightMapTotal(weights: Map[ByteString, Long]): Long =
     weights.values.sum
 
-  def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Int = {
-    val sortedWeights = weightMap(blockMessage).values.toList.sorted
+  def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Long = {
+    val sortedWeights = weightMap(blockMessage).values.toVector.sorted
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
@@ -147,15 +147,16 @@ object ProtoUtil {
     }
   }
 
-  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage, validator: ByteString): F[Int] =
+  def weightFromValidator[F[_]: Monad: BlockStore](b: BlockMessage,
+                                                   validator: ByteString): F[Long] =
     for {
       maybeMainParent <- mainParent[F](b)
       weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0))
-        .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+        .map(weightMap(_).getOrElse(validator, 0L))
+        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Int] =
+  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
     weightFromValidator[F](b, b.sender)
 
   def parentHashes(b: BlockMessage): Seq[ByteString] =

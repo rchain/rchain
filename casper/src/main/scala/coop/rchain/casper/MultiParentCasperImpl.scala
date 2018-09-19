@@ -307,7 +307,7 @@ class MultiParentCasperImpl[
         s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
       }
 
-  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker
       .map(_.equivocator)
       .toSet

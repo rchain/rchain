@@ -515,8 +515,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "increment last finalized block as appropriate in round robin" in {
-    val stake                 = 10
-    val equalBonds            = validators.zipWithIndex.map { case (v, _) => v -> stake }.toMap
+    val stake                 = 10L
+    val equalBonds            = validators.map(_ -> stake).toMap
     val genesisWithEqualBonds = buildGenesis(Seq.empty, equalBonds, 0L)
     val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
     val deployDatas           = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
@@ -619,14 +619,14 @@ object HashSetCasperTest {
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Int] =
-    validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
+    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
+  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
   def buildGenesis(wallets: Seq[PreWallet],
-                   bonds: Map[Array[Byte], Int],
+                   bonds: Map[Array[Byte], Long],
                    deployTimestamp: Long): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")

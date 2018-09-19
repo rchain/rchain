@@ -31,7 +31,7 @@ import scala.util.Try
 class BlockApproverProtocol(validatorId: ValidatorIdentity,
                             deployTimestamp: Long,
                             runtimeManager: RuntimeManager,
-                            bonds: Map[Array[Byte], Int],
+                            bonds: Map[Array[Byte], Long],
                             wallets: Seq[PreWallet],
                             requiredSigs: Int)(implicit scheduler: Scheduler) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -90,7 +90,7 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Int])(implicit scheduler: Scheduler): Either[String, Unit] =
+      bonds: Map[ByteString, Long])(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
             .either(())
