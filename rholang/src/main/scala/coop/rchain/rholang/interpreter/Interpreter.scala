@@ -63,7 +63,9 @@ object Interpreter {
         case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
           LexerError(e.getMessage)
         case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
-        case th                                                       => UnrecognizedInterpreterError(th)
+        case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
+          LexerError(e.getMessage)
+        case th => UnrecognizedInterpreterError(th)
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
