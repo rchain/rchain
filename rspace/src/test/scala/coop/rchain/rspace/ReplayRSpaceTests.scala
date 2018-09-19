@@ -770,27 +770,28 @@ trait ReplayRSpaceTests
       checkpoint1.log shouldBe empty
     }
 
-  /*
   "after close rspace" should "throw RSpaceClosedException on all store operations" in
     withTestSpaces { (space, replaySpace) =>
-      val channel  = "ch1"
-      val key      = List(channel)
-      val patterns = List(Wildcard)
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+      val data         = "datum1"
 
       replaySpace.close()
-      //using some nulls here to ensure that exception is thrown even before args check
+
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.install(key, patterns, null)
+        replaySpace.install(key, patterns, continuation)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.consume(key, patterns, null, false)
+        replaySpace.consume(key, patterns, continuation, false)
       )
 
       an[RSpaceClosedException] shouldBe thrownBy(
-        replaySpace.produce(channel, null, false)
+        replaySpace.produce(channel, data, false)
       )
-    }*/
+    }
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
