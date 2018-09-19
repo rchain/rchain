@@ -35,7 +35,7 @@ trait RegistryTester extends PersistentStoreTester {
                         TaggedContinuation]) => R
   ): R =
     withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace = new PureRSpace(space)
+      val pureSpace: Runtime.RhoPureSpace = PureRSpace[Task].of(space)
       lazy val registry: Registry         = new Registry(pureSpace, dispatcher)
       lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
         RholangAndScalaDispatcher

@@ -139,7 +139,7 @@ object Runtime {
 
     def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch): RhoDispatchMap = {
       import BodyRefs._
-      val pureSpace: RhoPureSpace = new PureRSpace(space)
+      val pureSpace: RhoPureSpace = PureRSpace[Task].of(space)
       val registry                = new Registry(pureSpace, dispatcher)
       Map(
         STDOUT                     -> SystemProcesses.stdout,
