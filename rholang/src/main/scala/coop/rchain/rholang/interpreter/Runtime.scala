@@ -97,6 +97,22 @@ object Runtime {
     val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
   }
 
+  def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+
+  object FixedChannels {
+    val STDOUT: Par            = byteName(0)
+    val STDOUT_ACK: Par        = byteName(1)
+    val STDERR: Par            = byteName(2)
+    val STDERR_ACK: Par        = byteName(3)
+    val ED25519_VERIFY: Par    = GString("ed25519Verify")
+    val SHA256_HASH: Par       = GString("sha256Hash")
+    val KECCAK256_HASH: Par    = GString("keccak256Hash")
+    val BLAKE2B256_HASH: Par   = GString("blake2b256Hash")
+    val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
+    val REG_LOOKUP: Par        = byteName(9)
+    val REG_INSERT_RANDOM: Par = byteName(10)
+  }
+
   private def introduceSystemProcesses(space: RhoISpace,
                                        replaySpace: RhoISpace,
                                        processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
@@ -163,12 +179,14 @@ object Runtime {
       )
     }
 
-    def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
-
-    val urnMap: Map[String, Par] = Map("rho:io:stdout" -> byteName(0),
-                                       "rho:io:stdoutAck" -> byteName(1),
-                                       "rho:io:stderr"    -> byteName(2),
-                                       "rho:io:stderrAck" -> byteName(3))
+    val urnMap: Map[String, Par] = Map(
+      "rho:io:stdout"                -> FixedChannels.STDOUT,
+      "rho:io:stdoutAck"             -> FixedChannels.STDOUT_ACK,
+      "rho:io:stderr"                -> FixedChannels.STDERR,
+      "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
+      "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
+      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
+    )
 
     lazy val dispatchTable: RhoDispatchMap =
       dispatchTableCreator(space, dispatcher)
@@ -185,15 +203,17 @@ object Runtime {
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
       import BodyRefs._
       List(
-        (byteName(0), 1, None, STDOUT),
-        (byteName(1), 2, None, STDOUT_ACK),
-        (byteName(2), 1, None, STDERR),
-        (byteName(3), 2, None, STDERR_ACK),
-        (GString("ed25519Verify"), 4, None, ED25519_VERIFY),
-        (GString("sha256Hash"), 2, None, SHA256_HASH),
-        (GString("keccak256Hash"), 2, None, KECCAK256_HASH),
-        (GString("blake2b256Hash"), 2, None, BLAKE2B256_HASH),
-        (GString("secp256k1Verify"), 4, None, SECP256K1_VERIFY)
+        (FixedChannels.STDOUT, 1, None, STDOUT),
+        (FixedChannels.STDOUT_ACK, 2, None, STDOUT_ACK),
+        (FixedChannels.STDERR, 1, None, STDERR),
+        (FixedChannels.STDERR_ACK, 2, None, STDERR_ACK),
+        (FixedChannels.ED25519_VERIFY, 4, None, ED25519_VERIFY),
+        (FixedChannels.SHA256_HASH, 2, None, SHA256_HASH),
+        (FixedChannels.KECCAK256_HASH, 2, None, KECCAK256_HASH),
+        (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
+        (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
+        (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
+        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM)
       )
     }
 
