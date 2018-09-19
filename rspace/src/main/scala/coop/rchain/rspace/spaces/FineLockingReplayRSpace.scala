@@ -5,7 +5,6 @@ import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
@@ -28,24 +27,6 @@ class FineLockingReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
     serializeK: Serialize[K]
 ) extends FineLockingRSpaceOps[C, P, E, A, R, K](store, branch)
     with IReplaySpace[cats.Id, C, P, E, A, R, K] {
-
-  implicit val codecC = serializeC.toCodec
-
-  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
-
-  private def consumeLock(channels: Seq[C])(
-      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] = {
-    val hashes = channels.map(ch => StableHashProvider.hash(ch))
-    lock.acquire(hashes)(() => hashes)(thunk)
-  }
-
-  private def produceLock(channel: C)(
-      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] =
-    lock.acquire(Seq(StableHashProvider.hash(channel)))(() =>
-      store.withTxn(store.createTxnRead()) { txn =>
-        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
-        groupedChannels.flatten.map(StableHashProvider.hash(_))
-    })(thunk)
 
   override protected[this] val logger: Logger = Logger[this.type]
 

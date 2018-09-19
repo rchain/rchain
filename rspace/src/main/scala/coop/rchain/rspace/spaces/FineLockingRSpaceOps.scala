@@ -4,6 +4,7 @@ import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.rspace._
+import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
@@ -23,6 +24,24 @@ abstract class FineLockingRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A,
     serializeP: Serialize[P],
     serializeK: Serialize[K]
 ) extends SpaceMatcher[C, P, E, A, R, K] {
+
+  implicit val codecC = serializeC.toCodec
+
+  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
+
+  protected[this] def consumeLock(channels: Seq[C])(
+      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] = {
+    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    lock.acquire(hashes)(() => hashes)(thunk)
+  }
+
+  protected[this] def produceLock(channel: C)(
+      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] =
+    lock.acquire(Seq(StableHashProvider.hash(channel)))(() =>
+      store.withTxn(store.createTxnRead()) { txn =>
+        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+        groupedChannels.flatten.map(StableHashProvider.hash(_))
+    })(thunk)
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder

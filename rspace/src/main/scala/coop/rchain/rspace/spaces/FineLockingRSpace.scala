@@ -26,24 +26,6 @@ class FineLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A
 ) extends FineLockingRSpaceOps[C, P, E, A, R, K](store, branch)
     with IdISpace[C, P, E, A, R, K] {
 
-  implicit val codecC = serializeC.toCodec
-
-  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
-
-  private def consumeLock(channels: Seq[C])(
-      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] = {
-    val hashes = channels.map(ch => StableHashProvider.hash(ch))
-    lock.acquire(hashes)(() => hashes)(thunk)
-  }
-
-  private def produceLock(channel: C)(
-      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] =
-    lock.acquire(Seq(StableHashProvider.hash(channel)))(() =>
-      store.withTxn(store.createTxnRead()) { txn =>
-        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
-        groupedChannels.flatten.map(StableHashProvider.hash(_))
-    })(thunk)
-
   override protected[this] val logger: Logger = Logger[this.type]
 
   private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
