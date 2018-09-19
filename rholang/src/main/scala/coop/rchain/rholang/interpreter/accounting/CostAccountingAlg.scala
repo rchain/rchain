@@ -13,10 +13,10 @@ trait CostAccountingAlg[F[_]] {
 }
 
 object CostAccountingAlg {
-  def apply[F[_]: Sync](init: CostAccount): F[CostAccountingAlg[F]] =
+  def of[F[_]: Sync](init: CostAccount): F[CostAccountingAlg[F]] =
     Ref[F].of(init).map(ref => new CostAccountingAlgImpl[F](ref))
 
-  def of[F[_]](implicit ev: CostAccountingAlg[F]): CostAccountingAlg[F] = ev
+  def apply[F[_]](implicit ev: CostAccountingAlg[F]): CostAccountingAlg[F] = ev
 
   def unsafe[F[_]: Monad](init: CostAccount)(implicit F: Sync[F]): CostAccountingAlg[F] = {
     val ref = Ref.unsafe[F, CostAccount](init)
