@@ -1,18 +1,12 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import coop.rchain.shared.NumericOps
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long) extends AnyVal {
-  def *(other: Cost): Cost = Cost(value * other.value)
-  def *(other: Int): Cost  = Cost(value * other)
+  def *(base: Int): Cost   = Cost(value * base)
   def +(other: Cost): Cost = Cost(value + other.value)
-}
-
-object Cost {
-  implicit val costNumeric: Numeric[Cost] =
-    NumericOps.by[Cost, Long](_.value, Cost(_))
+  def -(other: Cost): Cost = Cost(value - other.value)
 }
 
 trait Costs {
@@ -65,7 +59,7 @@ trait Costs {
   // on the # of bindings and constant cost of evaluating `new … in  { … }` construct
   final val NEW_BINDING_COST  = Cost(2)
   final val NEW_EVAL_COST     = Cost(10)
-  def newBindingsCost(n: Int) = Cost(n) * NEW_BINDING_COST + NEW_EVAL_COST
+  def newBindingsCost(n: Int) = (NEW_BINDING_COST * n) + NEW_EVAL_COST
 
   final val MATCH_EVAL_COST = Cost(12)
 

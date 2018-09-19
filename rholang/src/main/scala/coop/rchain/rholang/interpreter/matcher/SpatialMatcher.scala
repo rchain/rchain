@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data.{OptionT, State, StateT}
+import cats.data.{OptionT, StateT}
 import cats.implicits._
 import cats.{Monad, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
@@ -492,11 +492,12 @@ trait SpatialMatcherInstances {
               case Nil => OptionalFreeMapWithCost.emptyMap
               case p +: rem =>
                 OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-                  OptionT(State((c: CostAccount) => {
-                    spatialMatch(target, p).run(s).value.run(c).value match {
+                  OptionT(StateT((c: CostAccount) => {
+                    spatialMatch(target, p).run(s).value.run(c).flatMap {
                       case (cost, None) =>
-                        (cost, firstMatch(target, rem).run(s).value.run(c).value._2)
-                      case (cost, Some((_, _: Unit))) => (cost, Some((s, Unit)))
+                        firstMatch(target, rem).run(s).value.run(cost)
+                      case (cost, Some((_, _: Unit))) =>
+                        Right((cost, Some((s, Unit))))
                     }
                   }))
                 })
@@ -505,8 +506,8 @@ trait SpatialMatcherInstances {
         }
         case ConnNotBody(p) =>
           OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-            OptionT(State((c: CostAccount) => {
-              spatialMatch(target, p).run(s).value.run(c).value match {
+            OptionT(StateT((c: CostAccount) => {
+              spatialMatch(target, p).run(s).value.run(c).map {
                 case (cost, None)         => (cost, Some((s, Unit)))
                 case (cost, Some((_, _))) => (cost, None)
               }
@@ -810,7 +811,7 @@ trait SpatialMatcherInstances {
           target.patterns
             .zip(pattern.patterns)
             .map(x => equalityCheckCost(x._1, x._2))
-            .sum
+            .foldLeft(Cost(0))(_ + _)
         OptionalFreeMapWithCost.emptyMap.charge(cost)
       } else
         spatialMatch(target.source, pattern.source)
