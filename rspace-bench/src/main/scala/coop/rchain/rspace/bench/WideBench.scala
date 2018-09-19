@@ -49,7 +49,7 @@ object WideBench {
 
   @State(Scope.Benchmark)
   class FineBenchState extends WideBenchState {
-    override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize, StoreType.FineLockingLMDB)
+    override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize, StoreType.FineGrainedLMDB)
   }
 
   @State(Scope.Benchmark)

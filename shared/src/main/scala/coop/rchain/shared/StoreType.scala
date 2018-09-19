@@ -4,7 +4,7 @@ sealed trait StoreType
 object StoreType {
   case object Mixed           extends StoreType
   case object LMDB            extends StoreType
-  case object FineLockingLMDB extends StoreType
+  case object FineGrainedLMDB extends StoreType
   case object InMem           extends StoreType
 
   def from(s: String): Option[StoreType] = s match {

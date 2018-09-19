@@ -17,7 +17,7 @@ import scala.util.Random
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class FineLockingRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K],
+abstract class FineGrainedRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K],
                                                       val branch: Branch)(
     implicit
     serializeC: Serialize[C],

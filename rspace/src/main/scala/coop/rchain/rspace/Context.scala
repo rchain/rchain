@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal.GNAT
-import coop.rchain.rspace.spaces.FineLockingLMDBStore
+import coop.rchain.rspace.spaces.FineGrainedLMDBStore
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.Codec
 
@@ -44,7 +44,7 @@ private[rspace] class FineGrainedLMDBContext[C, P, A, K] private[rspace] (
                                            sp: Serialize[P],
                                            sa: Serialize[A],
                                            sk: Serialize[K]): IStore[C, P, A, K] =
-    FineLockingLMDBStore.create[C, P, A, K](this, branch)
+    FineGrainedLMDBStore.create[C, P, A, K](this, branch)
 
   def close(): Unit = {
     trieStore.close()

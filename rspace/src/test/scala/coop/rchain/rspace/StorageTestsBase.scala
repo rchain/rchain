@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.spaces.{FineLockingLMDBStore, FineLockingRSpace}
+import coop.rchain.rspace.spaces.{FineGrainedLMDBStore, FineGrainedRSpace}
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
@@ -237,7 +237,7 @@ class MixedStoreTestsBase
     dbDir.recursivelyDelete
 }
 
-class FineLockingTestsBase
+class FineGrainedTestsBase
     extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
     with BeforeAndAfterAll {
 
@@ -252,9 +252,9 @@ class FineLockingTestsBase
     val testBranch = Branch("test")
     val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore =
-      FineLockingLMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+      FineGrainedLMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      new FineLockingRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
+      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
                                                                                      testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>

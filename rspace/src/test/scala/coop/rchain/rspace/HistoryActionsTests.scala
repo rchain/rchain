@@ -484,4 +484,4 @@ class MixedStoreHistoryActionsTests extends MixedStoreTestsBase with HistoryActi
 class LMDBStoreHistoryActionsTests  extends LMDBStoreTestsBase with HistoryActionsTests
 class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests
 
-class FineLockingHistoryActionsTests extends FineLockingTestsBase with HistoryActionsTests
+class FineGrainedHistoryActionsTests extends FineGrainedTestsBase with HistoryActionsTests

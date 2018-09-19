@@ -125,7 +125,7 @@ object Runtime {
           Files.createDirectories(dataDir)
         }
         Context.create(dataDir, mapSize, true)
-      case FineLockingLMDB =>
+      case FineGrainedLMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }

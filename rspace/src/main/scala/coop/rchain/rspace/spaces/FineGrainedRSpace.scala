@@ -3,25 +3,28 @@ package coop.rchain.rspace.spaces
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
+import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.SyncVarOps._
+import kamon._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.util.Random
-import kamon._
 
-class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A, K],
-                                                             branch: Branch)(
+class FineGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A, K],
+                                                           branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
+) extends FineGrainedRSpaceOps[C, P, E, A, R, K](store, branch)
+    with IdISpace[C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -46,13 +49,12 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
         throw new IllegalArgumentException(msg)
       }
 
-      store.withTxn(store.createTxnWrite()) { txn =>
+      consumeLock(channels) {
         logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
         val consumeRef = Consume.create(channels, patterns, continuation, persist)
         eventLog.update(consumeRef +: _)
-
         /*
          * Here, we create a cache of the data at each channel as `channelToIndexedData`
          * which is used for finding matches.  When a speculative match is found, we can
@@ -62,9 +64,11 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
          * affecting the actual store contents.
          */
 
-        val channelToIndexedData = channels.map { (c: C) =>
-          c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
-        }.toMap
+        val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
+          channels.map { c: C =>
+            c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+          }.toMap
+        }
 
         val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
           extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
@@ -74,11 +78,16 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
           case Left(e) =>
             Left(e)
           case Right(None) =>
-            store.putWaitingContinuation(
-              txn,
-              channels,
-              WaitingContinuation(patterns, continuation, persist, consumeRef))
-            for (channel <- channels) store.addJoin(txn, channel, channels)
+            store.withTxn(store.createTxnRead()) { txn =>
+              store.putWaitingContinuation(
+                txn,
+                channels,
+                WaitingContinuation(patterns, continuation, persist, consumeRef))
+            }
+            for (channel <- channels)
+              store.withTxn(store.createTxnWrite()) { txn =>
+                store.addJoin(txn, channel, channels)
+              }
             logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
                              |at <channels: $channels>""".stripMargin.replace('\n', ' '))
@@ -93,7 +102,9 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
               .foreach {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
                     if !persistData =>
-                  store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                  store.withTxn(store.createTxnWrite()) { txn =>
+                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                  }
                 case _ =>
                   ()
               }
@@ -106,8 +117,11 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
   override def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
-        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+      produceLock(channel) {
+        //TODO fix double join fetch
+        val groupedChannels: Seq[Seq[C]] = store.withTxn(store.createTxnRead()) { txn =>
+          store.getJoin(txn, channel)
+        }
         logger.debug(s"""|produce: searching for matching continuations
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
@@ -128,7 +142,9 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
             case Nil => Right(None)
             case channels :: remaining =>
               val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-                Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
+                store.withTxn(store.createTxnRead()) { txn =>
+                  Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
+                }
               /*
                * Here, we create a cache of the data at each channel as `channelToIndexedData`
                * which is used for finding matches.  When a speculative match is found, we can
@@ -140,7 +156,9 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
                * In this version, we also add the produced data directly to this cache.
                */
               val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
-                val as = Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+                val as = store.withTxn(store.createTxnRead()) { txn =>
+                  Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
+                }
                 c -> {
                   if (c == batChannel) (data, -1) +: as else as
                 }
@@ -165,22 +183,30 @@ class CoarseLockingRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
             if (!persistK) {
-              store.removeWaitingContinuation(txn, channels, continuationIndex)
+              store.withTxn(store.createTxnWrite()) { txn =>
+                store.removeWaitingContinuation(txn, channels, continuationIndex)
+              }
             }
             dataCandidates
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .foreach {
                 case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                   if (!persistData && dataIndex >= 0) {
-                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                    store.withTxn(store.createTxnWrite()) { txn =>
+                      store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                    }
                   }
-                  store.removeJoin(txn, candidateChannel, channels)
+                  store.withTxn(store.createTxnWrite()) { txn =>
+                    store.removeJoin(txn, candidateChannel, channels)
+                  }
               }
             logger.debug(s"produce: matching continuation found at <channels: $channels>")
             Right(Some(continuation, dataCandidates.map(_.datum.a)))
           case Right(None) =>
             logger.debug(s"produce: no matching continuation found")
-            store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+            store.withTxn(store.createTxnWrite()) { txn =>
+              store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+            }
             logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
             Right(None)
         }

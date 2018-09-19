@@ -19,7 +19,7 @@ import scodec.bits._
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
 
-class FineLockingLMDBStore[C, P, A, K] private (
+class FineGrainedLMDBStore[C, P, A, K] private (
     val env: Env[ByteBuffer],
     protected[this] val databasePath: Path,
     _dbGNATs: Dbi[ByteBuffer],
@@ -269,7 +269,7 @@ class FineLockingLMDBStore[C, P, A, K] private (
     }
 }
 
-object FineLockingLMDBStore {
+object FineGrainedLMDBStore {
 
   def create[C, P, A, K](context: FineGrainedLMDBContext[C, P, A, K],
                          branch: Branch = Branch.MASTER)(implicit
@@ -285,7 +285,7 @@ object FineLockingLMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    new FineLockingLMDBStore[C, P, A, K](context.env,
+    new FineGrainedLMDBStore[C, P, A, K](context.env,
                                          context.path,
                                          dbGnats,
                                          dbJoins,

@@ -19,13 +19,13 @@ import scala.concurrent.SyncVar
 import scala.util.Random
 import kamon._
 
-class FineLockingReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends FineLockingRSpaceOps[C, P, E, A, R, K](store, branch)
+) extends FineGrainedRSpaceOps[C, P, E, A, R, K](store, branch)
     with IReplaySpace[cats.Id, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
@@ -297,14 +297,14 @@ class FineLockingReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
   }
 }
 
-object FineLockingReplayRSpace {
+object FineGrainedReplayRSpace {
 
   def create[C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): FineLockingReplayRSpace[C, P, E, A, R, K] = {
+      sk: Serialize[K]): FineGrainedReplayRSpace[C, P, E, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -325,7 +325,7 @@ object FineLockingReplayRSpace {
         ctx.createStore(branch)
     }
 
-    val replaySpace = new FineLockingReplayRSpace[C, P, E, A, R, K](mainStore, branch)
+    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

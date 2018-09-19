@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.Id
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.spaces.{CoarseLockingRSpace, FineLockingRSpace}
+import coop.rchain.rspace.spaces.{CoarseGrainedRSpace, FineGrainedRSpace}
 import scodec.Codec
 
 object RSpace {
@@ -25,7 +25,7 @@ object RSpace {
         create(InMemoryStore.create(ctx.trieStore, branch), branch)
 
       case ctx: FineGrainedLMDBContext[C, P, A, K] =>
-        createFine(ctx.createStore(branch), branch)
+        createFineGrained(ctx.createStore(branch), branch)
     }
 
   def createInMemory[C, P, E, A, R, K](
@@ -57,7 +57,7 @@ object RSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val space = new CoarseLockingRSpace[C, P, E, A, R, K](store, branch)
+    val space = new CoarseGrainedRSpace[C, P, E, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -72,7 +72,7 @@ object RSpace {
     space
   }
 
-  def createFine[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+  def createFineGrained[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -84,7 +84,7 @@ object RSpace {
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
 
-    val space = new FineLockingRSpace[C, P, E, A, R, K](store, branch)
+    val space = new FineGrainedRSpace[C, P, E, A, R, K](store, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).

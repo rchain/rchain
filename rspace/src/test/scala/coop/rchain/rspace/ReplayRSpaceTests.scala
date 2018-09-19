@@ -861,7 +861,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
   }
 }
 
-trait FineLockingReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
       f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
       implicit
@@ -874,7 +874,7 @@ trait FineLockingReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
-    val replaySpace = FineLockingReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+    val replaySpace = FineGrainedReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -894,6 +894,6 @@ class InMemoryRSpaceTests
     extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
-class FineLockingReplayRSpaceTests
-    extends FineLockingReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+class FineGrainedReplayRSpaceTests
+    extends FineGrainedReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
