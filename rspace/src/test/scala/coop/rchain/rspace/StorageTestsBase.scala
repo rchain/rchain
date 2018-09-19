@@ -1,22 +1,23 @@
 package coop.rchain.rspace
 import java.nio.file.{Files, Path}
 
-import com.typesafe.scalalogging.Logger
+import cats.Monoid
 import com.google.common.collect.HashMultiset
-import scala.collection.JavaConverters._
+import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{Branch, InMemoryTrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
-import scala.collection.immutable.{Seq, Set}
 import scodec.Codec
 
-trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
+import scala.collection.JavaConverters._
+import scala.collection.immutable.{Seq, Set}
 
-  type T = FreudianSpace[C, P, E, A, A, K]
+trait StorageTestsBase[C, P, E, S2, A, K] extends FlatSpec with Matchers with OptionValues {
+
+  type T = FreudianSpace[C, P, E, A, S2, A, K]
 
   case class State(
       checkpoint: Blake2b256Hash,
@@ -110,8 +111,8 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
   }
 }
 
-class InMemoryStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+class InMemoryStoreTestsBase[E, S2: Monoid]
+    extends StorageTestsBase[String, Pattern, E, S2, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   override def withTestSpace[S](f: T => S): S = {
@@ -131,7 +132,7 @@ class InMemoryStoreTestsBase
       StringsCaptor](trieStore, branch)
 
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
+      RSpace.create[String, Pattern, E, String, S2, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -152,8 +153,8 @@ class InMemoryStoreTestsBase
     super.afterAll()
 }
 
-class LMDBStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+class LMDBStoreTestsBase[E, S2: Monoid]
+    extends StorageTestsBase[String, Pattern, E, S2, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -168,7 +169,7 @@ class LMDBStoreTestsBase
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[String, Pattern, E, String, S2, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -190,8 +191,8 @@ class LMDBStoreTestsBase
     dbDir.recursivelyDelete
 }
 
-class MixedStoreTestsBase
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+class MixedStoreTestsBase[E, S2: Monoid]
+    extends StorageTestsBase[String, Pattern, E, S2, String, StringsCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-mixed-storage-test-")
@@ -210,7 +211,7 @@ class MixedStoreTestsBase
         testBranch)
 
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[String, Pattern, E, String, S2, String, StringsCaptor](testStore, testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)

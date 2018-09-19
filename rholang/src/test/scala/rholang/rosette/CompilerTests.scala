@@ -27,7 +27,7 @@ class CompilerTests extends FunSuite with Matchers {
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString.reverse.takeWhile(_ != '/').reverse) {
       val result = execute(file)
-      assert(result.isRight)
+      assert(result.isRight, s"Got $result expected Right(_)")
       val resRuntime = result.right.get
       val errorLog   = resRuntime.readAndClearErrorVector()
       assert(errorLog.isEmpty)

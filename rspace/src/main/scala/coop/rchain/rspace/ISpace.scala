@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.Match.MatchResult
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -13,7 +14,7 @@ import scala.collection.immutable.Seq
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait ISpace[F[_], C, P, E, A, R, K] {
+trait ISpace[F[_], C, P, E, A, S, R, K] {
 
   /** Searches the store for data matching all the given patterns at the given channels.
     *
@@ -39,10 +40,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
+      implicit m: Match[P, E, A, S, R]): F[MatchResult[(K, Seq[R]), S, E]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]): F[Option[(K, Seq[R])]]
+      implicit m: Match[P, E, A, S, R]): F[Option[(K, Seq[R])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -68,7 +69,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     * @param persist Whether or not to attempt to persist the data
     */
   def produce(channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): F[Either[E, Option[(K, Seq[R])]]]
+      implicit m: Match[P, E, A, S, R]): F[MatchResult[(K, Seq[R]), S, E]]
 
   /** Creates a checkpoint.
     *

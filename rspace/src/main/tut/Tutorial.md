@@ -6,6 +6,9 @@
 To start using `rspace`, we first import the library into our project.
 ```tut
 import coop.rchain.rspace._
+import coop.rchain.rspace.Match.MatchResult
+import coop.rchain.rspace.Match.MatchResult._
+import coop.rchain.rspace.examples.StringExamples.implicits._
 ```
 
 Before we can start using the main `produce` and `consume` functions, we need to define data types for channels, patterns, data, and continuations.
@@ -191,24 +194,29 @@ Here is the definition of the `Match` type class.
   *
   * @tparam P A type representing patterns
   * @tparam E A type representing illegal state
+  * @tparam S A type representing a state that is accumulated between matches
   * @tparam A A type representing data
   * @tparam R A type representing a match result
   */
-trait Match[P, E, A, R] {
+trait Match[P, E, A, S, R] {
 
-  def get(p: P, a: A): Either[E, Option[R]]
+  def get(p: P, a: A): MatchResult[R, S, E]
 }
 ```
 
 Let's try defining an instance of `Match` for `Pattern` and `Entry`.
 ```tut
-implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Entry] {
-  def get(p: Pattern, a: Entry): Either[Nothing, Option[Entry]] =
+implicit object matchPatternEntry extends Match[Pattern, Nothing, Entry, Int, Entry] {
+  def get(p: Pattern, a: Entry): MatchResult[Entry, Int, Nothing] =
     p match {
-      case NameMatch(last) if a.name.last == last        => Right(Some(a))
-      case CityMatch(city) if a.address.city == city     => Right(Some(a))
-      case StateMatch(state) if a.address.state == state => Right(Some(a))
-      case _                                             => Right(None)
+      case NameMatch(last) if a.name.last == last        =>
+        Found(a.name.last.length, a)
+      case CityMatch(city) if a.address.city == city     =>
+        Found(a.address.city.length, a)
+      case StateMatch(state) if a.address.state == state =>
+        Found(a.address.state.length, a)
+      case _                                             =>
+        NotFound(0)
     }
 }
 
@@ -234,7 +242,7 @@ val context: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel,
 ```
 Now we can create an RSpace using the created context
 ```tut
-val space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
+val space = RSpace.create[Channel, Pattern, Nothing, Entry, Int, Entry, Printer](context, coop.rchain.rspace.history.Branch.MASTER)
 ```
 
 ### Producing and Consuming
@@ -256,7 +264,7 @@ If we look closely at the result, we can see that we have received back an `Opti
 Let's run the continuation using a function from the `util` package.
 ```tut
 import coop.rchain.rspace.util._
-runK(pres1)
+runK(pres1.toEither)
 ```
 
 When we inspect the contents of the store, we notice that the store is empty.  The continuation has been removed.  The data was also not stored because a matching continuation was found.
@@ -276,7 +284,7 @@ val pres2 = space.produce(Channel("friends"), bob, persist = false)
 
 Let's also run the continuation and inspect the store.
 ```tut
-runK(pres2)
+runK(pres2.toEither)
 println(space.store.toMap)
 ```
 
@@ -298,7 +306,7 @@ Here we can see that that at `Channel("friends")`, we have now stored Carol's `E
 Let's `consume` again, but this time, let's use a different pattern - one that will match Carol's `Entry` - returning it to us.
 ```tut
 val cres4 = space.consume(List(Channel("friends")), List(NameMatch(last = "Lahblah")), new Printer, persist = false)
-runK(cres4)
+runK(cres4.toEither)
 ```
 
 Indeed, our call to `consume` has returned another continuation along with Carol's `Entry`.
@@ -311,7 +319,7 @@ println(space.store.toMap)
 Let's produce one more time to let this sink in.
 ```tut
 val pres4 = space.produce(Channel("friends"), alice, persist = false)
-runK(pres4)
+runK(pres4.toEither)
 println(space.store.toMap)
 ```
 
@@ -339,7 +347,7 @@ val pres6 = space.produce(Channel("friends"), erin, persist = false)
 Now let's `consume` on multiple channels, searching for our friends and colleagues who live in Idaho.
 ```tut
 val cres5 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
-runK(cres5)
+runK(cres5.toEither)
 ```
 
 Now let's do the same thing in the opposite order.
@@ -347,7 +355,7 @@ Now let's do the same thing in the opposite order.
 val cres6 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), StateMatch("Idaho")), new Printer, persist = false)
 val pres7 = space.produce(Channel("colleagues"), dan, persist = false)
 val pres8 = space.produce(Channel("friends"), erin, persist = false)
-runK(pres7)
+runK(pres7.toEither)
 ```
 
 Note that we can provide different patterns to match with the data on each channel.
@@ -355,7 +363,7 @@ Note that we can provide different patterns to match with the data on each chann
 val cres7 = space.consume(List(Channel("friends"), Channel("colleagues")), List(StateMatch("Idaho"), CityMatch("Crystal Lake")), new Printer, persist = false)
 val pres9 = space.produce(Channel("colleagues"), dan, persist = false)
 val pres10 = space.produce(Channel("friends"), erin, persist = false)
-runK(pres10)
+runK(pres10.toEither)
 ```
 
 ###  Making Things Stick
@@ -377,7 +385,7 @@ Look, data!
 
 Let's run with it.
 ```tut
-runK(cres8)
+runK(cres8.toEither)
 ```
 
 As a side note, we can observe the fact there is no particular order to which we retrieve matching data (or continuations).  If multiple matches exist, one is non-deterministically chosen and returned to the caller.
@@ -394,7 +402,7 @@ This quirk of `rspace` is to address the circumstance where matches already exis
 
 ```tut
 val cres9 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
-runK(cres9)
+runK(cres9.toEither)
 val cres10 = space.consume(List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
 println(space.store.toMap)
 ```
@@ -405,7 +413,7 @@ For example,
 ```tut
 val cres11 = space.consume(List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
 val pres13 = space.produce(Channel("friends"), erin, persist = true)
-runK(pres13)
+runK(pres13.toEither)
 println(space.store.toMap)
 val pres14 = space.produce(Channel("friends"), erin, persist = true)
 println(space.store.toMap)
@@ -428,13 +436,13 @@ Let's see how this works in practice. We'll start by creating a new, untouched R
 ```tut
 val rollbackExampleStorePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 val rollbackExampleContext: Context[Channel, Pattern, Entry, Printer] = Context.create[Channel, Pattern, Entry, Printer](rollbackExampleStorePath,  1024L * 1024L * 100L)
-val rollbackExampleSpace = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, Printer](rollbackExampleContext, coop.rchain.rspace.history.Branch.MASTER)
+val rollbackExampleSpace = RSpace.create[Channel, Pattern, Nothing, Entry, Int, Entry, Printer](rollbackExampleContext, coop.rchain.rspace.history.Branch.MASTER)
 val cres =
   rollbackExampleSpace.consume(List(Channel("friends")),
                 List(CityMatch(city = "Crystal Lake")),
                 new Printer,
                 persist = false)
-cres.right.get.isEmpty
+cres.isNotFound
 ```
 
 We can now create a checkpoint and store it's root.
@@ -444,28 +452,28 @@ val checkpointHash = rollbackExampleSpace.createCheckpoint.root
 
 The first `produceAlice` operation should be able to find data stored by the consume.
 ```tut
-def produceAlice(): Either[Nothing, Option[(Printer, Seq[Entry])]] = rollbackExampleSpace.produce(Channel("friends"), alice, persist = false)
-produceAlice.toOption.flatten.isDefined
+def produceAlice() = rollbackExampleSpace.produce(Channel("friends"), alice, persist = false)
+produceAlice.isFound
 ```
 
 Running the same operation again shouldn't return anything, as data hasn't been persisted.
 ```tut
-produceAlice.right.get.isEmpty
+produceAlice.isNotFound
 ```
 Every following repetition of the operation above should yield an empty result.
 ```tut
-produceAlice.right.get.isEmpty
+produceAlice.isNotFound
 ```
 
 After re-setting the RSpace to the state from the saved checkpoint the first produce operation should again return an non-empty result.
 ```tut
 rollbackExampleSpace.reset(checkpointHash)
-produceAlice.toOption.flatten.isDefined
+produceAlice.isFound
 ```
 And again, every following operation should yield an empty result
 Every following repetition of the operation above should yield an empty result.
 ```tut
-produceAlice.right.get.isEmpty
+produceAlice.isNotFound
 ```
 
 ### Finishing Up

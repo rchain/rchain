@@ -12,7 +12,7 @@ import org.scalatest.BeforeAndAfterAll
 import scodec.Codec
 
 trait StorageExamplesTests
-    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Channel, Pattern, Nothing, Null, Entry, EntriesCaptor]
     with TestImplicitHelpers {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
@@ -27,18 +27,18 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
 
     val r3 = space.produce(Channel("friends"), bob, persist = false)
 
-    r3 shouldBe defined
+    assert(r3.isFound)
 
-    runK(r3)
-    getK(r3).results shouldBe List(List(bob, bob))
+    runK(r3.toEither)
+    getK(r3.toEither).results should contain theSameElementsAs List(List(bob, bob))
 
     store.isEmpty shouldBe true
   }
@@ -49,11 +49,11 @@ trait StorageExamplesTests
 
     val r1 = space.produce(Channel("friends"), bob, persist = false)
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
 
     val r3 = space
       .consume(
@@ -63,10 +63,10 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r3 shouldBe defined
+    assert(r3.isFound)
 
     runK(r3)
-    getK(r3).results shouldBe List(List(bob, bob))
+    getK(r3).results should contain theSameElementsAs List(List(bob, bob))
 
     store.isEmpty shouldBe true
   }
@@ -85,22 +85,22 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2 = space.produce(Channel("friends"), bob, persist = false)
 
-    r2 shouldBe Right(None)
+    assert(r2.isNotFound)
 
     val r3 = space.produce(Channel("friends"), bob, persist = false)
 
-    r3 shouldBe Right(None)
+    assert(r3.isNotFound)
 
     val r4 = space.produce(Channel("colleagues"), alice, persist = false)
 
-    r4 shouldBe defined
+    assert(r4.isFound)
 
-    runK(r4)
-    getK(r4).results shouldBe List(List(alice, bob, bob))
+    runK(r4.toEither)
+    getK(r4.toEither).results shouldBe List(List(alice, bob, bob))
 
     store.isEmpty shouldBe true
   }
@@ -137,7 +137,7 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2  = space.produce(Channel("friends"), bob, persist = false)
     val r3  = space.produce(Channel("family"), carol, persist = false)
@@ -149,15 +149,15 @@ trait StorageExamplesTests
     val r9  = space.produce(Channel("family"), carol, persist = false)
     val r10 = space.produce(Channel("family"), carol, persist = false)
 
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
-    r4 shouldBe Right(None)
-    r5 shouldBe Right(None)
-    r6 shouldBe Right(None)
-    r7 shouldBe Right(None)
-    r8 shouldBe Right(None)
-    r9 shouldBe Right(None)
-    r10 shouldBe defined
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
+    assert(r4.isNotFound)
+    assert(r5.isNotFound)
+    assert(r6.isNotFound)
+    assert(r7.isNotFound)
+    assert(r8.isNotFound)
+    assert(r9.isNotFound)
+    assert(r10.isFound)
 
     runK(r10)
     getK(r10).results shouldBe List(List(carol, carol, carol, carol, alice, alice, alice, bob, bob))
@@ -179,15 +179,15 @@ trait StorageExamplesTests
     val r8 = space.produce(Channel("family"), carol, persist = false)
     val r9 = space.produce(Channel("family"), carol, persist = false)
 
-    r1 shouldBe Right(None)
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
-    r4 shouldBe Right(None)
-    r5 shouldBe Right(None)
-    r6 shouldBe Right(None)
-    r7 shouldBe Right(None)
-    r8 shouldBe Right(None)
-    r9 shouldBe Right(None)
+    assert(r1.isNotFound)
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
+    assert(r4.isNotFound)
+    assert(r5.isNotFound)
+    assert(r6.isNotFound)
+    assert(r7.isNotFound)
+    assert(r8.isNotFound)
+    assert(r9.isNotFound)
 
     val r10 = space
       .consume(
@@ -217,7 +217,7 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r10 shouldBe defined
+    assert(r10.isFound)
     runK(r10)
     getK(r10).results shouldBe List(List(carol, carol, carol, carol, alice, alice, alice, bob, bob))
 
@@ -256,7 +256,7 @@ trait StorageExamplesTests
         persist = false
       )
 
-    r1 shouldBe Right(None)
+    assert(r1.isNotFound)
 
     val r2  = space.produce(Channel("friends"), bob, persist = false)
     val r3  = space.produce(Channel("family"), carol, persist = false)
@@ -268,15 +268,15 @@ trait StorageExamplesTests
     val r9  = space.produce(Channel("family"), carol, persist = false)
     val r10 = space.produce(Channel("family"), carol, persist = false)
 
-    r2 shouldBe Right(None)
-    r3 shouldBe Right(None)
-    r4 shouldBe Right(None)
-    r5 shouldBe Right(None)
-    r6 shouldBe Right(None)
-    r7 shouldBe Right(None)
-    r8 shouldBe Right(None)
-    r9 shouldBe Right(None)
-    r10 shouldBe defined
+    assert(r2.isNotFound)
+    assert(r3.isNotFound)
+    assert(r4.isNotFound)
+    assert(r5.isNotFound)
+    assert(r6.isNotFound)
+    assert(r7.isNotFound)
+    assert(r8.isNotFound)
+    assert(r9.isNotFound)
+    assert(r10.isFound)
 
     runK(r10)
     getK(r10).results shouldBe List(List(carol, alice, carol, bob, bob, carol, alice, alice, carol))
@@ -286,7 +286,7 @@ trait StorageExamplesTests
 }
 
 class InMemoryStoreStorageExamplesTestsBase
-    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor] {
+    extends StorageTestsBase[Channel, Pattern, Nothing, Null, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => R): R = {
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
@@ -308,7 +308,7 @@ class InMemoryStoreStorageExamplesTestsBase
       EntriesCaptor](trieStore, branch)
 
     val testSpace =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
+      RSpace.create[Channel, Pattern, Nothing, Entry, Null, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -326,7 +326,7 @@ class InMemoryStoreStorageExamplesTests
     with StorageExamplesTests
 
 class LMDBStoreStorageExamplesTestBase
-    extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor]
+    extends StorageTestsBase[Channel, Pattern, Nothing, Null, Entry, EntriesCaptor]
     with BeforeAndAfterAll {
 
   val dbDir: Path    = Files.createTempDirectory("rchain-storage-test-")
@@ -337,8 +337,8 @@ class LMDBStoreStorageExamplesTestBase
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                            Branch.MASTER)
+      RSpace.create[Channel, Pattern, Nothing, Entry, Null, Entry, EntriesCaptor](testStore,
+                                                                                  Branch.MASTER)
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)

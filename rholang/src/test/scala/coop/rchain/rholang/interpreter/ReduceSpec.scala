@@ -16,7 +16,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoContext
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace._
+import coop.rchain.rspace.{Match => RSpaceMatch, _}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
@@ -34,7 +34,8 @@ trait PersistentStoreTester {
                 BindPattern,
                 OutOfPhlogistonsError.type,
                 ListChannelWithRandom,
-                ListChannelWithRandom,
+        CostAccount,
+        ListChannelWithRandom,
                 TaggedContinuation] => R): R = {
     val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
@@ -42,6 +43,7 @@ trait PersistentStoreTester {
                               BindPattern,
                               OutOfPhlogistonsError.type,
                               ListChannelWithRandom,
+                              CostAccount,
                               ListChannelWithRandom,
                               TaggedContinuation](context, Branch("test"))
     try {

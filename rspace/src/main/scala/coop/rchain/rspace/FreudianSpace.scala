@@ -1,8 +1,10 @@
 package coop.rchain.rspace
 
-import cats.Id
+import cats.{Eval, Id, Monoid}
 import cats.implicits._
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.Match.MatchResult
+import coop.rchain.rspace.Match.MatchResult.{Error, Found, NotFound}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log
@@ -22,7 +24,7 @@ import scala.concurrent.SyncVar
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
+trait FreudianSpace[C, P, E, A, S, R, K] extends ISpace[Id, C, P, E, A, S, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.
@@ -42,28 +44,29 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
     * along with the remaining unmatched data. If an illegal state is reached
     * during searching for a match we short circuit and return the state.
     */
-  @tailrec
   private[rspace] final def findMatchingDataCandidate(
       channel: C,
       data: Seq[(Datum[A], Int)],
       pattern: P,
       prefix: Seq[(Datum[A], Int)]
-  )(implicit m: Match[P, E, A, R]): Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
+  )(implicit m: Match[P, E, A, S, R],
+    monoid: Monoid[S]): Eval[MatchResult[(DataCandidate[C, R], Seq[(Datum[A], Int)]), S, E]] =
     data match {
-      case Nil => Right(None)
+      case Nil => Eval.later(NotFound(monoid.empty))
       case (indexedDatum @ (Datum(matchCandidate, persist, produceRef), dataIndex)) :: remaining =>
         m.get(pattern, matchCandidate) match {
-          case Left(ex) =>
-            Left(ex)
-          case Right(None) =>
+          case Error(s, e) => Eval.later(Error(s, e))
+          case Found(s, mat) if persist =>
+            Eval.later(
+              Found(s, (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data)))
+          case Found(s, mat) =>
+            Eval.later(
+              Found(s,
+                    (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+                     prefix ++ remaining)))
+          case NotFound(s) =>
             findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
-          case Right(Some(mat)) if persist =>
-            Right(Some((DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex), data)))
-          case Right(Some(mat)) =>
-            Right(
-              Some(
-                (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
-                 prefix ++ remaining)))
+              .map(_.map(s2 => monoid.combine(s, s2)))
         }
     }
 
@@ -85,57 +88,89 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
     * remaining matches. If an illegal state is reached when searching a matching candidate
     * we treat it as if no match was found and append the illegal state to result list.
     */
-  @tailrec
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Either[E, Option[DataCandidate[C, R]]]])(
-      implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
+      acc: Seq[MatchResult[DataCandidate[C, R], S, E]])(
+      implicit m: Match[P, E, A, S, R],
+      monoid: Monoid[S]): Eval[Seq[MatchResult[DataCandidate[C, R], S, E]]] =
     channelPatternPairs match {
       case Nil =>
-        acc.reverse
+        Eval.later(acc.reverse)
       case (channel, pattern) :: tail =>
-        val maybeTuple: Either[E, Option[(DataCandidate[C, R], Seq[(Datum[A], Int)])]] =
+        val maybeTuple: Eval[MatchResult[(DataCandidate[C, R], Seq[(Datum[A], Int)]), S, E]] =
           channelToIndexedData.get(channel) match {
             case Some(indexedData) =>
               findMatchingDataCandidate(channel, indexedData, pattern, Nil)
             case None =>
-              Right(None)
+              Eval.later(NotFound(monoid.empty))
           }
 
-        maybeTuple match {
-          case Left(e) =>
-            (Left(e) +: acc).reverse
-          case Right(Some((cand, rem))) =>
+        maybeTuple.flatMap {
+          case Error(s, e) =>
+            Eval.later((Error[DataCandidate[C, R], S, E](s, e) +: acc).reverse)
+          case Found(s, (cand, rem)) =>
             extractDataCandidates(tail,
                                   channelToIndexedData.updated(channel, rem),
-                                  Right(Some(cand)) +: acc)
-          case Right(None) =>
-            extractDataCandidates(tail, channelToIndexedData, Right(None) +: acc)
+                                  Found[DataCandidate[C, R], S, E](s, cand) +: acc)
+          case NotFound(s) =>
+            extractDataCandidates(tail,
+                                  channelToIndexedData,
+                                  NotFound[DataCandidate[C, R], S, E](s) +: acc)
         }
     }
 
   /* Produce */
 
-  @tailrec
   private[rspace] final def extractFirstMatch(
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
-      implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
+      implicit m: Match[P, E, A, S, R],
+      monoid: Monoid[S]): Eval[MatchResult[ProduceCandidate[C, P, R, K], S, E]] =
     matchCandidates match {
       case Nil =>
-        Right(None)
+        Eval.later(NotFound(monoid.empty))
       case (p @ WaitingContinuation(patterns, _, _, _), index) :: remaining =>
-        val maybeDataCandidates: Either[E, Option[Seq[DataCandidate[C, R]]]] =
-          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
-            .map(_.sequence)
-        maybeDataCandidates match {
-          case Left(e) => Left(e)
-          case Right(None) =>
-            extractFirstMatch(channels, remaining, channelToIndexedData)
-          case Right(Some(dataCandidates)) =>
-            Right(Some(ProduceCandidate(channels, p, index, dataCandidates)))
+        val maybeDataCandidates: Eval[MatchResult[Seq[DataCandidate[C, R]], S, E]] =
+          extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).map(seq => {
+            if (seq.isEmpty)
+              MatchResult.NotFound(monoid.empty)
+            else {
+              val init: MatchResult[Seq[DataCandidate[C, R]], S, E] =
+                Found(monoid.empty, Seq.empty[DataCandidate[C, R]])
+              seq.foldRight(init) {
+                case (curr, acc) =>
+                  curr match {
+                    case NotFound(s1) =>
+                      acc.fold(
+                        (s2, _) => NotFound(monoid.combine(s1, s2)),
+                        s2 => NotFound(monoid.combine(s1, s2)),
+                        (s2, e) => Error(monoid.combine(s1, s2), e)
+                      )
+                    case Found(s1, v) =>
+                      acc.fold(
+                        (s2, d) => Found(monoid.combine(s1, s2), v +: d),
+                        s2 => NotFound(monoid.combine(s1, s2)),
+                        (s2, e) => Error(monoid.combine(s1, s2), e)
+                      )
+                    case Error(s1, e) =>
+                      acc.fold(
+                        (s2, _) => Error(monoid.combine(s1, s2), e),
+                        s2 => Error(monoid.combine(s1, s2), e),
+                        (s2, _) => Error(monoid.combine(s1, s2), e)
+                      )
+                  }
+              }
+            }
+          })
+        maybeDataCandidates.flatMap {
+          case Error(s, e) => Eval.later(Error(s, e))
+          case NotFound(s1) =>
+            extractFirstMatch(channels, remaining, channelToIndexedData).map(_.map(s2 =>
+              monoid.combine(s1, s2)))
+          case Found(s, dataCandidates) =>
+            Eval.later(Found(s, ProduceCandidate(channels, p, index, dataCandidates)))
         }
     }
 

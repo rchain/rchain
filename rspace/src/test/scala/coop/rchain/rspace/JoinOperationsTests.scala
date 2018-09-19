@@ -5,7 +5,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
 
 trait JoinOperationsTests
-    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor] {
+    extends StorageTestsBase[String, Pattern, Nothing, Null, String, StringsCaptor] {
 
   "joins" should "remove joins if no PsK" in withTestSpace { space =>
     val store = space.store

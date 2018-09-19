@@ -12,10 +12,14 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.Match.MatchResult
+import coop.rchain.rspace.Match.MatchResult.{Error, Found, NotFound}
 import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
 import org.lightningj.util.ZBase32
+
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
@@ -162,12 +166,13 @@ class Registry(private val space: Runtime.RhoPureSpace,
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
-  private def handleResult[E <: Throwable](
-      resultTask: Task[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): Task[Unit] =
+  private def handleResult[S, E <: Throwable](
+      resultTask: Task[MatchResult[(TaggedContinuation, Seq[ListChannelWithRandom]), S, E]]): Task[Unit] =
     resultTask.flatMap({
-      case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
-      case Right(None) => Task.unit
-      case Left(err) => Task.raiseError(err)
+      //TODO(mateusz.gorski): Make use of cost account returned
+      case Found(s, (continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
+      case NotFound(s) => Task.unit
+      case Error(s, err) => Task.raiseError(err)
     })
 
   private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): Task[Unit] =

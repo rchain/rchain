@@ -12,6 +12,10 @@ import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.Match.MatchResult
+import coop.rchain.rspace.Match.MatchResult.{Error, Found, NotFound}
+
+import scala.collection.{immutable => imm}
 
 trait TuplespaceAlg[F[_]] {
   def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[CostAccount]
@@ -27,6 +31,7 @@ object TuplespaceAlg {
                              BindPattern,
                              OutOfPhlogistonsError.type,
                              ListChannelWithRandom,
+                             CostAccount,
                              ListChannelWithRandom,
                              TaggedContinuation],
       dispatcher: => Dispatch[F, ListChannelWithRandom, TaggedContinuation])(
@@ -37,15 +42,11 @@ object TuplespaceAlg {
                          persistent: Boolean): F[CostAccount] = {
       // TODO: Handle the environment in the store
       def go(
-          res: Either[OutOfPhlogistonsError.type,
-                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): F[CostAccount] =
+          res: MatchResult[(TaggedContinuation, imm.Seq[ListChannelWithRandom]),
+                           CostAccount,
+                           OutOfPhlogistonsError.type]): F[CostAccount] =
         res match {
-          case Right(Some((continuation, dataList))) =>
-            val rspaceMatchCost =
-              dataList
-                .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
-                .toList
-                .combineAll
+          case Found(rspaceMatchCost, (continuation, dataList)) =>
             if (persistent) {
               List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
                    produce(channel, data, persistent)).parSequence
@@ -53,8 +54,10 @@ object TuplespaceAlg {
             } else {
               dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
             }
-
-          case Right(None) => F.pure(CostAccount.zero)
+          case NotFound(rspaceMatchCost) =>
+            F.pure(rspaceMatchCost)
+          case Error(rspaceMatchCost, err) =>
+            Sync[F].raiseError(err)
         }
 
       for {
@@ -71,18 +74,11 @@ object TuplespaceAlg {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
           def go(
-              res: Either[OutOfPhlogistonsError.type,
-                          Option[(TaggedContinuation, Seq[ListChannelWithRandom])]])
-            : F[CostAccount] =
+              res: MatchResult[(TaggedContinuation, imm.Seq[ListChannelWithRandom]),
+                               CostAccount,
+                               OutOfPhlogistonsError.type]): F[CostAccount] =
             res match {
-              case Right(Some((continuation, dataList))) =>
-                val rspaceMatchCost =
-                  dataList
-                    .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount.zero))
-                    .toList
-                    .combineAll
-
-                dispatcher.dispatch(continuation, dataList)
+              case Found(rspaceMatchCost, (continuation, dataList)) =>
                 if (persistent) {
                   List(dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount.zero),
                        consume(binds, body, persistent)).parSequence
@@ -90,7 +86,10 @@ object TuplespaceAlg {
                 } else {
                   dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
                 }
-              case Right(None) => F.pure(CostAccount.zero)
+              case NotFound(rspaceMatchCost) =>
+                F.pure(rspaceMatchCost)
+              case Error(rspaceMatchCost, err) =>
+                Sync[F].raiseError(err)
             }
 
           for {

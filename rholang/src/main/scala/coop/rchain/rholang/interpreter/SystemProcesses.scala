@@ -11,9 +11,13 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{ISpace, IStore}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.Match.MatchResult
+import coop.rchain.rspace.Match.MatchResult.{Error, Found, NotFound}
 import monix.eval.Task
+import scala.collection.{immutable => imm}
 
 import scala.util.Try
 
@@ -26,13 +30,18 @@ object SystemProcesses {
       Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  private implicit class ProduceOps(res: Id[
-    Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+  private implicit class ProduceOps(
+      res: Id[MatchResult[(TaggedContinuation, imm.Seq[ListChannelWithRandom]),
+                          CostAccount,
+                          errors.OutOfPhlogistonsError.type]]) {
     def foldResult(
         dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
-      res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
-      })
+      res match {
+        //TODO(mateusz.gorski): make use of cost
+        case Found(cost, (cont, channels)) => _dispatch(dispatcher)(cont, channels)
+        case NotFound(cost)                => Task.unit
+        case Error(cost, err)              => Task.raiseError(err)
+      }
   }
 
   def stdoutAck(space: RhoISpace,
