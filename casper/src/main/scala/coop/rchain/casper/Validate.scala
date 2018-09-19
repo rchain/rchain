@@ -469,7 +469,6 @@ object Validate {
 
   def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
@@ -483,7 +482,6 @@ object Validate {
                              validateBlockCheckpointResult <- InterpreterUtil
                                                                .validateBlockCheckpoint[F](
                                                                  block,
-                                                                 genesis,
                                                                  dag,
                                                                  knownStateHashes,
                                                                  runtimeManager)
