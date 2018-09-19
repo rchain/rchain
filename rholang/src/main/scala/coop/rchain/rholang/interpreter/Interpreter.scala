@@ -96,10 +96,10 @@ object Interpreter {
     implicit val rand = Blake2b512Random(128)
     for {
       checkpoint     <- Task.now(runtime.space.createCheckpoint())
-      costAccounting <- CostAccountingAlg[Task](CostAccount.zero)
+      costAccounting <- CostAccountingAlg.of[Task](CostAccount.zero)
       _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
       errors         <- Task.now(runtime.readAndClearErrorVector())
-      cost           <- costAccounting.getCost()
+      cost           <- costAccounting.get()
       _              <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
     } yield EvaluateResult(cost, errors)
   }

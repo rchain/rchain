@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.arrow.FunctionK
 import cats.data.{OptionT, State, StateT}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 
 import scala.collection.immutable.Stream
 
@@ -17,11 +17,12 @@ package object matcher {
   object OptionalFreeMapWithCost {
 
     class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
-      def modifyCost(f: CostAccount => CostAccount): OptionalFreeMapWithCost[A] =
+      def charge(amount: Cost): OptionalFreeMapWithCost[A] =
         StateT((m: FreeMap) => {
           OptionT(State((c: CostAccount) => {
             val (cost, result) = s.run(m).value.run(c).value
-            (f(cost), result)
+            val newCost        = cost + amount
+            (newCost, result)
           }))
         })
 
@@ -39,8 +40,8 @@ package object matcher {
           }))
         })
 
-      def runWithCost: (CostAccount, Option[(FreeMap, A)]) =
-        s.run(Map.empty).value.run(CostAccount.zero).value
+      def runWithCost(availablePhlos: CostAccount): (CostAccount, Option[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(availablePhlos).value
 
       def toNonDet(): NonDetFreeMapWithCost[A] =
         s.mapK[StreamWithCost](new FunctionK[OptionWithCost, StreamWithCost] {
@@ -88,16 +89,17 @@ package object matcher {
 
   object NonDetFreeMapWithCost {
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
-      def modifyCost(f: CostAccount => CostAccount): NonDetFreeMapWithCost[A] =
+      def charge(amount: Cost): NonDetFreeMapWithCost[A] =
         StateT((m: FreeMap) => {
           StreamT(State((c: CostAccount) => {
             val (cost, result) = s.run(m).value.run(c).value
-            (f(cost), result)
+            val newCost        = cost + amount
+            (newCost, result)
           }))
         })
 
-      def runWithCost: (CostAccount, Stream[(FreeMap, A)]) =
-        s.run(Map.empty).value.run(CostAccount.zero).value
+      def runWithCost(availablePhlos: CostAccount): (CostAccount, Stream[(FreeMap, A)]) =
+        s.run(Map.empty).value.run(availablePhlos).value
 
       def toDet(): OptionalFreeMapWithCost[A] =
         s.mapK[OptionWithCost](new FunctionK[StreamWithCost, OptionWithCost] {
