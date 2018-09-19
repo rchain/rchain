@@ -14,11 +14,10 @@ import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
 import java.nio.file.Path
-
 import scala.io.Source
-
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp._, Connect._
+import scala.concurrent.duration._
 
 package object effects {
 
@@ -46,12 +45,12 @@ package object effects {
     }
   }
 
-  def kademliaRPC(port: Int)(
+  def kademliaRPC(port: Int, timeout: FiniteDuration)(
       implicit
       scheduler: Scheduler,
       metrics: Metrics[Task],
       log: Log[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(port)
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(port, timeout)
 
   def tcpTransportLayer(host: String,
                         port: Int,
