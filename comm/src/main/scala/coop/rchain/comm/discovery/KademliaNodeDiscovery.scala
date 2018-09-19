@@ -42,9 +42,7 @@ private[discovery] class KademliaNodeDiscovery[
     } yield ()
 
   private def pingHandler: F[Pong] =
-    for {
-      _ <- Metrics[F].incrementCounter("ping-recv-count")
-    } yield Pong()
+    Metrics[F].incrementCounter("ping-recv-count").as(Pong())
 
   private def lookupHandler(lookup: Lookup): F[LookupResponse] = {
     val id = lookup.id.toByteArray
