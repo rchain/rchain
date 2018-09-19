@@ -12,27 +12,27 @@ The first is that a program cannot have any globally free variables. It also can
 
 The second, in the same vein, is that a process variable does *not* match with anything that is not a process, meaning that it cannot match with a statement that contains a free variable, logical connectives, wildcards, or expressions using list or set remainders, unless those are written in a pattern fully contained in the statement.  Likewise, a name variable cannot match with anything that is not a quoted process, in the sense that it cannot contain free variables, logical connectives, etc unless they are correctly written in a pattern fully contained in the quoted process. For example, the following code
 
-    1 match for( x <- @Nil ){ Nil } {
-    2       for( x <-   y  ){ Nil } => { y!(Nil) }
+    1 match {for( x <- @Nil ){ Nil }} {
+    2       {for( x <-   y  ){ Nil }} => { y!(Nil) }
     3 }
 
 *will* match, returning `@Nil!(Nil)`, but
 
-    1 match for( x <-  @for( x <- @Nil ){ x!(Nil) } ){ Nil } {
-    2       for( x <-  @for( x <- @Nil ){    y    } ){ Nil } => { y!(Nil) }
+    1 match {for( x <-  @{for( x <- @Nil ){ x!(Nil) }} ){ Nil }} {
+    2       {for( x <-  @{for( x <- @Nil ){    y    }} ){ Nil }} => { y }
     3 }
 
 will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Also,
 
-    for( x <- @z!(Nil)){ Nil }
+    for( x <- @{z!(Nil)} ){ Nil }
 
 won't compile, due to the globally free variable `z`,
 
-    for( x <- @{Nil \/ @Nil!(Nil)} ){ Nil }
+    for( _ <- @{Nil} ){ {Nil} \/ {@Nil!(Nil)} }
 
-won't compile, due to a logical connective being where a process should be, and
+is incorrect, due to a logical connective being where a process should be, and
 
-    for( x <- @{[1, 2 ... z]){ Nil }
+    for( x <- @{[1, 2 ... z]}){ Nil }
 
 won't compile because `z` is free and the given list is a pattern.
 
@@ -49,11 +49,11 @@ Therefore, `@ P | Q = @ Q | P` and `@ P | Nil = @ P = @ Nil | P`, etc.
 In Rholang, these relations only apply *to the top level* of any name. In addition to the three given above, we also evaluate expressions on the top level. So for example, as channels,
 
 * `@{10 + 2} = @{5 + 7}` and
-* `@for(x <- @Nil){ 10 + 2 } = @for(x <- @Nil){ 5 + 7 }`.
+* `@{for(x <- @Nil){ 10 + 2 }} = @{for(x <- @Nil){ 5 + 7 }}`.
 
-Since we use variables, channels also respect alpha equivalence, meaning that, for example,
+Since we use variables, channels also respect alpha equivalence, meaning that, for example, as channels
 
-* `@{for( x <- @Nil ){ Nil }}  = @{for( z <- @Nil ){ Nil }}`
+* `@{for( x <- @Nil ){ Nil }}  = @{for( z <- @Nil ){ Nil }}`.
 
 In the RHO calculus we don't have to worry about distinguishing the top level from other parts of a channel, but because of things like pattern-matching, we have to in Rholang. This will be relevant later on, where there are restrictions on pattern-matching because of this.
 
@@ -65,7 +65,7 @@ Here we need to treat statements that are not on the top level. We reemphasize t
 
 
 * `@for(  @for( @{ Nil | x } <- @Nil ){ Nil } <- @Nil ){ Nil }}`
-* `@for(  @for( @{ x | Nil } <- @Nil ){ Nil } <- @Nil ){ Nil }}`
+* `@for(  @for( @{ x | Nil } <- @Nil ){ Nil } <- @Nil ){ Nil }}`.
 
 Note that while the patterns `@{ x | Nil }}` and `@{ Nil | x }` are equivalent at the top level, the patterns
 
@@ -76,12 +76,12 @@ are *not*. When we are matching *patterns within patterns*, these equivalence ru
 
 Furthermore, we can't bind variables to parts of patterns. For example, the following send/receive will not match:
 
-    1 for( @ for( @{x!(y)} <- @Nil ){ Nil } <- @Nil ){ Nil }  |
+    1 for( @{for( @{x!(y)} <- @Nil ){ Nil }} <- @Nil ){ Nil }  |
     2 @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
 
 Naively, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
 
-    @Nil!( for( @x!(y) <- @Nil ){ Nil } )
+    @Nil!( for( @{x!(y)} <- @Nil ){ Nil } )
 
 ## Precedence Rules
 When writing more complicated patterns, one should be aware of precedence rules of the operators in Rholang. Take for example the following pattern:
@@ -143,9 +143,9 @@ evaluating to `@Nil!(7)`.
 
 The other illegal move we ought to cover has to do with the `match` process. Remember that we cannot bind a free variable to any process or name containing free variables, or containing any out-of-context uses of logical connectives, joins, etc. In particular, it is syntactically incorrect to write:
 
-    1 match match @Nil!(Nil) { x => {@Nil!(x)} }
+    1 match {match {@Nil!(Nil)} { x => {@Nil!(x)} }}
     2   {
-    3       match @Nil!(Nil) { y } => { y }
+    3       {match {@Nil!(Nil)} { y }} => { y }
     4   }
 
 since, if it did match, `y` would match to `x => {@Nil!(x)}`, which is neither a process nor a name.
@@ -163,15 +163,15 @@ Note further that since `P = P | Nil` for any process `P`, the pattern `@{x | y}
 
 Note that we can write patterns with parallel processes that are not just process variables, such as `@{ @Nil!(x) | for( z <- c ){ z!(Nil) } }`, etc.
 
-## Logical Connectives In Patterns
+## Logical Connectives
 
-Logical connectives can be incorporated into patterns, but we cannot send or receive over a channel which contains logical connectives. For example, it is incorrect to write
+Logical connectives can be incorporated into patterns, but we cannot send over a channel which contains logical connectives. For example, it is incorrect to write
 
-    @{ 10 \/ 20 }!(Nil)
+    @{ {10} \/ {20} }!(Nil)
 
 We can, however, correctly write
 
-    for( @{@{ 10 \/ 20 }}!(z) <- @Nil ){ @Nil!(z) }
+    for( @{@{ {10} \/ {20} }!(z)} <- @Nil ){ @Nil!(z) }
 
 which listens on `@Nil` for a process which sends either to `@10` or to `@20`. Whatever is being sent is grabbed and sent over `@Nil` in the body. If we use `/\` in a pattern, any free variables which are in the pattern will be bound to their corresponding parts. However, if we use `\/`, none of the variables in the parse tree below the node are bound. In particular, if `P1 \/ P2` is in a pattern, the program will fail to run if any free variables in `P1` or `P2` appear in the body, since they cannot be guaranteed to bind to anything.
 
