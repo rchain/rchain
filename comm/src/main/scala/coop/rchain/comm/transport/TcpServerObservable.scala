@@ -84,9 +84,10 @@ class TcpServerObservable(
       .build
       .start
 
-    () => {
-      server.shutdown().awaitTermination()
-      mergeSubscription.cancel()
-    }
+    () =>
+      {
+        server.shutdown().awaitTermination()
+        mergeSubscription.cancel()
+      }
   }
 }
