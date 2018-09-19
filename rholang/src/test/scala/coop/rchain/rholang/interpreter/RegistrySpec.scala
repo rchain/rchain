@@ -1,9 +1,11 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -11,13 +13,12 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAl
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.pure.PureRSpace
-import java.io.StringReader
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.lightningj.util.ZBase32
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -37,10 +38,9 @@ trait RegistryTester extends PersistentStoreTester {
     withTestSpace { space =>
       val pureSpace: Runtime.RhoPureSpace = PureRSpace[Task].of(space)
       lazy val registry: Registry         = new Registry(pureSpace, dispatcher)
-      lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
+      lazy val (dispatcher, reducer) =
         RholangAndScalaDispatcher
           .create[Task, Task.Par](space, registry.testingDispatchTable, Registry.testingUrnMap)
-      val reducer = dispatcher.reducer
       registry.testInstall()
       f(reducer, space)
     }

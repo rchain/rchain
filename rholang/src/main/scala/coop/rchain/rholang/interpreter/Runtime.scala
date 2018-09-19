@@ -176,10 +176,10 @@ object Runtime {
     lazy val replayDispatchTable: RhoDispatchMap =
       dispatchTableCreator(replaySpace, replayDispatcher)
 
-    lazy val dispatcher: RhoDispatch =
+    lazy val (dispatcher, reducer) =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: RhoDispatch =
+    lazy val (replayDispatcher, replayReducer) =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
@@ -202,6 +202,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
+    new Runtime(reducer, replayReducer, space, replaySpace, errorLog, context)
   }
 }
