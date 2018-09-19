@@ -6,12 +6,10 @@ import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.transport.CommunicationResponse._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
-
 import scala.collection.mutable
 import scala.concurrent.duration._
 
@@ -41,20 +39,15 @@ private[discovery] class KademliaNodeDiscovery[
       _ <- Metrics[F].setGauge("kademlia-peers", table.peers.length.toLong)
     } yield ()
 
-  private def pingHandler(ping: Ping): F[Pong] =
-    addNode(ProtocolHelper.toPeerNode(ping.sender.get)) *> Metrics[F]
-      .incrementCounter("ping-recv-count")
-      .as(Pong())
+  private def pingHandler(peer: PeerNode): F[Unit] =
+    addNode(peer) *> Metrics[F].incrementCounter("ping-recv-count")
 
-  private def lookupHandler(lookup: Lookup): F[LookupResponse] = {
-    val id = lookup.id.toByteArray
-
+  private def lookupHandler(peer: PeerNode, id: Array[Byte]): F[Seq[PeerNode]] =
     for {
       peers <- Capture[F].capture(table.lookup(id))
       _     <- Metrics[F].incrementCounter("lookup-recv-count")
-      _     <- addNode(ProtocolHelper.toPeerNode(lookup.sender.get))
-    } yield LookupResponse().withNodes(peers.map(ProtocolHelper.node(_)))
-  }
+      _     <- addNode(peer)
+    } yield peers
 
   def discover: F[Unit] = {
 

@@ -57,15 +57,16 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implici
         lr => lr.nodes.map(ProtocolHelper.toPeerNode)
       )
 
-  def receive(pingHandler: Ping => Task[Pong],
-              lookupHandler: Lookup => Task[LookupResponse]): Task[Unit] = Task.delay {
-    NettyServerBuilder
-      .forPort(port)
-      .addService(KademliaRPCServiceGrpc
-        .bindService(new SimpleKademliaRPCService[Task](pingHandler, lookupHandler), scheduler))
-      .build
-      .start
-  }
+  def receive(pingHandler: PeerNode => Task[Unit],
+              lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]): Task[Unit] =
+    Task.delay {
+      NettyServerBuilder
+        .forPort(port)
+        .addService(KademliaRPCServiceGrpc
+          .bindService(new SimpleKademliaRPCService[Task](pingHandler, lookupHandler), scheduler))
+        .build
+        .start
+    }
 
   private def clientChannel(peer: PeerNode): Task[ManagedChannel] =
     for {
@@ -80,10 +81,19 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implici
 
 }
 
-class SimpleKademliaRPCService[F[_]: Futurable](
-    pingHandler: Ping => F[Pong],
-    lookupHandler: Lookup => F[LookupResponse]
+class SimpleKademliaRPCService[F[_]: Futurable: Functor](
+    pingHandler: PeerNode => F[Unit],
+    lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
 ) extends KademliaRPCServiceGrpc.KademliaRPCService {
-  def sendLookup(lookup: Lookup): Future[LookupResponse] = lookupHandler(lookup).toFuture
-  def sendPing(ping: Ping): Future[Pong]                 = pingHandler(ping).toFuture
+  def sendLookup(lookup: Lookup): Future[LookupResponse] = {
+    val id               = lookup.id.toByteArray
+    val sender: PeerNode = ProtocolHelper.toPeerNode(lookup.sender.get)
+    lookupHandler(sender, id)
+      .map(peers => LookupResponse().withNodes(peers.map(ProtocolHelper.node(_))))
+      .toFuture
+  }
+  def sendPing(ping: Ping): Future[Pong] = {
+    val sender: PeerNode = ProtocolHelper.toPeerNode(ping.sender.get)
+    pingHandler(sender).as(Pong()).toFuture
+  }
 }
