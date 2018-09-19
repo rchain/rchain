@@ -3,13 +3,16 @@ package coop.rchain.rspace.bench
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 
-import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
-import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.openjdk.jmh.annotations.{Setup, TearDown}
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
@@ -18,8 +21,7 @@ trait EvalBenchStateBase {
   val rhoScriptSource: String
   lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
   val rand: Blake2b512Random = Blake2b512Random(128)
-  val costAccountAlg: CostAccountingAlg[Task] =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  Await.ready(runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runAsync, 1.second)
   var term: Option[Par] = None
 
   @Setup

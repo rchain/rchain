@@ -11,7 +11,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
@@ -26,8 +26,6 @@ import scala.concurrent.duration._
 
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
-  implicit val costAccounting =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
   def dispatchTableCreator(registry: Registry): RhoDispatchMap =
     Map(
@@ -44,7 +42,7 @@ trait RegistryTester extends PersistentStoreTester {
     )
 
   def withRegistryAndTestSpace[R](
-      f: (Reduce[Task],
+      f: (ChargingReducer[Task],
           FreudianSpace[Channel,
                         BindPattern,
                         OutOfPhlogistonsError.type,
@@ -58,6 +56,7 @@ trait RegistryTester extends PersistentStoreTester {
       lazy val (dispatcher, reducer, registry) =
         RholangAndScalaDispatcher
           .create(space, dispatchTable, Registry.testingUrnMap)
+      Await.ready(reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runAsync, 1.second)
       registry.testInstall()
       f(reducer, space)
     }

@@ -22,8 +22,8 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
+class Runtime private (val reducer: ChargingReducer[Task],
+                       val replayReducer: ChargingReducer[Task],
                        val space: RhoISpace,
                        val replaySpace: RhoReplayRSpace,
                        var errorLog: ErrorLog,
