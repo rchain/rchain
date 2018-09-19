@@ -542,9 +542,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount(Integer.MAX_VALUE)).runAsync, 1.second)
-
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -1171,10 +1168,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "variable references" should "be substituted before being used." in {
     implicit val errorLog = new ErrorLog()
-    implicit val costAccounting =
-      CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
-    val splitRandResult = rand.splitByte(3)
-    val splitRandSrc    = rand.splitByte(3)
+    val splitRandResult   = rand.splitByte(3)
+    val splitRandSrc      = rand.splitByte(3)
     splitRandResult.next()
     val mergeRand =
       Blake2b512Random.merge(Seq(splitRandResult.splitByte(1), splitRandResult.splitByte(0)))
@@ -1226,10 +1221,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "be substituted before being used in a match." in {
     implicit val errorLog = new ErrorLog()
-    implicit val costAccounting =
-      CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
-    val splitRandResult = rand.splitByte(4)
-    val splitRandSrc    = rand.splitByte(4)
+    val splitRandResult   = rand.splitByte(4)
+    val splitRandSrc      = rand.splitByte(4)
     splitRandResult.next()
     val proc = New(
       bindCount = 1,
@@ -1270,12 +1263,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   it should "reference a variable that comes from a match in tuplespace" in {
     implicit val errorLog = new ErrorLog()
-    implicit val costAccounting =
-      CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
-    val baseRand   = rand.splitByte(7)
-    val splitRand0 = baseRand.splitByte(0)
-    val splitRand1 = baseRand.splitByte(1)
-    val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
+    val baseRand          = rand.splitByte(7)
+    val splitRand0        = baseRand.splitByte(0)
+    val splitRand1        = baseRand.splitByte(1)
+    val mergeRand         = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
     val proc = Par(
       sends = List(Send(chan = Quote(GInt(7)), data = List(GInt(10)))),
       receives = List(

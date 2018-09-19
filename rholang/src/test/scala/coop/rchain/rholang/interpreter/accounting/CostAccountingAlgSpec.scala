@@ -35,7 +35,7 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
     for {
       _ <- alg.charge(c)
       s <- alg.get()
-    } yield assert(defaultCost.charge(c) === s)
+    } yield assert(defaultCost - c === s)
   }
 
   def assertOutOfPhloError[A](test: Task[A]): Task[Assertion] =

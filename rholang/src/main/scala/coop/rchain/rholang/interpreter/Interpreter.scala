@@ -97,7 +97,7 @@ object Interpreter {
     val evaluatePhlosLimit = CostAccount(Integer.MAX_VALUE)
     for {
       checkpoint     <- Task.now(runtime.space.createCheckpoint())
-      costAccounting <- CostAccountingAlg.of[Task](evaluatePhlosLimit.zero)
+      costAccounting <- CostAccountingAlg.of[Task](evaluatePhlosLimit)
       _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
       errors         <- Task.now(runtime.readAndClearErrorVector())
       leftPhlos      <- costAccounting.get()

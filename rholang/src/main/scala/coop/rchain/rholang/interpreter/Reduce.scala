@@ -85,6 +85,28 @@ object Reduce {
           costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
       ))
 
+  private def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
+      implicit costAlg: CostAccountingAlg[M]): M[Option[(FreeMap, Unit)]] =
+    for {
+      // phlos available before going to the matcher
+      phlosAvailable <- costAlg.get()
+      result <- Sync[M]
+                 .fromEither(
+                   SpatialMatcher
+                     .spatialMatch(target, pattern)
+                     .runWithCost(phlosAvailable))
+                 .flatMap {
+                   case (phlosLeft, result) =>
+                     val phloUsed = phlosLeft.copy(cost = phlosAvailable.cost - phlosLeft.cost)
+                     costAlg.charge(phloUsed).map(_ => result)
+                 }
+                 .onError {
+                   case OutOfPhlogistonsError =>
+                     // if we run out of phlos during the match we have to zero phlos available
+                     costAlg.get().flatMap(costAlg.charge(_))
+                 }
+    } yield result
+
   class DebruijnInterpreter[M[_], F[_]](tuplespaceAlg: TuplespaceAlg[M],
                                         private val urnMap: Map[String, Par])(
       implicit
@@ -386,21 +408,7 @@ object Reduce {
                                                        1,
                                                        env,
                                                        costAccountingAlg)
-                // since we now decrement available phlos it makes sense to get all of them
-                phloLeft <- costAccountingAlg.get()
-                result <- Sync[M]
-                           .fromEither(
-                             SpatialMatcher
-                               .spatialMatch(target, pattern)
-                               .runWithCost(phloLeft))
-                           .onError {
-                             case OutOfPhlogistonsError =>
-                               costAccountingAlg.set(phloLeft.copy(cost = Cost(0)))
-                           }
-                (phlos, matchResult) = result
-                // we can set it, if we used more than was available any next
-                // get() call will return negative balance and `charge` call will fail
-                _ <- costAccountingAlg.set(phlos)
+                matchResult <- spatialMatchAndCharge[M](target, pattern)
                 res <- matchResult match {
                         case None =>
                           Applicative[M].pure(Left((target, caseRem)))
@@ -661,19 +669,7 @@ object Reduce {
             evaledTarget <- evalExpr(target)
             substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
             substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
-            // similarly to a case in the spatial matcher of the `Receive`
-            phloLeft <- costAccountingAlg.get()
-            result <- Sync[M]
-                       .fromEither(
-                         SpatialMatcher
-                           .spatialMatch(substTarget, substPattern)
-                           .runWithCost(phloLeft))
-                       .onError {
-                         case OutOfPhlogistonsError =>
-                           costAccountingAlg.set(phloLeft.copy(cost = Cost(0)))
-                       }
-            (phlos, matchResult) = result
-            _                    <- costAccountingAlg.set(phlos)
+            matchResult  <- spatialMatchAndCharge[M](target, pattern)
           } yield GBool(matchResult.isDefined)
 
         case EPercentPercentBody(EPercentPercent(p1, p2)) =>
