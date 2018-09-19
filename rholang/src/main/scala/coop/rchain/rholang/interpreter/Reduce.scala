@@ -156,9 +156,7 @@ object Reduce {
         persistent: Boolean,
         rand: Blake2b512Random)(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       for {
-        _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
+        _ <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
       } yield ()
 
     /**
@@ -179,11 +177,8 @@ object Reduce {
         rand: Blake2b512Random)(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] = {
       val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
       val srcs                                              = sources.map(q => Channel(q)).toList
-      val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
       for {
-        _ <- costAccountingAlg.charge(rspaceCost)
-        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
+        _ <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
       } yield ()
     }
 

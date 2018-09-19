@@ -1,9 +1,10 @@
 package coop.rchain.rholang.interpreter.storage
 import cats.implicits._
-import coop.rchain.models.{BindPattern, Channel, ListChannelWithRandom, TaggedContinuation}
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoPureSpace
 import coop.rchain.rholang.interpreter.accounting.CostAccount._
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.pure.PureRSpace
@@ -30,13 +31,17 @@ object ChargingRSpace {
                                                                ListChannelWithRandom,
                                                                ListChannelWithRandom])
         : Task[Either[errors.OutOfPhlogistonsError.type,
-                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]] =
+                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]] = {
+        val bodyCost = Some(continuation).collect {
+          case TaggedContinuation(ParBody(ParWithRandom(body, _))) => body.storageCost
+        }
+        val storageCost = channels.storageCost + patterns.storageCost + bodyCost.getOrElse(Cost(0))
         for {
-          //TODO(mateusz.gorski): move charging for the storage from Reduce here
-          //TODO(mateusz.gorski): refund the phlos if the match was found
+          _       <- costAlg.charge(storageCost)
           consRes <- space.consume(channels, patterns, continuation, persist)
-          _       <- handleResult(consRes)
+          _       <- handleResult(consRes, storageCost, persist)
         } yield consRes
+      }
 
       override def install(channels: Seq[Channel],
                            patterns: Seq[BindPattern],
@@ -54,17 +59,19 @@ object ChargingRSpace {
                             ListChannelWithRandom,
                             ListChannelWithRandom])
         : Task[Either[errors.OutOfPhlogistonsError.type,
-                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]] =
+                      Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]] = {
+        val storageCost = channel.storageCost + data.channels.storageCost
         for {
-          //TODO(mateusz.gorski): move charging for the storage from Reduce here
-          //TODO(mateusz.gorski): refund the phlos if the match was found
           prodRes <- space.produce(channel, data, persist)
-          _       <- handleResult(prodRes)
+          _       <- handleResult(prodRes, storageCost, persist)
         } yield prodRes
+      }
 
       private def handleResult(
           result: Either[OutOfPhlogistonsError.type,
-                         Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]): Task[Unit] =
+                         Option[(TaggedContinuation, Seq[ListChannelWithRandom])]],
+          storageCost: Cost,
+          persist: Boolean): Task[Unit] =
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
@@ -73,9 +80,19 @@ object ChargingRSpace {
             val rspaceMatchCost = dataList
               .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount(0)))
               .toList
+              .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost)) //FIXME: This shouldn't be needed
               .combineAll
-            //                  .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
-            costAlg.charge(rspaceMatchCost)
+
+            costAlg
+              .charge(rspaceMatchCost)
+              .flatMap { _ =>
+                // we refund the storage cost if there was a match and the persist flag is boolean
+                // this means that the data didn't stay in the tuplespace
+                if (persist)
+                  Task.unit
+                else
+                  costAlg.refund(storageCost)
+              }
           case Right(None) =>
             Task.unit
         }
