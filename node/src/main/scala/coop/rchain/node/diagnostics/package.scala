@@ -222,13 +222,13 @@ package object diagnostics {
       def listPeers(request: Empty): Future[Peers] =
         ConnectionsCell[F].read.map { ps =>
           Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
+            Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))))
         }.toFuture
 
       def listDiscoveredPeers(request: Empty): Future[Peers] =
         NodeDiscovery[F].peers.map { ps =>
           Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
+            Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))))
         }.toFuture
 
       def getProcessCpu(request: Empty): Future[ProcessCpu] =

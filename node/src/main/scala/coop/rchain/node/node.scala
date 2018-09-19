@@ -132,7 +132,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   /** Configuration */
   private val port              = conf.server.port
-  private val address           = s"rnode://$name@$host:$port"
+  private val kademliaPort      = conf.server.kademliaPort
+  private val address           = s"rnode://$name@$host:$port,$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -336,7 +337,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize)(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(conf.server.kademliaPort)(scheduler, metrics, log)
+    kademliaRPC = effects.kademliaRPC(kademliaPort)(scheduler, metrics, log)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,

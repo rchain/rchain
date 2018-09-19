@@ -22,7 +22,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
       val cert    = CertificatePrinter.print(CertificateHelper.generate(keyPair))
       val key     = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
       val id      = CertificateHelper.publicAddress(keyPair.getPublic).map(Base16.encode).get
-      val address = s"rnode://$id@$host:[$port,0]"
+      val address = s"rnode://$id@$host:$port,0"
       val peer    = PeerNode.fromAddress(address).right.get
       TcpTlsEnvironment(host, port, cert, key, peer)
     }

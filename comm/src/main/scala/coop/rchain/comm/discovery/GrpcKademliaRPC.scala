@@ -58,7 +58,7 @@ class GrpcKademliaRPC(port: Int)(implicit
     for {
       _ <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
       c <- Task.delay {
-            NettyChannelBuilder.forAddress(peer.endpoint.host, peer.endpoint.tcpPort).build()
+            NettyChannelBuilder.forAddress(peer.endpoint.host, peer.endpoint.udpPort).build()
           }
     } yield c
 

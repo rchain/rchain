@@ -31,7 +31,7 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   override def toString: String = toAddress
 
   val toAddress: String =
-    s"rnode://$sKey@${endpoint.host}:[${endpoint.tcpPort},${endpoint.udpPort}]"
+    s"rnode://$sKey@${endpoint.host}:${endpoint.tcpPort},${endpoint.udpPort}"
 
 }
 
@@ -40,7 +40,7 @@ object PeerNode {
   import scala.util.matching.Regex, Regex._
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
-    val template = """rnode\:\/\/(.*?)@(.*?):\[(.*),(.*)\]""".r
+    val template = """rnode\:\/\/(.*?)@(.*?):(.*),(.*)""".r
 
     str match {
       case template(key, host, tcpPort, udpPort) =>

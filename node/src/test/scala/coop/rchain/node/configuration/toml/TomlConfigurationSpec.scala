@@ -20,7 +20,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
       |http-port = 12
       |no-upnp = false
       |default-timeout = 1000
-      |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:[40400,40404]"
+      |bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400,40404"
       |standalone = true
       |map-size = 200000000
       |store-type = "lmdb"
@@ -57,7 +57,7 @@ class TomlConfigurationSpec extends FunSuite with Matchers {
 
     val bootstrap =
       PeerNode
-        .fromAddress("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:[40400,40404]")
+        .fromAddress("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400,40404")
         .right
         .get
 

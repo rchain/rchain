@@ -60,7 +60,7 @@ object Configuration {
   private val DefaultThreadPoolSize: Int        = 4000
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
-    .fromAddress("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:[40400,40404]")
+    .fromAddress("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400,40404")
     .right
     .get
   private val DefaultShardId = "rchain"
