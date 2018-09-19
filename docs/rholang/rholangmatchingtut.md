@@ -88,7 +88,7 @@ When writing more complicated patterns, one should be aware of precedence rules 
 
     @{@x!(Nil) | y!(Nil)}
 
-A priori, it is unclear whether this should be interpreted as `@{{@x!(Nil)} | {y!(Nil)}}`, where `x` is a process variable and `y` is a name variable, or as `@{@{x!(Nil) | y}!(Nil)}}`, where `x` is a name variable and `y` is a process variable. The chosen interpretation is vital, since the way we use `x` and `y` in the body depend on the type (process or name) of each of these terms. If the first interpretation is correct,
+A priori, it is unclear whether this should be interpreted as `@{{@x!(Nil)} | {y!(Nil)}}`, where `x` is a process variable and `y` is a name variable, or as `@{@{x!(Nil) | y}!(Nil)}`, where `x` is a name variable and `y` is a process variable. The chosen interpretation is vital, since the way we use `x` and `y` in the body depend on the type (process or name) of each of these terms. If the first interpretation is correct,
 
     for( @{@x!(Nil) | y!(Nil)} <- @10 ){ @x!("success") | y!("success") }
 
