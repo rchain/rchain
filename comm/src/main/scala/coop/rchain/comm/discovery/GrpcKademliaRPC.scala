@@ -73,7 +73,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implici
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
-              .usePlaintext(true)
+              .usePlaintext()
               .build()
           }
     } yield c
