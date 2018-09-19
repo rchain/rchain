@@ -20,6 +20,7 @@ import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
@@ -135,6 +136,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
       implicit scheduler: Scheduler): (StateHash, Seq[InternalProcessedDeploy]) = {
 
+    @tailrec
     def doEval(terms: Seq[Deploy],
                hash: Blake2b256Hash,
                acc: Vector[InternalProcessedDeploy]): (StateHash, Vector[InternalProcessedDeploy]) =
