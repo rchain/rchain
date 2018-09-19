@@ -47,7 +47,8 @@ message Protocol {
 }
 
 service TransportLayer {
-  rpc Send (TLRequest) returns (TLResponse) {}
+  rpc Tell (TLRequest) returns (TLResponse) {}
+  rpc Ask (TLRequest) returns (TLResponse) {}
 }
 
 message TLRequest {

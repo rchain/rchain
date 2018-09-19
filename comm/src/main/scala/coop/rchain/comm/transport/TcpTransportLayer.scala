@@ -146,17 +146,22 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     Task.gatherUnordered(peers.map(send(_, msg))).void
 
-  private def buildServer(transportLayer: RoutingGrpcMonix.TransportLayer): Task[Server] =
+  private def receiveInternal(parallelism: Int)(dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
+
+    def dispatchInternal: ServerMessage => Task[Unit] = {
+        case Tell(protocol) => dispatch(protocol).attempt.void
+        case Ask(protocol, sender) => dispatch(protocol).attempt.map {
+          case Left(e) => sender.failWith(e)
+          case Right(response) => sender.reply(response)
+        }.void
+      }
+
     Task.delay {
-      NettyServerBuilder
-        .forPort(port)
-        .maxMessageSize(maxMessageSize)
-        .sslContext(serverSslContext)
-        .addService(RoutingGrpcMonix.bindService(transportLayer, scheduler))
-        .intercept(new SslSessionServerInterceptor())
-        .build
-        .start
-    }
+      new TcpServerObservable(port, serverSslContext, maxMessageSize)
+        .mapParallelUnordered(parallelism)(dispatchInternal)
+        .subscribe()
+      }
+  }
 
   def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
     cell.modify { s =>
@@ -165,7 +170,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                    case Some(_) =>
                      Task.raiseError(
                        new RuntimeException("TransportLayer server is already started"))
-                   case _ => buildServer(new TransportLayerImpl(dispatch))
+                   case _ => receiveInternal(4)(dispatch)
                  }
       } yield s.copy(server = Some(server))
 
@@ -175,7 +180,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {
         _ <- log.info("Shutting down server")
-        _ <- s.server.fold(Task.unit)(server => Task.delay(server.shutdown()))
+        _ <- s.server.fold(Task.unit)(server => Task.delay(server.cancel()))
       } yield s.copy(server = None, shutdown = true)
     }
 
@@ -209,36 +214,10 @@ object TcpTransportLayer {
 
 case class TransportState(
     connections: TcpTransportLayer.Connections = Map.empty,
-    server: Option[Server] = None,
+    server: Option[Cancelable] = None,
     shutdown: Boolean = false
 )
 
 object TransportState {
   def empty: TransportState = TransportState()
-}
-
-class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
-    extends RoutingGrpcMonix.TransportLayer {
-
-  def send(request: TLRequest): Task[TLResponse] =
-    request.protocol
-      .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-        dispatch(protocol) map {
-          case NotHandled(error)            => internalServerError(error.message)
-          case HandledWitoutMessage         => noResponse
-          case HandledWithMessage(response) => returnProtocol(response)
-        }
-      }
-
-  private def returnProtocol(protocol: Protocol): TLResponse =
-    TLResponse(TLResponse.Payload.Protocol(protocol))
-
-  // TODO InternalServerError should take msg in constructor
-  private def internalServerError(msg: String): TLResponse =
-    TLResponse(
-      TLResponse.Payload.InternalServerError(
-        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
-
-  private def noResponse: TLResponse =
-    TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
 }
