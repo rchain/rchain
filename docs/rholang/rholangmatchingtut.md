@@ -2,7 +2,7 @@
 
 ## Patterns we are allowed to match
 
-Let's clarify the implications of the following sentence from the Rholang tutorial: "There are two kinds of values in Rholang, names and processes. Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or a `match`." This has a couple of implications that were not explicitly stated in the tutorial.
+Let's clarify the implications of the following sentence from the Rholang tutorial: "There are two kinds of values in Rholang, names and processes. Patterns are names or processes with free variables, which appear to the left of an arrow in a `for` or after the `match` keyword."
 
 The first is that a program cannot have any free variables. It also can't have any logical connectives `/\` or `\/`, joins, etc unless they form part of a pattern. Logical connectives, joins and arrows can be used if they are in patterns within the program, and any variable in a program must be at most locally free. For example, the following code snippets are not valid programs, despite the fact that they are valid components of patterns:
 
@@ -22,7 +22,7 @@ The second, in the same vein, is that a process variable does *not* match with a
     2       for( x <-  @for( t <- @Nil ){ y } ){ Nil } => { y!(Nil) }
     3 }
 
-will evaluate to the empty process due to not having matched, since `y` cannot match with `x!(Nil)`. Finally,
+will not match since `y` cannot match with `x!(Nil)`, and thus evaluate to the empty process. Finally,
 
     1 match for( x <- @z!(Nil)){ Nil } {
     2       for( x <- y){ Nil }  => { y!(Nil) }
@@ -73,7 +73,7 @@ Furthermore, we can't bind variables to parts of patterns. For example, the foll
     1 for( @ for( @{x!(y)} <- @Nil ){ Nil } <- @Nil ){ Nil }  |
     2 @Nil!( for( @{x!(10)} <- @Nil ){ Nil } )
 
-Na&iuml;vely, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
+Naively, one might expect these to match, binding `y` to `10`, but to match with the above receive, one must send something alpha equivalent to:
 
     @Nil!( for( @x!(y) <- @Nil ){ Nil } )
 
@@ -84,11 +84,11 @@ When writing more complicated patterns, one should be aware of precedence rules 
 
 A priori, it is unclear whether this should be interpreted as `@{{@x!(Nil)} | {y!(Nil)}}`, where `x` is a process variable and `y` is a name variable, or as `@{@{x!(Nil) | y}!(Nil)}}`, where `x` is a name variable and `y` is a process variable. The chosen interpretation is vital, since the way we use `x` and `y` in the body depend on the type (process or name) of each of these terms. If the first interpretation is correct,
 
-    for( @{@x!(Nil) | y!(Nil)} <- @10 ){ @x!("success") | y!("success") }
+    for( @{{@x!(Nil)} | {y!(Nil)}} <- @10 ){ @x!("success") | y!("success") }
 
 will compile, while
 
-    for( @{@x!(Nil) | y!(Nil)} <- @10 ){ x!("success") | @y!("success") }
+    for( @{{@x!(Nil) | y}!(Nil)}} <- @10 ){ x!("success") | @y!("success") }
 
 will not. If the second interpretation is correct, the opposite is true.
 
@@ -107,19 +107,33 @@ to match with a send such as `@Nil!(5 + 7)`, binding `x` to `5`. However, when m
 
 Remember, however, that an arithmetic operation that is in a pattern within a pattern is not evaluated when sent over a channel, and must be matched exactly. For example,
 
-    @Nil!( for( x <- @{5 + 7}){Nil} )
+    @Nil!(for( @{5 + 7} <- @Nil ){ Nil })
 
-can only match with something that preserves the `5 + 7` intact, such as in the process `for( @for( x <- @{5 + 7}){z} <- @Nil ){ @z!(Nil) }`. Since the `5 + 7` is part of a pattern within a pattern, we still cannot match any part of it.
+can only match with something that preserves the `5 + 7` intact. This means that to match with this we need something of the form
+
+    1 for(
+    2   @{for( @{5 + 7} <- ... ){ ... }}   <-   @Nil )
+    3   { ... }
+    4 )
+
+If we wanted to bind a variable to the `5`, for example, we would need something of the form
+
+    1 for(
+    2   @{for( @{x + 7} <- ... ){ ... }}   <-   @Nil )
+    3   { ... }
+    4 )
+
+which would never match because patterns within patterns must match exactly.
 
 However, when the arithmetic operation is both (1) not on the top level of a pattern, and (2) not part of a pattern within a pattern, we *can* bind to parts of an arithmetic expression. For example, the receive
 
-    for( @for( _ <- @10 ){ 8 + z } <- @Nil ){ @z!(Nil) }
+    for( @{for( x <- @{5 + w}){Nil}} <- @Nil ){ @Nil!(w) }
 
 can take a message from a send of the form
 
-    @Nil!( for( _  <- @10 ){ 8 + 10 })
+    @Nil!( for( x <- @{5 + 7}){Nil} )
 
-binding `z` to `10`.
+evaluating to `@Nil!(7)`.
 
 The other illegal move we ought to cover has to do with the `match` process. Remember that we cannot bind a free variable to any process or name containing free variables, or containing any out-of-context uses of logical connectives, joins, etc. In particular, it is syntactically incorrect to write:
 
