@@ -406,9 +406,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
-
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -478,9 +475,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
-
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -547,9 +541,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
-
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
 
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -629,9 +620,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
-
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -656,7 +644,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
-    Await.result(costAccounting.set(CostAccount.zero).runAsync, 1.second)
 
     val bothResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -787,9 +774,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
-
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val env = Env[Par]()
@@ -811,9 +795,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
-
-    //reset the cost
-    Await.ready(costAccounting.set(CostAccount.zero).runAsync, 1.second)
 
     val interleavedResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
