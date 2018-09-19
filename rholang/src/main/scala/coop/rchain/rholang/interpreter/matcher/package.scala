@@ -13,9 +13,15 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  type OptionalFreeMapWithCost[A] =
-    StateT[OptionWithCost, FreeMap, A]
-  type OptionWithCost[A] = OptionT[StateT[Either[OutOfPhlogistonsError.type, ?], CostAccount, ?], A]
+  //FreeMap => CostAccount => Either[OOPE, (CostAccount, Option[(FreeMap, A)])]
+  type OptionalFreeMapWithCost[A] = StateT[OptionWithCost, FreeMap, A]
+  type OptionWithCost[A]          = OptionT[ErroredOrCostA, A]
+
+  type ErroredOrCostA[A] = StateT[Either[OutOfPhlogistonsError.type, ?], CostAccount, A]
+
+  //FreeMap => CostAccount => Either[OOPE, (CostAccount, Stream[(FreeMap, A)])]
+  type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
+  type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
 
   object OptionalFreeMapWithCost {
 
@@ -93,9 +99,6 @@ package object matcher {
         }))
       })
   }
-
-  type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
-  type StreamWithCost[A]        = StreamT[StateT[Either[OutOfPhlogistonsError.type, ?], CostAccount, ?], A]
 
   object NonDetFreeMapWithCost {
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
