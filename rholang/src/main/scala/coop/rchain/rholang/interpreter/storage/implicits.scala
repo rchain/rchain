@@ -45,13 +45,9 @@ object implicits {
                   case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
                     val remainderMap = pattern.remainder match {
                       case Some(Var(FreeVar(level))) =>
-                        val flatRem: Seq[Par] = caughtRem.flatMap(
-                          chan =>
-                            chan match {
-                              case Channel(Quote(p)) => Some(p)
-                              case _                 => None
-                          }
-                        )
+                        val flatRem: Seq[Par] = caughtRem.collect {
+                          case Channel(Quote(p)) => p
+                        }
                         freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
                       case _ => freeMap
                     }
