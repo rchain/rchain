@@ -9,6 +9,8 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Registry.FixedRefs._
+import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -26,6 +28,21 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+
+  def dispatchTableCreator(registry: Registry): RhoDispatchMap =
+    Map(
+      lookupRef                       -> registry.lookup,
+      lookupCallbackRef               -> registry.lookupCallback,
+      insertRef                       -> registry.insert,
+      insertCallbackRef               -> registry.insertCallback,
+      deleteRef                       -> registry.delete,
+      deleteRootCallbackRef           -> registry.deleteRootCallback,
+      deleteCallbackRef               -> registry.deleteCallback,
+      publicLookupRef                 -> registry.publicLookup,
+      publicRegisterRandomRef         -> registry.publicRegisterRandom,
+      publicRegisterInsertCallbackRef -> registry.publicRegisterInsertCallback
+    )
+
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
           FreudianSpace[Channel,
@@ -36,11 +53,11 @@ trait RegistryTester extends PersistentStoreTester {
                         TaggedContinuation]) => R
   ): R =
     withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace = PureRSpace[Task].of(space)
-      lazy val registry: Registry         = new Registry(pureSpace, dispatcher)
-      lazy val (dispatcher, reducer) =
+      val pureSpace: Runtime.RhoPureSpace    = PureRSpace[Task].of(space)
+      lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
+      lazy val (dispatcher, reducer, registry) =
         RholangAndScalaDispatcher
-          .create[Task, Task.Par](space, registry.testingDispatchTable, Registry.testingUrnMap)
+          .create(space, dispatchTable, Registry.testingUrnMap)
       registry.testInstall()
       f(reducer, space)
     }
