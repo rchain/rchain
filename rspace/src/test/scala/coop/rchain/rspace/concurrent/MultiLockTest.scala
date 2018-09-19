@@ -35,12 +35,12 @@ class MultiLockTest extends FlatSpec with Matchers {
     val m = mutable.Map.empty[String, Int]
 
     (for {
-      f1 <- acquire(m)(Seq("a", "b")).fork
-      f2 <- acquire(m)(Seq("d", "c")).fork
-      f3 <- acquire(m)(Seq("a", "c")).fork
-      f4 <- acquire(m)(Seq("c", "a")).fork
-      f5 <- acquire(m)(Seq("a", "c")).fork
-      f6 <- acquire(m)(Seq("a", "d")).fork
+      f1 <- acquire(m)(Seq("a", "b")).start
+      f2 <- acquire(m)(Seq("d", "c")).start
+      f3 <- acquire(m)(Seq("a", "c")).start
+      f4 <- acquire(m)(Seq("c", "a")).start
+      f5 <- acquire(m)(Seq("a", "c")).start
+      f6 <- acquire(m)(Seq("a", "d")).start
       _  <- f1.join
       _  <- f2.join
       _  <- f3.join

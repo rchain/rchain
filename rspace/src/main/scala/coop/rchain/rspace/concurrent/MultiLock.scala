@@ -50,8 +50,8 @@ class FunctionalMultiLock[F[_]: Concurrent, K] {
 
   def acquire[R](keys: List[K])(thunk: => R)(implicit o: Ordering[K]): F[R] =
     (for {
-      k <- keys.sorted.pure[F] //Seq
-      semaphores <- (k.map { ks => // s <- Semaphore[F](1) //F
+      k <- keys.sorted.pure[F]
+      semaphores <- (k.map { ks =>
                      Semaphore[F](1).map { l =>
                        locks.getOrElseUpdate(ks, l)
                      }
@@ -64,8 +64,7 @@ class FunctionalMultiLock[F[_]: Concurrent, K] {
                     }))
                     .sequence
       res = thunk
-      //_   = openLocks.map(_.release)
-      _ <- openLocks.map(_.release).sequence
+      _   <- openLocks.map(_.release).sequence
     } yield (res))
 
 }
