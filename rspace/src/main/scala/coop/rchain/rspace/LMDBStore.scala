@@ -31,12 +31,13 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins: Dbi[ByteBuffer],
     val trieStore: ITrieStore[Txn[ByteBuffer], Blake2b256Hash, GNAT[C, P, A, K]],
     val trieBranch: Branch
-)(implicit
-  codecC: Codec[C],
-  codecP: Codec[P],
-  codecA: Codec[A],
-  codecK: Codec[K])
-    extends IStore[C, P, A, K]
+)(
+    implicit
+    codecC: Codec[C],
+    codecP: Codec[P],
+    codecA: Codec[A],
+    codecK: Codec[K]
+) extends IStore[C, P, A, K]
     with LMDBOps {
 
   // Good luck trying to get this to resolve as an implicit
@@ -47,31 +48,41 @@ class LMDBStore[C, P, A, K] private (
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 
   /* Basic operations */
-  private[this] def fetchGNAT(txn: Transaction,
-                              channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+  private[this] def fetchGNAT(
+      txn: Transaction,
+      channelsHash: Blake2b256Hash
+  ): Option[GNAT[C, P, A, K]] =
     _dbGNATs.get(txn, channelsHash)(codecGNAT[C, P, A, K])
 
-  private[this] def insertGNAT(txn: Transaction,
-                               channelsHash: Blake2b256Hash,
-                               gnat: GNAT[C, P, A, K]): Unit = {
+  private[this] def insertGNAT(
+      txn: Transaction,
+      channelsHash: Blake2b256Hash,
+      gnat: GNAT[C, P, A, K]
+  ): Unit = {
     _dbGNATs.put(txn, channelsHash, gnat)
     trieInsert(channelsHash, gnat)
   }
 
-  private def deleteGNAT(txn: Txn[ByteBuffer],
-                         channelsHash: Blake2b256Hash,
-                         gnat: GNAT[C, P, A, K]): Unit = {
+  private def deleteGNAT(
+      txn: Txn[ByteBuffer],
+      channelsHash: Blake2b256Hash,
+      gnat: GNAT[C, P, A, K]
+  ): Unit = {
     _dbGNATs.delete(txn, channelsHash)
     trieDelete(channelsHash, gnat)
   }
 
-  private[this] def fetchJoin(txn: Transaction,
-                              joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] =
+  private[this] def fetchJoin(
+      txn: Transaction,
+      joinedChannelHash: Blake2b256Hash
+  ): Option[Seq[Seq[C]]] =
     _dbJoins.get(txn, joinedChannelHash)(joinCodec)
 
-  private[this] def insertJoin(txn: Transaction,
-                               joinedChannelHash: Blake2b256Hash,
-                               joins: Seq[Seq[C]]): Unit =
+  private[this] def insertJoin(
+      txn: Transaction,
+      joinedChannelHash: Blake2b256Hash,
+      joins: Seq[Seq[C]]
+  ): Unit =
     _dbJoins.put(txn, joinedChannelHash, joins)(joinCodec)
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
@@ -121,16 +132,22 @@ class LMDBStore[C, P, A, K] private (
 
   /* Continuations */
 
-  private[rspace] def installWaitingContinuation(txn: Transaction,
-                                                 channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit =
-    _dbGNATs.put(txn,
-                 hashChannels(channels),
-                 GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation)))
+  private[rspace] def installWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit =
+    _dbGNATs.put(
+      txn,
+      hashChannels(channels),
+      GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation))
+    )
 
-  private[rspace] def putWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit = {
+  private[rspace] def putWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
@@ -140,15 +157,19 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def getWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]] = {
+  private[rspace] def getWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C]
+  ): Seq[WaitingContinuation[P, K]] = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash).map(_.wks).getOrElse(Seq.empty)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: Transaction,
-                                                channels: Seq[C],
-                                                index: Int): Unit = {
+  private[rspace] def removeWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      index: Int
+  ): Unit = {
     val channelsHash = hashChannels(channels)
     fetchGNAT(txn, channelsHash) match {
       case Some(gnat @ GNAT(_, Seq(), currContinuations)) =>
@@ -253,8 +274,10 @@ class LMDBStore[C, P, A, K] private (
     }
 
   // TODO: Does using a cursor improve performance for bulk operations?
-  private[rspace] def bulkInsert(txn: Txn[ByteBuffer],
-                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+  private[rspace] def bulkInsert(
+      txn: Txn[ByteBuffer],
+      gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]
+  ): Unit =
     gnats.foreach {
       case (hash, gnat @ GNAT(channels, _, wks)) =>
         insertGNAT(txn, hash, gnat)
@@ -274,7 +297,8 @@ object LMDBStore {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+      sk: Serialize[K]
+  ): LMDBStore[C, P, A, K] = {
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
@@ -283,11 +307,13 @@ object LMDBStore {
     val dbGnats: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-gnats", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = context.env.openDbi(s"${branch.name}-joins", MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](context.env,
-                              context.path,
-                              dbGnats,
-                              dbJoins,
-                              context.trieStore,
-                              branch)
+    new LMDBStore[C, P, A, K](
+      context.env,
+      context.path,
+      dbGnats,
+      dbJoins,
+      context.trieStore,
+      branch
+    )
   }
 }

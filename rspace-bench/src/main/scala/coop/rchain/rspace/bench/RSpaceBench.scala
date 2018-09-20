@@ -97,8 +97,10 @@ class LMDBBench extends RSpaceBench {
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown
@@ -121,8 +123,10 @@ class InMemBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown
@@ -150,8 +154,10 @@ class MixedBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown

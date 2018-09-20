@@ -42,7 +42,8 @@ trait EvalBenchStateBase {
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(
       Option(getClass.getResourceAsStream(path))
-        .getOrElse(throw new FileNotFoundException(path)))
+        .getOrElse(throw new FileNotFoundException(path))
+    )
 }
 
 object EvalBenchStateBase {
@@ -55,11 +56,13 @@ object EvalBenchStateBase {
     dbDir.getParent.toFile.listFiles
       .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
       .filter(_.getName.startsWith("rchain-storage-test-"))
-      .foreach(dir =>
-        try {
-          println(s"deleting... $dir")
-          dir.toPath.recursivelyDelete()
-        } catch {
-          case _: Exception =>
-      })
+      .foreach(
+        dir =>
+          try {
+            println(s"deleting... $dir")
+            dir.toPath.recursivelyDelete()
+          } catch {
+            case _: Exception =>
+          }
+      )
 }

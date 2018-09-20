@@ -35,7 +35,8 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2))
-        ))
+        )
+      )
     Seq(parGround, parExpr, parMethods)
   }
 

@@ -76,30 +76,39 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(CharClassPattern.parse("\\Z").contains(CharClassPattern("Z")))
     assert(CharClassPattern.parse("[\\Z]").contains(CharClassPattern("Z")))
     assert(
-      CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true)))
+      CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true))
+    )
 
     assert(CharClassPattern.parse("a").contains(CharClassPattern("a")))
     assert(CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
     assert(
       CharClassPattern
         .parse("\\S")
-        .contains(CharClassPattern(CharClassPattern.spacesCharSet, negateCharSet = true)))
+        .contains(CharClassPattern(CharClassPattern.spacesCharSet, negateCharSet = true))
+    )
     assert(CharClassPattern.parse("\\d").contains(CharClassPattern("0123456789")))
     assert(
       CharClassPattern
         .parse("\\D")
-        .contains(CharClassPattern("0123456789", negateCharSet = true)))
+        .contains(CharClassPattern("0123456789", negateCharSet = true))
+    )
     assert(
       CharClassPattern
         .parse("\\w")
         .contains(
-          CharClassPattern("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")))
+          CharClassPattern("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+        )
+    )
     assert(
       CharClassPattern
         .parse("\\W")
         .contains(
-          CharClassPattern("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
-                           negateCharSet = true)))
+          CharClassPattern(
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
+            negateCharSet = true
+          )
+        )
+    )
     assert(CharClassPattern.parse(".").contains(~CharClassPattern("")))
     assert(CharClassPattern.parse("[abc]").contains(CharClassPattern("abc")))
     assert(CharClassPattern.parse("[^abc]").contains(CharClassPattern("abc", negateCharSet = true)))
@@ -111,17 +120,20 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(
       CharClassPattern
         .parse("[^\\x41-\\x44]")
-        .contains(CharClassPattern("ABCD", negateCharSet = true)))
+        .contains(CharClassPattern("ABCD", negateCharSet = true))
+    )
 
     assert(CharClassPattern.parse("[\\u0041]").contains(CharClassPattern("A")))
     assert(CharClassPattern.parse("[\\u0041-\\u0044]").contains(CharClassPattern("ABCD")))
 
     assert(
-      CharClassPattern.parse("[^\\u0041]").contains(CharClassPattern("A", negateCharSet = true)))
+      CharClassPattern.parse("[^\\u0041]").contains(CharClassPattern("A", negateCharSet = true))
+    )
     assert(
       CharClassPattern
         .parse("[^\\u0041-\\u0044]")
-        .contains(CharClassPattern("ABCD", negateCharSet = true)))
+        .contains(CharClassPattern("ABCD", negateCharSet = true))
+    )
   }
 
   "CharClassPattern parse" should "return None on invalid patterns" in {
@@ -143,23 +155,29 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
 
   "MultPattern parse" should "accept simple mult sequences" in {
     assert(
-      MultPattern.parse("a").contains(MultPattern(CharClassPattern("a"), Multiplier.presetOne)))
+      MultPattern.parse("a").contains(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
+    )
     assert(
-      MultPattern.parse("a*").contains(MultPattern(CharClassPattern("a"), Multiplier.presetStar)))
+      MultPattern.parse("a*").contains(MultPattern(CharClassPattern("a"), Multiplier.presetStar))
+    )
     assert(
       MultPattern
         .parse("a?")
-        .contains(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)))
+        .contains(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion))
+    )
     assert(
-      MultPattern.parse("a+").contains(MultPattern(CharClassPattern("a"), Multiplier.presetPlus)))
+      MultPattern.parse("a+").contains(MultPattern(CharClassPattern("a"), Multiplier.presetPlus))
+    )
     assert(
       MultPattern
         .parse("a{3,5}")
-        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Some(5)))))
+        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Some(5))))
+    )
     assert(
       MultPattern
         .parse("a{3,}")
-        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Multiplier.Inf))))
+        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Multiplier.Inf)))
+    )
   }
 
   "MultPattern parse" should "return None on invalid patterns" in {
@@ -174,11 +192,13 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     val a = MultPattern(CharClassPattern("a"), Multiplier.presetOne)
     assert(a == a.multiply(Multiplier.presetOne))
     assert(
-      MultPattern(CharClassPattern("a"), Multiplier(Some(2), Some(2))) == a.multiply(
-        Multiplier(Some(2), Some(2))))
+      MultPattern(CharClassPattern("a"), Multiplier(Some(2), Some(2))) == a
+        .multiply(Multiplier(Some(2), Some(2)))
+    )
     assert(
       MultPattern(CharClassPattern("a"), Multiplier.presetPlus)
-        .multiply(Multiplier(Some(3), Some(4))) == a.multiply(Multiplier(Some(3), Multiplier.Inf)))
+        .multiply(Multiplier(Some(3), Some(4))) == a.multiply(Multiplier(Some(3), Multiplier.Inf))
+    )
   }
 
   "RegexPattern parse" should "parse groups" in {
@@ -186,7 +206,9 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       MultPattern
         .tryParse("(a)")
         .contains(
-          (MultPattern(AltPattern(ConcPattern(CharClassPattern("a"))), Multiplier.presetOne), 3)))
+          (MultPattern(AltPattern(ConcPattern(CharClassPattern("a"))), Multiplier.presetOne), 3)
+        )
+    )
 
     val ain = MultPattern.parse("((a))").get.toFsm()
     assert(ain.accepts("a"))
@@ -196,7 +218,10 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       ab == AltPattern(
         ConcPattern(
           MultPattern(AltPattern(ConcPattern(CharClassPattern("a"))), Multiplier.presetOne) ::
-            MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil)))
+            MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil
+        )
+      )
+    )
 
     assert(ab.toFsm().accepts("ab"))
 
@@ -218,21 +243,31 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(
       ConcPattern
         .parse("a")
-        .contains(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
+        .contains(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)))
+    )
 
     assert(
       ConcPattern
         .parse("ab")
-        .contains(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-          :: MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil)))
+        .contains(
+          ConcPattern(
+            MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+              :: MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil
+          )
+        )
+    )
 
     assert(
       ConcPattern
         .parse("abc")
         .contains(
-          ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-            :: MultPattern(CharClassPattern("b"), Multiplier.presetOne)
-            :: MultPattern(CharClassPattern("c"), Multiplier.presetOne) :: Nil)))
+          ConcPattern(
+            MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+              :: MultPattern(CharClassPattern("b"), Multiplier.presetOne)
+              :: MultPattern(CharClassPattern("c"), Multiplier.presetOne) :: Nil
+          )
+        )
+    )
   }
 
   "ConcPattern parse" should "return None on invalid sequences" in {
@@ -246,7 +281,9 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) != MultPattern(
         CharClassPattern("a"),
-        Multiplier.presetOne))
+        Multiplier.presetOne
+      )
+    )
   }
 
   "AltPattern tryParse" should "parse alt sequences" in {
@@ -254,29 +291,49 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       RegexPattern
         .parse("a|b")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
-            ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)))
+          AltPattern(
+            ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+              ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil
+          )
+        )
+    )
 
     assert(
       RegexPattern
         .parse("a|b")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
-            ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)))
+          AltPattern(
+            ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+              ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil
+          )
+        )
+    )
 
     assert(
       RegexPattern
         .parse("a?b")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
-            MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil))))
+          AltPattern(
+            ConcPattern(
+              MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+                MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil
+            )
+          )
+        )
+    )
 
     assert(
       RegexPattern
         .parse("a?b{3,}")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
-            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) :: Nil))))
+          AltPattern(
+            ConcPattern(
+              MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+                MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) :: Nil
+            )
+          )
+        )
+    )
 
     assert(RegexPattern.parse("ac*").nonEmpty)
 
@@ -288,17 +345,29 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       RegexPattern
         .parse("a?b{3,}c*")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
-            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
-            MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil))))
+          AltPattern(
+            ConcPattern(
+              MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+                MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
+                MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil
+            )
+          )
+        )
+    )
 
     assert(
       RegexPattern
         .parse("a?b{3,}c*")
         .contains(
-          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
-            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
-            MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil))))
+          AltPattern(
+            ConcPattern(
+              MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+                MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
+                MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil
+            )
+          )
+        )
+    )
   }
 
   "AltPattern" should "handle union operations" in {
@@ -306,8 +375,10 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       (ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)) |
         ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetQuestion))) == AltPattern(
         ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)) :: ConcPattern(
-          MultPattern(CharClassPattern("b"), Multiplier.presetQuestion)) :: Nil
-      ))
+          MultPattern(CharClassPattern("b"), Multiplier.presetQuestion)
+        ) :: Nil
+      )
+    )
   }
 
   "Empty" should "work for all char classes" in {
@@ -411,56 +482,78 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
   "MultPattern" should "pass equality check" in {
     assert(
       MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-        == MultPattern(CharClassPattern("a"), Multiplier.presetOne))
+        == MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+    )
     assert(
       MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-        != MultPattern(CharClassPattern("b"), Multiplier.presetOne))
+        != MultPattern(CharClassPattern("b"), Multiplier.presetOne)
+    )
     assert(
       MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-        != MultPattern(CharClassPattern("a"), Multiplier.presetQuestion))
+        != MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)
+    )
     assert(
       MultPattern(CharClassPattern("a"), Multiplier.presetOne)
-        != MultPattern(CharClassPattern("a"), Multiplier(Some(1), Some(2))))
+        != MultPattern(CharClassPattern("a"), Multiplier(Some(1), Some(2)))
+    )
     assert(MultPattern(CharClassPattern("a"), Multiplier.presetOne) != CharClassPattern("a"))
   }
 
   "ConcPattern" should "pass equality check" in {
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
-        == ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)))
+        == ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
+    )
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
-        != ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)))
+        != ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne))
+    )
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
-        != ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)))
+        != ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion))
+    )
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
-        != ConcPattern(MultPattern(CharClassPattern("a"), Multiplier(Some(1), Some(2)))))
+        != ConcPattern(MultPattern(CharClassPattern("a"), Multiplier(Some(1), Some(2))))
+    )
     assert(
       ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))
-        != ConcPattern.presetEmptyString)
+        != ConcPattern.presetEmptyString
+    )
   }
 
   "Nested Patterns" should "pass equality checks" in {
     assert(
-      AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
-        ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) :: Nil)
-        == AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
+      AltPattern(
+        ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+          ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) :: Nil
+      )
+        == AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)))
+    )
 
     assert(
-      AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
-        ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)
-        == AltPattern(ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) ::
-          ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) :: Nil))
+      AltPattern(
+        ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+          ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil
+      )
+        == AltPattern(
+          ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) ::
+            ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) :: Nil
+        )
+    )
   }
 
   "ConcPattern" should "be a result of + operation" in {
     assert(
       RegexPattern
         .parse("ba")
-        .contains(AltPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne) +
-          MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
+        .contains(
+          AltPattern(
+            MultPattern(CharClassPattern("b"), Multiplier.presetOne) +
+              MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+          )
+        )
+    )
   }
 
   "CharClassPattern toString" should "work on all patterns" in {

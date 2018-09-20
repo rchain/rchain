@@ -9,7 +9,8 @@ import scala.collection.immutable.Stream
 
 object MaximumBipartiteMatch {
   def apply[P, T, R, F[_]: Monad](
-      matchFun: (P, T) => F[Option[R]]): MaximumBipartiteMatch[P, T, R, F] = {
+      matchFun: (P, T) => F[Option[R]]
+  ): MaximumBipartiteMatch[P, T, R, F] = {
     val fM = implicitly[Monad[F]]
     new MaximumBipartiteMatch[P, T, R, F] {
       private[matcher] override implicit val fMonad: Monad[F] = fM

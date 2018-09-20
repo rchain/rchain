@@ -26,7 +26,8 @@ object ApplicativeError_ extends ApplicativeError_Instances {
 trait ApplicativeError_Instances {
 
   implicit def applicativeError[F[_], E](
-      implicit F: ApplicativeError[F, E]): ApplicativeError_[F, E] = new ApplicativeError_[F, E] {
+      implicit F: ApplicativeError[F, E]
+  ): ApplicativeError_[F, E] = new ApplicativeError_[F, E] {
     def raiseError[A](e: E): F[A] = ApplicativeError[F, E].raiseError(e)
     def handleErrorWith[A](fa: F[A])(f: E => F[A]): F[A] =
       ApplicativeError[F, E].handleErrorWith(fa)(f)

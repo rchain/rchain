@@ -5,10 +5,12 @@ import coop.rchain.casper.protocol._
 import coop.rchain.models.PCost
 import coop.rchain.rspace.trace
 
-case class InternalProcessedDeploy(deploy: Deploy,
-                                   cost: PCost,
-                                   log: Seq[trace.Event],
-                                   status: DeployStatus)
+case class InternalProcessedDeploy(
+    deploy: Deploy,
+    cost: PCost,
+    log: Seq[trace.Event],
+    status: DeployStatus
+)
 
 object ProcessedDeployUtil {
 

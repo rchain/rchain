@@ -79,7 +79,8 @@ private[diagnostics] class NodeMetricsSnapshotBean(snapshot: PeriodSnapshot) ext
 private[diagnostics] object NodeMetricsSnapshotBean {
   def apply(): NodeMetricsSnapshotBean =
     new NodeMetricsSnapshotBean(
-      PeriodSnapshot(Instant.EPOCH, Instant.EPOCH, MetricsSnapshot(Nil, Nil, Nil, Nil)))
+      PeriodSnapshot(Instant.EPOCH, Instant.EPOCH, MetricsSnapshot(Nil, Nil, Nil, Nil))
+    )
   def apply(metrics: PeriodSnapshot): NodeMetricsSnapshotBean =
     new NodeMetricsSnapshotBean(metrics)
 }

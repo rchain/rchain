@@ -32,9 +32,11 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
     val genesisDeploys =
-      Genesis.defaultBlessedTerms(0L,
-                                  bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-                                  wallet :: Nil)
+      Genesis.defaultBlessedTerms(
+        0L,
+        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+        wallet :: Nil
+      )
 
     val secKey = Base16.decode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
     val pubKey =
@@ -50,7 +52,8 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         .exprs
         .head
         .getGByteArray
-        .toByteArray)
+        .toByteArray
+    )
     val unlockSig = Secp256k1.sign(unlockSigData, secKey)
     assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
 
@@ -71,7 +74,8 @@ class RevIssuanceTest extends FlatSpec with Matchers {
         .exprs
         .head
         .getGByteArray
-        .toByteArray)
+        .toByteArray
+    )
     val transferSig = Secp256k1.sign(transferSigData, secKey)
     val transferDeploy = ProtoUtil.termDeployNow(
       mkTerm(s"""
@@ -79,22 +83,28 @@ class RevIssuanceTest extends FlatSpec with Matchers {
        |  @(wallet, "transfer")!($amount, $nonce, "${Base16
                   .encode(transferSig)}", "$destination", "$transferStatusOut")
        |}
-     """.stripMargin).right.get)
+     """.stripMargin).right.get
+    )
 
     val (postGenHash, _)    = runtimeManager.computeState(emptyHash, genesisDeploys)
     val (postUnlockHash, _) = runtimeManager.computeState(postGenHash, unlockDeploy :: Nil)
     val unlockResult =
-      runtimeManager.getData(postUnlockHash,
-                             Channel(Quote(Par().copy(exprs = Seq(Expr(GString(statusOut)))))))
+      runtimeManager.getData(
+        postUnlockHash,
+        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(statusOut))))))
+      )
     assert(unlockResult.head.exprs.head.getEListBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) = runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil)
     val transferSuccess = runtimeManager.getData(
       postTransferHash,
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(transferStatusOut)))))))
+      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))))
+    )
     val transferResult =
-      runtimeManager.getData(postTransferHash,
-                             Channel(Quote(Par().copy(exprs = Seq(Expr(GString(destination)))))))
+      runtimeManager.getData(
+        postTransferHash,
+        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(destination))))))
+      )
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)
 

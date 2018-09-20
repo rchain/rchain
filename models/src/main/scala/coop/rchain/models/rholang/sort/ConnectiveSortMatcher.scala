@@ -13,20 +13,26 @@ private[sort] object ConnectiveSortMatcher extends Sortable[Connective] {
         for {
           pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
-          ScoredTerm(Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
-                     Node(Score.CONNECTIVE_AND, pars.map(_.score): _*))
+          ScoredTerm(
+            Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
+            Node(Score.CONNECTIVE_AND, pars.map(_.score): _*)
+          )
       case ConnOrBody(cb) =>
         for {
           pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
-          ScoredTerm(Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
-                     Node(Score.CONNECTIVE_OR, pars.map(_.score): _*))
+          ScoredTerm(
+            Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
+            Node(Score.CONNECTIVE_OR, pars.map(_.score): _*)
+          )
       case ConnNotBody(p) =>
         for {
           scoredPar <- Sortable.sortMatch(p)
         } yield
-          ScoredTerm(Connective(ConnNotBody(scoredPar.term.get)),
-                     Node(Score.CONNECTIVE_NOT, scoredPar.score))
+          ScoredTerm(
+            Connective(ConnNotBody(scoredPar.term.get)),
+            Node(Score.CONNECTIVE_NOT, scoredPar.score)
+          )
       case v @ VarRefBody(VarRef(index, depth)) =>
         ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth)).pure[F]
       case v @ ConnBool(_) =>

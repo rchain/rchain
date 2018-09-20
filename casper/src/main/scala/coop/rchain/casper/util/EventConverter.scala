@@ -29,10 +29,11 @@ object EventConverter {
         Comm(
           CommEvent(
             Some(ConsumeEvent(rspaceConsume.channelsHash, rspaceConsume.hash)),
-            rspaceProduces.map(rspaceProduce =>
-              ProduceEvent(rspaceProduce.channelsHash, rspaceProduce.hash))
+            rspaceProduces
+              .map(rspaceProduce => ProduceEvent(rspaceProduce.channelsHash, rspaceProduce.hash))
           )
-        ))
+        )
+      )
   }
 
   def toRspaceEvent(event: Event): RspaceEvent = event match {
