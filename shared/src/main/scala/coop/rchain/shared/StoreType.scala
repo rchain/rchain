@@ -11,6 +11,7 @@ object StoreType {
     case "mixed" => Some(Mixed)
     case "inmem" => Some(InMem)
     case "lmdb"  => Some(LMDB)
+    case "fine"  => Some(FineGrainedLMDB)
     case _       => None
   }
 }
