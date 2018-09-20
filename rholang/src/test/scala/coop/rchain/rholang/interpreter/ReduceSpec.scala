@@ -16,6 +16,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoContext
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
@@ -30,12 +31,12 @@ import scala.concurrent.duration._
 
 trait PersistentStoreTester {
   def withTestSpace[R](
-      f: FreudianSpace[Channel,
-                       BindPattern,
-                       OutOfPhlogistonsError.type,
-                       ListChannelWithRandom,
-                       ListChannelWithRandom,
-                       TaggedContinuation] => R): R = {
+      f: IdISpace[Channel,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListChannelWithRandom,
+        ListChannelWithRandom,
+        TaggedContinuation] => R): R = {
     val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,

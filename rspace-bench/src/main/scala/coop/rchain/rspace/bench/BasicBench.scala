@@ -2,6 +2,7 @@ package coop.rchain.rspace.bench
 
 import java.nio.file.{Files, Path}
 
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
@@ -45,12 +46,12 @@ object BasicBench {
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
     val context: LMDBContext[String, Pattern, String, StringsCaptor] =
-      Context.create(dbDir, 1024 * 1024 * 1024)
+      Context.create(dbDir, 1024L * 1024L * 1024L)
 
     val testStore: LMDBStore[String, Pattern, String, StringsCaptor] =
       LMDBStore.create[String, Pattern, String, StringsCaptor](context)
 
-    val testSpace: RSpace[String, Pattern, Nothing, String, String, StringsCaptor] =
+    val testSpace: IdISpace[String, Pattern, Nothing, String, String, StringsCaptor] =
       RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
                                                                              Branch("bench"))
 
