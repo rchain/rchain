@@ -15,7 +15,8 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAl
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.internal.{Datum, Row}
+import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -45,22 +46,22 @@ trait RegistryTester extends PersistentStoreTester {
 
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
-          FreudianSpace[Channel,
-                        BindPattern,
-                        OutOfPhlogistonsError.type,
-                        ListChannelWithRandom,
-                        ListChannelWithRandom,
-                        TaggedContinuation]) => R
+          IdISpace[Channel,
+                   BindPattern,
+                   OutOfPhlogistonsError.type,
+                   ListChannelWithRandom,
+                   ListChannelWithRandom,
+                   TaggedContinuation]) => R
   ): R =
     withTestSpace(errorLog) {
       case TestFixture(space, _) =>
         val _                                  = errorLog.readAndClearErrorVector()
-        val pureSpace: Runtime.RhoPureSpace    = PureRSpace[Task].of(space)
+        val pureSpace: Runtime.RhoPureSpace[Task]    = PureRSpace[Task].of(space)
         lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
         lazy val (dispatcher, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
-        registry.testInstall()
+        registry.testInstall().unsafeRunSync
         f(reducer, space)
     }
 }

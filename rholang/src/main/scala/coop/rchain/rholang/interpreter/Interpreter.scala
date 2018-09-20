@@ -11,6 +11,7 @@ import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
+  LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
   TopLevelWildcardsNotAllowedError,
@@ -59,6 +60,11 @@ object Interpreter {
       .leftMap {
         case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
           SyntaxError(ex.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
+          LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
+          LexerError(e.getMessage)
         case th => UnrecognizedInterpreterError(th)
       }
 

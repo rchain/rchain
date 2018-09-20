@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Id
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
@@ -13,6 +14,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
@@ -38,17 +40,17 @@ class Runtime private (val reducer: Reduce[Task],
 
 object Runtime {
 
-  type RhoISpace       = CPARK[FreudianSpace]
-  type RhoPureSpace    = TCPARK[PureRSpace]
-  type RhoRSpace       = CPARK[RSpace]
-  type RhoReplayRSpace = CPARK[ReplayRSpace]
+  type RhoISpace          = CPARK[IdISpace]
+  type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
+  type RhoRSpace          = CPARK[IdISpace]
+  type RhoReplayRSpace    = CPARK[ReplayRSpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch    = Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  type RhoSysFunction = Function1[Seq[ListChannelWithRandom], Task[Unit]]
-  type RhoDispatchMap = Map[Long, RhoSysFunction]
+  type RhoDispatch[F[_]] = Dispatch[F, ListChannelWithRandom, TaggedContinuation]
+  type RhoSysFunction    = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
@@ -61,8 +63,8 @@ object Runtime {
       ListChannelWithRandom,
       TaggedContinuation]
 
-  private type TCPARK[F[_[_], _, _, _, _, _, _]] =
-    F[Task,
+  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+    F[M,
       Channel,
       BindPattern,
       OutOfPhlogistonsError.type,
@@ -115,8 +117,7 @@ object Runtime {
         )
     }
 
-  // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+  def setupRSpace(dataDir: Path, mapSize: Long, storeType: StoreType) = {
     val context: RhoContext = storeType match {
       case InMem => Context.createInMemory()
       case LMDB =>
@@ -124,6 +125,11 @@ object Runtime {
           Files.createDirectories(dataDir)
         }
         Context.create(dataDir, mapSize, true)
+      case FineGrainedLMDB =>
+        if (Files.notExists(dataDir)) {
+          Files.createDirectories(dataDir)
+        }
+        Context.createFineGrained(dataDir, mapSize)
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
@@ -134,12 +140,19 @@ object Runtime {
     val space: RhoRSpace             = RSpace.create(context, Branch.MASTER)
     val replaySpace: RhoReplayRSpace = ReplayRSpace.create(context, Branch.REPLAY)
 
+    (context, space, replaySpace)
+  }
+
+  // TODO: remove default store type
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+    val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
+
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
     def dispatchTableCreator(space: RhoISpace,
-                             dispatcher: RhoDispatch,
-                             registry: Registry): RhoDispatchMap = {
+                             dispatcher: RhoDispatch[Task],
+                             registry: Registry[Task]): RhoDispatchMap = {
       import BodyRefs._
       Map(
         STDOUT                     -> SystemProcesses.stdout,

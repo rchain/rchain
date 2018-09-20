@@ -1,5 +1,6 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.spaces
 
+import coop.rchain.rspace._
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
@@ -18,13 +19,13 @@ import scala.concurrent.SyncVar
 import scala.util.Random
 import kamon._
 
-class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch)
+) extends FineGrainedRSpaceOps[C, P, E, A, R, K](store, branch)
     with IReplaySpace[cats.Id, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
@@ -44,12 +45,14 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         logger.error(msg)
         throw new IllegalArgumentException(msg)
       }
-      store.withTxn(store.createTxnWrite()) { txn =>
+      consumeLock(channels) {
         def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
           val channelToIndexedData = channels.map { (c: C) =>
             c -> {
-              store.getData(txn, Seq(c)).zipWithIndex.filter {
-                case (Datum(_, _, source), _) => comm.produces.contains(source)
+              store.withTxn(store.createTxnRead()) { txn =>
+                store.getData(txn, Seq(c)).zipWithIndex.filter {
+                  case (Datum(_, _, source), _) => comm.produces.contains(source)
+                }
               }
             }
           }.toMap
@@ -61,11 +64,13 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         def storeWaitingContinuation(replays: ReplayData,
                                      consumeRef: Consume,
                                      maybeCommRef: Option[COMM]): None.type = {
-          store.putWaitingContinuation(
-            txn,
-            channels,
-            WaitingContinuation(patterns, continuation, persist, consumeRef))
-          for (channel <- channels) store.addJoin(txn, channel, channels)
+          store.withTxn(store.createTxnWrite()) { txn =>
+            store.putWaitingContinuation(
+              txn,
+              channels,
+              WaitingContinuation(patterns, continuation, persist, consumeRef))
+            for (channel <- channels) store.addJoin(txn, channel, channels)
+          }
           logger.debug(s"""|consume: no data found,
                            |storing <(patterns, continuation): ($patterns, $continuation)>
                            |at <channels: $channels>""".stripMargin.replace('\n', ' '))
@@ -85,7 +90,9 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                 if (!persistData) {
-                  store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                  store.withTxn(store.createTxnWrite()) { txn =>
+                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                  }
                 }
             }
           logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
@@ -138,7 +145,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
+      produceLock(channel) {
         @tailrec
         def runMatcher(comm: COMM,
                        produceRef: Produce,
@@ -147,16 +154,26 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
             case Nil => None
             case channels :: remaining =>
               val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-                store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
-                  case (WaitingContinuation(_, _, _, source), _) =>
-                    comm.consume == source
+                store.withTxn(store.createTxnRead()) { txn =>
+                  store.getWaitingContinuation(txn, channels).zipWithIndex.filter {
+                    case (WaitingContinuation(_, _, _, source), _) =>
+                      comm.consume == source
+                  }
                 }
-              val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
-                val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
-                  case (Datum(_, _, source), _) => comm.produces.contains(source)
+
+              val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = store
+                .withTxn(store.createTxnRead()) { txn =>
+                  channels.map { (c: C) =>
+                    val as = store.getData(txn, Seq(c)).zipWithIndex.filter {
+                      case (Datum(_, _, source), _) => comm.produces.contains(source)
+                    }
+                    c -> {
+                      if (c == channel) Seq((Datum(data, persist, produceRef), -1)) else as
+                    }
+                  }
                 }
-                c -> { if (c == channel) Seq((Datum(data, persist, produceRef), -1)) else as }
-              }.toMap
+                .toMap
+
               extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
                 case Right(None)             => runMatcher(comm, produceRef, remaining)
                 case Right(produceCandidate) => produceCandidate
@@ -166,7 +183,9 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         def storeDatum(replays: ReplayData,
                        produceRef: Produce,
                        maybeCommRef: Option[COMM]): None.type = {
-          store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+          store.withTxn(store.createTxnWrite()) { txn =>
+            store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+          }
           logger.debug(s"""|produce: no matching continuation found
                            |storing <data: $data> at <channel: $channel>""".stripMargin)
           replayData.put(replays)
@@ -186,62 +205,68 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
               val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
               assert(comms.contains(commRef), "COMM Event was not contained in the trace")
               if (!persistK) {
-                store.removeWaitingContinuation(txn, channels, continuationIndex)
+                store.withTxn(store.createTxnWrite()) { txn =>
+                  store.removeWaitingContinuation(txn, channels, continuationIndex)
+                }
               }
               dataCandidates
                 .sortBy(_.datumIndex)(Ordering[Int].reverse)
                 .foreach {
                   case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                    if (!persistData && dataIndex >= 0) {
-                      store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                    store.withTxn(store.createTxnWrite()) { txn =>
+                      if (!persistData && dataIndex >= 0) {
+                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                      }
+                      store.removeJoin(txn, candidateChannel, channels)
                     }
-                    store.removeJoin(txn, candidateChannel, channels)
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
               replayData.put(replaysLessCommRef(replays, commRef))
               Some((continuation, dataCandidates.map(_.datum.a)))
           }
 
-        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+        store.withTxn(store.createTxnRead()) { txn =>
+          val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
 
-        logger.debug(s"""|produce: searching for matching continuations
+          logger.debug(s"""|produce: searching for matching continuations
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
-        val produceRef = Produce.create(channel, data, persist)
-        val replays    = replayData.take()
+          val produceRef = Produce.create(channel, data, persist)
+          val replays    = replayData.take()
 
-        @tailrec
-        def getCommOrProduceCandidate(
-            comms: Seq[COMM]): Either[COMM, ProduceCandidate[C, P, R, K]] =
-          comms match {
-            case Nil =>
-              val msg = "comms must not be empty"
-              logger.error(msg)
-              throw new IllegalArgumentException(msg)
-            case commRef :: Nil =>
-              runMatcher(commRef, produceRef, groupedChannels) match {
-                case Some(x) => Right(x)
-                case None    => Left(commRef)
-              }
-            case commRef :: rem =>
-              runMatcher(commRef, produceRef, groupedChannels) match {
-                case Some(x) => Right(x)
-                case None    => getCommOrProduceCandidate(rem)
+          @tailrec
+          def getCommOrProduceCandidate(
+              comms: Seq[COMM]): Either[COMM, ProduceCandidate[C, P, R, K]] =
+            comms match {
+              case Nil =>
+                val msg = "comms must not be empty"
+                logger.error(msg)
+                throw new IllegalArgumentException(msg)
+              case commRef :: Nil =>
+                runMatcher(commRef, produceRef, groupedChannels) match {
+                  case Some(x) => Right(x)
+                  case None    => Left(commRef)
+                }
+              case commRef :: rem =>
+                runMatcher(commRef, produceRef, groupedChannels) match {
+                  case Some(x) => Right(x)
+                  case None    => getCommOrProduceCandidate(rem)
+                }
+            }
+
+          replays.get(produceRef) match {
+            case None =>
+              Right(storeDatum(replays, produceRef, None))
+            case Some(comms) =>
+              val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
+                getCommOrProduceCandidate(comms.iterator().asScala.toList)
+              commOrProduceCandidate match {
+                case Left(comm) =>
+                  Right(storeDatum(replays, produceRef, Some(comm)))
+                case Right(produceCandidate) =>
+                  Right(handleMatch(produceCandidate, replays, produceRef, comms))
               }
           }
-
-        replays.get(produceRef) match {
-          case None =>
-            Right(storeDatum(replays, produceRef, None))
-          case Some(comms) =>
-            val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
-              getCommOrProduceCandidate(comms.iterator().asScala.toList)
-            commOrProduceCandidate match {
-              case Left(comm) =>
-                Right(storeDatum(replays, produceRef, Some(comm)))
-              case Right(produceCandidate) =>
-                Right(handleMatch(produceCandidate, replays, produceRef, comms))
-            }
         }
       }
     }
@@ -270,50 +295,14 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
   }
 }
 
-trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
-
-  def getReplayData: ReplayData = replayData.get
-
-  protected val replayData: SyncVar[ReplayData] = {
-    val sv = new SyncVar[ReplayData]()
-    sv.put(ReplayData.empty)
-    sv
-  }
-
-  def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
-    // create a set of the "new" IOEvents
-    val newStuff: Set[Event] = log.filter {
-      case Produce(_, _) => true
-      case Consume(_, _) => true
-      case _             => false
-    }.toSet
-    // create and prepare the ReplayData table
-    val rigs: ReplayData = ReplayData.empty
-    log.foreach {
-      case comm @ COMM(consume, produces) =>
-        (consume +: produces).foreach { ioEvent =>
-          if (newStuff(ioEvent)) {
-            rigs.addBinding(ioEvent, comm)
-          }
-        }
-      case _ =>
-        ()
-    }
-    // reset to the starting checkpoint
-    reset(startRoot)
-    // update the replay data
-    replayData.update(const(rigs))
-  }
-}
-
-object ReplayRSpace {
+object FineGrainedReplayRSpace {
 
   def create[C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): ReplayRSpace[C, P, E, A, R, K] = {
+      sk: Serialize[K]): FineGrainedReplayRSpace[C, P, E, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -331,7 +320,7 @@ object ReplayRSpace {
         InMemoryStore.create(mixedContext.trieStore, branch)
     }
 
-    val replaySpace = new ReplayRSpace[C, P, E, A, R, K](mainStore, branch)
+    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -346,37 +335,4 @@ object ReplayRSpace {
     replaySpace
   }
 
-  def createInMemory[C, P, E, A, R, K](
-      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
-                            Blake2b256Hash,
-                            GNAT[C, P, A, K]],
-      branch: Branch)(implicit
-                      sc: Serialize[C],
-                      sp: Serialize[P],
-                      sa: Serialize[A],
-                      sk: Serialize[K]): ReplayRSpace[C, P, E, A, R, K] = {
-
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val mainStore: IStore[C, P, A, K] = InMemoryStore
-      .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
-        trieStore,
-        branch)
-    val replaySpace = new ReplayRSpace[C, P, E, A, R, K](mainStore, branch)
-
-    /*
-     * history.initialize returns true if the history trie contains no root (i.e. is empty).
-     *
-     * In this case, we create a checkpoint for the empty store so that we can reset
-     * to the empty store state with the clear method.
-     */
-    val _ = if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint()
-    }
-
-    replaySpace
-  }
 }

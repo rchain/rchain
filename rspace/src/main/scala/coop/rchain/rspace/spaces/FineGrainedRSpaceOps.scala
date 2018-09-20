@@ -1,8 +1,10 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.spaces
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.rspace._
+import coop.rchain.rspace.concurrent.{DefaultTwoStepLock, TwoStepLock}
 import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Consume
@@ -12,16 +14,34 @@ import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val branch: Branch)(
+abstract class FineGrainedRSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K],
+                                                      val branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K]
 ) extends SpaceMatcher[C, P, E, A, R, K] {
+
+  implicit val codecC = serializeC.toCodec
+
+  private val lock: TwoStepLock[Blake2b256Hash] = new DefaultTwoStepLock()
+
+  protected[this] def consumeLock(channels: Seq[C])(
+      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] = {
+    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    lock.acquire(hashes)(() => hashes)(thunk)
+  }
+
+  protected[this] def produceLock(channel: C)(
+      thunk: => Either[E, Option[(K, Seq[R])]]): Either[E, Option[(K, Seq[R])]] =
+    lock.acquire(Seq(StableHashProvider.hash(channel)))(() =>
+      store.withTxn(store.createTxnRead()) { txn =>
+        val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+        groupedChannels.flatten.map(StableHashProvider.hash(_))
+    })(thunk)
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder
@@ -48,7 +68,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
       throw new IllegalArgumentException(msg)
     }
     logger.debug(s"""|install: searching for data matching <patterns: $patterns>
-                     |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                       |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, true)
 
@@ -80,7 +100,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
           WaitingContinuation(patterns, continuation, persist = true, consumeRef))
         for (channel <- channels) store.addJoin(txn, channel, channels)
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
-                         |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
         None
       case Right(Some(_)) =>
         throw new RuntimeException("Installing can be done only on startup")
