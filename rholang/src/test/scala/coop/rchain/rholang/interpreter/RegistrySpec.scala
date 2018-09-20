@@ -52,14 +52,16 @@ trait RegistryTester extends PersistentStoreTester {
                         ListChannelWithRandom,
                         TaggedContinuation]) => R
   ): R =
-    withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace    = PureRSpace[Task].of(space)
-      lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
-      lazy val (dispatcher, reducer, registry) =
-        RholangAndScalaDispatcher
-          .create(space, dispatchTable, Registry.testingUrnMap)
-      registry.testInstall()
-      f(reducer, space)
+    withTestSpace(errorLog) {
+      case TestFixture(space, _) =>
+        val _                                  = errorLog.readAndClearErrorVector()
+        val pureSpace: Runtime.RhoPureSpace    = PureRSpace[Task].of(space)
+        lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
+        lazy val (dispatcher, reducer, registry) =
+          RholangAndScalaDispatcher
+            .create(space, dispatchTable, Registry.testingUrnMap)
+        registry.testInstall()
+        f(reducer, space)
     }
 }
 
