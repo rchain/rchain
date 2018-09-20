@@ -482,11 +482,8 @@ class ValidateTest
       val storageSize: Long = 1024L * 1024
       val activeRuntime     = Runtime.create(storageDirectory, storageSize)
       val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
-      val _ = InterpreterUtil.validateBlockCheckpoint[Id](genesis,
-                                                          genesis,
-                                                          BlockDag.empty,
-                                                          Set.empty[ByteString],
-                                                          runtimeManager)
+      val _ = InterpreterUtil
+        .validateBlockCheckpoint[Id](genesis, BlockDag.empty, Set.empty[ByteString], runtimeManager)
 
       Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
