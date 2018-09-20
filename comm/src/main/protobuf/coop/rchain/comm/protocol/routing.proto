@@ -20,33 +20,12 @@ message Header {
   Node   sender         = 1;
 }
 
-message Ping {
-  Node   sender         = 1;
-}
-
-message Pong {
-}
-
-message Lookup {
-  bytes  id     = 1;
-  Node   sender = 2;
-}
-        
-message LookupResponse {
-    repeated Node nodes = 1;
-}
-
 message Protocol {
-    Header header                           = 1;
+  Header header                           = 1;
 
-    oneof message {
-        google.protobuf.Any upstream        = 2;
-    }
-}
-
-service KademliaRPCService {
-  rpc SendPing (Ping) returns (Pong) {}
-  rpc SendLookup (Lookup) returns (LookupResponse) {}
+  oneof message {
+    google.protobuf.Any upstream        = 2;
+  }
 }
 
 service TransportLayer {
