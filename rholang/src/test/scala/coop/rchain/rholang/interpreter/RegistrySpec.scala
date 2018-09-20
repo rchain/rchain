@@ -29,20 +29,21 @@ trait RegistryTester extends PersistentStoreTester {
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
           IdISpace[Channel,
-            BindPattern,
-            OutOfPhlogistonsError.type,
-            ListChannelWithRandom,
-            ListChannelWithRandom,
-            TaggedContinuation]) => R
+                   BindPattern,
+                   OutOfPhlogistonsError.type,
+                   ListChannelWithRandom,
+                   ListChannelWithRandom,
+                   TaggedContinuation]) => R
   ): R =
     withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace = new PureRSpace(space)
-      lazy val registry: Registry         = new Registry(pureSpace, dispatcher)
+      val pureSpace: Runtime.RhoPureSpace[Task] = new PureRSpace(space)
+      lazy val registry: RegistryImpl[Task]     = new RegistryImpl[Task](pureSpace, dispatcher)
       lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
         RholangAndScalaDispatcher
           .create[Task, Task.Par](space, registry.testingDispatchTable, Registry.testingUrnMap)
       val reducer = dispatcher.reducer
-      registry.testInstall()
+      import monix.execution.Scheduler.Implicits.global
+      Await.result(registry.testInstall().runAsync, 1.seconds)
       f(reducer, space)
     }
 }
