@@ -3,6 +3,7 @@ package coop.rchain.rspace.bench
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
@@ -20,7 +21,7 @@ import scala.concurrent.{Await, Future}
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: FreudianSpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
+  var space: IdISpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)

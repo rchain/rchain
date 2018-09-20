@@ -149,6 +149,19 @@ sealed abstract class StreamT[F[_], +A] { self =>
       case _: SNil[F]            => StreamT.empty[F, A]
     } else StreamT.empty[F, A]
 
+  def takeWhile(p: A => Boolean)(implicit functor: Functor[F]): StreamT[F, A] = self match {
+    case SCons(curr, lazyTail) if p(curr) => StreamT.cons(curr, lazyTail.map(_.map(_.takeWhile(p))))
+    case SLazy(lazyTail)                  => StreamT.delay(lazyTail.map(_.map(_.takeWhile(p))))
+    case _                                => StreamT.empty[F, A]
+  }
+
+  def dropWhile(p: A => Boolean)(implicit functor: Functor[F]): StreamT[F, A] = self match {
+    case SCons(curr, lazyTail) =>
+      if (p(curr)) StreamT.delay(lazyTail.map(_.map(_.dropWhile(p)))) else self
+    case SLazy(lazyTail) => StreamT.delay(lazyTail.map(_.map(_.dropWhile(p))))
+    case _: SNil[F]      => StreamT.empty[F, A]
+  }
+
   def toList[AA >: A](implicit monad: Monad[F]): F[List[AA]] = self match {
     case SCons(curr, lazyTail) =>
       for {

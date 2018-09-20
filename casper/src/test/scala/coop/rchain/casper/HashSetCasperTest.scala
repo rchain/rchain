@@ -280,6 +280,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).casperEff.contains(multiparentBlock) shouldBe true
     nodes(1).casperEff.contains(multiparentBlock) shouldBe true
 
+    val finalTuplespace =
+      nodes(0).casperEff.storageContents(multiparentBlock.getBody.getPostState.tuplespace)
+    finalTuplespace.contains("@{0}!(0)") shouldBe true
+    finalTuplespace.contains("@{1}!(1)") shouldBe true
+    finalTuplespace.contains("@{2}!(2)") shouldBe true
+
     nodes.foreach(_.tearDown())
   }
 

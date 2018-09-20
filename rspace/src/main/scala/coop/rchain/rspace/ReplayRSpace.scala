@@ -24,15 +24,10 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
+) extends RSpaceOps[C, P, E, A, R, K](store, branch)
+    with IReplaySpace[cats.Id, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
-
-  private[rspace] val replayData: SyncVar[ReplayData] = {
-    val sv = new SyncVar[ReplayData]()
-    sv.put(ReplayData.empty)
-    sv
-  }
 
   private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
@@ -269,7 +264,21 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       throw new ReplayException(msg)
     }
 
+  override def clear(): Unit = {
+    replayData.update(const(ReplayData.empty))
+    super.clear()
+  }
+}
+
+trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
+
   def getReplayData: ReplayData = replayData.get
+
+  protected val replayData: SyncVar[ReplayData] = {
+    val sv = new SyncVar[ReplayData]()
+    sv.put(ReplayData.empty)
+    sv
+  }
 
   def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
     // create a set of the "new" IOEvents
@@ -294,11 +303,6 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     reset(startRoot)
     // update the replay data
     replayData.update(const(rigs))
-  }
-
-  override def clear(): Unit = {
-    replayData.update(const(ReplayData.empty))
-    super.clear()
   }
 }
 

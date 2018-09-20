@@ -9,6 +9,9 @@ import scodec.codecs._
 import scodec.interop.cats._
 
 object StableHashProvider {
+  def hash[C](channel: C)(implicit codecC: Codec[C]): Blake2b256Hash =
+    Blake2b256Hash.create(codecC.encode(channel).get.bytes :: Nil)
+
   def hash[C](channels: Seq[C])(implicit codecC: Codec[C]): Blake2b256Hash =
     Blake2b256Hash.create(
       channels

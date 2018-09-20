@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import cats.Id
 import cats.implicits._
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log
@@ -13,7 +14,6 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
 /** The interface for RSpace
-  * It's called a Freudian space because it has a fixed Id
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
@@ -22,7 +22,7 @@ import scala.concurrent.SyncVar
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
+private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.

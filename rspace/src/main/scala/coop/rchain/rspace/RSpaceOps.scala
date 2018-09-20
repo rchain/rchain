@@ -21,7 +21,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K]
-) extends FreudianSpace[C, P, E, A, R, K] {
+) extends SpaceMatcher[C, P, E, A, R, K] {
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder

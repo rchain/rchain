@@ -9,7 +9,6 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
-import coop.rchain.rspace.{FreudianSpace, ISpace}
 import cats.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -42,7 +41,7 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: S
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
@@ -90,7 +89,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
-      costAccountingAlg <- CostAccountingAlg(
+      costAccountingAlg <- CostAccountingAlg.of(
                             dataList
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))

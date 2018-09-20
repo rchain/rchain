@@ -39,9 +39,10 @@ import scala.collection.mutable
   * }}}
   */
 class Interactive private (runtime: Runtime) {
-  private implicit val rand              = Blake2b512Random(128)
-  private implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-  private implicit val scheduler         = Scheduler.io("rhoang-interpreter")
+  private implicit val rand = Blake2b512Random(128)
+  private implicit val costAccountingAlg =
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  private implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
   private val prettyPrinter = PrettyPrinter()
 

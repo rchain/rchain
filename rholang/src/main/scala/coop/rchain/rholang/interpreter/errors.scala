@@ -21,6 +21,7 @@ object errors {
 
   final case class NormalizerError(message: String) extends InterpreterError(message)
   final case class SyntaxError(message: String)     extends InterpreterError(message)
+  final case class LexerError(message: String)      extends InterpreterError(message)
 
   final case class UnboundVariableRef(varName: String, line: Int, col: Int)
       extends InterpreterError(s"Variable reference: =$varName at $line:$col is unbound.")
