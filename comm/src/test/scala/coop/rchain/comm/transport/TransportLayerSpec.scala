@@ -23,11 +23,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     "doing a round trip to remote peer" when {
       "everything is fine" should {
         "send and receive the message" in
-          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPing(transportLayer, local, remote)
+              roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
@@ -50,11 +50,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "response takes to long" should {
         "fail with a timeout" in
-          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcherWithDelay(500)) {
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcherWithDelay(500)) {
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPing(transportLayer, local, remote, 200.millis)
+              roundTripWithHeartbeat(transportLayer, local, remote, 200.millis)
 
             val result: TwoNodesResult = run()
 
@@ -68,7 +68,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPing(transportLayer, local, remote)
+              roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
@@ -79,11 +79,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "peer is not listening" should {
         "fail with peer unavailable error" in
-          new TwoNodesRemoteDeadRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+          new TwoNodesRemoteDeadRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPing(transportLayer, local, remote)
+              roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
@@ -97,7 +97,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
-              roundTripWithPing(transportLayer, local, remote)
+              roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
@@ -114,7 +114,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                       local: PeerNode,
                       remote: PeerNode): F[Unit] =
             for {
-              r <- sendPing(transportLayer, local, remote)
+              r <- sendHeartbeat(transportLayer, local, remote)
               _ = await()
             } yield r
 
@@ -134,7 +134,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                       local: PeerNode,
                       remote: PeerNode): F[Long] =
             for {
-              _ <- sendPing(transportLayer, local, remote)
+              _ <- sendHeartbeat(transportLayer, local, remote)
               t = System.currentTimeMillis()
               _ = await()
             } yield t
@@ -159,7 +159,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                       remote1: PeerNode,
                       remote2: PeerNode): F[Unit] =
             for {
-              r <- broadcastPing(transportLayer, local, remote1, remote2)
+              r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
               _ = await()
             } yield r
 
@@ -183,13 +183,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     "shutting down" when {
       "doing a round trip" should {
         "not send the message" in
-          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
+          new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
             def execute(transportLayer: TransportLayer[F],
                         local: PeerNode,
                         remote: PeerNode): F[CommErr[Protocol]] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
-                r <- roundTripWithPing(transportLayer, local, remote)
+                r <- roundTripWithHeartbeat(transportLayer, local, remote)
               } yield r
 
             val result: TwoNodesResult = run()
@@ -211,7 +211,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                         remote: PeerNode): F[Unit] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
-                r <- sendPing(transportLayer, local, remote)
+                r <- sendHeartbeat(transportLayer, local, remote)
                 _ = await()
               } yield r
 
@@ -230,7 +230,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                         remote2: PeerNode): F[Unit] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
-                r <- broadcastPing(transportLayer, local, remote1, remote2)
+                r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
                 _ = await()
               } yield r
 

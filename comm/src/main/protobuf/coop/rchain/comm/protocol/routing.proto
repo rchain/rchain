@@ -41,10 +41,6 @@ message Protocol {
 
     oneof message {
         google.protobuf.Any upstream        = 2;
-        Ping                ping            = 3;
-        Pong                pong            = 4;
-        Lookup              lookup          = 5;
-        LookupResponse      lookup_response = 6;
     }
 }
 

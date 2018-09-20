@@ -39,28 +39,6 @@ object ProtocolHelper {
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
-  def ping(src: PeerNode): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withPing(Ping())
-
-  def pong(src: PeerNode): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withPong(Pong())
-
-  def lookup(src: PeerNode, id: Seq[Byte]): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withLookup(Lookup()
-        .withId(id.toArray))
-
-  def lookupResponse(src: PeerNode, nodes: Seq[PeerNode]): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withLookupResponse(LookupResponse()
-        .withNodes(nodes.map(node)))
-
   def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
