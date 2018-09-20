@@ -108,9 +108,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   private def innerRoundTrip(peer: PeerNode,
                              request: TLRequest,
                              timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
-    withClient(peer, enforce = false)(_.ask(request))
-      .nonCancelingTimeout(timeout)
-      .attempt
+    withClient(peer, enforce = false)(_.ask(request).nonCancelingTimeout(timeout)).attempt
       .map(_.leftMap {
         case _: TimeoutException => CommError.timeout
         case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
