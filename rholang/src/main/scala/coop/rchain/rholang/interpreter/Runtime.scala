@@ -42,9 +42,9 @@ class Runtime private (val reducer: Reduce[Task],
 
 object Runtime {
 
-  type RhoISpace       = CPARK[IdISpace]
+  type RhoISpace          = CPARK[IdISpace]
   type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
-  type RhoReplayISpace = CPARK[IdIReplaySpace]
+  type RhoReplayISpace    = CPARK[IdIReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
@@ -118,6 +118,9 @@ object Runtime {
         )
     }
 
+  /**
+    * TODO this needs to go away when double locking is good enough
+    */
   def setupRSpace(dataDir: Path,
                   mapSize: Long,
                   storeType: StoreType): (RhoContext, RhoISpace, RhoReplayISpace) = {
