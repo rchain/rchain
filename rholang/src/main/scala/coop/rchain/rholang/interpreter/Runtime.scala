@@ -14,10 +14,12 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.IReplaySpace.IdIReplaySpace
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.spaces.FineGrainedReplayRSpace
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
 import monix.eval.Task
@@ -27,7 +29,7 @@ import scala.collection.immutable
 class Runtime private (val reducer: Reduce[Task],
                        val replayReducer: Reduce[Task],
                        val space: RhoISpace,
-                       val replaySpace: RhoReplayRSpace,
+                       val replaySpace: RhoReplayISpace,
                        var errorLog: ErrorLog,
                        val context: RhoContext) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
@@ -42,8 +44,7 @@ object Runtime {
 
   type RhoISpace       = CPARK[IdISpace]
   type RhoPureSpace    = TCPARK[PureRSpace]
-  type RhoRSpace       = CPARK[IdISpace]
-  type RhoReplayRSpace = CPARK[ReplayRSpace]
+  type RhoReplayISpace = CPARK[IdIReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
@@ -117,34 +118,41 @@ object Runtime {
         )
     }
 
-  def setupRSpace(dataDir: Path, mapSize: Long, storeType: StoreType) = {
-    val context: RhoContext = storeType match {
-      case InMem => Context.createInMemory()
+  def setupRSpace(dataDir: Path,
+                  mapSize: Long,
+                  storeType: StoreType): (RhoContext, RhoISpace, RhoReplayISpace) = {
+    def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
+      val space: RhoISpace             = RSpace.create(context, Branch.MASTER)
+      val replaySpace: RhoReplayISpace = ReplayRSpace.create(context, Branch.REPLAY)
+      (context, space, replaySpace)
+    }
+    storeType match {
+      case InMem =>
+        createCoarseRSpace(Context.createInMemory())
       case LMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        Context.create(dataDir, mapSize, true)
+        createCoarseRSpace(Context.create(dataDir, mapSize, true))
       case FineGrainedLMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        Context.createFineGrained(dataDir, mapSize)
+        val context: RhoContext          = Context.createFineGrained(dataDir, mapSize)
+        val store                        = context.createStore(Branch.MASTER)
+        val space: RhoISpace             = RSpace.createFineGrained(store, Branch.MASTER)
+        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create(context, Branch.REPLAY)
+        (context, space, replaySpace)
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        Context.createMixed(dataDir, mapSize)
+        createCoarseRSpace(Context.createMixed(dataDir, mapSize))
     }
-
-    val space: RhoRSpace             = RSpace.create(context, Branch.MASTER)
-    val replaySpace: RhoReplayRSpace = ReplayRSpace.create(context, Branch.REPLAY)
-
-    (context, space, replaySpace)
   }
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = FineGrainedLMDB): Runtime = {
     val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
 
     val errorLog                                  = new ErrorLog()
