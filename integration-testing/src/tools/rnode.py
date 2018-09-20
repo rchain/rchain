@@ -40,12 +40,13 @@ class Node:
         return address
 
     def cleanup(self):
-        with log_box(logging.info, f"Logs for node {self.container.name}:"):
-            logs = self.logs().splitlines()
-            for log_line in logs:
-                logging.info(f"{self.container.name}: {log_line}")
+        log_file = f"{self.container.name}.log"
+        
+        with open(log_file, "w") as f:
+            f.write(self.logs())
 
-        logging.info(f"Remove container {self.container.name}")
+        logging.info(f"Remove container {self.container.name}. Logs have been written to {log_file}")
+
         self.container.remove(force=True, v=True)
 
     def deploy(self, contract):
@@ -72,9 +73,10 @@ class Node:
         process.start()
 
         try:
-            result = queue.get(self.timeout)
-            logging.debug("Returning '{result}'")
-            return result
+            exit_code, output = queue.get(self.timeout)
+            printed_output = output if len(output) < 20 else (output[0:20] + "...")
+            logging.info(f"Returning: {exit_code},'{printed_output}'")
+            return exit_code, output
         except Empty:
             process.terminate()
             process.join()

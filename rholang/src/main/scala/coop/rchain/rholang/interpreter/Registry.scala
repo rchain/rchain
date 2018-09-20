@@ -95,36 +95,47 @@ class Registry(private val space: Runtime.RhoPureSpace,
       freeCount = 2))
 
   private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-  private val publicRegisterInsertCallbackRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+  private val publicRegisterInsertCallbackRef: Long =
+    Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
   private val publicRegisterRandomChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18))))))
+  // format: off
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
+  // format: on
 
   private val publicRegisterInsertCallbackPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
-      ChanVar(FreeVar(2))),
-      freeCount = 3),
+          Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+          ChanVar(FreeVar(2))),
+      freeCount = 3
+    ),
     BindPattern(Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
-      freeCount = 1))
+                freeCount = 1)
+  )
 
   def testInstall(): Unit = {
     import monix.execution.Scheduler.Implicits.global
     val installTask: Task[Unit] =
       for {
-        _ <- space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
-        _ <- space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
-        _ <- space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
+        _ <- space.install(lookupChannels,
+                           lookupPatterns,
+                           TaggedContinuation(ScalaBodyRef(lookupRef)))
+        _ <- space.install(insertChannels,
+                           insertPatterns,
+                           TaggedContinuation(ScalaBodyRef(insertRef)))
+        _ <- space.install(deleteChannels,
+                           deletePatterns,
+                           TaggedContinuation(ScalaBodyRef(deleteRef)))
         _ <- space.install(publicLookupChannels,
-                      publicLookupPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicLookupRef)))
+                           publicLookupPatterns,
+                           TaggedContinuation(ScalaBodyRef(publicLookupRef)))
         _ <- space.install(publicRegisterRandomChannels,
-                      publicRegisterRandomPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
+                           publicRegisterRandomPatterns,
+                           TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
       } yield Unit
     Await.result(installTask.runAsync, 1.seconds)
   }
@@ -163,11 +174,12 @@ class Registry(private val space: Runtime.RhoPureSpace,
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   private def handleResult[E <: Throwable](
-      resultTask: Task[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): Task[Unit] =
+      resultTask: Task[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]])
+    : Task[Unit] =
     resultTask.flatMap({
       case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
-      case Right(None) => Task.unit
-      case Left(err) => Task.raiseError(err)
+      case Right(None)                           => Task.unit
+      case Left(err)                             => Task.raiseError(err)
     })
 
   private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): Task[Unit] =
@@ -625,7 +637,8 @@ class Registry(private val space: Runtime.RhoPureSpace,
               // Could fail
               // 256 bits plus 14 bit crc-14
               val bytes: Array[Byte] = ZBase32.decode(tail, 270)
-              val crc: Short         = ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+              val crc: Short =
+                ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
               if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
                 val args = RootSeq(
                   ListChannelWithRandom(
@@ -655,27 +668,28 @@ class Registry(private val space: Runtime.RhoPureSpace,
           if (valPar.serializedSize > 1024)
             localFail()
           else {
-            val bytes = rand.next()
+            val bytes           = rand.next()
             val partialKey: Par = parByteArray(ByteString.copyFrom(bytes))
-            val curryChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
+            val curryChan: Par  = GPrivate(ByteString.copyFrom(rand.next()))
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val uriPar: Par     = GUri(buildURI(bytes))
             val args = RootSeq(
-              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)),
-                                    rand))
+              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)), rand))
             for {
               _ <- handleResult(
                     space.produce(
                       Quote(curryChan),
                       // This re-use of rand is fine because we throw it away in the callback below.
                       ListChannelWithRandom(Seq(Quote(uriPar), value, ret), rand, None),
-                      false))
+                      false
+                    ))
               _ <- handleResult(
                     space.consume(
                       Seq[Channel](Quote(curryChan), Quote(resultChan)),
                       publicRegisterInsertCallbackPatterns,
                       TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
-                      false))
+                      false
+                    ))
               _ <- insert(args)
             } yield ()
           }
@@ -686,11 +700,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
       case _ => Task.unit
     }
 
-  def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] = {
+  def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
     args match {
-      case Seq(
-          ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
-          ListChannelWithRandom(Seq(value), valRand, valCost)) =>
+      case Seq(ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
+               ListChannelWithRandom(Seq(value), valRand, valCost)) =>
         ret match {
           case Channel(retQ @ Quote(_)) =>
             if (expectedValue == value)
@@ -703,7 +716,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
       case _ =>
         Task.unit
     }
-  }
 
   val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
     Map(

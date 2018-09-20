@@ -59,7 +59,9 @@ class Blake2b512Block {
                        outOffset: Int): Unit = {
     val tempChainValue: Array[Long] = new Array[Long](8)
     compress(block, inOffset, tempChainValue, true, true, false)
-    Pack.longToLittleEndian(tempChainValue, output, outOffset)
+    for (i <- 0 until 4) {
+      Pack.longToLittleEndian(tempChainValue(i), output, outOffset + i * 8)
+    }
   }
 
   override def equals(other: Any): Boolean =
@@ -227,8 +229,8 @@ object Blake2b512Block {
   val DIGEST_LENGTH_BYTES: Int = 64
   // Depth = 255, Fanout = ??, Keylength = 0, Digest length = 64 bytes
   val PARAM_VALUE_0: Long = 0xff000040L
-  // Inner length = 64 bytes
-  val PARAM_VALUE_2: Long = 0x4000L
+  // Inner length = 32 bytes
+  val PARAM_VALUE_2: Long = 0x2000L
 
   // This will give invalid results and is for testing only.
   def tweakT0(src: Blake2b512Block): Unit =

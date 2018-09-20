@@ -172,7 +172,9 @@ object Validate {
                                Validate.repeatDeploy[F](block, dag))
       blockNumberStatus <- repeatedDeployStatus.joinRight.traverse(_ =>
                             Validate.blockNumber[F](block))
-      parentsStatus <- blockNumberStatus.joinRight.traverse(_ =>
+      followsStatus <- blockNumberStatus.joinRight.traverse(_ =>
+                        Validate.justificationFollows[F](block, genesis, dag))
+      parentsStatus <- followsStatus.joinRight.traverse(_ =>
                         Validate.parents[F](block, genesis, dag))
       sequenceNumberStatus <- parentsStatus.joinRight.traverse(_ =>
                                Validate.sequenceNumber[F](block, dag))
@@ -398,6 +400,33 @@ object Validate {
   }
 
   /*
+   * This check must come before Validate.parents
+   */
+  def justificationFollows[F[_]: Monad: Log: BlockStore](
+      b: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag): F[Either[InvalidBlock, ValidBlock]] =
+    for {
+      latestMessages     <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
+      validators         = latestMessages.keySet
+      creatorLatestBlock = latestMessages.getOrElse(b.sender, genesis)
+      creatorBonds       = ProtoUtil.bonds(creatorLatestBlock).map(_.validator).toSet
+      result             = creatorBonds == validators
+      status <- if (result) {
+                 Applicative[F].pure(Right(Valid))
+               } else {
+                 val justifications =
+                   b.justifications.map(it => PrettyPrinter.buildString(it.validator)).mkString(",")
+                 for {
+                   _ <- Log[F].warn(
+                         ignore(
+                           b,
+                           s"the justifications of block are ${justifications}, do not follow from bonds of creator justification block"))
+                 } yield Left(InvalidFollows)
+               }
+    } yield status
+
+  /*
    * When we switch between equivocation forks for a slashed validator, we will potentially get a
    * justification regression that is valid. We cannot ignore this as the creator only drops the
    * justification block created by the equivocator on the following block.
@@ -469,7 +498,6 @@ object Validate {
 
   def transactions[F[_]: Sync: Log: BlockStore](
       block: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
@@ -483,7 +511,6 @@ object Validate {
                              validateBlockCheckpointResult <- InterpreterUtil
                                                                .validateBlockCheckpoint[F](
                                                                  block,
-                                                                 genesis,
                                                                  dag,
                                                                  knownStateHashes,
                                                                  runtimeManager)

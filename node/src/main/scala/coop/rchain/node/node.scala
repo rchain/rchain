@@ -169,12 +169,14 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] =
     for {
-      grpcServerExternal <- GrpcServer.acquireExternalServer[Effect](conf.grpcServer.portExternal,
-                                                                     conf.server.maxMessageSize)
+      grpcServerExternal <- GrpcServer
+                             .acquireExternalServer[Effect](conf.grpcServer.portExternal,
+                                                            conf.server.maxMessageSize)
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer[Effect](conf.grpcServer.portInternal,
-                                                            conf.server.maxMessageSize,
-                                                            runtime)
+                             .acquireInternalServer(conf.grpcServer.portInternal,
+                                                    conf.server.maxMessageSize,
+                                                    runtime)
+                             .toEffect
       prometheusReporter = new NewPrometheusReporter()
 
       httpServer <- LiftIO[Task].liftIO {
@@ -194,7 +196,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   def startServers(servers: Servers)(
       implicit
       log: Log[Task],
-  ): Effect[Unit] = GrpcServer.start[Effect](servers.grpcServerExternal, servers.grpcServerInternal)
+  ): Effect[Unit] =
+    GrpcServer.start(servers.grpcServerExternal, servers.grpcServerInternal).toEffect
 
   def clearResources(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
       implicit
