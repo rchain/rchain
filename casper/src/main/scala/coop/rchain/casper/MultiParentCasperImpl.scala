@@ -262,9 +262,10 @@ class MultiParentCasperImpl[
                            case (acc, block) => math.max(acc, blockNumber(block))
                          }
 
+                       val newBonds = runtimeManager.computeBonds(computedStateHash)
                        val postState = RChainState()
                          .withTuplespace(computedStateHash)
-                         .withBonds(bonds(p.head))
+                         .withBonds(newBonds)
                          .withBlockNumber(maxBlockNumber + 1)
 
                        val body = Body()

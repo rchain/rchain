@@ -406,6 +406,11 @@ object ProtoUtil {
 
   def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
 
+  def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
+    term = InterpreterUtil.mkTerm(dd.term).toOption,
+    raw = Some(dd)
+  )
+
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.
     * The fields stripped are the term and anything that depends on the term (Currently only the sig)
