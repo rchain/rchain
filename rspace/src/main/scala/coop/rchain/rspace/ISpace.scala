@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Id
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -87,6 +88,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): F[Option[GNAT[C, P, A, K]]]
 
+  def getData(channel: C): Seq[Datum[A]]
+
+  def getWaitingContinuations(channels: Seq[C]): Seq[WaitingContinuation[P, K]]
+
   /** Clears the store.  Does not affect the history trie.
     */
   def clear(): F[Unit]
@@ -94,4 +99,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
   /** Closes
     */
   def close(): F[Unit]
+
+  val store: IStore[C, P, A, K]
+}
+
+object ISpace {
+  type IdISpace[C, P, E, A, R, K] = ISpace[Id, C, P, E, A, R, K]
 }

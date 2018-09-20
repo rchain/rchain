@@ -27,7 +27,7 @@ class BlocksResponseAPITest
 
   implicit val syncId: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
   val v1        = ByteString.copyFromUtf8("Validator One")
   val v2        = ByteString.copyFromUtf8("Validator Two")
   val v3        = ByteString.copyFromUtf8("Validator Three")

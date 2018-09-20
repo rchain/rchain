@@ -11,6 +11,7 @@ import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
+  LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
   TopLevelWildcardsNotAllowedError,
@@ -59,6 +60,11 @@ object Interpreter {
       .leftMap {
         case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
           SyntaxError(ex.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
+          LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
+          LexerError(e.getMessage)
         case th => UnrecognizedInterpreterError(th)
       }
 
@@ -93,13 +99,15 @@ object Interpreter {
     } yield result
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
-    implicit val rand = Blake2b512Random(128)
+    implicit val rand      = Blake2b512Random(128)
+    val evaluatePhlosLimit = CostAccount(Integer.MAX_VALUE)
     for {
       checkpoint     <- Task.now(runtime.space.createCheckpoint())
-      costAccounting <- CostAccountingAlg[Task](CostAccount.zero)
+      costAccounting <- CostAccountingAlg.of[Task](evaluatePhlosLimit)
       _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
       errors         <- Task.now(runtime.readAndClearErrorVector())
-      cost           <- costAccounting.getCost()
+      leftPhlos      <- costAccounting.get()
+      cost           = leftPhlos.copy(cost = evaluatePhlosLimit.cost - leftPhlos.cost)
       _              <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
     } yield EvaluateResult(cost, errors)
   }

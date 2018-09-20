@@ -1,8 +1,12 @@
 package coop.rchain.rspace
+
+import coop.rchain.rspace.spaces.FineGrainedRSpace
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
+import coop.rchain.rspace.ISpace.IdISpace
+
 import scala.collection.JavaConverters._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -11,12 +15,13 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+
 import scala.collection.immutable.{Seq, Set}
 import scodec.Codec
 
 trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = FreudianSpace[C, P, E, A, A, K]
+  type T = IdISpace[C, P, E, A, A, K]
 
   case class State(
       checkpoint: Blake2b256Hash,
@@ -211,6 +216,46 @@ class MixedStoreTestsBase
 
     val testSpace =
       RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+    testStore.withTxn(testStore.createTxnWrite()) { txn =>
+      testStore.withTrieTxn(txn) { trieTxn =>
+        testStore.clear(txn)
+        testStore.trieStore.clear(trieTxn)
+      }
+    }
+    history.initialize(testStore.trieStore, testBranch)
+    val _ = testSpace.createCheckpoint()
+    try {
+      f(testSpace)
+    } finally {
+      testStore.trieStore.close()
+      testStore.close()
+      env.close()
+    }
+  }
+
+  override def afterAll(): Unit =
+    dbDir.recursivelyDelete
+}
+
+class FineGrainedTestsBase
+    extends StorageTestsBase[String, Pattern, Nothing, String, StringsCaptor]
+    with BeforeAndAfterAll {
+
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 4096L
+
+  override def withTestSpace[S](f: T => S): S = {
+    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
+    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
+    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+
+    val testBranch = Branch("test")
+    val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val testStore =
+      LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
+    val testSpace =
+      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
+                                                                                     testBranch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
