@@ -4,23 +4,22 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.ByteString.ByteIterator
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.pure.PureRSpace
 import monix.eval.Task
 import org.lightningj.util.ZBase32
+
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
-import scala.concurrent.duration._
 import scala.concurrent.Await
+import scala.concurrent.duration._
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -65,13 +64,11 @@ class Registry(private val space: Runtime.RhoPureSpace,
     (head, tail)
   }
 
-  private val lookupRef: Long = Runtime.BodyRefs.REG_LOOKUP
   private val lookupPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
-  private val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
-  private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
+  private val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
   private val insertPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
@@ -86,7 +83,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
       freeCount = 2))
   private val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
-  private val publicLookupRef: Long = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
   private val publicLookupChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](17))))))
   private val publicLookupPatterns = List(
@@ -94,9 +90,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
 
-  private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-  private val publicRegisterInsertCallbackRef: Long =
-    Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
   private val publicRegisterRandomChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18))))))
   // format: off
@@ -140,7 +133,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
     Await.result(installTask.runAsync, 1.seconds)
   }
 
-  private val lookupCallbackRef: Long = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
   private val prefixRetReplacePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
         ChanVar(FreeVar(1)),
@@ -164,12 +156,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
   private val triePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
     freeCount = 1)
-
-  private val insertCallbackRef: Long = Runtime.BodyRefs.REG_INSERT_CALLBACK
-
-  private val deleteRef: Long             = Runtime.BodyRefs.REG_DELETE
-  private val deleteRootCallbackRef: Long = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
-  private val deleteCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_CALLBACK
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
@@ -716,20 +702,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
       case _ =>
         Task.unit
     }
-
-  val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
-    Map(
-      lookupRef                       -> lookup,
-      lookupCallbackRef               -> lookupCallback,
-      insertRef                       -> insert,
-      insertCallbackRef               -> insertCallback,
-      deleteRef                       -> delete,
-      deleteRootCallbackRef           -> deleteRootCallback,
-      deleteCallbackRef               -> deleteCallback,
-      publicLookupRef                 -> publicLookup,
-      publicRegisterRandomRef         -> publicRegisterRandom,
-      publicRegisterInsertCallbackRef -> publicRegisterInsertCallback
-    )
 }
 
 object Registry {
@@ -746,6 +718,21 @@ object Registry {
     "rho:registry:lookup"         -> byteName(17),
     "rho:registry:insertRandom"   -> byteName(18)
   )
+
+  object FixedRefs {
+    val lookupRef: Long               = Runtime.BodyRefs.REG_LOOKUP
+    val lookupCallbackRef: Long       = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
+    val insertRef: Long               = Runtime.BodyRefs.REG_INSERT
+    val deleteRef: Long               = Runtime.BodyRefs.REG_DELETE
+    val insertCallbackRef: Long       = Runtime.BodyRefs.REG_INSERT_CALLBACK
+    val deleteRootCallbackRef: Long   = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
+    val deleteCallbackRef: Long       = Runtime.BodyRefs.REG_DELETE_CALLBACK
+    val publicLookupRef: Long         = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
+    val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
+    val publicRegisterInsertCallbackRef: Long =
+      Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+
+  }
 
   object CRC14 {
     val INIT_REMAINDER: Short = 0

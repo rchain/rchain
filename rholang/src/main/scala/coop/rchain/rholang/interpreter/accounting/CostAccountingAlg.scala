@@ -10,6 +10,8 @@ trait CostAccountingAlg[F[_]] {
   def charge(cost: Cost): F[Unit]
   def charge(cost: CostAccount): F[Unit]
   def get(): F[CostAccount]
+  def set(cost: CostAccount): F[Unit]
+  def refund(cost: Cost): F[Unit]
 }
 
 object CostAccountingAlg {
@@ -36,7 +38,13 @@ object CostAccountingAlg {
         _ <- failOnOutOfPhlo
       } yield ()
 
+
+    override def refund(cost: Cost): F[Unit] = state.update(_ + cost)
     override def get: F[CostAccount] = state.get
+
+    override def set(cost: CostAccount): F[Unit] =
+      state.set(cost)
+
     private val failOnOutOfPhlo: F[Unit] =
       FlatMap[F].ifM(state.get.map(_.cost.value < 0))(F.raiseError(OutOfPhlogistonsError), F.unit)
   }
