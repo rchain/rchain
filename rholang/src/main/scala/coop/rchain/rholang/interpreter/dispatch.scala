@@ -9,6 +9,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import cats.implicits._
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.pure.PureRSpace
 
@@ -111,18 +112,18 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace,
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      urnMap: Map[String, Par])(
-      implicit
-      parallel: Parallel[M, F],
-      s: Sync[M],
-      ft: FunctorTell[M, Throwable]): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
+      urnMap: Map[String, Par])(implicit
+                                parallel: Parallel[M, F],
+                                s: Sync[M],
+                                ft: FunctorTell[M, Throwable])
+    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    lazy val registry: Registry = new RegistryImpl(pureSpace, dispatcher)
+    lazy val registry: Registry[M] = new RegistryImpl(pureSpace, dispatcher)
     (dispatcher, reducer, registry)
   }
 }
