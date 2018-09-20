@@ -7,17 +7,13 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
-import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
-import cats.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import cats.implicits._
+import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.pure.PureRSpace
 
 trait Dispatch[M[_], A, K] {
-
-  val reducer: Reduce[M]
-
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
 }
 
@@ -34,10 +30,8 @@ object Dispatch {
         }): _*)
 }
 
-class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit s: Sync[M])
+class RholangOnlyDispatcher[M[_]] private (reducer: => Reduce[M])(implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
-
-  val reducer: Reduce[M] = _reducer
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
@@ -68,24 +62,23 @@ object RholangOnlyDispatcher {
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
+      ft: FunctorTell[M, Throwable])
+    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    dispatcher
+    (dispatcher, reducer)
   }
 }
 
 class RholangAndScalaDispatcher[M[_]] private (
-    _reducer: => Reduce[M],
+    reducer: => Reduce[M],
     _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]])(
     implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
-
-  val reducer: Reduce[M] = _reducer
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
     for {
@@ -119,17 +112,18 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace,
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      urnMap: Map[String, Par])(
-      implicit
-      parallel: Parallel[M, F],
-      s: Sync[M],
-      ft: FunctorTell[M, Throwable]): Dispatch[M, ListChannelWithRandom, TaggedContinuation] = {
+      urnMap: Map[String, Par])(implicit
+                                parallel: Parallel[M, F],
+                                s: Sync[M],
+                                ft: FunctorTell[M, Throwable])
+    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
-    dispatcher
+    lazy val registry: Registry[M] = new RegistryImpl(pureSpace, dispatcher)
+    (dispatcher, reducer, registry)
   }
 }

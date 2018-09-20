@@ -1,12 +1,16 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Registry.FixedRefs._
+import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -14,11 +18,10 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.pure.PureRSpace
-import java.io.StringReader
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.lightningj.util.ZBase32
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -26,6 +29,21 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+
+  def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
+    Map(
+      lookupRef                       -> registry.lookup,
+      lookupCallbackRef               -> registry.lookupCallback,
+      insertRef                       -> registry.insert,
+      insertCallbackRef               -> registry.insertCallback,
+      deleteRef                       -> registry.delete,
+      deleteRootCallbackRef           -> registry.deleteRootCallback,
+      deleteCallbackRef               -> registry.deleteCallback,
+      publicLookupRef                 -> registry.publicLookup,
+      publicRegisterRandomRef         -> registry.publicRegisterRandom,
+      publicRegisterInsertCallbackRef -> registry.publicRegisterInsertCallback
+    )
+
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
           IdISpace[Channel,
@@ -35,16 +53,16 @@ trait RegistryTester extends PersistentStoreTester {
                    ListChannelWithRandom,
                    TaggedContinuation]) => R
   ): R =
-    withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace[Task] = new PureRSpace(space)
-      lazy val registry: RegistryImpl[Task]     = new RegistryImpl[Task](pureSpace, dispatcher)
-      lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-        RholangAndScalaDispatcher
-          .create[Task, Task.Par](space, registry.testingDispatchTable, Registry.testingUrnMap)
-      val reducer = dispatcher.reducer
-      import monix.execution.Scheduler.Implicits.global
-      Await.result(registry.testInstall().runAsync, 1.seconds)
-      f(reducer, space)
+    withTestSpace(errorLog) {
+      case TestFixture(space, _) =>
+        val _                                     = errorLog.readAndClearErrorVector()
+        val pureSpace: Runtime.RhoPureSpace[Task] = PureRSpace[Task].of(space)
+        lazy val dispatchTable: RhoDispatchMap    = dispatchTableCreator(registry)
+        lazy val (dispatcher, reducer, registry) =
+          RholangAndScalaDispatcher
+            .create(space, dispatchTable, Registry.testingUrnMap)
+        registry.testInstall().runSyncUnsafe(1.second)
+        f(reducer, space)
     }
 }
 

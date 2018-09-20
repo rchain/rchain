@@ -209,9 +209,9 @@ object ProtoUtil {
                      bAncestors <- DagOperations
                                     .bfTraverseF[F, BlockMessage](List(b))(
                                       ProtoUtil.unsafeGetParents[F])
+                                    .takeWhile(_ != gca)
                                     .toList
                      deploys = bAncestors
-                       .takeWhile(_ != gca)
                        .flatMap(b => {
                          b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
                        })

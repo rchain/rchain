@@ -53,7 +53,7 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
-  def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+  private def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par],
@@ -69,7 +69,7 @@ object Reduce {
           costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
       ))
 
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+  private def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par],

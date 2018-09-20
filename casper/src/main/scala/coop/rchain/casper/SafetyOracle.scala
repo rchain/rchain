@@ -168,22 +168,16 @@ sealed abstract class SafetyOracleInstances {
         def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
           blockDag.latestMessages.get(validator) match {
             case Some(latestMessageByValidator) =>
-              for {
-                potentialChildren <- DagOperations
-                                      .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
-                                        block =>
-                                          ProtoUtil.getCreatorJustificationAsList[F](
-                                            block,
-                                            validator,
-                                            b => b == candidate)
-                                      }
-                                      .toList
-                children <- potentialChildren.filterA { potentialChild =>
-                             val isFutureBlockIfSameValidator = candidate.seqNum <= potentialChild.seqNum
-                             val validatorCreatedChild        = potentialChild.sender == validator
-                             (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
-                           }
-              } yield children
+              DagOperations
+                .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) { block =>
+                  ProtoUtil.getCreatorJustificationAsList[F](block, validator, b => b == candidate)
+                }
+                .filter { potentialChild =>
+                  val validatorCreatedChild = potentialChild.sender == validator
+                  val isFutureBlock         = candidate.seqNum <= potentialChild.seqNum
+                  validatorCreatedChild && isFutureBlock
+                }
+                .toList
             case None => List.empty[BlockMessage].pure[F]
           }
 
