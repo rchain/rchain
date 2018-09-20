@@ -175,31 +175,35 @@ trait HistoryActionsTests
   "consume a bunch and then createCheckpoint" should "persist the expected values in the TrieStore" in
     withTestSpace { space =>
       forAll { (data: TestConsumeMap) =>
-        val gnats: Seq[TestGNAT] =
-          data.map {
-            case (channels, wk) =>
-              GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
+        try {
+          val gnats: Seq[TestGNAT] =
+            data.map {
+              case (channels, wk) =>
+                GNAT(channels, List.empty[Datum[String]], List(wk))
+            }.toList
 
-        gnats.foreach {
-          case GNAT(channels, _, List(wk)) =>
-            space.consume(channels, wk.patterns, wk.continuation, wk.persist)
-        }
+          gnats.foreach {
+            case GNAT(channels, _, List(wk)) =>
+              space.consume(channels, wk.patterns, wk.continuation, wk.persist)
+          }
 
-        val channelHashMap =
-          gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
-        val channelHashes = channelHashMap.keys.toList
+          val channelHashMap =
+            gnats.map(gnat => space.store.hashChannels(gnat.channels) -> gnat).toMap
+          val channelHashes = channelHashMap.keys.toList
 
-        history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
+          history.lookup(space.store.trieStore, space.store.trieBranch, channelHashes) shouldBe None
 
-        val checkpoint = space.createCheckpoint()
+          val checkpoint = space.createCheckpoint()
 
-        history
-          .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
-          .value should contain theSameElementsAs gnats
+          history
+            .lookup(space.store.trieStore, space.store.trieBranch, channelHashes)
+            .value should contain theSameElementsAs gnats
 
-        for ((channelHash, gnat) <- channelHashMap) {
-          space.retrieve(checkpoint.root, channelHash).value shouldBe gnat
+          for ((channelHash, gnat) <- channelHashMap) {
+            space.retrieve(checkpoint.root, channelHash).value shouldBe gnat
+          }
+        } catch {
+          case ex: Throwable => ex.printStackTrace()
         }
       }
     }
@@ -479,3 +483,5 @@ trait HistoryActionsTests
 class MixedStoreHistoryActionsTests extends MixedStoreTestsBase with HistoryActionsTests
 class LMDBStoreHistoryActionsTests  extends LMDBStoreTestsBase with HistoryActionsTests
 class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests
+
+class FineGrainedHistoryActionsTests extends FineGrainedTestsBase with HistoryActionsTests

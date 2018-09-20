@@ -1,26 +1,26 @@
 package coop.rchain.rholang.interpreter
 
+import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.ByteString.ByteIterator
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.pure.PureRSpace
-import monix.eval.Task
 import org.lightningj.util.ZBase32
+
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.collection.{Seq => RootSeq}
-import scala.concurrent.duration._
 import scala.concurrent.Await
+import scala.concurrent.duration._
 
 /**
   * Registry implements a radix tree for public lookup of one-sided bundles.
@@ -38,8 +38,37 @@ import scala.concurrent.Await
   * if tag is 0, this is the stored data.
   * if tag is 1, this is a name where the process recurs.
   */
-class Registry(private val space: Runtime.RhoPureSpace,
-               private val dispatcher: Runtime.RhoDispatch) {
+trait Registry[F[_]] {
+
+  def testInstall(): F[Unit]
+
+  def lookup(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def lookupCallback(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def insert(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def insertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def delete(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def deleteRootCallback(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def deleteCallback(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def publicLookup(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def publicRegisterRandom(args: RootSeq[ListChannelWithRandom]): F[Unit]
+
+  def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit]
+}
+
+class RegistryImpl[F[_]](
+    private val space: Runtime.RhoPureSpace[F],
+    private val dispatcher: Runtime.RhoDispatch[F]
+)(implicit F: Sync[F])
+    extends Registry[F] {
+
   import Registry._
   private def commonPrefix(b1: ByteString, b2: ByteString): ByteString = {
     val prefixOut = ByteString.newOutput()
@@ -65,13 +94,11 @@ class Registry(private val space: Runtime.RhoPureSpace,
     (head, tail)
   }
 
-  private val lookupRef: Long = Runtime.BodyRefs.REG_LOOKUP
   private val lookupPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
-  private val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
-  private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
+  private val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
   private val insertPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
@@ -86,7 +113,6 @@ class Registry(private val space: Runtime.RhoPureSpace,
       freeCount = 2))
   private val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
-  private val publicLookupRef: Long = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
   private val publicLookupChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](17))))))
   private val publicLookupPatterns = List(
@@ -94,42 +120,45 @@ class Registry(private val space: Runtime.RhoPureSpace,
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
 
-  private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-  private val publicRegisterInsertCallbackRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
   private val publicRegisterRandomChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18))))))
+  // format: off
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
       freeCount = 2))
+  // format: on
 
   private val publicRegisterInsertCallbackPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
-      ChanVar(FreeVar(2))),
-      freeCount = 3),
+          Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+          ChanVar(FreeVar(2))),
+      freeCount = 3
+    ),
     BindPattern(Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
-      freeCount = 1))
+                freeCount = 1)
+  )
 
-  def testInstall(): Unit = {
-    import monix.execution.Scheduler.Implicits.global
-    val installTask: Task[Unit] =
-      for {
-        _ <- space.install(lookupChannels, lookupPatterns, TaggedContinuation(ScalaBodyRef(lookupRef)))
-        _ <- space.install(insertChannels, insertPatterns, TaggedContinuation(ScalaBodyRef(insertRef)))
-        _ <- space.install(deleteChannels, deletePatterns, TaggedContinuation(ScalaBodyRef(deleteRef)))
-        _ <- space.install(publicLookupChannels,
-                      publicLookupPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicLookupRef)))
-        _ <- space.install(publicRegisterRandomChannels,
-                      publicRegisterRandomPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
-      } yield Unit
-    Await.result(installTask.runAsync, 1.seconds)
-  }
+  def testInstall(): F[Unit] =
+    for {
+      _ <- space.install(lookupChannels,
+                         lookupPatterns,
+                         TaggedContinuation(ScalaBodyRef(lookupRef)))
+      _ <- space.install(insertChannels,
+                         insertPatterns,
+                         TaggedContinuation(ScalaBodyRef(insertRef)))
+      _ <- space.install(deleteChannels,
+                         deletePatterns,
+                         TaggedContinuation(ScalaBodyRef(deleteRef)))
+      _ <- space.install(publicLookupChannels,
+                         publicLookupPatterns,
+                         TaggedContinuation(ScalaBodyRef(publicLookupRef)))
+      _ <- space.install(publicRegisterRandomChannels,
+                         publicRegisterRandomPatterns,
+                         TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
+    } yield Unit
 
-  private val lookupCallbackRef: Long = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
   private val prefixRetReplacePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
         ChanVar(FreeVar(1)),
@@ -154,48 +183,42 @@ class Registry(private val space: Runtime.RhoPureSpace,
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
     freeCount = 1)
 
-  private val insertCallbackRef: Long = Runtime.BodyRefs.REG_INSERT_CALLBACK
-
-  private val deleteRef: Long             = Runtime.BodyRefs.REG_DELETE
-  private val deleteRootCallbackRef: Long = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
-  private val deleteCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_CALLBACK
-
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   private def handleResult[E <: Throwable](
-      resultTask: Task[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): Task[Unit] =
-    resultTask.flatMap({
+      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): F[Unit] =
+    resultF.flatMap({
       case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
-      case Right(None) => Task.unit
-      case Left(err) => Task.raiseError(err)
+      case Right(None)                           => F.unit
+      case Left(err)                             => F.raiseError(err)
     })
 
-  private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): Task[Unit] =
+  private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): F[Unit] =
     handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand, None), false))
 
-  private def succeed(result: Par, ret: Channel, rand: Blake2b512Random): Task[Unit] =
+  private def succeed(result: Par, ret: Channel, rand: Blake2b512Random): F[Unit] =
     ret match {
       case Channel(q @ Quote(_)) => singleSend(Quote(result), q, rand)
-      case _                     => Task.unit
+      case _                     => F.unit
     }
 
-  private def fail(ret: Channel, rand: Blake2b512Random): Task[Unit] =
+  private def fail(ret: Channel, rand: Blake2b512Random): F[Unit] =
     ret match {
       case Channel(q @ Quote(_)) => singleSend(Quote(Par()), q, rand)
-      case _                     => Task.unit
+      case _                     => F.unit
     }
 
-  private def replace(data: Channel, replaceChan: Channel, dataRand: Blake2b512Random): Task[Unit] =
+  private def replace(data: Channel, replaceChan: Channel, dataRand: Blake2b512Random): F[Unit] =
     replaceChan match {
       case Channel(q @ Quote(_)) => singleSend(data, q, dataRand)
-      case _                     => Task.unit
+      case _                     => F.unit
     }
 
   private def failAndReplace(data: Channel,
                              replaceChan: Channel,
                              retChan: Channel,
                              dataRand: Blake2b512Random,
-                             failRand: Blake2b512Random): Task[Unit] =
+                             failRand: Blake2b512Random): F[Unit] =
     for {
       _ <- replace(data, replaceChan, dataRand)
       _ <- fail(retChan, failRand)
@@ -204,7 +227,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
   private def fetchDataLookup(dataSource: Quote,
                               key: Channel,
                               ret: Channel,
-                              rand: Blake2b512Random): Task[Unit] = {
+                              rand: Blake2b512Random): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -225,7 +248,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
                               key: Channel,
                               value: Channel,
                               ret: Channel,
-                              rand: Blake2b512Random): Task[Unit] = {
+                              rand: Blake2b512Random): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -246,7 +269,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
   private def fetchDataRootDelete(dataSource: Quote,
                                   key: Channel,
                                   ret: Channel,
-                                  rand: Blake2b512Random): Task[Unit] = {
+                                  rand: Blake2b512Random): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
@@ -270,7 +293,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
                               parentKey: Channel,
                               parentData: Channel,
                               parentReplace: Channel,
-                              parentRand: Blake2b512Random): Task[Unit] = {
+                              parentRand: Blake2b512Random): F[Unit] = {
     val keyChannel: Par    = GPrivate(ByteString.copyFrom(rand.next()))
     val parentChannel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
@@ -293,7 +316,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
     } yield ()
   }
 
-  def lookup(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def lookup(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret), rand, cost)) =>
         try {
@@ -303,7 +326,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => fail(ret, rand)
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
   // A lookup result should result in 1 of 3 things
@@ -311,7 +334,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
   // Result there, return it.
   // Further lookup needed, recurse.
 
-  def lookupCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def lookupCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
                ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
@@ -352,10 +375,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def insert(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def insert(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, value, ret), rand, cost)) =>
         try {
@@ -365,10 +388,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => fail(ret, rand)
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def insertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def insertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
                ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
@@ -449,10 +472,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def delete(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def delete(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret), rand, cost)) =>
         try {
@@ -462,10 +485,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => fail(ret, rand)
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def deleteRootCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def deleteRootCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
                ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
@@ -511,10 +534,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def deleteCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def deleteCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(
           ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
@@ -528,7 +551,7 @@ class Registry(private val space: Runtime.RhoPureSpace,
           val Some(Expr(GByteArray(bs))) = keyPar.singleExpr
           val (head, tail)               = safeUncons(bs)
 
-          def mergeWithParent(lastKey: Par, lastEntry: Par): Task[Unit] = {
+          def mergeWithParent(lastKey: Par, lastEntry: Par): F[Unit] = {
             val Channel(Quote(parentKeyPar))                   = parentKey
             val Channel(Quote(parentDataPar))                  = parentData
             val Some(Expr(EMapBody(parMap)))                   = parentDataPar.singleExpr()
@@ -607,10 +630,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
         } catch {
           case _: MatchError => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def publicLookup(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def publicLookup(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(key, ret), rand, cost)) =>
         def localFail() = fail(ret, rand)
@@ -625,7 +648,8 @@ class Registry(private val space: Runtime.RhoPureSpace,
               // Could fail
               // 256 bits plus 14 bit crc-14
               val bytes: Array[Byte] = ZBase32.decode(tail, 270)
-              val crc: Short         = ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
+              val crc: Short =
+                ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
               if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
                 val args = RootSeq(
                   ListChannelWithRandom(
@@ -643,10 +667,10 @@ class Registry(private val space: Runtime.RhoPureSpace,
           case _: MatchError               => localFail()
           case _: IllegalArgumentException => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def publicRegisterRandom(args: RootSeq[ListChannelWithRandom]): Task[Unit] =
+  def publicRegisterRandom(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
       case Seq(ListChannelWithRandom(Seq(value, ret), rand, cost)) =>
         def localFail() = fail(ret, rand)
@@ -655,27 +679,28 @@ class Registry(private val space: Runtime.RhoPureSpace,
           if (valPar.serializedSize > 1024)
             localFail()
           else {
-            val bytes = rand.next()
+            val bytes           = rand.next()
             val partialKey: Par = parByteArray(ByteString.copyFrom(bytes))
-            val curryChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
+            val curryChan: Par  = GPrivate(ByteString.copyFrom(rand.next()))
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val uriPar: Par     = GUri(buildURI(bytes))
             val args = RootSeq(
-              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)),
-                                    rand))
+              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)), rand))
             for {
               _ <- handleResult(
                     space.produce(
                       Quote(curryChan),
                       // This re-use of rand is fine because we throw it away in the callback below.
                       ListChannelWithRandom(Seq(Quote(uriPar), value, ret), rand, None),
-                      false))
+                      false
+                    ))
               _ <- handleResult(
                     space.consume(
                       Seq[Channel](Quote(curryChan), Quote(resultChan)),
                       publicRegisterInsertCallbackPatterns,
                       TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
-                      false))
+                      false
+                    ))
               _ <- insert(args)
             } yield ()
           }
@@ -683,14 +708,13 @@ class Registry(private val space: Runtime.RhoPureSpace,
           case _: MatchError               => localFail()
           case _: IllegalArgumentException => localFail()
         }
-      case _ => Task.unit
+      case _ => F.unit
     }
 
-  def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): Task[Unit] = {
+  def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
-      case Seq(
-          ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
-          ListChannelWithRandom(Seq(value), valRand, valCost)) =>
+      case Seq(ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
+               ListChannelWithRandom(Seq(value), valRand, valCost)) =>
         ret match {
           case Channel(retQ @ Quote(_)) =>
             if (expectedValue == value)
@@ -701,23 +725,8 @@ class Registry(private val space: Runtime.RhoPureSpace,
             fail(ret, valRand)
         }
       case _ =>
-        Task.unit
+        F.unit
     }
-  }
-
-  val testingDispatchTable: Map[Long, Function1[RootSeq[ListChannelWithRandom], Task[Unit]]] =
-    Map(
-      lookupRef                       -> lookup,
-      lookupCallbackRef               -> lookupCallback,
-      insertRef                       -> insert,
-      insertCallbackRef               -> insertCallback,
-      deleteRef                       -> delete,
-      deleteRootCallbackRef           -> deleteRootCallback,
-      deleteCallbackRef               -> deleteCallback,
-      publicLookupRef                 -> publicLookup,
-      publicRegisterRandomRef         -> publicRegisterRandom,
-      publicRegisterInsertCallbackRef -> publicRegisterInsertCallback
-    )
 }
 
 object Registry {
@@ -734,6 +743,21 @@ object Registry {
     "rho:registry:lookup"         -> byteName(17),
     "rho:registry:insertRandom"   -> byteName(18)
   )
+
+  object FixedRefs {
+    val lookupRef: Long               = Runtime.BodyRefs.REG_LOOKUP
+    val lookupCallbackRef: Long       = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
+    val insertRef: Long               = Runtime.BodyRefs.REG_INSERT
+    val deleteRef: Long               = Runtime.BodyRefs.REG_DELETE
+    val insertCallbackRef: Long       = Runtime.BodyRefs.REG_INSERT_CALLBACK
+    val deleteRootCallbackRef: Long   = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
+    val deleteCallbackRef: Long       = Runtime.BodyRefs.REG_DELETE_CALLBACK
+    val publicLookupRef: Long         = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
+    val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
+    val publicRegisterInsertCallbackRef: Long =
+      Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+
+  }
 
   object CRC14 {
     val INIT_REMAINDER: Short = 0
