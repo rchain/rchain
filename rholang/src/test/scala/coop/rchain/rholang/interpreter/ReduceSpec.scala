@@ -489,20 +489,32 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand0 = rand.splitByte(0)
     val splitRand1 = rand.splitByte(1)
     val mergeRand  = Blake2b512Random.merge(Seq(splitRand1, splitRand0))
-    // format: off
     val send =
-      Send(Quote(GString("channel")), List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7), GInt(8), GInt(9)))))))), false, BitSet())
+      Send(
+        Quote(GString("channel")),
+        List(Par(exprs = Seq(Expr(EListBody(EList(Seq(GInt(7), GInt(8), GInt(9)))))))),
+        false,
+        BitSet()
+      )
     val receive = Receive(
       Seq(
-        ReceiveBind(Seq(Quote(Par(exprs = Seq(EListBody(EList(connectiveUsed = true, remainder = Some(FreeVar(0)))))))),
+        ReceiveBind(
+          Seq(
+            Quote(
+              Par(
+                exprs = Seq(EListBody(EList(connectiveUsed = true, remainder = Some(FreeVar(0)))))
+              )
+            )
+          ),
           Quote(GString("channel")),
-          freeCount = 1)),
+          freeCount = 1
+        )
+      ),
       Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
       false,
       1,
       BitSet()
     )
-    // format: on
     val sendFirstResult = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env[Par]()
@@ -955,18 +967,24 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel = Channel(Quote(GString("result")))
 
-    // format: off
     result should be(
       HashMap(
         List(channel) ->
-          Row(List(
-                Datum.create(channel,
-                             ListChannelWithRandom(Seq(Quote(EList(List(GInt(7), GInt(8), GInt(9))))), mergeRand),
-                             false)),
-              List())
+          Row(
+            List(
+              Datum.create(
+                channel,
+                ListChannelWithRandom(
+                  Seq(Quote(EList(List(GInt(7), GInt(8), GInt(9))))),
+                  mergeRand
+                ),
+                false
+              )
+            ),
+            List()
+          )
       )
     )
-    // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1068,7 +1086,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel0 = Channel(Quote(GString("result0")))
     val channel1 = Channel(Quote(GString("result1")))
-    // format: off
     result should be(
       HashMap(
         List(channel0) ->
@@ -1076,21 +1093,33 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List(
               Datum.create(
                 channel0,
-                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(Array[Byte](42))))), result0Rand),
-                false)),
-            List()),
+                ListChannelWithRandom(
+                  Seq(Quote(GPrivate(ByteString.copyFrom(Array[Byte](42))))),
+                  result0Rand
+                ),
+                false
+              )
+            ),
+            List()
+          ),
         List(channel1) ->
           Row(
             List(
               Datum.create(
                 channel1,
-                ListChannelWithRandom(Seq(Quote(GPrivate(ByteString.copyFrom(chosenName)))), result1Rand),
-                false)),
-            List())
+                ListChannelWithRandom(
+                  Seq(Quote(GPrivate(ByteString.copyFrom(chosenName)))),
+                  result1Rand
+                ),
+                false
+              )
+            ),
+            List()
+          )
       )
     )
   }
-  // format: on
+
   "eval of nth method in send position" should "change what is sent" in {
     implicit val errorLog = new ErrorLog()
     implicit val costAccounting =
@@ -1123,7 +1152,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel = Channel(Quote(GString("result")))
 
-    // format: off
     result should be(
       HashMap(
         List(channel) ->
@@ -1131,13 +1159,19 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List(
               Datum.create(
                 channel,
-                ListChannelWithRandom(Seq(
-                  Quote(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))), splitRand),
-                false)),
-            List())
+                ListChannelWithRandom(
+                  Seq(
+                    Quote(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))
+                  ),
+                  splitRand
+                ),
+                false
+              )
+            ),
+            List()
+          )
       )
     )
-    // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1290,18 +1324,24 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel = Channel(Quote(GString("result")))
 
-    // format: off
     result should be(
       HashMap(
         List(channel) ->
-          Row(List(
-                Datum.create(channel,
-                  ListChannelWithRandom(Seq(Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))), splitRand),
-                  persist = false)),
-              List())
+          Row(
+            List(
+              Datum.create(
+                channel,
+                ListChannelWithRandom(
+                  Seq(Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))),
+                  splitRand
+                ),
+                persist = false
+              )
+            ),
+            List()
+          )
       )
     )
-    // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 

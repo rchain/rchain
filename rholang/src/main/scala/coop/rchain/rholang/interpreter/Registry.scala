@@ -133,12 +133,12 @@ class RegistryImpl[F[_]](
   private val publicRegisterRandomChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18)))))
   )
-  // format: off
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
-      freeCount = 2))
-  // format: on
+      freeCount = 2
+    )
+  )
 
   private val publicRegisterInsertCallbackPatterns = List(
     BindPattern(

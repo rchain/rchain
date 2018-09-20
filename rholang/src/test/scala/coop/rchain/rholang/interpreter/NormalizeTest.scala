@@ -1179,18 +1179,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listCases.add(new CaseImpl(new PVarRef(new VarRefKindProc(), "x"), new PNil()))
     val proc = new PMatch(new PGround(new GroundInt("7")), listCases)
 
-    // format: off
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, boundInputs).value
     val expectedResult = inputs.par
       .addMatches(
-        Match(target = GInt(7),
-              cases =
-                List(MatchCase(
-                  pattern = Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)),
-                  source = Par())),
-              locallyFree = BitSet(0)))
+        Match(
+          target = GInt(7),
+          cases = List(
+            MatchCase(
+              pattern = Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)),
+              source = Par()
+            )
+          ),
+          locallyFree = BitSet(0)
+        )
+      )
       .withLocallyFree(BitSet(0))
-    // format: on
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
     // Make sure that variable references in patterns are reflected

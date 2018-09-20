@@ -801,34 +801,45 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
   }
 
   "Matching a target with var ref and a pattern with a var ref" should "ignore locallyFree" in {
-    // format: off
     val target: Par = New(
       bindCount = 1,
       p = Par(
-        receives = List(Receive(
-          binds = List(
-            ReceiveBind(
-              patterns = List(Quote(
-                Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)))),
-              source = Quote(Par()))),
-          body = Par(),
-          persistent = false,
-          bindCount = 0,
-          locallyFree = BitSet(0))),
-        locallyFree = BitSet(0)))
+        receives = List(
+          Receive(
+            binds = List(
+              ReceiveBind(
+                patterns =
+                  List(Quote(Connective(VarRefBody(VarRef(0, 1))).withLocallyFree(BitSet(0)))),
+                source = Quote(Par())
+              )
+            ),
+            body = Par(),
+            persistent = false,
+            bindCount = 0,
+            locallyFree = BitSet(0)
+          )
+        ),
+        locallyFree = BitSet(0)
+      )
+    )
     val pattern: Par = New(
       bindCount = 1,
       p = Par(
-        receives = List(Receive(
-          binds = List(
-            ReceiveBind(
-              patterns = List(Quote(
-                Connective(VarRefBody(VarRef(0, 1))))),
-              source = Quote(Par()))),
-          body = Par(),
-          persistent = false,
-          bindCount = 0))))
-    // format: on
+        receives = List(
+          Receive(
+            binds = List(
+              ReceiveBind(
+                patterns = List(Quote(Connective(VarRefBody(VarRef(0, 1))))),
+                source = Quote(Par())
+              )
+            ),
+            body = Par(),
+            persistent = false,
+            bindCount = 0
+          )
+        )
+      )
+    )
     assertSpatialMatch(target, pattern, Some(Map.empty[Int, Par]))
   }
 
