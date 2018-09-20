@@ -25,7 +25,7 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
-    CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
           IdISpace[Channel,

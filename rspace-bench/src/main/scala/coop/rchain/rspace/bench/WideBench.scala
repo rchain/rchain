@@ -66,11 +66,12 @@ object WideBench {
     lazy val dbDir: Path              = Files.createTempDirectory("rchain-storage-test-")
     val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-    val runtime: Runtime
-    def rand: Blake2b512Random                  = Blake2b512Random(128)
-    val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-    var setupTerm: Option[Par]                  = None
-    var term: Option[Par]                       = None
+    lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
+    def rand: Blake2b512Random = Blake2b512Random(128)
+    val costAccountAlg: CostAccountingAlg[Task] =
+      CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    var setupTerm: Option[Par] = None
+    var term: Option[Par]      = None
 
     @Setup(value = Level.Iteration)
     def doSetup(): Unit = {

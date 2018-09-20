@@ -38,7 +38,7 @@ class CryptoChannelsSpec
 
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
   implicit val costAccountingAlg: CostAccountingAlg[Task] =
-    CostAccountingAlg.unsafe[Task](CostAccount.zero)
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[ListChannelWithRandom] =
     storage.implicits.serializeChannels
@@ -67,12 +67,10 @@ class CryptoChannelsSpec
       serializeChannel: Serialize[Channel],
       serializeChannels: Serialize[ListChannelWithRandom]): Assertion = {
     val channel = Channel(Quote(ackChannel))
-    store.toMap(List(channel)) should be(
-      Row(
-        List(Datum.create[Channel, ListChannelWithRandom](channel, data, false)),
-        List()
-      )
-    )
+    val datum   = store.toMap(List(channel)).data.head
+    assert(datum.a.channels == data.channels)
+    assert(datum.a.randomState == data.randomState)
+    assert(!datum.persist)
   }
 
   def hashingChannel(channelName: String,

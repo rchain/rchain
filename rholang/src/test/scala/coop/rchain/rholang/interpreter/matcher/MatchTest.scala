@@ -10,16 +10,18 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost.toOptionalFreeMapWithCostOps
 import monix.eval.Coeval
+import org.scalactic.TripleEqualsSupport
 import org.scalatest._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
 import org.scalatest.concurrent.TimeLimits
 import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 
-class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
+class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleEqualsSupport {
   import SpatialMatcher._
   import coop.rchain.models.rholang.implicits._
 
@@ -36,10 +38,12 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
     assertSorted(pattern, "pattern")
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term")))
-    val result: Option[FreeMap] =
-      spatialMatch(target, pattern).runWithCost(CostAccount(0))._2.map(_._1)
+    val intermediate: Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, Unit)])] =
+      spatialMatch(target, pattern).runWithCost(CostAccount(Integer.MAX_VALUE))
+    assert(intermediate.isRight)
+    val result = intermediate.right.get._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
-    assert(result == expectedCaptures)
+    assert(result === expectedCaptures)
   }
 
   private def explainMatch[P <: GeneratedMessage, T <: GeneratedMessage](
@@ -841,5 +845,13 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits {
 
     assertSpatialMatch(successTarget, pattern, Some(Map.empty))
     assertSpatialMatch(failTarget, pattern, None)
+  }
+
+  "Spatial matcher" should "short-circuit when runs out of phlo in the middle of matching" in {
+    val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
+    val pattern: Par =
+      EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
+    val res = spatialMatch(target, pattern).runWithCost(CostAccount(0, Cost(0)))
+    res should be(Left(OutOfPhlogistonsError))
   }
 }

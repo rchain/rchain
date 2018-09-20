@@ -25,9 +25,9 @@ object CostAccountingAlg {
 
   private class CostAccountingAlgImpl[F[_]](state: Ref[F, CostAccount])(implicit F: Sync[F])
       extends CostAccountingAlg[F] {
-    override def charge(cost: Cost): F[Unit] = chargeInternal(_.charge(cost))
+    override def charge(cost: Cost): F[Unit] = chargeInternal(_ - cost)
 
-    override def charge(cost: CostAccount): F[Unit] = chargeInternal(_.charge(cost))
+    override def charge(cost: CostAccount): F[Unit] = chargeInternal(_ - cost)
 
     private def chargeInternal(f: CostAccount => CostAccount): F[Unit] =
       for {
