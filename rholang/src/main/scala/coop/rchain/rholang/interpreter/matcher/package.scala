@@ -55,8 +55,9 @@ package object matcher {
           }))
         })
 
-      def runWithCost(initCost: CostAccount)
-        : Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, A)])] =
+      def runWithCost(
+          initCost: CostAccount
+      ): Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, A)])] =
         s.run(Map.empty).value.run(initCost)
 
       def toNonDet(): NonDetFreeMapWithCost[A] =
@@ -116,8 +117,9 @@ package object matcher {
           }))
         })
 
-      def runWithCost(initCost: CostAccount)
-        : Either[OutOfPhlogistonsError.type, (CostAccount, Stream[(FreeMap, A)])] =
+      def runWithCost(
+          initCost: CostAccount
+      ): Either[OutOfPhlogistonsError.type, (CostAccount, Stream[(FreeMap, A)])] =
         s.run(Map.empty).value.run(initCost)
 
       def toDet(): OptionalFreeMapWithCost[A] =

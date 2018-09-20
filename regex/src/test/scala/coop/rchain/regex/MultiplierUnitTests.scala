@@ -24,40 +24,51 @@ class MultiplierUnitTests extends FlatSpec with Matchers {
     //a{3,4}, a{2,5} -> a{2,3} (with a{1,1}, a{0,2} left over)
     assert(
       Multiplier.parse("{3,4}").get.common(Multiplier.parse("{2,5}").get)
-        == Multiplier.parse("{2,3}").get)
+        == Multiplier.parse("{2,3}").get
+    )
     assert(
       (Multiplier.parse("{3,4}").get - Multiplier.parse("{2,3}").get)
-        == Multiplier.presetOne)
+        == Multiplier.presetOne
+    )
     assert(
       (Multiplier.parse("{2,5}").get - Multiplier.parse("{2,3}").get)
-        == Multiplier.parse("{0,2}").get)
+        == Multiplier.parse("{0,2}").get
+    )
     //a{2,}, a{1,5} -> a{1,5} (with a{1,}, a{0,0} left over)
     assert(
       Multiplier.parse("{2,}").get.common(Multiplier.parse("{1,5}").get)
-        == Multiplier.parse("{1,5}").get)
+        == Multiplier.parse("{1,5}").get
+    )
     assert(
       (Multiplier.parse("{2,}").get - Multiplier.parse("{1,5}").get)
-        == Multiplier.presetPlus)
+        == Multiplier.presetPlus
+    )
     assert(
       (Multiplier.parse("{1,5}").get - Multiplier.parse("{1,5}").get)
-        == Multiplier.presetZero)
+        == Multiplier.presetZero
+    )
     //a{3,}, a{2,} -> a{2,} (with a, epsilon left over)
     assert(
       Multiplier.parse("{3,}").get.common(Multiplier.parse("{2,}").get)
-        == Multiplier.parse("{2,}").get)
+        == Multiplier.parse("{2,}").get
+    )
     assert(
       (Multiplier.parse("{3,}").get - Multiplier.parse("{2,}").get)
-        == Multiplier.presetOne)
+        == Multiplier.presetOne
+    )
     assert(
       (Multiplier.parse("{2,}").get - Multiplier.parse("{2,}").get)
-        == Multiplier.presetZero)
+        == Multiplier.presetZero
+    )
     //a{3,}, a{3,} -> a{3,} (with zero, zero left over)
     assert(
       Multiplier.parse("{3,}").get.common(Multiplier.parse("{3,}").get)
-        == Multiplier.parse("{3,}").get)
+        == Multiplier.parse("{3,}").get
+    )
     assert(
       (Multiplier.parse("{3,}").get - Multiplier.parse("{3,}").get)
-        == Multiplier.presetZero)
+        == Multiplier.presetZero
+    )
   }
 
   "Multiplier common operation" should "work as expected" in {
@@ -68,7 +79,8 @@ class MultiplierUnitTests extends FlatSpec with Matchers {
     assert(
       Multiplier.parse("{3,}").get.common(Multiplier.parse("{2,5}").get) == Multiplier
         .parse("{2,5}")
-        .get)
+        .get
+    )
   }
 
   "Multiplier union" should "work" in {

@@ -48,17 +48,21 @@ object Cell extends CellInstances0 {
 trait CellInstances0 {
   implicit def eitherTCell[E, F[_]: Monad, S](
       implicit
-      fCell: Cell[F, S]): Cell[EitherT[F, E, ?], S] =
+      fCell: Cell[F, S]
+  ): Cell[EitherT[F, E, ?], S] =
     new Cell[EitherT[F, E, ?], S] {
       def modify(f: S => EitherT[F, E, S]): EitherT[F, E, Unit] =
         EitherT(
           fCell
-            .modify(s =>
-              f(s).value >>= {
-                case Right(ns) => ns.pure[F]
-                case Left(_)   => s.pure[F]
-            })
-            .map(Right(_).leftCast[E]))
+            .modify(
+              s =>
+                f(s).value >>= {
+                  case Right(ns) => ns.pure[F]
+                  case Left(_)   => s.pure[F]
+                }
+            )
+            .map(Right(_).leftCast[E])
+        )
 
       def read: EitherT[F, E, S] = EitherT(fCell.read.map(Right(_).leftCast[E]))
     }

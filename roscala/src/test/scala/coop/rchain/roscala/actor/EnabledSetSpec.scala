@@ -696,13 +696,17 @@ class EnabledSetSpec extends VmSpecUtils {
         * The `buf` slot of the actor instance should at this point
         * be `[1 2 3]`.
         */
-      fixture.fifo.meta.map(Symbol("buf")).get shouldBe LexVariable(level = 0,
-                                                                    offset = 0,
-                                                                    indirect = true)
+      fixture.fifo.meta.map(Symbol("buf")).get shouldBe LexVariable(
+        level = 0,
+        offset = 0,
+        indirect = true
+      )
       fixture.fifo.extension.slot.unsafeGet(0).asInstanceOf[Tuple].numberOfElements() shouldBe 3
-      fixture.fifo.extension.slot.unsafeGet(0).asInstanceOf[Tuple].value shouldBe Array(Fixnum(1),
-                                                                                        Fixnum(2),
-                                                                                        Fixnum(3))
+      fixture.fifo.extension.slot.unsafeGet(0).asInstanceOf[Tuple].value shouldBe Array(
+        Fixnum(1),
+        Fixnum(2),
+        Fixnum(3)
+      )
     }
   }
 }

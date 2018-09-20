@@ -27,7 +27,8 @@ object Dispatch {
         .map({
           case Channel(Quote(p)) => p
           case Channel(_)        => Par() // Should never happen
-        }): _*)
+        }): _*
+    )
 }
 
 class RholangOnlyDispatcher[M[_]] private (reducer: => Reduce[M])(implicit s: Sync[M])
@@ -40,14 +41,17 @@ class RholangOnlyDispatcher[M[_]] private (reducer: => Reduce[M])(implicit s: Sy
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
                               .toList
-                              .combineAll)
+                              .combineAll
+                          )
       res <- continuation.taggedCont match {
               case ParBody(parWithRand) =>
                 val env     = Dispatch.buildEnv(dataList)
                 val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-                reducer.eval(parWithRand.body)(env,
-                                               Blake2b512Random.merge(randoms),
-                                               costAccountingAlg)
+                reducer.eval(parWithRand.body)(
+                  env,
+                  Blake2b512Random.merge(randoms),
+                  costAccountingAlg
+                )
               case ScalaBodyRef(_) =>
                 s.unit
               case Empty =>
@@ -62,8 +66,8 @@ object RholangOnlyDispatcher {
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable])
-    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M]) = {
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
@@ -76,8 +80,8 @@ object RholangOnlyDispatcher {
 
 class RholangAndScalaDispatcher[M[_]] private (
     reducer: => Reduce[M],
-    _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]])(
-    implicit s: Sync[M])
+    _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]]
+)(implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
@@ -87,14 +91,17 @@ class RholangAndScalaDispatcher[M[_]] private (
                               .flatMap(_.cost)
                               .map(CostAccount.fromProto(_))
                               .toList
-                              .combineAll)
+                              .combineAll
+                          )
       res <- continuation.taggedCont match {
               case ParBody(parWithRand) =>
                 val env     = Dispatch.buildEnv(dataList)
                 val randoms = parWithRand.randomState +: dataList.toVector.map(_.randomState)
-                reducer.eval(parWithRand.body)(env,
-                                               Blake2b512Random.merge(randoms),
-                                               costAccountingAlg)
+                reducer.eval(parWithRand.body)(
+                  env,
+                  Blake2b512Random.merge(randoms),
+                  costAccountingAlg
+                )
               case ScalaBodyRef(ref) =>
                 _dispatchTable.get(ref) match {
                   case Some(f) => f(dataList)
@@ -112,11 +119,13 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace,
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      urnMap: Map[String, Par])(implicit
-                                parallel: Parallel[M, F],
-                                s: Sync[M],
-                                ft: FunctorTell[M, Throwable])
-    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
+      urnMap: Map[String, Par]
+  )(
+      implicit
+      parallel: Parallel[M, F],
+      s: Sync[M],
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], Reduce[M], Registry[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =

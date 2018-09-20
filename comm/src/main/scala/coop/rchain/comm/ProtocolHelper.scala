@@ -14,8 +14,10 @@ object ProtocolHelper {
       h <- proto.header
       s <- h.sender
     } yield
-      PeerNode(NodeIdentifier(s.id.toByteArray),
-               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+      PeerNode(
+        NodeIdentifier(s.id.toByteArray),
+        Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort)
+      )
 
   implicit def toProtocolBytes(x: String): ByteString =
     com.google.protobuf.ByteString.copyFromUtf8(x)
@@ -51,14 +53,18 @@ object ProtocolHelper {
   def lookup(src: PeerNode, id: Seq[Byte]): Protocol =
     Protocol()
       .withHeader(header(src))
-      .withLookup(Lookup()
-        .withId(id.toArray))
+      .withLookup(
+        Lookup()
+          .withId(id.toArray)
+      )
 
   def lookupResponse(src: PeerNode, nodes: Seq[PeerNode]): Protocol =
     Protocol()
       .withHeader(header(src))
-      .withLookupResponse(LookupResponse()
-        .withNodes(nodes.map(node)))
+      .withLookupResponse(
+        LookupResponse()
+          .withNodes(nodes.map(node))
+      )
 
   def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()

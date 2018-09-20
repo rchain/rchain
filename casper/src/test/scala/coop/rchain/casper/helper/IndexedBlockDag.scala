@@ -25,15 +25,17 @@ case class IndexedBlockDag(dag: BlockDag, idToBlocks: Map[Int, BlockMessage], cu
 object IndexedBlockDag {
   def empty: IndexedBlockDag = IndexedBlockDag(BlockDag.empty, Map.empty[Int, BlockMessage], 0)
 
-  def apply(idToBlocks: Map[Int, BlockMessage],
-            childMap: Map[BlockHash, Set[BlockHash]],
-            latestMessages: Map[Validator, BlockMessage],
-            latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
-            currentId: Int,
-            currentSeqNum: Map[Validator, Int],
-            dataLookup: BlockMetadata.Lookup,
-            topoSort: Vector[Vector[BlockHash]],
-            sortOffset: Long): IndexedBlockDag = IndexedBlockDag(
+  def apply(
+      idToBlocks: Map[Int, BlockMessage],
+      childMap: Map[BlockHash, Set[BlockHash]],
+      latestMessages: Map[Validator, BlockMessage],
+      latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
+      currentId: Int,
+      currentSeqNum: Map[Validator, Int],
+      dataLookup: BlockMetadata.Lookup,
+      topoSort: Vector[Vector[BlockHash]],
+      sortOffset: Long
+  ): IndexedBlockDag = IndexedBlockDag(
     BlockDag(
       childMap,
       latestMessages,

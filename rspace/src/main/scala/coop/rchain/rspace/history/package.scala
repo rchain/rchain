@@ -24,19 +24,23 @@ package object history {
 
     def countPathLength: Long =
       parents
-        .foldLeft(0L)((acc, el) =>
-          el match {
-            case (_, s: Skip) => acc + s.affix.size
-            case _            => acc + 1L
-        })
+        .foldLeft(0L)(
+          (acc, el) =>
+            el match {
+              case (_, s: Skip) => acc + s.affix.size
+              case _            => acc + 1L
+            }
+        )
 
   }
 
   private val logger: Logger = Logger[this.type]
 
-  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(implicit
-                                                                      codecK: Codec[K],
-                                                                      codecV: Codec[V]): Boolean =
+  def initialize[T, K, V](store: ITrieStore[T, K, V], branch: Branch)(
+      implicit
+      codecK: Codec[K],
+      codecV: Codec[V]
+  ): Boolean =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.getRoot(txn, branch) match {
         case None =>
@@ -52,10 +56,12 @@ package object history {
       }
     }
 
-  private[this] def lookup[T, K, V](txn: T,
-                                    store: ITrieStore[T, K, V],
-                                    branchRootHash: Blake2b256Hash,
-                                    key: K)(implicit codecK: Codec[K]): Option[V] = {
+  private[this] def lookup[T, K, V](
+      txn: T,
+      store: ITrieStore[T, K, V],
+      branchRootHash: Blake2b256Hash,
+      key: K
+  )(implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
 
     @tailrec
@@ -93,32 +99,38 @@ package object history {
   }
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], rootHash: Blake2b256Hash, key: K)(
-      implicit codecK: Codec[K]): Option[V] =
+      implicit codecK: Codec[K]
+  ): Option[V] =
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       lookup(txn, store, rootHash, key)
     }
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K)(
-      implicit codecK: Codec[K]): Option[V] =
+      implicit codecK: Codec[K]
+  ): Option[V] =
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       store.getRoot(txn, branch).flatMap(lookup(txn, store, _, key))
     }
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], branch: Branch, keys: immutable.Seq[K])(
-      implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
+      implicit codecK: Codec[K]
+  ): Option[immutable.Seq[V]] =
     if (keys.isEmpty) {
       throw new IllegalArgumentException("keys can't be empty")
     } else {
       store.withTxn(store.createTxnRead()) { (txn: T) =>
-        keys.traverse[Option, V]((k: K) =>
-          store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k)))
+        keys.traverse[Option, V](
+          (k: K) => store.getRoot(txn, branch).flatMap(lookup(txn, store, _, k))
+        )
       }
     }
 
-  private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
-                                        txn: T,
-                                        path: Seq[Byte],
-                                        curr: Trie[K, V]): (Trie[K, V], Parents[K, V]) = {
+  private[this] def getParents[T, K, V](
+      store: ITrieStore[T, K, V],
+      txn: T,
+      path: Seq[Byte],
+      curr: Trie[K, V]
+  ): (Trie[K, V], Parents[K, V]) = {
 
     @tailrec
     def parents(depth: Int, curr: Trie[K, V], acc: Parents[K, V]): (Trie[K, V], Parents[K, V]) =
@@ -162,7 +174,8 @@ package object history {
   private[this] def rehash[K, V](trie: Trie[K, V], parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
+      codecV: Codec[V]
+  ): Seq[(Blake2b256Hash, Trie[K, V])] =
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       // node with children, just rehash
       case ((lastHash, _), (offset, Node(pointerBlock))) =>
@@ -177,7 +190,8 @@ package object history {
   def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): Unit =
+      codecV: Codec[V]
+  ): Unit =
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // Get the current root hash
       val currentRootHash: Blake2b256Hash =
@@ -244,7 +258,8 @@ package object history {
       newLeafHash: Blake2b256Hash,
       parents: Parents[K, V],
       affix: ByteVector,
-      ptr: NonEmptyPointer)(implicit codecK: Codec[K], codecV: Codec[V]) = {
+      ptr: NonEmptyPointer
+  )(implicit codecK: Codec[K], codecV: Codec[V]) = {
     val pathLength = parents.countPathLength
     val subPath    = encodedKeyByteVector.slice(pathLength, pathLength + affix.size)
     val pathRemaining =
@@ -263,8 +278,10 @@ package object history {
         (ptr, newPtr, newParents)
       case (len, _) if len > 1 =>
         val (newSkip, newParents) =
-          setupSkipNode(LeafPointer(newLeafHash), newSuffix.drop(1) ++ pathRemaining)(codecK,
-                                                                                      codecV)
+          setupSkipNode(LeafPointer(newLeafHash), newSuffix.drop(1) ++ pathRemaining)(
+            codecK,
+            codecV
+          )
         val (oldSkip, oldParents) =
           setupSkipNode(ptr, oldSuffix.drop(1))(codecK, codecV)
         (oldSkip, newSkip, newParents ++ oldParents)
@@ -274,12 +291,15 @@ package object history {
     val oldNodeIndex = JByte.toUnsignedInt(oldSuffix(0))
     val newNodeIndex = JByte.toUnsignedInt(newSuffix(0))
     val newCombinedNode = Node(
-      PointerBlock.create((oldNodeIndex, existingPtr), (newNodeIndex, newPtr)))
+      PointerBlock.create((oldNodeIndex, existingPtr), (newNodeIndex, newPtr))
+    )
 
     val (toBeAdded, skips) = if (sharedSubPathLength > 0) {
       val combinedHash = Trie.hash(newCombinedNode)(codecK, codecV)
-      (Skip(ByteVector(sharedPrefix), NodePointer(combinedHash)),
-       Seq((combinedHash, newCombinedNode)))
+      (
+        Skip(ByteVector(sharedPrefix), NodePointer(combinedHash)),
+        Seq((combinedHash, newCombinedNode))
+      )
     } else {
       (newCombinedNode, Seq.empty)
     }
@@ -291,7 +311,8 @@ package object history {
       encodedKeyByteVector: ByteVector,
       newLeafHash: Blake2b256Hash,
       parents: Parents[K, V],
-      pb: PointerBlock)(implicit codecK: Codec[K], codecV: Codec[V]) = {
+      pb: PointerBlock
+  )(implicit codecK: Codec[K], codecV: Codec[V]) = {
     val pathLength    = parents.countPathLength
     val newLeafIndex  = JByte.toUnsignedInt(encodedKeyByteVector(pathLength))
     val remainingPath = encodedKeyByteVector.splitAt(pathLength + 1)._2
@@ -302,9 +323,10 @@ package object history {
     newParents ++ rehashedNodes
   }
 
-  private[this] def updateLeaf[V, K, T](newLeafHash: Blake2b256Hash, parents: Parents[K, V])(
-      implicit codecK: Codec[K],
-      codecV: Codec[V]) = {
+  private[this] def updateLeaf[V, K, T](
+      newLeafHash: Blake2b256Hash,
+      parents: Parents[K, V]
+  )(implicit codecK: Codec[K], codecV: Codec[V]) = {
     val (hd, tl) = parents match {
       case (idx, Node(pointerBlock)) +: remaining =>
         (Node(pointerBlock.updated((idx, LeafPointer(newLeafHash)))), remaining)
@@ -317,11 +339,14 @@ package object history {
     rehashedNodes
   }
 
-  private[this] def collapseAndUpdatePointerBlock[T, K, V](ptr: NonEmptyPointer,
-                                                           incomingAffix: ByteVector,
-                                                           parents: Parents[K, V])(
+  private[this] def collapseAndUpdatePointerBlock[T, K, V](
+      ptr: NonEmptyPointer,
+      incomingAffix: ByteVector,
+      parents: Parents[K, V]
+  )(
       implicit codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
+      codecV: Codec[V]
+  ): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the node.
@@ -343,7 +368,8 @@ package object history {
           // post skip node: this case got swallowed in deleteLeaf
           case Vector(_) =>
             throw new DeleteException(
-              "PointerBlock with one child on propagation signifies a malformed trie.")
+              "PointerBlock with one child on propagation signifies a malformed trie."
+            )
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the propagated node.
           case _ =>
@@ -352,9 +378,10 @@ package object history {
         }
     }
 
-  private[this] def setupSkipNode[V, K, T](ptr: NonEmptyPointer, incomingAffix: ByteVector)(
-      implicit codecK: Codec[K],
-      codecV: Codec[V]) =
+  private[this] def setupSkipNode[V, K, T](
+      ptr: NonEmptyPointer,
+      incomingAffix: ByteVector
+  )(implicit codecK: Codec[K], codecV: Codec[V]) =
     if (incomingAffix.size > 0) {
       val skip     = Skip(incomingAffix, ptr)
       val skipHash = Trie.hash(skip)(codecK, codecV)
@@ -366,7 +393,8 @@ package object history {
   private[this] def insertTries[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
-      rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
+      rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]
+  ): Option[Blake2b256Hash] =
     rehashedNodes.foldLeft(None: Option[Blake2b256Hash]) {
       case (_, (hash, trie)) =>
         store.put(txn, hash, trie)
@@ -377,7 +405,8 @@ package object history {
   private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V], txn: T, parents: Parents[K, V])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
+      codecV: Codec[V]
+  ): (Trie[K, V], Parents[K, V], Seq[(Blake2b256Hash, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `EmptyPointer`
@@ -429,7 +458,8 @@ package object history {
   def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): Boolean =
+      codecV: Codec[V]
+  ): Boolean =
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // We take the current root hash, preventing other threads from operating on the Trie
       val currentRootHash: Blake2b256Hash =

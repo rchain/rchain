@@ -108,10 +108,12 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   }
 
   abstract class ThreeNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote1: PeerNode,
-                remote2: PeerNode): F[A]
+    def execute(
+        transportLayer: TransportLayer[F],
+        local: PeerNode,
+        remote1: PeerNode,
+        remote2: PeerNode
+    ): F[A]
 
     def run(): ThreeNodesResult =
       extract(
@@ -145,18 +147,22 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  def roundTripWithPing(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode,
-                        timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] =
+  def roundTripWithPing(
+      transportLayer: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode,
+      timeout: FiniteDuration = 3.second
+  ): F[CommErr[Protocol]] =
     transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
 
   def sendPing(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] =
     transportLayer.send(remote, ProtocolHelper.ping(local))
 
-  def broadcastPing(transportLayer: TransportLayer[F],
-                    local: PeerNode,
-                    remotes: PeerNode*): F[Unit] =
+  def broadcastPing(
+      transportLayer: TransportLayer[F],
+      local: PeerNode,
+      remotes: PeerNode*
+  ): F[Unit] =
     transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
 
 }

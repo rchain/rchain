@@ -108,10 +108,13 @@ trait LMDBOps extends CloseOps {
         }
 
     def put[V](txn: Txn[ByteBuffer], key: Blake2b256Hash, data: V)(
-        implicit codecV: Codec[V]): Unit =
-      if (!dbi.put(txn,
-                   key.bytes.toDirectByteBuffer,
-                   codecV.encode(data).map(_.bytes.toDirectByteBuffer).get)) {
+        implicit codecV: Codec[V]
+    ): Unit =
+      if (!dbi.put(
+            txn,
+            key.bytes.toDirectByteBuffer,
+            codecV.encode(data).map(_.bytes.toDirectByteBuffer).get
+          )) {
         throw new Exception(s"could not persist: $data")
       }
 
@@ -120,18 +123,24 @@ trait LMDBOps extends CloseOps {
         throw new Exception(s"could not delete: $key")
       }
 
-    def get[K, V](txn: Txn[ByteBuffer], key: K)(implicit codecK: Codec[K],
-                                                codecV: Codec[V]): Option[V] =
+    def get[K, V](
+        txn: Txn[ByteBuffer],
+        key: K
+    )(implicit codecK: Codec[K], codecV: Codec[V]): Option[V] =
       Option(dbi.get(txn, codecK.encode(key).get.bytes.toDirectByteBuffer))
         .map { bytes =>
           codecV.decode(BitVector(bytes)).map(_.value).get
         }
 
-    def put[K, V](txn: Txn[ByteBuffer], key: K, data: V)(implicit codecK: Codec[K],
-                                                         codecV: Codec[V]): Unit =
-      if (!dbi.put(txn,
-                   codecK.encode(key).get.bytes.toDirectByteBuffer,
-                   codecV.encode(data).map(_.bytes.toDirectByteBuffer).get)) {
+    def put[K, V](txn: Txn[ByteBuffer], key: K, data: V)(
+        implicit codecK: Codec[K],
+        codecV: Codec[V]
+    ): Unit =
+      if (!dbi.put(
+            txn,
+            codecK.encode(key).get.bytes.toDirectByteBuffer,
+            codecV.encode(data).map(_.bytes.toDirectByteBuffer).get
+          )) {
         throw new Exception(s"could not persist: $data")
       }
 

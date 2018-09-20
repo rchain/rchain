@@ -21,7 +21,8 @@ class EvalBench {
     throw new RuntimeException(
       errors
         .map(_.toString())
-        .mkString("Errors received during evaluation:\n", "\n", "\n"))
+        .mkString("Errors received during evaluation:\n", "\n", "\n")
+    )
   }
 
   def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
@@ -39,7 +40,8 @@ class EvalBench {
   def reduceMVCEPPST(state: MVCEPPBenchState): Unit = {
     val runTask = createTest(state).executeOn(state.singleThreadedScheduler, forceAsync = false)
     processErrors(
-      runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit))
+      runTask.runSyncUnsafe(Duration.Inf)(state.singleThreadedScheduler, CanBlock.permit)
+    )
   }
 
   @Benchmark
@@ -56,7 +58,8 @@ object EvalBench {
   class MVCEPPBenchState extends EvalBenchStateBase {
     val singleThreadedScheduler: Scheduler = TrampolineScheduler.apply(
       Scheduler.singleThread(name = "mvcepp-1"),
-      ExecutionModel.SynchronousExecution)
+      ExecutionModel.SynchronousExecution
+    )
 
     override val rhoScriptSource: String = "/rholang/mvcepp.rho"
   }

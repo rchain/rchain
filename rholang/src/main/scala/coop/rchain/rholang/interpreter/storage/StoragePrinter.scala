@@ -12,8 +12,12 @@ import coop.rchain.rspace.trace.{Consume, Produce}
 object StoragePrinter {
   def prettyPrint(store: RhoIStore): String = {
     val pars: Seq[Par] = store.toMap.map {
-      case ((channels: Seq[Channel],
-             row: Row[BindPattern, ListChannelWithRandom, TaggedContinuation])) => {
+      case (
+          (
+          channels: Seq[Channel],
+          row: Row[BindPattern, ListChannelWithRandom, TaggedContinuation]
+          )
+          ) => {
         def toSends(data: Seq[Datum[ListChannelWithRandom]]): Par = {
           val sends: Seq[Send] = data.flatMap {
             case Datum(as: ListChannelWithRandom, persist: Boolean, _: Produce) =>
@@ -31,10 +35,12 @@ object StoragePrinter {
 
         def toReceive(wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]): Par = {
           val receives: Seq[Receive] = wks.map {
-            case WaitingContinuation(patterns: Seq[BindPattern],
-                                     continuation: TaggedContinuation,
-                                     persist: Boolean,
-                                     _: Consume) =>
+            case WaitingContinuation(
+                patterns: Seq[BindPattern],
+                continuation: TaggedContinuation,
+                persist: Boolean,
+                _: Consume
+                ) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
                 case (channel, pattern) =>
                   ReceiveBind(pattern.patterns, channel, pattern.remainder, pattern.freeCount)
@@ -57,8 +63,10 @@ object StoragePrinter {
             toSends(data)
           case Row(Nil, wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]) =>
             toReceive(wks)
-          case Row(data: Seq[Datum[ListChannelWithRandom]],
-                   wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]) =>
+          case Row(
+              data: Seq[Datum[ListChannelWithRandom]],
+              wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]
+              ) =>
             toSends(data) ++ toReceive(wks)
         }
       }

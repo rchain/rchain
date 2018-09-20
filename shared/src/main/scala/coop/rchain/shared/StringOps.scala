@@ -19,7 +19,7 @@ object StringOps {
             expr
           } else {
             s"($expr)"
-        },
+          },
         _ => expr
       )
   }

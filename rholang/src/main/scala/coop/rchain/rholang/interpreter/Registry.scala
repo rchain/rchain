@@ -97,73 +97,101 @@ class RegistryImpl[F[_]](
   private val lookupPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
-      freeCount = 2))
+      freeCount = 2
+    )
+  )
   private val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
   private val insertPatterns = List(
     BindPattern(
-      Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-          Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
-          ChanVar(FreeVar(2))),
+      Seq(
+        Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+        ChanVar(FreeVar(2))
+      ),
       freeCount = 3
-    ))
+    )
+  )
   private val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
   private val deletePatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
-      freeCount = 2))
+      freeCount = 2
+    )
+  )
   private val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
   private val publicLookupChannels = List(
-    Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](17))))))
+    Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](17)))))
+  )
   private val publicLookupPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
-      freeCount = 2))
+      freeCount = 2
+    )
+  )
 
   private val publicRegisterRandomChannels = List(
-    Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18))))))
-  // format: off
+    Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18)))))
+  )
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)), ChanVar(FreeVar(1))),
-      freeCount = 2))
-  // format: on
+      freeCount = 2
+    )
+  )
 
   private val publicRegisterInsertCallbackPatterns = List(
     BindPattern(
-      Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-          Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
-          ChanVar(FreeVar(2))),
+      Seq(
+        Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+        ChanVar(FreeVar(2))
+      ),
       freeCount = 3
     ),
-    BindPattern(Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
-                freeCount = 1)
+    BindPattern(
+      Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
+      freeCount = 1
+    )
   )
 
   def testInstall(): F[Unit] =
     for {
-      _ <- space.install(lookupChannels,
-                         lookupPatterns,
-                         TaggedContinuation(ScalaBodyRef(lookupRef)))
-      _ <- space.install(insertChannels,
-                         insertPatterns,
-                         TaggedContinuation(ScalaBodyRef(insertRef)))
-      _ <- space.install(deleteChannels,
-                         deletePatterns,
-                         TaggedContinuation(ScalaBodyRef(deleteRef)))
-      _ <- space.install(publicLookupChannels,
-                         publicLookupPatterns,
-                         TaggedContinuation(ScalaBodyRef(publicLookupRef)))
-      _ <- space.install(publicRegisterRandomChannels,
-                         publicRegisterRandomPatterns,
-                         TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef)))
+      _ <- space.install(
+            lookupChannels,
+            lookupPatterns,
+            TaggedContinuation(ScalaBodyRef(lookupRef))
+          )
+      _ <- space.install(
+            insertChannels,
+            insertPatterns,
+            TaggedContinuation(ScalaBodyRef(insertRef))
+          )
+      _ <- space.install(
+            deleteChannels,
+            deletePatterns,
+            TaggedContinuation(ScalaBodyRef(deleteRef))
+          )
+      _ <- space.install(
+            publicLookupChannels,
+            publicLookupPatterns,
+            TaggedContinuation(ScalaBodyRef(publicLookupRef))
+          )
+      _ <- space.install(
+            publicRegisterRandomChannels,
+            publicRegisterRandomPatterns,
+            TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef))
+          )
     } yield Unit
 
   private val prefixRetReplacePattern = BindPattern(
-    Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-        ChanVar(FreeVar(1)),
-        ChanVar(FreeVar(2))),
-    freeCount = 3)
+    Seq(
+      Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+      ChanVar(FreeVar(1)),
+      ChanVar(FreeVar(2))
+    ),
+    freeCount = 3
+  )
   private val prefixValueRetReplacePattern = BindPattern(
     Seq(
       Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
@@ -174,19 +202,23 @@ class RegistryImpl[F[_]](
     freeCount = 4
   )
   private val parentKeyDataReplacePattern = BindPattern(
-    Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
-        Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
-        ChanVar(FreeVar(2))),
+    Seq(
+      Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+      Quote(Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)),
+      ChanVar(FreeVar(2))
+    ),
     freeCount = 3
   )
   private val triePattern = BindPattern(
     Seq(Quote(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true))),
-    freeCount = 1)
+    freeCount = 1
+  )
 
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   private def handleResult[E <: Throwable](
-      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]): F[Unit] =
+      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]
+  ): F[Unit] =
     resultF.flatMap({
       case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
       case Right(None)                           => F.unit
@@ -214,105 +246,132 @@ class RegistryImpl[F[_]](
       case _                     => F.unit
     }
 
-  private def failAndReplace(data: Channel,
-                             replaceChan: Channel,
-                             retChan: Channel,
-                             dataRand: Blake2b512Random,
-                             failRand: Blake2b512Random): F[Unit] =
+  private def failAndReplace(
+      data: Channel,
+      replaceChan: Channel,
+      retChan: Channel,
+      dataRand: Blake2b512Random,
+      failRand: Blake2b512Random
+  ): F[Unit] =
     for {
       _ <- replace(data, replaceChan, dataRand)
       _ <- fail(retChan, failRand)
     } yield ()
 
-  private def fetchDataLookup(dataSource: Quote,
-                              key: Channel,
-                              ret: Channel,
-                              rand: Blake2b512Random): F[Unit] = {
+  private def fetchDataLookup(
+      dataSource: Quote,
+      key: Channel,
+      ret: Channel,
+      rand: Blake2b512Random
+  ): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
-            space.produce(Quote(channel),
-                          ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
-                          false))
+            space.produce(
+              Quote(channel),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              false
+            )
+          )
       _ <- handleResult(
             space.consume(
               Seq[Channel](Quote(channel), dataSource),
               Seq(prefixRetReplacePattern, triePattern),
               TaggedContinuation(ScalaBodyRef(lookupCallbackRef)),
               false
-            ))
+            )
+          )
     } yield ()
   }
 
-  private def fetchDataInsert(dataSource: Quote,
-                              key: Channel,
-                              value: Channel,
-                              ret: Channel,
-                              rand: Blake2b512Random): F[Unit] = {
+  private def fetchDataInsert(
+      dataSource: Quote,
+      key: Channel,
+      value: Channel,
+      ret: Channel,
+      rand: Blake2b512Random
+  ): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
             space.produce(
               Quote(channel),
               ListChannelWithRandom(Seq(key, value, ret, Channel(dataSource)), rand, None),
-              false))
+              false
+            )
+          )
       _ <- handleResult(
             space.consume(
               Seq[Channel](Quote(channel), dataSource),
               Seq(prefixValueRetReplacePattern, triePattern),
               TaggedContinuation(ScalaBodyRef(insertCallbackRef)),
               false
-            ))
+            )
+          )
     } yield ()
   }
 
-  private def fetchDataRootDelete(dataSource: Quote,
-                                  key: Channel,
-                                  ret: Channel,
-                                  rand: Blake2b512Random): F[Unit] = {
+  private def fetchDataRootDelete(
+      dataSource: Quote,
+      key: Channel,
+      ret: Channel,
+      rand: Blake2b512Random
+  ): F[Unit] = {
     val channel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
-            space.produce(Quote(channel),
-                          ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
-                          false))
+            space.produce(
+              Quote(channel),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              false
+            )
+          )
       _ <- handleResult(
             space.consume(
               Seq[Channel](Quote(channel), dataSource),
               Seq(prefixRetReplacePattern, triePattern),
               TaggedContinuation(ScalaBodyRef(deleteRootCallbackRef)),
               false
-            ))
+            )
+          )
     } yield ()
   }
 
-  private def fetchDataDelete(dataSource: Quote,
-                              key: Channel,
-                              ret: Channel,
-                              rand: Blake2b512Random,
-                              parentKey: Channel,
-                              parentData: Channel,
-                              parentReplace: Channel,
-                              parentRand: Blake2b512Random): F[Unit] = {
+  private def fetchDataDelete(
+      dataSource: Quote,
+      key: Channel,
+      ret: Channel,
+      rand: Blake2b512Random,
+      parentKey: Channel,
+      parentData: Channel,
+      parentReplace: Channel,
+      parentRand: Blake2b512Random
+  ): F[Unit] = {
     val keyChannel: Par    = GPrivate(ByteString.copyFrom(rand.next()))
     val parentChannel: Par = GPrivate(ByteString.copyFrom(rand.next()))
     for {
       _ <- handleResult(
-            space.produce(Quote(keyChannel),
-                          ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
-                          false))
+            space.produce(
+              Quote(keyChannel),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              false
+            )
+          )
       _ <- handleResult(
             space.produce(
               Quote(parentChannel),
               ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, None),
-              false))
+              false
+            )
+          )
       _ <- handleResult(
             space.consume(
               Seq[Channel](Quote(keyChannel), Quote(parentChannel), dataSource),
               Seq(prefixRetReplacePattern, parentKeyDataReplacePattern, triePattern),
               TaggedContinuation(ScalaBodyRef(deleteCallbackRef)),
               false
-            ))
+            )
+          )
     } yield ()
   }
 
@@ -336,8 +395,10 @@ class RegistryImpl[F[_]](
 
   def lookupCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
-      case Seq(ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
-               ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+      case Seq(
+          ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
+          ListChannelWithRandom(Seq(data), dataRand, dataCost)
+          ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
           val Channel(Quote(keyPar))                   = key
@@ -364,10 +425,13 @@ class RegistryImpl[F[_]](
 
                   replace(data, replaceChan, dataRand).flatMap(
                     _ =>
-                      fetchDataLookup(Quote(ps(2)),
-                                      Channel(Quote(parByteArray(newKey))),
-                                      ret,
-                                      callRand))
+                      fetchDataLookup(
+                        Quote(ps(2)),
+                        Channel(Quote(parByteArray(newKey))),
+                        ret,
+                        callRand
+                      )
+                  )
                 } else
                   localFail()
             }
@@ -393,8 +457,10 @@ class RegistryImpl[F[_]](
 
   def insertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
-      case Seq(ListChannelWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
-               ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+      case Seq(
+          ListChannelWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
+          ListChannelWithRandom(Seq(data), dataRand, dataCost)
+          ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
           val Channel(Quote(keyPar))       = key
@@ -406,8 +472,8 @@ class RegistryImpl[F[_]](
           def insert() = {
             val tuple: Par  = ETuple(Seq(GInt(0), parByteArray(tail), valuePar))
             val newMap: Par = ParMap(SortedParMap(parMap.ps + (parByteArray(head) -> tuple)))
-            replace(Channel(Quote(newMap)), replaceChan, dataRand).flatMap(_ =>
-              succeed(valuePar, ret, callRand))
+            replace(Channel(Quote(newMap)), replaceChan, dataRand)
+              .flatMap(_ => succeed(valuePar, ret, callRand))
           }
           parMap.ps.get(parByteArray(head)) match {
             case None => insert()
@@ -429,14 +495,19 @@ class RegistryImpl[F[_]](
                     SortedParMap(
                       Seq[(Par, Par)](
                         parByteArray(oldEdgeHead) -> ETuple(
-                          Seq(ps(0), parByteArray(oldEdgeTail), ps(2))),
+                          Seq(ps(0), parByteArray(oldEdgeTail), ps(2))
+                        ),
                         parByteArray(newEdgeHead) -> ETuple(
-                          Seq(GInt(0), parByteArray(newEdgeTail), valuePar))
-                      )))
+                          Seq(GInt(0), parByteArray(newEdgeTail), valuePar)
+                        )
+                      )
+                    )
+                  )
                   val newName: Par      = GPrivate(ByteString.copyFrom(callRand.next()))
                   val updatedTuple: Par = ETuple(Seq(GInt(1), outgoingEdge, newName))
                   val updatedMap: Par = ParMap(
-                    SortedParMap(parMap.ps + (parByteArray(head) -> updatedTuple)))
+                    SortedParMap(parMap.ps + (parByteArray(head) -> updatedTuple))
+                  )
                   for {
                     _ <- replace(Quote(updatedMap), replaceChan, dataRand)
                     _ <- replace(Quote(newMap), Quote(newName), callRand.splitByte(0))
@@ -458,11 +529,14 @@ class RegistryImpl[F[_]](
 
                       replace(data, replaceChan, dataRand).flatMap(
                         _ =>
-                          fetchDataInsert(Quote(ps(2)),
-                                          Channel(Quote(parByteArray(newKey))),
-                                          value,
-                                          ret,
-                                          callRand))
+                          fetchDataInsert(
+                            Quote(ps(2)),
+                            Channel(Quote(parByteArray(newKey))),
+                            value,
+                            ret,
+                            callRand
+                          )
+                      )
                     } else {
                       split()
                     }
@@ -490,8 +564,10 @@ class RegistryImpl[F[_]](
 
   def deleteRootCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
-      case Seq(ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
-               ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+      case Seq(
+          ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
+          ListChannelWithRandom(Seq(data), dataRand, dataCost)
+          ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
           val Channel(Quote(keyPar))                   = key
@@ -518,14 +594,16 @@ class RegistryImpl[F[_]](
               case Some(Expr(GInt(1))) =>
                 if (tail.startsWith(edgeAdditional)) {
                   val newKey = tail.substring(edgeAdditional.size)
-                  fetchDataDelete(Quote(ps(2)),
-                                  Channel(Quote(parByteArray(newKey))),
-                                  ret,
-                                  callRand,
-                                  Quote(parByteArray(head)),
-                                  data,
-                                  replaceChan,
-                                  dataRand)
+                  fetchDataDelete(
+                    Quote(ps(2)),
+                    Channel(Quote(parByteArray(newKey))),
+                    ret,
+                    callRand,
+                    Quote(parByteArray(head)),
+                    data,
+                    replaceChan,
+                    dataRand
+                  )
                 } else {
                   localFail()
                 }
@@ -542,10 +620,12 @@ class RegistryImpl[F[_]](
       case Seq(
           ListChannelWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
           ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, parentCost),
-          ListChannelWithRandom(Seq(data), dataRand, dataCost)) =>
+          ListChannelWithRandom(Seq(data), dataRand, dataCost)
+          ) =>
         def localFail() =
-          replace(parentData, parentReplace, parentRand).flatMap(_ =>
-            failAndReplace(data, replaceChan, ret, dataRand, callRand))
+          replace(parentData, parentReplace, parentRand).flatMap(
+            _ => failAndReplace(data, replaceChan, ret, dataRand, callRand)
+          )
         try {
           val Channel(Quote(keyPar))     = key
           val Some(Expr(GByteArray(bs))) = keyPar.singleExpr
@@ -574,7 +654,8 @@ class RegistryImpl[F[_]](
                 val mergedEdge        = parByteArray(mergeStream.toByteString())
                 val updatedTuple: Par = ETuple(Seq(ps(0), mergedEdge, ps(2)))
                 val updatedMap: Par = ParMap(
-                  SortedParMap(parMap.ps + (parentKeyPar -> updatedTuple)))
+                  SortedParMap(parMap.ps + (parentKeyPar -> updatedTuple))
+                )
                 replace(Quote(updatedMap), parentReplace, parentRand)
               }
             }
@@ -614,14 +695,16 @@ class RegistryImpl[F[_]](
               case Some(Expr(GInt(1))) =>
                 if (tail.startsWith(edgeAdditional)) {
                   val newKey = tail.substring(edgeAdditional.size)
-                  fetchDataDelete(Quote(ps(2)),
-                                  Channel(Quote(parByteArray(newKey))),
-                                  ret,
-                                  callRand,
-                                  Quote(parByteArray(head)),
-                                  data,
-                                  replaceChan,
-                                  dataRand)
+                  fetchDataDelete(
+                    Quote(ps(2)),
+                    Channel(Quote(parByteArray(newKey))),
+                    ret,
+                    callRand,
+                    Quote(parByteArray(head)),
+                    data,
+                    replaceChan,
+                    dataRand
+                  )
                 } else {
                   localFail()
                 }
@@ -654,7 +737,9 @@ class RegistryImpl[F[_]](
                 val args = RootSeq(
                   ListChannelWithRandom(
                     Seq(Quote(parByteArray(ByteString.copyFrom(bytes, 0, 32))), ret),
-                    rand))
+                    rand
+                  )
+                )
                 lookup(args)
               } else {
                 localFail()
@@ -685,7 +770,8 @@ class RegistryImpl[F[_]](
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val uriPar: Par     = GUri(buildURI(bytes))
             val args = RootSeq(
-              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)), rand))
+              ListChannelWithRandom(Seq(Quote(partialKey), Quote(valPar), Quote(resultChan)), rand)
+            )
             for {
               _ <- handleResult(
                     space.produce(
@@ -693,14 +779,16 @@ class RegistryImpl[F[_]](
                       // This re-use of rand is fine because we throw it away in the callback below.
                       ListChannelWithRandom(Seq(Quote(uriPar), value, ret), rand, None),
                       false
-                    ))
+                    )
+                  )
               _ <- handleResult(
                     space.consume(
                       Seq[Channel](Quote(curryChan), Quote(resultChan)),
                       publicRegisterInsertCallbackPatterns,
                       TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
                       false
-                    ))
+                    )
+                  )
               _ <- insert(args)
             } yield ()
           }
@@ -713,8 +801,10 @@ class RegistryImpl[F[_]](
 
   def publicRegisterInsertCallback(args: RootSeq[ListChannelWithRandom]): F[Unit] =
     args match {
-      case Seq(ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
-               ListChannelWithRandom(Seq(value), valRand, valCost)) =>
+      case Seq(
+          ListChannelWithRandom(Seq(urn, expectedValue, ret), _, callCost),
+          ListChannelWithRandom(Seq(value), valRand, valCost)
+          ) =>
         ret match {
           case Channel(retQ @ Quote(_)) =>
             if (expectedValue == value)
@@ -731,8 +821,9 @@ class RegistryImpl[F[_]](
 
 object Registry {
   val registryRoot = GPrivate(
-    ByteString.copyFrom(
-      Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697")))
+    ByteString
+      .copyFrom(Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697"))
+  )
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 

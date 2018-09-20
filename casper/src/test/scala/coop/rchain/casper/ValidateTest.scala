@@ -51,7 +51,8 @@ class ValidateTest
 
   def createChain[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage] =
+      bonds: Seq[Bond] = Seq.empty[Bond]
+  ): F[BlockMessage] =
     (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
@@ -62,7 +63,8 @@ class ValidateTest
 
   def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState: Time: BlockStore](
       length: Int,
-      validatorLength: Int): F[BlockMessage] = {
+      validatorLength: Int
+  ): F[BlockMessage] = {
     val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
     (0 until length).toList
       .zip(validatorRoundRobinCycle)
@@ -77,9 +79,11 @@ class ValidateTest
           for {
             unwrappedAcc            <- acc
             (block, latestMessages) = unwrappedAcc
-            bnext <- createBlock[F](parentsHashList = Seq(block.blockHash),
-                                    creator = creator,
-                                    justifications = latestMessages)
+            bnext <- createBlock[F](
+                      parentsHashList = Seq(block.blockHash),
+                      creator = creator,
+                      justifications = latestMessages
+                    )
             latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
           } yield (bnext, latestMessagesNext)
       }
@@ -116,7 +120,8 @@ class ValidateTest
 
       Validate.blockSignature[Id](block0) should be(false)
       log.warns.last.contains(s"signature algorithm $unknownAlgorithm is unsupported") should be(
-        true)
+        true
+      )
 
       Validate.blockSignature[Id](block1) should be(false)
       log.warns.last.contains(s"signature algorithm $rsa is unsupported") should be(true)
@@ -161,7 +166,8 @@ class ValidateTest
 
       val modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
       Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
-        Left(InvalidUnslashableBlock))
+        Left(InvalidUnslashableBlock)
+      )
       Validate.timestamp[Id](block, chain) should be(Right(Valid))
 
       log.warns.size should be(1)
@@ -176,7 +182,8 @@ class ValidateTest
 
       val modifiedTimestampHeader = block.header.get.withTimestamp(-1)
       Validate.timestamp[Id](block.withHeader(modifiedTimestampHeader), chain) should be(
-        Left(InvalidUnslashableBlock))
+        Left(InvalidUnslashableBlock)
+      )
       Validate.timestamp[Id](block, chain) should be(Right(Valid))
       log.warns.size should be(1)
       log.warns.head.contains("block timestamp") should be(true)
@@ -211,7 +218,8 @@ class ValidateTest
     val chain                    = createChain[StateWithChain](n).runS(initState)
 
     (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i)) == Right(Valid)) should be(
-      true)
+      true
+    )
     log.warns should be(Nil)
   }
 
@@ -262,7 +270,8 @@ class ValidateTest
       createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState)
 
     (0 until n).forall(i => Validate.sequenceNumber[Id](chain.idToBlocks(i), chain) == Right(Valid)) should be(
-      true)
+      true
+    )
     log.warns should be(Nil)
   }
 
@@ -299,7 +308,8 @@ class ValidateTest
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
           parents: Seq[BlockMessage],
           justifications: Seq[BlockMessage],
-          validator: Int): F[BlockMessage] =
+          validator: Int
+      ): F[BlockMessage] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -326,12 +336,15 @@ class ValidateTest
       val b0    = chain.idToBlocks(0)
 
       (0 to 6).forall(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
-        true)
+        true
+      )
       (7 to 9).exists(i => Validate.parents[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
-        false)
+        false
+      )
       log.warns.size should be(3)
       log.warns.forall(_.contains("block parents did not match estimate based on justification")) should be(
-        true)
+        true
+      )
   }
 
   // Creates a block with an invalid block number and sequence number
@@ -343,12 +356,14 @@ class ValidateTest
       val (sk, pk)                 = Ed25519.newKeyPair
 
       Validate.blockSummary[Id](
-        ProtoUtil.signBlock(block.withBlockNumber(17).withSeqNum(1),
-                            BlockDag.empty,
-                            pk,
-                            sk,
-                            "ed25519",
-                            "rchain"),
+        ProtoUtil.signBlock(
+          block.withBlockNumber(17).withSeqNum(1),
+          BlockDag.empty,
+          pk,
+          sk,
+          "ed25519",
+          "rchain"
+        ),
         BlockMessage(),
         chain,
         "rchain"
@@ -368,51 +383,68 @@ class ValidateTest
       def createChainWithValidators[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
-          b2 <- createBlock[F](Seq(genesis.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b3 <- createBlock[F](Seq(genesis.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b4 <- createBlock[F](Seq(b2.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash))
-          b5 <- createBlock[F](Seq(b2.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash))
-          _ <- createBlock[F](Seq(b4.blockHash),
-                              v2,
-                              bonds,
-                              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b7 <- createBlock[F](Seq(b4.blockHash),
-                               v1,
-                               Seq(),
-                               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b8 <- createBlock[F](Seq(b7.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
+          b2 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b3 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b4 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
+               )
+          b5 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
+               )
+          _ <- createBlock[F](
+                Seq(b4.blockHash),
+                v2,
+                bonds,
+                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+              )
+          b7 <- createBlock[F](
+                 Seq(b4.blockHash),
+                 v1,
+                 Seq(),
+                 HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+               )
+          b8 <- createBlock[F](
+                 Seq(b7.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+               )
         } yield b8
 
       val chain   = createChainWithValidators[StateWithChain].runS(initState)
       val genesis = chain.idToBlocks(1)
 
-      (1 to 6).forall(i =>
-        Validate
-          .justificationFollows[Id](chain.idToBlocks(i), genesis, chain) == Right(Valid)) should be(
-        true)
+      (1 to 6).forall(
+        i =>
+          Validate
+            .justificationFollows[Id](chain.idToBlocks(i), genesis, chain) == Right(Valid)
+      ) should be(true)
 
       Validate
         .justificationFollows[Id](chain.idToBlocks(7), genesis, chain) == Left(InvalidFollows) should be(
-        true)
+        true
+      )
 
       log.warns.size should be(1)
       log.warns.forall(_.contains("not follow from bonds of creator justification block")) should be(
-        true)
+        true
+      )
   }
 
   "Justification regression validation" should "return valid for proper justifications and justification regression detected otherwise" in withStore {
@@ -432,7 +464,8 @@ class ValidateTest
       def createValidatorBlock[F[_]: Monad: BlockDagState: Time: BlockStore](
           parents: Seq[BlockMessage],
           justifications: Seq[BlockMessage],
-          validator: Int): F[BlockMessage] =
+          validator: Int
+      ): F[BlockMessage] =
         createBlock[F](
           parents.map(_.blockHash),
           creator = validators(validator),
@@ -453,10 +486,11 @@ class ValidateTest
       val chain = createChainWithValidators[StateWithChain].runS(initState)
       val b0    = chain.idToBlocks(0)
 
-      (0 to 4).forall(i =>
-        Validate
-          .justificationRegressions[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)) should be(
-        true)
+      (0 to 4).forall(
+        i =>
+          Validate
+            .justificationRegressions[Id](chain.idToBlocks(i), b0, chain) == Right(Valid)
+      ) should be(true)
 
       // The justification block for validator 0 should point to b2 or above.
       val b1 = chain.idToBlocks(1)
@@ -468,7 +502,8 @@ class ValidateTest
           .withSender(validators(1))
           .withJustifications(justificationsWithRegression)
       Validate.justificationRegressions[Id](blockWithJustificationRegression, b0, chain) should be(
-        Left(JustificationRegression))
+        Left(JustificationRegression)
+      )
       log.warns.size should be(1)
   }
 
@@ -488,7 +523,8 @@ class ValidateTest
       List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
       initial,
       emptyStateHash,
-      runtimeManager)
+      runtimeManager
+    )
 
     Validate.bondsCache[Id](genesis, runtimeManager) should be(Right(Valid))
 
@@ -524,7 +560,8 @@ class ValidateTest
     Validate.formatOfFields[Id](
       genesis.withBody(
         genesis.body.get
-          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty))))))
+          .withDeploys(genesis.body.get.deploys.map(_.withLog(List(Event(EventInstance.Empty)))))
+      )
     ) should be(false)
   }
 

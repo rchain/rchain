@@ -62,7 +62,8 @@ object BlockApproverProtocolTest {
       requiredSigs: Int,
       wallets: Seq[PreWallet],
       sk: Array[Byte],
-      bonds: Map[Array[Byte], Int]): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
+      bonds: Map[Array[Byte], Int]
+  ): (BlockApproverProtocol, HashSetCasperTestNode[Id]) = {
     import monix.execution.Scheduler.Implicits.global
 
     val runtimeDir     = BlockStoreTestFixture.dbDir
@@ -75,12 +76,14 @@ object BlockApproverProtocolTest {
     val genesis = HashSetCasperTest.buildGenesis(wallets, bonds, deployTimestamp)
     val node    = HashSetCasperTestNode.network(Vector(sk), genesis).head
 
-    new BlockApproverProtocol(node.validatorId,
-                              deployTimestamp,
-                              runtimeManager,
-                              bonds,
-                              wallets,
-                              requiredSigs) -> node
+    new BlockApproverProtocol(
+      node.validatorId,
+      deployTimestamp,
+      runtimeManager,
+      bonds,
+      wallets,
+      requiredSigs
+    ) -> node
   }
 
 }
