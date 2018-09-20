@@ -15,15 +15,14 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoIStore
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.Serialize
-import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks
-import org.scalatest.{fixture, Assertion, Matchers, Outcome}
+import org.scalatest.{Assertion, Matchers, Outcome, fixture}
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.Await
@@ -34,11 +33,10 @@ class CryptoChannelsSpec
     with PropertyChecks
     with Matchers
     with TripleEqualsSupport {
+
   behavior of "Crypto channels"
 
-  implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-  implicit val costAccountingAlg: CostAccountingAlg[Task] =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  implicit val rand: Blake2b512Random               = Blake2b512Random(Array.empty[Byte])
   implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
   implicit val serializeChannels: Serialize[ListChannelWithRandom] =
     storage.implicits.serializeChannels
@@ -52,7 +50,7 @@ class CryptoChannelsSpec
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(store: RhoIStore,
-                 reduce: Reduce[Task],
+                 reduce: ChargingReducer[Task],
                  ackChannel: Par,
                  timeout: Duration = 3.seconds)(implicit env: Env[Par]): Unit = {
     val consume = Receive(
@@ -207,6 +205,7 @@ class CryptoChannelsSpec
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
     val size      = 1024L * 1024 * 10
     val runtime   = Runtime.create(dbDir, size)
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
     try {
       test((runtime.reducer, runtime.space.store))
@@ -219,6 +218,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (Reduce[Task], RhoIStore)
+  override type FixtureParam = (ChargingReducer[Task], RhoIStore)
 
 }
