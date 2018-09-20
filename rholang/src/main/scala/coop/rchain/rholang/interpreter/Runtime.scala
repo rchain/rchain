@@ -161,10 +161,10 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch[Task]): RhoDispatchMap = {
+    def dispatchTableCreator(space: RhoISpace,
+                             dispatcher: RhoDispatch[Task],
+                             registry: Registry[Task]): RhoDispatchMap = {
       import BodyRefs._
-      val pureSpace: RhoPureSpace[Task] = new PureRSpace(space)
-      val registry                      = new RegistryImpl[Task](pureSpace, dispatcher)
       Map(
         STDOUT                     -> SystemProcesses.stdout,
         STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
@@ -195,15 +195,15 @@ object Runtime {
                                        "rho:io:stderrAck" -> byteName(3))
 
     lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(space, dispatcher)
+      dispatchTableCreator(space, dispatcher, registry)
 
     lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(replaySpace, replayDispatcher)
+      dispatchTableCreator(replaySpace, replayDispatcher, replayRegistry)
 
-    lazy val dispatcher: RhoDispatch[Task] =
+    lazy val (dispatcher, reducer, registry) =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: RhoDispatch[Task] =
+    lazy val (replayDispatcher, replayReducer, replayRegistry) =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
@@ -226,6 +226,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
+    new Runtime(reducer, replayReducer, space, replaySpace, errorLog, context)
   }
 }
