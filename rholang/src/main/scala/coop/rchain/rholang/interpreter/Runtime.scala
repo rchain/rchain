@@ -43,15 +43,15 @@ class Runtime private (val reducer: Reduce[Task],
 object Runtime {
 
   type RhoISpace       = CPARK[IdISpace]
-  type RhoPureSpace    = TCPARK[PureRSpace]
+  type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
   type RhoReplayISpace = CPARK[IdIReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch    = Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  type RhoSysFunction = Function1[Seq[ListChannelWithRandom], Task[Unit]]
-  type RhoDispatchMap = Map[Long, RhoSysFunction]
+  type RhoDispatch[F[_]] = Dispatch[F, ListChannelWithRandom, TaggedContinuation]
+  type RhoSysFunction    = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
   private type CPAK[F[_, _, _, _]] =
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
@@ -64,8 +64,8 @@ object Runtime {
       ListChannelWithRandom,
       TaggedContinuation]
 
-  private type TCPARK[F[_[_], _, _, _, _, _, _]] =
-    F[Task,
+  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+    F[M,
       Channel,
       BindPattern,
       OutOfPhlogistonsError.type,
@@ -158,10 +158,10 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch): RhoDispatchMap = {
+    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch[Task]): RhoDispatchMap = {
       import BodyRefs._
-      val pureSpace: RhoPureSpace = new PureRSpace(space)
-      val registry                = new Registry(pureSpace, dispatcher)
+      val pureSpace: RhoPureSpace[Task] = new PureRSpace(space)
+      val registry                      = new RegistryImpl[Task](pureSpace, dispatcher)
       Map(
         STDOUT                     -> SystemProcesses.stdout,
         STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
@@ -197,10 +197,10 @@ object Runtime {
     lazy val replayDispatchTable: RhoDispatchMap =
       dispatchTableCreator(replaySpace, replayDispatcher)
 
-    lazy val dispatcher: RhoDispatch =
+    lazy val dispatcher: RhoDispatch[Task] =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: RhoDispatch =
+    lazy val replayDispatcher: RhoDispatch[Task] =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
