@@ -32,11 +32,11 @@ import scala.concurrent.duration._
 trait PersistentStoreTester {
   def withTestSpace[R](
       f: IdISpace[Channel,
-        BindPattern,
-        OutOfPhlogistonsError.type,
-        ListChannelWithRandom,
-        ListChannelWithRandom,
-        TaggedContinuation] => R): R = {
+                  BindPattern,
+                  OutOfPhlogistonsError.type,
+                  ListChannelWithRandom,
+                  ListChannelWithRandom,
+                  TaggedContinuation] => R): R = {
     val dbDir               = Files.createTempDirectory("rholang-interpreter-test-")
     val context: RhoContext = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
     val space = RSpace.create[Channel,

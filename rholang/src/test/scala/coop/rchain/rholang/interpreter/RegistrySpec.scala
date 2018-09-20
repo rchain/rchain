@@ -29,11 +29,11 @@ trait RegistryTester extends PersistentStoreTester {
   def withRegistryAndTestSpace[R](
       f: (Reduce[Task],
           IdISpace[Channel,
-            BindPattern,
-            OutOfPhlogistonsError.type,
-            ListChannelWithRandom,
-            ListChannelWithRandom,
-            TaggedContinuation]) => R
+                   BindPattern,
+                   OutOfPhlogistonsError.type,
+                   ListChannelWithRandom,
+                   ListChannelWithRandom,
+                   TaggedContinuation]) => R
   ): R =
     withTestSpace { space =>
       val pureSpace: Runtime.RhoPureSpace = new PureRSpace(space)
