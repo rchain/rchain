@@ -22,8 +22,8 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: Reduce[Task],
-                       val replayReducer: Reduce[Task],
+class Runtime private (val reducer: ChargingReducer[Task],
+                       val replayReducer: ChargingReducer[Task],
                        val space: RhoISpace,
                        val replaySpace: RhoReplayRSpace,
                        var errorLog: ErrorLog,
@@ -137,10 +137,10 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(space: RhoISpace, dispatcher: RhoDispatch): RhoDispatchMap = {
+    def dispatchTableCreator(space: RhoISpace,
+                             dispatcher: RhoDispatch,
+                             registry: Registry): RhoDispatchMap = {
       import BodyRefs._
-      val pureSpace: RhoPureSpace = new PureRSpace(space)
-      val registry                = new Registry(pureSpace, dispatcher)
       Map(
         STDOUT                     -> SystemProcesses.stdout,
         STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
@@ -171,15 +171,15 @@ object Runtime {
                                        "rho:io:stderrAck" -> byteName(3))
 
     lazy val dispatchTable: RhoDispatchMap =
-      dispatchTableCreator(space, dispatcher)
+      dispatchTableCreator(space, dispatcher, registry)
 
     lazy val replayDispatchTable: RhoDispatchMap =
-      dispatchTableCreator(replaySpace, replayDispatcher)
+      dispatchTableCreator(replaySpace, replayDispatcher, replayRegistry)
 
-    lazy val dispatcher: RhoDispatch =
+    lazy val (dispatcher, reducer, registry) =
       RholangAndScalaDispatcher.create(space, dispatchTable, urnMap)
 
-    lazy val replayDispatcher: RhoDispatch =
+    lazy val (replayDispatcher, replayReducer, replayRegistry) =
       RholangAndScalaDispatcher.create(replaySpace, replayDispatchTable, urnMap)
 
     val procDefs: immutable.Seq[(Name, Arity, Remainder, Ref)] = {
@@ -202,6 +202,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, replayDispatcher.reducer, space, replaySpace, errorLog, context)
+    new Runtime(reducer, replayReducer, space, replaySpace, errorLog, context)
   }
 }
