@@ -23,9 +23,6 @@ object RSpace {
 
       case ctx: MixedContext[C, P, A, K] =>
         create(InMemoryStore.create(ctx.trieStore, branch), branch)
-//
-//      case ctx: FineGrainedLMDBContext[C, P, A, K] =>
-//        createFineGrained(ctx.createStore(branch), branch)
     }
 
   def createInMemory[C, P, E, A, R, K](
