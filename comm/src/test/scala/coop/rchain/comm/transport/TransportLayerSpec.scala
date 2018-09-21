@@ -142,7 +142,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           protocol2.message shouldBe 'ping
         }
 
-      "not wait for a response" in
+      "wait for a response" in
         new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
           def execute(
               transportLayer: TransportLayer[F],
@@ -158,7 +158,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val result: TwoNodesResult = run()
 
           val sent = result()
-          sent should be < result.lastProcessedMessageTimestamp
+          sent should be > result.lastProcessedMessageTimestamp
         }
 
       "wait for message being delivered" in {
