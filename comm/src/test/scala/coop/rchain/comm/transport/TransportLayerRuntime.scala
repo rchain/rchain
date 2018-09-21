@@ -155,14 +155,18 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   ): F[CommErr[Protocol]] =
     transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
 
-  def sendPing(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] =
+  def sendPing(
+      transportLayer: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode
+  ): F[CommErr[Unit]] =
     transportLayer.send(remote, ProtocolHelper.ping(local))
 
   def broadcastPing(
       transportLayer: TransportLayer[F],
       local: PeerNode,
       remotes: PeerNode*
-  ): F[Unit] =
+  ): F[Seq[CommErr[Unit]]] =
     transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
 
 }

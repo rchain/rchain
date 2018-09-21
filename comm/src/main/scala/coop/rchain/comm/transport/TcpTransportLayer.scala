@@ -94,6 +94,12 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       } yield s.copy(connections = s.connections - peer)
     }
 
+  private object PeerUnavailable {
+    def unapply(e: Throwable): Boolean =
+      e.isInstanceOf[StatusRuntimeException] &&
+        e.asInstanceOf[StatusRuntimeException].getStatus.getCode == Status.Code.UNAVAILABLE
+  }
+
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
       f: TransportLayerStub => Task[A]
   ): Task[A] =
@@ -101,64 +107,67 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       channel <- connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
-                 case None    => Task.unit
-                 case Some(_) => disconnect(peer)
+                 case Some(PeerUnavailable()) => disconnect(peer)
+                 case _                       => Task.unit
                }
     } yield result
 
-  private def innerRoundTrip(
-      peer: PeerNode,
-      request: TLRequest,
-      timeout: FiniteDuration
-  ): Task[Either[CommError, TLResponse]] =
-    withClient(peer, enforce = false)(_.ask(request).nonCancelingTimeout(timeout)).attempt
-      .map(_.leftMap {
-        case _: TimeoutException => CommError.timeout
-        case e: StatusRuntimeException if e.getStatus.getCode == Status.Code.UNAVAILABLE =>
-          peerUnavailable(peer)
-        case e => protocolException(e)
-      })
+  private def transport(peer: PeerNode, enforce: Boolean)(
+      f: TransportLayerStub => Task[TLResponse]
+  ): Task[CommErr[Option[Protocol]]] =
+    withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  // TODO: Rename to send
+  private def processResponse(
+      peer: PeerNode,
+      response: Either[Throwable, TLResponse]
+  ): CommErr[Option[Protocol]] =
+    response
+      .leftMap {
+        case _: TimeoutException => CommError.timeout
+        case PeerUnavailable()   => peerUnavailable(peer)
+        case e                   => protocolException(e)
+      }
+      .flatMap(
+        tlr =>
+          tlr.payload match {
+            case p if p.isProtocol   => Right(Some(tlr.getProtocol))
+            case p if p.isNoResponse => Right(None)
+            case TLResponse.Payload.InternalServerError(ise) =>
+              Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
+          }
+      )
+
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): Task[CommErr[Protocol]] =
-    for {
-      tlResponseErr <- innerRoundTrip(peer, TLRequest(msg.some), timeout)
-      pmErr <- tlResponseErr
-                .flatMap(
-                  tlr =>
-                    tlr.payload match {
-                      case p if p.isProtocol => Right(tlr.getProtocol)
-                      case p if p.isNoResponse =>
-                        Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                      case TLResponse.Payload.InternalServerError(ise) =>
-                        Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-                    }
-                )
-                .pure[Task]
-    } yield pmErr
+    transport(peer, enforce = false)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
+      .map(_.flatMap {
+        case Some(p) => Right(p)
+        case _       => Left(internalCommunicationError("Was expecting message, nothing arrived"))
+      })
 
   private def innerSend(
       peer: PeerNode,
       msg: Protocol,
       enforce: Boolean = false,
-      timeOut: FiniteDuration = DefaultSendTimeout
-  ): Task[Unit] =
-    withClient(peer, enforce) {
-      _.tell(TLRequest(msg.some)).nonCancelingTimeoutTo(timeOut, Task.delay(peerUnavailable(peer)))
-    }.attempt.void
+      timeout: FiniteDuration = DefaultSendTimeout
+  ): Task[CommErr[Unit]] =
+    transport(peer, enforce)(_.ask(TLRequest(msg.some)).nonCancelingTimeout(timeout))
+      .map(_.flatMap {
+        case Some(p) => Left(internalCommunicationError(s"Was expecting no message. Response: $p"))
+        case _       => Right(())
+      })
 
   private def innerBroadcast(
       peers: Seq[PeerNode],
       msg: Protocol,
       enforce: Boolean = false,
       timeOut: FiniteDuration = DefaultSendTimeout
-  ): Task[Unit] =
-    Task.gatherUnordered(peers.map(innerSend(_, msg, enforce, timeOut))).void
+  ): Task[Seq[CommErr[Unit]]] =
+    Task.gatherUnordered(peers.map(innerSend(_, msg, enforce, timeOut)))
 
-  def send(peer: PeerNode, msg: Protocol): Task[Unit] =
+  def send(peer: PeerNode, msg: Protocol): Task[CommErr[Unit]] =
     innerSend(peer, msg)
 
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
     innerBroadcast(peers, msg)
 
   private def receiveInternal(
