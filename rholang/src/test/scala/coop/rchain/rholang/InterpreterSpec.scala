@@ -12,7 +12,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  val mapSize     = 1024L * 1024L * 1024L
+  val mapSize     = 10L * 1024L * 1024L
   val tmpPrefix   = "rspace-store-"
   val maxDuration = 5.seconds
 
