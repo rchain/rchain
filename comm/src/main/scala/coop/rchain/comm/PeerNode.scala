@@ -1,12 +1,10 @@
 package coop.rchain.comm
 
 import java.net.InetSocketAddress
-
 import scala.util.control.NonFatal
-
 import coop.rchain.crypto.codec.Base16
-
 import io.lemonlabs.uri.{Uri, Url}
+import scala.util.Try
 
 // TODO: Add Show instance
 final case class NodeIdentifier(key: Seq[Byte]) {
@@ -31,7 +29,7 @@ final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   override def toString: String = toAddress
 
   val toAddress: String =
-    s"rnode://$sKey@${endpoint.host}:${endpoint.tcpPort},${endpoint.udpPort}"
+    s"rnode://$sKey@${endpoint.host}?protocol=${endpoint.tcpPort}&discovery=${endpoint.udpPort}"
 
 }
 
@@ -40,12 +38,18 @@ object PeerNode {
   import scala.util.matching.Regex, Regex._
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
-    val template = """rnode\:\/\/(.*?)@(.*?):(.*),(.*)""".r
+    // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port
+    val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
-    str match {
-      case template(key, host, tcpPort, udpPort) =>
-        Right(PeerNode(NodeIdentifier(key), Endpoint(host, tcpPort.toInt, udpPort.toInt)))
-      case _ => Left(ParseError(s"bad address: $str"))
-    }
+    val maybePeer = maybeUrl flatMap (url =>
+      for {
+        scheme    <- url.schemeOption
+        key       <- url.user
+        host      <- url.hostOption
+        discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
+        protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
+      } yield PeerNode(NodeIdentifier(key), Endpoint(host.value, protocol, discovery)))
+
+    maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))
   }
 }

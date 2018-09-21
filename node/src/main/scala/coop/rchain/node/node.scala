@@ -133,7 +133,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   /** Configuration */
   private val port              = conf.server.port
   private val kademliaPort      = conf.server.kademliaPort
-  private val address           = s"rnode://$name@$host:$port,$kademliaPort"
+  private val address           = s"rnode://$name@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize

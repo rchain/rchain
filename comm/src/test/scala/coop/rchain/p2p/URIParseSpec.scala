@@ -8,7 +8,7 @@ class URIParseSpec extends FlatSpec with Matchers {
     Left(ParseError(s"bad address: $s"))
 
   "A well formed rnode URI" should "parse into a PeerNode" in {
-    val uri = "rnode://abcdef@localhost:12345,12346"
+    val uri = "rnode://abcdef@localhost?protocol=12345&discovery=12346"
     PeerNode.fromAddress(uri) should be(
       Right(PeerNode(NodeIdentifier(Seq(0xAB.toByte, 0xCD.toByte, 0xEF.toByte)),
                      Endpoint("localhost", 12345, 12346))))
@@ -20,7 +20,7 @@ class URIParseSpec extends FlatSpec with Matchers {
   }
 
   "A URI without protocol" should "parse as an error" in {
-    val uri = "abcde@localhost:12345"
+    val uri = "abcde@localhost?protocol=12345&discovery=12346"
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
 
@@ -30,7 +30,7 @@ class URIParseSpec extends FlatSpec with Matchers {
   }
 
   "An rnode URI without a key" should "parse as an error" in {
-    val uri = "rnode://localhost:1234"
+    val uri = "rnode://localhost?protocol=12345&discovery=12346"
     PeerNode.fromAddress(uri) should be(badAddressError(uri))
   }
 }

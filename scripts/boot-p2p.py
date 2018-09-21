@@ -81,7 +81,7 @@ RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
 bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
-peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}:40400,40404'
+peer_prefix_command=f'run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.{args.network}?protocol=40400&discovery=40404'
 
 
 def main():

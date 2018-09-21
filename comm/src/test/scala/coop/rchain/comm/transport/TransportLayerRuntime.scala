@@ -199,7 +199,8 @@ final class Dispatcher[F[_]: Applicative](
 
 object Dispatcher {
   def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)))
+    new Dispatcher(
+      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)))
 
   def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
     new Dispatcher(
