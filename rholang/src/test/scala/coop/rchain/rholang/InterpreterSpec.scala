@@ -32,7 +32,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     assert(storageContents() == initStorage)
   }
 
-  private def storageContents() =
+  private def storageContents(): String =
     StoragePrinter.prettyPrint(runtime.space.store)
 
   private def success(rho: String): Unit =
@@ -43,7 +43,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def failure(rho: String): Throwable =
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
-  private def execute(source: String) = {
+  private def execute(source: String): Either[Throwable, Runtime] = {
     val future = Interpreter.execute(runtime, new StringReader(source)).attempt.runAsync
     Await.result(future, maxDuration)
   }
