@@ -47,7 +47,9 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
             PeerNode(
               NodeIdentifier(p.key.toByteArray.toSeq),
               Endpoint(p.host, p.port, p.port)
-          )))
+            )
+        )
+      )
 
   def listDiscoveredPeers: Task[Seq[PeerNode]] =
     stub
@@ -59,7 +61,9 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
               PeerNode(
                 NodeIdentifier(p.key.toByteArray.toSeq),
                 Endpoint(p.host, p.port, p.port)
-            )))
+              )
+          )
+      )
 
   def nodeCoreMetrics: Task[NodeCoreMetrics] =
     stub.getNodeCoreMetrics(Empty())
@@ -83,7 +87,8 @@ class GrpcDiagnosticsService(host: String, port: Int, maxMessageSize: Int)
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)
     if (!terminated) {
       println(
-        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout")
+        "warn: did not shutdown after 10 seconds, retrying with additional 10 seconds timeout"
+      )
       channel.awaitTermination(10, TimeUnit.SECONDS)
     }
   }

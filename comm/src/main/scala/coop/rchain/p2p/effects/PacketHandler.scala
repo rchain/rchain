@@ -16,7 +16,8 @@ object PacketHandler extends PacketHandlerInstances {
   def apply[F[_]: PacketHandler]: PacketHandler[F] = implicitly[PacketHandler[F]]
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: PacketHandler[F]): PacketHandler[T[F, ?]] =
+      implicit C: PacketHandler[F]
+  ): PacketHandler[T[F, ?]] =
     new PacketHandler[T[F, ?]] {
       def handlePacket(peer: PeerNode, packet: Packet): T[F, Option[Packet]] =
         C.handlePacket(peer, packet).liftM[T]
@@ -25,7 +26,8 @@ object PacketHandler extends PacketHandlerInstances {
   def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
       implicit ev1: Applicative[F],
       ev2: Log[F],
-      errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
+      errorHandler: ApplicativeError_[F, CommError]
+  ): PacketHandler[F] =
     new PacketHandler[F] {
       def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"

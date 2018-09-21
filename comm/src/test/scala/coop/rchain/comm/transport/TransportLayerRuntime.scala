@@ -108,10 +108,12 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   }
 
   abstract class ThreeNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
-    def execute(transportLayer: TransportLayer[F],
-                local: PeerNode,
-                remote1: PeerNode,
-                remote2: PeerNode): F[A]
+    def execute(
+        transportLayer: TransportLayer[F],
+        local: PeerNode,
+        remote1: PeerNode,
+        remote2: PeerNode
+    ): F[A]
 
     def run(): ThreeNodesResult =
       extract(

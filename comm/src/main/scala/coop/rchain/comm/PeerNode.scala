@@ -41,14 +41,16 @@ object PeerNode {
     // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port
     val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
-    val maybePeer = maybeUrl flatMap (url =>
-      for {
-        scheme    <- url.schemeOption
-        key       <- url.user
-        host      <- url.hostOption
-        discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
-        protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
-      } yield PeerNode(NodeIdentifier(key), Endpoint(host.value, protocol, discovery)))
+    val maybePeer = maybeUrl flatMap (
+        url =>
+          for {
+            scheme    <- url.schemeOption
+            key       <- url.user
+            host      <- url.hostOption
+            discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
+            protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
+          } yield PeerNode(NodeIdentifier(key), Endpoint(host.value, protocol, discovery))
+      )
 
     maybePeer.fold[Either[CommError, PeerNode]](Left(ParseError(s"bad address: $str")))(Right(_))
   }

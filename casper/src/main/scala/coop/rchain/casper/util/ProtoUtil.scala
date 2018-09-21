@@ -22,8 +22,10 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  def isInMainChain[F[_]: Monad: BlockStore](candidate: BlockMessage,
-                                             target: BlockMessage): F[Boolean] =
+  def isInMainChain[F[_]: Monad: BlockStore](
+      candidate: BlockMessage,
+      target: BlockMessage
+  ): F[Boolean] =
     if (candidate == target) {
       true.pure[F]
     } else {
@@ -43,7 +45,8 @@ object ProtoUtil {
 
   def getMainChain[F[_]: Monad: BlockStore](
       estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage]): F[IndexedSeq[BlockMessage]] = {
+      acc: IndexedSeq[BlockMessage]
+  ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
     for {
@@ -77,7 +80,8 @@ object ProtoUtil {
 
   def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad: BlockStore](
       b: BlockMessage,
-      seqNum: SequenceNumber): F[Option[BlockMessage]] =
+      seqNum: SequenceNumber
+  ): F[Option[BlockMessage]] =
     if (b.seqNum == seqNum) {
       Option[BlockMessage](b).pure[F]
     } else {
@@ -91,7 +95,8 @@ object ProtoUtil {
   def getCreatorJustificationAsList[F[_]: Monad: BlockStore](
       block: BlockMessage,
       validator: Validator,
-      goalFunc: BlockMessage => Boolean = _ => false): F[List[BlockMessage]] = {
+      goalFunc: BlockMessage => Boolean = _ => false
+  ): F[List[BlockMessage]] = {
     val maybeCreatorJustificationHash =
       block.justifications.find(_.validator == validator)
     maybeCreatorJustificationHash match {
@@ -193,10 +198,12 @@ object ProtoUtil {
    * TODO: Update the logic of this function to make use of the trace logs and
    * say that two blocks don't conflict if they act on disjoint sets of channels
    */
-  def conflicts[F[_]: Monad: BlockStore](b1: BlockMessage,
-                                         b2: BlockMessage,
-                                         genesis: BlockMessage,
-                                         dag: BlockDag): F[Boolean] =
+  def conflicts[F[_]: Monad: BlockStore](
+      b1: BlockMessage,
+      b2: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[Boolean] =
     for {
       gca <- DagOperations.greatestCommonAncestorF[F](b1, b2, genesis, dag)
       result <- if (gca == b1 || gca == b2) {
@@ -207,10 +214,11 @@ object ProtoUtil {
                    for {
                      bAncestors <- DagOperations
                                     .bfTraverseF[F, BlockMessage](List(b))(
-                                      ProtoUtil.unsafeGetParents[F])
+                                      ProtoUtil.unsafeGetParents[F]
+                                    )
+                                    .takeWhile(_ != gca)
                                     .toList
                      deploys = bAncestors
-                       .takeWhile(_ != gca)
                        .flatMap(b => {
                          b.body.map(_.deploys.flatMap(_.deploy)).getOrElse(List.empty[Deploy])
                        })
@@ -223,9 +231,11 @@ object ProtoUtil {
                }
     } yield result
 
-  def chooseNonConflicting[F[_]: Monad: BlockStore](blocks: Seq[BlockMessage],
-                                                    genesis: BlockMessage,
-                                                    dag: BlockDag): F[Seq[BlockMessage]] = {
+  def chooseNonConflicting[F[_]: Monad: BlockStore](
+      blocks: Seq[BlockMessage],
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[Seq[BlockMessage]] = {
     def nonConflicting(b: BlockMessage): BlockMessage => F[Boolean] =
       conflicts[F](_, b, genesis, dag).map(b => !b)
 
@@ -249,7 +259,8 @@ object ProtoUtil {
     }
 
   def toLatestMessageHashes(
-      justifications: Seq[Justification]): immutable.Map[Validator, BlockHash] =
+      justifications: Seq[Justification]
+  ): immutable.Map[Validator, BlockHash] =
     justifications.foldLeft(Map.empty[Validator, BlockHash]) {
       case (acc, Justification(validator, block)) =>
         acc.updated(validator, block)
@@ -257,7 +268,8 @@ object ProtoUtil {
 
   def toLatestMessage[F[_]: Monad: BlockStore](
       justifications: Seq[Justification],
-      dag: BlockDag): F[immutable.Map[Validator, BlockMessage]] =
+      dag: BlockDag
+  ): F[immutable.Map[Validator, BlockMessage]] =
     justifications.toList.foldM(Map.empty[Validator, BlockMessage]) {
       case (acc, Justification(validator, hash)) =>
         for {
@@ -274,10 +286,12 @@ object ProtoUtil {
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
-  def blockHeader(body: Body,
-                  parentHashes: Seq[ByteString],
-                  version: Long,
-                  timestamp: Long): Header =
+  def blockHeader(
+      body: Body,
+      parentHashes: Seq[ByteString],
+      version: Long,
+      timestamp: Long
+  ): Header =
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
@@ -286,10 +300,12 @@ object ProtoUtil {
       .withVersion(version)
       .withTimestamp(timestamp)
 
-  def unsignedBlockProto(body: Body,
-                         header: Header,
-                         justifications: Seq[Justification],
-                         shardId: String): BlockMessage = {
+  def unsignedBlockProto(
+      body: Body,
+      header: Header,
+      justifications: Seq[Justification],
+      shardId: String
+  ): BlockMessage = {
     val hash = hashUnsignedBlock(header, justifications)
 
     BlockMessage()
@@ -305,12 +321,14 @@ object ProtoUtil {
     hashByteArrays(items: _*)
   }
 
-  def hashSignedBlock(header: Header,
-                      sender: ByteString,
-                      sigAlgorithm: String,
-                      seqNum: Int,
-                      shardId: String,
-                      extraBytes: ByteString): BlockHash =
+  def hashSignedBlock(
+      header: Header,
+      sender: ByteString,
+      sigAlgorithm: String,
+      seqNum: Int,
+      shardId: String,
+      extraBytes: ByteString
+  ): BlockHash =
     hashByteArrays(
       header.toByteArray,
       sender.toByteArray,
@@ -320,12 +338,14 @@ object ProtoUtil {
       extraBytes.toByteArray
     )
 
-  def signBlock(block: BlockMessage,
-                dag: BlockDag,
-                pk: Array[Byte],
-                sk: Array[Byte],
-                sigAlgorithm: String,
-                shardId: String): BlockMessage = {
+  def signBlock(
+      block: BlockMessage,
+      dag: BlockDag,
+      pk: Array[Byte],
+      sk: Array[Byte],
+      sigAlgorithm: String,
+      shardId: String
+  ): BlockMessage = {
 
     val header = {
       //TODO refactor casper code to avoid the usage of Option fields in the block datastructures

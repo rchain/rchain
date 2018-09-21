@@ -10,8 +10,10 @@ import kamon.metric.MeasurementUnit
 import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.MeasurementUnit.Dimension._
 
-class ScrapeDataBuilder(prometheusConfig: NewPrometheusReporter.Configuration,
-                        environmentTags: Map[String, String] = Map.empty) {
+class ScrapeDataBuilder(
+    prometheusConfig: NewPrometheusReporter.Configuration,
+    environmentTags: Map[String, String] = Map.empty
+) {
   private val builder              = new StringBuilder()
   private val decimalFormatSymbols = DecimalFormatSymbols.getInstance(Locale.ROOT)
   private val numberFormat         = new DecimalFormat("#0.0########", decimalFormatSymbols)
@@ -37,7 +39,8 @@ class ScrapeDataBuilder(prometheusConfig: NewPrometheusReporter.Configuration,
   }
 
   private def appendValueMetric(metricType: String, alwaysIncreasing: Boolean)(
-      group: (String, Seq[MetricValue])): Unit = {
+      group: (String, Seq[MetricValue])
+  ): Unit = {
     val (metricName, snapshots) = group
     val unit                    = snapshots.headOption.map(_.unit).getOrElse(none)
     val normalizedMetricName = normalizeMetricName(metricName, unit) + {
@@ -64,10 +67,12 @@ class ScrapeDataBuilder(prometheusConfig: NewPrometheusReporter.Configuration,
 
     snapshots.foreach(metric => {
       if (metric.distribution.count > 0) {
-        appendHistogramBuckets(normalizedMetricName,
-                               metric.tags,
-                               metric,
-                               resolveBucketConfiguration(metric))
+        appendHistogramBuckets(
+          normalizedMetricName,
+          metric.tags,
+          metric,
+          resolveBucketConfiguration(metric)
+        )
 
         val count = format(metric.distribution.count)
         val sum   = format(scale(metric.distribution.sum, metric.unit))
@@ -77,10 +82,12 @@ class ScrapeDataBuilder(prometheusConfig: NewPrometheusReporter.Configuration,
     })
   }
 
-  private def appendTimeSerieValue(name: String,
-                                   tags: Map[String, String],
-                                   value: String,
-                                   suffix: String = ""): Unit = {
+  private def appendTimeSerieValue(
+      name: String,
+      tags: Map[String, String],
+      value: String,
+      suffix: String = ""
+  ): Unit = {
     append(name)
     append(suffix)
     appendTags(tags)
@@ -99,10 +106,12 @@ class ScrapeDataBuilder(prometheusConfig: NewPrometheusReporter.Configuration,
       }
     )
 
-  private def appendHistogramBuckets(name: String,
-                                     tags: Map[String, String],
-                                     metric: MetricDistribution,
-                                     buckets: Seq[java.lang.Double]): Unit = {
+  private def appendHistogramBuckets(
+      name: String,
+      tags: Map[String, String],
+      metric: MetricDistribution,
+      buckets: Seq[java.lang.Double]
+  ): Unit = {
     val distributionBuckets            = metric.distribution.bucketsIterator
     var currentDistributionBucket      = distributionBuckets.next()
     var currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)

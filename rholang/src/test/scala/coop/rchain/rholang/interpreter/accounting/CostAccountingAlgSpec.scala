@@ -15,8 +15,9 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
 
   val defaultCost = CostAccount(3, Cost(33))
 
-  def withCostAccAlg[T](initState: CostAccount = defaultCost)(
-      f: CostAccountingAlg[Task] => Task[T]): T = {
+  def withCostAccAlg[T](
+      initState: CostAccount = defaultCost
+  )(f: CostAccountingAlg[Task] => Task[T]): T = {
     val test = for {
       alg <- CostAccountingAlg.of[Task](initState)
       res <- f(alg)
@@ -52,7 +53,8 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
   }
 
   it should "fail when tries to charge on the cost account that is already negative" in withCostAccAlg(
-    CostAccount(-100)) { alg =>
+    CostAccount(-100)
+  ) { alg =>
     val cost = Cost(1)
     val test = for {
       _ <- alg.charge(cost)

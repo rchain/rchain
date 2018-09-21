@@ -90,9 +90,9 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => b.pure[F]
   }
 
-  def foldRight[B](lb: Eval[B])(f: (A, Eval[F[B]]) => Eval[F[B]])(
-      implicit monad: Monad[F],
-      traverse: Traverse[F]): Eval[F[B]] = self match {
+  def foldRight[B](lb: Eval[B])(
+      f: (A, Eval[F[B]]) => Eval[F[B]]
+  )(implicit monad: Monad[F], traverse: Traverse[F]): Eval[F[B]] = self match {
     case SCons(curr, lazyTail) =>
       val mappedLazyTail = lazyTail.flatMap { tailF =>
         monad.map(tailF)(_.foldRight(lb)(f)).flatSequence
@@ -138,8 +138,9 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case SLazy(lazyTail)    => StreamT.delay(lazyTail.map(_.map(_.tail)))
     case _: SNil[F] =>
       StreamT.delay(
-        Eval.now(
-          applicativeError.raiseError[StreamT[F, A]](new Exception("Tail on empty StreamT!"))))
+        Eval
+          .now(applicativeError.raiseError[StreamT[F, A]](new Exception("Tail on empty StreamT!")))
+      )
   }
 
   def take(n: Int)(implicit functor: Functor[F]): StreamT[F, A] =
@@ -238,7 +239,8 @@ object StreamT {
   private def flatMapHelper[F[_], A, B, BB <: B](
       f: A => StreamT[F, B],
       lazyTail: STail[F, A],
-      mappedLazyTail: STail[F, BB])(implicit monad: Monad[F]): STail[F, B] =
+      mappedLazyTail: STail[F, BB]
+  )(implicit monad: Monad[F]): STail[F, B] =
     for {
       tailF       <- lazyTail
       mappedTailF <- mappedLazyTail

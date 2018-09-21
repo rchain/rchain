@@ -18,7 +18,8 @@ object NodeDiscovery extends NodeDiscoveryInstances {
   def apply[F[_]](implicit L: NodeDiscovery[F]): NodeDiscovery[F] = L
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: NodeDiscovery[F]): NodeDiscovery[T[F, ?]] =
+      implicit C: NodeDiscovery[F]
+  ): NodeDiscovery[T[F, ?]] =
     new NodeDiscovery[T[F, ?]] {
       def discover: T[F, Unit]       = C.discover.liftM[T]
       def peers: T[F, Seq[PeerNode]] = C.peers.liftM[T]

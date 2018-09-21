@@ -15,8 +15,10 @@ object ProtocolHelper {
       h <- proto.header
       s <- h.sender
     } yield
-      PeerNode(NodeIdentifier(s.id.toByteArray),
-               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+      PeerNode(
+        NodeIdentifier(s.id.toByteArray),
+        Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort)
+      )
 
   implicit def toProtocolBytes(x: String): ByteString =
     com.google.protobuf.ByteString.copyFromUtf8(x)

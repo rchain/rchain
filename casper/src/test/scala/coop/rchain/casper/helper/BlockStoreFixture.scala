@@ -24,9 +24,11 @@ trait BlockStoreFixture extends BeforeAndAfter { self: Suite =>
 }
 
 object BlockStoreTestFixture {
-  def env(path: Path,
-          mapSize: Long,
-          flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)): Env[ByteBuffer] =
+  def env(
+      path: Path,
+      mapSize: Long,
+      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
+  ): Env[ByteBuffer] =
     Env
       .create()
       .setMapSize(mapSize)

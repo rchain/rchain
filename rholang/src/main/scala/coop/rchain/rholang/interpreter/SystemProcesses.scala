@@ -26,24 +26,31 @@ object SystemProcesses {
       Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  private implicit class ProduceOps(res: Id[
-    Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]]) {
+  private implicit class ProduceOps(
+      res: Id[
+        Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]
+      ]
+  ) {
     def foldResult(
-        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]): Task[Unit] =
+        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+    ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
         case (cont, channels) => _dispatch(dispatcher)(cont, channels)
       })
   }
 
-  def stdoutAck(space: RhoISpace,
-                dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def stdoutAck(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
       Task.now(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
-          .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
-                   false)
+          .produce(
+            ack,
+            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
+            false
+          )
           .foldResult(dispatcher)
       }
   }
@@ -53,15 +60,18 @@ object SystemProcesses {
       Task.now(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(space: RhoISpace,
-                dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def stderrAck(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
       Task.now(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
-          .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
-                   false)
+          .produce(
+            ack,
+            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
+            false
+          )
           .foldResult(dispatcher)
       }
   }
@@ -80,98 +90,123 @@ object SystemProcesses {
 
   //  The following methods will be made available to contract authors.
 
-  def secp256k1Verify(space: RhoISpace,
-                      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def secp256k1Verify(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
-        ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-                              rand,
-                              cost)) =>
+        ListChannelWithRandom(
+          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+          rand,
+          cost
+        )
+        ) =>
       Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
         space
-          .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
-                   false)
+          .produce(
+            ack,
+            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
+            false
+          )
           .foldResult(dispatcher)
       }
   }
 
-  def ed25519Verify(space: RhoISpace,
-                    dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def ed25519Verify(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(
-        ListChannelWithRandom(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
-                              rand,
-                              cost)) =>
+        ListChannelWithRandom(
+          Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
+          rand,
+          cost
+        )
+        ) =>
       Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
         space
-          .produce(ack,
-                   ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
-                   false)
+          .produce(
+            ack,
+            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
+            false
+          )
           .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException(
-        "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
+        "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments"
+      )
   }
 
-  def sha256Hash(space: RhoISpace,
-                 dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def sha256Hash(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand,
-                                  cost),
-            false)
+            ListChannelWithRandom(
+              Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
+              rand,
+              cost
+            ),
+            false
+          )
           .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
-  def keccak256Hash(space: RhoISpace,
-                    dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def keccak256Hash(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand,
-                                  cost),
-            false)
+            ListChannelWithRandom(
+              Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
+              rand,
+              cost
+            ),
+            false
+          )
           .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
-  def blake2b256Hash(space: RhoISpace,
-                     dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])
-    : Seq[ListChannelWithRandom] => Task[Unit] = {
+  def blake2b256Hash(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
     case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
       Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-                                  rand,
-                                  cost),
-            false)
+            ListChannelWithRandom(
+              Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
+              rand,
+              cost
+            ),
+            false
+          )
           .foldResult(dispatcher)
       }
     case _ =>
       illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
   }
 
-  private def _dispatch(dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation])(
-      cont: TaggedContinuation,
-      dataList: Seq[ListChannelWithRandom]): Task[Unit] =
+  private def _dispatch(
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  )(cont: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): Task[Unit] =
     dispatcher.dispatch(cont, dataList)
 
   private def illegalArgumentException(msg: String): Task[Unit] =

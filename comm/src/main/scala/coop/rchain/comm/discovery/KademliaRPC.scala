@@ -12,8 +12,10 @@ import coop.rchain.comm.protocol.routing._
 trait KademliaRPC[F[_]] {
   def ping(node: PeerNode): F[Boolean]
   def lookup(key: Seq[Byte], peer: PeerNode): F[Seq[PeerNode]]
-  def receive(pingHandler: PeerNode => F[Unit],
-              lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]): F[Unit]
+  def receive(
+      pingHandler: PeerNode => F[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+  ): F[Unit]
 }
 
 object KademliaRPC {

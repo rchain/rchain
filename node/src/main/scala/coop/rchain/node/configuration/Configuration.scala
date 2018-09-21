@@ -27,9 +27,10 @@ object Configuration {
     Profile("docker", dataDir = (() => Paths.get("/var/lib/rnode"), "Defaults to /var/lib/rnode"))
 
   private val defaultProfile =
-    Profile("default",
-            dataDir =
-              (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode"))
+    Profile(
+      "default",
+      dataDir = (() => Paths.get(sys.props("user.home"), ".rnode"), "Defaults to $HOME/.rnode")
+    )
 
   private val profiles: Map[String, Profile] =
     Map(defaultProfile.name -> defaultProfile, dockerProfile.name -> dockerProfile)
@@ -45,7 +46,7 @@ object Configuration {
   private val DefaultTimeout                    = 2000
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultStoreType: StoreType       = LMDB
+  private val DefaultStoreType: StoreType       = FineGrainedLMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -61,13 +62,15 @@ object Configuration {
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
-      "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404")
+      "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+    )
     .right
     .get
   private val DefaultShardId = "rchain"
 
-  private def loadConfigurationFile(configFile: File)(
-      implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
+  private def loadConfigurationFile(
+      configFile: File
+  )(implicit log: Log[Task]): Task[Option[TomlConfiguration]] =
     for {
       _       <- log.info(s"Using configuration file: $configFile")
       configE <- Task.delay(toml.TomlConfiguration.from(configFile))
@@ -100,7 +103,8 @@ object Configuration {
     } yield result
 
   private def apply(options: commandline.Options, command: Command, profile: Profile)(
-      implicit log: Log[Task]): Task[Configuration] =
+      implicit log: Log[Task]
+  ): Task[Configuration] =
     if (command == Run) {
       for {
         dataDir    <- Task.pure(options.run.data_dir.getOrElse(profile.dataDir._1()))
@@ -109,7 +113,8 @@ object Configuration {
         config     <- loadConfigurationFile(configFile)
         effectiveDataDir <- Task.pure(
                              if (options.run.data_dir.isDefined) dataDir
-                             else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir))
+                             else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
+                           )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
         result <- Task.pure(apply(effectiveDataDir, options, config))
         _      <- log.info(s"Starting with profile ${profile.name}")
@@ -172,9 +177,11 @@ object Configuration {
       )
     }
 
-  private def apply(dataDir: Path,
-                    options: commandline.Options,
-                    config: Option[TomlConfiguration]): Configuration = {
+  private def apply(
+      dataDir: Path,
+      options: commandline.Options,
+      config: Option[TomlConfiguration]
+  ): Configuration = {
     val command: Command = options.subcommand match {
       case Some(options.eval)        => Eval(options.eval.fileNames())
       case Some(options.repl)        => Repl
@@ -182,11 +189,13 @@ object Configuration {
       case Some(options.deploy)      =>
         //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from.getOrElse("0x"),
-               phloLimit.getOrElse(0),
-               phloPrice.getOrElse(0),
-               nonce.getOrElse(0),
-               location())
+        Deploy(
+          from.getOrElse("0x"),
+          phloLimit.getOrElse(0),
+          phloPrice.getOrElse(0),
+          nonce.getOrElse(0),
+          location()
+        )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
@@ -197,13 +206,17 @@ object Configuration {
 
     import commandline.Options._
 
-    def getOpt[A](fo: commandline.Options => Option[A],
-                  fc: TomlConfiguration => Option[A]): Option[A] =
+    def getOpt[A](
+        fo: commandline.Options => Option[A],
+        fc: TomlConfiguration => Option[A]
+    ): Option[A] =
       fo(options).orElse(config.flatMap(fc))
 
-    def get[A](fo: commandline.Options => Option[A],
-               fc: TomlConfiguration => Option[A],
-               default: => A): A =
+    def get[A](
+        fo: commandline.Options => Option[A],
+        fc: TomlConfiguration => Option[A],
+        default: => A
+    ): A =
       getOpt(fo, fc).getOrElse(default)
 
     // gRPC
@@ -230,13 +243,17 @@ object Configuration {
     val requiredSigs =
       get(_.run.requiredSigs, _.validators.flatMap(_.requiredSigs), DefaultRequiredSigns)
     val genesisApproveInterval =
-      get(_.run.interval,
-          _.validators.flatMap(_.approveGenesisInterval),
-          DefaultApprovalProtocolInterval)
+      get(
+        _.run.interval,
+        _.validators.flatMap(_.approveGenesisInterval),
+        DefaultApprovalProtocolInterval
+      )
     val genesisAppriveDuration =
-      get(_.run.duration,
-          _.validators.flatMap(_.approveGenesisDuration),
-          DefaultApprovalProtocolDuration)
+      get(
+        _.run.duration,
+        _.validators.flatMap(_.approveGenesisDuration),
+        DefaultApprovalProtocolDuration
+      )
 
     val deployTimestamp = getOpt(_.run.deployTimestamp, _.validators.flatMap(_.deployTimestamp))
 
@@ -244,9 +261,11 @@ object Configuration {
     val mapSize: Long        = get(_.run.map_size, _.server.flatMap(_.mapSize), DefaultMapSize)
     val storeType: StoreType =
       get(_.run.storeType, _.server.flatMap(_.storeType.flatMap(StoreType.from)), DefaultStoreType)
-    val casperBlockStoreSize: Long = get(_.run.casperBlockStoreSize,
-                                         _.server.flatMap(_.casperBlockStoreSize),
-                                         DefaultCasperBlockStoreSize)
+    val casperBlockStoreSize: Long = get(
+      _.run.casperBlockStoreSize,
+      _.server.flatMap(_.casperBlockStoreSize),
+      DefaultCasperBlockStoreSize
+    )
 
     // TLS
     val certificate: Option[Path] = getOpt(_.run.certificate, _.tls.flatMap(_.certificate))
@@ -266,13 +285,17 @@ object Configuration {
     val knownValidators     = getOpt(_.run.knownValidators, _.validators.flatMap(_.known))
     val validatorPublicKey  = getOpt(_.run.validatorPublicKey, _.validators.flatMap(_.publicKey))
     val validatorPrivateKey = getOpt(_.run.validatorPrivateKey, _.validators.flatMap(_.privateKey))
-    val validatorSigAlgorithm = get(_.run.validatorSigAlgorithm,
-                                    _.validators.flatMap(_.sigAlgorithm),
-                                    DefaultValidatorSigAlgorithm)
+    val validatorSigAlgorithm = get(
+      _.run.validatorSigAlgorithm,
+      _.validators.flatMap(_.sigAlgorithm),
+      DefaultValidatorSigAlgorithm
+    )
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
-    val maxNumOfConnections = get(_.run.maxNumOfConnections,
-                                  _.server.flatMap(_.maxNumOfConnections),
-                                  DefaultMaxNumOfConnections)
+    val maxNumOfConnections = get(
+      _.run.maxNumOfConnections,
+      _.server.flatMap(_.maxNumOfConnections),
+      DefaultMaxNumOfConnections
+    )
 
     val maxMessageSize: Int =
       get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
@@ -354,11 +377,13 @@ object Configuration {
       case Some(options.deploy)      =>
         //TODO: change the defaults before main net
         import options.deploy._
-        Deploy(from.getOrElse("0x"),
-               phloLimit.getOrElse(0),
-               phloPrice.getOrElse(0),
-               nonce.getOrElse(0),
-               location())
+        Deploy(
+          from.getOrElse("0x"),
+          phloLimit.getOrElse(0),
+          phloPrice.getOrElse(0),
+          nonce.getOrElse(0),
+          location()
+        )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
@@ -405,8 +430,10 @@ final class Configuration(
   private def check(source: String, from: String): Task[(String, Option[String])] =
     IpChecker.checkFrom[Task](from).map((source, _))
 
-  private def checkNext(prev: (String, Option[String]),
-                        next: Task[(String, Option[String])]): Task[(String, Option[String])] =
+  private def checkNext(
+      prev: (String, Option[String]),
+      next: Task[(String, Option[String])]
+  ): Task[(String, Option[String])] =
     prev._2.fold(next)(_ => Task.pure(prev))
 
   private def upnpIpCheck(externalAddress: Option[String]): Task[(String, Option[String])] =
@@ -424,7 +451,8 @@ final class Configuration(
     }
 
   private def whoAmI(port: Int, externalAddress: Option[String])(
-      implicit log: Log[Task]): Task[String] =
+      implicit log: Log[Task]
+  ): Task[String] =
     for {
       _      <- log.info("flag --host was not provided, guessing your external IP address")
       r      <- checkAll(externalAddress)

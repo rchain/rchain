@@ -52,13 +52,17 @@ package object effects {
       log: Log[Task]
   ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
 
-  def tcpTransportLayer(host: String,
-                        port: Int,
-                        certPath: Path,
-                        keyPath: Path,
-                        maxMessageSize: Int)(implicit scheduler: Scheduler,
-                                             connections: TcpTransportLayer.TransportCell[Task],
-                                             log: Log[Task]): TcpTransportLayer = {
+  def tcpTransportLayer(
+      host: String,
+      port: Int,
+      certPath: Path,
+      keyPath: Path,
+      maxMessageSize: Int
+  )(
+      implicit scheduler: Scheduler,
+      connections: TcpTransportLayer.TransportCell[Task],
+      log: Log[Task]
+  ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TcpTransportLayer(host, port, cert, key, maxMessageSize)

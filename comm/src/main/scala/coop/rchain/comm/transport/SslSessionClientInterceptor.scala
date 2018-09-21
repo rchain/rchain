@@ -12,9 +12,11 @@ import io.grpc._
 import javax.net.ssl.SSLSession
 
 class SslSessionClientInterceptor() extends ClientInterceptor {
-  def interceptCall[ReqT, RespT](method: MethodDescriptor[ReqT, RespT],
-                                 callOptions: CallOptions,
-                                 next: Channel): ClientCall[ReqT, RespT] =
+  def interceptCall[ReqT, RespT](
+      method: MethodDescriptor[ReqT, RespT],
+      callOptions: CallOptions,
+      next: Channel
+  ): ClientCall[ReqT, RespT] =
     new SslSessionClientCallInterceptor(next.newCall(method, callOptions))
 }
 
@@ -56,7 +58,8 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
             log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
           }
           val sslSession: Option[SSLSession] = Option(
-            self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION))
+            self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
+          )
           if (sslSession.isEmpty) {
             log.warn("No TLS Session. Closing connection")
             close()

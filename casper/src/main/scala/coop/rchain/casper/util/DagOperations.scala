@@ -48,7 +48,8 @@ object DagOperations {
     *         and ancestor of starting block with index i if B's BitSet contains i.
     */
   def uncommonAncestors(blocks: IndexedSeq[BlockMetadata], lookup: BlockMetadata.Lookup)(
-      implicit topoSort: Ordering[BlockMetadata]): Map[BlockMetadata, BitSet] = {
+      implicit topoSort: Ordering[BlockMetadata]
+  ): Map[BlockMetadata, BitSet] = {
     val commonSet                                      = BitSet(0 until blocks.length: _*)
     def parents(b: BlockMetadata): List[BlockMetadata] = b.parents.map(lookup)
     def isCommon(set: BitSet): Boolean                 = set == commonSet
@@ -58,9 +59,11 @@ object DagOperations {
     q.enqueue(blocks: _*)
 
     @tailrec
-    def loop(currMap: Map[BlockMetadata, BitSet],
-             enqueued: HashSet[BlockMetadata],
-             uncommonEnqueued: Set[BlockMetadata]): Map[BlockMetadata, BitSet] =
+    def loop(
+        currMap: Map[BlockMetadata, BitSet],
+        enqueued: HashSet[BlockMetadata],
+        uncommonEnqueued: Set[BlockMetadata]
+    ): Map[BlockMetadata, BitSet] =
       if (uncommonEnqueued.isEmpty) currMap
       else {
         val currBlock = q.dequeue()
@@ -68,7 +71,8 @@ object DagOperations {
         //      reverse topological order (i.e. down parent links)
         val currSet = currMap.getOrElse(currBlock, BitSet.empty)
         val (newMap, newEnqueued, newUncommon) = parents(currBlock).foldLeft(
-          (currMap, enqueued - currBlock, uncommonEnqueued - currBlock)) {
+          (currMap, enqueued - currBlock, uncommonEnqueued - currBlock)
+        ) {
           case ((map, enq, unc), p) =>
             if (!enq(p)) q.enqueue(p)
             val pSet = map.getOrElse(p, BitSet.empty) | currSet
@@ -90,15 +94,19 @@ object DagOperations {
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
   //Based on that, we compute by finding the first block from genesis for which there
   //exists a child of that block which is an ancestor of b1 or b2 but not both.
-  def greatestCommonAncestorF[F[_]: Monad: BlockStore](b1: BlockMessage,
-                                                       b2: BlockMessage,
-                                                       genesis: BlockMessage,
-                                                       dag: BlockDag): F[BlockMessage] =
+  def greatestCommonAncestorF[F[_]: Monad: BlockStore](
+      b1: BlockMessage,
+      b2: BlockMessage,
+      genesis: BlockMessage,
+      dag: BlockDag
+  ): F[BlockMessage] =
     if (b1 == b2) {
       b1.pure[F]
     } else {
-      def commonAncestorChild(b: BlockMessage,
-                              commonAncestors: Set[BlockMessage]): F[List[BlockMessage]] = {
+      def commonAncestorChild(
+          b: BlockMessage,
+          commonAncestors: Set[BlockMessage]
+      ): F[List[BlockMessage]] = {
         val childrenHashes = dag.childMap.getOrElse(b.blockHash, HashSet.empty[BlockHash])
         for {
           children               <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
@@ -116,10 +124,13 @@ object DagOperations {
                     dag.childMap
                       .getOrElse(b.blockHash, HashSet.empty[BlockHash])
                       .toList
-                      .existsM(hash =>
-                        for {
-                          c <- ProtoUtil.unsafeGetBlock[F](hash)
-                        } yield b1Ancestors(c) ^ b2Ancestors(c)))
+                      .existsM(
+                        hash =>
+                          for {
+                            c <- ProtoUtil.unsafeGetBlock[F](hash)
+                          } yield b1Ancestors(c) ^ b2Ancestors(c)
+                      )
+                )
       } yield gca.get
     }
 }

@@ -14,11 +14,12 @@ import com.google.protobuf.ByteString
 import scala.concurrent.duration._
 import com.google.protobuf.ByteString
 
-class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implicit
-                                                                         scheduler: Scheduler,
-                                                                         metrics: Metrics[Task],
-                                                                         log: Log[Task])
-    extends KademliaRPC[Task] {
+class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
+    implicit
+    scheduler: Scheduler,
+    metrics: Metrics[Task],
+    log: Log[Task]
+) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -57,13 +58,17 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(implici
         lr => lr.nodes.map(toPeerNode)
       )
 
-  def receive(pingHandler: PeerNode => Task[Unit],
-              lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]): Task[Unit] =
+  def receive(
+      pingHandler: PeerNode => Task[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+  ): Task[Unit] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
-        .addService(KademliaRPCServiceGrpc
-          .bindService(new SimpleKademliaRPCService[Task](pingHandler, lookupHandler), scheduler))
+        .addService(
+          KademliaRPCServiceGrpc
+            .bindService(new SimpleKademliaRPCService[Task](pingHandler, lookupHandler), scheduler)
+        )
         .build
         .start
     }

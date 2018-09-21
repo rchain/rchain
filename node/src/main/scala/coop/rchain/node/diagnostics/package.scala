@@ -227,14 +227,20 @@ package object diagnostics {
     new DiagnosticsGrpcMonix.Diagnostics {
       def listPeers(request: Empty): Task[Peers] =
         connectionsCell.read.map { ps =>
-          Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))))
+          Peers(
+            ps.map(
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+            )
+          )
         }
 
       def listDiscoveredPeers(request: Empty): Task[Peers] =
         nodeDiscovery.peers.map { ps =>
-          Peers(ps.map(p =>
-            Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))))
+          Peers(
+            ps.map(
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
+            )
+          )
         }
 
       def getProcessCpu(request: Empty): Task[ProcessCpu] =

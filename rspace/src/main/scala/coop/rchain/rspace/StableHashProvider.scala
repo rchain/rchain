@@ -16,13 +16,15 @@ object StableHashProvider {
     Blake2b256Hash.create(
       channels
         .map(c => codecC.encode(c).get.bytes)
-        .sorted(util.ordByteVector))
+        .sorted(util.ordByteVector)
+    )
 
   def hash[C, P, K](channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
-      serializeK: Serialize[K]) = {
+      serializeK: Serialize[K]
+  ) = {
     val (encodedChannels, encodedPatterns) = channels
       .zip(patterns)
       .map { case (channel, pattern) => (serializeC.encode(channel), serializeP.encode(pattern)) }
@@ -31,15 +33,23 @@ object StableHashProvider {
 
     Blake2b256Hash.create(
       encodedChannels ++ encodedPatterns
-        ++ List(serializeK.encode(continuation),
-                (ignore(7) ~> bool).encode(persist).map(_.bytes).get))
+        ++ List(
+          serializeK.encode(continuation),
+          (ignore(7) ~> bool).encode(persist).map(_.bytes).get
+        )
+    )
   }
 
-  def hash[C, A](channel: C, datum: A, persist: Boolean)(implicit
-                                                         serializeC: Serialize[C],
-                                                         serializeA: Serialize[A]) =
+  def hash[C, A](channel: C, datum: A, persist: Boolean)(
+      implicit
+      serializeC: Serialize[C],
+      serializeA: Serialize[A]
+  ) =
     Blake2b256Hash.create(
-      Seq(serializeC.encode(channel),
-          serializeA.encode(datum),
-          (ignore(7) ~> bool).encode(persist).map(_.bytes).get))
+      Seq(
+        serializeC.encode(channel),
+        serializeA.encode(datum),
+        (ignore(7) ~> bool).encode(persist).map(_.bytes).get
+      )
+    )
 }

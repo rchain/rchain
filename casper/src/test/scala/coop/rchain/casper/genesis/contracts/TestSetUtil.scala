@@ -22,22 +22,28 @@ object TestSetUtil {
 
   def runtime(name: String): Runtime = Runtime.create(Paths.get("/not/a/path"), -1, InMem)
 
-  def eval_term(term: Par, runtime: Runtime)(implicit scheduler: Scheduler,
-                                             rand: Blake2b512Random,
-                                             costAccountingAlg: CostAccountingAlg[Task]): Unit =
+  def eval_term(term: Par, runtime: Runtime)(
+      implicit scheduler: Scheduler,
+      rand: Blake2b512Random,
+      costAccountingAlg: CostAccountingAlg[Task]
+  ): Unit =
     runtime.reducer.inj(term).unsafeRunSync
 
-  def eval(code: String, runtime: Runtime)(implicit scheduler: Scheduler,
-                                           rand: Blake2b512Random,
-                                           costAccountingAlg: CostAccountingAlg[Task]): Unit =
+  def eval(code: String, runtime: Runtime)(
+      implicit scheduler: Scheduler,
+      rand: Blake2b512Random,
+      costAccountingAlg: CostAccountingAlg[Task]
+  ): Unit =
     mkTerm(code) match {
       case Right(term) => eval_term(term, runtime)
       case Left(ex)    => throw ex
     }
 
-  def runTests(tests: CompiledRholangSource,
-               otherLibs: Seq[CompiledRholangSource],
-               runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
+  def runTests(
+      tests: CompiledRholangSource,
+      otherLibs: Seq[CompiledRholangSource],
+      runtime: Runtime
+  )(implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
     val rand              = Blake2b512Random(128)
     val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
@@ -50,9 +56,11 @@ object TestSetUtil {
         eval(lib.code, runtime)(implicitly, rand.splitShort((idx + 2).toShort), costAccountingAlg)
     }
 
-    eval(tests.code, runtime)(implicitly,
-                              rand.splitShort((otherLibs.length + 2).toShort),
-                              costAccountingAlg)
+    eval(tests.code, runtime)(
+      implicitly,
+      rand.splitShort((otherLibs.length + 2).toShort),
+      costAccountingAlg
+    )
   }
 
   /**

@@ -22,10 +22,12 @@ object ArbitraryInstances {
   val arbNonEmptyString =
     Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
-  implicit def arbitraryDatum[C, T](chan: C)(implicit
-                                             arbT: Arbitrary[T],
-                                             serializeC: Serialize[C],
-                                             serializeT: Serialize[T]): Arbitrary[Datum[T]] =
+  implicit def arbitraryDatum[C, T](chan: C)(
+      implicit
+      arbT: Arbitrary[T],
+      serializeC: Serialize[C],
+      serializeT: Serialize[T]
+  ): Arbitrary[Datum[T]] =
     Arbitrary(for {
       t <- arbT.arbitrary
       b <- Arbitrary.arbitrary[Boolean]
@@ -47,9 +49,11 @@ object ArbitraryInstances {
         .map(maybeHashes => PointerBlock.fromVector(maybeHashes.toVector))
     })
 
-  implicit def arbitaryTrie[K, V](implicit
-                                  arbK: Arbitrary[K],
-                                  arbV: Arbitrary[V]): Arbitrary[Trie[K, V]] = {
+  implicit def arbitaryTrie[K, V](
+      implicit
+      arbK: Arbitrary[K],
+      arbV: Arbitrary[V]
+  ): Arbitrary[Trie[K, V]] = {
     val genNode: Gen[Trie[K, V]] = Arbitrary.arbitrary[PointerBlock].map(pb => Node(pb))
 
     val genLeaf: Gen[Trie[K, V]] =
@@ -75,10 +79,13 @@ object ArbitraryInstances {
     Arbitrary(
       Gen
         .sized { size =>
-          Gen.containerOfN[Seq, (TestKey4, ByteVector)](if (size > 2) size else 2,
-                                                        Arbitrary.arbitrary[(TestKey4, ByteVector)])
+          Gen.containerOfN[Seq, (TestKey4, ByteVector)](
+            if (size > 2) size else 2,
+            Arbitrary.arbitrary[(TestKey4, ByteVector)]
+          )
         }
-        .map(_.toMap))
+        .map(_.toMap)
+    )
   }
 
   implicit val arbitraryTestKey32: Arbitrary[TestKey32] =
@@ -89,16 +96,21 @@ object ArbitraryInstances {
     })
 
   implicit val arbitraryNonEmptyMapTestKey32ByteVector: Arbitrary[Map[TestKey32, ByteVector]] = {
-    Arbitrary(Gen
-      .sized { size =>
-        Gen.containerOfN[Seq, (TestKey32, ByteVector)](if (size > 2) size else 2,
-                                                       Arbitrary.arbitrary[(TestKey32, ByteVector)])
-      }
-      .map(_.toMap))
+    Arbitrary(
+      Gen
+        .sized { size =>
+          Gen.containerOfN[Seq, (TestKey32, ByteVector)](
+            if (size > 2) size else 2,
+            Arbitrary.arbitrary[(TestKey32, ByteVector)]
+          )
+        }
+        .map(_.toMap)
+    )
   }
 
   implicit def arbitraryNonEmptyMapStringDatumString(
-      implicit serializeString: Serialize[String]): Arbitrary[Map[String, Datum[String]]] =
+      implicit serializeString: Serialize[String]
+  ): Arbitrary[Map[String, Datum[String]]] =
     Arbitrary(
       Gen
         .sized { size =>
@@ -107,13 +119,14 @@ object ArbitraryInstances {
             dat <- arbitraryDatum[String, String](str).arbitrary
           } yield (str, dat))
         }
-        .map(_.toMap))
+        .map(_.toMap)
+    )
 
   def arbitraryWaitingContinuation(chans: List[String])(
       implicit
       serializeString: Serialize[String],
       serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor],
+      serializeStringsCaptor: Serialize[StringsCaptor]
   ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
     Arbitrary(
       for {
@@ -122,19 +135,22 @@ object ArbitraryInstances {
       } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
     )
 
-  implicit def arbitraryGnat(implicit
-                             serializeString: Serialize[String],
-                             serializePattern: Serialize[Pattern],
-                             serializeStringsCaptor: Serialize[StringsCaptor])
-    : Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
+  implicit def arbitraryGnat(
+      implicit
+      serializeString: Serialize[String],
+      serializePattern: Serialize[Pattern],
+      serializeStringsCaptor: Serialize[StringsCaptor]
+  ): Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       for {
         chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
         data <- Gen.nonEmptyContainerOf[List, Datum[String]](
-                 arbitraryDatum[String, String](chans.head).arbitrary)
+                 arbitraryDatum[String, String](chans.head).arbitrary
+               )
         wks <- Gen.nonEmptyContainerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
-                arbitraryWaitingContinuation(chans).arbitrary)
+                arbitraryWaitingContinuation(chans).arbitrary
+              )
       } yield GNAT(chans, data, wks)
     })
 
@@ -142,8 +158,8 @@ object ArbitraryInstances {
       implicit
       serializeString: Serialize[String],
       serializePattern: Serialize[Pattern],
-      serializeStringsCaptor: Serialize[StringsCaptor])
-    : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] =
+      serializeStringsCaptor: Serialize[StringsCaptor]
+  ): Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       Gen

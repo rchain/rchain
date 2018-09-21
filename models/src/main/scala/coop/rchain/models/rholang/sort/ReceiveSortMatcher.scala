@@ -35,13 +35,17 @@ object ReceiveSortMatcher extends Sortable[Receive] {
       sortedBody      <- Sortable.sortMatch(r.body)
     } yield
       ScoredTerm(
-        Receive(sortedBinds.map(_.term),
-                sortedBody.term,
-                r.persistent,
-                r.bindCount,
-                r.locallyFree,
-                r.connectiveUsed),
-        Node(Score.RECEIVE,
-             Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
+        Receive(
+          sortedBinds.map(_.term),
+          sortedBody.term,
+          r.persistent,
+          r.bindCount,
+          r.locallyFree,
+          r.connectiveUsed
+        ),
+        Node(
+          Score.RECEIVE,
+          Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*
+        )
       )
 }

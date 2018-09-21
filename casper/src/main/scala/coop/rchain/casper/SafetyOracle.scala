@@ -71,12 +71,16 @@ sealed abstract class SafetyOracleInstances {
                                } else {
                                  val vertexCount = candidateWeights.keys.size
                                  for {
-                                   edgeCount <- agreementGraphEdgeCount(blockDag,
-                                                                        estimate,
-                                                                        candidateWeights)
+                                   edgeCount <- agreementGraphEdgeCount(
+                                                 blockDag,
+                                                 estimate,
+                                                 candidateWeights
+                                               )
                                  } yield
-                                   minTotalValidatorWeight(estimate,
-                                                           maxCliqueMinSize(vertexCount, edgeCount))
+                                   minTotalValidatorWeight(
+                                     estimate,
+                                     maxCliqueMinSize(vertexCount, edgeCount)
+                                   )
                                }
         } yield minMaxCliqueWeight
 
@@ -85,8 +89,10 @@ sealed abstract class SafetyOracleInstances {
           mainParentWeightMap <- computeMainParentWeightMap(estimate)
         } yield weightMapTotal(mainParentWeightMap)
 
-      private def computeCandidateWeights(blockDag: BlockDag,
-                                          estimate: BlockMessage): F[Map[Validator, Int]] =
+      private def computeCandidateWeights(
+          blockDag: BlockDag,
+          estimate: BlockMessage
+      ): F[Map[Validator, Int]] =
         for {
           weights <- computeMainParentWeightMap(estimate)
           candidateWeights <- weights.toList.traverse {
@@ -117,8 +123,10 @@ sealed abstract class SafetyOracleInstances {
           }
         } yield mainParentWeightMap
 
-      private def findMaximumClique(edges: List[(Validator, Validator)],
-                                    candidates: Map[Validator, Int]): (List[Validator], Int) =
+      private def findMaximumClique(
+          edges: List[(Validator, Validator)],
+          candidates: Map[Validator, Int]
+      ): (List[Validator], Int) =
         Clique
           .findCliquesRecursive(edges)
           .foldLeft((List[Validator](), 0)) {
@@ -134,11 +142,15 @@ sealed abstract class SafetyOracleInstances {
             }
           }
 
-      private def agreementGraphEdgeCount(blockDag: BlockDag,
-                                          estimate: BlockMessage,
-                                          candidates: Map[Validator, Int]): F[Int] = {
-        def findAgreeingJustificationHash(justificationHashes: List[BlockHash],
-                                          validator: Validator): F[Option[BlockHash]] =
+      private def agreementGraphEdgeCount(
+          blockDag: BlockDag,
+          estimate: BlockMessage,
+          candidates: Map[Validator, Int]
+      ): F[Int] = {
+        def findAgreeingJustificationHash(
+            justificationHashes: List[BlockHash],
+            validator: Validator
+        ): F[Option[BlockHash]] =
           ListContrib.findM(
             justificationHashes,
             justificationHash =>
@@ -159,7 +171,8 @@ sealed abstract class SafetyOracleInstances {
                                         .pure[F]
                 agreeingJustificationHash <- findAgreeingJustificationHash(
                                               justificationHashes.toList,
-                                              second)
+                                              second
+                                            )
               } yield agreeingJustificationHash.isDefined
             case None => false.pure[F]
           }
@@ -168,22 +181,16 @@ sealed abstract class SafetyOracleInstances {
         def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
           blockDag.latestMessages.get(validator) match {
             case Some(latestMessageByValidator) =>
-              for {
-                potentialChildren <- DagOperations
-                                      .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
-                                        block =>
-                                          ProtoUtil.getCreatorJustificationAsList[F](
-                                            block,
-                                            validator,
-                                            b => b == candidate)
-                                      }
-                                      .toList
-                children <- potentialChildren.filterA { potentialChild =>
-                             val isFutureBlockIfSameValidator = candidate.seqNum <= potentialChild.seqNum
-                             val validatorCreatedChild        = potentialChild.sender == validator
-                             (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
-                           }
-              } yield children
+              DagOperations
+                .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) { block =>
+                  ProtoUtil.getCreatorJustificationAsList[F](block, validator, b => b == candidate)
+                }
+                .filter { potentialChild =>
+                  val validatorCreatedChild = potentialChild.sender == validator
+                  val isFutureBlock         = candidate.seqNum <= potentialChild.seqNum
+                  validatorCreatedChild && isFutureBlock
+                }
+                .toList
             case None => List.empty[BlockMessage].pure[F]
           }
 
@@ -199,14 +206,16 @@ sealed abstract class SafetyOracleInstances {
                                                  justificationHash =>
                                                    for {
                                                      justificationBlock <- unsafeGetBlock[F](
-                                                                            justificationHash)
+                                                                            justificationHash
+                                                                          )
                                                      isSenderSecond = justificationBlock.sender == second
                                                      result = if (isSenderSecond) {
                                                        Some(justificationBlock)
                                                      } else {
                                                        none[BlockMessage]
                                                      }
-                                                   } yield result)
+                                                   } yield result
+                                               )
                 _                        = assert(justificationBlockSecondList.flatten.length == 1)
                 justificationBlockSecond = justificationBlockSecondList.flatten.head
                 potentialDisagreements   <- filterChildren(justificationBlockSecond, second)
@@ -229,9 +238,12 @@ sealed abstract class SafetyOracleInstances {
               Monad[F].ifM(seesAgreement(first, second))(
                 Monad[F].ifM(seesAgreement(second, first))(
                   Monad[F].ifM(neverEventuallySeeDisagreement(first, second))(
-                    Monad[F].ifM(neverEventuallySeeDisagreement(second, first))(true.pure[F],
-                                                                                false.pure[F]),
-                    false.pure[F]),
+                    Monad[F].ifM(neverEventuallySeeDisagreement(second, first))(
+                      true.pure[F],
+                      false.pure[F]
+                    ),
+                    false.pure[F]
+                  ),
                   false.pure[F]
                 ),
                 false.pure[F]

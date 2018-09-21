@@ -38,7 +38,8 @@ class ClearConnectionsSpec
 
   describe("Node when called to clear connectios") {
     describe(
-      "if number of connectons is smaller or equal to 2/3 of number of maximum connectons allowed") {
+      "if number of connectons is smaller or equal to 2/3 of number of maximum connectons allowed"
+    ) {
       it("should not clear any of existing connections") {
         // given
         implicit val connections = mkConnections(peer("A"), peer("B"))
@@ -132,9 +133,11 @@ class ClearConnectionsSpec
 
   private def conf(maxNumOfConnections: Int, numOfConnectionsPinged: Int = 5): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = FiniteDuration(1, MILLISECONDS),
-             local = peer("src"))
+      RPConf(
+        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        defaultTimeout = FiniteDuration(1, MILLISECONDS),
+        local = peer("src")
+      )
     )
 
   def alwaysSuccess: Protocol => CommErr[Protocol] =

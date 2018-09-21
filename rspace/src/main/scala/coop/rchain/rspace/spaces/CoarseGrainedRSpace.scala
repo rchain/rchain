@@ -14,8 +14,10 @@ import scala.collection.immutable.Seq
 import scala.util.Random
 import kamon._
 
-class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P, A, K],
-                                                             branch: Branch)(
+class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
+    store: IStore[C, P, A, K],
+    branch: Branch
+)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
@@ -33,7 +35,8 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
   protected[this] val installSpan = Kamon.buildSpan("rspace.install")
 
   override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
+      implicit m: Match[P, E, A, R]
+  ): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
@@ -77,7 +80,8 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
             store.putWaitingContinuation(
               txn,
               channels,
-              WaitingContinuation(patterns, continuation, persist, consumeRef))
+              WaitingContinuation(patterns, continuation, persist, consumeRef)
+            )
             for (channel <- channels) store.addJoin(txn, channel, channels)
             logger.debug(s"""|consume: no data found,
                              |storing <(patterns, continuation): ($patterns, $continuation)>
@@ -104,7 +108,8 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
     }
 
   override def produce(channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, E, A, R]): Either[E, Option[(K, Seq[R])]] =
+      implicit m: Match[P, E, A, R]
+  ): Either[E, Option[(K, Seq[R])]] =
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
@@ -123,7 +128,8 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
         def extractProduceCandidate(
             groupedChannels: Seq[Seq[C]],
             batChannel: C,
-            data: Datum[A]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
+            data: Datum[A]
+        ): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
           groupedChannels match {
             case Nil => Right(None)
             case channels :: remaining =>
@@ -156,10 +162,14 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (store: IStore[C, P,
           case Left(e) => Left(e)
           case Right(
               Some(
-                ProduceCandidate(channels,
-                                 WaitingContinuation(_, continuation, persistK, consumeRef),
-                                 continuationIndex,
-                                 dataCandidates))) =>
+                ProduceCandidate(
+                  channels,
+                  WaitingContinuation(_, continuation, persistK, consumeRef),
+                  continuationIndex,
+                  dataCandidates
+                )
+              )
+              ) =>
             produceCommCounter.increment()
 
             eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
