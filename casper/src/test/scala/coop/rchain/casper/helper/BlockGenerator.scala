@@ -56,7 +56,8 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain"): F[BlockMessage] =
+      shardId: String = "rchain"
+  ): F[BlockMessage] =
     for {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
@@ -79,13 +80,15 @@ trait BlockGenerator {
           Justification(creator, latestBlockHash)
       }
       serializedBlockHash = ByteString.copyFrom(blockHash)
-      block = BlockMessage(serializedBlockHash,
-                           Some(header),
-                           Some(body),
-                           serializedJustifications,
-                           creator,
-                           nextCreatorSeqNum,
-                           shardId = shardId)
+      block = BlockMessage(
+        serializedBlockHash,
+        Some(header),
+        Some(body),
+        serializedJustifications,
+        creator,
+        nextCreatorSeqNum,
+        shardId = shardId
+      )
       idToBlocks     = chain.idToBlocks + (nextId -> block)
       _              <- BlockStore[F].put(serializedBlockHash, block)
       latestMessages = chain.latestMessages + (block.sender -> block)
@@ -102,15 +105,17 @@ trait BlockGenerator {
       updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
       updatedSort       = TopologicalSortUtil.update(chain.topoSort, chain.sortOffset, block)
       updatedLookup     = chain.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
-      newChain = IndexedBlockDag(idToBlocks,
-                                 childMap,
-                                 latestMessages,
-                                 latestMessagesOfLatestMessages,
-                                 nextId,
-                                 updatedSeqNumbers,
-                                 updatedLookup,
-                                 updatedSort,
-                                 chain.sortOffset)
+      newChain = IndexedBlockDag(
+        idToBlocks,
+        childMap,
+        latestMessages,
+        latestMessagesOfLatestMessages,
+        nextId,
+        updatedSeqNumbers,
+        updatedLookup,
+        updatedSort,
+        chain.sortOffset
+      )
       _ <- blockDagState[F].set(newChain)
     } yield block
 }

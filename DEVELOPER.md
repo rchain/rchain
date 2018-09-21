@@ -1,6 +1,6 @@
 ## Building and running
 
-Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q1 of 2019.
 
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 

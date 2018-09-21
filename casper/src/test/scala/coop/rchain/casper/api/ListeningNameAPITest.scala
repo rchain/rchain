@@ -103,10 +103,13 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val data2   = listeningNameResponse2.blockResults.map(_.postBlockData)
     val blocks2 = listeningNameResponse2.blockResults.map(_.block)
     data2 should be(
-      List(List(resultData, resultData, resultData, resultData),
-           List(resultData, resultData, resultData),
-           List(resultData, resultData),
-           List(resultData)))
+      List(
+        List(resultData, resultData, resultData, resultData),
+        List(resultData, resultData, resultData),
+        List(resultData, resultData),
+        List(resultData)
+      )
+    )
     blocks2.length should be(4)
     listeningNameResponse2.length should be(4)
 
@@ -141,7 +144,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         List(resultData, resultData, resultData),
         List(resultData, resultData),
         List(resultData)
-      ))
+      )
+    )
     blocks3.length should be(7)
     listeningNameResponse3.length should be(7)
 
@@ -168,7 +172,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         Seq(
           Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))))),
           Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
-        ))
+        )
+      )
     val result = WaitingContinuationInfo(
       List(
         BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(1))))))), None, 0),
@@ -189,7 +194,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         Seq(
           Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))))),
           Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))))
-        ))
+        )
+      )
     val listeningNameResponse2 =
       BlockAPI.getListeningNameContinuationResponse[Id](listeningNamesShuffled2)
     val continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)

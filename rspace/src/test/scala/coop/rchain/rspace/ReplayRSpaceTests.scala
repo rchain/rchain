@@ -31,18 +31,20 @@ trait ReplayRSpaceTests
       channelsCreator: Int => List[C],
       patterns: List[P],
       continuationCreator: Int => K,
-      persist: Boolean)(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, Seq[R])]] =
+      persist: Boolean
+  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
     }
 
-  def produceMany[C, P, A, R, K](space: IdISpace[C, P, Nothing, A, R, K],
-                                 range: Range,
-                                 shuffle: Boolean,
-                                 channelCreator: Int => C,
-                                 datumCreator: Int => A,
-                                 persist: Boolean)(
-      implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, immutable.Seq[R])]] =
+  def produceMany[C, P, A, R, K](
+      space: IdISpace[C, P, Nothing, A, R, K],
+      range: Range,
+      shuffle: Boolean,
+      channelCreator: Int => C,
+      datumCreator: Int => A,
+      persist: Boolean
+  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, immutable.Seq[R])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.produce(channelCreator(i), datumCreator(i), persist).right.get
     }
@@ -808,18 +810,21 @@ trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with O
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      oC: Ordering[C]): S
+      oC: Ordering[C]
+  ): S
 }
 
 trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      oC: Ordering[C]): S = {
+      oC: Ordering[C]
+  ): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
@@ -839,13 +844,15 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
 
 trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      oC: Ordering[C]): S = {
+      oC: Ordering[C]
+  ): S = {
 
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
     val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
@@ -863,13 +870,15 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
 
 trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S)(
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
-      oC: Ordering[C]): S = {
+      oC: Ordering[C]
+  ): S = {
 
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)

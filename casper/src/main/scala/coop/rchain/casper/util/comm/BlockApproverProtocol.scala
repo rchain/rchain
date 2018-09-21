@@ -28,31 +28,35 @@ import scala.util.Try
   * Validator side of the protocol defined in
   * https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
   */
-class BlockApproverProtocol(validatorId: ValidatorIdentity,
-                            deployTimestamp: Long,
-                            runtimeManager: RuntimeManager,
-                            bonds: Map[Array[Byte], Long],
-                            wallets: Seq[PreWallet],
-                            requiredSigs: Int)(implicit scheduler: Scheduler) {
+class BlockApproverProtocol(
+    validatorId: ValidatorIdentity,
+    deployTimestamp: Long,
+    runtimeManager: RuntimeManager,
+    bonds: Map[Array[Byte], Long],
+    wallets: Seq[PreWallet],
+    requiredSigs: Int
+)(implicit scheduler: Scheduler) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
-  def unapprovedBlockPacketHandler[
-      F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+  def unapprovedBlockPacketHandler[F[_]: Capture: Monad: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
       peer: PeerNode,
-      u: UnapprovedBlock): F[Option[Packet]] =
+      u: UnapprovedBlock
+  ): F[Option[Packet]] =
     if (u.candidate.isEmpty) {
       Log[F]
         .warn("Candidate is not defined.")
         .map(_ => none[Packet])
     } else {
       val candidate = u.candidate.get
-      val validCandidate = BlockApproverProtocol.validateCandidate(runtimeManager,
-                                                                   candidate,
-                                                                   requiredSigs,
-                                                                   deployTimestamp,
-                                                                   wallets,
-                                                                   _bonds)
+      val validCandidate = BlockApproverProtocol.validateCandidate(
+        runtimeManager,
+        candidate,
+        requiredSigs,
+        deployTimestamp,
+        wallets,
+        _bonds
+      )
       validCandidate match {
         case Right(_) =>
           for {
@@ -73,15 +77,19 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
 }
 
 object BlockApproverProtocol {
-  def getBlockApproval(expectedCandidate: ApprovedBlockCandidate,
-                       validatorId: ValidatorIdentity): BlockApproval = {
+  def getBlockApproval(
+      expectedCandidate: ApprovedBlockCandidate,
+      validatorId: ValidatorIdentity
+  ): BlockApproval = {
     val sigData = Blake2b256.hash(expectedCandidate.toByteArray)
     val sig     = validatorId.signature(sigData)
     BlockApproval(Some(expectedCandidate), Some(sig))
   }
 
-  def getApproval(candidate: ApprovedBlockCandidate,
-                  validatorId: ValidatorIdentity): BlockApproval =
+  def getApproval(
+      candidate: ApprovedBlockCandidate,
+      validatorId: ValidatorIdentity
+  ): BlockApproval =
     getBlockApproval(candidate, validatorId)
 
   def validateCandidate(
@@ -90,7 +98,8 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Long])(implicit scheduler: Scheduler): Either[String, Unit] =
+      bonds: Map[ByteString, Long]
+  )(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
             .either(())
@@ -111,7 +120,8 @@ object BlockApproverProtocol {
             .forall(
               d =>
                 genesisBlessedTerms.contains(d.deploy.term.get) && genesisBlessedDeploys
-                  .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get)))
+                  .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get))
+            )
             .either(())
             .or("Candidate deploys do not match expected deploys.")
       _ <- (blockDeploys.size == genesisBlessedContracts.size)

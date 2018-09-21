@@ -38,10 +38,12 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
         install(txn, channels, patterns, continuation)(_match)
     }
 
-  private[this] def install(txn: store.Transaction,
-                            channels: Seq[C],
-                            patterns: Seq[P],
-                            continuation: K)(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
+  private[this] def install(
+      txn: store.Transaction,
+      channels: Seq[C],
+      patterns: Seq[P],
+      continuation: K
+  )(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -77,7 +79,8 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
         store.installWaitingContinuation(
           txn,
           channels,
-          WaitingContinuation(patterns, continuation, persist = true, consumeRef))
+          WaitingContinuation(patterns, continuation, persist = true, consumeRef)
+        )
         for (channel <- channels) store.addJoin(txn, channel, channels)
         logger.debug(s"""|storing <(patterns, continuation): ($patterns, $continuation)>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
@@ -89,15 +92,18 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
   }
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
-      implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] =
+      implicit m: Match[P, E, A, R]
+  ): Option[(K, Seq[R])] =
     Kamon.withSpan(installSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         install(txn, channels, patterns, continuation)
       }
     }
 
-  override def retrieve(root: Blake2b256Hash,
-                        channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] =
+  override def retrieve(
+      root: Blake2b256Hash,
+      channelsHash: Blake2b256Hash
+  ): Option[GNAT[C, P, A, K]] =
     history.lookup(store.trieStore, root, channelsHash)
 
   override def reset(root: Blake2b256Hash): Unit =

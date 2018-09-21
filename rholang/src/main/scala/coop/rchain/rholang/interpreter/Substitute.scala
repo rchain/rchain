@@ -20,24 +20,21 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-  def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
-      implicit evA: Substitute[M, A],
-      evB: Substitute[M, B],
-      depth: Int,
-      env: Env[Par]): M[C] =
+  def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
+      f: (A, B) => C
+  )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
     (evA.substitute(termA), evB.substitute(termB)).mapN(f)
 
-  def substituteNoSort2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
-      implicit evA: Substitute[M, A],
-      evB: Substitute[M, B],
-      depth: Int,
-      env: Env[Par]): M[C] =
+  def substituteNoSort2[M[_]: Monad, A, B, C](termA: A, termB: B)(
+      f: (A, B) => C
+  )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
     (evA.substituteNoSort(termA), evB.substituteNoSort(termB)).mapN(f)
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
-  def maybeSubstitute[M[+ _]: Sync](term: Var)(implicit depth: Int,
-                                               env: Env[Par]): M[Either[Var, Par]] =
+  def maybeSubstitute[M[+ _]: Sync](
+      term: Var
+  )(implicit depth: Int, env: Env[Par]): M[Either[Var, Par]] =
     if (depth != 0)
       Applicative[M].pure(Left(term))
     else
@@ -52,15 +49,17 @@ object Substitute {
           Sync[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
       }
 
-  def maybeSubstitute[M[_]: Sync](term: EVar)(implicit depth: Int,
-                                              env: Env[Par]): M[Either[EVar, Par]] =
+  def maybeSubstitute[M[_]: Sync](
+      term: EVar
+  )(implicit depth: Int, env: Env[Par]): M[Either[EVar, Par]] =
     maybeSubstitute[M](term.v).map {
       case Left(v)    => Left(EVar(v))
       case Right(par) => Right(par)
     }
 
-  def maybeSubstitute[M[_]: Sync](term: EEvalBody)(implicit depth: Int,
-                                                   env: Env[Par]): M[Either[Expr, Par]] =
+  def maybeSubstitute[M[_]: Sync](
+      term: EEvalBody
+  )(implicit depth: Int, env: Env[Par]): M[Either[Expr, Par]] =
     term.value.channelInstance match {
       case Quote(p) => substitutePar[M].substituteNoSort(p).map(Right(_))
       case ChanVar(v) =>
@@ -71,8 +70,9 @@ object Substitute {
       case ChannelInstance.Empty => Either.left[Expr, Par](Expr(term)).pure[M]
     }
 
-  def maybeSubstitute[M[_]: Sync](term: VarRef)(implicit depth: Int,
-                                                env: Env[Par]): M[Either[VarRef, Par]] =
+  def maybeSubstitute[M[_]: Sync](
+      term: VarRef
+  )(implicit depth: Int, env: Env[Par]): M[Either[VarRef, Par]] =
     if (term.depth != depth)
       Applicative[M].pure(Left(term))
     else
@@ -231,11 +231,14 @@ object Substitute {
                            subPatterns <- patterns.toVector.traverse(
                                            pattern =>
                                              substituteChannel[M]
-                                               .substituteNoSort(pattern)(depth + 1, env))
+                                               .substituteNoSort(pattern)(depth + 1, env)
+                                         )
                          } yield ReceiveBind(subPatterns, subChannel, rem, freeCount)
                      }
-          bodySub <- substitutePar[M].substituteNoSort(term.body.get)(depth,
-                                                                      env.shift(term.bindCount))
+          bodySub <- substitutePar[M].substituteNoSort(term.body.get)(
+                      depth,
+                      env.shift(term.bindCount)
+                    )
           rec = Receive(
             binds = bindsSub,
             body = bodySub,
@@ -269,8 +272,10 @@ object Substitute {
           casesSub <- term.cases.toVector.traverse {
                        case MatchCase(_case, _par, freeCount) =>
                          for {
-                           par <- substitutePar[M].substituteNoSort(_par)(depth,
-                                                                          env.shift(freeCount))
+                           par <- substitutePar[M].substituteNoSort(_par)(
+                                   depth,
+                                   env.shift(freeCount)
+                                 )
                            subCase <- substitutePar[M].substituteNoSort(_case)(depth + 1, env)
                          } yield MatchCase(subCase, par, freeCount)
                      }
@@ -285,7 +290,8 @@ object Substitute {
       private[this] def substituteDelegate(
           term: Expr,
           s1: Par => M[Par],
-          s2: (Par, Par) => ((Par, Par) => Expr) => M[Expr])(implicit env: Env[Par]): M[Expr] =
+          s2: (Par, Par) => ((Par, Par) => Expr) => M[Expr]
+      )(implicit env: Env[Par]): M[Expr] =
         term.exprInstance match {
           case ENotBody(ENot(par)) => s1(par.get).map(ENot(_))
           case ENegBody(ENeg(par)) => s1(par.get).map(ENeg(_))
@@ -342,10 +348,14 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = ESetBody(
-                  ParSet(SortedParHashSet(pss.toSeq),
-                         connectiveUsed,
-                         locallyFree.map(_.until(env.shift)),
-                         remainder)))
+                  ParSet(
+                    SortedParHashSet(pss.toSeq),
+                    connectiveUsed,
+                    locallyFree.map(_.until(env.shift)),
+                    remainder
+                  )
+                )
+              )
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
@@ -359,7 +369,9 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = EMapBody(
-                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)))
+                  ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
+                )
+              )
           case EMethodBody(EMethod(mtd, target, arguments, locallyFree, connectiveUsed)) =>
             for {
               subTarget    <- s1(target)
@@ -367,18 +379,24 @@ object Substitute {
             } yield
               Expr(
                 exprInstance = EMethodBody(
-                  EMethod(mtd,
-                          subTarget,
-                          subArguments,
-                          locallyFree.until(env.shift),
-                          connectiveUsed)))
+                  EMethod(
+                    mtd,
+                    subTarget,
+                    subArguments,
+                    locallyFree.until(env.shift),
+                    connectiveUsed
+                  )
+                )
+              )
           case g @ _ => Applicative[M].pure(term)
         }
       override def substitute(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =
         substituteDelegate(term, substitutePar[M].substitute, substitute2[M, Par, Par, Expr])
       override def substituteNoSort(term: Expr)(implicit depth: Int, env: Env[Par]): M[Expr] =
-        substituteDelegate(term,
-                           substitutePar[M].substituteNoSort,
-                           substituteNoSort2[M, Par, Par, Expr])
+        substituteDelegate(
+          term,
+          substitutePar[M].substituteNoSort,
+          substituteNoSort2[M, Par, Par, Expr]
+        )
     }
 }

@@ -43,20 +43,28 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeDatum(txn: Transaction, channel: Seq[C], index: Int): Unit
 
-  private[rspace] def installWaitingContinuation(txn: Transaction,
-                                                 channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit
+  private[rspace] def installWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit
 
-  private[rspace] def putWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit
+  private[rspace] def putWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit
 
-  private[rspace] def getWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]]
+  private[rspace] def getWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C]
+  ): Seq[WaitingContinuation[P, K]]
 
-  private[rspace] def removeWaitingContinuation(txn: Transaction,
-                                                channels: Seq[C],
-                                                index: Int): Unit
+  private[rspace] def removeWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      index: Int
+  ): Unit
 
   private[rspace] def getPatterns(txn: Transaction, channels: Seq[C]): Seq[Seq[P]]
 
@@ -134,8 +142,10 @@ trait IStore[C, P, A, K] {
       }
       .toList
 
-  private[rspace] def bulkInsert(txn: Transaction,
-                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
+  private[rspace] def bulkInsert(
+      txn: Transaction,
+      gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]
+  ): Unit
 
   private[rspace] def clear(txn: Transaction): Unit
 

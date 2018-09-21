@@ -32,7 +32,8 @@ trait BlockStoreTest
 
   private[this] implicit def liftToBlockHash(s: String): BlockHash = ByteString.copyFromUtf8(s)
   private[this] implicit def liftToBlockStoreElement(
-      s: (String, BlockMessage)): (BlockHash, BlockMessage) =
+      s: (String, BlockMessage)
+  ): (BlockHash, BlockMessage) =
     (ByteString.copyFromUtf8(s._1), s._2)
 
   private[this] val blockHashGen: Gen[BlockHash] = for {
@@ -47,9 +48,11 @@ trait BlockStoreTest
       version   <- arbitrary[Long]
       timestamp <- arbitrary[Long]
     } yield
-      (hash.toStringUtf8,
-       BlockMessage(blockHash = hash)
-         .withHeader(Header().withVersion(version).withTimestamp(timestamp)))
+      (
+        hash.toStringUtf8,
+        BlockMessage(blockHash = hash)
+          .withHeader(Header().withVersion(version).withTimestamp(timestamp))
+      )
 
   private[this] val blockStoreElementsGen: Gen[List[(String, BlockMessage)]] =
     distinctListOfGen(blockStoreElementGen)(_._1 == _._1)
@@ -70,7 +73,8 @@ trait BlockStoreTest
    with a maximum number of elements to discard
     */
   def distinctListOfGen[T](gen: Gen[T], maxDiscarded: Int = 1000)(
-      comp: (T, T) => Boolean): Gen[List[T]] = {
+      comp: (T, T) => Boolean
+  ): Gen[List[T]] = {
     val seen      = new scala.collection.mutable.ListBuffer[T]
     var discarded = 0
 

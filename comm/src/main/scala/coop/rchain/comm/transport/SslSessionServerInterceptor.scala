@@ -21,9 +21,10 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val log                           = Log.log[Id]
 
-  private class InterceptionListener[ReqT, RespT](next: ServerCall.Listener[ReqT],
-                                                  call: ServerCall[ReqT, RespT])
-      extends ServerCall.Listener[ReqT] {
+  private class InterceptionListener[ReqT, RespT](
+      next: ServerCall.Listener[ReqT],
+      call: ServerCall[ReqT, RespT]
+  ) extends ServerCall.Listener[ReqT] {
 
     override def onHalfClose(): Unit = next.onHalfClose()
     override def onCancel(): Unit    = next.onCancel()
@@ -47,7 +48,8 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
             log.trace(s"Request [$msgType] from peer ${peerNode.toAddress}")
           }
           val sslSession: Option[SSLSession] = Option(
-            call.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION))
+            call.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)
+          )
           if (sslSession.isEmpty) {
             log.warn("No TLS Session. Closing connection")
             close()

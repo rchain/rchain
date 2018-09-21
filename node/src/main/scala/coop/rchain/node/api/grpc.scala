@@ -31,7 +31,8 @@ object GrpcServer {
       nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
-      connectionsCell: ConnectionsCell[Task]): Task[Server] =
+      connectionsCell: ConnectionsCell[Task]
+  ): Task[Server] =
     Task.delay {
       NettyServerBuilder
         .forPort(port)
@@ -41,10 +42,10 @@ object GrpcServer {
         .build
     }
 
-  def acquireExternalServer[
-      F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+  def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
-      maxMessageSize: Int)(implicit scheduler: Scheduler): F[Server] =
+      maxMessageSize: Int
+  )(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)

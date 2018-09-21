@@ -83,7 +83,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
                    case Right((running, statusB)) =>
                      running.join.map((_, statusB).tupled)
-                 })
+                 }
+               )
     } yield result
     val threadStatuses: (BlockStatus, BlockStatus) =
       testProgram.value.unsafeRunSync(scheduler).right.get
@@ -149,11 +150,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2))
 
     val Created(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[
-      Id].createBlock
+      Id
+    ].createBlock
     MultiParentCasper[Id].addBlock(signedBlock1)
 
     val Created(signedBlock2) = MultiParentCasper[Id].deploy(deployDatas(1)) *> MultiParentCasper[
-      Id].createBlock
+      Id
+    ].createBlock
     MultiParentCasper[Id].addBlock(signedBlock2)
     val storage = blockTuplespaceContents(signedBlock2)
 
@@ -171,8 +174,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val startTime = System.currentTimeMillis()
     val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
-    val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex.map(s =>
-      ProtoUtil.sourceDeploy(s._1, startTime + s._2))
+    val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex
+      .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2))
     deploys.foreach(MultiParentCasper[Id].deploy(_))
     val Created(block) = MultiParentCasper[Id].createBlock
     val _              = MultiParentCasper[Id].addBlock(block)
@@ -186,7 +189,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
 
     val Created(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
-      Id].createBlock
+      Id
+    ].createBlock
     val invalidBlock = block.withSig(ByteString.EMPTY)
 
     MultiParentCasper[Id].addBlock(invalidBlock)
@@ -203,7 +207,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     import node._
 
     val Created(signedBlock) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeployData(0)) *> MultiParentCasper[
-      Id].createBlock
+      Id
+    ].createBlock
 
     MultiParentCasper[Id].addBlock(signedBlock)
 
@@ -313,12 +318,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     val transferStatusOut = "transferOut"
     val bondingTransferDeploy =
-      RevIssuanceTest.walletTransferDeploy(0,
-                                           wallets.head.initRevBalance.toLong,
-                                           bondingForwarderAddress,
-                                           transferStatusOut,
-                                           pubKey,
-                                           secKey)
+      RevIssuanceTest.walletTransferDeploy(
+        0,
+        wallets.head.initRevBalance.toLong,
+        bondingForwarderAddress,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )
 
     val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
       .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
@@ -336,7 +343,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val correctBonds = bonds.map { case (key, stake) => Bond(ByteString.copyFrom(key), stake) }.toSet + Bond(
       ByteString.copyFrom(ethPubKeys.head.bytes),
-      wallets.head.initRevBalance.toLong)
+      wallets.head.initRevBalance.toLong
+    )
     val newBonds = block2.getBody.getPostState.bonds
     newBonds.toSet shouldBe correctBonds
   }
@@ -376,7 +384,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).logEff.warns
       .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
-      1)
+      1
+    )
     nodes.foreach(_.tearDownNode())
 
     nodes.foreach { node =>
@@ -416,8 +425,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(2).logEff.infos
       .count(_ startsWith "Requested missing block") should be(1)
-    nodes(1).logEff.infos.count(s =>
-      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
+    nodes(1).logEff.infos.count(
+      s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
+    ) should be(1)
 
     nodes.foreach(_.tearDownNode())
     nodes.foreach { node =>
@@ -502,7 +512,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
-      1f / (1f + 3f + 5f + 7f))
+      1f / (1f + 3f + 5f + 7f)
+    )
     nodes.foreach(_.tearDownNode())
 
     validateBlockStore(nodes(0)) { blockStore =>
@@ -567,8 +578,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     nodes(1).logEff.infos
       .count(_ startsWith "Requested missing block") should be(10)
-    nodes(0).logEff.infos.count(s =>
-      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(10)
+    nodes(0).logEff.infos.count(
+      s => (s startsWith "Received request for block") && (s endsWith "Response sent.")
+    ) should be(10)
 
     nodes.foreach(_.tearDown())
   }
@@ -639,9 +651,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
-  private def buildBlockWithInvalidJustification(nodes: IndexedSeq[HashSetCasperTestNode[Id]],
-                                                 deploys: immutable.IndexedSeq[ProcessedDeploy],
-                                                 signedInvalidBlock: BlockMessage) = {
+  private def buildBlockWithInvalidJustification(
+      nodes: IndexedSeq[HashSetCasperTestNode[Id]],
+      deploys: immutable.IndexedSeq[ProcessedDeploy],
+      signedInvalidBlock: BlockMessage
+  ) = {
     val postState     = RChainState().withBonds(ProtoUtil.bonds(genesis)).withBlockNumber(2)
     val postStateHash = Blake2b256.hash(postState.toByteArray)
     val header = Header()
@@ -655,12 +669,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
       BlockMessage(serializedBlockHash, Some(header), Some(body), serializedJustifications)
-    ProtoUtil.signBlock(blockThatPointsToInvalidBlock,
-                        nodes(1).casperEff.blockDag,
-                        validators(1),
-                        validatorKeys(1),
-                        "ed25519",
-                        "rchain")
+    ProtoUtil.signBlock(
+      blockThatPointsToInvalidBlock,
+      nodes(1).casperEff.blockDag,
+      validators(1),
+      validatorKeys(1),
+      "ed25519",
+      "rchain"
+    )
   }
 }
 
@@ -672,8 +688,9 @@ object HashSetCasperTest {
     node.dir.recursivelyDelete()
   }
 
-  def blockTuplespaceContents(block: BlockMessage)(
-      implicit casper: MultiParentCasper[Id]): String = {
+  def blockTuplespaceContents(
+      block: BlockMessage
+  )(implicit casper: MultiParentCasper[Id]): String = {
     val tsHash = block.body.get.postState.get.tuplespace
     MultiParentCasper[Id].storageContents(tsHash)
   }
@@ -684,9 +701,11 @@ object HashSetCasperTest {
   def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
-  def buildGenesis(wallets: Seq[PreWallet],
-                   bonds: Map[Array[Byte], Long],
-                   deployTimestamp: Long): BlockMessage = {
+  def buildGenesis(
+      wallets: Seq[PreWallet],
+      bonds: Map[Array[Byte], Long],
+      deployTimestamp: Long
+  ): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
     val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis")
     val storageSize: Long = 1024L * 1024
@@ -699,7 +718,8 @@ object HashSetCasperTest {
       wallets,
       emptyStateHash,
       runtimeManager,
-      deployTimestamp)
+      deployTimestamp
+    )
     activeRuntime.close()
     genesis
   }

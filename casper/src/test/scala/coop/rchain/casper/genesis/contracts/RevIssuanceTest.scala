@@ -33,9 +33,11 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
     val genesisDeploys =
-      Genesis.defaultBlessedTerms(0L,
-                                  bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-                                  wallet :: Nil)
+      Genesis.defaultBlessedTerms(
+        0L,
+        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+        wallet :: Nil
+      )
 
     val secKey = Base16.decode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
     val pubKey =
@@ -50,27 +52,34 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val amount            = 15L
     val destination       = "deposit"
     val transferStatusOut = "tOut"
-    val transferDeployData = RevIssuanceTest.walletTransferDeploy(nonce,
-                                                                  amount,
-                                                                  destination,
-                                                                  transferStatusOut,
-                                                                  pubKey,
-                                                                  secKey)(runtimeManager)
+    val transferDeployData = RevIssuanceTest.walletTransferDeploy(
+      nonce,
+      amount,
+      destination,
+      transferStatusOut,
+      pubKey,
+      secKey
+    )(runtimeManager)
     val transferDeploy      = ProtoUtil.deployDataToDeploy(transferDeployData)
     val (postGenHash, _)    = runtimeManager.computeState(emptyHash, genesisDeploys)
     val (postUnlockHash, _) = runtimeManager.computeState(postGenHash, unlockDeploy :: Nil)
     val unlockResult =
-      runtimeManager.getData(postUnlockHash,
-                             Channel(Quote(Par().copy(exprs = Seq(Expr(GString(statusOut)))))))
+      runtimeManager.getData(
+        postUnlockHash,
+        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(statusOut))))))
+      )
     assert(unlockResult.head.exprs.head.getEListBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) = runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil)
     val transferSuccess = runtimeManager.getData(
       postTransferHash,
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(transferStatusOut)))))))
+      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))))
+    )
     val transferResult =
-      runtimeManager.getData(postTransferHash,
-                             Channel(Quote(Par().copy(exprs = Seq(Expr(GString(destination)))))))
+      runtimeManager.getData(
+        postTransferHash,
+        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(destination))))))
+      )
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)
 
@@ -83,7 +92,8 @@ object RevIssuanceTest {
       ethAddress: String,
       pubKey: String,
       secKey: Array[Byte],
-      statusOut: String)(implicit runtimeManager: RuntimeManager): DeployData = {
+      statusOut: String
+  )(implicit runtimeManager: RuntimeManager): DeployData = {
     assert(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
     val unlockSigDataTerm =
       mkTerm(s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())  """).right.get
@@ -94,7 +104,8 @@ object RevIssuanceTest {
         .exprs
         .head
         .getGByteArray
-        .toByteArray)
+        .toByteArray
+    )
     val unlockSig = Secp256k1.sign(unlockSigData, secKey)
     assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
 
@@ -110,7 +121,8 @@ object RevIssuanceTest {
       destination: String,
       transferStatusOut: String,
       pubKey: String,
-      secKey: Array[Byte])(implicit runtimeManager: RuntimeManager): DeployData = {
+      secKey: Array[Byte]
+  )(implicit runtimeManager: RuntimeManager): DeployData = {
     val transferSigDataTerm =
       mkTerm(s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())  """).right.get
     val transferSigData = Blake2b256.hash(
@@ -120,7 +132,8 @@ object RevIssuanceTest {
         .exprs
         .head
         .getGByteArray
-        .toByteArray)
+        .toByteArray
+    )
     val transferSig = Secp256k1.sign(transferSigData, secKey)
 
     ProtoUtil.sourceDeploy(

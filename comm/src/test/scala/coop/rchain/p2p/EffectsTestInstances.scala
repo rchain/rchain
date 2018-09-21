@@ -50,7 +50,8 @@ object EffectsTestInstances {
   def createRPConfAsk[F[_]: Applicative](
       local: PeerNode,
       defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS),
-      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)) =
+      clearConnections: ClearConnetionsConf = ClearConnetionsConf(1, 1)
+  ) =
     new ConstApplicativeAsk[F, RPConf](RPConf(local, defaultTimeout, clearConnections))
 
   class TransportLayerStub[F[_]: Capture: Applicative] extends TransportLayer[F] {

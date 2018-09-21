@@ -29,7 +29,8 @@ import scala.util.{Failure, Success, Try}
 class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: SyncVar[Runtime]) {
 
   def captureResults(start: StateHash, term: Par, name: String = "__SCALA__")(
-      implicit scheduler: Scheduler): Seq[Par] = {
+      implicit scheduler: Scheduler
+  ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
     val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis())
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
@@ -52,7 +53,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
-      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
+      implicit scheduler: Scheduler
+  ): Either[(Option[Deploy], Failed), StateHash] = {
     val runtime = runtimeContainer.take()
     val result  = replayEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
@@ -60,7 +62,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def computeState(hash: StateHash, terms: Seq[Deploy])(
-      implicit scheduler: Scheduler): (StateHash, Seq[InternalProcessedDeploy]) = {
+      implicit scheduler: Scheduler
+  ): (StateHash, Seq[InternalProcessedDeploy]) = {
     val runtime = runtimeContainer.take()
     val result  = newEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
@@ -80,8 +83,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     //TODO: construct directly instead of parsing rholang source
     val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
     val bondsPar       = captureResults(hash, bondsQueryTerm)
-    assert(bondsPar.size == 1,
-           s"Incorrect number of results from query of current bonds: ${bondsPar.size}")
+    assert(
+      bondsPar.size == 1,
+      s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+    )
     toBondSeq(bondsPar.head)
   }
 
@@ -117,8 +122,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     } yield par
   }
 
-  def getContinuation(hash: ByteString,
-                      channels: immutable.Seq[Channel]): Seq[(Seq[BindPattern], Par)] = {
+  def getContinuation(
+      hash: ByteString,
+      channels: immutable.Seq[Channel]
+  ): Seq[(Seq[BindPattern], Par)] = {
     val resetRuntime = getResetRuntime(hash)
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
       resetRuntime.space.getWaitingContinuations(channels)
@@ -129,12 +136,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   private def newEval(terms: Seq[Deploy], runtime: Runtime, initHash: StateHash)(
-      implicit scheduler: Scheduler): (StateHash, Seq[InternalProcessedDeploy]) = {
+      implicit scheduler: Scheduler
+  ): (StateHash, Seq[InternalProcessedDeploy]) = {
 
     @tailrec
-    def doEval(terms: Seq[Deploy],
-               hash: Blake2b256Hash,
-               acc: Vector[InternalProcessedDeploy]): (StateHash, Vector[InternalProcessedDeploy]) =
+    def doEval(
+        terms: Seq[Deploy],
+        hash: Blake2b256Hash,
+        acc: Vector[InternalProcessedDeploy]
+    ): (StateHash, Vector[InternalProcessedDeploy]) =
       terms match {
         case deploy +: rem =>
           runtime.space.reset(hash)
@@ -143,10 +153,12 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           val (phlosLeft, errors)        = injAttempt(deploy, runtime.reducer, runtime.errorLog)
           val cost                       = phlosLeft.copy(cost = availablePhlos.cost.value - phlosLeft.cost)
           val newCheckpoint              = runtime.space.createCheckpoint()
-          val deployResult = InternalProcessedDeploy(deploy,
-                                                     cost,
-                                                     newCheckpoint.log,
-                                                     DeployStatus.fromErrors(errors))
+          val deployResult = InternalProcessedDeploy(
+            deploy,
+            cost,
+            newCheckpoint.log,
+            DeployStatus.fromErrors(errors)
+          )
           if (errors.isEmpty) doEval(rem, newCheckpoint.root, acc :+ deployResult)
           else doEval(rem, hash, acc :+ deployResult)
 
@@ -156,13 +168,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
   }
 
-  private def replayEval(terms: Seq[InternalProcessedDeploy],
-                         runtime: Runtime,
-                         initHash: StateHash)(
-      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
+  private def replayEval(
+      terms: Seq[InternalProcessedDeploy],
+      runtime: Runtime,
+      initHash: StateHash
+  )(implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
 
-    def doReplayEval(terms: Seq[InternalProcessedDeploy],
-                     hash: Blake2b256Hash): Either[(Option[Deploy], Failed), StateHash] =
+    def doReplayEval(
+        terms: Seq[InternalProcessedDeploy],
+        hash: Blake2b256Hash
+    ): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
           val availablePhlos             = CostAccount(Integer.MAX_VALUE)
@@ -195,9 +210,11 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 
   private def injAttempt(deploy: Deploy, reducer: Reduce[Task], errorLog: ErrorLog)(
       implicit scheduler: Scheduler,
-      costAlg: CostAccountingAlg[Task]): (PCost, Vector[Throwable]) = {
+      costAlg: CostAccountingAlg[Task]
+  ): (PCost, Vector[Throwable]) = {
     implicit val rand: Blake2b512Random = Blake2b512Random(
-      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get)))
+      DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
+    )
     Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
       case Success(_) =>
         val errors = errorLog.readAndClearErrorVector()

@@ -23,18 +23,23 @@ object Estimator {
   /**
     * When the BlockDag has an empty latestMessages, tips will return IndexedSeq(genesis)
     */
-  def tips[F[_]: Monad: BlockStore](blockDag: BlockDag,
-                                    genesis: BlockMessage): F[IndexedSeq[BlockMessage]] = {
+  def tips[F[_]: Monad: BlockStore](
+      blockDag: BlockDag,
+      genesis: BlockMessage
+  ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
-    def sortChildren(blocks: IndexedSeq[BlockHash],
-                     childMap: Map[BlockHash, Set[BlockHash]],
-                     scores: Map[BlockHash, Long]): IndexedSeq[BlockHash] = {
+    def sortChildren(
+        blocks: IndexedSeq[BlockHash],
+        childMap: Map[BlockHash, Set[BlockHash]],
+        scores: Map[BlockHash, Long]
+    ): IndexedSeq[BlockHash] = {
       // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
       val newBlocks =
         ListContrib
           .sortBy[BlockHash, Long](
             blocks.flatMap(replaceBlockHashWithChildren(childMap, _, scores)).distinct,
-            scores)
+            scores
+          )
       if (stillSame(blocks, newBlocks)) {
         blocks
       } else {
@@ -47,9 +52,11 @@ object Estimator {
       * this ensures that the search does not go beyond
       * the messages defined by blockDag.latestMessages
       */
-    def replaceBlockHashWithChildren(childMap: Map[BlockHash, Set[BlockHash]],
-                                     b: BlockHash,
-                                     scores: Map[BlockHash, Long]): IndexedSeq[BlockHash] = {
+    def replaceBlockHashWithChildren(
+        childMap: Map[BlockHash, Set[BlockHash]],
+        b: BlockHash,
+        scores: Map[BlockHash, Long]
+    ): IndexedSeq[BlockHash] = {
       val c: Set[BlockHash] = childMap.getOrElse(b, Set.empty[BlockHash]).filter(scores.contains)
       if (c.nonEmpty) {
         c.toIndexedSeq
@@ -76,9 +83,11 @@ object Estimator {
         b <- unsafeGetBlock[F](hash)
       } yield parentHashes(b).toList
 
-    def addValidatorWeightDownSupportingChain(scoreMap: Map[BlockHash, Long],
-                                              validator: Validator,
-                                              latestBlockHash: BlockHash): F[Map[BlockHash, Long]] =
+    def addValidatorWeightDownSupportingChain(
+        scoreMap: Map[BlockHash, Long],
+        validator: Validator,
+        latestBlockHash: BlockHash
+    ): F[Map[BlockHash, Long]] =
       for {
         updatedScoreMap <- DagOperations
                             .bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents)
@@ -98,10 +107,12 @@ object Estimator {
       *
       * TODO: Add test where this matters
       */
-    def addValidatorWeightToImplicitlySupported(scoreMap: Map[BlockHash, Long],
-                                                childMap: Map[BlockHash, Set[BlockHash]],
-                                                validator: Validator,
-                                                latestBlockHash: BlockHash) =
+    def addValidatorWeightToImplicitlySupported(
+        scoreMap: Map[BlockHash, Long],
+        childMap: Map[BlockHash, Set[BlockHash]],
+        validator: Validator,
+        latestBlockHash: BlockHash
+    ) =
       childMap
         .get(latestBlockHash)
         .toList
@@ -130,12 +141,14 @@ object Estimator {
                           postValidatorWeightScoreMap <- addValidatorWeightDownSupportingChain(
                                                           acc,
                                                           validator,
-                                                          latestBlock.blockHash)
+                                                          latestBlock.blockHash
+                                                        )
                           postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
                                                               postValidatorWeightScoreMap,
                                                               blockDag.childMap,
                                                               validator,
-                                                              latestBlock.blockHash)
+                                                              latestBlock.blockHash
+                                                            )
                         } yield postImplicitlySupportedScoreMap
                     }
     } yield scoresMap
