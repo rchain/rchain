@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.pure.PureRSpace
-
+import coop.rchain.rholang.interpreter.storage.implicits._
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
 }
