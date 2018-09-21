@@ -43,7 +43,7 @@ case class PrettyPrinter(
   def buildString(c: Channel): String          = buildStringM(c).value
   def buildString(m: GeneratedMessage): String = buildStringM(m).value
 
-  private def buildStringM(e: Expr): Coeval[String] =
+  private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
     e.exprInstance match {
 
       case ENegBody(ENeg(p)) => pure("-") |+| buildStringM(p).map(_.wrapWithBraces)
@@ -112,6 +112,7 @@ case class PrettyPrinter(
       case ExprInstance.GByteArray(bs) => pure(Base16.encode(bs.toByteArray))
       case _                           => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
+  }
 
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
@@ -140,7 +141,7 @@ case class PrettyPrinter(
 
   def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
-  def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = {
+  def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
     val content = t match {
       case v: Var     => buildStringM(v)
       case c: Channel => buildStringM(c)
