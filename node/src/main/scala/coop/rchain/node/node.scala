@@ -37,7 +37,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
@@ -246,6 +246,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       implicit
       log: Log[Task],
       time: Time[Task],
+      timerTask: Timer[Task],
       rpConfAsk: RPConfAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
@@ -274,8 +275,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     val loop: Effect[Unit] = for {
       _ <- Connect.clearConnections[Effect]
-      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
-      _ <- time.sleep(5000).toEffect
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+      _ <- timerTask.sleep(5.seconds).toEffect
     } yield ()
 
     for {
@@ -325,7 +326,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   val main: Effect[Unit] = for {
     // 1. set up configurations
     local          <- EitherT.fromEither[Task](PeerNode.parse(address))
-    defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
+    defaultTimeout = conf.server.defaultTimeout.millis
     rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
                                           numOfConnectionsPinged = 10) // TODO read from conf
     // 2. create instances of typeclasses
@@ -349,7 +350,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
-                                                                      time,
+                                                                      timerTask,
                                                                       metrics,
                                                                       kademliaRPC)
                       .toEffect
@@ -391,6 +392,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     program = nodeProgram(runtime, casperRuntime)(
       log,
       time,
+      timerTask,
       rpConfAsk,
       metrics,
       transport,
