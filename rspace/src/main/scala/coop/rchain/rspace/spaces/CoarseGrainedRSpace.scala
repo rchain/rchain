@@ -1,5 +1,7 @@
 package coop.rchain.rspace.spaces
 
+import cats.Id
+import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -26,6 +28,7 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
 ) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
 
   override protected[this] val logger: Logger = Logger[this.type]
+  override implicit val syncF: Sync[Id]       = coop.rchain.catscontrib.effect.implicits.syncId
 
   private[this] val consumeCommCounter = Kamon.counter("rspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("rspace.comm.produce")

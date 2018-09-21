@@ -1,11 +1,11 @@
 package coop.rchain.rspace
 
 import cats.Id
+import cats.effect.Sync
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.IReplaySpace.IdIReplaySpace
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
@@ -26,9 +26,10 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     serializeA: Serialize[A],
     serializeK: Serialize[K]
 ) extends RSpaceOps[C, P, E, A, R, K](store, branch)
-    with IdIReplaySpace[C, P, E, A, R, K] {
+    with IReplaySpace[Id, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
+  override implicit val syncF: Sync[Id]       = coop.rchain.catscontrib.effect.implicits.syncId
 
   private[this] val consumeCommCounter = Kamon.counter("replayrspace.comm.consume")
   private[this] val produceCommCounter = Kamon.counter("replayrspace.comm.produce")
@@ -323,10 +324,6 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
     // update the replay data
     replayData.update(const(rigs))
   }
-}
-
-object IReplaySpace {
-  type IdIReplaySpace[C, P, E, A, R, K] = IReplaySpace[Id, C, P, E, A, R, K]
 }
 
 object ReplayRSpace {

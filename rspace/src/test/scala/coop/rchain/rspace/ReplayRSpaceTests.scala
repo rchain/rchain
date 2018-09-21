@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.nio.file.Files
 
 import cats.Id
+import cats.effect.Sync
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
@@ -880,10 +881,12 @@ trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
     val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
-    val replaySpace = FineGrainedReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+    val replaySpace = FineGrainedReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)

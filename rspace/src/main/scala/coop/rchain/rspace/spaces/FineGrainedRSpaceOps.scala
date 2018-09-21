@@ -1,5 +1,6 @@
 package coop.rchain.rspace.spaces
 
+import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -17,15 +18,16 @@ import scala.util.Random
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
-abstract class FineGrainedRSpaceOps[C, P, E, A, R, K](
+abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
     val store: IStore[C, P, A, K],
     val branch: Branch
 )(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
-    serializeK: Serialize[K]
-) extends SpaceMatcher[C, P, E, A, R, K] {
+    serializeK: Serialize[K],
+    syncF: Sync[F]
+) extends SpaceMatcher[F, C, P, E, A, R, K] {
 
   implicit val codecC = serializeC.toCodec
 
@@ -119,39 +121,46 @@ abstract class FineGrainedRSpaceOps[C, P, E, A, R, K](
 
   override def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, E, A, R]
-  ): Option[(K, Seq[R])] =
-    Kamon.withSpan(installSpan.start(), finishSpan = true) {
-      store.withTxn(store.createTxnWrite()) { txn =>
-        install(txn, channels, patterns, continuation)
+  ): F[Option[(K, Seq[R])]] =
+    syncF.delay {
+      Kamon.withSpan(installSpan.start(), finishSpan = true) {
+        store.withTxn(store.createTxnWrite()) { txn =>
+          install(txn, channels, patterns, continuation)
+        }
       }
     }
 
   override def retrieve(
       root: Blake2b256Hash,
       channelsHash: Blake2b256Hash
-  ): Option[GNAT[C, P, A, K]] =
-    history.lookup(store.trieStore, root, channelsHash)
+  ): F[Option[GNAT[C, P, A, K]]] =
+    syncF.delay {
+      history.lookup(store.trieStore, root, channelsHash)
+    }
 
-  override def reset(root: Blake2b256Hash): Unit =
-    store.withTxn(store.createTxnWrite()) { txn =>
-      store.withTrieTxn(txn) { trieTxn =>
-        store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
-        val leaves = store.trieStore.getLeaves(trieTxn, root)
-        eventLog.update(const(Seq.empty))
-        store.clearTrieUpdates()
-        store.clear(txn)
-        restoreInstalls(txn)
-        store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+  override def reset(root: Blake2b256Hash): F[Unit] =
+    syncF.delay {
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.withTrieTxn(txn) { trieTxn =>
+          store.trieStore.validateAndPutRoot(trieTxn, store.trieBranch, root)
+          val leaves = store.trieStore.getLeaves(trieTxn, root)
+          eventLog.update(const(Seq.empty))
+          store.clearTrieUpdates()
+          store.clear(txn)
+          restoreInstalls(txn)
+          store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+        }
       }
     }
 
-  override def clear(): Unit = {
-    val emptyRootHash: Blake2b256Hash =
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.withTrieTxn(txn) { trieTxn =>
-          store.trieStore.getEmptyRoot(trieTxn)
+  override def clear(): F[Unit] =
+    syncF.delay {
+      val emptyRootHash: Blake2b256Hash =
+        store.withTxn(store.createTxnRead()) { txn =>
+          store.withTrieTxn(txn) { trieTxn =>
+            store.trieStore.getEmptyRoot(trieTxn)
+          }
         }
-      }
-    reset(emptyRootHash)
-  }
+      reset(emptyRootHash)
+    }
 }

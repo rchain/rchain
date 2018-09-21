@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import cats.Id
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -12,7 +13,6 @@ import scala.Function.const
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import scala.util.Random
-
 import kamon._
 import kamon.trace.Tracer.SpanBuilder
 
@@ -21,7 +21,7 @@ abstract class RSpaceOps[C, P, E, A, R, K](val store: IStore[C, P, A, K], val br
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeK: Serialize[K]
-) extends SpaceMatcher[C, P, E, A, R, K] {
+) extends SpaceMatcher[Id, C, P, E, A, R, K] {
 
   protected[this] val logger: Logger
   protected[this] val installSpan: SpanBuilder

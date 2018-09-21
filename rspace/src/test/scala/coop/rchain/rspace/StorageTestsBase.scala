@@ -3,6 +3,8 @@ package coop.rchain.rspace
 import coop.rchain.rspace.spaces.FineGrainedRSpace
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.ISpace.IdISpace
@@ -251,12 +253,14 @@ class FineGrainedTestsBase
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val testBranch = Branch("test")
     val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore =
       LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](
+      new FineGrainedRSpace[Id, String, Pattern, Nothing, String, String, StringsCaptor](
         testStore,
         testBranch
       )

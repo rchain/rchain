@@ -91,9 +91,9 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def retrieve(root: Blake2b256Hash, channelsHash: Blake2b256Hash): F[Option[GNAT[C, P, A, K]]]
 
-  def getData(channel: C): Seq[Datum[A]]
+  def getData(channel: C): F[Seq[Datum[A]]]
 
-  def getWaitingContinuations(channels: Seq[C]): Seq[WaitingContinuation[P, K]]
+  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
 
   /** Clears the store.  Does not affect the history trie.
     */
