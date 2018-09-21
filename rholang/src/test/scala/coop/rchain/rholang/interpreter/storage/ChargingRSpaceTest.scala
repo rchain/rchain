@@ -20,7 +20,7 @@ import coop.rchain.rspace.history.Branch
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
-import org.scalatest.{Matchers, Outcome, fixture}
+import org.scalatest.{fixture, Matchers, Outcome}
 
 import scala.collection.immutable
 import scala.concurrent.Await
