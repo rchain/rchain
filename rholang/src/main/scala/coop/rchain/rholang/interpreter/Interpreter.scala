@@ -9,9 +9,16 @@ import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, LexerError, SyntaxError, TopLevelFreeVariablesNotAllowedError, TopLevelWildcardsNotAllowedError, UnrecognizedInterpreterError}
+import coop.rchain.rholang.interpreter.errors.{
+  InterpreterError,
+  LexerError,
+  SyntaxError,
+  TopLevelFreeVariablesNotAllowedError,
+  TopLevelWildcardsNotAllowedError,
+  UnrecognizedInterpreterError
+}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import monix.eval.{Coeval, Task}
 
 private class FailingTask[T](task: Task[Either[Throwable, T]]) {

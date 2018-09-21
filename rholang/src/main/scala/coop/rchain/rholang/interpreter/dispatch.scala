@@ -27,7 +27,8 @@ object Dispatch {
         .map({
           case Channel(Quote(p)) => p
           case Channel(_)        => Par() // Should never happen
-        }): _*)
+        }): _*
+    )
 }
 
 class RholangOnlyDispatcher[M[_]] private (reducer: => ChargingReducer[M])(implicit s: Sync[M])
@@ -54,8 +55,8 @@ object RholangOnlyDispatcher {
       implicit
       parallel: Parallel[M, F],
       s: Sync[M],
-      ft: FunctorTell[M, Throwable])
-    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], ChargingReducer[M]) = {
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], ChargingReducer[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
@@ -70,8 +71,8 @@ object RholangOnlyDispatcher {
 
 class RholangAndScalaDispatcher[M[_]] private (
     reducer: => ChargingReducer[M],
-    _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]])(
-    implicit s: Sync[M])
+    _dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]]
+)(implicit s: Sync[M])
     extends Dispatch[M, ListChannelWithRandom, TaggedContinuation] {
 
   def dispatch(continuation: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): M[Unit] =
@@ -98,11 +99,13 @@ object RholangAndScalaDispatcher {
   def create[M[_], F[_]](
       tuplespace: RhoISpace,
       dispatchTable: => Map[Long, Function1[Seq[ListChannelWithRandom], M[Unit]]],
-      urnMap: Map[String, Par])(implicit
-                                parallel: Parallel[M, F],
-                                s: Sync[M],
-                                ft: FunctorTell[M, Throwable])
-    : (Dispatch[M, ListChannelWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
+      urnMap: Map[String, Par]
+  )(
+      implicit
+      parallel: Parallel[M, F],
+      s: Sync[M],
+      ft: FunctorTell[M, Throwable]
+  ): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], ChargingReducer[M], Registry[M]) = {
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =

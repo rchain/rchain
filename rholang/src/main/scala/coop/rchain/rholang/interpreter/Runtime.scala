@@ -25,12 +25,14 @@ import monix.eval.Task
 
 import scala.collection.immutable
 
-class Runtime private (val reducer: ChargingReducer[Task],
-                       val replayReducer: ChargingReducer[Task],
-                       val space: RhoISpace,
-                       val replaySpace: RhoReplayISpace,
-                       var errorLog: ErrorLog,
-                       val context: RhoContext) {
+class Runtime private (
+    val reducer: ChargingReducer[Task],
+    val replayReducer: ChargingReducer[Task],
+    val space: RhoISpace,
+    val replaySpace: RhoReplayISpace,
+    var errorLog: ErrorLog,
+    val context: RhoContext
+) {
   def readAndClearErrorVector(): Vector[Throwable] = errorLog.readAndClearErrorVector()
   def close(): Unit = {
     space.close()
@@ -56,21 +58,25 @@ object Runtime {
     F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
 
   private type CPARK[F[_, _, _, _, _, _]] =
-    F[Channel,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
-      TaggedContinuation]
-
-  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
-    F[M,
+    F[
       Channel,
       BindPattern,
       OutOfPhlogistonsError.type,
       ListChannelWithRandom,
       ListChannelWithRandom,
-      TaggedContinuation]
+      TaggedContinuation
+    ]
+
+  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+    F[
+      M,
+      Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation
+    ]
 
   type Name      = Par
   type Arity     = Int
@@ -99,17 +105,21 @@ object Runtime {
     val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
   }
 
-  private def introduceSystemProcesses(space: RhoISpace,
-                                       replaySpace: RhoISpace,
-                                       processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
-    : Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
+  private def introduceSystemProcesses(
+      space: RhoISpace,
+      replaySpace: RhoISpace,
+      processes: immutable.Seq[(Name, Arity, Remainder, Ref)]
+  ): Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
         val channels = List(Channel(Quote(name)))
         val patterns = List(
-          BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                      remainder,
-                      freeCount = arity))
+          BindPattern(
+            (0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+            remainder,
+            freeCount = arity
+          )
+        )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         Seq(
           space.install(channels, patterns, continuation),
@@ -120,9 +130,11 @@ object Runtime {
   /**
     * TODO this needs to go away when double locking is good enough
     */
-  def setupRSpace(dataDir: Path,
-                  mapSize: Long,
-                  storeType: StoreType): (RhoContext, RhoISpace, RhoReplayISpace) = {
+  def setupRSpace(
+      dataDir: Path,
+      mapSize: Long,
+      storeType: StoreType
+  ): (RhoContext, RhoISpace, RhoReplayISpace) = {
     def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
       val space: RhoISpace             = RSpace.create(context, Branch.MASTER)
       val replaySpace: RhoReplayISpace = ReplayRSpace.create(context, Branch.REPLAY)
@@ -160,9 +172,11 @@ object Runtime {
     val errorLog                                  = new ErrorLog()
     implicit val ft: FunctorTell[Task, Throwable] = errorLog
 
-    def dispatchTableCreator(space: RhoISpace,
-                             dispatcher: RhoDispatch[Task],
-                             registry: Registry[Task]): RhoDispatchMap = {
+    def dispatchTableCreator(
+        space: RhoISpace,
+        dispatcher: RhoDispatch[Task],
+        registry: Registry[Task]
+    ): RhoDispatchMap = {
       import BodyRefs._
       Map(
         STDOUT                     -> SystemProcesses.stdout,
@@ -188,10 +202,12 @@ object Runtime {
 
     def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
-    val urnMap: Map[String, Par] = Map("rho:io:stdout" -> byteName(0),
-                                       "rho:io:stdoutAck" -> byteName(1),
-                                       "rho:io:stderr"    -> byteName(2),
-                                       "rho:io:stderrAck" -> byteName(3))
+    val urnMap: Map[String, Par] = Map(
+      "rho:io:stdout"    -> byteName(0),
+      "rho:io:stdoutAck" -> byteName(1),
+      "rho:io:stderr"    -> byteName(2),
+      "rho:io:stderrAck" -> byteName(3)
+    )
 
     lazy val dispatchTable: RhoDispatchMap =
       dispatchTableCreator(space, dispatcher, registry)
