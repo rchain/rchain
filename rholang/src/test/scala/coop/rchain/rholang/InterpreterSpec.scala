@@ -8,7 +8,6 @@ import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class InterpreterSpec extends FlatSpec with Matchers {
@@ -43,9 +42,10 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def failure(rho: String): Throwable =
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
 
-  private def execute(source: String): Either[Throwable, Runtime] = {
-    val future = Interpreter.execute(runtime, new StringReader(source)).attempt.runAsync
-    Await.result(future, maxDuration)
-  }
+  private def execute(source: String): Either[Throwable, Runtime] =
+    Interpreter
+      .execute(runtime, new StringReader(source))
+      .attempt
+      .runSyncUnsafe(maxDuration)
 
 }
