@@ -17,33 +17,15 @@ message Node {
 }
 
 message Header {
-    Node   sender         = 1;
-}
-
-message Ping {
-}
-
-message Pong {
-}
-
-message Lookup {
-    bytes id = 1;
-}
-        
-message LookupResponse {
-    repeated Node nodes = 1;
+  Node   sender         = 1;
 }
 
 message Protocol {
-    Header header                           = 1;
+  Header header                           = 1;
 
-    oneof message {
-        google.protobuf.Any upstream        = 2;
-        Ping                ping            = 3;
-        Pong                pong            = 4;
-        Lookup              lookup          = 5;
-        LookupResponse      lookup_response = 6;
-    }
+  oneof message {
+    google.protobuf.Any upstream        = 2;
+  }
 }
 
 service TransportLayer {

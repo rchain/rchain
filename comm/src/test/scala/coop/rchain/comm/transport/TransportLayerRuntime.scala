@@ -147,27 +147,28 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  def roundTripWithPing(
-      transportLayer: TransportLayer[F],
-      local: PeerNode,
-      remote: PeerNode,
-      timeout: FiniteDuration = 3.second
-  ): F[CommErr[Protocol]] =
-    transportLayer.roundTrip(remote, ProtocolHelper.ping(local), timeout)
+  def roundTripWithHeartbeat(transport: TransportLayer[F],
+                             local: PeerNode,
+                             remote: PeerNode,
+                             timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] = {
+    val msg = CommMessages.heartbeat(local)
+    transport.roundTrip(remote, msg, timeout)
+  }
 
-  def sendPing(
-      transportLayer: TransportLayer[F],
+  def sendHeartbeat(transport: TransportLayer[F],
       local: PeerNode,
       remote: PeerNode
-  ): F[CommErr[Unit]] =
-    transportLayer.send(remote, ProtocolHelper.ping(local))
+  ): F[CommErr[Unit]] = {
+    val msg = CommMessages.heartbeat(local)
+    transport.send(remote, msg)
+  }
 
-  def broadcastPing(
-      transportLayer: TransportLayer[F],
-      local: PeerNode,
-      remotes: PeerNode*
-  ): F[Seq[CommErr[Unit]]] =
-    transportLayer.broadcast(remotes, ProtocolHelper.ping(local))
+  def broadcastHeartbeat(transport: TransportLayer[F],
+                         local: PeerNode,
+                         remotes: PeerNode*): F[Seq[CommErr[Unit]]] = {
+    val msg = CommMessages.heartbeat(local)
+    transport.broadcast(remotes, msg)
+  }
 
 }
 
@@ -202,12 +203,13 @@ final class Dispatcher[F[_]: Applicative](
 }
 
 object Dispatcher {
-  def pongDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)))
-
-  def pongDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
+  def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
     new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.pong(peer)),
+      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)))
+
+  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
+    new Dispatcher(
+      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)),
       delay = Some(delay)
     )
 

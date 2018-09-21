@@ -32,7 +32,7 @@ class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
     runtimeManager: RuntimeManager,
-    bonds: Map[Array[Byte], Int],
+    bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     requiredSigs: Int
 )(implicit scheduler: Scheduler) {
@@ -98,7 +98,7 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Int]
+      bonds: Map[ByteString, Long]
   )(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)

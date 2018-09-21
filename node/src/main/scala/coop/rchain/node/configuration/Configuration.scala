@@ -39,6 +39,7 @@ object Configuration {
   private val DefaultGrpcPortExternal           = 40401
   private val DefaultGrpcPortInternal           = 40402
   private val DefaultHttPort                    = 40403
+  private val DefaultKademliaPort               = 40404
   private val DefaultGrpcHost                   = "localhost"
   private val DefaultNoUpNP                     = false
   private val DefaultStandalone                 = false
@@ -60,7 +61,9 @@ object Configuration {
   private val DefaultThreadPoolSize: Int        = 4000
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
-    .parse("rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109:40400")
+    .fromAddress(
+      "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+    )
     .right
     .get
   private val DefaultShardId = "rchain"
@@ -126,6 +129,7 @@ object Configuration {
             None,
             DefaultPort,
             DefaultHttPort,
+            DefaultKademliaPort,
             DefaultNoUpNP,
             DefaultTimeout,
             DefaultBootstrapServer,
@@ -223,8 +227,10 @@ object Configuration {
       get(_.grpcPortInternal, _.grpcServer.flatMap(_.portInternal), DefaultGrpcPortInternal)
 
     // Server
-    val port: Int       = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
-    val httpPort: Int   = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
+    val port: Int     = get(_.run.port, _.server.flatMap(_.port), DefaultPort)
+    val httpPort: Int = get(_.run.httpPort, _.server.flatMap(_.httpPort), DefaultHttPort)
+    val kademliaPort: Int =
+      get(_.run.kademliaPort, _.server.flatMap(_.kademliaPort), DefaultKademliaPort)
     val noUpnp: Boolean = get(_.run.noUpnp, _.server.flatMap(_.noUpnp), DefaultNoUpNP)
     val defaultTimeout: Int =
       get(_.run.defaultTimeout, _.server.flatMap(_.defaultTimeout), DefaultTimeout)
@@ -303,6 +309,7 @@ object Configuration {
       host,
       port,
       httpPort,
+      kademliaPort,
       noUpnp,
       defaultTimeout,
       bootstrap,
