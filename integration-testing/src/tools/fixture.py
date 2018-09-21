@@ -20,12 +20,16 @@ def make_wrapper(fn, fixtures):
 
     wrapper_code = f"""
 def wrapper(request, {parameter_list}):
-    # import logging
-    # logging.info("fixtures:" + str(fixtures))
+    import logging
+    logging.info("fixtures:" + str(fixtures))
     def get_value(p_name, p_value):
         if p_name in fixtures:
-            v = request.getfuncargvalue(p_value.__name__)
-            # logging.info("Get_value from fixtures: " + p_name + " : " + str(v))
+            if hasattr(p_value, "__name__"):
+                v = request.getfuncargvalue(p_value.__name__)
+            else:
+                v = p_value
+                
+            logging.info("Get_value from fixtures: " + p_name + " : " + str(v))
             return v
         else:
             # logging.info("Get_value returns the object: " + p_name + " : " + str(p_value))
