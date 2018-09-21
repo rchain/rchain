@@ -50,11 +50,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
         case TLResponse(Payload.Protocol(Protocol(Some(Header(Some(sender))), msg))) =>
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType = msg match {
-              case m if m.isUpstream => "upstream"
-              case m if m.isEmpty    => "empty"
-              case _                 => "unknown"
-            }
+            val msgType  = msg.getClass.toString
             log.trace(s"Response [$msgType] from peer ${peerNode.toAddress}")
           }
           val sslSession: Option[SSLSession] = Option(

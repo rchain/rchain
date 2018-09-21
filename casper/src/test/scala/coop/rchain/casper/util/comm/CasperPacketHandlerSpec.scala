@@ -20,7 +20,7 @@ import coop.rchain.casper.util.comm.CasperPacketHandlerSpec._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture}
-import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.transport.CommMessages
 import coop.rchain.comm.transport.CommMessages._

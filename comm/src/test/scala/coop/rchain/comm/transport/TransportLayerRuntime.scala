@@ -147,10 +147,12 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  def roundTripWithHeartbeat(transport: TransportLayer[F],
-                             local: PeerNode,
-                             remote: PeerNode,
-                             timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] = {
+  def roundTripWithHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode,
+      timeout: FiniteDuration = 3.second
+  ): F[CommErr[Protocol]] = {
     val msg = CommMessages.heartbeat(local)
     transport.roundTrip(remote, msg, timeout)
   }
@@ -160,9 +162,11 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     transport.send(remote, msg)
   }
 
-  def broadcastHeartbeat(transport: TransportLayer[F],
-                         local: PeerNode,
-                         remotes: PeerNode*): F[Unit] = {
+  def broadcastHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remotes: PeerNode*
+  ): F[Unit] = {
     val msg = CommMessages.heartbeat(local)
     transport.broadcast(remotes, msg)
   }
@@ -185,10 +189,8 @@ final class Dispatcher[F[_]: Applicative](
       processed = System.currentTimeMillis()
       latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
-      val isDisconnect =
-        p.message.isUpstream && p.message.upstream.get.typeUrl == "type.googleapis.com/coop.rchain.comm.protocol.rchain.Disconnect"
       // Ignore Disconnect messages to not skew the tests
-      if (!isDisconnect)
+      if (!p.message.isDisconnect)
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
@@ -202,7 +204,8 @@ final class Dispatcher[F[_]: Applicative](
 object Dispatcher {
   def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
     new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)))
+      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer))
+    )
 
   def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
     new Dispatcher(

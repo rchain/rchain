@@ -3,7 +3,6 @@ package coop.rchain.comm.rp
 import Connect._
 import org.scalatest._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.protocol.rchain.{Protocol => _, _}
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
@@ -46,8 +45,7 @@ class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with App
         Connect.connect[Effect](remote, defaultTimeout)
         // then
         transportLayerEff.requests.size should be(1)
-        val Protocol(_, Protocol.Message.Upstream(upstream)) = transportLayerEff.requests(0).msg
-        upstream.unpack(ProtocolHandshake)
+        val Protocol(_, Protocol.Message.ProtocolHandshake(_)) = transportLayerEff.requests(0).msg
       }
     }
 

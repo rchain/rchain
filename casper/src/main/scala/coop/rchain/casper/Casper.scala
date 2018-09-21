@@ -59,8 +59,6 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
 sealed abstract class MultiParentCasperInstances {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   def hashSetCasper[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
       runtimeManager: RuntimeManager,
       validatorId: Option[ValidatorIdentity],

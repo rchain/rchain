@@ -87,9 +87,9 @@ object CommUtil {
                       val maybePacket = toPacket(response).toOption
 
                       (maybeSender, maybePacket) match {
-                        case (Some(sender), Some(_)) =>
+                        case (Some(sender), Some(packet)) =>
                           for {
-                            _ <- HandleMessages.handlePacket[F](sender, maybePacket)
+                            _ <- HandleMessages.handlePacket[F](sender, packet)
                             l <- LastApprovedBlock[F].get
                             _ <- l.fold(askPeers(rest, local))(_ => ().pure[F])
                           } yield ()

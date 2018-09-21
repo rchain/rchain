@@ -4,64 +4,64 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.rchain._
-import coop.rchain.comm.protocol.routing
+import coop.rchain.comm.protocol.routing._
+import com.google.protobuf.ByteString
 
 object CommMessages {
 
-  def protocolHandshake(src: PeerNode): routing.Protocol = {
-    val ph = ProtocolHandshake()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(ph))
-  }
+  def header(src: PeerNode): Header =
+    Header()
+      .withSender(node(src))
 
-  def toProtocolHandshake(proto: routing.Protocol): CommErr[ProtocolHandshake] =
-    proto.message match {
-      case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(ProtocolHandshake))
-      case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
-    }
+  def node(n: PeerNode): Node =
+    Node()
+      .withId(ByteString.copyFrom(n.key.toArray))
+      .withHost(ByteString.copyFromUtf8(n.endpoint.host))
+      .withUdpPort(n.endpoint.udpPort)
+      .withTcpPort(n.endpoint.tcpPort)
 
-  def protocolHandshakeResponse(src: PeerNode): routing.Protocol = {
-    val phr = ProtocolHandshakeResponse()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(phr))
-  }
+  def protocol(src: PeerNode): Protocol =
+    Protocol().withHeader(header(src))
 
-  def packet(src: PeerNode, pType: PacketType, content: Array[Byte]): routing.Protocol =
+  def protocolHandshake(src: PeerNode): Protocol =
+    protocol(src).withProtocolHandshake(ProtocolHandshake())
+
+  def toProtocolHandshake(proto: Protocol): CommErr[ProtocolHandshake] =
+    proto.message.protocolHandshake.fold[CommErr[ProtocolHandshake]](
+      Left(UnknownProtocolError(s"Was expecting ProtocolHandshake, got ${proto.message}"))
+    )(Right(_))
+
+  def protocolHandshakeResponse(src: PeerNode): Protocol =
+    protocol(src).withProtocolHandshakeResponse(ProtocolHandshakeResponse())
+
+  def heartbeat(src: PeerNode): Protocol =
+    protocol(src).withHeartbeat(Heartbeat())
+
+  def toHeartbeat(proto: Protocol): CommErr[Heartbeat] =
+    proto.message.heartbeat.fold[CommErr[Heartbeat]](
+      Left(UnknownProtocolError(s"Was expecting Heartbeat, got ${proto.message}"))
+    )(Right(_))
+
+  def heartbeatResponse(src: PeerNode): Protocol =
+    protocol(src).withHeartbeatResponse(HeartbeatResponse())
+
+  def packet(src: PeerNode, pType: PacketType, content: Array[Byte]): Protocol =
     packet(src, pType, ByteString.copyFrom(content))
 
-  def heartbeat(src: PeerNode): routing.Protocol = {
-    val hb = Heartbeat()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hb))
-  }
+  def packet(src: PeerNode, pType: PacketType, content: ByteString): Protocol =
+    protocol(src).withPacket(Packet(pType.id, content))
 
-  def toHeartbeat(proto: routing.Protocol): CommErr[Heartbeat] =
-    proto.message match {
-      case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Heartbeat))
-      case a                                           => Left(UnknownProtocolError(s"Was expecting Heartbeat, got $a"))
-    }
+  def toPacket(proto: Protocol): CommErr[Packet] =
+    proto.message.packet.fold[CommErr[Packet]](
+      Left(UnknownProtocolError(s"Was expecting Packet, got ${proto.message}"))
+    )(Right(_))
 
-  def heartbeatResponse(src: PeerNode): routing.Protocol = {
-    val hbr = HeartbeatResponse()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(hbr))
-  }
+  def disconnect(src: PeerNode): Protocol =
+    protocol(src).withDisconnect(Disconnect())
 
-  def packet(src: PeerNode, pType: PacketType, content: ByteString): routing.Protocol = {
-    val p = Packet(pType.id, content)
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(p))
-  }
-
-  def toPacket(proto: routing.Protocol): CommErr[Packet] = proto.message match {
-    case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Packet))
-    case a                                           => Left(UnknownProtocolError(s"Was expecting Packet, got $a"))
-  }
-
-  def disconnect(src: PeerNode): routing.Protocol = {
-    val d = Disconnect()
-    ProtocolHelper.upstreamMessage(src, AnyProto.pack(d))
-  }
-
-  def toDisconnect(proto: routing.Protocol): CommErr[Disconnect] = proto.message match {
-    case routing.Protocol.Message.Upstream(upstream) => Right(upstream.unpack(Disconnect))
-    case a                                           => Left(UnknownProtocolError(s"Was expecting Disconnect, got $a"))
-  }
+  def toDisconnect(proto: Protocol): CommErr[Disconnect] =
+    proto.message.disconnect.fold[CommErr[Disconnect]](
+      Left(UnknownProtocolError(s"Was expecting Disconnect, got ${proto.message}"))
+    )(Right(_))
 
 }
