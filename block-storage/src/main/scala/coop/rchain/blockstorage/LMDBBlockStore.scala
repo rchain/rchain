@@ -20,8 +20,8 @@ import coop.rchain.shared.Resources.withResource
 class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks: Dbi[ByteBuffer])(
     implicit
     syncF: Sync[F],
-    metricsF: Metrics[F])
-    extends BlockStore[F] {
+    metricsF: Metrics[F]
+) extends BlockStore[F] {
 
   import LMDBBlockStore.MetricNamePrefix
 
@@ -70,9 +70,11 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
       _ <- metricsF.incrementCounter(MetricNamePrefix + "put")
       ret <- withWriteTxn { txn =>
               val (blockHash, blockMessage) = f
-              blocks.put(txn,
-                         blockHash.toDirectByteBuffer,
-                         blockMessage.toByteString.toDirectByteBuffer)
+              blocks.put(
+                txn,
+                blockHash.toDirectByteBuffer,
+                blockMessage.toByteString.toDirectByteBuffer
+              )
             }
     } yield ret
 
@@ -80,8 +82,8 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "get")
       ret <- withReadTxn { txn =>
-              Option(blocks.get(txn, blockHash.toDirectByteBuffer)).map(r =>
-                BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
+              Option(blocks.get(txn, blockHash.toDirectByteBuffer))
+                .map(r => BlockMessage.parseFrom(ByteString.copyFrom(r).newCodedInput()))
             }
     } yield ret
 
@@ -103,8 +105,10 @@ class LMDBBlockStore[F[_]] private (val env: Env[ByteBuffer], path: Path, blocks
             }
     } yield ret
 
-  @deprecated(message = "to be removed when casper code no longer needs the whole DB in memmory",
-              since = "0.5")
+  @deprecated(
+    message = "to be removed when casper code no longer needs the whole DB in memmory",
+    since = "0.5"
+  )
   def asMap(): F[Map[BlockHash, BlockMessage]] =
     for {
       _ <- metricsF.incrementCounter(MetricNamePrefix + "as-map")
@@ -133,15 +137,19 @@ object LMDBBlockStore {
 
   private val MetricNamePrefix = "lmdb-block-store-"
 
-  case class Config(path: Path,
-                    mapSize: Long,
-                    maxDbs: Int = 1,
-                    maxReaders: Int = 126,
-                    noTls: Boolean = true)
+  case class Config(
+      path: Path,
+      mapSize: Long,
+      maxDbs: Int = 1,
+      maxReaders: Int = 126,
+      noTls: Boolean = true
+  )
 
-  def create[F[_]](config: Config)(implicit
-                                   syncF: Sync[F],
-                                   metricsF: Metrics[F]): LMDBBlockStore[F] = {
+  def create[F[_]](config: Config)(
+      implicit
+      syncF: Sync[F],
+      metricsF: Metrics[F]
+  ): LMDBBlockStore[F] = {
     if (Files.notExists(config.path)) Files.createDirectories(config.path)
 
     val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
@@ -156,9 +164,11 @@ object LMDBBlockStore {
     new LMDBBlockStore(env, config.path, blocks)
   }
 
-  def create[F[_]](env: Env[ByteBuffer], path: Path)(implicit
-                                                     syncF: Sync[F],
-                                                     metricsF: Metrics[F]): BlockStore[F] = {
+  def create[F[_]](env: Env[ByteBuffer], path: Path)(
+      implicit
+      syncF: Sync[F],
+      metricsF: Metrics[F]
+  ): BlockStore[F] = {
     val blocks: Dbi[ByteBuffer] = env.openDbi(s"blocks", MDB_CREATE)
     new LMDBBlockStore[F](env, path, blocks)
   }

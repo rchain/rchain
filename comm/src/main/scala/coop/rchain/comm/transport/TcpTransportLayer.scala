@@ -20,8 +20,8 @@ import scala.concurrent.TimeoutException
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
-    log: Log[Task])
-    extends TransportLayer[Task] {
+    log: Log[Task]
+) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
 
@@ -95,7 +95,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
-      f: TransportLayerStub => Task[A]): Task[A] =
+      f: TransportLayerStub => Task[A]
+  ): Task[A] =
     for {
       channel <- connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
@@ -105,9 +106,11 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                }
     } yield result
 
-  private def innerRoundTrip(peer: PeerNode,
-                             request: TLRequest,
-                             timeout: FiniteDuration): Task[Either[CommError, TLResponse]] =
+  private def innerRoundTrip(
+      peer: PeerNode,
+      request: TLRequest,
+      timeout: FiniteDuration
+  ): Task[Either[CommError, TLResponse]] =
     withClient(peer, enforce = false)(_.ask(request).nonCancelingTimeout(timeout)).attempt
       .map(_.leftMap {
         case _: TimeoutException => CommError.timeout
@@ -121,29 +124,35 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     for {
       tlResponseErr <- innerRoundTrip(peer, TLRequest(msg.some), timeout)
       pmErr <- tlResponseErr
-                .flatMap(tlr =>
-                  tlr.payload match {
-                    case p if p.isProtocol => Right(tlr.getProtocol)
-                    case p if p.isNoResponse =>
-                      Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case TLResponse.Payload.InternalServerError(ise) =>
-                      Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-                })
+                .flatMap(
+                  tlr =>
+                    tlr.payload match {
+                      case p if p.isProtocol => Right(tlr.getProtocol)
+                      case p if p.isNoResponse =>
+                        Left(internalCommunicationError("Was expecting message, nothing arrived"))
+                      case TLResponse.Payload.InternalServerError(ise) =>
+                        Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
+                    }
+                )
                 .pure[Task]
     } yield pmErr
 
-  private def innerSend(peer: PeerNode,
-                        msg: Protocol,
-                        enforce: Boolean = false,
-                        timeOut: FiniteDuration = DefaultSendTimeout): Task[Unit] =
+  private def innerSend(
+      peer: PeerNode,
+      msg: Protocol,
+      enforce: Boolean = false,
+      timeOut: FiniteDuration = DefaultSendTimeout
+  ): Task[Unit] =
     withClient(peer, enforce) {
       _.tell(TLRequest(msg.some)).nonCancelingTimeoutTo(timeOut, Task.delay(peerUnavailable(peer)))
     }.attempt.void
 
-  private def innerBroadcast(peers: Seq[PeerNode],
-                             msg: Protocol,
-                             enforce: Boolean = false,
-                             timeOut: FiniteDuration = DefaultSendTimeout): Task[Unit] =
+  private def innerBroadcast(
+      peers: Seq[PeerNode],
+      msg: Protocol,
+      enforce: Boolean = false,
+      timeOut: FiniteDuration = DefaultSendTimeout
+  ): Task[Unit] =
     Task.gatherUnordered(peers.map(innerSend(_, msg, enforce, timeOut))).void
 
   def send(peer: PeerNode, msg: Protocol): Task[Unit] =
@@ -152,8 +161,9 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Unit] =
     innerBroadcast(peers, msg)
 
-  private def receiveInternal(parallelism: Int)(
-      dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
+  private def receiveInternal(
+      parallelism: Int
+  )(dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
@@ -178,7 +188,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         server <- s.server match {
                    case Some(_) =>
                      Task.raiseError(
-                       new RuntimeException("TransportLayer server is already started"))
+                       new RuntimeException("TransportLayer server is already started")
+                     )
                    case _ =>
                      val parallelism = Runtime.getRuntime.availableProcessors()
                      receiveInternal(parallelism)(dispatch)

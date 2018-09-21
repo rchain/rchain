@@ -12,13 +12,17 @@ private[sort] object MatchSortMatcher extends Sortable[Match] {
         sortedPattern <- Sortable.sortMatch(matchCase.pattern)
         sortedBody    <- Sortable.sortMatch(matchCase.source)
       } yield
-        ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
-                   Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
+        ScoredTerm(
+          MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
+          Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score))
+        )
     for {
       sortedValue <- Sortable.sortMatch(m.target)
       scoredCases <- m.cases.toList.traverse(sortCase)
     } yield
-      ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
-                 Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
+      ScoredTerm(
+        Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
+        Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*)
+      )
   }
 }

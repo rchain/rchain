@@ -7,10 +7,12 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 
 //locallyFree is of type Coeval to make use of memoization
-case class ParSet(ps: SortedParHashSet,
-                  connectiveUsed: Boolean,
-                  locallyFree: Coeval[BitSet],
-                  remainder: Option[Var]) {
+case class ParSet(
+    ps: SortedParHashSet,
+    connectiveUsed: Boolean,
+    locallyFree: Coeval[BitSet],
+    remainder: Option[Var]
+) {
 
   override def equals(o: scala.Any): Boolean = o match {
     case parSet: ParSet =>
@@ -23,15 +25,19 @@ case class ParSet(ps: SortedParHashSet,
 }
 
 object ParSet {
-  def apply(ps: Seq[Par],
-            connectiveUsed: Boolean,
-            locallyFree: Coeval[BitSet],
-            remainder: Option[Var]): ParSet =
+  def apply(
+      ps: Seq[Par],
+      connectiveUsed: Boolean,
+      locallyFree: Coeval[BitSet],
+      remainder: Option[Var]
+  ): ParSet =
     ParSet(SortedParHashSet(ps), connectiveUsed, locallyFree.memoize, remainder)
 
-  def apply(ps: Seq[Par],
-            connectiveUsed: Boolean = false,
-            remainder: Option[Var] = None): ParSet = {
+  def apply(
+      ps: Seq[Par],
+      connectiveUsed: Boolean = false,
+      remainder: Option[Var] = None
+  ): ParSet = {
     val shs = SortedParHashSet(ps)
     ParSet(shs, connectiveUsed, Coeval.delay(updateLocallyFree(shs)).memoize, remainder)
   }

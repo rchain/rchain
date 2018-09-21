@@ -90,16 +90,19 @@ class FsmUnitTests extends FlatSpec with Matchers {
     assert(Fsm(Set(), Set(0, 1), 1, Set(0), Map(0 -> Map())).isEmpty)
 
     assert(
-      Fsm(Set('a', 'b'),
-          Set(0, 1, _ob, 2),
-          0,
-          Set(2),
-          Map(
-            0   -> Map('a' -> 1, 'b'   -> 1),
-            1   -> Map('a' -> _ob, 'b' -> _ob),
-            _ob -> Map('a' -> _ob, 'b' -> _ob),
-            2   -> Map('a' -> _ob, 'b' -> _ob),
-          )).isEmpty)
+      Fsm(
+        Set('a', 'b'),
+        Set(0, 1, _ob, 2),
+        0,
+        Set(2),
+        Map(
+          0   -> Map('a' -> 1, 'b'   -> 1),
+          1   -> Map('a' -> _ob, 'b' -> _ob),
+          _ob -> Map('a' -> _ob, 'b' -> _ob),
+          2   -> Map('a' -> _ob, 'b' -> _ob)
+        )
+      ).isEmpty
+    )
   }
 
   "Null FSM" should "behave as expected" in {
@@ -125,14 +128,18 @@ class FsmUnitTests extends FlatSpec with Matchers {
     val fsmE2 = Fsm(Set(), Set(0), 0, Set(0), Map(0 -> Map()))
     assert(!fsmE2.isEmpty)
 
-    val fsmE3 = Fsm(Set('a', 'b'),
-                    Set(0, 1, _ob, 2),
-                    0,
-                    Set(2),
-                    Map(0   -> Map('a' -> 1, 'b'   -> 1),
-                        1   -> Map('a' -> _ob, 'b' -> _ob),
-                        _ob -> Map('a' -> _ob, 'b' -> _ob),
-                        2   -> Map('a' -> _ob, 'b' -> _ob)))
+    val fsmE3 = Fsm(
+      Set('a', 'b'),
+      Set(0, 1, _ob, 2),
+      0,
+      Set(2),
+      Map(
+        0   -> Map('a' -> 1, 'b'   -> 1),
+        1   -> Map('a' -> _ob, 'b' -> _ob),
+        _ob -> Map('a' -> _ob, 'b' -> _ob),
+        2   -> Map('a' -> _ob, 'b' -> _ob)
+      )
+    )
 
     assert(fsmE3.isEmpty)
   }
@@ -226,11 +233,13 @@ class FsmUnitTests extends FlatSpec with Matchers {
       Set(1, 2, 3, 4, _ob),
       1,
       Set(4),
-      Map(1   -> Map('0' -> 2, '1'   -> 4),
-          2   -> Map('0' -> 3, '1'   -> 4),
-          3   -> Map('0' -> 3, '1'   -> 4),
-          4   -> Map('0' -> _ob, '1' -> _ob),
-          _ob -> Map('0' -> _ob, '1' -> _ob))
+      Map(
+        1   -> Map('0' -> 2, '1'   -> 4),
+        2   -> Map('0' -> 3, '1'   -> 4),
+        3   -> Map('0' -> 3, '1'   -> 4),
+        4   -> Map('0' -> _ob, '1' -> _ob),
+        _ob -> Map('0' -> _ob, '1' -> _ob)
+      )
     )
 
     assert(merged.reversed.states.size == 2)
@@ -255,11 +264,13 @@ class FsmUnitTests extends FlatSpec with Matchers {
   }
 
   "Reduce" should "remove unreachable states" in {
-    val fsm = Fsm(Set('a'),
-                  Set(0, 1, 2),
-                  0,
-                  Set(1),
-                  Map(0 -> Map('a' -> 2), 1 -> Map('a' -> 2), 2 -> Map('a' -> 2)))
+    val fsm = Fsm(
+      Set('a'),
+      Set(0, 1, 2),
+      0,
+      Set(1),
+      Map(0 -> Map('a' -> 2), 1 -> Map('a' -> 2), 2 -> Map('a' -> 2))
+    )
 
     assert(fsm.isEmpty)
     assert(!fsm.accepts("a"))
@@ -332,8 +343,10 @@ class FsmUnitTests extends FlatSpec with Matchers {
       Set(0, 1),
       1,
       Set(1),
-      Map(0 -> Map(Fsm.anythingElse -> 0, 'a' -> 0, 'b' -> 0, 'c' -> 0),
-          1 -> Map(Fsm.anythingElse -> 0, 'a' -> 0, 'b' -> 1, 'c' -> 1))
+      Map(
+        0 -> Map(Fsm.anythingElse -> 0, 'a' -> 0, 'b' -> 0, 'c' -> 0),
+        1 -> Map(Fsm.anythingElse -> 0, 'a' -> 0, 'b' -> 1, 'c' -> 1)
+      )
     )
 
     assert(fsm1.accepts(""))
@@ -343,9 +356,11 @@ class FsmUnitTests extends FlatSpec with Matchers {
       Set(0, 1, 2),
       1,
       Set(0),
-      Map(0 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 2),
-          1 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 0),
-          2 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 2))
+      Map(
+        0 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 2),
+        1 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 0),
+        2 -> Map(Fsm.anythingElse -> 2, 'a' -> 2, 'b' -> 2, 'c' -> 2)
+      )
     )
 
     assert(fsm2.accepts("c"))
@@ -388,14 +403,18 @@ class FsmUnitTests extends FlatSpec with Matchers {
     * gives the incorrect result here.
     */
   "Star" should "pass advanced check" in {
-    val fsmS = Fsm(Set('a', 'b'),
-                   Set(0, 1, 2, _ob),
-                   0,
-                   Set(2),
-                   Map(0   -> Map('a' -> 0, 'b'   -> 1),
-                       1   -> Map('a' -> 2, 'b'   -> _ob),
-                       2   -> Map('a' -> _ob, 'b' -> _ob),
-                       _ob -> Map('a' -> _ob, 'b' -> _ob))).star
+    val fsmS = Fsm(
+      Set('a', 'b'),
+      Set(0, 1, 2, _ob),
+      0,
+      Set(2),
+      Map(
+        0   -> Map('a' -> 0, 'b'   -> 1),
+        1   -> Map('a' -> 2, 'b'   -> _ob),
+        2   -> Map('a' -> _ob, 'b' -> _ob),
+        _ob -> Map('a' -> _ob, 'b' -> _ob)
+      )
+    ).star
 
     assert(fsmS.alphabet == Set('a', 'b'))
     assert(fsmS.accepts(""))
@@ -537,13 +556,17 @@ class FsmUnitTests extends FlatSpec with Matchers {
   }
 
   "Difference" should "work" in {
-    val fsmAorB = Fsm(Set('a', 'b'),
-                      Set(0, 1, _ob),
-                      0,
-                      Set(1),
-                      Map(0   -> Map('a' -> 1, 'b'   -> 1),
-                          1   -> Map('a' -> _ob, 'b' -> _ob),
-                          _ob -> Map('a' -> _ob, 'b' -> _ob)))
+    val fsmAorB = Fsm(
+      Set('a', 'b'),
+      Set(0, 1, _ob),
+      0,
+      Set(1),
+      Map(
+        0   -> Map('a' -> 1, 'b'   -> 1),
+        1   -> Map('a' -> _ob, 'b' -> _ob),
+        _ob -> Map('a' -> _ob, 'b' -> _ob)
+      )
+    )
 
     val fsmA = createFsmA
     val fsmB = createFsmB
@@ -566,15 +589,17 @@ class FsmUnitTests extends FlatSpec with Matchers {
     * FSM accepts no strings but has 3 states, needs only 1
     */
   "Reduce" should "eliminate unused states" in {
-    val fsm3 = Fsm(Set('a'),
-                   Set(0, 1, 2),
-                   0,
-                   Set(1),
-                   Map(
-                     0 -> Map('a' -> 2),
-                     1 -> Map('a' -> 2),
-                     2 -> Map('a' -> 2)
-                   ))
+    val fsm3 = Fsm(
+      Set('a'),
+      Set(0, 1, 2),
+      0,
+      Set(1),
+      Map(
+        0 -> Map('a' -> 2),
+        1 -> Map('a' -> 2),
+        2 -> Map('a' -> 2)
+      )
+    )
 
     val fsm1 = fsm3.reduced
     assert(fsm1.states.size == 1)
@@ -593,11 +618,13 @@ class FsmUnitTests extends FlatSpec with Matchers {
       Set(1, 2, 3, 4, _ob),
       1,
       Set(4),
-      Map(1   -> Map('a' -> 2, 'b'   -> 4),
-          2   -> Map('a' -> 3, 'b'   -> 4),
-          3   -> Map('a' -> 3, 'b'   -> 4),
-          4   -> Map('a' -> _ob, 'b' -> _ob),
-          _ob -> Map('a' -> _ob, 'b' -> _ob))
+      Map(
+        1   -> Map('a' -> 2, 'b'   -> 4),
+        2   -> Map('a' -> 3, 'b'   -> 4),
+        3   -> Map('a' -> 3, 'b'   -> 4),
+        4   -> Map('a' -> _ob, 'b' -> _ob),
+        _ob -> Map('a' -> _ob, 'b' -> _ob)
+      )
     )
 
     val reducedFsm = mergedFsm.reduced
@@ -707,10 +734,12 @@ class FsmUnitTests extends FlatSpec with Matchers {
       Set(0, 1, 2, 3, 4, 5),
       0,
       Set(4),
-      Map(0 -> Map('/' -> 1),
-          1 -> Map('*' -> 2),
-          2 -> Map('/' -> 2, Fsm.anythingElse -> 2, '*' -> 3),
-          3 -> Map('/' -> 4, Fsm.anythingElse -> 2, '*' -> 3))
+      Map(
+        0 -> Map('/' -> 1),
+        1 -> Map('*' -> 2),
+        2 -> Map('/' -> 2, Fsm.anythingElse -> 2, '*' -> 3),
+        3 -> Map('/' -> 4, Fsm.anythingElse -> 2, '*' -> 3)
+      )
     )
 
     assert(fsm.strings.take(1).toList == "/**/" :: Nil)

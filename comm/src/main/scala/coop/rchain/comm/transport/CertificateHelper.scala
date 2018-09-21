@@ -91,7 +91,7 @@ object CertificateHelper {
 
     val info     = new X509CertInfo
     val from     = new java.util.Date()
-    val to       = new java.util.Date(from.getTime + 365 * 86400000l)
+    val to       = new java.util.Date(from.getTime + 365 * 86400000L)
     val interval = new CertificateValidity(from, to)
     val serial   = new BigInteger(64, new SecureRandom())
     val owner    = new X500Name(s"CN=$address")
@@ -127,10 +127,12 @@ case class ParameterSpec(
 
 case object ParameterSpec {
   def apply(ecParamSpec: ECParameterSpec): ParameterSpec =
-    ParameterSpec(ecParamSpec.getCurve,
-                  ecParamSpec.getGenerator,
-                  ecParamSpec.getOrder,
-                  ecParamSpec.getCofactor)
+    ParameterSpec(
+      ecParamSpec.getCurve,
+      ecParamSpec.getGenerator,
+      ecParamSpec.getOrder,
+      ecParamSpec.getCofactor
+    )
 }
 
 object CertificatePrinter {

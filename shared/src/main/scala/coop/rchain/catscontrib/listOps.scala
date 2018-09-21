@@ -7,7 +7,8 @@ import scala.math.Ordering
 
 object ListContrib {
   def sortBy[A, K: Monoid](list: IndexedSeq[A], map: collection.Map[A, K])(
-      implicit ord: Ordering[K]) =
+      implicit ord: Ordering[K]
+  ) =
     list.sortBy(map.getOrElse(_, Monoid[K].empty))(ord)
 
   // From https://hygt.github.io/2018/08/05/Cats-findM-collectFirstM.html

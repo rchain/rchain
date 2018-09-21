@@ -62,8 +62,12 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
           case Right(Some(mat)) =>
             Right(
               Some(
-                (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
-                 prefix ++ remaining)))
+                (
+                  DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+                  prefix ++ remaining
+                )
+              )
+            )
         }
     }
 
@@ -89,8 +93,8 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Either[E, Option[DataCandidate[C, R]]]])(
-      implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
+      acc: Seq[Either[E, Option[DataCandidate[C, R]]]]
+  )(implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
     channelPatternPairs match {
       case Nil =>
         acc.reverse
@@ -107,9 +111,11 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
           case Left(e) =>
             (Left(e) +: acc).reverse
           case Right(Some((cand, rem))) =>
-            extractDataCandidates(tail,
-                                  channelToIndexedData.updated(channel, rem),
-                                  Right(Some(cand)) +: acc)
+            extractDataCandidates(
+              tail,
+              channelToIndexedData.updated(channel, rem),
+              Right(Some(cand)) +: acc
+            )
           case Right(None) =>
             extractDataCandidates(tail, channelToIndexedData, Right(None) +: acc)
         }
@@ -121,8 +127,8 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
   private[rspace] final def extractFirstMatch(
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
-      channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
-      implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
+      channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
+  )(implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
       case Nil =>
         Right(None)

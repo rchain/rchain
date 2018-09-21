@@ -70,14 +70,18 @@ object GrpcMonix {
       }
     }
 
-  def liftByGrpcOperator[I, O](observable: Observable[I],
-                               operator: GrpcOperator[I, O]): Observable[O] =
+  def liftByGrpcOperator[I, O](
+      observable: Observable[I],
+      operator: GrpcOperator[I, O]
+  ): Observable[O] =
     observable.liftByOperator(
       grpcOperatorToMonixOperator(operator)
     )
 
-  def unliftByTransformer[I, O](transformer: Transformer[I, O],
-                                subscriber: Subscriber[O]): Subscriber[I] =
+  def unliftByTransformer[I, O](
+      transformer: Transformer[I, O],
+      subscriber: Subscriber[O]
+  ): Subscriber[I] =
     new Subscriber[I] {
       private[this] val subject = PublishSubject[I]()
       transformer(subject).subscribe(subscriber)

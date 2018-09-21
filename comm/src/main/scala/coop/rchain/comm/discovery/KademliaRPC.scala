@@ -17,7 +17,8 @@ object KademliaRPC extends KademliaRPCInstances {
   def apply[F[_]](implicit P: KademliaRPC[F]): KademliaRPC[F] = P
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit P: KademliaRPC[F]): KademliaRPC[T[F, ?]] =
+      implicit P: KademliaRPC[F]
+  ): KademliaRPC[T[F, ?]] =
     new KademliaRPC[T[F, ?]] {
       def ping(node: PeerNode): T[F, Boolean]                         = P.ping(node).liftM[T]
       def lookup(key: Seq[Byte], peer: PeerNode): T[F, Seq[PeerNode]] = P.lookup(key, peer).liftM[T]

@@ -13,7 +13,8 @@ object RSpace {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): ISpace[Id, C, P, E, A, R, K] =
+      sk: Serialize[K]
+  ): ISpace[Id, C, P, E, A, R, K] =
     context match {
       case ctx: LMDBContext[C, P, A, K] =>
         create(LMDBStore.create[C, P, A, K](ctx, branch), branch)
@@ -26,19 +27,26 @@ object RSpace {
     }
 
   def createInMemory[C, P, E, A, R, K](
-      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]],
-                            Blake2b256Hash,
-                            GNAT[C, P, A, K]],
-      branch: Branch)(implicit
-                      sc: Serialize[C],
-                      sp: Serialize[P],
-                      sa: Serialize[A],
-                      sk: Serialize[K]): ISpace[Id, C, P, E, A, R, K] = {
+      trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
+        C,
+        P,
+        A,
+        K
+      ]],
+      branch: Branch
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]
+  ): ISpace[Id, C, P, E, A, R, K] = {
 
     val mainStore = InMemoryStore
       .create[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
-        branch)
+        branch
+      )
     create(mainStore, branch)
   }
 
@@ -47,7 +55,8 @@ object RSpace {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): ISpace[Id, C, P, E, A, R, K] = {
+      sk: Serialize[K]
+  ): ISpace[Id, C, P, E, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -74,7 +83,8 @@ object RSpace {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]): ISpace[Id, C, P, E, A, R, K] = {
+      sk: Serialize[K]
+  ): ISpace[Id, C, P, E, A, R, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec

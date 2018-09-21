@@ -47,7 +47,8 @@ package object effects {
   def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
       implicit
       metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
+      transport: TransportLayer[Task]
+  ): KademliaRPC[Task] =
     new KademliaRPC[Task] {
       def ping(node: PeerNode): Task[Boolean] =
         for {
@@ -62,23 +63,29 @@ package object effects {
           req = ProtocolHelper.lookup(src, key)
           r <- TransportLayer[Task]
                 .roundTrip(remoteNode, req, timeout)
-                .map(_.toOption
-                  .map {
-                    case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                      lr.nodes.map(ProtocolHelper.toPeerNode)
-                    case _ => Seq()
-                  }
-                  .getOrElse(Seq()))
+                .map(
+                  _.toOption
+                    .map {
+                      case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
+                        lr.nodes.map(ProtocolHelper.toPeerNode)
+                      case _ => Seq()
+                    }
+                    .getOrElse(Seq())
+                )
         } yield r
     }
 
-  def tcpTransportLayer(host: String,
-                        port: Int,
-                        certPath: Path,
-                        keyPath: Path,
-                        maxMessageSize: Int)(implicit scheduler: Scheduler,
-                                             connections: TcpTransportLayer.TransportCell[Task],
-                                             log: Log[Task]): TcpTransportLayer = {
+  def tcpTransportLayer(
+      host: String,
+      port: Int,
+      certPath: Path,
+      keyPath: Path,
+      maxMessageSize: Int
+  )(
+      implicit scheduler: Scheduler,
+      connections: TcpTransportLayer.TransportCell[Task],
+      log: Log[Task]
+  ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TcpTransportLayer(host, port, cert, key, maxMessageSize)

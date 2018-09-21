@@ -69,7 +69,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+        )
+      )(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
       implicit val casperRef = {
         val tmp = MultiParentCasperRef.of[Id]
@@ -79,11 +81,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       implicit val turanOracleEffect: SafetyOracle[Id] =
         SafetyOracle.turanOracle[Id](syncId, blockStore)
       val q = BlockQuery(hash = secondBlockQuery)
-      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
-                                                                     casperRef,
-                                                                     logEff,
-                                                                     turanOracleEffect,
-                                                                     blockStore)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
       val blockInfo = blockQueryResponse.blockInfo.get
       blockQueryResponse.status should be("Success")
       blockInfo.blockHash should be(secondHashString)
@@ -103,7 +107,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-          (ProtoUtil.stringToByteString(secondHashString), secondBlock)))(syncId, blockStore)
+          (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+        )
+      )(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
       implicit val casperRef = {
         val tmp = MultiParentCasperRef.of[Id]
@@ -113,12 +119,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
       implicit val turanOracleEffect: SafetyOracle[Id] =
         SafetyOracle.turanOracle[Id](syncId, blockStore)
       val q = BlockQuery(hash = badTestHashQuery)
-      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(syncId,
-                                                                     casperRef,
-                                                                     logEff,
-                                                                     turanOracleEffect,
-                                                                     blockStore)
+      val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
       blockQueryResponse.status should be(
-        s"Error: Failure to find block with hash ${badTestHashQuery}")
+        s"Error: Failure to find block with hash ${badTestHashQuery}"
+      )
   }
 }

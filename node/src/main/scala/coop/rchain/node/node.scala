@@ -52,7 +52,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   if (!dataDirFile.exists()) {
     if (!dataDirFile.mkdir()) {
       println(
-        s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}")
+        s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+      )
       System.exit(-1)
     }
   }
@@ -60,7 +61,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   // Check if data_dir has read/write access
   if (!dataDirFile.isDirectory || !dataDirFile.canRead || !dataDirFile.canWrite) {
     println(
-      s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}")
+      s"The data dir must be a directory and have read and write permissions:\n${dataDirFile.getAbsolutePath}"
+    )
     System.exit(-1)
   }
 
@@ -169,12 +171,16 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   ): Effect[Servers] =
     for {
       grpcServerExternal <- GrpcServer
-                             .acquireExternalServer[Effect](conf.grpcServer.portExternal,
-                                                            conf.server.maxMessageSize)
+                             .acquireExternalServer[Effect](
+                               conf.grpcServer.portExternal,
+                               conf.server.maxMessageSize
+                             )
       grpcServerInternal <- GrpcServer
-                             .acquireInternalServer(conf.grpcServer.portInternal,
-                                                    conf.server.maxMessageSize,
-                                                    runtime)
+                             .acquireInternalServer(
+                               conf.grpcServer.portInternal,
+                               conf.server.maxMessageSize,
+                               runtime
+                             )
                              .toEffect
       prometheusReporter = new NewPrometheusReporter()
 
@@ -194,7 +200,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   def startServers(servers: Servers)(
       implicit
-      log: Log[Task],
+      log: Log[Task]
   ): Effect[Unit] =
     GrpcServer.start(servers.grpcServerExternal, servers.grpcServerInternal).toEffect
 
@@ -225,8 +231,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Goodbye.")
     } yield ()).unsafeRunSync
 
-  def startReportJvmMetrics(implicit metrics: Metrics[Task],
-                            jvmMetrics: JvmMetrics[Task]): Task[Unit] =
+  def startReportJvmMetrics(
+      implicit metrics: Metrics[Task],
+      jvmMetrics: JvmMetrics[Task]
+  ): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
@@ -264,11 +272,12 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
         case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
         case handled       => handled.pure[Effect]
-    }
+      }
 
     val info: Effect[Unit] = for {
       _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})")
+            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+          )
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
@@ -303,12 +312,14 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
           case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
             Log[Task]
               .error(
-                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
+                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again."
+              )
           case th =>
             log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
               th.printStackTrace();
             }
-        } *> exit0.as(Right(())))
+        } *> exit0.as(Right(()))
+    )
 
   private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] =
     Timer.deriveEitherT(Functor[Task], timerTask)
@@ -327,8 +338,10 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     // 1. set up configurations
     local          <- EitherT.fromEither[Task](PeerNode.parse(address))
     defaultTimeout = conf.server.defaultTimeout.millis
-    rpClearConnConf = ClearConnetionsConf(conf.server.maxNumOfConnections,
-                                          numOfConnectionsPinged = 10) // TODO read from conf
+    rpClearConnConf = ClearConnetionsConf(
+      conf.server.maxNumOfConnections,
+      numOfConnectionsPinged = 10
+    ) // TODO read from conf
     // 2. create instances of typeclasses
     rpConfAsk            = effects.rpConfAsk(RPConf(local, defaultTimeout, rpClearConnConf))
     tcpConnections       <- effects.tcpConnections.toEffect
@@ -345,18 +358,22 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       port,
       conf.tls.certificate,
       conf.tls.key,
-      conf.server.maxMessageSize)(scheduler, tcpConnections, log)
+      conf.server.maxMessageSize
+    )(scheduler, tcpConnections, log)
     kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
-                      .nodeDiscovery(local, defaultTimeout)(initPeer)(log,
-                                                                      timerTask,
-                                                                      metrics,
-                                                                      kademliaRPC)
+                      .nodeDiscovery(local, defaultTimeout)(initPeer)(
+                        log,
+                        timerTask,
+                        metrics,
+                        kademliaRPC
+                      )
                       .toEffect
     blockStore = LMDBBlockStore.create[Effect](conf.blockstorage)(
       syncEffect,
-      Metrics.eitherT(Monad[Task], metrics))
+      Metrics.eitherT(Monad[Task], metrics)
+    )
 
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
     oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
@@ -385,7 +402,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     packetHandler = PacketHandler.pf[Effect](casperPacketHandler.handle)(
       Applicative[Effect],
       Log.eitherTLog(Monad[Task], log),
-      ErrorHandler[Effect])
+      ErrorHandler[Effect]
+    )
     nodeCoreMetrics = diagnostics.nodeCoreMetrics[Task]
     jvmMetrics      = diagnostics.jvmMetrics[Task]
     // 3. run the node program.

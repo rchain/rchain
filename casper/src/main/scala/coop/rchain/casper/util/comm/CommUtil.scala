@@ -28,7 +28,8 @@ object CommUtil {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def sendBlock[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
-      b: BlockMessage): F[Unit] = {
+      b: BlockMessage
+  ): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
       _ <- sendToPeers[F](transport.BlockMessage, serializedBlock)
@@ -36,9 +37,9 @@ object CommUtil {
     } yield ()
   }
 
-  def sendBlockRequest[
-      F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
-      r: BlockRequest): F[Unit] = {
+  def sendBlockRequest[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk](
+      r: BlockRequest
+  ): F[Unit] = {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
     for {
@@ -49,7 +50,8 @@ object CommUtil {
 
   def sendToPeers[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: RPConfAsk](
       pType: PacketType,
-      serializedMessage: ByteString): F[Unit] =
+      serializedMessage: ByteString
+  ): F[Unit] =
     for {
       peers <- ConnectionsCell[F].read
       local <- RPConfAsk[F].reader(_.local)
@@ -57,9 +59,9 @@ object CommUtil {
       _     <- TransportLayer[F].broadcast(peers, msg)
     } yield ()
 
-  def requestApprovedBlock[
-      F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
-      delay: FiniteDuration): F[Unit] = {
+  def requestApprovedBlock[F[_]: Monad: Capture: LastApprovedBlock: Log: Time: Timer: Metrics: TransportLayer: ConnectionsCell: ErrorHandler: PacketHandler: RPConfAsk](
+      delay: FiniteDuration
+  ): F[Unit] = {
     val request = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
 
     def askPeers(peers: List[PeerNode], local: PeerNode): F[Unit] = peers match {
@@ -67,9 +69,11 @@ object CommUtil {
         for {
           _ <- Log[F].info(s"Sending request for ApprovedBlock to $peer")
           send <- TransportLayer[F]
-                   .roundTrip(peer,
-                              packet(local, transport.ApprovedBlockRequest, request),
-                              5.seconds)
+                   .roundTrip(
+                     peer,
+                     packet(local, transport.ApprovedBlockRequest, request),
+                     5.seconds
+                   )
           _ <- send match {
                 case Left(err) =>
                   Log[F].info(s"Failed to get response from $peer because: $err") *>
@@ -91,14 +95,12 @@ object CommUtil {
                           } yield ()
                         case (None, _) =>
                           Log[F].error(
-                            s"Response from $peer invalid. The sender of the message could not be determined.") *> askPeers(
-                            rest,
-                            local)
+                            s"Response from $peer invalid. The sender of the message could not be determined."
+                          ) *> askPeers(rest, local)
                         case (Some(_), None) =>
                           Log[F].error(
-                            s"Response from $peer invalid. A packet was expected, but received ${response.message}.") *> askPeers(
-                            rest,
-                            local)
+                            s"Response from $peer invalid. A packet was expected, but received ${response.message}."
+                          ) *> askPeers(rest, local)
                       }
                     })
 

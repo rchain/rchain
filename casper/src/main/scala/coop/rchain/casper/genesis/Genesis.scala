@@ -37,9 +37,11 @@ object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def defaultBlessedTerms(timestamp: Long,
-                          validators: Seq[ProofOfStakeValidator],
-                          wallets: Seq[PreWallet]): List[Deploy] =
+  def defaultBlessedTerms(
+      timestamp: Long,
+      validators: Seq[ProofOfStakeValidator],
+      wallets: Seq[PreWallet]
+  ): List[Deploy] =
     List(
       ListOps,
       Either,
@@ -51,21 +53,27 @@ object Genesis {
       ProofOfStake(validators)
     ).map(compiledSourceDeploy(_, timestamp))
 
-  def withContracts(initial: BlockMessage,
-                    validators: Seq[ProofOfStakeValidator],
-                    wallets: Seq[PreWallet],
-                    startHash: StateHash,
-                    runtimeManager: RuntimeManager,
-                    timestamp: Long)(implicit scheduler: Scheduler): BlockMessage =
-    withContracts(defaultBlessedTerms(timestamp, validators, wallets),
-                  initial,
-                  startHash,
-                  runtimeManager)
+  def withContracts(
+      initial: BlockMessage,
+      validators: Seq[ProofOfStakeValidator],
+      wallets: Seq[PreWallet],
+      startHash: StateHash,
+      runtimeManager: RuntimeManager,
+      timestamp: Long
+  )(implicit scheduler: Scheduler): BlockMessage =
+    withContracts(
+      defaultBlessedTerms(timestamp, validators, wallets),
+      initial,
+      startHash,
+      runtimeManager
+    )
 
-  def withContracts(blessedTerms: List[Deploy],
-                    initial: BlockMessage,
-                    startHash: StateHash,
-                    runtimeManager: RuntimeManager)(implicit scheduler: Scheduler): BlockMessage = {
+  def withContracts(
+      blessedTerms: List[Deploy],
+      initial: BlockMessage,
+      startHash: StateHash,
+      runtimeManager: RuntimeManager
+  )(implicit scheduler: Scheduler): BlockMessage = {
     val (stateHash, processedDeploys) = runtimeManager.computeState(startHash, blessedTerms)
 
     val stateWithContracts = for {
@@ -86,10 +94,12 @@ object Genesis {
     unsignedBlockProto(body, header, List.empty[Justification], initial.shardId)
   }
 
-  def withoutContracts(bonds: Map[Array[Byte], Int],
-                       version: Long,
-                       timestamp: Long,
-                       shardId: String): BlockMessage = {
+  def withoutContracts(
+      bonds: Map[Array[Byte], Int],
+      version: Long,
+      timestamp: Long,
+      shardId: String
+  ): BlockMessage = {
     import Sorting.byteArrayOrdering
     //sort to have deterministic order (to get reproducible hash)
     val bondsProto = bonds.toIndexedSeq.sorted.map {
@@ -116,28 +126,37 @@ object Genesis {
       maybeWalletsPath: Option[String],
       runtimeManager: RuntimeManager,
       shardId: String,
-      deployTimestamp: Option[Long])(implicit scheduler: Scheduler): F[BlockMessage] =
+      deployTimestamp: Option[Long]
+  )(implicit scheduler: Scheduler): F[BlockMessage] =
     for {
       bondsFile <- toFile[F](maybeBondsPath, genesisPath.resolve("bonds.txt"))
-      _ <- bondsFile.fold[F[Unit]](maybeBondsPath.fold(().pure[F])(path =>
-            Log[F].warn(
-              s"Specified bonds file $path does not exist. Falling back on generating random validators.")))(
-            _ => ().pure[F])
+      _ <- bondsFile.fold[F[Unit]](
+            maybeBondsPath.fold(().pure[F])(
+              path =>
+                Log[F].warn(
+                  s"Specified bonds file $path does not exist. Falling back on generating random validators."
+                )
+            )
+          )(_ => ().pure[F])
       walletsFile <- toFile[F](maybeWalletsPath, genesisPath.resolve("wallets.txt"))
       wallets     <- getWallets[F](walletsFile, maybeWalletsPath)
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
-      withContr = withContracts(initial,
-                                bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-                                wallets,
-                                runtimeManager.emptyStateHash,
-                                runtimeManager,
-                                timestamp)
+      withContr = withContracts(
+        initial,
+        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+        wallets,
+        runtimeManager.emptyStateHash,
+        runtimeManager,
+        timestamp
+      )
     } yield withContr
 
-  def toFile[F[_]: Applicative: Log](maybePath: Option[String],
-                                     defaultPath: Path): F[Option[File]] =
+  def toFile[F[_]: Applicative: Log](
+      maybePath: Option[String],
+      defaultPath: Path
+  ): F[Option[File]] =
     maybePath match {
       case Some(path) =>
         val f = new File(path)
@@ -155,8 +174,10 @@ object Genesis {
         } else none[File].pure[F]
     }
 
-  def getWallets[F[_]: Monad: Capture: Log](walletsFile: Option[File],
-                                            maybeWalletsPath: Option[String]): F[Seq[PreWallet]] = {
+  def getWallets[F[_]: Monad: Capture: Log](
+      walletsFile: Option[File],
+      maybeWalletsPath: Option[String]
+  ): F[Seq[PreWallet]] = {
     def walletFromFile(file: File): F[Seq[PreWallet]] =
       for {
         maybeLines <- Capture[F].capture { Try(Source.fromFile(file).getLines().toList) }
@@ -174,7 +195,8 @@ object Genesis {
                     case Failure(ex) =>
                       Log[F]
                         .warn(
-                          s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}")
+                          s"Failed to read ${file.getAbsolutePath()} for reason: ${ex.getMessage}"
+                        )
                         .map(_ => Seq.empty[PreWallet])
                   }
       } yield wallets
@@ -188,7 +210,8 @@ object Genesis {
       case (None, None) =>
         Log[F]
           .warn(
-            s"No wallets file specified and no default file found. No wallets will exist at genesis.")
+            s"No wallets file specified and no default file found. No wallets will exist at genesis."
+          )
           .map(_ => Seq.empty[PreWallet])
     }
   }
@@ -219,9 +242,11 @@ object Genesis {
           }
     }
 
-  def getBonds[F[_]: Monad: Capture: Log](bondsFile: Option[File],
-                                          numValidators: Int,
-                                          genesisPath: Path): F[Map[Array[Byte], Int]] =
+  def getBonds[F[_]: Monad: Capture: Log](
+      bondsFile: Option[File],
+      numValidators: Int,
+      genesisPath: Path
+  ): F[Map[Array[Byte], Int]] =
     bondsFile match {
       case Some(file) =>
         Capture[F]
@@ -249,7 +274,8 @@ object Genesis {
 
   private def newValidators[F[_]: Monad: Capture: Log](
       numValidators: Int,
-      genesisPath: Path): F[Map[Array[Byte], Int]] = {
+      genesisPath: Path
+  ): F[Map[Array[Byte], Int]] = {
     val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zip((1 to numValidators).toVector).toMap

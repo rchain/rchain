@@ -17,8 +17,10 @@ import scala.concurrent.SyncVar
 
 import kamon._
 
-case class State[C, P, A, K](dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
-                             dbJoins: Map[C, Seq[Seq[C]]]) {
+case class State[C, P, A, K](
+    dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
+    dbJoins: Map[C, Seq[Seq[C]]]
+) {
   def isEmpty: Boolean =
     dbGNATs.isEmpty && dbJoins.isEmpty
 
@@ -71,20 +73,25 @@ class InMemoryStore[T, C, P, A, K](
     txn.readState(state => state.dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty))
 
   private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]] =
-    txn.readState(state =>
-      state.dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty))
+    txn.readState(
+      state => state.dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty)
+    )
 
   private[this] def getMutableWaitingContinuation(
       txn: Transaction,
-      channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
+      channels: Seq[C]
+  ): Seq[WaitingContinuation[P, K]] =
     txn.readState(
       _.dbGNATs
         .get(hashChannels(channels))
         .map(_.wks)
-        .getOrElse(Seq.empty))
+        .getOrElse(Seq.empty)
+    )
 
-  private[rspace] def getWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
+  private[rspace] def getWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C]
+  ): Seq[WaitingContinuation[P, K]] =
     getMutableWaitingContinuation(txn, channels)
       .map { wk =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
@@ -97,7 +104,8 @@ class InMemoryStore[T, C, P, A, K](
     txn.readState(_.dbJoins.getOrElse(channel, Seq.empty))
 
   private[this] def withGNAT(txn: Transaction, key: Blake2b256Hash)(
-      f: Option[GNAT[C, P, A, K]] => Option[GNAT[C, P, A, K]]): Unit =
+      f: Option[GNAT[C, P, A, K]] => Option[GNAT[C, P, A, K]]
+  ): Unit =
     txn.writeState(state => {
       val gnatOpt   = state.dbGNATs.get(key)
       val resultOpt = f(gnatOpt)
@@ -106,7 +114,8 @@ class InMemoryStore[T, C, P, A, K](
     })
 
   private[this] def withJoin(txn: Transaction, key: C)(
-      f: Option[Seq[Seq[C]]] => Option[Seq[Seq[C]]]): Unit =
+      f: Option[Seq[Seq[C]]] => Option[Seq[Seq[C]]]
+  ): Unit =
     txn.writeState(state => {
       val joinOpt   = state.dbJoins.get(key)
       val resultOpt = f(joinOpt)
@@ -125,7 +134,8 @@ class InMemoryStore[T, C, P, A, K](
 
   private[this] def handleGNATChange(
       state: StateType,
-      key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {
+      key: Blake2b256Hash
+  ): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {
     case Some(gnat) if !isOrphaned(gnat) =>
       val updated = state.copy(dbGNATs = state.dbGNATs + (key -> gnat))
       trieInsert(key, gnat)
@@ -137,8 +147,10 @@ class InMemoryStore[T, C, P, A, K](
       updated
   }
 
-  private[this] def handleJoinChange(state: StateType,
-                                     key: C): PartialFunction[Option[Seq[Seq[C]]], StateType] = {
+  private[this] def handleJoinChange(
+      state: StateType,
+      key: C
+  ): PartialFunction[Option[Seq[Seq[C]]], StateType] = {
     case Some(join) => state.copy(dbJoins = state.dbJoins + (key -> join))
     case None       => state.copy(dbJoins = state.dbJoins - key)
   }
@@ -150,9 +162,11 @@ class InMemoryStore[T, C, P, A, K](
         .orElse(GNAT(channels = channels, data = Seq(datum), wks = Seq.empty).some)
     }
 
-  private[rspace] def putWaitingContinuation(txn: Transaction,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit =
+  private[rspace] def putWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit =
     withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt
         .map(gnat => gnat.copy(wks = continuation +: gnat.wks))
@@ -172,9 +186,11 @@ class InMemoryStore[T, C, P, A, K](
       gnatOpt.map(gnat => gnat.copy(data = dropIndex(gnat.data, index)))
     }
 
-  private[rspace] def removeWaitingContinuation(txn: Transaction,
-                                                channels: Seq[C],
-                                                index: Int): Unit =
+  private[rspace] def removeWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      index: Int
+  ): Unit =
     withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
     }
@@ -215,8 +231,10 @@ class InMemoryStore[T, C, P, A, K](
         history.delete(trieStore, trieBranch, channelsHash, canonicalize(gnat))
     }
 
-  private[rspace] def bulkInsert(txn: Transaction,
-                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+  private[rspace] def bulkInsert(
+      txn: Transaction,
+      gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]
+  ): Unit =
     gnats.foreach {
       case (hash, gnat @ GNAT(channels, _, wks)) =>
         withGNAT(txn, hash) { _ =>
@@ -230,9 +248,11 @@ class InMemoryStore[T, C, P, A, K](
         }
     }
 
-  private[rspace] def installWaitingContinuation(txn: Transaction,
-                                                 channels: Seq[C],
-                                                 continuation: WaitingContinuation[P, K]): Unit = {
+  private[rspace] def installWaitingContinuation(
+      txn: Transaction,
+      channels: Seq[C],
+      continuation: WaitingContinuation[P, K]
+  ): Unit = {
     val key  = hashChannels(channels)
     val gnat = GNAT[C, P, A, K](channels, Seq.empty, Seq(continuation))
     txn.writeState(state => {
@@ -250,10 +270,14 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[T, C, P, A, K](trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
-                            branch: Branch)(implicit sc: Serialize[C],
-                                            sp: Serialize[P],
-                                            sa: Serialize[A],
-                                            sk: Serialize[K]): InMemoryStore[T, C, P, A, K] =
+  def create[T, C, P, A, K](
+      trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]],
+      branch: Branch
+  )(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]
+  ): InMemoryStore[T, C, P, A, K] =
     new InMemoryStore[T, C, P, A, K](trieStore, branch)(sc, sp, sa, sk)
 }

@@ -66,8 +66,9 @@ class TcpServerObservable(
       // TODO InternalServerError should take msg in constructor
       private def internalServerError(msg: String): TLResponse =
         TLResponse(
-          TLResponse.Payload.InternalServerError(
-            InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
+          TLResponse.Payload
+            .InternalServerError(InternalServerError(ProtocolHelper.toProtocolBytes(msg)))
+        )
 
       private def noResponse: TLResponse =
         TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
@@ -84,10 +85,9 @@ class TcpServerObservable(
       .build
       .start
 
-    () =>
-      {
-        server.shutdown().awaitTermination()
-        mergeSubscription.cancel()
-      }
+    () => {
+      server.shutdown().awaitTermination()
+      mergeSubscription.cancel()
+    }
   }
 }

@@ -21,14 +21,18 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         for {
           sortedPars <- gl.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
-          ScoredTerm(EListBody(gl.withPs(sortedPars.map(_.term.get))),
-                     Node(Score.ELIST, sortedPars.map(_.score): _*))
+          ScoredTerm(
+            EListBody(gl.withPs(sortedPars.map(_.term.get))),
+            Node(Score.ELIST, sortedPars.map(_.score): _*)
+          )
       case ETupleBody(gt) =>
         for {
           sortedPars <- gt.ps.toList.traverse(Sortable[Par].sortMatch[F])
         } yield
-          ScoredTerm(ETupleBody(gt.withPs(sortedPars.map(_.term.get))),
-                     Node(Score.ETUPLE, sortedPars.map(_.score): _*))
+          ScoredTerm(
+            ETupleBody(gt.withPs(sortedPars.map(_.term.get))),
+            Node(Score.ETUPLE, sortedPars.map(_.score): _*)
+          )
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
@@ -39,10 +43,13 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         } yield
           ScoredTerm(
             ESetBody(
-              ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
-                     gs.connectiveUsed,
-                     gs.locallyFree,
-                     gs.remainder)),
+              ParSet(
+                SortedParHashSet(sortedPars.map(_.term.get)),
+                gs.connectiveUsed,
+                gs.locallyFree,
+                gs.remainder
+              )
+            ),
             Node(Leaf(Score.ESET) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
           )
       case EMapBody(gm) =>
@@ -59,13 +66,15 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
         } yield
           ScoredTerm(
             EMapBody(
-              ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, gm.remainder)),
+              ParMap(sortedPars.map(_.term), gm.connectiveUsed, gm.locallyFree, gm.remainder)
+            ),
             Node(Leaf(Score.EMAP) :: sortedPars.map(_.score) ::: remainderScoreOpt.toList)
           )
       case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8))).pure[F]
       case _ => //TODO(mateusz.gorski): rethink it
         Sync[F].raiseError(
-          new IllegalArgumentException("GroundSortMatcher passed unknown Expr instance"))
+          new IllegalArgumentException("GroundSortMatcher passed unknown Expr instance")
+        )
     }
 }

@@ -15,8 +15,8 @@ import coop.rchain.comm.transport._
 
 class TransportLayerTestImpl[F[_]: Monad](
     identity: PeerNode,
-    val msgQueues: Map[PeerNode, Ref[F, mutable.Queue[Protocol]]])
-    extends TransportLayer[F] {
+    val msgQueues: Map[PeerNode, Ref[F, mutable.Queue[Protocol]]]
+) extends TransportLayer[F] {
 
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]] = ???
 
@@ -50,8 +50,10 @@ class TransportLayerTestImpl[F[_]: Monad](
 }
 
 object TransportLayerTestImpl {
-  def handleQueue[F[_]: Monad](dispatch: Protocol => F[CommunicationResponse],
-                               qRef: Ref[F, mutable.Queue[Protocol]]): F[Unit] =
+  def handleQueue[F[_]: Monad](
+      dispatch: Protocol => F[CommunicationResponse],
+      qRef: Ref[F, mutable.Queue[Protocol]]
+  ): F[Unit] =
     for {
       maybeProto <- qRef.modify { q =>
                      if (q.nonEmpty) {

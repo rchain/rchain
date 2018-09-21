@@ -20,7 +20,8 @@ import cats.effect.Timer
 object KademliaNodeDiscovery {
   def create[F[_]: Monad: Capture: Log: Timer: Metrics: KademliaRPC](
       src: PeerNode,
-      defaultTimeout: FiniteDuration)(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
+      defaultTimeout: FiniteDuration
+  )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
       knd <- new KademliaNodeDiscovery[F](src, defaultTimeout).pure[F]
       _   <- init.fold(().pure[F])(p => knd.addNode(p))
@@ -28,9 +29,10 @@ object KademliaNodeDiscovery {
 
 }
 
-private[discovery] class KademliaNodeDiscovery[
-    F[_]: Monad: Capture: Log: Timer: Metrics: KademliaRPC](src: PeerNode, timeout: FiniteDuration)
-    extends NodeDiscovery[F] {
+private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Timer: Metrics: KademliaRPC](
+    src: PeerNode,
+    timeout: FiniteDuration
+) extends NodeDiscovery[F] {
 
   private val table = PeerTable(src)
 
@@ -81,7 +83,8 @@ private[discovery] class KademliaNodeDiscovery[
               r =>
                 !potentials.contains(r)
                   && r.id.key != id.key
-                  && table.find(r.id.key).isEmpty)
+                  && table.find(r.id.key).isEmpty
+            )
           } >>= (find(peerSet.tail, _, i + 1))
       } else {
         potentials.toSeq.pure[F]
@@ -100,7 +103,7 @@ private[discovery] class KademliaNodeDiscovery[
           case Protocol(_, Protocol.Message.Lookup(lookup)) => handleLookup(sender, lookup)
           case _                                            => notHandled(unexpectedMessage(protocol.toString)).pure[F]
         })
-    }
+      }
 
   private def handlePing: F[CommunicationResponse] =
     for {
