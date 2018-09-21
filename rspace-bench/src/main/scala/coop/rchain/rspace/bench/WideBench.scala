@@ -106,7 +106,8 @@ object WideEvalBenchState {
       throw new RuntimeException(
         errors
           .map(_.toString())
-          .mkString("Errors received during evaluation:\n", "\n", "\n"))
+          .mkString("Errors received during evaluation:\n", "\n", "\n")
+      )
     }
     errors
   }
@@ -121,5 +122,6 @@ object WideEvalBenchState {
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(
       Option(getClass.getResourceAsStream(path))
-        .getOrElse(throw new FileNotFoundException(path)))
+        .getOrElse(throw new FileNotFoundException(path))
+    )
 }

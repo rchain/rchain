@@ -62,11 +62,15 @@ object Produce {
   def unapply(arg: Produce): Option[(Blake2b256Hash, Blake2b256Hash)] =
     Some((arg.channelsHash, arg.hash))
 
-  def create[C, A](channel: C, datum: A, persist: Boolean)(implicit
-                                                           serializeC: Serialize[C],
-                                                           serializeA: Serialize[A]): Produce =
-    new Produce(StableHashProvider.hash(Seq(channel))(serializeC.toCodec),
-                StableHashProvider.hash(channel, datum, persist))
+  def create[C, A](channel: C, datum: A, persist: Boolean)(
+      implicit
+      serializeC: Serialize[C],
+      serializeA: Serialize[A]
+  ): Produce =
+    new Produce(
+      StableHashProvider.hash(Seq(channel))(serializeC.toCodec),
+      StableHashProvider.hash(channel, datum, persist)
+    )
 
   def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Produce =
     new Produce(channelsHash, hash)
@@ -97,9 +101,12 @@ object Consume {
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
-      serializeK: Serialize[K]): Consume =
-    new Consume(StableHashProvider.hash(channels)(serializeC.toCodec),
-                StableHashProvider.hash(channels, patterns, continuation, persist))
+      serializeK: Serialize[K]
+  ): Consume =
+    new Consume(
+      StableHashProvider.hash(channels)(serializeC.toCodec),
+      StableHashProvider.hash(channels, patterns, continuation, persist)
+    )
 
   def fromHash(channelsHash: Blake2b256Hash, hash: Blake2b256Hash): Consume =
     new Consume(channelsHash, hash)

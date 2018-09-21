@@ -24,9 +24,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "everything is fine" should {
         "send and receive the message" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithPing(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -51,9 +53,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "response takes to long" should {
         "fail with a timeout" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcherWithDelay(500)) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithPing(transportLayer, local, remote, 200.millis)
 
             val result: TwoNodesResult = run()
@@ -65,24 +69,29 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "there is no response body" should {
         "fail with a communication error" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.withoutMessageDispatcher) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithPing(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
             result() shouldEqual Left(
-              InternalCommunicationError("Was expecting message, nothing arrived"))
+              InternalCommunicationError("Was expecting message, nothing arrived")
+            )
           }
       }
 
       "peer is not listening" should {
         "fail with peer unavailable error" in
           new TwoNodesRemoteDeadRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithPing(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -94,15 +103,18 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "there was a peer-side error" should {
         "fail with an internal communication error" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.internalCommunicationErrorDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithPing(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
 
             result() shouldEqual Left(
-              InternalCommunicationError("Got response: Internal communication error. Test"))
+              InternalCommunicationError("Got response: Internal communication error. Test")
+            )
           }
       }
     }
@@ -110,9 +122,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     "sending a message" should {
       "deliver the message" in
         new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
-          def execute(transportLayer: TransportLayer[F],
-                      local: PeerNode,
-                      remote: PeerNode): F[Unit] =
+          def execute(
+              transportLayer: TransportLayer[F],
+              local: PeerNode,
+              remote: PeerNode
+          ): F[Unit] =
             for {
               r <- sendPing(transportLayer, local, remote)
               _ = await()
@@ -130,9 +144,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "not wait for a response" in
         new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
-          def execute(transportLayer: TransportLayer[F],
-                      local: PeerNode,
-                      remote: PeerNode): F[Long] =
+          def execute(
+              transportLayer: TransportLayer[F],
+              local: PeerNode,
+              remote: PeerNode
+          ): F[Long] =
             for {
               _ <- sendPing(transportLayer, local, remote)
               t = System.currentTimeMillis()
@@ -154,10 +170,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
     "broadcasting a message" should {
       "send the message to all peers" in
         new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
-          def execute(transportLayer: TransportLayer[F],
-                      local: PeerNode,
-                      remote1: PeerNode,
-                      remote2: PeerNode): F[Unit] =
+          def execute(
+              transportLayer: TransportLayer[F],
+              local: PeerNode,
+              remote1: PeerNode,
+              remote2: PeerNode
+          ): F[Unit] =
             for {
               r <- broadcastPing(transportLayer, local, remote1, remote2)
               _ = await()
@@ -184,9 +202,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "doing a round trip" should {
         "not send the message" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.pongDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- roundTripWithPing(transportLayer, local, remote)
@@ -206,9 +226,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "sending a message" should {
         "not send the message" in
           new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[Unit] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[Unit] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- sendPing(transportLayer, local, remote)
@@ -224,10 +246,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "broadcasting a message" should {
         "not send any messages" in
           new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote1: PeerNode,
-                        remote2: PeerNode): F[Unit] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote1: PeerNode,
+                remote2: PeerNode
+            ): F[Unit] =
               for {
                 _ <- transportLayer.shutdown(CommMessages.disconnect(local))
                 r <- broadcastPing(transportLayer, local, remote1, remote2)

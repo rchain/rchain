@@ -42,7 +42,8 @@ private[api] object DeployGrpcService {
         BlockAPI.getListeningNameDataResponse[F](listeningName).toTask
 
       override def listenForContinuationAtName(
-          listeningNames: Channels): Task[ListeningNameContinuationResponse] =
+          listeningNames: Channels
+      ): Task[ListeningNameContinuationResponse] =
         BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toTask
     }
 }

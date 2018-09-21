@@ -20,12 +20,14 @@ object PrettyPrinter {
     PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
 }
 
-case class PrettyPrinter(freeShift: Int,
-                         boundShift: Int,
-                         freeId: String,
-                         baseId: String,
-                         rotation: Int,
-                         maxVarCount: Int) {
+case class PrettyPrinter(
+    freeShift: Int,
+    boundShift: Int,
+    freeId: String,
+    baseId: String,
+    rotation: Int,
+    maxVarCount: Int
+) {
 
   val indentStr = "  "
 
@@ -168,7 +170,8 @@ case class PrettyPrinter(freeShift: Int,
       case b: Bundle =>
         BundleOps.showInstance.show(b) + "{ " + (indentStr * (indent + 1)) + buildString(
           b.body,
-          indent + 1) + " }"
+          indent + 1
+        ) + " }"
 
       case n: New =>
         "new " + buildVariables(n.bindCount) + " in {\n" +
@@ -210,14 +213,16 @@ case class PrettyPrinter(freeShift: Int,
         if (isEmpty(par)) "Nil"
         else {
           val list =
-            List(par.bundles,
-                 par.sends,
-                 par.receives,
-                 par.news,
-                 par.exprs,
-                 par.matches,
-                 par.ids,
-                 par.connectives)
+            List(
+              par.bundles,
+              par.sends,
+              par.receives,
+              par.news,
+              par.exprs,
+              par.matches,
+              par.ids,
+              par.connectives
+            )
           ((false, "") /: list) {
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {

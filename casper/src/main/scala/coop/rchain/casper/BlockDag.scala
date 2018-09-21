@@ -19,13 +19,15 @@ import scala.collection.immutable.{HashMap, HashSet}
  *              to remember the sorting before that block. The offset gives the block
  *              number for the first block in the currently maintained sorting.
  */
-final case class BlockDag(childMap: Map[BlockHash, Set[BlockHash]],
-                          latestMessages: Map[Validator, BlockMessage],
-                          latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
-                          currentSeqNum: Map[Validator, Int],
-                          dataLookup: BlockMetadata.Lookup,
-                          topoSort: Vector[Vector[BlockHash]],
-                          sortOffset: Long)
+final case class BlockDag(
+    childMap: Map[BlockHash, Set[BlockHash]],
+    latestMessages: Map[Validator, BlockMessage],
+    latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
+    currentSeqNum: Map[Validator, Int],
+    dataLookup: BlockMetadata.Lookup,
+    topoSort: Vector[Vector[BlockHash]],
+    sortOffset: Long
+)
 
 object BlockDag {
   type LatestMessages = Map[Validator, BlockHash]

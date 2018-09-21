@@ -20,6 +20,7 @@ private[sort] object SendSortMatcher extends Sortable[Send] {
       persistentScore = if (s.persistent) 1 else 0
       sendScore = Node(
         Score.SEND,
-        Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score): _*)
+        Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score): _*
+      )
     } yield ScoredTerm(sortedSend, sendScore)
 }

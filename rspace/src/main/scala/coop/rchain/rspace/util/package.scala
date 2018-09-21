@@ -82,5 +82,5 @@ package object util {
       veccmp(a._1, b._1) match {
         case 0 => veccmp(a._2, b._2)
         case c => c
-    }
+      }
 }

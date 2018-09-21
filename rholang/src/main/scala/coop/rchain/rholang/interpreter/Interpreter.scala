@@ -62,7 +62,8 @@ object Interpreter {
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit sync: Sync[M]): M[ProcVisitOutputs] =
+      implicit sync: Sync[M]
+  ): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
         if (normalizedTerm.knownFree.wildcards.isEmpty) {
@@ -70,13 +71,15 @@ object Interpreter {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
           sync.raiseError(
-            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
+            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+          )
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
           sync.raiseError(
-            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
+            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+          )
         }
       } else normalizedTerm.pure[M]
     }

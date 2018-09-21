@@ -40,10 +40,12 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
     */
   def withTestSpace[S](f: T => S): S
 
-  def validateIndexedStates(space: T,
-                            indexedStates: Seq[(State, Int)],
-                            reportName: String,
-                            differenceReport: Boolean = false): Boolean = {
+  def validateIndexedStates(
+      space: T,
+      indexedStates: Seq[(State, Int)],
+      reportName: String,
+      differenceReport: Boolean = false
+  ): Boolean = {
     final case class SetRow(data: Set[Datum[A]], wks: Set[WaitingContinuation[P, K]])
 
     def convertMap(m: Map[Seq[C], Row[P, A, K]]): Map[Seq[C], SetRow] =
@@ -89,7 +91,8 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
                   case Some(row) =>
                     if (row != expectedRow) {
                       logger.error(
-                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow")
+                        s"key [$expectedChannels] invalid actual value: $row !== $expectedRow"
+                      )
                     }
                   case None => logger.error(s"key [$expectedChannels] not found in actual records")
                 }
@@ -102,7 +105,8 @@ trait StorageTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with Option
                   case Some(row) =>
                     if (row != actualRow) {
                       logger.error(
-                        s"key[$actualChannels] invalid actual value: $actualRow !== $row")
+                        s"key[$actualChannels] invalid actual value: $actualRow !== $row"
+                      )
                     }
                   case None => logger.error(s"key [$actualChannels] not found in expected records")
                 }
@@ -128,12 +132,9 @@ class InMemoryStoreTestsBase
     val trieStore =
       InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
 
-    val testStore = InMemoryStore.create[
-      InMemTransaction[history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]],
-      String,
-      Pattern,
-      String,
-      StringsCaptor](trieStore, branch)
+    val testStore = InMemoryStore.create[InMemTransaction[
+      history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]
+    ], String, Pattern, String, StringsCaptor](trieStore, branch)
 
     val testSpace =
       RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
@@ -212,7 +213,8 @@ class MixedStoreTestsBase
     val testStore = InMemoryStore
       .create[org.lmdbjava.Txn[java.nio.ByteBuffer], String, Pattern, String, StringsCaptor](
         env.trieStore,
-        testBranch)
+        testBranch
+      )
 
     val testSpace =
       RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
@@ -254,8 +256,10 @@ class FineGrainedTestsBase
     val testStore =
       LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](testStore,
-                                                                                     testBranch)
+      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](
+        testStore,
+        testBranch
+      )
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)

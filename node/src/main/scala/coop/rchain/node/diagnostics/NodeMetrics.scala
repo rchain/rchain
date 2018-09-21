@@ -15,7 +15,8 @@ object NodeMetrics extends NodeMetricsInstances {
   def apply[F[_]](implicit M: NodeMetrics[F]): NodeMetrics[F] = M
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: NodeMetrics[F]): NodeMetrics[T[F, ?]] =
+      implicit C: NodeMetrics[F]
+  ): NodeMetrics[T[F, ?]] =
     new NodeMetrics[T[F, ?]] {
       def metrics: T[F, NodeCoreMetrics] = C.metrics.liftM[T]
     }

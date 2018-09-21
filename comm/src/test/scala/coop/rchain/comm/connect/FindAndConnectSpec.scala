@@ -71,7 +71,8 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
     describe("and there already are some connections") {
       it(
-        "should ask NodeDiscovery for the list of peers and try to the one he is not connected yet") {
+        "should ask NodeDiscovery for the list of peers and try to the one he is not connected yet"
+      ) {
         // given
         implicit val connections = mkConnections(peer("B"))
         // when
@@ -113,9 +114,11 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
       defaultTimeout: FiniteDuration
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
-      RPConf(clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
-             defaultTimeout = defaultTimeout,
-             local = peer("src"))
+      RPConf(
+        clearConnections = ClearConnetionsConf(maxNumOfConnections, numOfConnectionsPinged),
+        defaultTimeout = defaultTimeout,
+        local = peer("src")
+      )
     )
 
   implicit def eiterTrpConfAsk: RPConfAsk[Effect] =
