@@ -134,7 +134,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   /** Configuration */
   private val port              = conf.server.port
-  private val address           = s"rnode://$name@$host:$port"
+  private val kademliaPort      = conf.server.kademliaPort
+  private val address           = s"rnode://$name@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -267,12 +268,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val handleCommunication = (pm: Protocol) =>
-      NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
-        case handled       => handled.pure[Effect]
-      }
-
     val info: Effect[Unit] = for {
       _ <- Log[Effect].info(
             s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
@@ -293,8 +288,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(handleCommunication)
-      ndFiber <- NodeDiscovery[Task].discover.forever.fork.toEffect
+      _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
+      _       <- NodeDiscovery[Task].discover.fork.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- loop.forever
     } yield ()
@@ -335,7 +330,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     */
   val main: Effect[Unit] = for {
     // 1. set up configurations
-    local          <- EitherT.fromEither[Task](PeerNode.parse(address))
+    local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
     defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
     rpClearConnConf = ClearConnetionsConf(
       conf.server.maxNumOfConnections,
@@ -359,7 +354,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.key,
       conf.server.maxMessageSize
     )(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
+    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(scheduler, metrics, log)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(

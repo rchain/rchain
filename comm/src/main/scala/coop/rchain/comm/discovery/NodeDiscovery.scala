@@ -12,7 +12,6 @@ import coop.rchain.comm.protocol.routing._
 trait NodeDiscovery[F[_]] {
   def discover: F[Unit]
   def peers: F[Seq[PeerNode]]
-  def handleCommunications: Protocol => F[CommunicationResponse]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -24,8 +23,6 @@ object NodeDiscovery extends NodeDiscoveryInstances {
     new NodeDiscovery[T[F, ?]] {
       def discover: T[F, Unit]       = C.discover.liftM[T]
       def peers: T[F, Seq[PeerNode]] = C.peers.liftM[T]
-      def handleCommunications: Protocol => T[F, CommunicationResponse] =
-        pm => C.handleCommunications(pm).liftM[T]
     }
 }
 
