@@ -5,6 +5,7 @@ from tools.rnode import create_bootstrap_node, create_peer_nodes
 from tools.wait import wait_for, string_contains, node_logs, network_converged
 from fixtures.datastructures import RChain
 from fixtures.common import *
+from fixtures.bootstrap import *
 
 @pytest.fixture(scope="package")
 def star_network(config, docker, started_bootstrap, docker_network, validators_data):
