@@ -226,7 +226,7 @@ class RegistryImpl[F[_]](
     })
 
   private def singleSend(data: Channel, chan: Quote, rand: Blake2b512Random): F[Unit] =
-    handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand, None), false))
+    handleResult(space.produce(chan, ListChannelWithRandom(Seq(data), rand), false))
 
   private def succeed(result: Par, ret: Channel, rand: Blake2b512Random): F[Unit] =
     ret match {
@@ -269,7 +269,7 @@ class RegistryImpl[F[_]](
       _ <- handleResult(
             space.produce(
               Quote(channel),
-              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand),
               false
             )
           )
@@ -296,7 +296,7 @@ class RegistryImpl[F[_]](
       _ <- handleResult(
             space.produce(
               Quote(channel),
-              ListChannelWithRandom(Seq(key, value, ret, Channel(dataSource)), rand, None),
+              ListChannelWithRandom(Seq(key, value, ret, Channel(dataSource)), rand),
               false
             )
           )
@@ -322,7 +322,7 @@ class RegistryImpl[F[_]](
       _ <- handleResult(
             space.produce(
               Quote(channel),
-              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand),
               false
             )
           )
@@ -353,14 +353,14 @@ class RegistryImpl[F[_]](
       _ <- handleResult(
             space.produce(
               Quote(keyChannel),
-              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand, None),
+              ListChannelWithRandom(Seq(key, ret, Channel(dataSource)), rand),
               false
             )
           )
       _ <- handleResult(
             space.produce(
               Quote(parentChannel),
-              ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, None),
+              ListChannelWithRandom(Seq(parentKey, parentData, parentReplace), parentRand),
               false
             )
           )
@@ -777,7 +777,7 @@ class RegistryImpl[F[_]](
                     space.produce(
                       Quote(curryChan),
                       // This re-use of rand is fine because we throw it away in the callback below.
-                      ListChannelWithRandom(Seq(Quote(uriPar), value, ret), rand, None),
+                      ListChannelWithRandom(Seq(Quote(uriPar), value, ret), rand),
                       false
                     )
                   )

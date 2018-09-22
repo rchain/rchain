@@ -95,12 +95,14 @@ object ChargingRSpace {
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
-            costAlg.get().flatMap(costAlg.charge(_)) >> Sync[F].raiseError(oope)
+            costAlg.get().flatMap(ca => costAlg.charge(ca.cost)) >> Sync[F].raiseError(oope)
           case Right(Some((_, dataList))) =>
-            val rspaceMatchCost = dataList
-              .map(_.cost.map(CostAccount.fromProto(_)).get)
-              .toList
-              .combineAll
+            val rspaceMatchCost = Cost(
+              dataList
+                .map(_.cost)
+                .toList
+                .combineAll
+            )
 
             costAlg
               .charge(rspaceMatchCost)

@@ -133,13 +133,13 @@ object Reduce {
                  )
                  .flatMap {
                    case (phlosLeft, result) =>
-                     val phloUsed = phlosLeft.copy(cost = phlosAvailable.cost - phlosLeft.cost)
-                     costAlg.charge(phloUsed).map(_ => result)
+                     val matchCost = phlosAvailable.cost - phlosLeft.cost
+                     costAlg.charge(matchCost).map(_ => result)
                  }
                  .onError {
                    case OutOfPhlogistonsError =>
                      // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(costAlg.charge(_))
+                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
                  }
     } yield result
 
