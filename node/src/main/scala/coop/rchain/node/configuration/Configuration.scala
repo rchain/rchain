@@ -191,8 +191,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          phloLimit(),
+          phloPrice(),
           nonce.getOrElse(0),
           location()
         )
@@ -379,8 +379,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          phloLimit(),
+          phloPrice(),
           nonce.getOrElse(0),
           location()
         )
