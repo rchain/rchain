@@ -26,8 +26,6 @@ object implicits {
       }
     }
 
-  implicit val matchListQuoteMax = matchListQuote(CostAccount(Integer.MAX_VALUE))
-
   def matchListQuote(init: CostAccount): StorageMatch[
     BindPattern,
     OutOfPhlogistonsError.type,

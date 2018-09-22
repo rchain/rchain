@@ -20,6 +20,8 @@ object RholangOnlyDispatcher {
       s: Sync[M],
       ft: FunctorTell[M, Throwable]
   ): (Dispatch[M, ListChannelWithRandom, TaggedContinuation], ChargingReducer[M]) = {
+    // This is safe because test
+    implicit val matchCost = matchListQuote(CostAccount(Integer.MAX_VALUE))
     val pureSpace          = PureRSpace[M].of(tuplespace)
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListChannelWithRandom, TaggedContinuation] =
