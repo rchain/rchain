@@ -827,10 +827,12 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
-    val replaySpace = ReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+    val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -855,10 +857,12 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val space     = RSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
     val replaySpace =
-      ReplayRSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+      ReplayRSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -883,9 +887,12 @@ trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
 
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
 
-    val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
+    val dbDir   = Files.createTempDirectory("rchain-storage-test-")
+    val context = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val space = RSpace.createFineGrained[Id, C, P, E, A, A, K](
+      context.createStore(Branch.MASTER),
+      Branch.MASTER
+    )
     val replaySpace = FineGrainedReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {

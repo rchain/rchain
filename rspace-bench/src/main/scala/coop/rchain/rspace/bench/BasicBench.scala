@@ -2,7 +2,8 @@ package coop.rchain.rspace.bench
 
 import java.nio.file.{Files, Path}
 
-import coop.rchain.rspace.ISpace.IdISpace
+import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.Branch
@@ -46,6 +47,8 @@ object BasicBench {
   @State(Scope.Benchmark)
   class BenchState {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
     val context: LMDBContext[String, Pattern, String, StringsCaptor] =
@@ -54,8 +57,8 @@ object BasicBench {
     val testStore: LMDBStore[String, Pattern, String, StringsCaptor] =
       LMDBStore.create[String, Pattern, String, StringsCaptor](context, Branch("bench"))
 
-    val testSpace: IdISpace[String, Pattern, Nothing, String, String, StringsCaptor] =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](
+    val testSpace: ISpace[Id, String, Pattern, Nothing, String, String, StringsCaptor] =
+      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
         testStore,
         Branch("bench")
       )

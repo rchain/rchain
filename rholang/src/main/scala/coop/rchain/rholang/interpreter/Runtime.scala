@@ -135,9 +135,26 @@ object Runtime {
       mapSize: Long,
       storeType: StoreType
   ): (RhoContext, RhoISpace, RhoReplayISpace) = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
-      val space: RhoISpace             = RSpace.create(context, Branch.MASTER)
-      val replaySpace: RhoReplayISpace = ReplayRSpace.create(context, Branch.REPLAY)
+      val space: RhoISpace = RSpace.create[
+        Id,
+        Channel,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListChannelWithRandom,
+        ListChannelWithRandom,
+        TaggedContinuation
+      ](context, Branch.MASTER)
+      val replaySpace: RhoReplayISpace = ReplayRSpace.create[
+        Id,
+        Channel,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListChannelWithRandom,
+        ListChannelWithRandom,
+        TaggedContinuation
+      ](context, Branch.REPLAY)
       (context, space, replaySpace)
     }
     storeType match {
@@ -152,9 +169,8 @@ object Runtime {
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-        val context: RhoContext      = Context.createFineGrained(dataDir, mapSize)
-        val store                    = context.createStore(Branch.MASTER)
+        val context: RhoContext = Context.createFineGrained(dataDir, mapSize)
+        val store               = context.createStore(Branch.MASTER)
         // TODO clean this up
         val space: RhoISpace = RSpace.createFineGrained[
           Id,

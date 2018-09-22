@@ -153,14 +153,14 @@ abstract class FineGrainedRSpaceOps[F[_], C, P, E, A, R, K](
       }
     }
 
-  override def clear(): F[Unit] =
-    syncF.delay {
-      val emptyRootHash: Blake2b256Hash =
-        store.withTxn(store.createTxnRead()) { txn =>
-          store.withTrieTxn(txn) { trieTxn =>
-            store.trieStore.getEmptyRoot(trieTxn)
-          }
+  override def clear(): F[Unit] = {
+    val emptyRootHash: F[Blake2b256Hash] = syncF.delay {
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.withTrieTxn(txn) { trieTxn =>
+          store.trieStore.getEmptyRoot(trieTxn)
         }
-      reset(emptyRootHash)
+      }
     }
+    emptyRootHash.flatMap(root => reset(root))
+  }
 }
