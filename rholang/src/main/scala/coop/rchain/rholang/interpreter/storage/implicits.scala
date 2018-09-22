@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter.storage
 
-import java.util.concurrent.atomic.AtomicReference
-
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -39,23 +37,19 @@ object implicits {
       ListChannelWithRandom
     ] {
 
-      private val phlosState = new AtomicReference[CostAccount](init)
-
       private def calcUsed(init: CostAccount, left: CostAccount): CostAccount =
         CostAccount(left.idx - init.idx, init.cost - left.cost)
 
       def get(
           pattern: BindPattern,
           data: ListChannelWithRandom
-      ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] = {
-        val startPhlos = phlosState.get
+      ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
         SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost(startPhlos)
+          .runWithCost(init)
           .map {
             case (left, resultMatch) =>
-              val cost = calcUsed(startPhlos, left)
-              phlosState.getAndUpdate(_ - cost)
+              val cost = calcUsed(init, left)
               resultMatch
                 .map {
                   case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
@@ -74,7 +68,6 @@ object implicits {
                     )
                 }
           }
-      }
     }
 
   /* Serialize instances */
