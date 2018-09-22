@@ -52,7 +52,6 @@ object TuplespaceAlg {
               dataList
                 .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount(0)))
                 .toList
-                .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
                 .combineAll
             if (persistent) {
               List(
@@ -97,7 +96,6 @@ object TuplespaceAlg {
                         .getOrElse(CostAccount(0))
                     )
                     .toList
-                    .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
                     .combineAll
 
                 dispatcher.dispatch(continuation, dataList)
