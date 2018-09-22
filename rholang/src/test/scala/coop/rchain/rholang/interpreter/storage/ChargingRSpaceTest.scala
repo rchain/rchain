@@ -171,7 +171,7 @@ object ChargingRSpaceTest {
   def setInitPhlos(costAlg: CostAccountingAlg[Task], init: Cost): Unit =
     costAlg.set(CostAccount(0, init)).runSyncUnsafe(1.second)
 
-  // This test ISpace wraps regular RhoISpace but adds predictable cost match
+  // This test ISpace wraps regular RhoISpace but adds predictable match cost
   def createTestISpace(): RhoISpace = new RhoISpace {
     val _rspace = createRhoISpace()
 
