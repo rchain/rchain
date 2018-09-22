@@ -1,13 +1,16 @@
 sudo: required
 dist: trusty
 jdk:
-  - openjdk8
+  - openjdk10
 
 matrix:
   include:
   - language: nix
     env: SUBPROJECT=rosette
   - language: scala
+    before_install:
+      - rm "${JAVA_HOME}/lib/security/cacerts"
+      - ln -s /etc/ssl/certs/java/cacerts "${JAVA_HOME}/lib/security/cacerts"
     env: SUBPROJECT=core
     scala: 2.12.4
     sbt_args: -no-colors
