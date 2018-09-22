@@ -29,5 +29,5 @@ in rec {
     targetPkgs = ps: rchainPackages;
   };
 
-  rchainPackages = with pkgs; [ bnfcHEAD git jflex libsodium sbt jdk ];
+  rchainPackages = with pkgs; [ bnfcHEAD git jflex sbt jdk ];
 }
