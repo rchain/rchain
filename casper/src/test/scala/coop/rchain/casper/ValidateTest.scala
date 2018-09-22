@@ -520,7 +520,9 @@ class ValidateTest
     val proofOfStakeValidators = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val proofOfStakeStubPar    = ProofOfStake(proofOfStakeValidators).term
     val genesis = Genesis.withContracts(
-      List(ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis())),
+      List(
+        ProtoUtil.termDeploy(proofOfStakeStubPar, System.currentTimeMillis(), Integer.MAX_VALUE)
+      ),
       initial,
       emptyStateHash,
       runtimeManager

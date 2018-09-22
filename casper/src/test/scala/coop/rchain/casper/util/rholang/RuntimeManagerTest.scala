@@ -5,13 +5,14 @@ import java.nio.file.Files
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
+import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
-  val activeRuntime    = Runtime.create(storageDirectory, storageSize)
+  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "capture rholang errors" in {
@@ -28,7 +29,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deploys = Seq(
       NonNegativeNumber.term,
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
-    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
+    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
@@ -87,7 +88,12 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
     val deploy = terms.map(
-      t => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis())
+      t =>
+        ProtoUtil.termDeploy(
+          InterpreterUtil.mkTerm(t).right.get,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
     )
     val (_, firstDeploy) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)

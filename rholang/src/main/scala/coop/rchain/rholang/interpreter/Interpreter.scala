@@ -103,7 +103,7 @@ object Interpreter {
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
     implicit val rand      = Blake2b512Random(128)
-    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE)
+    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE) //This is OK because evaluate is not called on deploy
     for {
       checkpoint <- Task.now(runtime.space.createCheckpoint())
       _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)

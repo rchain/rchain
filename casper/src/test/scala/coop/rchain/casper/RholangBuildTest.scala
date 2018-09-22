@@ -28,7 +28,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
   val emptyStateHash              = runtimeManager.emptyStateHash
   val proofOfStakeValidators      = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
   val proofOfStakeDeploy =
-    ProtoUtil.termDeploy(ProofOfStake(proofOfStakeValidators).term, System.currentTimeMillis())
+    ProtoUtil.termDeploy(
+      ProofOfStake(proofOfStakeValidators).term,
+      System.currentTimeMillis(),
+      Integer.MAX_VALUE
+    )
   val genesis =
     Genesis.withContracts(List[Deploy](proofOfStakeDeploy), initial, emptyStateHash, runtimeManager)
   activeRuntime.close()
@@ -39,11 +43,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
-    val llDeploy = ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis())
+    val llDeploy =
+      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), Integer.MAX_VALUE)
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2))
+    ).zipWithIndex.map(d => ProtoUtil.sourceDeploy(d._1, d._2, Integer.MAX_VALUE))
 
     val Created(signedBlock) = MultiParentCasper[Id].deploy(llDeploy) *>
       deploys.traverse(MultiParentCasper[Id].deploy) *>

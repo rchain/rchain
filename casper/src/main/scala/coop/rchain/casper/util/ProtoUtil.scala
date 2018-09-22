@@ -388,6 +388,7 @@ object ProtoUtil {
       .withUser(ByteString.EMPTY)
       .withTimestamp(timestamp)
       .withTerm(term)
+      .withPhloLimit(Integer.MAX_VALUE)
   }
 
   def basicDeploy(id: Int): Deploy = {
@@ -407,23 +408,30 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long): DeployData =
-    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+  def sourceDeploy(source: String, timestamp: Long, phlos: Int): DeployData =
+    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source, phloLimit = phlos)
 
-  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long): Deploy =
+  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long, phloLimit: Int): Deploy =
     Deploy(
       term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp))
+      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long): Deploy =
+  def termDeploy(term: Par, timestamp: Long, phloLimit: Int): Deploy =
     Deploy(
       term = Some(term),
-      raw =
-        Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
+      raw = Some(
+        DeployData(
+          user = ByteString.EMPTY,
+          timestamp = timestamp,
+          term = term.toProtoString,
+          phloLimit = phloLimit
+        )
+      )
     )
 
-  def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+  def termDeployNow(term: Par): Deploy =
+    termDeploy(term, System.currentTimeMillis(), Integer.MAX_VALUE)
 
   /**
     * Strip a deploy down to the fields we are using to seed the Deterministic name generator.

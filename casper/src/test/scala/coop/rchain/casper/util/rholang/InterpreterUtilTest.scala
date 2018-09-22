@@ -70,7 +70,8 @@ class InterpreterUtilTest
       "@1!(1)",
       "@2!(2)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
+    ).flatMap(mkTerm(_).toOption)
+      .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
     val genesisDeploysCost =
       genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
@@ -277,13 +278,22 @@ class InterpreterUtilTest
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in {
     //reference costs
     //deploy each Rholang program separately and record its cost
-    val deploy1 = ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get, System.currentTimeMillis())
+    val deploy1 = ProtoUtil.termDeploy(
+      mkTerm("@1!(Nil)").toOption.get,
+      System.currentTimeMillis(),
+      Integer.MAX_VALUE
+    )
     val deploy2 =
-      ProtoUtil.termDeploy(mkTerm("@3!([1,2,3,4])").toOption.get, System.currentTimeMillis())
+      ProtoUtil.termDeploy(
+        mkTerm("@3!([1,2,3,4])").toOption.get,
+        System.currentTimeMillis(),
+        Integer.MAX_VALUE
+      )
     val deploy3 =
       ProtoUtil.termDeploy(
         mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get,
-        System.currentTimeMillis()
+        System.currentTimeMillis(),
+        Integer.MAX_VALUE
       )
 
     val cost1 = computeSingleProcessedDeploy(deploy1)
@@ -303,9 +313,17 @@ class InterpreterUtilTest
     pendingUntilFixed { //reference costs
       //deploy each Rholang program separately and record its cost
       val deploy1 =
-        ProtoUtil.termDeploy(mkTerm("@1!(Nil)").toOption.get, System.currentTimeMillis())
+        ProtoUtil.termDeploy(
+          mkTerm("@1!(Nil)").toOption.get,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
       val deploy2 =
-        ProtoUtil.termDeploy(mkTerm("@2!([1,2,3,4])").toOption.get, System.currentTimeMillis())
+        ProtoUtil.termDeploy(
+          mkTerm("@2!([1,2,3,4])").toOption.get,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
 
       val cost1 = computeSingleProcessedDeploy(deploy1)
       val cost2 = computeSingleProcessedDeploy(deploy2)
@@ -313,7 +331,11 @@ class InterpreterUtilTest
       val accCostsSep = cost1 ++ cost2
 
       val deployErr =
-        ProtoUtil.termDeploy(mkTerm("@3!(\"a\" + 3)").toOption.get, System.currentTimeMillis())
+        ProtoUtil.termDeploy(
+          mkTerm("@3!(\"a\" + 3)").toOption.get,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
       val batchDeploy  = Seq(deploy1, deploy2, deployErr)
       val accCostBatch = computeSingleProcessedDeploy(batchDeploy: _*)
 
@@ -348,7 +370,7 @@ class InterpreterUtilTest
         "for (@x <- @1) { @2!(x) }",
         "for (@x <- @2) { @3!(x) }"
       ).flatMap(mkTerm(_).toOption)
-        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis()))
+        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
 
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, knownStateHashes, runtimeManager)
@@ -392,7 +414,12 @@ class InterpreterUtilTest
         |@"recursionTest"!([1,2])
       """.stripMargin
     ).map(
-      s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis())
+      s =>
+        ProtoUtil.termDeploy(
+          InterpreterUtil.mkTerm(s).right.get,
+          System.currentTimeMillis(),
+          Integer.MAX_VALUE
+        )
     )
 
     val (Right((computedTsHash, processedDeploys)), _) =
@@ -441,7 +468,12 @@ class InterpreterUtilTest
              }
           """)
         .map(
-          s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis())
+          s =>
+            ProtoUtil.termDeploy(
+              InterpreterUtil.mkTerm(s).right.get,
+              System.currentTimeMillis(),
+              Integer.MAX_VALUE
+            )
         )
 
     val (Right((computedTsHash, processedDeploys)), _) =
@@ -487,7 +519,12 @@ class InterpreterUtilTest
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
       ).map(
-        s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis())
+        s =>
+          ProtoUtil.termDeploy(
+            InterpreterUtil.mkTerm(s).right.get,
+            System.currentTimeMillis(),
+            Integer.MAX_VALUE
+          )
       )
 
     val (Right((computedTsHash, processedDeploys)), _) =
@@ -525,7 +562,12 @@ class InterpreterUtilTest
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
         ).map(
-          s => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(s).right.get, System.currentTimeMillis())
+          s =>
+            ProtoUtil.termDeploy(
+              InterpreterUtil.mkTerm(s).right.get,
+              System.currentTimeMillis(),
+              Integer.MAX_VALUE
+            )
         )
 
       val (Right((computedTsHash, processedDeploys)), _) =
