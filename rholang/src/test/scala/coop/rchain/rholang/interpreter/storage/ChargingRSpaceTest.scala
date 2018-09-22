@@ -56,7 +56,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val consumeStorageCost                               = ChargingRSpace.storageCostConsume(channels, patterns, cont)
     val data                                             = NilPar
     val produceStorageCost                               = ChargingRSpace.storageCostProduce(channels.head, data)
-    val minimumPhlos                                     = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST.cost
+    val minimumPhlos                                     = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST
 
     setInitPhlos(costAlg, minimumPhlos)
 
@@ -102,7 +102,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       val firstProdCost                                    = ChargingRSpace.storageCostProduce(channels(0), data)
       val secondProdCost                                   = ChargingRSpace.storageCostProduce(channels(1), data)
       val joinCost                                         = ChargingRSpace.storageCostConsume(channels, patterns, cont)
-      val minimumPhlos                                     = firstProdCost + secondProdCost + joinCost + (RSPACE_MATCH_COST.cost * 2)
+      val minimumPhlos                                     = firstProdCost + secondProdCost + joinCost + (RSPACE_MATCH_COST * 2)
 
       setInitPhlos(costAlg, minimumPhlos)
 
@@ -146,10 +146,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 }
 
 object ChargingRSpaceTest {
-  val RSPACE_MATCH_PCOST: PCost = PCost(1, 100)
-  val RSPACE_MATCH_COST         = CostAccount.fromProto(RSPACE_MATCH_PCOST)
+  val RSPACE_MATCH_PCOST     = 100L
+  val RSPACE_MATCH_COST      = Cost(RSPACE_MATCH_PCOST)
   val NilPar                    = ListChannelWithRandom().withChannels(Seq(Channel(Quote(Par()))))
-  val rand: Blake2b512Random    = Blake2b512Random(Array.empty[Byte])
+  val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
   private def byteName(b: Byte): GPrivate = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 

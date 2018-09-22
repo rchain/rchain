@@ -64,7 +64,7 @@ object implicits {
                     ListChannelWithRandom(
                       toChannels(remainderMap, pattern.freeCount),
                       data.randomState,
-                      Some(CostAccount.toProto(cost))
+                      cost.cost.value
                     )
                 }
           }
