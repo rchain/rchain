@@ -24,7 +24,9 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote: StorageMatch[
+  implicit val matchListQuoteMax = matchListQuote(CostAccount(Integer.MAX_VALUE))
+
+  def matchListQuote(init: CostAccount): StorageMatch[
     BindPattern,
     OutOfPhlogistonsError.type,
     ListChannelWithRandom,
@@ -43,7 +45,7 @@ object implicits {
       ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
         SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost(CostAccount(Integer.MAX_VALUE)) // FIXME -- must come from the input args
+          .runWithCost(init) // FIXME -- must come from the input args
           .map {
             case (cost, resultMatch) =>
               resultMatch
