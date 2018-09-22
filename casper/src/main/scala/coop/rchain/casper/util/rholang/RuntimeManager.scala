@@ -33,7 +33,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis())
+    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), Integer.MAX_VALUE)
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -149,7 +149,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       terms match {
         case deploy +: rem =>
           runtime.space.reset(hash)
-          val availablePhlos = Cost(Integer.MAX_VALUE) // FIXME: This needs to come from the deploy params
+          val availablePhlos = Cost(deploy.raw.get.phloLimit)
           runtime.reducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
           val (phlosLeft, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
           val cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
@@ -181,7 +181,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     ): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-          val availablePhlos = Cost(Integer.MAX_VALUE) // FIXME: This needs to come from the deploy params
+          val availablePhlos = Cost(deploy.raw.get.phloLimit) // FIXME: This needs to come from the deploy params
           runtime.replayReducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost

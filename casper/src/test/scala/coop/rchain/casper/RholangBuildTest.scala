@@ -31,7 +31,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex.map { case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L) }
+    ).zipWithIndex.map { case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, Integer.MAX_VALUE) }
 
     val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
       Id
