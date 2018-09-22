@@ -52,7 +52,7 @@ object ChargingRSpace {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(matchListQuote(_))
+          matchF  <- costAlg.get().map(ca => matchListQuote(ca.cost))
           consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
           _       <- handleResult(consRes, storageCost, persist)
         } yield consRes
@@ -65,7 +65,7 @@ object ChargingRSpace {
       ): F[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
         Sync[F].delay(
           space.install(channels, patterns, continuation)(
-            matchListQuote(CostAccount(Integer.MAX_VALUE))
+            matchListQuote(Cost(Integer.MAX_VALUE))
           )
         )
 
@@ -79,7 +79,7 @@ object ChargingRSpace {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(matchListQuote(_))
+          matchF  <- costAlg.get().map(ca => matchListQuote(ca.cost))
           prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
           _       <- handleResult(prodRes, storageCost, persist)
         } yield prodRes

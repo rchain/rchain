@@ -129,11 +129,11 @@ object Reduce {
                  .fromEither(
                    SpatialMatcher
                      .spatialMatch(target, pattern)
-                     .runWithCost(phlosAvailable)
+                     .runWithCost(phlosAvailable.cost)
                  )
                  .flatMap {
                    case (phlosLeft, result) =>
-                     val matchCost = phlosAvailable.cost - phlosLeft.cost
+                     val matchCost = phlosAvailable.cost - phlosLeft
                      costAlg.charge(matchCost).map(_ => result)
                  }
                  .onError {

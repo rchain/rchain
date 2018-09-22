@@ -5,7 +5,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher._
@@ -24,7 +24,7 @@ object implicits {
       }
     }
 
-  def matchListQuote(init: CostAccount): StorageMatch[
+  def matchListQuote(init: Cost): StorageMatch[
     BindPattern,
     OutOfPhlogistonsError.type,
     ListChannelWithRandom,
@@ -37,8 +37,7 @@ object implicits {
       ListChannelWithRandom
     ] {
 
-      private def calcUsed(init: CostAccount, left: CostAccount): CostAccount =
-        CostAccount(left.idx - init.idx, init.cost - left.cost)
+      private def calcUsed(init: Cost, left: Cost): Cost = init - left
 
       def get(
           pattern: BindPattern,
@@ -64,7 +63,7 @@ object implicits {
                     ListChannelWithRandom(
                       toChannels(remainderMap, pattern.freeCount),
                       data.randomState,
-                      cost.cost.value
+                      cost.value
                     )
                 }
           }
