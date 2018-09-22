@@ -148,7 +148,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 object ChargingRSpaceTest {
   val RSPACE_MATCH_PCOST     = 100L
   val RSPACE_MATCH_COST      = Cost(RSPACE_MATCH_PCOST)
-  val NilPar                    = ListChannelWithRandom().withChannels(Seq(Channel(Quote(Par()))))
+  val NilPar                 = ListChannelWithRandom().withChannels(Seq(Channel(Quote(Par()))))
   val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
   private def byteName(b: Byte): GPrivate = GPrivate(ByteString.copyFrom(Array[Byte](b)))
