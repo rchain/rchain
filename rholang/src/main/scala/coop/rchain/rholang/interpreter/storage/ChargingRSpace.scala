@@ -9,7 +9,7 @@ import coop.rchain.rholang.interpreter.accounting.CostAccount._
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage.implicits.matchListQuote
 import coop.rchain.rspace.pure.PureRSpace
 import coop.rchain.rspace.{Blake2b256Hash, Checkpoint}
 
@@ -52,7 +52,8 @@ object ChargingRSpace {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _       <- costAlg.charge(storageCost)
-          consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist))
+          matchF  <- costAlg.get().map(matchListQuote(_))
+          consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
           _       <- handleResult(consRes, storageCost, persist)
         } yield consRes
       }
@@ -62,7 +63,11 @@ object ChargingRSpace {
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
-        Sync[F].delay(space.install(channels, patterns, continuation))
+        Sync[F].delay(
+          space.install(channels, patterns, continuation)(
+            matchListQuote(CostAccount(Integer.MAX_VALUE))
+          )
+        )
 
       override def produce(
           channel: Channel,
@@ -74,7 +79,8 @@ object ChargingRSpace {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
-          prodRes <- Sync[F].delay(space.produce(channel, data, persist))
+          matchF  <- costAlg.get().map(matchListQuote(_))
+          prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
           _       <- handleResult(prodRes, storageCost, persist)
         } yield prodRes
       }
