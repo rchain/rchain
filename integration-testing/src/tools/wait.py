@@ -100,3 +100,7 @@ def network_converged(bootstrap_node, expected_peers):
     go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
 
     return go
+
+def node_started(node):
+    return string_contains( node_logs(node),
+                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")

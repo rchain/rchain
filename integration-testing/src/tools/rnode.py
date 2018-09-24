@@ -1,8 +1,10 @@
 import logging
 import re
-import tempfile
+from contextlib import contextmanager
+from tools.docker import docker_network
 import tools.resources as resources
 from tools.util import log_box, make_tempfile, make_tempdir
+from tools.wait import wait_for, node_started
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -20,13 +22,14 @@ class InterruptedException(Exception):
     pass
 
 class Node:
-    def __init__(self, container, deploy_dir, docker_client, timeout):
+    def __init__(self, container, deploy_dir, docker_client, timeout, network):
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
         self.docker_client = docker_client
         self.timeout = timeout
+        self.network = network
 
     def logs(self):
         return self.container.logs().decode('utf-8')
@@ -119,7 +122,7 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                        ] + extra_volumes,
                                                command=command,
                                                hostname=name)
-    return Node(container, deploy_dir, docker_client, rnode_timeout)
+    return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_timeout, allowed_peers = None, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
@@ -168,3 +171,25 @@ def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, 
 
     return [ create_peer(i, key_pair)
              for i, key_pair in enumerate(key_pairs)]
+
+
+@contextmanager
+def bootstrap(docker, docker_network, timeout, validators_data):
+    bonds_file, bootstrap_keys, _ = validators_data
+    node = create_bootstrap_node(docker, docker_network, bonds_file, bootstrap_keys, timeout)
+    logging.info(f"Node={node}")
+    yield node
+
+    node.cleanup()
+
+
+@contextmanager
+def start_bootstrap(docker_client, timeout, validators_data):
+    with docker_network(docker_client) as network:
+        with bootstrap(docker_client, network, timeout, validators_data) as node:
+            logging.info(f"Node={node}")
+            wait_for( node_started(node),
+                      timeout,
+                      "Bootstrap node didn't start correctly")
+            logging.info(f"Node={node}")
+            yield node
