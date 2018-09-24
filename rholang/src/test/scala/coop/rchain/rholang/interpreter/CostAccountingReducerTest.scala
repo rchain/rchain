@@ -12,10 +12,11 @@ import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccount
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import monix.eval.{Coeval, Task}
+import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
 
@@ -68,10 +69,6 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     val send              = Send(Channel(Quote(GString("x"))), Seq(Par()))
     val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
-  }
-
-  it should "update the cost account after going back from RSpace" in {
-    pending
   }
 
   it should "stop interpreter threads as soon as deploy runs out of phlo" in {
