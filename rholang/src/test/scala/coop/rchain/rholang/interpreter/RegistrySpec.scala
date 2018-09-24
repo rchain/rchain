@@ -51,7 +51,7 @@ trait RegistryTester extends PersistentStoreTester {
             BindPattern,
             OutOfPhlogistonsError.type,
             ListChannelWithRandom,
-            ListChannelWithRandom,
+            ListChannelWithRandomAndPhlos,
             TaggedContinuation
           ]
       ) => R

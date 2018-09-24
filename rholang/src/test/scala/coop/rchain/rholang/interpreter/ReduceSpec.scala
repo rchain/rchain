@@ -43,7 +43,7 @@ trait PersistentStoreTester {
       BindPattern,
       OutOfPhlogistonsError.type,
       ListChannelWithRandom,
-      ListChannelWithRandom,
+      ListChannelWithRandomAndPhlos,
       TaggedContinuation
     ](context, Branch("test"))
     implicit val errLog = errorLog
