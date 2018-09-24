@@ -269,9 +269,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   ): Effect[Unit] = {
 
     val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
-          )
+      _ <- Log[Effect].info(VersionInfo.get)
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
