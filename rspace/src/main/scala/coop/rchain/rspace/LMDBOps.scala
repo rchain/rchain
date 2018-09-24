@@ -47,6 +47,7 @@ trait LMDBOps extends CloseOps {
     } catch {
       case ex: Throwable =>
         try {
+          ex.printStackTrace
           txn.abort()
         } catch {
           //  /**
@@ -65,8 +66,7 @@ trait LMDBOps extends CloseOps {
           //    state = DONE;
           //    LIB.mdb_txn_abort(ptr);
           //  }
-          case ex: NotReadyException =>
-            ex.printStackTrace()
+          case _: NotReadyException =>
             TxnOps.manuallyAbortTxn(txn)
           // due to the way LMDBjava tries to handle txn commit
           // IF the DB runs out of space AND this occurs while trying to commit a txn (2)
