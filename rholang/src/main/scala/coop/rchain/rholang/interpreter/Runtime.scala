@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
-import cats.Id
 import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
@@ -27,8 +26,8 @@ import monix.eval.Task
 import scala.collection.immutable
 
 class Runtime private (
-    val reducer: Reduce[Task],
-    val replayReducer: Reduce[Task],
+    val reducer: ChargingReducer[Task],
+    val replayReducer: ChargingReducer[Task],
     val space: RhoISpace,
     val replaySpace: RhoReplayISpace,
     var errorLog: ErrorLog,
