@@ -54,7 +54,7 @@ sealed abstract class SafetyOracleInstances {
     new SafetyOracle[F] {
       def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): F[Float] =
         for {
-          totalWeight              <- computeTotalWeight(estimate)
+          totalWeight              <- computeTotalWeight(blockDag, estimate)
           minMaxCliqueWeight       <- computeMinMaxCliqueWeight(blockDag, estimate)
           faultTolerance           = 2 * minMaxCliqueWeight - totalWeight
           normalizedFaultTolerance = faultTolerance.toFloat / totalWeight
@@ -65,7 +65,7 @@ sealed abstract class SafetyOracleInstances {
       private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): F[Long] =
         for {
           candidateWeights <- computeCandidateWeights(blockDag, estimate)
-          totalWeight      <- computeTotalWeight(estimate)
+          totalWeight      <- computeTotalWeight(blockDag, estimate)
           minMaxCliqueWeight <- if (2L * candidateWeights.values.sum < totalWeight) {
                                  0L.pure[F]
                                } else {
@@ -84,9 +84,9 @@ sealed abstract class SafetyOracleInstances {
                                }
         } yield minMaxCliqueWeight
 
-      private def computeTotalWeight(estimate: BlockMessage): F[Long] =
+      private def computeTotalWeight(blockDag: BlockDag, estimate: BlockMessage): F[Long] =
         for {
-          mainParentWeightMap <- computeMainParentWeightMap(estimate)
+          mainParentWeightMap <- computeMainParentWeightMap(blockDag, estimate)
         } yield weightMapTotal(mainParentWeightMap)
 
       private def computeCandidateWeights(
@@ -94,14 +94,18 @@ sealed abstract class SafetyOracleInstances {
           estimate: BlockMessage
       ): F[Map[Validator, Long]] =
         for {
-          weights <- computeMainParentWeightMap(estimate)
+          weights <- computeMainParentWeightMap(blockDag, estimate)
           candidateWeights <- weights.toList.traverse {
                                case (validator, stake) =>
                                  val maybeLatestMessage = blockDag.latestMessages.get(validator)
                                  maybeLatestMessage match {
                                    case Some(latestMessage) =>
                                      for {
-                                       isCompatible <- computeCompatibility(estimate, latestMessage)
+                                       isCompatible <- computeCompatibility(
+                                                        blockDag,
+                                                        estimate,
+                                                        latestMessage.blockHash
+                                                      )
                                        result = if (isCompatible) {
                                          Some((validator, stake))
                                        } else {
@@ -114,14 +118,16 @@ sealed abstract class SafetyOracleInstances {
                              }
         } yield candidateWeights.flatten.toMap
 
-      private def computeMainParentWeightMap(estimate: BlockMessage): F[Map[BlockHash, Long]] =
-        for {
-          estimateMainParent <- mainParent[F](estimate)
-          mainParentWeightMap = estimateMainParent match {
-            case Some(parent) => weightMap(parent)
-            case None         => weightMap(estimate) // Genesis
-          }
-        } yield mainParentWeightMap
+      private def computeMainParentWeightMap(
+          blockDag: BlockDag,
+          estimate: BlockMessage
+      ): F[Map[BlockHash, Long]] = {
+        val estimateMainParent = mainParent[F](estimate)
+        blockDag.dataLookup(estimate.blockHash).parents.headOption match {
+          case Some(parent) => blockDag.dataLookup(parent).weightMap.pure[F]
+          case None         => weightMap(estimate).pure[F]
+        }
+      }
 
       private def findMaximumClique(
           edges: List[(Validator, Validator)],
@@ -153,12 +159,15 @@ sealed abstract class SafetyOracleInstances {
         ): F[Option[BlockHash]] =
           ListContrib.findM(
             justificationHashes,
-            justificationHash =>
-              for {
-                justificationBlock <- unsafeGetBlock[F](justificationHash)
-                isSenderSecond     = justificationBlock.sender == validator
-                compatible         <- computeCompatibility(estimate, justificationBlock)
-              } yield isSenderSecond && compatible
+            justificationHash => {
+              blockDag.dataLookup.get(justificationHash) match {
+                case Some(justificationMetadata) =>
+                  for {
+                    compatible <- computeCompatibility(blockDag, estimate, justificationHash)
+                  } yield compatible && justificationMetadata.sender == validator
+                case None => false.pure[F]
+              }
+            }
           )
 
         def seesAgreement(first: Validator, second: Validator): F[Boolean] = {
@@ -178,20 +187,26 @@ sealed abstract class SafetyOracleInstances {
           }
         }
 
-        def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
+        def filterChildren(candidate: BlockMetadata, validator: Validator): F[List[BlockHash]] =
           blockDag.latestMessages.get(validator) match {
             case Some(latestMessageByValidator) =>
               DagOperations
-                .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) { block =>
-                  ProtoUtil.getCreatorJustificationAsList[F](block, validator, b => b == candidate)
+                .bfTraverseF[F, BlockHash](List(latestMessageByValidator.blockHash)) { blockHash =>
+                  ProtoUtil.getCreatorJustificationAsListByInMemory[F](
+                    blockDag,
+                    blockHash,
+                    validator,
+                    b => b == candidate.blockHash
+                  )
                 }
-                .filter { potentialChild =>
-                  val validatorCreatedChild = potentialChild.sender == validator
-                  val isFutureBlock         = candidate.seqNum <= potentialChild.seqNum
+                .filter(potentialChild => {
+                  val metadata              = blockDag.dataLookup(potentialChild)
+                  val isFutureBlock         = candidate.seqNum <= metadata.seqNum
+                  val validatorCreatedChild = metadata.sender == validator
                   validatorCreatedChild && isFutureBlock
-                }
+                })
                 .toList
-            case None => List.empty[BlockMessage].pure[F]
+            case None => List.empty[BlockHash].pure[F]
           }
 
         def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
@@ -202,25 +217,19 @@ sealed abstract class SafetyOracleInstances {
                 justificationHashes <- firstLatestBlock.justifications
                                         .map(_.latestBlockHash)
                                         .pure[F]
-                justificationBlockSecondList <- justificationHashes.toList.traverse(
-                                                 justificationHash =>
-                                                   for {
-                                                     justificationBlock <- unsafeGetBlock[F](
-                                                                            justificationHash
-                                                                          )
-                                                     isSenderSecond = justificationBlock.sender == second
-                                                     result = if (isSenderSecond) {
-                                                       Some(justificationBlock)
-                                                     } else {
-                                                       none[BlockMessage]
-                                                     }
-                                                   } yield result
-                                               )
+                justificationBlockSecondList <- justificationHashes.toList
+                                                 .traverse(
+                                                   justificationHash =>
+                                                     blockDag.dataLookup
+                                                       .get(justificationHash)
+                                                       .filter(_.sender == second)
+                                                       .pure[F]
+                                                 )
                 _                        = assert(justificationBlockSecondList.flatten.length == 1)
                 justificationBlockSecond = justificationBlockSecondList.flatten.head
                 potentialDisagreements   <- filterChildren(justificationBlockSecond, second)
                 result <- potentialDisagreements.forallM { potentialDisagreement =>
-                           computeCompatibility(estimate, potentialDisagreement)
+                           computeCompatibility(blockDag, estimate, potentialDisagreement)
                          }
               } yield result
             case None => false.pure[F]
@@ -256,8 +265,12 @@ sealed abstract class SafetyOracleInstances {
       }
 
       // TODO: Change to isInBlockDAG
-      private def computeCompatibility(candidate: BlockMessage, target: BlockMessage): F[Boolean] =
-        isInMainChain[F](candidate, target)
+      private def computeCompatibility(
+          blockDag: BlockDag,
+          candidate: BlockMessage,
+          targetBlockHash: BlockHash
+      ): F[Boolean] =
+        isInMainChain[F](blockDag, candidate, targetBlockHash)
 
       // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
       private def maxCliqueMinSize(vertices: Int, edges: Int) = {

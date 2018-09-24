@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, PrettyPrinter}
+import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
@@ -39,6 +39,25 @@ object ProtoUtil {
                               case None         => false.pure[F]
                             }
           } yield isInMainChain
+        case None => false.pure[F]
+      }
+    }
+
+  // todo test this method, and replace everything in isInMainChain
+  def isInMainChain[F[_]: Monad](
+      dag: BlockDag,
+      candidate: BlockMessage,
+      targetBlockHash: BlockHash
+  ): F[Boolean] =
+    if (candidate.blockHash == targetBlockHash) {
+      true.pure[F]
+    } else {
+      dag.dataLookup.get(targetBlockHash) match {
+        case Some(targetBlockMeta) =>
+          targetBlockMeta.parents.headOption match {
+            case Some(mainParentHash) => isInMainChain[F](dag, candidate, mainParentHash)
+            case None                 => false.pure[F]
+          }
         case None => false.pure[F]
       }
     }
@@ -115,6 +134,30 @@ object ProtoUtil {
           }
         } yield maybeCreatorJustificationAsList
       case None => List.empty[BlockMessage].pure[F]
+    }
+  }
+
+  def getCreatorJustificationAsListByInMemory[F[_]: Monad](
+      blockDag: BlockDag,
+      blockHash: BlockHash,
+      validator: Validator,
+      goalFunc: BlockHash => Boolean = _ => false
+  ): F[List[BlockHash]] = {
+    val maybeCreatorJustificationHash =
+      blockDag.dataLookup(blockHash).justifications.find(_.validator == validator)
+    maybeCreatorJustificationHash match {
+      case Some(creatorJustificationHash) =>
+        blockDag.dataLookup.get(creatorJustificationHash.latestBlockHash) match {
+          case Some(creatorJustification) =>
+            if (goalFunc(creatorJustification.blockHash)) {
+              List.empty[BlockHash].pure[F]
+            } else {
+              List(creatorJustification.blockHash).pure[F]
+            }
+          case None =>
+            List.empty[BlockHash].pure[F]
+        }
+      case None => List.empty[BlockHash].pure[F]
     }
   }
 
