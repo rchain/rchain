@@ -820,8 +820,8 @@ trait ReplayRSpaceTests
 
   "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
     withTestSpaces { (space, replaySpace) =>
-      val channel      = "ch1"
-      val data         = "datum1"
+      val channel = "ch1"
+      val data    = "datum1"
 
       replaySpace.replayData.take()
       replaySpace.replayData.put(null)
@@ -934,6 +934,43 @@ trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     }
   }
 }
+
+trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S = {
+
+    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
+    val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val store =
+      new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        Branch.REPLAY
+      ) {
+        override private[rspace] def createTxnWrite()
+          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+          throw new RuntimeException("Couldn't write to underlying store")
+      }
+
+    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, A, K](store, Branch.REPLAY)
+
+    try {
+      f(space, replaySpace)
+    } finally {
+      space.close()
+      replaySpace.close()
+    }
+  }
+
+}
+
 class LMDBReplayRSpaceTests
     extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
@@ -945,3 +982,36 @@ class InMemoryRSpaceTests
 class FineGrainedReplayRSpaceTests
     extends FineGrainedReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
+
+class FaultyFineGrainedReplayRSpaceTests
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    with ScalaFutures {
+
+  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, continuation, false)
+      )
+
+      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+
+  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel = "ch1"
+      val data    = "datum1"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.produce(channel, data, false)
+      )
+
+      val res = Future { replaySpace.produce(channel, data, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+}
