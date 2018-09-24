@@ -164,6 +164,15 @@ To run rnode locally from within sbt use the revolver plugin. It will start the 
 ```
 Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
 
+#### Running tests in IntelliJ
+
+For tests of the Rholang module, make sure you've got the following JVM options set in your Run Configuration:
+`-Xss240k -XX:MaxJavaStackTraceDepth=10000 -Xmx128m`
+
+Otherwise the StackSafetySpec is going to be veeery slow and will most likely fail due to timeouts.
+
+You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.  
+
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
