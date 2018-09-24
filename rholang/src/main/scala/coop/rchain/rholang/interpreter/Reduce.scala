@@ -232,7 +232,13 @@ object Reduce {
             rand.splitShort((start + ta._2).toShort)
           else
             rand.splitByte((start + ta._2).toByte)
-        eval(ta._1)(env, newRand, costAccountingAlg).handleError(fTell.tell)
+        eval(ta._1)(env, newRand, costAccountingAlg).handleErrorWith {
+          case e: OutOfPhlogistonsError.type =>
+            fTell.tell(e)
+            s.raiseError(e)
+          case e =>
+            fTell.tell(e) *> s.unit
+        }
       }
       List(
         Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(evalExplicit, starts(0))),
