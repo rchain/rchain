@@ -22,8 +22,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.{ApplicativeError_, Capture}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
-import coop.rchain.comm.transport.CommMessages
-import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.rp.ProtocolHelper, ProtocolHelper._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -115,7 +114,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           packetResponse <- packetHandler.handle(local).apply(unapprovedPacket)
           _              = assert(packetResponse.isEmpty)
           blockApproval  = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
-          expectedPacket = CommMessages.packet(
+          expectedPacket = ProtocolHelper.packet(
             local,
             transport.BlockApproval,
             blockApproval.toByteString
@@ -245,7 +244,7 @@ class CasperPacketHandlerSpec extends WordSpec {
         import fixture._
 
         val request       = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toByteString
-        val requestPacket = CommMessages.packet(local, transport.ApprovedBlockRequest, request)
+        val requestPacket = ProtocolHelper.packet(local, transport.ApprovedBlockRequest, request)
 
         val peer1 = peerNode("peerNode1", 1)
         val peer2 = peerNode("peerNode2", 2)

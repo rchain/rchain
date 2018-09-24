@@ -9,7 +9,8 @@ import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.metrics.Metrics
-import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.transport._
+import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}

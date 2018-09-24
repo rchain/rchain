@@ -5,7 +5,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.implicits._
 
-import coop.rchain.comm._
+import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError.CommErr
 
@@ -212,7 +212,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 remote: PeerNode
             ): F[CommErr[Protocol]] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- roundTripWithHeartbeat(transportLayer, local, remote)
               } yield r
 
@@ -236,7 +236,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 remote: PeerNode
             ): F[Unit] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- sendHeartbeat(transportLayer, local, remote)
                 _ = await()
               } yield r
@@ -257,7 +257,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 remote2: PeerNode
             ): F[Unit] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
                 _ = await()
               } yield r
