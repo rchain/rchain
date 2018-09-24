@@ -3,7 +3,7 @@ package coop.rchain.comm.transport
 import cats.Id
 
 import coop.rchain.catscontrib._
-import coop.rchain.comm.ProtocolHelper
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.shared.{Log, LogSource}
 
@@ -36,15 +36,7 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
         case TLRequest(Some(Protocol(Some(Header(Some(sender))), msg))) =>
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
-            val msgType = msg match {
-              case m if m.isLookup         => "lookup"
-              case m if m.isLookupResponse => "lookup response"
-              case m if m.isPing           => "ping"
-              case m if m.isPong           => "pong"
-              case m if m.isUpstream       => "upstream"
-              case m if m.isEmpty          => "empty"
-              case _                       => "unknown"
-            }
+            val msgType  = msg.getClass.toString
             log.trace(s"Request [$msgType] from peer ${peerNode.toAddress}")
           }
           val sslSession: Option[SSLSession] = Option(

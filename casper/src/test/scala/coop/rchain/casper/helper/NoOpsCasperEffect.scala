@@ -28,12 +28,12 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore] private (
   def deploy(r: DeployData): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] =
     estimatorFunc.pure[F]
-  def createBlock: F[CreateBlockStatus]                              = CreateBlockStatus.noNewDeploys.pure[F]
-  def blockDag: F[BlockDag]                                          = blockDagFunc.pure[F]
-  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] = 0f.pure[F]
-  def lastFinalizedBlock: F[BlockMessage]                            = BlockMessage().pure[F]
-  def storageContents(hash: BlockHash): F[String]                    = "".pure[F]
-  def getRuntimeManager: F[Option[RuntimeManager]]                   = none[RuntimeManager].pure[F]
+  def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
+  def blockDag: F[BlockDag]                                           = blockDagFunc.pure[F]
+  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
+  def lastFinalizedBlock: F[BlockMessage]                             = BlockMessage().pure[F]
+  def storageContents(hash: BlockHash): F[String]                     = "".pure[F]
+  def getRuntimeManager: F[Option[RuntimeManager]]                    = none[RuntimeManager].pure[F]
 }
 
 object NoOpsCasperEffect {

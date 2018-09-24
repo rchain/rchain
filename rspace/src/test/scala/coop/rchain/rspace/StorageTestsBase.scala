@@ -136,9 +136,10 @@ class InMemoryStoreTestsBase
     val trieStore =
       InMemoryTrieStore.create[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]()
 
-    val testStore = InMemoryStore.create[InMemTransaction[
-      history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]
-    ], String, Pattern, String, StringsCaptor](trieStore, branch)
+    val testStore = InMemoryStore
+      .create[InMemTransaction[
+        history.State[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]]
+      ], String, Pattern, String, StringsCaptor](trieStore, branch)
 
     val testSpace =
       RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)

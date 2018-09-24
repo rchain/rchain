@@ -17,6 +17,7 @@ case class Server(
     host: Option[String],
     port: Option[Int],
     httpPort: Option[Int],
+    kademliaPort: Option[Int],
     noUpnp: Option[Boolean],
     defaultTimeout: Option[Int],
     bootstrap: Option[PeerNode],

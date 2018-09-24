@@ -134,7 +134,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
   /** Configuration */
   private val port              = conf.server.port
-  private val address           = s"rnode://$name@$host:$port"
+  private val kademliaPort      = conf.server.kademliaPort
+  private val address           = s"rnode://$name@$host?protocol=$port&discovery=$kademliaPort"
   private val storagePath       = conf.server.dataDir.resolve("rspace")
   private val casperStoragePath = storagePath.resolve("casper")
   private val storageSize       = conf.server.mapSize
@@ -190,6 +191,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
+                       .mountService(VersionInfo.service, "/version")
                        .start
                    }.toEffect
       _ <- Task.delay {
@@ -217,7 +219,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
-      msg = CommMessages.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
@@ -267,16 +269,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       jvmMetrics: JvmMetrics[Task]
   ): Effect[Unit] = {
 
-    val handleCommunication = (pm: Protocol) =>
-      NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case NotHandled(_) => HandleMessages.handle[Effect](pm, defaultTimeout)
-        case handled       => handled.pure[Effect]
-      }
-
     val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
-          )
+      _ <- Log[Effect].info(VersionInfo.get)
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
@@ -293,8 +287,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(handleCommunication)
-      ndFiber <- NodeDiscovery[Task].discover.forever.fork.toEffect
+      _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
+      _       <- NodeDiscovery[Task].discover.fork.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
       _       <- loop.forever
     } yield ()
@@ -308,11 +302,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     EitherT[Task, CommError, Unit](
       prog.value
         .onErrorHandleWith {
-          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-            Log[Task]
-              .error(
-                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again."
-              )
           case th =>
             log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
               th.printStackTrace();
@@ -335,7 +324,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     */
   val main: Effect[Unit] = for {
     // 1. set up configurations
-    local          <- EitherT.fromEither[Task](PeerNode.parse(address))
+    local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
     defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
     rpClearConnConf = ClearConnetionsConf(
       conf.server.maxNumOfConnections,
@@ -359,7 +348,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.key,
       conf.server.maxMessageSize
     )(scheduler, tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, defaultTimeout)(metrics, transport)
+    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(scheduler, metrics, log)
     initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(

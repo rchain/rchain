@@ -62,12 +62,12 @@ sealed abstract class SafetyOracleInstances {
 
       // To have a maximum clique of half the total weight,
       // you need at least twice the weight of the candidateWeights to be greater than the total weight
-      private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): F[Int] =
+      private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): F[Long] =
         for {
           candidateWeights <- computeCandidateWeights(blockDag, estimate)
           totalWeight      <- computeTotalWeight(estimate)
-          minMaxCliqueWeight <- if (2 * candidateWeights.values.sum < totalWeight) {
-                                 0.pure[F]
+          minMaxCliqueWeight <- if (2L * candidateWeights.values.sum < totalWeight) {
+                                 0L.pure[F]
                                } else {
                                  val vertexCount = candidateWeights.keys.size
                                  for {
@@ -84,7 +84,7 @@ sealed abstract class SafetyOracleInstances {
                                }
         } yield minMaxCliqueWeight
 
-      private def computeTotalWeight(estimate: BlockMessage): F[Int] =
+      private def computeTotalWeight(estimate: BlockMessage): F[Long] =
         for {
           mainParentWeightMap <- computeMainParentWeightMap(estimate)
         } yield weightMapTotal(mainParentWeightMap)
@@ -92,7 +92,7 @@ sealed abstract class SafetyOracleInstances {
       private def computeCandidateWeights(
           blockDag: BlockDag,
           estimate: BlockMessage
-      ): F[Map[Validator, Int]] =
+      ): F[Map[Validator, Long]] =
         for {
           weights <- computeMainParentWeightMap(estimate)
           candidateWeights <- weights.toList.traverse {
@@ -105,16 +105,16 @@ sealed abstract class SafetyOracleInstances {
                                        result = if (isCompatible) {
                                          Some((validator, stake))
                                        } else {
-                                         none[(Validator, Int)]
+                                         none[(Validator, Long)]
                                        }
                                      } yield result
                                    case None =>
-                                     none[(Validator, Int)].pure[F]
+                                     none[(Validator, Long)].pure[F]
                                  }
                              }
         } yield candidateWeights.flatten.toMap
 
-      private def computeMainParentWeightMap(estimate: BlockMessage): F[Map[BlockHash, Int]] =
+      private def computeMainParentWeightMap(estimate: BlockMessage): F[Map[BlockHash, Long]] =
         for {
           estimateMainParent <- mainParent[F](estimate)
           mainParentWeightMap = estimateMainParent match {
@@ -125,13 +125,13 @@ sealed abstract class SafetyOracleInstances {
 
       private def findMaximumClique(
           edges: List[(Validator, Validator)],
-          candidates: Map[Validator, Int]
-      ): (List[Validator], Int) =
+          candidates: Map[Validator, Long]
+      ): (List[Validator], Long) =
         Clique
           .findCliquesRecursive(edges)
-          .foldLeft((List[Validator](), 0)) {
+          .foldLeft((List[Validator](), 0L)) {
             case ((maxClique, maxWeight), clique) => {
-              val weight = clique.map(candidates.getOrElse(_, 0)).sum
+              val weight = clique.map(candidates.getOrElse(_, 0L)).sum
               if (weight > maxWeight) {
                 (clique, weight)
               } else if (weight == maxWeight && clique.size > maxClique.size) {
@@ -145,7 +145,7 @@ sealed abstract class SafetyOracleInstances {
       private def agreementGraphEdgeCount(
           blockDag: BlockDag,
           estimate: BlockMessage,
-          candidates: Map[Validator, Int]
+          candidates: Map[Validator, Long]
       ): F[Int] = {
         def findAgreeingJustificationHash(
             justificationHashes: List[BlockHash],
