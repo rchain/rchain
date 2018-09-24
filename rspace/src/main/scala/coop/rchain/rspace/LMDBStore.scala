@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
+import com.typesafe.scalalogging.Logger
 import internal._
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
@@ -44,6 +45,8 @@ class LMDBStore[C, P, A, K] private (
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
   private[rspace] type TrieTransaction = Transaction
+
+  override protected[this] val logger: Logger = Logger[this.type]
 
   def withTrieTxn[R](txn: Transaction)(f: TrieTransaction => R): R = f(txn)
 

@@ -1,4 +1,5 @@
 package coop.rchain.rspace.history
+import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.{Blake2b256Hash, InMemTransaction, InMemoryOps}
 import kamon.Kamon
 
@@ -31,6 +32,8 @@ object State {
 class InMemoryTrieStore[K, V]
     extends InMemoryOps[State[K, V]]
     with ITrieStore[InMemTransaction[State[K, V]], K, V] {
+
+  override protected[this] val logger: Logger = Logger[this.type]
 
   override def emptyState: State[K, V] = State.empty
 

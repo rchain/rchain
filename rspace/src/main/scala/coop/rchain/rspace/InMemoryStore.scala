@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 
 import internal._
 import cats.implicits._
+import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore}
 import coop.rchain.rspace.internal._
@@ -14,7 +15,6 @@ import scodec.Codec
 
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
-
 import kamon._
 
 case class State[C, P, A, K](
@@ -50,6 +50,8 @@ class InMemoryStore[T, C, P, A, K](
   private implicit val codecP: Codec[P] = sp.toCodec
   private implicit val codecA: Codec[A] = sa.toCodec
   private implicit val codecK: Codec[K] = sk.toCodec
+
+  override protected[this] val logger: Logger = Logger[this.type]
 
   override def emptyState: State[C, P, A, K] = State.empty
 

@@ -1,8 +1,11 @@
 package coop.rchain.rspace
 import java.util.concurrent.atomic.AtomicInteger
+import com.typesafe.scalalogging.Logger
 
 trait CloseOps {
   import CloseOps._
+
+  protected[this] val logger: Logger
 
   @volatile private[this] var isClosed = false
 
@@ -26,13 +29,18 @@ trait CloseOps {
     //As a trade-off we're waiting up to closeTimeout, checking if
     //all transactions are done every closeSleepPeriod milliseconds,
     //and finally leaving this method (in this case SIGSEGV may be thrown by LMDB)
-    (0L to closeTimeout by closeSleepPeriod).find(_ =>
-      if (openedTransactions.get() == 0) {
-        true
-      } else {
-        Thread.sleep(closeSleepPeriod)
-        false
-    })
+    (0L to closeTimeout by closeSleepPeriod).find(
+      time =>
+        if (openedTransactions.get() == 0) {
+          true
+        } else {
+          if (time == 0) {
+            logger.info("Waiting for active transactions to finish...")
+          }
+          Thread.sleep(closeSleepPeriod)
+          false
+        }
+    )
   }
 
   def failIfClosed(): Unit =
@@ -43,5 +51,5 @@ trait CloseOps {
 private object CloseOps {
   //timeouts are in milliseconds
   private val closeSleepPeriod: Long = 100
-  private val closeTimeout: Long     = 3000
+  private val closeTimeout: Long     = 30000
 }
