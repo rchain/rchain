@@ -7,15 +7,13 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import com.google.protobuf.ByteString
 import coop.rchain.comm.transport.PacketType
+import com.google.protobuf.ByteString
 
 object ProtocolHelper {
 
-  implicit def toProtocolBytes(x: String): ByteString =
-    com.google.protobuf.ByteString.copyFromUtf8(x)
-  implicit def toProtocolBytes(x: Array[Byte]): ByteString =
-    com.google.protobuf.ByteString.copyFrom(x)
-  implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
-    com.google.protobuf.ByteString.copyFrom(x.toArray)
+  def toProtocolBytes(x: String): ByteString      = ByteString.copyFromUtf8(x)
+  def toProtocolBytes(x: Array[Byte]): ByteString = ByteString.copyFrom(x)
+  def toProtocolBytes(x: Seq[Byte]): ByteString   = ByteString.copyFrom(x.toArray)
 
   def header(src: PeerNode): Header =
     Header()
