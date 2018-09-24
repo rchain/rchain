@@ -88,9 +88,7 @@ def network_converged(bootstrap_node, expected_peers):
     rx = re.compile("^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def go():
-        cmd = f'curl -s http://localhost:40403/metrics'
-
-        exit_code, output = bootstrap_node.exec_run(cmd=cmd)
+        exit_code, output = bootstrap_node.get_metrics()
 
         m = rx.search(output)
 

@@ -19,7 +19,8 @@ object JvmMetrics extends JmxMetricsInstances {
   def apply[F[_]](implicit M: JvmMetrics[F]): JvmMetrics[F] = M
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: JvmMetrics[F]): JvmMetrics[T[F, ?]] =
+      implicit C: JvmMetrics[F]
+  ): JvmMetrics[T[F, ?]] =
     new JvmMetrics[T[F, ?]] {
       def processCpu: T[F, ProcessCpu]                   = C.processCpu.liftM[T]
       def memoryUsage: T[F, MemoryUsage]                 = C.memoryUsage.liftM[T]

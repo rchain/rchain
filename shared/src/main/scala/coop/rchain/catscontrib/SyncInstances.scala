@@ -7,8 +7,10 @@ import monix.eval.Task
 
 object SyncInstances {
 
-  def syncEffect[E](toThrowable: E => Throwable,
-                    fromThrowable: Throwable => E): Sync[EitherT[Task, E, ?]] = {
+  def syncEffect[E](
+      toThrowable: E => Throwable,
+      fromThrowable: Throwable => E
+  ): Sync[EitherT[Task, E, ?]] = {
     type Effect[A] = EitherT[Task, E, A]
     new Sync[Effect] {
       def suspend[A](thunk: => Effect[A]): Effect[A] =
@@ -25,8 +27,9 @@ object SyncInstances {
 
       def pure[A](x: A): Effect[A] = implicitly[Applicative[Effect]].pure(x)
 
-      def bracketCase[A, B](acquire: Effect[A])(use: A => Effect[B])(
-          release: (A, ExitCase[Throwable]) => Effect[Unit]): Effect[B] =
+      def bracketCase[A, B](
+          acquire: Effect[A]
+      )(use: A => Effect[B])(release: (A, ExitCase[Throwable]) => Effect[Unit]): Effect[B] =
         acquire flatMap { state =>
           try {
             use(state)

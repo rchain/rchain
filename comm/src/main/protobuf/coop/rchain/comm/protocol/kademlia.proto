@@ -1,0 +1,37 @@
+syntax = "proto3";
+package coop.rchain.comm.discovery;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.comm.discovery"
+  flat_package: true
+};
+
+message Node {
+  bytes  id       = 1;
+  bytes  host     = 2;
+  uint32 tcp_port = 3;
+  uint32 udp_port = 4;
+}
+
+message Ping {
+  Node   sender         = 1;
+}
+
+message Pong {
+}
+
+message Lookup {
+  bytes  id     = 1;
+  Node   sender = 2;
+}
+        
+message LookupResponse {
+    repeated Node nodes = 1;
+}
+
+service KademliaRPCService {
+  rpc SendPing (Ping) returns (Pong) {}
+  rpc SendLookup (Lookup) returns (LookupResponse) {}
+}

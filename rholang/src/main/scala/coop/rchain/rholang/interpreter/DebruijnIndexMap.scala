@@ -21,11 +21,15 @@ class DebruijnIndexMap[T](val next: Int, val env: Map[String, (Int, T, Int, Int)
     val finalNext  = next + binders.next
     val adjustNext = next
     binders.env.foldLeft((this, List[(String, Int, Int)]())) {
-      case ((db: DebruijnIndexMap[T], shadowed: List[(String, Int, Int)]),
-            (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))) => {
+      case (
+          (db: DebruijnIndexMap[T], shadowed: List[(String, Int, Int)]),
+          (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))
+          ) => {
         val shadowedNew = if (db.env.contains(k)) (k, line, col) :: shadowed else shadowed
-        (DebruijnIndexMap(finalNext, db.env + (k -> ((level + adjustNext, varType, line, col)))),
-         shadowedNew)
+        (
+          DebruijnIndexMap(finalNext, db.env + (k -> ((level + adjustNext, varType, line, col)))),
+          shadowedNew
+        )
       }
     }
   }

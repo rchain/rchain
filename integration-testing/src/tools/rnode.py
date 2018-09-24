@@ -33,11 +33,16 @@ class Node:
 
     def get_rnode_address(self):
         log_content = self.logs()
-        m = re.search("Listening for traffic on (rnode://.*:\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
+        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\?protocol=\d+&discovery=\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
         address = m[1]
 
         logging.info(f"Bootstrap address: `{address}`")
         return address
+
+    def get_metrics(self):
+        cmd = f'curl -s http://localhost:40403/metrics'
+
+        return self.exec_run(cmd=cmd)
 
     def cleanup(self):
         log_file = f"{self.container.name}.log"

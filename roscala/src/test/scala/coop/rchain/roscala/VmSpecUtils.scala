@@ -11,7 +11,8 @@ trait VmSpecUtils extends FlatSpec with Matchers {
   def runBehaviour[E: StrandPoolExecutor]: Unit
 
   private def registerVmTest[E: StrandPoolExecutor](v: ResultOfStringPassedToVerb, testFun: => Any)(
-      implicit pos: source.Position) =
+      implicit pos: source.Position
+  ) =
     registerTest(s"${v.verb.trim} ${v.rest.trim} using $strandPoolName")(testFun)
 
   implicit class ResultOfStringPassedToVerbOps(v: ResultOfStringPassedToVerb) {

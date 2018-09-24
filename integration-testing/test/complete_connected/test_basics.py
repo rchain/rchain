@@ -6,9 +6,8 @@ from tools.profiling import profile
 def test_metrics_api_socket(started_complete_network):
     for node  in started_complete_network.nodes:
         logging.info(f"Test metrics api socket for {node.name}")
-        cmd = f"nmap -sS -n -p T:40403 -oG - {node.name}"
-        r = node.container.exec_run(cmd=cmd, user='root').output.decode("utf-8")
-        expect("40403/open/tcp" in r, f"Port 40403/tcp is not open in container {node.name}")
+        exit_code, output = node.get_metrics()
+        expect(exit_code == 0, "Could not get the metrics for node {node.name}")
 
     assert_expectations()
 

@@ -4,6 +4,7 @@ import scala.collection.mutable
 
 import cats.Id
 
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.comm._
 
@@ -162,6 +163,10 @@ class KademliaSpec extends FunSpec with Matchers with BeforeAndAfterEach {
       returns
     }
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
+    def receive(
+        pingHandler: PeerNode => Id[Unit],
+        lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
+    ): Id[Unit] = ()
   }
 
   private def createPeer(id: String): PeerNode =

@@ -19,7 +19,8 @@ object LastApprovedBlock extends LastApprovedBlockInstances {
     MaybeCell.unsafe[F, ApprovedBlock](init)
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: LastApprovedBlock[F]): LastApprovedBlock[T[F, ?]] =
+      implicit C: LastApprovedBlock[F]
+  ): LastApprovedBlock[T[F, ?]] =
     new MaybeCell[T[F, ?], ApprovedBlock] {
       override def get: T[F, Option[ApprovedBlock]] =
         C.get.liftM[T]

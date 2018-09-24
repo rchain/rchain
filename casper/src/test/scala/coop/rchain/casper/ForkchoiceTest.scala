@@ -25,7 +25,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.HashMap
 
 class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
 
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStore {
     implicit blockStore =>
@@ -37,34 +37,48 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
-          b2 <- createBlock[F](Seq(genesis.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b3 <- createBlock[F](Seq(genesis.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b4 <- createBlock[F](Seq(b2.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash))
-          b5 <- createBlock[F](Seq(b2.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash))
-          _ <- createBlock[F](Seq(b4.blockHash),
-                              v2,
-                              bonds,
-                              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b7 <- createBlock[F](Seq(b4.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b8 <- createBlock[F](Seq(b7.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
+          b2 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b3 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b4 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
+               )
+          b5 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
+               )
+          _ <- createBlock[F](
+                Seq(b4.blockHash),
+                v2,
+                bonds,
+                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+              )
+          b7 <- createBlock[F](
+                 Seq(b4.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+               )
+          b8 <- createBlock[F](
+                 Seq(b7.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+               )
         } yield b8
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
@@ -76,7 +90,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
         for {
           forkchoice <- Estimator.tips[F](
                          chain.withLatestMessages(HashMap.empty[Validator, BlockMessage]),
-                         genesis)
+                         genesis
+                       )
           _ = forkchoice.head should be(genesis)
         } yield ()
       checkForkchoice[Id]
@@ -93,34 +108,48 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
       def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
         for {
           genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
-          b2 <- createBlock[F](Seq(genesis.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b3 <- createBlock[F](Seq(genesis.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-          b4 <- createBlock[F](Seq(b2.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash))
-          b5 <- createBlock[F](Seq(b2.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash))
-          _ <- createBlock[F](Seq(b4.blockHash),
-                              v2,
-                              bonds,
-                              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b7 <- createBlock[F](Seq(b4.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-          b8 <- createBlock[F](Seq(b7.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
+          b2 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b3 <- createBlock[F](
+                 Seq(genesis.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+               )
+          b4 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
+               )
+          b5 <- createBlock[F](
+                 Seq(b2.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
+               )
+          _ <- createBlock[F](
+                Seq(b4.blockHash),
+                v2,
+                bonds,
+                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+              )
+          b7 <- createBlock[F](
+                 Seq(b4.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+               )
+          b8 <- createBlock[F](
+                 Seq(b7.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+               )
         } yield b8
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
@@ -159,34 +188,44 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
                  Seq(genesis.blockHash),
                  v2,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               )
           b3 <- createBlock[F](
                  Seq(genesis.blockHash),
                  v1,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               )
           b4 <- createBlock[F](
                  Seq(b2.blockHash),
                  v3,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+               )
           b5 <- createBlock[F](
                  Seq(b3.blockHash),
                  v2,
                  bonds,
-                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash))
-          b6 <- createBlock[F](Seq(b4.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash))
-          b7 <- createBlock[F](Seq(b5.blockHash),
-                               v3,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
-          b8 <- createBlock[F](Seq(b6.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+               )
+          b6 <- createBlock[F](
+                 Seq(b4.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+               )
+          b7 <- createBlock[F](
+                 Seq(b5.blockHash),
+                 v3,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+               )
+          b8 <- createBlock[F](
+                 Seq(b6.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+               )
         } yield b8
 
       implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)

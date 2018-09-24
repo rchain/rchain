@@ -37,7 +37,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .mkTerm(s""" for(@nn <- @"nn"){ @(nn, "value")!("$captureChannel") } """)
         .right
         .get,
-      captureChannel)
+      captureChannel
+    )
 
     result.size should be(1)
     result.head should be(InterpreterUtil.mkTerm(purseValue).right.get)
@@ -56,7 +57,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     manyResults.size should be(n)
     (1 to n).forall(i => manyResults.contains(InterpreterUtil.mkTerm(i.toString).right.get)) should be(
-      true)
+      true
+    )
   }
 
   "emptyStateHash" should "not remember previous hot store state" in {
@@ -84,8 +86,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     )
 
     def deployCost(p: Seq[InternalProcessedDeploy]): Long = p.map(_.cost.cost).sum
-    val deploy = terms.map(t =>
-      ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis()))
+    val deploy = terms.map(
+      t => ProtoUtil.termDeploy(InterpreterUtil.mkTerm(t).right.get, System.currentTimeMillis())
+    )
     val (_, firstDeploy) =
       runtimeManager.computeState(runtimeManager.emptyStateHash, deploy.head :: Nil)
     val (_, secondDeploy) =
@@ -102,10 +105,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     assert(secondDeployCost < compoundDeployCost)
     assert(
       firstDeployCost == deployCost(
-        compoundDeploy.find(_.deploy == firstDeploy.head.deploy).toVector))
+        compoundDeploy.find(_.deploy == firstDeploy.head.deploy).toVector
+      )
+    )
     assert(
       secondDeployCost == deployCost(
-        compoundDeploy.find(_.deploy == secondDeploy.head.deploy).toVector))
+        compoundDeploy.find(_.deploy == secondDeploy.head.deploy).toVector
+      )
+    )
     assert((firstDeployCost + secondDeployCost) == compoundDeployCost)
   }
 }
