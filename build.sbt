@@ -176,7 +176,6 @@ lazy val node = (project in file("node"))
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "libsodium18"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
@@ -201,8 +200,7 @@ lazy val node = (project in file("node"))
     /* Debian */
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
                                                 "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
-                                                "bash (>= 2.05a-11)",
-                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+                                                "bash (>= 2.05a-11)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -213,8 +211,7 @@ lazy val node = (project in file("node"))
     ),
     rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
                         //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
-                        "openssl",
-                        "libsodium >= 1.0.14-1")
+                        "openssl")
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -308,6 +305,9 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings"
+    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",

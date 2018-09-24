@@ -37,13 +37,9 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
           if (log.isTraceEnabled) {
             val peerNode = ProtocolHelper.toPeerNode(sender)
             val msgType = msg match {
-              case m if m.isLookup         => "lookup"
-              case m if m.isLookupResponse => "lookup response"
-              case m if m.isPing           => "ping"
-              case m if m.isPong           => "pong"
-              case m if m.isUpstream       => "upstream"
-              case m if m.isEmpty          => "empty"
-              case _                       => "unknown"
+              case m if m.isUpstream => "upstream"
+              case m if m.isEmpty    => "empty"
+              case _                 => "unknown"
             }
             log.trace(s"Request [$msgType] from peer ${peerNode.toAddress}")
           }
