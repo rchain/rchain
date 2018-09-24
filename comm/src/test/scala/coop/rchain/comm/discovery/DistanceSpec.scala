@@ -25,8 +25,10 @@ class DistanceSpec extends FlatSpec with Matchers {
   implicit val ping: KademliaRPC[Id] = new KademliaRPC[Id] {
     def ping(node: PeerNode): Boolean                         = true
     def lookup(key: Seq[Byte], peer: PeerNode): Seq[PeerNode] = Seq.empty[PeerNode]
-    def receive(pingHandler: PeerNode => Id[Unit],
-                lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]): Id[Unit] = ()
+    def receive(
+        pingHandler: PeerNode => Id[Unit],
+        lookupHandler: (PeerNode, Array[Byte]) => Id[Seq[PeerNode]]
+    ): Id[Unit] = ()
   }
   implicit val capture: Capture[Id] = new Capture[Id] {
     def capture[A](a: => A): Id[A]       = a

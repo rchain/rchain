@@ -6,7 +6,8 @@ import cats.Monad
 import cats.data.EitherT
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.{MonadTrans, _}
-import coop.rchain.comm.{CommError, PeerNode, ProtocolHelper}, CommError.CommErr
+import coop.rchain.comm.{CommError, PeerNode}, CommError.CommErr
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 
 trait NodeDiscovery[F[_]] {

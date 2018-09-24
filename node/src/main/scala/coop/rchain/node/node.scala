@@ -218,7 +218,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
-      msg = CommMessages.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
