@@ -55,11 +55,12 @@ object TuplespaceAlg {
                 .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
                 .combineAll
             if (persistent) {
-              List(
-                dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
-                produce(channel, data, persistent)
-              ).parSequence
-                .map(_.combineAll + rspaceMatchCost)
+              Parallel
+                .parProduct(
+                  dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
+                  produce(channel, data, persistent)
+                )
+                .map(t => t._1 + t._2 + rspaceMatchCost)
             } else {
               dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
             }
@@ -102,11 +103,12 @@ object TuplespaceAlg {
 
                 dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
-                  List(
-                    dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
-                    consume(binds, body, persistent)
-                  ).parSequence
-                    .map(_.combineAll + rspaceMatchCost)
+                  Parallel
+                    .parProduct(
+                      dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
+                      consume(binds, body, persistent)
+                    )
+                    .map(t => t._1 + t._2 + rspaceMatchCost)
                 } else {
                   dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
                 }
