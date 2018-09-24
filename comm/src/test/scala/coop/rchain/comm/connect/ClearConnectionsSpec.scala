@@ -8,7 +8,7 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.Connections._
 import coop.rchain.comm.rp.Connect._
-import coop.rchain.comm.transport.CommMessages._
+import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances.{LogicalTime, TransportLayerStub}

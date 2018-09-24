@@ -229,7 +229,7 @@ package object diagnostics {
         connectionsCell.read.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
             )
           )
         }
@@ -238,7 +238,7 @@ package object diagnostics {
         nodeDiscovery.peers.map { ps =>
           Peers(
             ps.map(
-              p => Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))
+              p => Peer(p.endpoint.host, p.endpoint.tcpPort, ByteString.copyFrom(p.id.key.toArray))
             )
           )
         }

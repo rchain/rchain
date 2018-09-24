@@ -18,7 +18,7 @@ object Converter {
       s match {
         case (_, uri :: Nil) :: Nil =>
           PeerNode
-            .parse(uri)
+            .fromAddress(uri)
             .map(u => Right(Some(u)))
             .getOrElse(Left("can't parse the rnode bootstrap address"))
         case Nil => Right(None)
@@ -166,6 +166,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val httpPort =
       opt[Int](descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
+
+    val kademliaPort =
+      opt[Int](descr = "Kademlia port used for node discovery based on Kademlia algorithm")
 
     val numValidators = opt[Int](descr = "Number of validators at genesis.")
     val bondsFile = opt[String](
