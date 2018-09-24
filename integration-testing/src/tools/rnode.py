@@ -33,19 +33,25 @@ class Node:
 
     def get_rnode_address(self):
         log_content = self.logs()
-        m = re.search("Listening for traffic on (rnode://.*:\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
+        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\?protocol=\d+&discovery=\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
         address = m[1]
 
         logging.info(f"Bootstrap address: `{address}`")
         return address
 
-    def cleanup(self):
-        with log_box(logging.info, f"Logs for node {self.container.name}:"):
-            logs = self.logs().splitlines()
-            for log_line in logs:
-                logging.info(f"{self.container.name}: {log_line}")
+    def get_metrics(self):
+        cmd = f'curl -s http://localhost:40403/metrics'
 
-        logging.info(f"Remove container {self.container.name}")
+        return self.exec_run(cmd=cmd)
+
+    def cleanup(self):
+        log_file = f"{self.container.name}.log"
+        
+        with open(log_file, "w") as f:
+            f.write(self.logs())
+
+        logging.info(f"Remove container {self.container.name}. Logs have been written to {log_file}")
+
         self.container.remove(force=True, v=True)
 
     def deploy(self, contract):
@@ -72,9 +78,10 @@ class Node:
         process.start()
 
         try:
-            result = queue.get(self.timeout)
-            logging.debug("Returning '{result}'")
-            return result
+            exit_code, output = queue.get(self.timeout)
+            printed_output = output if len(output) < 20 else (output[0:20] + "...")
+            logging.info(f"Returning: {exit_code},'{printed_output}'")
+            return exit_code, output
         except Empty:
             process.terminate()
             process.join()

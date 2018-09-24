@@ -56,7 +56,8 @@ lazy val shared = (project in file("shared"))
       catsMtl,
       monix,
       scodecCore,
-      scodecBits
+      scodecBits,
+      scalapbRuntimegGrpc,
     )
   )
 
@@ -96,7 +97,8 @@ lazy val comm = (project in file("comm"))
     ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   ).dependsOn(shared, crypto)
 
@@ -126,7 +128,8 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(rspace)
@@ -152,7 +155,8 @@ lazy val node = (project in file("node"))
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
@@ -172,7 +176,6 @@ lazy val node = (project in file("node"))
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "libsodium18"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
@@ -197,8 +200,7 @@ lazy val node = (project in file("node"))
     /* Debian */
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
                                                 "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
-                                                "bash (>= 2.05a-11)",
-                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+                                                "bash (>= 2.05a-11)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -209,8 +211,7 @@ lazy val node = (project in file("node"))
     ),
     rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
                         //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
-                        "openssl",
-                        "libsodium >= 1.0.14-1")
+                        "openssl")
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -237,7 +238,9 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true
+    fork in Test := true,
+    //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
+    javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
   .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
 
@@ -304,6 +307,9 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings"
+    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",

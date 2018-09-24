@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import cats.Id
 import cats.implicits._
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.Log
@@ -13,7 +14,6 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 
 /** The interface for RSpace
-  * It's called a Freudian space because it has a fixed Id
   *
   * @tparam C a type representing a channel
   * @tparam P a type representing a pattern
@@ -22,7 +22,7 @@ import scala.concurrent.SyncVar
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
+private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.
@@ -62,8 +62,12 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
           case Right(Some(mat)) =>
             Right(
               Some(
-                (DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
-                 prefix ++ remaining)))
+                (
+                  DataCandidate(channel, Datum(mat, persist, produceRef), dataIndex),
+                  prefix ++ remaining
+                )
+              )
+            )
         }
     }
 
@@ -89,8 +93,8 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
   private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
-      acc: Seq[Either[E, Option[DataCandidate[C, R]]]])(
-      implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
+      acc: Seq[Either[E, Option[DataCandidate[C, R]]]]
+  )(implicit m: Match[P, E, A, R]): Seq[Either[E, Option[DataCandidate[C, R]]]] =
     channelPatternPairs match {
       case Nil =>
         acc.reverse
@@ -107,9 +111,11 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
           case Left(e) =>
             (Left(e) +: acc).reverse
           case Right(Some((cand, rem))) =>
-            extractDataCandidates(tail,
-                                  channelToIndexedData.updated(channel, rem),
-                                  Right(Some(cand)) +: acc)
+            extractDataCandidates(
+              tail,
+              channelToIndexedData.updated(channel, rem),
+              Right(Some(cand)) +: acc
+            )
           case Right(None) =>
             extractDataCandidates(tail, channelToIndexedData, Right(None) +: acc)
         }
@@ -121,8 +127,8 @@ trait FreudianSpace[C, P, E, A, R, K] extends ISpace[Id, C, P, E, A, R, K] {
   private[rspace] final def extractFirstMatch(
       channels: Seq[C],
       matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
-      channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
-      implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
+      channelToIndexedData: Map[C, Seq[(Datum[A], Int)]]
+  )(implicit m: Match[P, E, A, R]): Either[E, Option[ProduceCandidate[C, P, R, K]]] =
     matchCandidates match {
       case Nil =>
         Right(None)

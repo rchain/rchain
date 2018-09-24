@@ -13,13 +13,14 @@ import monix.eval.Task
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
-  private val mapSize: Long    = 1024 * 1024 * 1024
+  private val mapSize: Long    = 1024L * 1024L * 1024L
 
   val rhoScriptSource: String
-  lazy val runtime: Runtime                   = Runtime.create(dbDir, mapSize)
-  val rand: Blake2b512Random                  = Blake2b512Random(128)
-  val costAccountAlg: CostAccountingAlg[Task] = CostAccountingAlg.unsafe[Task](CostAccount.zero)
-  var term: Option[Par]                       = None
+  lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
+  val rand: Blake2b512Random = Blake2b512Random(128)
+  val costAccountAlg: CostAccountingAlg[Task] =
+    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+  var term: Option[Par] = None
 
   @Setup
   def doSetup(): Unit = {
@@ -41,7 +42,8 @@ trait EvalBenchStateBase {
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(
       Option(getClass.getResourceAsStream(path))
-        .getOrElse(throw new FileNotFoundException(path)))
+        .getOrElse(throw new FileNotFoundException(path))
+    )
 }
 
 object EvalBenchStateBase {
@@ -54,11 +56,13 @@ object EvalBenchStateBase {
     dbDir.getParent.toFile.listFiles
       .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
       .filter(_.getName.startsWith("rchain-storage-test-"))
-      .foreach(dir =>
-        try {
-          println(s"deleting... $dir")
-          dir.toPath.recursivelyDelete()
-        } catch {
-          case _: Exception =>
-      })
+      .foreach(
+        dir =>
+          try {
+            println(s"deleting... $dir")
+            dir.toPath.recursivelyDelete()
+          } catch {
+            case _: Exception =>
+          }
+      )
 }

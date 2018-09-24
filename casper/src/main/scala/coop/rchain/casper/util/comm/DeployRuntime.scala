@@ -42,7 +42,8 @@ object DeployRuntime {
     }
 
   def listenForContinuationAtName[F[_]: Sync: Timer: DeployService: Capture](
-      names: List[Name]): F[Unit] =
+      names: List[Name]
+  ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
         val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
@@ -52,11 +53,13 @@ object DeployRuntime {
     }
 
   //Accepts a Rholang source file and deploys it to Casper
-  def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](purseAddress: String,
-                                                                           phloLimit: Int,
-                                                                           phloPrice: Int,
-                                                                           nonce: Int,
-                                                                           file: String): F[Unit] =
+  def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](
+      purseAddress: String,
+      phloLimit: Int,
+      phloPrice: Int,
+      nonce: Int,
+      file: String
+  ): F[Unit] =
     Try(Source.fromFile(file).mkString) match {
       case Success(code) =>
         gracefulExit(

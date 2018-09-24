@@ -11,6 +11,8 @@ test:integration-test-for-p2p-network:
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
     - sudo ./scripts/p2p-test-tool.py -b -t -p 2 -m 2048m
+  except:
+    - testing
 
 test:integration-test-for-artifact-creation:
   stage: test 
@@ -19,6 +21,8 @@ test:integration-test-for-artifact-creation:
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
+  except:
+    - testing
 
 deploy:deploy-rnode-to-dockerhub:
   stage: deploy 
@@ -39,6 +43,7 @@ deploy:deploy-rnode-to-dockerhub:
   only:
     - master
     - dev
+    - testing
     - /^release-.*$/
     - tags 
 
@@ -68,5 +73,6 @@ deploy:deploy-rnode-artifacts:
   only:
     - master
     - dev
+    - testing
     - /^release-.*$/
     - tags 

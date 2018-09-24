@@ -24,7 +24,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in withStore { implicit blockStore =>
@@ -37,34 +37,48 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
     def createChain[F[_]: Monad: BlockDagState: Time: BlockStore]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[F](Seq(genesis.blockHash),
-                             v2,
-                             bonds,
-                             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-        b3 <- createBlock[F](Seq(genesis.blockHash),
-                             v1,
-                             bonds,
-                             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash))
-        b4 <- createBlock[F](Seq(b2.blockHash),
-                             v2,
-                             bonds,
-                             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash))
-        b5 <- createBlock[F](Seq(b2.blockHash),
-                             v1,
-                             bonds,
-                             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash))
-        _ <- createBlock[F](Seq(b4.blockHash),
-                            v2,
-                            bonds,
-                            HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-        b7 <- createBlock[F](Seq(b4.blockHash),
-                             v1,
-                             bonds,
-                             HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash))
-        b8 <- createBlock[F](Seq(b7.blockHash),
-                             v1,
-                             bonds,
-                             HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
+        b2 <- createBlock[F](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+             )
+        b3 <- createBlock[F](
+               Seq(genesis.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
+             )
+        b4 <- createBlock[F](
+               Seq(b2.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
+             )
+        b5 <- createBlock[F](
+               Seq(b2.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
+             )
+        _ <- createBlock[F](
+              Seq(b4.blockHash),
+              v2,
+              bonds,
+              HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+            )
+        b7 <- createBlock[F](
+               Seq(b4.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
+             )
+        b8 <- createBlock[F](
+               Seq(b7.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
+             )
       } yield b8
 
     val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)
@@ -108,34 +122,44 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator with B
                  Seq(genesis.blockHash),
                  v2,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               )
           b3 <- createBlock[F](
                  Seq(genesis.blockHash),
                  v1,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               )
           b4 <- createBlock[F](
                  Seq(b2.blockHash),
                  v3,
                  bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash))
+                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+               )
           b5 <- createBlock[F](
                  Seq(b3.blockHash),
                  v2,
                  bonds,
-                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash))
-          b6 <- createBlock[F](Seq(b4.blockHash),
-                               v1,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash))
-          b7 <- createBlock[F](Seq(b5.blockHash),
-                               v3,
-                               bonds,
-                               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
-          b8 <- createBlock[F](Seq(b6.blockHash),
-                               v2,
-                               bonds,
-                               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+               )
+          b6 <- createBlock[F](
+                 Seq(b4.blockHash),
+                 v1,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+               )
+          b7 <- createBlock[F](
+                 Seq(b5.blockHash),
+                 v3,
+                 bonds,
+                 HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+               )
+          b8 <- createBlock[F](
+                 Seq(b6.blockHash),
+                 v2,
+                 bonds,
+                 HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+               )
         } yield b8
 
       val chain: IndexedBlockDag = createChain[StateWithChain].runS(initState)

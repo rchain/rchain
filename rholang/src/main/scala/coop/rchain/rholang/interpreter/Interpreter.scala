@@ -8,9 +8,10 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sort.Sortable
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
+  LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
   TopLevelWildcardsNotAllowedError,
@@ -39,7 +40,7 @@ object Interpreter {
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
-        term    <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
+        term    <- buildAST(source)
         inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm(term, inputs)
         sorted <- Sortable[Par]
@@ -49,21 +50,27 @@ object Interpreter {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
     }
 
-  private def buildAST(source: Reader): Either[InterpreterError, Proc] =
-    Either
-      .catchNonFatal {
+  private def buildAST(source: Reader): Coeval[Proc] =
+    Coeval
+      .delay {
         val lxr = lexer(source)
         val ast = parser(lxr)
         ast.pProc()
       }
-      .leftMap {
+      .adaptError {
         case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
           SyntaxError(ex.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string at EOF, beginning at") =>
+          LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Illegal Character") => LexerError(e.getMessage)
+        case e: Error if e.getMessage.startsWith("Unterminated string on line") =>
+          LexerError(e.getMessage)
         case th => UnrecognizedInterpreterError(th)
       }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit sync: Sync[M]): M[ProcVisitOutputs] =
+      implicit sync: Sync[M]
+  ): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
         if (normalizedTerm.knownFree.wildcards.isEmpty) {
@@ -71,13 +78,15 @@ object Interpreter {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
           sync.raiseError(
-            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", "")))
+            TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+          )
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
           }
           sync.raiseError(
-            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", "")))
+            TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+          )
         }
       } else normalizedTerm.pure[M]
     }
@@ -93,14 +102,16 @@ object Interpreter {
     } yield result
 
   def evaluate(runtime: Runtime, normalizedTerm: Par): Task[EvaluateResult] = {
-    implicit val rand = Blake2b512Random(128)
+    implicit val rand      = Blake2b512Random(128)
+    val evaluatePhlosLimit = Cost(Integer.MAX_VALUE)
     for {
-      checkpoint     <- Task.now(runtime.space.createCheckpoint())
-      costAccounting <- CostAccountingAlg[Task](CostAccount.zero)
-      _              <- runtime.reducer.inj(normalizedTerm)(rand, costAccounting)
-      errors         <- Task.now(runtime.readAndClearErrorVector())
-      cost           <- costAccounting.getCost()
-      _              <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
+      checkpoint <- Task.now(runtime.space.createCheckpoint())
+      _          <- runtime.reducer.setAvailablePhlos(evaluatePhlosLimit)
+      _          <- runtime.reducer.inj(normalizedTerm)(rand)
+      errors     <- Task.now(runtime.readAndClearErrorVector())
+      leftPhlos  <- runtime.reducer.getAvailablePhlos()
+      cost       = leftPhlos.copy(cost = evaluatePhlosLimit - leftPhlos.cost)
+      _          <- Task.now(if (errors.nonEmpty) runtime.space.reset(checkpoint.root))
     } yield EvaluateResult(cost, errors)
   }
 

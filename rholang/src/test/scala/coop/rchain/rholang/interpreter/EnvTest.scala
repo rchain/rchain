@@ -24,6 +24,7 @@ class EnvSpec extends FlatSpec with Matchers {
     val target2: Env[Par] = Env.makeEnv(source3, source4)
     val result            = target1.merge(target2)
     result should be(
-      Env[Par](Map(0 -> source0, 1 -> source1, 2 -> source2, 3 -> source3, 4 -> source4), 5, 0))
+      Env[Par](Map(0 -> source0, 1 -> source1, 2 -> source2, 3 -> source3, 4 -> source4), 5, 0)
+    )
   }
 }

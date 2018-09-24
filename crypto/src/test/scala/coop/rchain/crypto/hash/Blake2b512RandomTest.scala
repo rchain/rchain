@@ -100,9 +100,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "b962d59c94308015793b1f62f78d473f847dbf275ca199e315a512fa39aaf342")
+      "52884e9cfaf738709d271e9c0268f05964395678d9ccd61b187d67224a464230"
+    )
     Base16.encode(res2) should be(
-      "3cc42eba719df4a9f3ef7335ba700892b58e1344f113684a0afda52edd8beed4")
+      "cfa2ebb91185e9764a5aef6c7f5a6756cfe0f48a33c5bfabffdacac55d32f24a"
+    )
   }
   it should "handle splitShort as well." in {
     val b2Random = Blake2b512Random(emptyMsg)
@@ -110,9 +112,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = split.next()
     val res2     = split.next()
     Base16.encode(res1) should be(
-      "00baadcd599f38b3307e3e85b9a0cbc2a47588fb77276f6b85af5eb4e441e43c")
+      "745ce0f59aa7ebadc31c097126ac85870c3364b561d1d81935eb01ef5968d4b3"
+    )
     Base16.encode(res2) should be(
-      "1b2ddd2f756ef8009b7d65be12f2a2aa92ad17e2bfe57d6643c8f9d39520d53b")
+      "2d7bd219e4ce1e18e38c06eecdf17098ed49d66890086d19543a84fe88d80d67"
+    )
   }
   it should "correctly implement wraparound." in {
     val b2Random = Blake2b512Random(emptyMsg)
@@ -122,13 +126,17 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res3 = b2Random.next()
     val res4 = b2Random.next()
     Base16.encode(res1) should be(
-      "317cd07cb364e94ace11cedb496aee1a7985845d37c5c65a22ac3223eb6d6827")
+      "b63ea0e23d853977e02707364c753bd414c4828e294c1b0c39d046bacf18f5cf"
+    )
     Base16.encode(res2) should be(
-      "ecc35e232fd8fe53c4f28574d3afd0bc8b53483c46b0a4ad3899b1fada492ae4")
+      "4b850fc7d0a930cd89a8907ccee22f41941bd896127e71301eba137a347b131f"
+    )
     Base16.encode(res3) should be(
-      "70a93a3dd599328caf228044299c755aa5e736fa197672a4c21b25d827eef1d7")
+      "a913716961120edbbb9f08cc513a40321de334aa99a6991f97eff93b799f9cab"
+    )
     Base16.encode(res4) should be(
-      "8b82080409a6841e104f137db737b12a49151fc77ea52c46da54072005c66420")
+      "be14efe796e8a10a8bbc55e4691f8eeb71df5dc37b0b0b79133150b8cc90533a"
+    )
   }
 
   it should "roll over when enough byte-splits have occurred" in {
@@ -139,9 +147,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1 = rollover.next()
     val res2 = rollover.next()
     Base16.encode(res1) should be(
-      "fbcbf93f84ae40261d897d0863ddef870b2abe46a23208b43a0f56a766f8bc7a")
+      "0f6ccee70daf946d23361a92e672515898a287456c38517bd92bb0925ee18103"
+    )
     Base16.encode(res2) should be(
-      "e40e2b87786d256237aa06d73b9a9d329c1b0f8e831ee32d93578325652724b8")
+      "7d9a1831ce7f42b818c61223f709d55dd9cf310b01e19e2526d2d13e1b9ed61c"
+    )
   }
   it should "correctly handle nexts that are then rolled over" in {
     val b2Random = Blake2b512Random(emptyMsg)
@@ -153,9 +163,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res2 = rollover.next()
 
     Base16.encode(res1) should be(
-      "edcdd590f7da7cbcd5f21cefcb387022d913dbe45666929a2bfd1e7e4fd6e26c")
+      "1fa2af2fdc0521dacc1b06d0dc9ee729075283c7e2ba8df7b637bd05134e2d30"
+    )
     Base16.encode(res2) should be(
-      "1db118c61b4e4d5561219506f75930b81a3fff52212b663f413dc06aa9e872c6")
+      "9c7a9b1f04907c73263a81178540a5d7e3102fe260a9f15b80ff91f87de2039b"
+    )
   }
   val partialMsg: Array[Byte] = "Hello, World!".getBytes(StandardCharsets.UTF_8)
   "Partial" should "give a predictable result" in {
@@ -163,9 +175,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "efa28ddf7a11184a63d51a2f56cde6169ebd475b68041c2cccb7192902ccc47f")
+      "34c06b6f6907595709c44a1c2f4940210d99b04302937a88e14a5c5e2d439221"
+    )
     Base16.encode(res2) should be(
-      "52c4ae2d0d5f59d3076c10d912e60483885f3da72c625390557ceb3494a55c0e")
+      "7c3c57f0220fa003ad9c10fd785001c11f2b626f0d5da8367499200e10166276"
+    )
   }
   val singleBlockMsg: Array[Byte] =
     "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa "
@@ -175,9 +189,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "223c3480276dd962a817f786578621e708476c4c4f40860d493dcd937200088a")
+      "459691c149f10c8cf45a4f84421d89e97228b91e046f7afbcf3a4131216c538b"
+    )
     Base16.encode(res2) should be(
-      "f97e902c46d2d906c18af92d359d41dc045c1ff7c23233b394a2fd4a4e16ebba")
+      "1e676c4ad57a46408312a5209e8498d43023e43ab0bfabfc57a535663dfa3918"
+    )
   }
   val blockAndPartMsg: Array[Byte] =
     "quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores "
@@ -187,9 +203,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "fe72d81cd1121cd027f3b3605ef333436a0019884f351a686c5226a2670787d7")
+      "c27d88a63898e9f593ae34439112572feedd241c4223e6c62e997e45267b285d"
+    )
     Base16.encode(res2) should be(
-      "53c7de540222cd37203bdbb01a474a599b9f2fec219db74b830f5c173989768c")
+      "8c8d36972e4bfa65fdde555c1247ee221ff7c0031e92ec790aa01549321e7c86"
+    )
   }
   val multiBlockMsg: Array[Byte] =
     "eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem "
@@ -199,9 +217,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "4ed762bcba985d2cb8428fdb6c90956c8f7abe2398c502e06f2e57aea4364306")
+      "07ac715093bb984b8f9364b6ccdf89ca63dbdcc164000d115ee333d6566b3e87"
+    )
     Base16.encode(res2) should be(
-      "e87a6119b52c1653f936068fb89bc855e7d201cdf77b1109265f30141914bf65")
+      "1235bb1ec4ba9bf58f6f0aa10aaf53e373191a1c6a849fbc7b8a1d31a0affc61"
+    )
   }
   val multiBlockAndPartialMsg: Array[Byte] =
     "Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?\nAt vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga."
@@ -211,9 +231,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1     = b2Random.next()
     val res2     = b2Random.next()
     Base16.encode(res1) should be(
-      "2fd6059adb28c41de9d5fe952e8ca33beb162868c26749732625dc02f17539d8")
+      "828f766bc845c41944f1a9933b0835afabf636abd93f8bd986db7a73c7de056c"
+    )
     Base16.encode(res2) should be(
-      "57db77d6bdfbcc8474b841431084ffd466c2fbec1f3f00471bf828e692928e5a")
+      "890399ff51fd6f02c09ad76d69c51445805252c60d7511a767e2e01dce0c45cd"
+    )
   }
 
   "A merge with a single child" should "give a predictable result" in {
@@ -223,9 +245,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1              = singleMergeRandom.next()
     val res2              = singleMergeRandom.next()
     Base16.encode(res1) should be(
-      "78e5ca85a2e47c8a8d21ad37cdf7d62ead3d2be6f788f2419c1a25fb42d260c1")
+      "a3904853d9db8de44202bf6ab64c2ee5b6c78fe8abc7799dc0e3426d6572e4eb"
+    )
     Base16.encode(res2) should be(
-      "0bf7e0587d06b59a819692102dec066e82ec304700aff706f3fbc579fe90050c")
+      "1d6da76e99ce1fa6fe756f7d7117c3eae6c0fd4fa53854e04de3083d557d0a01"
+    )
   }
 
   "A merge with two children" should "give a predictable result" in {
@@ -236,9 +260,11 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1              = singleMergeRandom.next()
     val res2              = singleMergeRandom.next()
     Base16.encode(res1) should be(
-      "2d72c9df8496d8dd032994c094e1fff44c058c40aa66ac968af713dd3ce8a425")
+      "ce190f4283d4b11653cb78ee8fbc68a5b8cb62511a1f2ed3e836400e62144fa9"
+    )
     Base16.encode(res2) should be(
-      "4c0a5ad2c895d1ce10cc60fff89e73fd1de219ccef44ececeb8ef719ac6a671e")
+      "460e913fb6f2250fb1ae2cd6ceeb5501b0d83b29abd538d3508ec6845904342d"
+    )
   }
 
   "A merge with many children" should "group by 255's until a single internal node is reached." in {
@@ -258,8 +284,10 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1   = merged.next()
     val res2   = merged.next()
     Base16.encode(res1) should be(
-      "314730aa276f40180a4dcf69fc35654316770aae63c41a3dd319137359e84480")
+      "1af9db74651a8aa5e667311151d6b556939d0eb478980cce2ebd0b2cbc7183a8"
+    )
     Base16.encode(res2) should be(
-      "454fe454f563f729d639d1f542d3744cc3dbc664765548fe03c7c81353ac4aed")
+      "e6015287968435ef7b9656daf52083619aeb237db24bf09b2f878575d616572a"
+    )
   }
 }

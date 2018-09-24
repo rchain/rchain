@@ -18,7 +18,7 @@ class TupleSpec extends FlatSpec with Matchers {
     self2 = null,
     selfEnv = null,
     rcvr = null,
-    monitor = null,
+    monitor = null
   )
 
   ctxt.rslt = null
@@ -54,7 +54,8 @@ class TupleSpec extends FlatSpec with Matchers {
     val ret = tplConsStar.fnSimple(newCtxt)
     ret.isRight should be(true)
     ret.right.get.value should be(
-      Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(tup)))).value)
+      Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(tup)))).value
+    )
   }
 
   "tplConsStar" should "correctly cons 0 Obs with a Tuple" in {
@@ -161,9 +162,11 @@ class TupleSpec extends FlatSpec with Matchers {
   it should "fail for out of bounds arguments" in {
     val tup = Array[Ob](Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
     val newCtxt =
-      reAssignCtxtArgs(ctxt,
-                       3,
-                       Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(-100)), Fixnum(100)))
+      reAssignCtxtArgs(
+        ctxt,
+        3,
+        Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(-100)), Fixnum(100))
+      )
     tplXchg.fnSimple(newCtxt) should be('left)
   }
 

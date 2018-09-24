@@ -35,114 +35,146 @@ private[sort] object ExprSortMatcher extends Sortable[Expr] {
           sortedPar1 <- Sortable.sortMatch(em.p1)
           sortedPar2 <- Sortable.sortMatch(em.p2)
         } yield
-          constructExpr(EMultBody(EMult(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EMULT, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EMultBody(EMult(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EMULT, sortedPar1.score, sortedPar2.score)
+          )
       case EDivBody(ed) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ed.p1)
           sortedPar2 <- Sortable.sortMatch(ed.p2)
         } yield
-          constructExpr(EDivBody(EDiv(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EDIV, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EDivBody(EDiv(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EDIV, sortedPar1.score, sortedPar2.score)
+          )
       case EPlusBody(ep) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ep.p1)
           sortedPar2 <- Sortable.sortMatch(ep.p2)
         } yield
-          constructExpr(EPlusBody(EPlus(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EPLUS, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EPlusBody(EPlus(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EPLUS, sortedPar1.score, sortedPar2.score)
+          )
       case EMinusBody(em) =>
         for {
           sortedPar1 <- Sortable.sortMatch(em.p1)
           sortedPar2 <- Sortable.sortMatch(em.p2)
         } yield
-          constructExpr(EMinusBody(EMinus(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EMINUS, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EMinusBody(EMinus(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EMINUS, sortedPar1.score, sortedPar2.score)
+          )
       case ELtBody(el) =>
         for {
           sortedPar1 <- Sortable.sortMatch(el.p1)
           sortedPar2 <- Sortable.sortMatch(el.p2)
         } yield
-          constructExpr(ELtBody(ELt(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.ELT, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            ELtBody(ELt(sortedPar1.term, sortedPar2.term)),
+            Node(Score.ELT, sortedPar1.score, sortedPar2.score)
+          )
       case ELteBody(el) =>
         for {
           sortedPar1 <- Sortable.sortMatch(el.p1)
           sortedPar2 <- Sortable.sortMatch(el.p2)
         } yield
-          constructExpr(ELteBody(ELte(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.ELTE, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            ELteBody(ELte(sortedPar1.term, sortedPar2.term)),
+            Node(Score.ELTE, sortedPar1.score, sortedPar2.score)
+          )
       case EGtBody(eg) =>
         for {
           sortedPar1 <- Sortable.sortMatch(eg.p1)
           sortedPar2 <- Sortable.sortMatch(eg.p2)
         } yield
-          constructExpr(EGtBody(EGt(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EGT, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EGtBody(EGt(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EGT, sortedPar1.score, sortedPar2.score)
+          )
       case EGteBody(eg) =>
         for {
           sortedPar1 <- Sortable.sortMatch(eg.p1)
           sortedPar2 <- Sortable.sortMatch(eg.p2)
         } yield
-          constructExpr(EGteBody(EGte(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EGTE, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EGteBody(EGte(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EGTE, sortedPar1.score, sortedPar2.score)
+          )
       case EEqBody(ee) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ee.p1)
           sortedPar2 <- Sortable.sortMatch(ee.p2)
         } yield
-          constructExpr(EEqBody(EEq(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EEQ, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EEqBody(EEq(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EEQ, sortedPar1.score, sortedPar2.score)
+          )
       case ENeqBody(en) =>
         for {
           sortedPar1 <- Sortable.sortMatch(en.p1)
           sortedPar2 <- Sortable.sortMatch(en.p2)
         } yield
-          constructExpr(ENeqBody(ENeq(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.ENEQ, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            ENeqBody(ENeq(sortedPar1.term, sortedPar2.term)),
+            Node(Score.ENEQ, sortedPar1.score, sortedPar2.score)
+          )
       case EAndBody(ea) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ea.p1)
           sortedPar2 <- Sortable.sortMatch(ea.p2)
         } yield
-          constructExpr(EAndBody(EAnd(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EAND, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EAndBody(EAnd(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EAND, sortedPar1.score, sortedPar2.score)
+          )
       case EOrBody(eo) =>
         for {
           sortedPar1 <- Sortable.sortMatch(eo.p1)
           sortedPar2 <- Sortable.sortMatch(eo.p2)
         } yield
-          constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EOR, sortedPar1.score, sortedPar2.score)
+          )
 
       case EMatchesBody(em) =>
         for {
           sortedTarget  <- Sortable.sortMatch(em.target)
           sortedPattern <- Sortable.sortMatch(em.pattern)
         } yield
-          constructExpr(EMatchesBody(EMatches(sortedTarget.term, sortedPattern.term)),
-                        Node(Score.EMATCHES, sortedTarget.score, sortedPattern.score))
+          constructExpr(
+            EMatchesBody(EMatches(sortedTarget.term, sortedPattern.term)),
+            Node(Score.EMATCHES, sortedTarget.score, sortedPattern.score)
+          )
       case EPercentPercentBody(ep) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ep.p1)
           sortedPar2 <- Sortable.sortMatch(ep.p2)
         } yield
-          constructExpr(EPercentPercentBody(EPercentPercent(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EPERCENT, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EPercentPercentBody(EPercentPercent(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EPERCENT, sortedPar1.score, sortedPar2.score)
+          )
       case EPlusPlusBody(ep) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ep.p1)
           sortedPar2 <- Sortable.sortMatch(ep.p2)
         } yield
-          constructExpr(EPlusPlusBody(EPlusPlus(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EPLUSPLUS, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EPlusPlusBody(EPlusPlus(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EPLUSPLUS, sortedPar1.score, sortedPar2.score)
+          )
       case EMinusMinusBody(ep) =>
         for {
           sortedPar1 <- Sortable.sortMatch(ep.p1)
           sortedPar2 <- Sortable.sortMatch(ep.p2)
         } yield
-          constructExpr(EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
-                        Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score))
+          constructExpr(
+            EMinusMinusBody(EMinusMinus(sortedPar1.term, sortedPar2.term)),
+            Node(Score.EMINUSMINUS, sortedPar1.score, sortedPar2.score)
+          )
       case EMethodBody(em) =>
         for {
           args         <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
@@ -151,8 +183,8 @@ private[sort] object ExprSortMatcher extends Sortable[Expr] {
           constructExpr(
             EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
             Node(
-              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(
-                _.score))
+              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score)
+            )
           )
       case eg =>
         for {

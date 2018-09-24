@@ -22,7 +22,7 @@ class FixnumSpec extends FlatSpec with Matchers {
     self2 = null,
     selfEnv = null,
     rcvr = null,
-    monitor = null,
+    monitor = null
   )
 
   ctxt.trgt = null

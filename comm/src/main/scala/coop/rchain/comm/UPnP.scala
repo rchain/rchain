@@ -61,7 +61,8 @@ object UPnP {
         case Some(true) =>
           println(
             s"WARNING - Gateway's external IP address ${gateway.getExternalIPAddress} is from a private address block. " +
-              "This machine is behind more than one NAT.")
+              "This machine is behind more than one NAT."
+          )
         case Some(_) =>
           println("INFO - Gateway's external IP address is from a public address block.")
         case _ => println("WARNING - Can't parse gateway's external IP address. It's maybe IPv6.")
@@ -70,7 +71,8 @@ object UPnP {
       val mappings = getPortMappings(gateway).filter(m => ports.contains(m.getExternalPort))
       mappings.foreach { m =>
         print(
-          s"INFO - Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort}")
+          s"INFO - Removing an existing port mapping for port ${m.getProtocol}/${m.getExternalPort}"
+        )
         removePort(gateway, m) match {
           case Right(_) => println(" [success]")
           case _        => println(" [failed]")
@@ -91,7 +93,8 @@ object UPnP {
 
       if (result.exists(r => !r)) {
         println(
-          "ERROR - Could not open the ports via UPnP. Please open it manually on your router!")
+          "ERROR - Could not open the ports via UPnP. Please open it manually on your router!"
+        )
       } else {
         println("INFO - UPnP port forwarding was most likely successful!")
       }
@@ -163,14 +166,17 @@ object UPnP {
   }
 
   // TODO: Allow different external and internal ports
-  def addPort(device: GatewayDevice,
-              port: Int,
-              protocol: String,
-              description: String): Either[CommError, Boolean] =
+  def addPort(
+      device: GatewayDevice,
+      port: Int,
+      protocol: String,
+      description: String
+  ): Either[CommError, Boolean] =
     try {
       Right(
         device
-          .addPortMapping(port, port, device.getLocalAddress.getHostAddress, protocol, description))
+          .addPortMapping(port, port, device.getLocalAddress.getHostAddress, protocol, description)
+      )
     } catch {
       case NonFatal(ex: Exception) => Left(UnknownCommError(ex.toString))
     }

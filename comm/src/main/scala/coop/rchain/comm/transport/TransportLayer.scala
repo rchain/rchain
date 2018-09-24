@@ -3,8 +3,8 @@ package coop.rchain.comm.transport
 import scala.concurrent.duration.FiniteDuration
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.comm.CommError, CommError.CommErr
-import coop.rchain.comm.{PeerNode, ProtocolHelper}
+import coop.rchain.comm.{CommError, PeerNode}, CommError.CommErr
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
@@ -30,12 +30,15 @@ sealed abstract class TransportLayerInstances {
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   implicit def eitherTTransportLayer[F[_]: Monad: Log](
-      implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, CommError, ?]] =
+      implicit evF: TransportLayer[F]
+  ): TransportLayer[EitherT[F, CommError, ?]] =
     new TransportLayer[EitherT[F, CommError, ?]] {
 
-      def roundTrip(peer: PeerNode,
-                    msg: Protocol,
-                    timeout: FiniteDuration): EitherT[F, CommError, CommErr[Protocol]] =
+      def roundTrip(
+          peer: PeerNode,
+          msg: Protocol,
+          timeout: FiniteDuration
+      ): EitherT[F, CommError, CommErr[Protocol]] =
         EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
       def send(peer: PeerNode, msg: Protocol): EitherT[F, CommError, Unit] =
@@ -44,15 +47,17 @@ sealed abstract class TransportLayerInstances {
       def broadcast(peers: Seq[PeerNode], msg: Protocol): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
-      def receive(dispatch: Protocol => EitherT[F, CommError, CommunicationResponse])
-        : EitherT[F, CommError, Unit] = {
+      def receive(
+          dispatch: Protocol => EitherT[F, CommError, CommunicationResponse]
+      ): EitherT[F, CommError, Unit] = {
         val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap {
             case Left(err) =>
               Log[F].error(s"Error while handling message. Error: ${err.message}") *> notHandled(
-                err).pure[F]
+                err
+              ).pure[F]
             case Right(m) => m.pure[F]
-        }
+          }
         EitherT.liftF(evF.receive(dis))
       }
 

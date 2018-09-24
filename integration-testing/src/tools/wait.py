@@ -85,13 +85,12 @@ def string_contains(string_factory, regex_str, flags = 0):
     return go
 
 def network_converged(bootstrap_node, expected_peers):
-    rx = re.compile("^peers\s+(\d+).*", re.MULTILINE | re.DOTALL)
+    rx = re.compile("^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def go():
-        cmd = f'curl -s {bootstrap_node.name}:40403'
+        exit_code, output = bootstrap_node.get_metrics()
 
-        r = bootstrap_node.container.exec_run(cmd=cmd).output.decode('utf-8')
-        m = rx.search(r)
+        m = rx.search(output)
 
         peers = int(m[1]) if m else 0
 
