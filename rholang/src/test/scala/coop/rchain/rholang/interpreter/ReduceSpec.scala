@@ -1960,4 +1960,35 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Vector(MethodNotDefined("add", "Map"))
     )
   }
+
+  "Running out of phlogistons" should "stop the evaluation" in {
+    implicit val errorLog = new ErrorLog()
+
+    val test = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        reducer.setAvailablePhlos(Cost(5)).runSyncUnsafe(1.second)
+        val splitRand = rand.splitByte(0)
+        val receive =
+          Receive(
+            Seq(
+              ReceiveBind(
+                Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                Quote(GString("channel"))
+              )
+            ),
+            Par(),
+            false,
+            3,
+            BitSet()
+          )
+        reducer.eval(receive)(env, splitRand)
+    }
+
+    val result = test.attempt.runSyncUnsafe(1.second)
+    assert(result === Left(OutOfPhlogistonsError))
+    errorLog.readAndClearErrorVector() should be(
+      Vector(OutOfPhlogistonsError)
+    )
+  }
 }
