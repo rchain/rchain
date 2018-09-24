@@ -1,4 +1,4 @@
-package coop.rchain.comm.transport
+package coop.rchain.comm.rp
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
@@ -6,8 +6,16 @@ import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import com.google.protobuf.ByteString
+import coop.rchain.comm.transport.PacketType
 
-object CommMessages {
+object ProtocolHelper {
+
+  implicit def toProtocolBytes(x: String): ByteString =
+    com.google.protobuf.ByteString.copyFromUtf8(x)
+  implicit def toProtocolBytes(x: Array[Byte]): ByteString =
+    com.google.protobuf.ByteString.copyFrom(x)
+  implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
+    com.google.protobuf.ByteString.copyFrom(x.toArray)
 
   def header(src: PeerNode): Header =
     Header()
@@ -19,6 +27,15 @@ object CommMessages {
       .withHost(ByteString.copyFromUtf8(n.endpoint.host))
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
+
+  def sender(proto: Protocol): Option[PeerNode] =
+    for {
+      h <- proto.header
+      s <- h.sender
+    } yield toPeerNode(s)
+
+  def toPeerNode(n: Node): PeerNode =
+    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
   def protocol(src: PeerNode): Protocol =
     Protocol().withHeader(header(src))

@@ -14,9 +14,10 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp._
-import coop.rchain.comm.transport.CommMessages.{packet, toPacket}
+import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.transport.{PacketType, TransportLayer}
-import coop.rchain.comm.{transport, PeerNode, ProtocolHelper}
+import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._

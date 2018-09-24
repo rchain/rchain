@@ -11,7 +11,6 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.Connections._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.CommMessages._
 import coop.rchain.comm.transport.CommunicationResponse._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
@@ -71,7 +70,7 @@ object HandleMessages {
     } yield
       maybeResponsePacket
         .fold(notHandled(noResponseForRequest))(
-          m => handledWithMessage(CommMessages.protocol(local).withPacket(m))
+          m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
         )
 
   def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: Log: ErrorHandler: ConnectionsCell: RPConfAsk: Metrics](
@@ -89,11 +88,11 @@ object HandleMessages {
       for {
         _ <- ConnectionsCell[F].modify(_.addConn[F](peer))
         _ <- Log[F].info(s"Responded to protocol handshake request from $peer")
-      } yield handledWithMessage(protocolHandshakeResponse(local))
+      } yield handledWithMessage(ProtocolHelper.protocolHandshakeResponse(local))
 
     for {
       local        <- RPConfAsk[F].reader(_.local)
-      hbrErr       <- TransportLayer[F].roundTrip(peer, heartbeat(local), defaultTimeout)
+      hbrErr       <- TransportLayer[F].roundTrip(peer, ProtocolHelper.heartbeat(local), defaultTimeout)
       commResponse <- hbrErr.fold(error => notHandledHandshake(error), _ => handledHandshake(local))
     } yield commResponse
   }
@@ -102,6 +101,8 @@ object HandleMessages {
       peer: PeerNode,
       heartbeat: Heartbeat
   ): F[CommunicationResponse] =
-    RPConfAsk[F].reader(_.local) map (local => handledWithMessage(heartbeatResponse(local)))
+    RPConfAsk[F].reader(_.local) map (
+        local => handledWithMessage(ProtocolHelper.heartbeatResponse(local))
+    )
 
 }

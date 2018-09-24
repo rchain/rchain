@@ -3,7 +3,7 @@ package coop.rchain.comm.transport
 import cats.Id
 
 import coop.rchain.catscontrib._
-import coop.rchain.comm.ProtocolHelper
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
 import coop.rchain.shared.{Log, LogSource}
