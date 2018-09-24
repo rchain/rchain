@@ -191,6 +191,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
+                       .mountService(VersionInfo.service, "/version")
                        .start
                    }.toEffect
       _ <- Task.delay {
