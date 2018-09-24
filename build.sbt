@@ -308,6 +308,9 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings"
+    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
