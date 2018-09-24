@@ -215,13 +215,12 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
                 c -> {
                   if (c == channel) Seq((Datum(data, persist, produceRef), -1)) else as
                 }
-              }
+              }.toMap
             }
-            .toMap
-
           extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
             case Right(None)             => runMatcher(comm, produceRef, remaining)
             case Right(produceCandidate) => produceCandidate
+            case Left(_)                 => ???
           }
       }
 

@@ -170,6 +170,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
               extractFirstMatch(channels, matchCandidates, channelToIndexedData) match {
                 case Right(None)             => runMatcher(comm, produceRef, remaining)
                 case Right(produceCandidate) => produceCandidate
+                case Left(_)                 => ???
               }
           }
 

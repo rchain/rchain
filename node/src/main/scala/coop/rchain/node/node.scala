@@ -303,11 +303,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     EitherT[Task, CommError, Unit](
       prog.value
         .onErrorHandleWith {
-          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-            Log[Task]
-              .error(
-                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again."
-              )
           case th =>
             log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
               th.printStackTrace();

@@ -39,6 +39,11 @@ class Node:
         logging.info(f"Bootstrap address: `{address}`")
         return address
 
+    def get_metrics(self):
+        cmd = f'curl -s http://localhost:40403/metrics'
+
+        return self.exec_run(cmd=cmd)
+
     def cleanup(self):
         log_file = f"{self.container.name}.log"
         
