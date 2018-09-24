@@ -121,13 +121,11 @@ sealed abstract class SafetyOracleInstances {
       private def computeMainParentWeightMap(
           blockDag: BlockDag,
           estimate: BlockMessage
-      ): F[Map[BlockHash, Long]] = {
-        val estimateMainParent = mainParent[F](estimate)
+      ): F[Map[BlockHash, Long]] =
         blockDag.dataLookup(estimate.blockHash).parents.headOption match {
           case Some(parent) => blockDag.dataLookup(parent).weightMap.pure[F]
-          case None         => weightMap(estimate).pure[F]
+          case None         => blockDag.dataLookup(estimate.blockHash).weightMap.pure[F]
         }
-      }
 
       private def findMaximumClique(
           edges: List[(Validator, Validator)],
