@@ -11,15 +11,15 @@ import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage.implicits.matchListQuote
 
 trait TuplespaceAlg[F[_]] {
-  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[CostAccount]
+  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[Unit]
   def consume(
       binds: Seq[(BindPattern, Quote)],
       body: ParWithRandom,
       persistent: Boolean
-  ): F[CostAccount]
+  ): F[Unit]
 }
 
 object TuplespaceAlg {
@@ -39,46 +39,40 @@ object TuplespaceAlg {
         channel: Channel,
         data: ListChannelWithRandom,
         persistent: Boolean
-    ): F[CostAccount] = {
+    ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
           res: Either[OutOfPhlogistonsError.type, Option[
             (TaggedContinuation, Seq[ListChannelWithRandom])
           ]]
-      ): F[CostAccount] =
+      ): F[Unit] =
         res match {
           case Right(Some((continuation, dataList))) =>
-            val rspaceMatchCost =
-              dataList
-                .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount(0)))
-                .toList
-                .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
-                .combineAll
             if (persistent) {
               Parallel
                 .parProduct(
-                  dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
+                  dispatcher.dispatch(continuation, dataList),
                   produce(channel, data, persistent)
                 )
-                .map(t => t._1 + t._2 + rspaceMatchCost)
+                .as(())
             } else {
-              dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
+              dispatcher.dispatch(continuation, dataList)
             }
 
-          case Right(None) => F.pure(CostAccount(0))
+          case Right(None) => F.unit
         }
 
       for {
-        res  <- pureRSpace.produce(channel, data, persist = persistent)
-        cost <- go(res)
-      } yield cost
+        res <- pureRSpace.produce(channel, data, persist = persistent)
+        _   <- go(res)
+      } yield ()
     }
 
     override def consume(
         binds: Seq[(BindPattern, Quote)],
         body: ParWithRandom,
         persistent: Boolean
-    ): F[CostAccount] =
+    ): F[Unit] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
@@ -87,32 +81,20 @@ object TuplespaceAlg {
               res: Either[OutOfPhlogistonsError.type, Option[
                 (TaggedContinuation, Seq[ListChannelWithRandom])
               ]]
-          ): F[CostAccount] =
+          ): F[Unit] =
             res match {
               case Right(Some((continuation, dataList))) =>
-                val rspaceMatchCost =
-                  dataList
-                    .map(
-                      _.cost
-                        .map(CostAccount.fromProto(_))
-                        .getOrElse(CostAccount(0))
-                    )
-                    .toList
-                    .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
-                    .combineAll
-
-                dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
                   Parallel
                     .parProduct(
-                      dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
+                      dispatcher.dispatch(continuation, dataList),
                       consume(binds, body, persistent)
                     )
-                    .map(t => t._1 + t._2 + rspaceMatchCost)
+                    .as(())
                 } else {
-                  dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
+                  dispatcher.dispatch(continuation, dataList)
                 }
-              case Right(None) => F.pure(CostAccount(0))
+              case Right(None) => F.unit
             }
 
           for {
@@ -122,8 +104,8 @@ object TuplespaceAlg {
                     TaggedContinuation(ParBody(body)),
                     persist = persistent
                   )
-            cost <- go(res)
-          } yield cost
+            _ <- go(res)
+          } yield ()
       }
   }
 }
