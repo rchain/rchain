@@ -1,0 +1,2 @@
+from fixtures.stress import *
+
