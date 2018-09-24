@@ -96,7 +96,17 @@ object ChargingRSpace {
               .toList
               .combineAll
 
-            costAlg.charge(rspaceMatchCost)
+            costAlg
+              .charge(rspaceMatchCost)
+              .flatMap { _ =>
+                // we refund the storage cost if there was a match and the persist flag is false
+                // this means that the data didn't stay in the tuplespace
+                if (persist)
+                  Sync[F].unit
+                else {
+                  costAlg.refund(storageCost)
+                }
+              }
           case Right(None) =>
             Sync[F].unit
         }

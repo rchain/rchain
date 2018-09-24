@@ -102,6 +102,31 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       Await.result(test.runAsync, 1.second)
   }
 
+  it should "refund if data doesn't stay in tuplespace" in { fixture =>
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val channels                                         = channelsN(1)
+    val patterns                                         = patternsN(1)
+    val cont                                             = continuation()
+    val consumeStorageCost                               = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+    val data                                             = Nil
+    val produceStorageCost                               = ChargingRSpace.storageCostProduce(channels.head, data)
+    val minimumPhlos                                     = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST.cost + Cost(1)
+
+    setInitPhlos(costAlg, minimumPhlos)
+
+    val test = for {
+      _                 <- chargingRSpace.produce(channels.head, data, false)
+      phlosAfterProduce <- costAlg.get()
+      _                 = phlosAfterProduce.cost shouldBe (minimumPhlos - produceStorageCost)
+      res               <- chargingRSpace.consume(channels, patterns, cont, false)
+      phlosLeft         <- costAlg.get()
+      // we expect Cost(16), because we will be refunded for storing the consume
+      _ = phlosLeft.cost shouldBe (consumeStorageCost + Cost(1))
+    } yield ()
+
+    Await.result(test.runAsync, 1.second)
+  }
+
   type ChargingRSpace = RhoPureSpace[Task]
 
   override protected def withFixture(test: OneArgTest): Outcome = {
