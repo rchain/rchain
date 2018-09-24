@@ -55,6 +55,30 @@ trait Reduce[M[_]] {
   )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par]
 }
 
+// TODO:
+// In a perfect world we would an algebra of an interpreter encoded in the terms of
+// rholang's elimination and have the `ChargingReducer` forward the calls to the plain algebra
+// and charge accordingly. This would eliminate the "charge" calls from the algebra of a language.
+class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccountingAlg[M]) {
+  def getAvailablePhlos(): M[CostAccount] =
+    C.get()
+
+  def setAvailablePhlos(limit: Cost): M[Unit] =
+    C.set(CostAccount(0, limit))
+
+  def eval(par: Par)(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] =
+    R.eval(par)
+
+  def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
+    R.inj(par)
+
+  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par] =
+    R.evalExpr(par)
+
+  def evalExprToPar(expr: Expr)(implicit env: Env[Par]): M[Par] =
+    R.evalExprToPar(expr)
+}
+
 object Reduce {
 
   private def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
