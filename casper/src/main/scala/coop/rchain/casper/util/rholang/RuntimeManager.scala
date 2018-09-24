@@ -78,13 +78,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def computeBonds(hash: StateHash): Seq[Bond] = {
-    val resetRuntime = getResetRuntime(hash)
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
-    val bondsChannel     = Channel(Quote(Par().copy(exprs = Seq(Expr(GString("proofOfStake"))))))
-    val bondsChannelData = resetRuntime.space.getData(bondsChannel)
-    runtimeContainer.put(resetRuntime)
-    toBondSeq(bondsChannelData)
+    val bondsQuery = """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
+    //TODO: construct directly instead of parsing rholang source
+    val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
+    val bondsPar       = captureResults(hash, bondsQueryTerm)
+    assert(
+      bondsPar.size == 1,
+      s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+    )
+    toBondSeq(bondsPar.head)
   }
 
   private def getResetRuntime(hash: StateHash) = {
@@ -98,22 +102,15 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     }
   }
 
-  private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
-    assert(data.length == 1, s"Data length ${data.length} for bonds map was not 1.")
-    val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
-    as.channels.head match {
-      case Channel(Quote(p)) =>
-        p.exprs.head.getEMapBody.ps.map {
-          case (validator: Par, bond: Par) =>
-            assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
-            assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
-            val validatorName = validator.exprs.head.getGString
-            val stakeAmount   = Math.toIntExact(bond.exprs.head.getGInt)
-            Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
-        }.toList
-      case Channel(_) => throw new Error("Matched a Channel that did not contain a Quote inside.")
-    }
-  }
+  private def toBondSeq(bondsMap: Par): Seq[Bond] =
+    bondsMap.exprs.head.getEMapBody.ps.map {
+      case (validator: Par, bond: Par) =>
+        assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
+        assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
+        val validatorName = validator.exprs.head.getGByteArray
+        val stakeAmount   = bond.exprs.head.getETupleBody.ps.head.exprs.head.getGInt
+        Bond(validatorName, stakeAmount)
+    }.toList
 
   def getData(hash: ByteString, channel: Channel): Seq[Par] = {
     val resetRuntime                              = getResetRuntime(hash)

@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter
+
 import cats.Parallel
 import cats.effect.Sync
 import cats.implicits._

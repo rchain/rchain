@@ -25,6 +25,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.{Either, ListOps}
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.rholang.mint.MakeMint
+import coop.rchain.rholang.proofofstake.MakePoS
 import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.execution.Scheduler
@@ -47,10 +48,10 @@ object Genesis {
       Either,
       NonNegativeNumber,
       MakeMint,
+      MakePoS,
       BasicWallet,
       WalletCheck,
-      new PreWalletRev(wallets),
-      ProofOfStake(validators)
+      new PreWalletRev(wallets, validators)
     ).map(compiledSourceDeploy(_, timestamp))
 
   def withContracts(
@@ -95,7 +96,7 @@ object Genesis {
   }
 
   def withoutContracts(
-      bonds: Map[Array[Byte], Int],
+      bonds: Map[Array[Byte], Long],
       version: Long,
       timestamp: Long,
       shardId: String
@@ -246,7 +247,7 @@ object Genesis {
       bondsFile: Option[File],
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Int]] =
+  ): F[Map[Array[Byte], Long]] =
     bondsFile match {
       case Some(file) =>
         Capture[F]
@@ -257,7 +258,7 @@ object Genesis {
                 .getLines()
                 .map(line => {
                   val Array(pk, stake) = line.trim.split(" ")
-                  Base16.decode(pk) -> (stake.toInt)
+                  Base16.decode(pk) -> (stake.toLong)
                 })
                 .toMap
             }
@@ -275,10 +276,10 @@ object Genesis {
   private def newValidators[F[_]: Monad: Capture: Log](
       numValidators: Int,
       genesisPath: Path
-  ): F[Map[Array[Byte], Int]] = {
+  ): F[Map[Array[Byte], Long]] = {
     val keys         = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys) = keys.unzip
-    val bonds        = pubKeys.zip((1 to numValidators).toVector).toMap
+    val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
 
     val skFiles = Capture[F].capture {
@@ -298,7 +299,7 @@ object Genesis {
     for {
       _       <- skFiles
       printer <- Capture[F].capture { new PrintWriter(genBondsFile) }
-      _ <- Foldable[List].foldM[F, (Array[Byte], Int), Unit](bonds.toList, ()) {
+      _ <- Foldable[List].foldM[F, (Array[Byte], Long), Unit](bonds.toList, ()) {
             case (_, (pub, stake)) =>
               val pk = Base16.encode(pub)
               Log[F].info(s"Created validator $pk with bond $stake") *>
