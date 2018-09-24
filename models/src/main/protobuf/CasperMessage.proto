@@ -255,7 +255,7 @@ message CommEvent {
 
 message Bond {
   bytes validator = 1;
-  int32 stake     = 2;
+  int64 stake     = 2;
 }
 // --------- End Core Protocol  --------
 

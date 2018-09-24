@@ -12,9 +12,9 @@ import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
-import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.transport.CommMessages.packet
+import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
@@ -32,7 +32,7 @@ class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
     deployTimestamp: Long,
     runtimeManager: RuntimeManager,
-    bonds: Map[Array[Byte], Int],
+    bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
     requiredSigs: Int
 )(implicit scheduler: Scheduler) {
@@ -98,7 +98,7 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Int]
+      bonds: Map[ByteString, Long]
   )(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)

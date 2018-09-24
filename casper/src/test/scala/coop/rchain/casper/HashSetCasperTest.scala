@@ -10,7 +10,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator, RevIssuanceTest}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
@@ -22,10 +22,11 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
-import coop.rchain.comm.transport.CommMessages.packet
+import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.PCost
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.{Log, Time}
@@ -37,6 +38,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 import scala.collection.immutable
+import scala.util.Random
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
@@ -44,8 +46,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   private val (otherSk, _)                = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val bonds                       = createBonds(validators)
-  private val genesis                     = createGenesis(bonds)
+  private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
+  private val ethAddresses =
+    ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
+  private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(Random.nextInt(499) + 1)))
+  private val bonds   = createBonds(validators)
+  private val genesis = buildGenesis(wallets, bonds, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -298,6 +304,55 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
+  it should "allow bonding" in {
+    val nodes =
+      HashSetCasperTestNode.network(validatorKeys, genesis, storageSize = 1024L * 1024 * 10)
+    implicit val runtimeManager = nodes(0).runtimeManager
+    val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
+    val secKey                  = ethPivKeys.head.bytes
+    val walletUnlockDeploy =
+      RevIssuanceTest.preWalletUnlockDeploy(ethAddresses.head, pubKey, secKey, "unlockOut")
+    val bondingStatusOut        = "bondingOut"
+    val bondingForwarderAddress = "myBondingForwarder"
+    val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
+      s"""for(@purse <- @"$bondingForwarderAddress"; @pos <- @"proofOfStake"){
+       |  @(pos, "bond")!("04$pubKey".hexToBytes(), "secp256k1Verify", purse, "$pubKey", "$bondingStatusOut")
+       |}""".stripMargin,
+      System.currentTimeMillis()
+    )
+    val transferStatusOut = "transferOut"
+    val bondingTransferDeploy =
+      RevIssuanceTest.walletTransferDeploy(
+        0,
+        wallets.head.initRevBalance.toLong,
+        bondingForwarderAddress,
+        transferStatusOut,
+        pubKey,
+        secKey
+      )
+
+    val Created(block1) = nodes(0).casperEff.deploy(walletUnlockDeploy) *> nodes(0).casperEff
+      .deploy(bondingForwarderDeploy) *> nodes(0).casperEff.createBlock
+    val block1Status = nodes(0).casperEff.addBlock(block1)
+    nodes.foreach(_.receive) //send to all peers
+
+    val Created(block2) = nodes(1).casperEff
+      .deploy(bondingTransferDeploy) *> nodes(1).casperEff.createBlock
+    val block2Status = nodes(1).casperEff.addBlock(block2)
+    nodes.foreach(_.receive)
+
+    block1Status shouldBe Valid
+    block2Status shouldBe Valid
+    nodes.forall(_.logEff.warns.isEmpty) shouldBe true
+
+    val correctBonds = bonds.map { case (key, stake) => Bond(ByteString.copyFrom(key), stake) }.toSet + Bond(
+      ByteString.copyFrom(ethPubKeys.head.bytes),
+      wallets.head.initRevBalance.toLong
+    )
+    val newBonds = block2.getBody.getPostState.bonds
+    newBonds.toSet shouldBe correctBonds
+  }
+
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
@@ -507,7 +562,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "handle a long chain of block requests appropriately" in {
-    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val nodes =
+      HashSetCasperTestNode.network(validatorKeys.take(2), genesis, storageSize = 1024L * 1024 * 10)
 
     (0 to 9).foreach { i =>
       val deploy         = ProtoUtil.basicDeployData(i)
@@ -535,8 +591,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "increment last finalized block as appropriate in round robin" in {
-    val stake                 = 10
-    val equalBonds            = validators.zipWithIndex.map { case (v, _) => v -> stake }.toMap
+    val stake                 = 10L
+    val equalBonds            = validators.map(_ -> stake).toMap
     val genesisWithEqualBonds = buildGenesis(Seq.empty, equalBonds, 0L)
     val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
     val deployDatas           = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
@@ -644,15 +700,15 @@ object HashSetCasperTest {
     MultiParentCasper[Id].storageContents(tsHash)
   }
 
-  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Int] =
-    validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
+  def createBonds(validators: Seq[Array[Byte]]): Map[Array[Byte], Long] =
+    validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[Array[Byte], Int]): BlockMessage =
+  def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
     buildGenesis(Seq.empty, bonds, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
-      bonds: Map[Array[Byte], Int],
+      bonds: Map[Array[Byte], Long],
       deployTimestamp: Long
   ): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")

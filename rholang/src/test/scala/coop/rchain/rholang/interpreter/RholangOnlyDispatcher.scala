@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter
+
 import cats.Parallel
 import cats.effect.Sync
 import cats.implicits._
@@ -10,6 +11,8 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.pure.PureRSpace
 
 object RholangOnlyDispatcher {

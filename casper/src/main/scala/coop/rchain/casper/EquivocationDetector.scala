@@ -211,10 +211,10 @@ object EquivocationDetector {
   private def getEquivocationDiscoveryStatusForBondedValidator[F[_]: Monad: BlockStore](
       equivocationRecord: EquivocationRecord,
       latestMessages: Map[Validator, BlockHash],
-      stake: SequenceNumber,
+      stake: Long,
       genesis: BlockMessage
   ): F[EquivocationDiscoveryStatus] =
-    if (stake > 0) {
+    if (stake > 0L) {
       for {
         equivocationDetectable <- isEquivocationDetectable[F](
                                    latestMessages.toSeq,
