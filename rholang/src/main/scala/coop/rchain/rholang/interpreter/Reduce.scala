@@ -81,7 +81,7 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccountingAlg[M]) {
 
 object Reduce {
 
-  private def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+  def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par],
@@ -100,7 +100,7 @@ object Reduce {
         )
       )
 
-  private def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par],
@@ -119,7 +119,7 @@ object Reduce {
         )
       )
 
-  private def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
+  def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
       implicit costAlg: CostAccountingAlg[M]
   ): M[Option[(FreeMap, Unit)]] =
     for {
