@@ -26,14 +26,14 @@ import coop.rchain.catscontrib.TaskContrib._
 import scala.collection.immutable.HashSet
 import scala.collection.mutable
 
-class MultiParentCasperImpl[
-    F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
+class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: BlockStore: RPConfAsk](
     runtimeManager: RuntimeManager,
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     initialDag: BlockDag,
     postGenesisStateHash: StateHash,
-    shardId: String)(implicit scheduler: Scheduler)
+    shardId: String
+)(implicit scheduler: Scheduler)
     extends MultiParentCasper[F] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -91,15 +91,19 @@ class MultiParentCasperImpl[
                  case Right((_, false)) =>
                    Log[F]
                      .info(
-                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread.")
+                       s"Block ${PrettyPrinter.buildString(b.blockHash)} is already being processed by another thread."
+                     )
                      .map(_ => BlockStatus.processing)
                  case Right((_, true)) =>
-                   internalAddBlock(b).flatMap(status =>
-                     Capture[F].capture { processingBlocks.update(_ - b.blockHash); status })
+                   internalAddBlock(b).flatMap(
+                     status =>
+                       Capture[F].capture { processingBlocks.update(_ - b.blockHash); status }
+                   )
                  case Left(ex) =>
                    Log[F]
                      .warn(
-                       s"Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}")
+                       s"Block ${PrettyPrinter.buildString(b.blockHash)} encountered an exception during processing: ${ex.getMessage}"
+                     )
                      .map(_ => BlockStatus.exception(ex))
                }
     } yield result
@@ -119,7 +123,8 @@ class MultiParentCasperImpl[
             case _ =>
               Capture[F].capture { blockBuffer -= b } *> blockBufferDependencyDagState.modify(
                 blockBufferDependencyDag =>
-                  DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash))
+                  DoublyLinkedDagOperations.remove(blockBufferDependencyDag, b.blockHash)
+              )
           }
       _ <- attempt match {
             case MissingBlocks           => ().pure[F]
@@ -136,16 +141,20 @@ class MultiParentCasperImpl[
       _                         <- lastFinalizedBlockContainer.set(updatedLastFinalizedBlock)
     } yield attempt
 
-  private def updateLastFinalizedBlock(dag: BlockDag,
-                                       lastFinalizedBlock: BlockMessage): F[BlockMessage] =
+  private def updateLastFinalizedBlock(
+      dag: BlockDag,
+      lastFinalizedBlock: BlockMessage
+  ): F[BlockMessage] =
     for {
       childrenHashes <- dag.childMap
                          .getOrElse(lastFinalizedBlock.blockHash, Set.empty[BlockHash])
                          .pure[F]
       children <- childrenHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
-      maybeFinalizedChild <- ListContrib.findM(children,
-                                               (block: BlockMessage) =>
-                                                 isGreaterThanFaultToleranceThreshold(dag, block))
+      maybeFinalizedChild <- ListContrib.findM(
+                              children,
+                              (block: BlockMessage) =>
+                                isGreaterThanFaultToleranceThreshold(dag, block)
+                            )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
                               updateLastFinalizedBlock(dag, finalizedChild)
@@ -225,15 +234,19 @@ class MultiParentCasperImpl[
       result <- Capture[F].capture { deployHist.clone() }
       _ <- DagOperations
             .bfTraverseF[F, BlockMessage](p.toList)(ProtoUtil.unsafeGetParents[F])
-            .foreach(b =>
-              Capture[F].capture {
-                b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
-            })
+            .foreach(
+              b =>
+                Capture[F].capture {
+                  b.body.foreach(_.deploys.flatMap(_.deploy).foreach(result -= _))
+                }
+            )
     } yield result.toSeq
 
-  private def createProposal(p: Seq[BlockMessage],
-                             r: Seq[Deploy],
-                             justifications: Seq[Justification]): F[CreateBlockStatus] =
+  private def createProposal(
+      p: Seq[BlockMessage],
+      r: Seq[Deploy],
+      justifications: Seq[Justification]
+  ): F[CreateBlockStatus] =
     for {
       now                      <- Time[F].currentMillis
       possibleProcessedDeploys <- updateKnownStateHashes(knownStateHashesContainer, p, r)
@@ -241,7 +254,8 @@ class MultiParentCasperImpl[
                  case Left(ex) =>
                    Log[F]
                      .error(
-                       s"Critical error encountered while processing deploys: ${ex.getMessage}")
+                       s"Critical error encountered while processing deploys: ${ex.getMessage}"
+                     )
                      .map(_ => CreateBlockStatus.internalDeployError(ex))
 
                  case Right((computedStateHash, processedDeploys)) =>
@@ -253,7 +267,8 @@ class MultiParentCasperImpl[
                          val errorsMessage = errors.map(_.getMessage).mkString("\n")
                          Log[F].error(
                            s"Internal error encountered while processing deploy ${PrettyPrinter
-                             .buildString(deploy)}: $errorsMessage")
+                             .buildString(deploy)}: $errorsMessage"
+                         )
                        case _ => ().pure[F]
                      }
                      .map(_ => {
@@ -262,9 +277,10 @@ class MultiParentCasperImpl[
                            case (acc, block) => math.max(acc, blockNumber(block))
                          }
 
+                       val newBonds = runtimeManager.computeBonds(computedStateHash)
                        val postState = RChainState()
                          .withTuplespace(computedStateHash)
-                         .withBonds(bonds(p.head))
+                         .withBonds(newBonds)
                          .withBlockNumber(maxBlockNumber + 1)
 
                        val body = Body()
@@ -280,15 +296,18 @@ class MultiParentCasperImpl[
   private def updateKnownStateHashes(
       knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]],
       p: Seq[BlockMessage],
-      r: Seq[Deploy]): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
+      r: Seq[Deploy]
+  ): F[Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])]] =
     knownStateHashesContainer
       .modify[(Either[Throwable, (StateHash, Seq[InternalProcessedDeploy])])] { knownStateHashes =>
         for {
-          possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](p,
-                                                                                  r,
-                                                                                  _blockDag.get,
-                                                                                  knownStateHashes,
-                                                                                  runtimeManager)
+          possibleProcessedDeploys <- InterpreterUtil.computeDeploysCheckpoint[F](
+                                       p,
+                                       r,
+                                       _blockDag.get,
+                                       knownStateHashes,
+                                       runtimeManager
+                                     )
         } yield (possibleProcessedDeploys._2, possibleProcessedDeploys._1)
       }
 
@@ -306,7 +325,7 @@ class MultiParentCasperImpl[
         s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
       }
 
-  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     (equivocationsTracker
       .map(_.equivocator)
       .toSet
@@ -327,16 +346,25 @@ class MultiParentCasperImpl[
       postValidationStatus <- Validate.blockSummary[F](b, genesis, dag, shardId)
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
-                                        Validate.transactions[F](b,
-                                                                 dag,
-                                                                 emptyStateHash,
-                                                                 runtimeManager,
-                                                                 knownStateHashesContainer))
-      postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(_ =>
-                               Validate.bondsCache[F](b, runtimeManager))
-      postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(_ =>
-                                          Validate
-                                            .neglectedInvalidBlock[F](b, invalidBlockTracker.toSet))
+                                        Validate.transactions[F](
+                                          b,
+                                          dag,
+                                          emptyStateHash,
+                                          runtimeManager,
+                                          knownStateHashesContainer
+                                        )
+                                    )
+      postBondsCacheStatus <- postTransactionsCheckStatus.joinRight.traverse(
+                               _ => Validate.bondsCache[F](b, runtimeManager)
+                             )
+      postNeglectedInvalidBlockStatus <- postBondsCacheStatus.joinRight.traverse(
+                                          _ =>
+                                            Validate
+                                              .neglectedInvalidBlock[F](
+                                                b,
+                                                invalidBlockTracker.toSet
+                                              )
+                                        )
       postNeglectedEquivocationCheckStatus <- postNeglectedInvalidBlockStatus.joinRight
                                                .traverse(
                                                  _ =>
@@ -345,12 +373,15 @@ class MultiParentCasperImpl[
                                                        equivocationsTracker,
                                                        b,
                                                        dag,
-                                                       genesis))
+                                                       genesis
+                                                     )
+                                               )
       blockBufferDependencyDag <- blockBufferDependencyDagState.get
       postEquivocationCheckStatus <- postNeglectedEquivocationCheckStatus.joinRight.traverse(
                                       _ =>
                                         EquivocationDetector
-                                          .checkEquivocations[F](blockBufferDependencyDag, b, dag))
+                                          .checkEquivocations[F](blockBufferDependencyDag, b, dag)
+                                    )
       status = postEquivocationCheckStatus.joinRight.merge
       _      <- addEffects(status, b)
     } yield status
@@ -361,7 +392,8 @@ class MultiParentCasperImpl[
       //Add successful! Send block to peers, log success, try to add other blocks
       case Valid =>
         addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-          s"Added ${PrettyPrinter.buildString(block.blockHash)}")
+          s"Added ${PrettyPrinter.buildString(block.blockHash)}"
+        )
       case MissingBlocks =>
         for {
           _              <- Capture[F].capture { blockBuffer += block }
@@ -374,7 +406,8 @@ class MultiParentCasperImpl[
                                   blockHash =>
                                     BlockStore[F]
                                       .contains(blockHash)
-                                      .map(contains => !contains))
+                                      .map(contains => !contains)
+                                )
           _ <- missingDependencies.traverse(hash => handleMissingDependency(hash, block))
         } yield ()
       case AdmissibleEquivocation =>
@@ -392,7 +425,8 @@ class MultiParentCasperImpl[
           }
         } *>
           addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-          s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}")
+          s"Added admissible equivocation child block ${PrettyPrinter.buildString(block.blockHash)}"
+        )
       case IgnorableEquivocation =>
         /*
          * We don't have to include these blocks to the equivocation tracker because if any validator
@@ -400,7 +434,8 @@ class MultiParentCasperImpl[
          * through the admissible equivocations.
          */
         Log[F].info(
-          s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
+          s"Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG"
+        )
       case InvalidUnslashableBlock =>
         handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
@@ -439,14 +474,16 @@ class MultiParentCasperImpl[
       _ <- blockBufferDependencyDagState.modify(
             blockBufferDependencyDag =>
               DoublyLinkedDagOperations
-                .add[BlockHash](blockBufferDependencyDag, hash, parentBlock.blockHash))
+                .add[BlockHash](blockBufferDependencyDag, hash, parentBlock.blockHash)
+          )
       _ <- CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
     } yield ()
 
   private def handleInvalidBlockEffect(status: BlockStatus, block: BlockMessage): F[Unit] =
     for {
       _ <- Log[F].warn(
-            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}.")
+            s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
+          )
       // TODO: Slash block for status except InvalidUnslashableBlock
       _ <- Capture[F].capture(invalidBlockTracker += block.blockHash) *> addToState(block)
     } yield ()

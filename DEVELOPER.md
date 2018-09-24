@@ -1,13 +1,12 @@
 ## Building and running
 
-Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q1 of 2019.
 
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Prerequisites
 * Java Development Kit (JDK), version 8. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
-* [Sodium crypto library](https://github.com/jedisct1/libsodium)
 * For Rholang
      - [jflex](http://jflex.de/)
      - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
@@ -17,7 +16,6 @@ __Note__ Successfully building from source requires attending to all of the prer
 ```
 brew install git
 brew install sbt
-brew install libsodium
 brew install jflex
 ```
 
@@ -30,7 +28,6 @@ sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89
 sudo apt-get update
 sudo apt-get install sbt
 
-sudo apt-get install libsodium23
 sudo apt-get install jflex
 sudo apt-get install haskell-platform
 ```
@@ -39,7 +36,6 @@ sudo apt-get install haskell-platform
 ```
 sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be necessary)
 sudo dnf --enablerepo=bintray--sbt-rpm install sbt
-sudo dnf install libsodium
 sudo dnf install jflex
 sudo dnf install haskell-platform
 ```
@@ -48,7 +44,7 @@ sudo dnf install haskell-platform
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
 ```
 sudo pacman -S stack ghc # for building BNFC
-sudo pacman -S jdk8-openjdk sbt libsodium
+sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
 ```
 

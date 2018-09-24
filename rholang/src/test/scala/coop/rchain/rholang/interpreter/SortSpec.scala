@@ -21,10 +21,12 @@ class SortSpec extends FlatSpec with Matchers {
   it should "discern maps with and without remainder" in {
     assertOrder[Expr](
       ParMap(Seq.empty),
-      ParMap(Seq.empty,
-             connectiveUsed = false,
-             locallyFree = BitSet(),
-             remainder = Some(Var(FreeVar(0))))
+      ParMap(
+        Seq.empty,
+        connectiveUsed = false,
+        locallyFree = BitSet(),
+        remainder = Some(Var(FreeVar(0)))
+      )
     )
   }
 

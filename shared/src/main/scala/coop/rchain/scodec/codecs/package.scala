@@ -18,8 +18,11 @@ package object codecs {
             if (xs.size == cnt)
               Attempt.successful(xs)
             else
-              Attempt.failure(Err(
-                s"Insufficient number of elements: decoded ${xs.size} but should have decoded $cnt"))
+              Attempt.failure(
+                Err(
+                  s"Insufficient number of elements: decoded ${xs.size} but should have decoded $cnt"
+                )
+              )
         },
         xs => (xs.size, xs)
       )

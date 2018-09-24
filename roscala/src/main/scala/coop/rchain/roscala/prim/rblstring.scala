@@ -64,7 +64,8 @@ object rblstring {
 
       Right(
         RblString(
-          elem.foldLeft(init)((acc: String, el: Ob) => acc ++ el.asInstanceOf[RblString].value))
+          elem.foldLeft(init)((acc: String, el: Ob) => acc ++ el.asInstanceOf[RblString].value)
+        )
       )
     }
   }

@@ -24,17 +24,23 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote: StorageMatch[BindPattern,
-                                            OutOfPhlogistonsError.type,
-                                            ListChannelWithRandom,
-                                            ListChannelWithRandom] =
-    new StorageMatch[BindPattern,
-                     OutOfPhlogistonsError.type,
-                     ListChannelWithRandom,
-                     ListChannelWithRandom] {
+  implicit val matchListQuote: StorageMatch[
+    BindPattern,
+    OutOfPhlogistonsError.type,
+    ListChannelWithRandom,
+    ListChannelWithRandom
+  ] =
+    new StorageMatch[
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom
+    ] {
 
-      def get(pattern: BindPattern, data: ListChannelWithRandom)
-        : Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
+      def get(
+          pattern: BindPattern,
+          data: ListChannelWithRandom
+      ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
         SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
           .runWithCost(CostAccount(Integer.MAX_VALUE)) // FIXME -- must come from the input args
@@ -51,9 +57,11 @@ object implicits {
                         freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
                       case _ => freeMap
                     }
-                    ListChannelWithRandom(toChannels(remainderMap, pattern.freeCount),
-                                          data.randomState,
-                                          Some(CostAccount.toProto(cost)))
+                    ListChannelWithRandom(
+                      toChannels(remainderMap, pattern.freeCount),
+                      data.randomState,
+                      Some(CostAccount.toProto(cost))
+                    )
                 }
           }
     }

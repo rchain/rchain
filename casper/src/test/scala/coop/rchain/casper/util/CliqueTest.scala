@@ -6,19 +6,21 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 import scala.annotation.tailrec
 
 class CliqueTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val e = List((1, 6),
-               (1, 2),
-               (1, 3),
-               (2, 6),
-               (2, 4),
-               (2, 3),
-               (3, 6),
-               (4, 6),
-               (4, 7),
-               (4, 5),
-               (5, 7),
-               (8, 9),
-               (10, 11))
+  val e = List(
+    (1, 6),
+    (1, 2),
+    (1, 3),
+    (2, 6),
+    (2, 4),
+    (2, 3),
+    (3, 6),
+    (4, 6),
+    (4, 7),
+    (4, 5),
+    (5, 7),
+    (8, 9),
+    (10, 11)
+  )
 
   private def compare(l: List[Int], r: List[Int]): Boolean = {
     @tailrec

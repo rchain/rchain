@@ -20,7 +20,9 @@ object AlwaysEqual {
   implicit def wrap[A](unwrapped: A): AlwaysEqual[A] = apply(unwrapped)
 
   implicit def alwaysEqualTypeMapper[B, A](
-      implicit tm: TypeMapper[B, A]): TypeMapper[B, AlwaysEqual[A]] =
-    TypeMapper[B, AlwaysEqual[A]](b => AlwaysEqual(tm.toCustom(b)))(wrappedA =>
-      tm.toBase(wrappedA.get))
+      implicit tm: TypeMapper[B, A]
+  ): TypeMapper[B, AlwaysEqual[A]] =
+    TypeMapper[B, AlwaysEqual[A]](b => AlwaysEqual(tm.toCustom(b)))(
+      wrappedA => tm.toBase(wrappedA.get)
+    )
 }

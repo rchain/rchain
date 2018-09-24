@@ -20,8 +20,8 @@ import scala.concurrent.TimeoutException
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
     implicit scheduler: Scheduler,
     cell: TcpTransportLayer.TransportCell[Task],
-    log: Log[Task])
-    extends TransportLayer[Task] {
+    log: Log[Task]
+) extends TransportLayer[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -93,7 +93,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     }
 
   private def withClient[A](peer: PeerNode, enforce: Boolean)(
-      f: TransportLayerStub => Task[A]): Task[A] =
+      f: TransportLayerStub => Task[A]
+  ): Task[A] =
     for {
       channel <- connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
@@ -106,10 +107,12 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   private def sendRequest(peer: PeerNode, request: TLRequest, enforce: Boolean): Task[TLResponse] =
     withClient(peer, enforce)(_.send(request))
 
-  private def innerRoundTrip(peer: PeerNode,
-                             request: TLRequest,
-                             timeout: FiniteDuration,
-                             enforce: Boolean): Task[Either[CommError, TLResponse]] =
+  private def innerRoundTrip(
+      peer: PeerNode,
+      request: TLRequest,
+      timeout: FiniteDuration,
+      enforce: Boolean
+  ): Task[Either[CommError, TLResponse]] =
     sendRequest(peer, request, enforce)
       .nonCancelingTimeout(timeout)
       .attempt
@@ -125,14 +128,16 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     for {
       tlResponseErr <- innerRoundTrip(peer, TLRequest(msg.some), timeout, enforce = false)
       pmErr <- tlResponseErr
-                .flatMap(tlr =>
-                  tlr.payload match {
-                    case p if p.isProtocol => Right(tlr.getProtocol)
-                    case p if p.isNoResponse =>
-                      Left(internalCommunicationError("Was expecting message, nothing arrived"))
-                    case TLResponse.Payload.InternalServerError(ise) =>
-                      Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
-                })
+                .flatMap(
+                  tlr =>
+                    tlr.payload match {
+                      case p if p.isProtocol => Right(tlr.getProtocol)
+                      case p if p.isNoResponse =>
+                        Left(internalCommunicationError("Was expecting message, nothing arrived"))
+                      case TLResponse.Payload.InternalServerError(ise) =>
+                        Left(internalCommunicationError("Got response: " + ise.error.toStringUtf8))
+                    }
+                )
                 .pure[Task]
     } yield pmErr
 
@@ -164,7 +169,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
         server <- s.server match {
                    case Some(_) =>
                      Task.raiseError(
-                       new RuntimeException("TransportLayer server is already started"))
+                       new RuntimeException("TransportLayer server is already started")
+                     )
                    case _ => buildServer(new TransportLayerImpl(dispatch))
                  }
       } yield s.copy(server = Some(server))
@@ -236,8 +242,9 @@ class TransportLayerImpl(dispatch: Protocol => Task[CommunicationResponse])
   // TODO InternalServerError should take msg in constructor
   private def internalServerError(msg: String): TLResponse =
     TLResponse(
-      TLResponse.Payload.InternalServerError(
-        InternalServerError(ProtocolHelper.toProtocolBytes(msg))))
+      TLResponse.Payload
+        .InternalServerError(InternalServerError(ProtocolHelper.toProtocolBytes(msg)))
+    )
 
   private def noResponse: TLResponse =
     TLResponse(TLResponse.Payload.NoResponse(NoResponse()))

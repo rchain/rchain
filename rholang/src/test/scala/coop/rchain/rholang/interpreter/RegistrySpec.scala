@@ -1,12 +1,16 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.Registry.FixedRefs._
+import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
@@ -14,11 +18,10 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.pure.PureRSpace
-import java.io.StringReader
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.lightningj.util.ZBase32
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -26,24 +29,44 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+
+  def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
+    Map(
+      lookupRef                       -> registry.lookup,
+      lookupCallbackRef               -> registry.lookupCallback,
+      insertRef                       -> registry.insert,
+      insertCallbackRef               -> registry.insertCallback,
+      deleteRef                       -> registry.delete,
+      deleteRootCallbackRef           -> registry.deleteRootCallback,
+      deleteCallbackRef               -> registry.deleteCallback,
+      publicLookupRef                 -> registry.publicLookup,
+      publicRegisterRandomRef         -> registry.publicRegisterRandom,
+      publicRegisterInsertCallbackRef -> registry.publicRegisterInsertCallback
+    )
+
   def withRegistryAndTestSpace[R](
-      f: (Reduce[Task],
-          IdISpace[Channel,
+      f: (
+          Reduce[Task],
+          IdISpace[
+            Channel,
             BindPattern,
             OutOfPhlogistonsError.type,
             ListChannelWithRandom,
             ListChannelWithRandom,
-            TaggedContinuation]) => R
+            TaggedContinuation
+          ]
+      ) => R
   ): R =
-    withTestSpace { space =>
-      val pureSpace: Runtime.RhoPureSpace = new PureRSpace(space)
-      lazy val registry: Registry         = new Registry(pureSpace, dispatcher)
-      lazy val dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation] =
-        RholangAndScalaDispatcher
-          .create[Task, Task.Par](space, registry.testingDispatchTable, Registry.testingUrnMap)
-      val reducer = dispatcher.reducer
-      registry.testInstall()
-      f(reducer, space)
+    withTestSpace(errorLog) {
+      case TestFixture(space, _) =>
+        val _                                     = errorLog.readAndClearErrorVector()
+        val pureSpace: Runtime.RhoPureSpace[Task] = PureRSpace[Task].of(space)
+        lazy val dispatchTable: RhoDispatchMap    = dispatchTableCreator(registry)
+        lazy val (dispatcher, reducer, registry) =
+          RholangAndScalaDispatcher
+            .create(space, dispatchTable, Registry.testingUrnMap)
+        registry.testInstall().runSyncUnsafe(1.second)
+        f(reducer, space)
     }
 }
 
@@ -57,8 +80,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val eightByteArray: Par       = GByteArray(ByteString.copyFrom(Array[Byte](0x08.toByte)))
   val ninetySevenByteArray: Par = GByteArray(ByteString.copyFrom(Array[Byte](0x97.toByte)))
   val branchName: Par = GPrivate(
-    ByteString.copyFrom(
-      Base16.decode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e")))
+    ByteString
+      .copyFrom(Base16.decode("d5fd3d8daf9f295aa590b37b50d5518803b4596ed6940aa42d46b1413a1bb16e"))
+  )
   // format: off
   val rootSend: Send = Send(
     chan = Quote(Registry.registryRoot),
@@ -74,43 +98,65 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   val efByteArray: Par        = GByteArray(ByteString.copyFrom(Array[Byte](0xef.toByte)))
   val emptyByteArray: Par     = GByteArray(ByteString.EMPTY)
   val branch1: Par = GByteArray(
-    ByteString.copyFrom(
-      Base16.decode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2")))
+    ByteString.copyFrom(Base16.decode("533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2"))
+  )
   val branch2: Par = GByteArray(
-    ByteString.copyFrom(
-      Base16.decode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e")))
+    ByteString.copyFrom(Base16.decode("e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e"))
+  )
   val branch3: Par = GByteArray(
-    ByteString.copyFrom(
-      Base16.decode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0")))
+    ByteString.copyFrom(Base16.decode("763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0"))
+  )
   val branch4: Par = GByteArray(
-    ByteString.copyFrom(
-      Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3")))
+    ByteString.copyFrom(Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"))
+  )
   val branchSend: Send = Send(
     chan = Quote(branchName),
     data = Seq(
-      Expr(EMapBody(ParMap(Seq(
-        emptyByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), emptyByteArray, GInt(7))))))),
-        eNineByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
-        sevenFiveByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9)))))))
-      ))))),
+      Expr(
+        EMapBody(
+          ParMap(
+            Seq(
+              emptyByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), emptyByteArray, GInt(7))))))
+              ),
+              eNineByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))
+              ),
+              sevenFiveByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9))))))
+              )
+            )
+          )
+        )
+      )
+    ),
     persistent = false
   )
 
   val fullBranchSend: Send = Send(
     chan = Quote(branchName),
     data = Seq(
-      Expr(EMapBody(ParMap(Seq(
-        eNineByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))),
-        sevenFiveByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9))))))),
-        efByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch3, GInt(10))))))),
-        aThreeByteArray -> Par(
-          exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch4, GInt(11)))))))
-      ))))),
+      Expr(
+        EMapBody(
+          ParMap(
+            Seq(
+              eNineByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch1, GInt(8))))))
+              ),
+              sevenFiveByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch2, GInt(9))))))
+              ),
+              efByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch3, GInt(10))))))
+              ),
+              aThreeByteArray -> Par(
+                exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(0), branch4, GInt(11))))))
+              )
+            )
+          )
+        )
+      )
+    ),
     persistent = false
   )
 
@@ -150,27 +196,45 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result0"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(7))), randResult0),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result0"))),
+              ListChannelWithRandom(Seq(Quote(GInt(7))), randResult0),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result1")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result1"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result1"))),
+              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result2")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result2"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), randResult2),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result2"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult2),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
   }
 
   "insert" should "successfully split" in {
@@ -287,91 +351,157 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result0"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result0"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result1")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result1"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(10))), result1Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result1"))),
+              ListChannelWithRandom(Seq(Quote(GInt(10))), result1Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result2")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result2"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result2Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result2"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result2Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result3")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result3"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(10))), result3Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result3"))),
+              ListChannelWithRandom(Seq(Quote(GInt(10))), result3Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result4")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result4"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(11))), result4Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result4"))),
+              ListChannelWithRandom(Seq(Quote(GInt(11))), result4Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result5")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result5"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(7))), result5Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result5"))),
+              ListChannelWithRandom(Seq(Quote(GInt(7))), result5Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result6")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result6"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(9))), result6Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result6"))),
+              ListChannelWithRandom(Seq(Quote(GInt(9))), result6Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result7")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result7"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(11))), result7Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result7"))),
+              ListChannelWithRandom(Seq(Quote(GInt(11))), result7Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result8")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result8"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(10))), result8Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result8"))),
+              ListChannelWithRandom(Seq(Quote(GInt(10))), result8Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result9")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result9"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result9Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result9"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result9Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result10")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result10"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(12))), result10Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result10"))),
+              ListChannelWithRandom(Seq(Quote(GInt(12))), result10Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
   }
 
   "delete" should "successfully merge" in {
@@ -483,67 +613,115 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result0"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result0"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result1")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result1"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(9))), result1Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result1"))),
+              ListChannelWithRandom(Seq(Quote(GInt(9))), result1Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result2")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result2"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(10))), result2Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result2"))),
+              ListChannelWithRandom(Seq(Quote(GInt(10))), result2Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result3")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result3"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result3Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result3"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result3Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result4")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result4"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(9))), result4Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result4"))),
+              ListChannelWithRandom(Seq(Quote(GInt(9))), result4Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result5")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result5"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result5Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result5"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result5Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result6")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result6"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), result6Rand),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result6"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), result6Rand),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(List[Channel](Quote(Registry.registryRoot))) should be(
-      Some(Row(
-        List(Datum.create(Channel(Quote(Registry.registryRoot)),
-                          ListChannelWithRandom(Seq(Quote(EMapBody(ParMap(SortedParMap.empty)))),
-                                                rootRand),
-                          false)),
-        List()
-      )))
+      Some(
+        Row(
+          List(
+            Datum.create(
+              Channel(Quote(Registry.registryRoot)),
+              ListChannelWithRandom(Seq(Quote(EMapBody(ParMap(SortedParMap.empty)))), rootRand),
+              false
+            )
+          ),
+          List()
+        )
+      )
+    )
   }
 
   "Public lookup" should "decode and then call lookup" in {
@@ -576,19 +754,31 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result0"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result0"))),
+              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result1")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result1"))),
-                            ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result1"))),
+              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
   }
 
   "Random Registry" should "use the random generator and insert" in {
@@ -638,18 +828,30 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result0"))),
-                            ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result0"))),
+              ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
     result.get(resultChanList("result1")) should be(
       Some(
         Row(
-          List(Datum.create(Channel(Quote(GString("result1"))),
-                            ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
-                            false)),
+          List(
+            Datum.create(
+              Channel(Quote(GString("result1"))),
+              ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
+              false
+            )
+          ),
           List()
-        )))
+        )
+      )
+    )
   }
 }

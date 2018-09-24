@@ -6,16 +6,20 @@ package coop.rchain.rholang.interpreter
 // This way you don't have to re-number the map, you just calculate the index on
 // get.
 // Parameterized over T, the kind of typing discipline we are enforcing.
-class DebruijnLevelMap[T](val next: Int,
-                          val env: Map[String, (Int, T, Int, Int)],
-                          val wildcards: List[(Int, Int)]) {
+class DebruijnLevelMap[T](
+    val next: Int,
+    val env: Map[String, (Int, T, Int, Int)],
+    val wildcards: List[(Int, Int)]
+) {
   def this() = this(0, Map[String, (Int, T, Int, Int)](), List[(Int, Int)]())
 
   def newBinding(binding: (String, T, Int, Int)): (DebruijnLevelMap[T], Int) =
     binding match {
       case (varName, sort, line, col) =>
-        (DebruijnLevelMap[T](next + 1, env + (varName -> ((next, sort, line, col))), wildcards),
-         next)
+        (
+          DebruijnLevelMap[T](next + 1, env + (varName -> ((next, sort, line, col))), wildcards),
+          next
+        )
     }
 
   // Returns the new map, and the first value assigned. Given that they're assigned contiguously
@@ -30,13 +34,19 @@ class DebruijnLevelMap[T](val next: Int,
     val finalWildcards = wildcards ++ binders.wildcards
     val adjustNext     = next
     binders.env.foldLeft((this, List[(String, Int, Int)]())) {
-      case ((db: DebruijnLevelMap[T], shadowed: List[(String, Int, Int)]),
-            (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))) =>
+      case (
+          (db: DebruijnLevelMap[T], shadowed: List[(String, Int, Int)]),
+          (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))
+          ) =>
         val shadowedNew = if (db.env.contains(k)) (k, line, col) :: shadowed else shadowed
-        (DebruijnLevelMap(finalNext,
-                          db.env + (k -> ((level + adjustNext, varType, line, col))),
-                          finalWildcards),
-         shadowedNew)
+        (
+          DebruijnLevelMap(
+            finalNext,
+            db.env + (k -> ((level + adjustNext, varType, line, col))),
+            finalWildcards
+          ),
+          shadowedNew
+        )
     }
   }
 
@@ -69,14 +79,17 @@ class DebruijnLevelMap[T](val next: Int,
 }
 
 object DebruijnLevelMap {
-  def apply[T](next: Int,
-               env: Map[String, (Int, T, Int, Int)],
-               wildcards: List[(Int, Int)]): DebruijnLevelMap[T] =
+  def apply[T](
+      next: Int,
+      env: Map[String, (Int, T, Int, Int)],
+      wildcards: List[(Int, Int)]
+  ): DebruijnLevelMap[T] =
     new DebruijnLevelMap(next, env, wildcards)
 
   def apply[T](): DebruijnLevelMap[T] = new DebruijnLevelMap[T]()
 
   def unapply[T](
-      db: DebruijnLevelMap[T]): Option[(Int, Map[String, (Int, T, Int, Int)], List[(Int, Int)])] =
+      db: DebruijnLevelMap[T]
+  ): Option[(Int, Map[String, (Int, T, Int, Int)], List[(Int, Int)])] =
     Some((db.next, db.env, db.wildcards))
 }

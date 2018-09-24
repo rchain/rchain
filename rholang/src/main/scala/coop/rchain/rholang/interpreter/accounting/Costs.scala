@@ -14,8 +14,9 @@ trait Costs {
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost[T <: GeneratedMessage with Message[T],
-                        P <: GeneratedMessage with Message[P]](x: T, y: P): Cost =
+  def equalityCheckCost[T <: GeneratedMessage with Message[T], P <: GeneratedMessage with Message[
+    P
+  ]](x: T, y: P): Cost =
     Cost(scala.math.min(x.serializedSize, y.serializedSize))
 
   final val BOOLEAN_AND_COST = Cost(2)
@@ -41,8 +42,9 @@ trait Costs {
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
-  def toByteArrayCost[T <: GeneratedMessage with Message[T]](a: T)(
-      implicit comp: GeneratedMessageCompanion[T]): Cost =
+  def toByteArrayCost[T <: GeneratedMessage with Message[T]](
+      a: T
+  )(implicit comp: GeneratedMessageCompanion[T]): Cost =
     Cost(a.serializedSize)
 
   //TODO(mateusz.gorski): adjust the cost of the nth method call.
@@ -64,13 +66,16 @@ trait Costs {
   final val MATCH_EVAL_COST = Cost(12)
 
   implicit def toStorageCostOps[A <: GeneratedMessage with Message[A]](a: Seq[A])(
-      implicit gm: GeneratedMessageCompanion[A]) = new StorageCostOps(a: _*)(gm)
+      implicit gm: GeneratedMessageCompanion[A]
+  ) = new StorageCostOps(a: _*)(gm)
 
   implicit def toStorageCostOps[A <: GeneratedMessage with Message[A]](a: A)(
-      implicit gm: GeneratedMessageCompanion[A]) = new StorageCostOps(a)(gm)
+      implicit gm: GeneratedMessageCompanion[A]
+  ) = new StorageCostOps(a)(gm)
 
   class StorageCostOps[A <: GeneratedMessage with Message[A]](a: A*)(
-      gm: GeneratedMessageCompanion[A]) {
+      gm: GeneratedMessageCompanion[A]
+  ) {
     def storageCost: Cost = Cost(a.map(a => gm.toByteArray(a).size).sum)
   }
 }

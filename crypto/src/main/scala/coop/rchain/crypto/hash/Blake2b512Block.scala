@@ -44,19 +44,23 @@ class Blake2b512Block {
 
   // gives the output as if block were the last block processed, but does not
   // invalidate or modify internal state
-  def peekFinalRoot(block: Array[Byte],
-                    inOffset: Int,
-                    output: Array[Byte],
-                    outOffset: Int): Unit = {
+  def peekFinalRoot(
+      block: Array[Byte],
+      inOffset: Int,
+      output: Array[Byte],
+      outOffset: Int
+  ): Unit = {
     val tempChainValue: Array[Long] = new Array[Long](8)
     compress(block, inOffset, tempChainValue, true, true, true)
     Pack.longToLittleEndian(tempChainValue, output, outOffset)
   }
 
-  def finalizeInternal(block: Array[Byte],
-                       inOffset: Int,
-                       output: Array[Byte],
-                       outOffset: Int): Unit = {
+  def finalizeInternal(
+      block: Array[Byte],
+      inOffset: Int,
+      output: Array[Byte],
+      outOffset: Int
+  ): Unit = {
     val tempChainValue: Array[Long] = new Array[Long](8)
     compress(block, inOffset, tempChainValue, true, true, false)
     for (i <- 0 until 4) {
@@ -84,12 +88,14 @@ class Blake2b512Block {
     (collapsedCV * 31 + (t0 ^ (t0 >>> 32)).toInt) * 31 + (t1 ^ (t1 >>> 32)).toInt
   }
 
-  private[this] def compress(msg: Array[Byte],
-                             offset: Int,
-                             newChainValue: Array[Long],
-                             peek: Boolean,
-                             finalize: Boolean,
-                             rootFinalize: Boolean): Unit = {
+  private[this] def compress(
+      msg: Array[Byte],
+      offset: Int,
+      newChainValue: Array[Long],
+      peek: Boolean,
+      finalize: Boolean,
+      rootFinalize: Boolean
+  ): Unit = {
     val internalState: Array[Long] = new Array[Long](BLOCK_LENGTH_LONGS)
     def g(m1: Long, m2: Long, posA: Int, posB: Int, posC: Int, posD: Int): Unit = {
       def rotr64(x: Long, rot: Int): Long =
@@ -110,8 +116,8 @@ class Blake2b512Block {
     def init(): Unit = {
       Array.copy(chainValue, 0, internalState, 0, CHAIN_VALUE_LENGTH)
       Array.copy(IV, 0, internalState, CHAIN_VALUE_LENGTH, 4)
-      val f0 = if (finalize) 0xffffffffffffffffL else 0x0L
-      val f1 = if (rootFinalize) 0xffffffffffffffffL else 0x0L
+      val f0 = if (finalize) 0XFFFFFFFFFFFFFFFFL else 0X0L
+      val f1 = if (rootFinalize) 0XFFFFFFFFFFFFFFFFL else 0X0L
       internalState(12) = newT0 ^ IV(4)
       internalState(13) = newT1 ^ IV(5)
       internalState(14) = f0 ^ IV(6)
@@ -201,9 +207,9 @@ object Blake2b512Block {
 
   // Produced from the square root of primes 2, 3, 5, 7, 11, 13, 17, 19.
   // The same as SHA-512 IV.
-  val IV: Array[Long] = Array(0x6a09e667f3bcc908L, 0xbb67ae8584caa73bL, 0x3c6ef372fe94f82bL,
-    0xa54ff53a5f1d36f1L, 0x510e527fade682d1L, 0x9b05688c2b3e6c1fL, 0x1f83d9abfb41bd6bL,
-    0x5be0cd19137e2179L)
+  val IV: Array[Long] = Array(0X6A09E667F3BCC908L, 0XBB67AE8584CAA73BL, 0X3C6EF372FE94F82BL,
+    0XA54FF53A5F1D36F1L, 0X510E527FADE682D1L, 0X9B05688C2B3E6C1FL, 0X1F83D9ABFB41BD6BL,
+    0X5BE0CD19137E2179L)
 
   // Message word permutations:
   val SIGMA: Array[Array[Byte]] =
@@ -228,9 +234,9 @@ object Blake2b512Block {
   val BLOCK_LENGTH_LONGS: Int  = 16
   val DIGEST_LENGTH_BYTES: Int = 64
   // Depth = 255, Fanout = ??, Keylength = 0, Digest length = 64 bytes
-  val PARAM_VALUE_0: Long = 0xff000040L
+  val PARAM_VALUE_0: Long = 0XFF000040L
   // Inner length = 32 bytes
-  val PARAM_VALUE_2: Long = 0x2000L
+  val PARAM_VALUE_2: Long = 0X2000L
 
   // This will give invalid results and is for testing only.
   def tweakT0(src: Blake2b512Block): Unit =

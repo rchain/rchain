@@ -20,7 +20,7 @@ object TomlConfiguration {
     Codec {
       case (Value.Str(uri), _) =>
         PeerNode
-          .parse(uri)
+          .fromAddress(uri)
           .map(u => Right(u))
           .getOrElse(Left((Nil, "can't parse the rnode bootstrap address")))
       case _ => Left((Nil, "the rnode bootstrap address should be a string"))

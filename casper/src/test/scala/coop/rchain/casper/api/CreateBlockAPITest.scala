@@ -43,8 +43,9 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis()))
 
     implicit val logEff = new LogStub[Effect]
-    def testProgram(implicit casperRef: MultiParentCasperRef[Effect])
-      : Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
+    def testProgram(
+        implicit casperRef: MultiParentCasperRef[Effect]
+    ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
       for {
         t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI.createBlock[Effect]).value.fork
         _  <- implicitly[Timer[Task]].sleep(2.second)
@@ -77,7 +78,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Timer](underlying: Mult
   def deploy(d: DeployData): F[Either[Throwable, Unit]]     = underlying.deploy(d)
   def estimator(dag: BlockDag): F[IndexedSeq[BlockMessage]] = underlying.estimator(dag)
   def blockDag: F[BlockDag]                                 = underlying.blockDag
-  def normalizedInitialFault(weights: Map[Validator, Int]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[BlockMessage]          = underlying.lastFinalizedBlock
   def storageContents(hash: ByteString): F[String] = underlying.storageContents(hash)

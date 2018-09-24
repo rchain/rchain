@@ -20,9 +20,11 @@ class TwoStepLockTest extends FlatSpec with Matchers {
     r.unsafeRunSync
   }
 
-  def acquireLock(lock: TwoStepLock[String],
-                  a: List[String],
-                  b: List[String],
-                  update: => Unit): Task[Unit] =
+  def acquireLock(
+      lock: TwoStepLock[String],
+      a: List[String],
+      b: List[String],
+      update: => Unit
+  ): Task[Unit] =
     Task { lock.acquire(a)(() => b)(update) }
 }

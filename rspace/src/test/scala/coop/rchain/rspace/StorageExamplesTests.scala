@@ -78,9 +78,11 @@ trait StorageExamplesTests
     val r1 = space
       .consume(
         List(Channel("colleagues"), Channel("friends"), Channel("friends")),
-        List(CityMatch(city = "Crystal Lake"),
-             CityMatch(city = "Crystal Lake"),
-             CityMatch(city = "Crystal Lake")),
+        List(
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake"),
+          CityMatch(city = "Crystal Lake")
+        ),
         new EntriesCaptor,
         persist = false
       )
@@ -293,19 +295,17 @@ class InMemoryStoreStorageExamplesTestsBase
       implicits.serializeChannel.toCodec,
       implicits.serializePattern.toCodec,
       implicits.serializeInfo.toCodec,
-      implicits.serializeEntriesCaptor.toCodec)
+      implicits.serializeEntriesCaptor.toCodec
+    )
 
     val branch = Branch("inmem")
 
     val trieStore =
       InMemoryTrieStore.create[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]()
 
-    val testStore = InMemoryStore.create[
-      InMemTransaction[history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]],
-      Channel,
-      Pattern,
-      Entry,
-      EntriesCaptor](trieStore, branch)
+    val testStore = InMemoryStore.create[InMemTransaction[
+      history.State[Blake2b256Hash, GNAT[Channel, Pattern, Entry, EntriesCaptor]]
+    ], Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
 
     val testSpace =
       RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
@@ -337,8 +337,10 @@ class LMDBStoreStorageExamplesTestBase
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                            Branch.MASTER)
+      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+        testStore,
+        Branch.MASTER
+      )
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testSpace)

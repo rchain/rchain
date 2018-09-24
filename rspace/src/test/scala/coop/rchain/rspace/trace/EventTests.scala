@@ -24,9 +24,12 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
 
       val expectedHash =
         Blake2b256Hash.create(
-          List(Serialize[String].encode(channel),
-               Serialize[String].encode(data),
-               (cignore(7) ~> bool).encode(persist).map(_.bytes).get))
+          List(
+            Serialize[String].encode(channel),
+            Serialize[String].encode(data),
+            (cignore(7) ~> bool).encode(persist).map(_.bytes).get
+          )
+        )
 
       actual.hash shouldBe expectedHash
     }
@@ -52,8 +55,11 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
       val expectedHash =
         Blake2b256Hash.create(
           encodedChannels ++ encodedPatterns
-            ++ List(Serialize[StringsCaptor].encode(continuation),
-                    (cignore(7) ~> bool).encode(persist).map(_.bytes).get))
+            ++ List(
+              Serialize[StringsCaptor].encode(continuation),
+              (cignore(7) ~> bool).encode(persist).map(_.bytes).get
+            )
+        )
 
       actual.hash shouldBe expectedHash
     }

@@ -14,11 +14,10 @@ import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.io.File
 import java.nio.file.Path
-
 import scala.io.Source
-
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp._, Connect._
+import scala.concurrent.duration._
 
 package object effects {
 
@@ -46,41 +45,24 @@ package object effects {
     }
   }
 
-  def kademliaRPC(src: PeerNode, timeout: FiniteDuration)(
+  def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       implicit
+      scheduler: Scheduler,
       metrics: Metrics[Task],
-      transport: TransportLayer[Task]): KademliaRPC[Task] =
-    new KademliaRPC[Task] {
-      def ping(node: PeerNode): Task[Boolean] =
-        for {
-          _   <- Metrics[Task].incrementCounter("protocol-ping-sends")
-          req = ProtocolHelper.ping(src)
-          res <- TransportLayer[Task].roundTrip(node, req, timeout)
-        } yield res.toOption.isDefined
+      log: Log[Task]
+  ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
 
-      def lookup(key: Seq[Byte], remoteNode: PeerNode): Task[Seq[PeerNode]] =
-        for {
-          _   <- Metrics[Task].incrementCounter("protocol-lookup-send")
-          req = ProtocolHelper.lookup(src, key)
-          r <- TransportLayer[Task]
-                .roundTrip(remoteNode, req, timeout)
-                .map(_.toOption
-                  .map {
-                    case Protocol(_, Protocol.Message.LookupResponse(lr)) =>
-                      lr.nodes.map(ProtocolHelper.toPeerNode)
-                    case _ => Seq()
-                  }
-                  .getOrElse(Seq()))
-        } yield r
-    }
-
-  def tcpTransportLayer(host: String,
-                        port: Int,
-                        certPath: Path,
-                        keyPath: Path,
-                        maxMessageSize: Int)(implicit scheduler: Scheduler,
-                                             connections: TcpTransportLayer.TransportCell[Task],
-                                             log: Log[Task]): TcpTransportLayer = {
+  def tcpTransportLayer(
+      host: String,
+      port: Int,
+      certPath: Path,
+      keyPath: Path,
+      maxMessageSize: Int
+  )(
+      implicit scheduler: Scheduler,
+      connections: TcpTransportLayer.TransportCell[Task],
+      log: Log[Task]
+  ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TcpTransportLayer(host, port, cert, key, maxMessageSize)

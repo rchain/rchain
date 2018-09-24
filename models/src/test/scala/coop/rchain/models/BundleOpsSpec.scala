@@ -21,8 +21,10 @@ class BundleOpsSpec extends FunSuite {
       val result = b1.merge(b2)
       assert(!result.readFlag, "Name should not be readable")
       assert(result.writeFlag, "Name should be writeable")
-      assert(result.body.get === par,
-             "Flattened bundles should contain process found in the innermost bundle.")
+      assert(
+        result.body.get === par,
+        "Flattened bundles should contain process found in the innermost bundle."
+      )
     }
 
     withClue("""
@@ -36,8 +38,10 @@ class BundleOpsSpec extends FunSuite {
       val result = b1.merge(b2)
       assert(!result.readFlag, "Name should not be readable")
       assert(!result.writeFlag, "Name should not be writeable")
-      assert(result.body.get === par,
-             "Flattened bundles should contain process found in the innermost bundle.")
+      assert(
+        result.body.get === par,
+        "Flattened bundles should contain process found in the innermost bundle."
+      )
     }
 
   }
