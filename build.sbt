@@ -238,7 +238,9 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true
+    fork in Test := true,
+    //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
+    javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
   .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
 
