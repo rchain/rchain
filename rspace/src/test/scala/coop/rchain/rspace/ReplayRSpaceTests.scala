@@ -14,15 +14,20 @@ import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
 import scala.collection.{immutable, mutable}
-import scala.util.Random
+import scala.concurrent.Future
+import scala.util.{Random, Right}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with TestImplicitHelpers {
+    with TestImplicitHelpers
+    with ScalaFutures {
 
   def consumeMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -793,6 +798,40 @@ trait ReplayRSpaceTests
       an[RSpaceClosedException] shouldBe thrownBy(
         replaySpace.produce(channel, data, false)
       )
+    }
+
+  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      replaySpace.replayData.take()
+      replaySpace.replayData.put(null)
+
+      an[NullPointerException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, continuation, false)
+      )
+
+      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.futureValue
+      res shouldBe a[Right[_, _]]
+    }
+
+  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val data         = "datum1"
+
+      replaySpace.replayData.take()
+      replaySpace.replayData.put(null)
+
+      an[NullPointerException] shouldBe thrownBy(
+        replaySpace.produce(channel, data, false)
+      )
+
+      val res = Future { replaySpace.produce(channel, data, false) }.futureValue
+      res shouldBe a[Right[_, _]]
     }
 }
 

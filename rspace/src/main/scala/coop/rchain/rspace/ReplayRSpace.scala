@@ -293,7 +293,7 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
   def getReplayData: ReplayData = replayData.get
 
-  protected val replayData: SyncVar[ReplayData] = {
+  protected[rspace] val replayData: SyncVar[ReplayData] = {
     val sv = new SyncVar[ReplayData]()
     sv.put(ReplayData.empty)
     sv
