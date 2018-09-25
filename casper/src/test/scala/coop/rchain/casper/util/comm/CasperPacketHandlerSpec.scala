@@ -89,8 +89,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       override def normalizedFaultTolerance(
           blockDag: BlockDag,
           estimate: BlockMessage
-      ): Task[Float] =
-        Task.pure(1.0f)
+      ): Float = 1.0f
     }
   }
 
