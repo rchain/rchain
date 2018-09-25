@@ -54,10 +54,8 @@ Summary: A Python library for the Docker Engine API.
 
 ``` 
 
-
-# Test organization
-The tests are organized in a treee structure. The 
 # Running the tests
+
 
 ## Configuration
 The file `pytest.ini` allows some configuration of the test execution. Information about all the available options 
@@ -71,14 +69,6 @@ The tests are run using *pytest*. If you want to have a deep understanding of th
 The tests can be run using the bash script 
 ```bash
 $ ./run_tests.sh
-```
-
-In order to run only specific tests can specify the test subdir where you want the discovery to start
-
-Examples:
-The correctness
-```bash
-$ ./run_tests.sh --collect-only  test/correctness
 ```
 
 You can see all the options available by running
@@ -104,9 +94,8 @@ Examples
 $ ./run_tests.sh --collect-only
 ```
 ```bash
-$ ./run_tests.sh --collect-only  test/correctness/star_connected
+$ ./run_tests.sh --collect-only  test/star_connected
 ```
-
 
 # Writing your own tests
 TODO
