@@ -101,7 +101,7 @@ class RegistryImpl[F[_]](
     )
   )
   // Testing only
-  private val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
+  private val lookupChannels  = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
   private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
   private val insertPatterns = List(
     BindPattern(

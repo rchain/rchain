@@ -7,7 +7,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -62,7 +62,7 @@ class CryptoChannelsSpec
     Await.ready(reduce.eval(consume).runAsync, 3.seconds)
   }
 
-  def assertStoreContains(store: RhoIStore)(ackChannel: GString)(data: ListChannelWithRandom)(
+  def assertStoreContains(store: RhoIStore)(ackChannel: GPrivate)(data: ListChannelWithRandom)(
       implicit
       serializeChannel: Serialize[Channel],
       serializeChannels: Serialize[ListChannelWithRandom]
@@ -75,7 +75,7 @@ class CryptoChannelsSpec
   }
 
   def hashingChannel(
-      channelName: String,
+      channelName: Par,
       hashFn: Array[Byte] => Array[Byte],
       fixture: FixtureParam
   )(
@@ -88,10 +88,10 @@ class CryptoChannelsSpec
     val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
       hashFn => serialize andThen hashFn
 
-    val hashChannel              = Quote(GString(channelName))
+    val hashChannel              = Quote(channelName)
     val hash: Par => Array[Byte] = serializeAndHash(hashFn)
 
-    val ackChannel        = GString("x")
+    val ackChannel        = GPrivateBuilder("x")
     implicit val emptyEnv = Env[Par]()
 
     val storeContainsTest: ListChannelWithRandom => Assertion =
@@ -113,15 +113,15 @@ class CryptoChannelsSpec
   }
 
   "sha256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("sha256Hash", Sha256.hash _, fixture)
+    hashingChannel(Runtime.FixedChannels.SHA256_HASH, Sha256.hash _, fixture)
   }
 
   "blake2b256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("blake2b256Hash", Blake2b256.hash _, fixture)
+    hashingChannel(Runtime.FixedChannels.BLAKE2B256_HASH, Blake2b256.hash _, fixture)
   }
 
   "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
-    hashingChannel("keccak256Hash", Keccak256.hash _, fixture)
+    hashingChannel(Runtime.FixedChannels.KECCAK256_HASH, Keccak256.hash _, fixture)
 
   }
 
@@ -135,14 +135,14 @@ class CryptoChannelsSpec
     fixture =>
       val (reduce, store) = fixture
 
-      val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
+      val secp256k1VerifyhashChannel = Quote(Runtime.FixedChannels.SECP256K1_VERIFY)
 
       val pubKey = Base16.decode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
       )
       val secKey = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
 
-      val ackChannel        = GString("x")
+      val ackChannel        = GPrivateBuilder("x")
       implicit val emptyEnv = Env[Par]()
       val storeContainsTest: ListChannelWithRandom => Assertion =
         assertStoreContains(store)(ackChannel) _
@@ -179,10 +179,10 @@ class CryptoChannelsSpec
 
       implicit val rand = Blake2b512Random(Array.empty[Byte])
 
-      val ed25519VerifyChannel = Quote(GString("ed25519Verify"))
+      val ed25519VerifyChannel = Quote(Runtime.FixedChannels.ED25519_VERIFY)
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
-      val ackChannel        = GString("x")
+      val ackChannel        = GPrivateBuilder("x")
       implicit val emptyEnv = Env[Par]()
       val storeContainsTest: ListChannelWithRandom => Assertion =
         assertStoreContains(store)(ackChannel) _

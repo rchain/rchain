@@ -29,6 +29,9 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
+  def channelBytes(bytes: Array[Byte]): Channel =
+    Channel(Quote(GPrivate(ByteString.copyFrom(bytes))))
+
   def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
     Map(
       lookupRef                       -> registry.lookup,
@@ -164,10 +167,10 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "lookup" should "recurse" in {
     val lookupString: String =
       """
-      new r(`rho:registry:testing:lookup`) in {
-        r!("0897".hexToBytes(), "result0") |
-        r!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), "result1") |
-        r!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result2")
+      new r(`rho:registry:testing:lookup`), result0, result1, result2 in {
+        r!("0897".hexToBytes(), *result0) |
+        r!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *result1) |
+        r!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *result2)
       }"""
 
     val lookupPar: Par = Interpreter.buildNormalizedTerm(new StringReader(lookupString)).value
@@ -175,6 +178,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(1)
     val newRand                         = rand.splitByte(2)
+    val result0                         = channelBytes(newRand.next)
+    val result1                         = channelBytes(newRand.next)
+    val result2                         = channelBytes(newRand.next)
     val randResult0                     = newRand.splitByte(0)
     randResult0.next; randResult0.next
     val randResult1 = newRand.splitByte(1)
@@ -190,15 +196,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
+    result.get(List(result0)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result0"))),
+              result0,
               ListChannelWithRandom(Seq(Quote(GInt(7))), randResult0),
               false
             )
@@ -207,12 +210,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result1")) should be(
+    result.get(List(result1)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result1"))),
+              result1,
               ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
               false
             )
@@ -221,12 +224,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result2")) should be(
+    result.get(List(result2)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result2"))),
+              result2,
               ListChannelWithRandom(Seq(Quote(GInt(8))), randResult2),
               false
             )
@@ -240,34 +243,36 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "insert" should "successfully split" in {
     val insertString =
       """
-        new rl(`rho:registry:testing:lookup`), ri(`rho:registry:testing:insert`), ack in {
+        new rl(`rho:registry:testing:lookup`), ri(`rho:registry:testing:insert`), ack,
+            result0, result1, result2, result3, result4, result5, result6, result7,
+            result8, result9, result10 in {
           ri!("0897e953".hexToBytes(), 10, *ack) |
           for (@10 <- ack) { //merge 0
             rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
             for (@x <- ack) { //merge 1
-              @"result0"!(x) |
+              result0!(x) |
               rl!("0897e953".hexToBytes(), *ack) |
               for (@x <- ack) { //merge 2
-                @"result1"!(x) |
+                result1!(x) |
                 ri!("0897e9".hexToBytes(), 11, *ack) |
                 for (@11 <- ack) { //merge 3
                   rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
                   for (@x <- ack) { //merge4
-                    @"result2"!(x) |
+                    result2!(x) |
                     rl!("0897e953".hexToBytes(), *ack) |
                     for (@x <- ack) { //merge5
-                      @"result3"!(x) |
+                      result3!(x) |
                       rl!("0897e9".hexToBytes(), *ack) |
                       for (@x <- ack) {
-                        @"result4"!(x) |
+                        result4!(x) |
                         ri!("08bb".hexToBytes(), 12, *ack) |
                         for (@12 <- ack) {
-                          rl!("0897".hexToBytes(), "result5") |
-                          rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), "result6") |
-                          rl!("0897e9".hexToBytes(), "result7") |
-                          rl!("0897e953".hexToBytes(), "result8") |
-                          rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result9") |
-                          rl!("08bb".hexToBytes(), "result10")
+                          rl!("0897".hexToBytes(), *result5) |
+                          rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *result6) |
+                          rl!("0897e9".hexToBytes(), *result7) |
+                          rl!("0897e953".hexToBytes(), *result8) |
+                          rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *result9) |
+                          rl!("08bb".hexToBytes(), *result10)
                         }
                       }
                     }
@@ -287,6 +292,17 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val newRand = resultRand.splitByte(2)
     // once, for ack.
     newRand.next()
+    val result0     = channelBytes(newRand.next)
+    val result1     = channelBytes(newRand.next)
+    val result2     = channelBytes(newRand.next)
+    val result3     = channelBytes(newRand.next)
+    val result4     = channelBytes(newRand.next)
+    val result5     = channelBytes(newRand.next)
+    val result6     = channelBytes(newRand.next)
+    val result7     = channelBytes(newRand.next)
+    val result8     = channelBytes(newRand.next)
+    val result9     = channelBytes(newRand.next)
+    val result10    = channelBytes(newRand.next)
     val insert0Rand = newRand.splitByte(0)
     // Twice for lookup, once for new name to insert.
     insert0Rand.next(); insert0Rand.next(); insert0Rand.next()
@@ -295,12 +311,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // It takes 3 now because of the previous insert.
     lookup0Rand.next(); lookup0Rand.next(); lookup0Rand.next()
     val merge1      = Blake2b512Random.merge(Seq(merge0.splitByte(1), lookup0Rand))
-    val result0Rand = merge1.splitByte(0)
-    val lookup1Rand = merge1.splitByte(1)
+    val result0Rand = merge1.splitByte(1)
+    val lookup1Rand = merge1.splitByte(0)
     lookup1Rand.next(); lookup1Rand.next(); lookup1Rand.next()
     val merge2      = Blake2b512Random.merge(Seq(merge1.splitByte(2), lookup1Rand))
-    val result1Rand = merge2.splitByte(0)
-    val insert1Rand = merge2.splitByte(1)
+    val result1Rand = merge2.splitByte(1)
+    val insert1Rand = merge2.splitByte(0)
     //0897e9 only takes 2 lookups (root, and 0897). It uses 1 more to split
     insert1Rand.next(); insert1Rand.next(); insert1Rand.next()
     val merge3      = Blake2b512Random.merge(Seq(merge2.splitByte(2), insert1Rand.splitByte(1)))
@@ -308,17 +324,17 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // It takes 4 lookups now because of the second insert.
     lookup2Rand.next(); lookup2Rand.next(); lookup2Rand.next(); lookup2Rand.next()
     val merge4      = Blake2b512Random.merge(Seq(merge3.splitByte(1), lookup2Rand))
-    val result2Rand = merge4.splitByte(0)
-    val lookup3Rand = merge4.splitByte(1)
+    val result2Rand = merge4.splitByte(1)
+    val lookup3Rand = merge4.splitByte(0)
     lookup3Rand.next(); lookup3Rand.next(); lookup3Rand.next(); lookup3Rand.next()
     val merge5      = Blake2b512Random.merge(Seq(merge4.splitByte(2), lookup3Rand))
-    val result3Rand = merge5.splitByte(0)
-    val lookup4Rand = merge5.splitByte(1)
+    val result3Rand = merge5.splitByte(1)
+    val lookup4Rand = merge5.splitByte(0)
     //Only 3 lookups: root, 0897, e9
     lookup4Rand.next(); lookup4Rand.next(); lookup4Rand.next()
     val merge6      = Blake2b512Random.merge(Seq(merge5.splitByte(2), lookup4Rand))
-    val result4Rand = merge6.splitByte(0)
-    val insert2Rand = merge6.splitByte(1)
+    val result4Rand = merge6.splitByte(1)
+    val insert2Rand = merge6.splitByte(0)
     // Only 2 because we perform a split at the root
     insert2Rand.next(); insert2Rand.next()
     val merge7      = Blake2b512Random.merge(Seq(merge6.splitByte(2), insert2Rand.splitByte(1)))
@@ -345,15 +361,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
+    result.get(List(result0)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result0"))),
+              result0,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
               false
             )
@@ -362,12 +375,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result1")) should be(
+    result.get(List(result1)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result1"))),
+              result1,
               ListChannelWithRandom(Seq(Quote(GInt(10))), result1Rand),
               false
             )
@@ -376,12 +389,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result2")) should be(
+    result.get(List(result2)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result2"))),
+              result2,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result2Rand),
               false
             )
@@ -390,12 +403,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result3")) should be(
+    result.get(List(result3)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result3"))),
+              result3,
               ListChannelWithRandom(Seq(Quote(GInt(10))), result3Rand),
               false
             )
@@ -404,12 +417,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result4")) should be(
+    result.get(List(result4)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result4"))),
+              result4,
               ListChannelWithRandom(Seq(Quote(GInt(11))), result4Rand),
               false
             )
@@ -418,12 +431,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result5")) should be(
+    result.get(List(result5)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result5"))),
+              result5,
               ListChannelWithRandom(Seq(Quote(GInt(7))), result5Rand),
               false
             )
@@ -432,12 +445,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result6")) should be(
+    result.get(List(result6)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result6"))),
+              result6,
               ListChannelWithRandom(Seq(Quote(GInt(9))), result6Rand),
               false
             )
@@ -446,12 +459,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result7")) should be(
+    result.get(List(result7)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result7"))),
+              result7,
               ListChannelWithRandom(Seq(Quote(GInt(11))), result7Rand),
               false
             )
@@ -460,12 +473,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result8")) should be(
+    result.get(List(result8)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result8"))),
+              result8,
               ListChannelWithRandom(Seq(Quote(GInt(10))), result8Rand),
               false
             )
@@ -474,12 +487,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result9")) should be(
+    result.get(List(result9)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result9"))),
+              result9,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result9Rand),
               false
             )
@@ -488,12 +501,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result10")) should be(
+    result.get(List(result10)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result10"))),
+              result10,
               ListChannelWithRandom(Seq(Quote(GInt(12))), result10Rand),
               false
             )
@@ -509,32 +522,33 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     2 lookups, 1 delete, 1 lookup, 1 delete */
     val deleteString =
       """
-      new rl(`rho:registry:testing:lookup`), rd(`rho:registry:testing:delete`), ack in {
+      new rl(`rho:registry:testing:lookup`), rd(`rho:registry:testing:delete`), ack,
+          result0, result1, result2, result3, result4, result5, result6 in {
         rd!("0897a37e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3".hexToBytes(), *ack) |
         for (@11 <- ack) { //merge 0
           rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
           for (@x <- ack) { //merge 1
-            @"result0"!(x) |
+            result0!(x) |
             rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
             for (@x <- ack) { //merge 2
-              @"result1"!(x) |
+              result1!(x) |
               rl!("0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0".hexToBytes(), *ack) |
               for (@x <- ack) { //merge 3
-                @"result2"!(x) |
+                result2!(x) |
                 rd!("0897ef763354e4266d31c74b7a5be55fbfeb464fe65ce56ce9ccbfd9a1fddef0".hexToBytes(), *ack) |
                 for (@10 <- ack) { //merge4
                   rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
                   for (@x <- ack) { //merge5
-                    @"result3"!(x) |
+                    result3!(x) |
                     rl!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
                     for (@x <- ack) { //merge6
-                      @"result4"!(x) |
+                      result4!(x) |
                       rd!("089775e6bbe6f893b810e66615867bede6e16fcf22a5dd869bb17ca8415f0b8e".hexToBytes(), *ack) |
                       for (@9 <- ack) { //merge7
                         rl!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *ack) |
                         for (@x <- ack) { //merge8
-                          @"result5"!(x) |
-                          rd!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), "result6")
+                          result5!(x) |
+                          rd!("0897e9533fd9c5c26e7ea3fe07f99a4dbbde31eb2c59f84810d03e078e7d31c2".hexToBytes(), *result6)
                         }
                       }
                     }
@@ -564,6 +578,13 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val rootRand = resultRand.splitByte(0)
     // once, for ack.
     newRand.next()
+    val result0     = channelBytes(newRand.next)
+    val result1     = channelBytes(newRand.next)
+    val result2     = channelBytes(newRand.next)
+    val result3     = channelBytes(newRand.next)
+    val result4     = channelBytes(newRand.next)
+    val result5     = channelBytes(newRand.next)
+    val result6     = channelBytes(newRand.next)
     val delete0Rand = newRand.splitByte(0)
     // Once for root, and twice for a single iteration through the tree
     delete0Rand.next(); delete0Rand.next(); delete0Rand.next()
@@ -571,28 +592,28 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val lookup0Rand = merge0.splitByte(0)
     lookup0Rand.next(); lookup0Rand.next();
     val merge1      = Blake2b512Random.merge(Seq(merge0.splitByte(1), lookup0Rand))
-    val result0Rand = merge1.splitByte(0)
-    val lookup1Rand = merge1.splitByte(1)
+    val result0Rand = merge1.splitByte(1)
+    val lookup1Rand = merge1.splitByte(0)
     lookup1Rand.next(); lookup1Rand.next();
     val merge2      = Blake2b512Random.merge(Seq(merge1.splitByte(2), lookup1Rand))
-    val result1Rand = merge2.splitByte(0)
-    val lookup2Rand = merge2.splitByte(1)
+    val result1Rand = merge2.splitByte(1)
+    val lookup2Rand = merge2.splitByte(0)
     lookup2Rand.next(); lookup2Rand.next();
     val merge3      = Blake2b512Random.merge(Seq(merge2.splitByte(2), lookup2Rand))
-    val result2Rand = merge3.splitByte(0)
-    val delete1Rand = merge3.splitByte(1)
+    val result2Rand = merge3.splitByte(1)
+    val delete1Rand = merge3.splitByte(0)
     // Once for root, and twice for a single iteration through the tree
     delete1Rand.next(); delete1Rand.next(); delete1Rand.next()
     val merge4      = Blake2b512Random.merge(Seq(merge3.splitByte(2), delete1Rand))
     val lookup3Rand = merge4.splitByte(0)
     lookup3Rand.next(); lookup3Rand.next();
     val merge5      = Blake2b512Random.merge(Seq(merge4.splitByte(1), lookup3Rand))
-    val result3Rand = merge5.splitByte(0)
-    val lookup4Rand = merge5.splitByte(1)
+    val result3Rand = merge5.splitByte(1)
+    val lookup4Rand = merge5.splitByte(0)
     lookup4Rand.next(); lookup4Rand.next();
     val merge6      = Blake2b512Random.merge(Seq(merge5.splitByte(2), lookup4Rand))
-    val result4Rand = merge6.splitByte(0)
-    val delete2Rand = merge6.splitByte(1)
+    val result4Rand = merge6.splitByte(1)
+    val delete2Rand = merge6.splitByte(0)
     // Once for root, and twice for a single iteration through the tree
     delete2Rand.next(); delete2Rand.next(); delete2Rand.next()
     val merge7      = Blake2b512Random.merge(Seq(merge6.splitByte(2), delete2Rand))
@@ -601,21 +622,18 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // 1 new name.
     lookup5Rand.next();
     val merge8      = Blake2b512Random.merge(Seq(merge7.splitByte(1), lookup5Rand))
-    val result5Rand = merge8.splitByte(0)
-    val result6Rand = merge8.splitByte(1)
+    val result5Rand = merge8.splitByte(1)
+    val result6Rand = merge8.splitByte(0)
     // This is the last delete. It should take only 1 lookup, because of the
     // previous merge to root.
     result6Rand.next()
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
+    result.get(List(result0)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result0"))),
+              result0,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
               false
             )
@@ -624,12 +642,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result1")) should be(
+    result.get(List(result1)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result1"))),
+              result1,
               ListChannelWithRandom(Seq(Quote(GInt(9))), result1Rand),
               false
             )
@@ -638,12 +656,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result2")) should be(
+    result.get(List(result2)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result2"))),
+              result2,
               ListChannelWithRandom(Seq(Quote(GInt(10))), result2Rand),
               false
             )
@@ -652,12 +670,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result3")) should be(
+    result.get(List(result3)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result3"))),
+              result3,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result3Rand),
               false
             )
@@ -666,12 +684,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result4")) should be(
+    result.get(List(result4)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result4"))),
+              result4,
               ListChannelWithRandom(Seq(Quote(GInt(9))), result4Rand),
               false
             )
@@ -680,12 +698,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result5")) should be(
+    result.get(List(result5)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result5"))),
+              result5,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result5Rand),
               false
             )
@@ -694,12 +712,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result6")) should be(
+    result.get(List(result6)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result6"))),
+              result6,
               ListChannelWithRandom(Seq(Quote(GInt(8))), result6Rand),
               false
             )
@@ -727,14 +745,16 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "Public lookup" should "decode and then call lookup" in {
     val lookupString =
       """
-      new r(`rho:registry:lookup`) in {
-        r!(`rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3`, "result0") |
-        r!(`rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3`, "result1")
+      new r(`rho:registry:lookup`), result0, result1 in {
+        r!(`rho:id:bnm61w3958nhr5u6wx9yx6c4js77hcxmftc9o1yo4y9yxdu7g8bnq3`, *result0) |
+        r!(`rho:id:bnmzm3i5h5hj8qyoh3ubmbu57zuqn56xrk175bw5sf6kook9bq8ny3`, *result1)
       }"""
     val lookupPar: Par                  = Interpreter.buildNormalizedTerm(new StringReader(lookupString)).value
     val completePar                     = lookupPar.addSends(rootSend, branchSend)
     implicit val rand: Blake2b512Random = baseRand.splitByte(4)
     val newRand                         = rand.splitByte(2)
+    val result0                         = channelBytes(newRand.next)
+    val result1                         = channelBytes(newRand.next)
     val randResult0                     = newRand.splitByte(0)
     randResult0.next; randResult0.next
     val randResult1 = newRand.splitByte(1)
@@ -748,15 +768,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
-    result.get(resultChanList("result0")) should be(
+    result.get(List(result0)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result0"))),
+              result0,
               ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
               false
             )
@@ -765,12 +782,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result1")) should be(
+    result.get(List(result1)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result1"))),
+              result1,
               ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
               false
             )
@@ -784,11 +801,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "Random Registry" should "use the random generator and insert" in {
     val registerString =
       """
-      new rr(`rho:registry:insertArbitrary`), rl(`rho:registry:lookup`), x, y in {
+      new rr(`rho:registry:insertArbitrary`), rl(`rho:registry:lookup`),
+          x, y, result0, result1 in {
         rr!(bundle+{*x}, *y) |
         for(@{uri /\ Uri} <- y) {
-          @"result0"!(uri) |
-          rl!(uri, "result1")
+          result0!(uri) |
+          rl!(uri, *result1)
         }
       }"""
     val registerPar: Par                = Interpreter.buildNormalizedTerm(new StringReader(registerString)).value
@@ -797,6 +815,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     val newRand                         = rand.splitByte(2)
     val registeredName                  = newRand.next();
     newRand.next()
+    val result0      = channelBytes(newRand.next)
+    val result1      = channelBytes(newRand.next)
     val registerRand = newRand.splitByte(0)
     // Once for Uri and twice for temporary channels to handle the insert.
     val uriBytes = registerRand.next();
@@ -805,8 +825,8 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // Goes directly into root
     insertRand.next();
     val merge0Rand  = Blake2b512Random.merge(Seq(newRand.splitByte(1), insertRand))
-    val randResult0 = merge0Rand.splitByte(0)
-    val lookupRand  = merge0Rand.splitByte(1)
+    val randResult0 = merge0Rand.splitByte(1)
+    val lookupRand  = merge0Rand.splitByte(0)
     lookupRand.next();
     val randResult1 = lookupRand
 
@@ -818,20 +838,17 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
-    def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
-
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
 
     val expectedUri = Registry.buildURI(uriBytes)
 
-    result.get(resultChanList("result0")) should be(
+    result.get(List(result0)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result0"))),
+              result0,
               ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
               false
             )
@@ -840,12 +857,12 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(resultChanList("result1")) should be(
+    result.get(List(result1)) should be(
       Some(
         Row(
           List(
             Datum.create(
-              Channel(Quote(GString("result1"))),
+              result1,
               ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
               false
             )

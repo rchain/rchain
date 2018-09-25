@@ -112,11 +112,11 @@ object Runtime {
     val STDOUT_ACK: Par        = byteName(1)
     val STDERR: Par            = byteName(2)
     val STDERR_ACK: Par        = byteName(3)
-    val ED25519_VERIFY: Par    = GString("ed25519Verify")
-    val SHA256_HASH: Par       = GString("sha256Hash")
-    val KECCAK256_HASH: Par    = GString("keccak256Hash")
-    val BLAKE2B256_HASH: Par   = GString("blake2b256Hash")
-    val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
+    val ED25519_VERIFY: Par    = byteName(4)
+    val SHA256_HASH: Par       = byteName(5)
+    val KECCAK256_HASH: Par    = byteName(6)
+    val BLAKE2B256_HASH: Par   = byteName(7)
+    val SECP256K1_VERIFY: Par  = byteName(8)
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
   }
@@ -221,6 +221,11 @@ object Runtime {
       "rho:io:stdoutAck"             -> FixedChannels.STDOUT_ACK,
       "rho:io:stderr"                -> FixedChannels.STDERR,
       "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
+      "rho:crypto:ed25519Verify"     -> FixedChannels.ED25519_VERIFY,
+      "rho:crypto:sha256Hash"        -> FixedChannels.SHA256_HASH,
+      "rho:crypto:keccak256Hash"     -> FixedChannels.KECCAK256_HASH,
+      "rho:crypto:blake2b256Hash"    -> FixedChannels.BLAKE2B256_HASH,
+      "rho:crypto:secp256k1Verify"   -> FixedChannels.SECP256K1_VERIFY,
       "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
       "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
     )

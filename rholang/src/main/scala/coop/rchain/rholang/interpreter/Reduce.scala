@@ -316,24 +316,33 @@ object Reduce {
       for {
         quote   <- eval(send.chan)
         subChan <- substituteAndCharge[Quote, M](quote, 0, env, costAccountingAlg)
-        unbundled <- subChan.value.singleBundle() match {
-                      case Some(value) =>
-                        if (!value.writeFlag) {
-                          s.raiseError(ReduceError("Trying to send on non-writeable channel."))
-                        } else {
-                          s.pure(Quote(value.body))
-                        }
-                      case None => Applicative[M].pure(subChan)
-                    }
+        _ <- {
+          if (ParIsForgeable.isForgeable(subChan.value))
+            Applicative[M].pure(())
+          else
+            for {
+              unbundled <- subChan.value.singleBundle() match {
+                            case Some(value) =>
+                              if (!value.writeFlag) {
+                                s.raiseError(
+                                  ReduceError("Trying to send on non-writeable channel.")
+                                )
+                              } else {
+                                s.pure(Quote(value.body))
+                              }
+                            case None => Applicative[M].pure(subChan)
+                          }
 
-        data <- send.data.toList.traverse(x => evalExpr(x))
-        substData <- data.traverse(
-                      p =>
-                        substituteAndCharge[Par, M](p, 0, env, costAccountingAlg)
-                          .map(par => Channel(Quote(par)))
-                    )
-        _ <- produce(unbundled, substData, send.persistent, rand)
-        _ <- costAccountingAlg.charge(SEND_EVAL_COST)
+              data <- send.data.toList.traverse(x => evalExpr(x))
+              substData <- data.traverse(
+                            p =>
+                              substituteAndCharge[Par, M](p, 0, env, costAccountingAlg)
+                                .map(par => Channel(Quote(par)))
+                          )
+              _ <- produce(unbundled, substData, send.persistent, rand)
+              _ <- costAccountingAlg.charge(SEND_EVAL_COST)
+            } yield ()
+        }
       } yield ()
 
     private def evalExplicit(
@@ -370,8 +379,15 @@ object Reduce {
                       env.shift(receive.bindCount),
                       costAccountingAlg
                     )
-        _ <- consume(binds, substBody, receive.persistent, rand)
-        _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
+        _ <- {
+          if (binds.exists(x => ParIsForgeable.isForgeable(x._2.value)))
+            Applicative[M].pure(())
+          else
+            for {
+              _ <- consume(binds, substBody, receive.persistent, rand)
+              _ <- costAccountingAlg.charge(RECEIVE_EVAL_COST)
+            } yield ()
+        }
       } yield ()
 
     /**
