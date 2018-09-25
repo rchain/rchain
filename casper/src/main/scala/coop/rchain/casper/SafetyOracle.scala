@@ -209,10 +209,9 @@ sealed abstract class SafetyOracleInstances {
             if x.toString > y.toString // TODO: Order ByteString
           } yield (x, y)).toList.filter {
             case (first: Validator, second: Validator) =>
-              seesAgreement(first, second) && seesAgreement(second, first) && neverEventuallySeeDisagreement(
-                first,
-                second
-              ) && neverEventuallySeeDisagreement(second, first)
+              seesAgreement(first, second) && seesAgreement(second, first) &&
+                neverEventuallySeeDisagreement(first, second) &&
+                neverEventuallySeeDisagreement(second, first)
           }
 
         val edges = computeAgreementGraphEdges
