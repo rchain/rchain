@@ -19,7 +19,7 @@ def start_network(config, docker, bootstrap, validators_data, allowed_peers=None
     peers = create_peer_nodes(docker, bootstrap, bootstrap.network, validators_data.bonds_file, validators_data.peers_keys, config.rnode_timeout, allowed_peers)
 
     try:
-        yield RChain(network = bootstrap.network, bootstrap = bootstrap, peers = peers)
+        yield RChain(network=bootstrap.network, bootstrap=bootstrap, peers=peers)
 
     finally:
         for peer in peers:
