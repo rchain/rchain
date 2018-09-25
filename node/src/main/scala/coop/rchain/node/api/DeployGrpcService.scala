@@ -33,7 +33,7 @@ private[api] object DeployGrpcService {
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         BlockAPI.getBlockQueryResponse[F](q).toTask
 
-      override def showBlocks(request: Empty): Observable[BlockInfo] =
+      override def showBlocks(request: Empty): Observable[BlockInfoWithoutTuplespace] =
         Observable
           .fromTask(BlockAPI.getBlocksResponse[F].toTask)
           .flatMap(b => Observable.fromIterable(b.blocks))

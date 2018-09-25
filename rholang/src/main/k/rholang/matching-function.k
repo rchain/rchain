@@ -11,55 +11,6 @@ imports MATCH-PROCESS
 // string to each instance of the match function.
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
-// Some syntax specifically for the "matching-function" module
-// Some needed syntax for matching
-// This distinguishes between Processes and Names with and without variables
-syntax ProcOrName ::= Id
-              | ProcOrNameNoVars
-              | Name
-              | Proc
-
-syntax HigherProcOrHigherName ::= Id
-              | HigherProcOrHigherNameNoVars
-              | HigherName
-              | HigherProc
-
-// For matching, we need to make a distinction between variables and no variables
-syntax ProcOrNameNoVars ::= NameNoVars
-              | ProcNoVars
-
-syntax HigherProcOrHigherNameNoVars ::= HigherNameNoVars
-              | HigherProcNoVars
-
-syntax StringlessMatchFormSyntax ::=
-              // Quote, Eval and Var
-                "[" HigherPat "]"
-              // Listen and Persistent Listen, as well as Contracts
-              | "[" HigherNamePat "][" HigherNamePat "][" HigherProcPat "]"
-              // New
-              | "[" Ids "][" HigherProcPat "]"
-              // Send
-              | "[" HigherNamePat "][" HigherProcPat "]"
-              // Match
-              | "[" HigherProcPat "][" HigherMatchCasesPat "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-              // Logical And's and Or's
-              | "[" String "][" HigherPat "][" HigherPat "]"
-              // Nil
-              | "[" "]"
-              // Hashed new HigherNames
-              | "[" Int "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-
-// Syntax which is needed for various matching operations
-syntax CanBeStdMatched ::= Id
-              | "intostdmatchform(" HigherPat ")"
-              | "intostdtfmatchform(" HigherPat ")"
-              | String StringlessMatchFormSyntax
-              | Ground
-              | HigherNameNoVars
-              | KResult
-
 // Now the semantics of the match function
 // Take the tuples one at a time
 rule <thread> ... <k> ... aritymatch[ S:String ](
@@ -153,7 +104,7 @@ rule intostdmatchform(S:String) => "string"[S]
 rule intostdmatchform(B:Bool) => "bool"[B]
 rule intostdmatchform(I:Int) => "int"[I]
 // Misc
-rule intostdmatchform( #(I:Int) ) => "hash"[I]
+rule intostdmatchform( unforgeable(I:Int) ) => "unforgeable"[I]
 rule intostdmatchform( P1:HigherProcPat | P2:HigherProcPat ) => "par"[P1][P2]
 rule intostdmatchform( X:Id ) => "variable"[X]
 rule intostdmatchform( X:Wildcard ) => "wildcard"[ X ]
@@ -297,8 +248,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
           => match[S]( C ; D )
           ~> match[S]( P ; R ) ... </k> ... </thread>
 
-// When the pattern is "hash"
-rule <thread> ... <k> ... matchstdform[S:String]( "hash"[I:Int] ; "hash"[J:Int] ; true)
+// When the pattern is "unforgeable"
+rule <thread> ... <k>... matchstdform[S:String]( "unforgeable"[I:Int] ; "unforgeable"[J:Int] ; true)
           => match[S]( I ; J ) ... </k> ... </thread>
 
 // When the pattern is a "new"
@@ -308,8 +259,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
                                 "new"[X2:Id,L2:Ids][R:HigherProcPat] ;
                                 true)
           => matchstdform[S](
-                    "new"[L1][ P[@ #(!I:Int) / X1] ] ;
-                    "new"[L2][ R[@ #(!I:Int) / X2] ] ;
+                    "new"[L1][ P[@ unforgeable(!I:Int) / X1] ] ;
+                    "new"[L2][ R[@ unforgeable(!I:Int) / X2] ] ;
                     true) ... </k> ... </thread>
 
 // (ii) If either one creates more new variables than the other we fail

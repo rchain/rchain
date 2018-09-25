@@ -158,7 +158,11 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     transport.roundTrip(remote, msg, timeout)
   }
 
-  def sendHeartbeat(transport: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] = {
+  def sendHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode
+  ): F[CommErr[Unit]] = {
     val msg = ProtocolHelper.heartbeat(local)
     transport.send(remote, msg)
   }
@@ -167,7 +171,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
       transport: TransportLayer[F],
       local: PeerNode,
       remotes: PeerNode*
-  ): F[Unit] = {
+  ): F[Seq[CommErr[Unit]]] = {
     val msg = ProtocolHelper.heartbeat(local)
     transport.broadcast(remotes, msg)
   }

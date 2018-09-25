@@ -10,7 +10,10 @@ imports MATCHING-FUNCTION
 // (1) How they interact with variables
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
-// The Standard match function
+// *******************************************************************
+// STANDARD MATCH
+
+// * * * * * * * * * * * * * * * * * * * *
 // This checks to see if two patterns match, and then substitutes free variables
 // from the second argument with terms from the first
 // 1. Production rules : what we're putting into the function
@@ -46,8 +49,9 @@ rule <thread> ...
 
 
 
+// * * * * * * * * * * * * * * * * * * * *
+// The "DoTheseMatch" function (TF version)
 
-// The "DoTheseMatch" function
 // This only checks to see if two patterns will match **in the sense of the standard
 // match function**, but does not do any substituting. If it encounters a variable,
 // it just rewrites to nothing. Rewriting to nothing is a sign of success
@@ -81,9 +85,12 @@ rule <thread> ... <k> ... match["TFSTDMATCH"]( P:HigherPat ; X:Wildcard )
               => .K ... </k> ... </thread>
 
 
+// *******************************************************************
+// MATCHING NAMES
 
+// * * * * * * * * * * * * * * * * * * * *
 // The "DoTheseHigherNamesMatch" function
-// This function will see
+
 // 1. We allow variables in the second component
 rule <thread> ... <k> ... match["HIGHERNAMEMATCH"]( P:HigherPat ; D:HigherPat )
               => matchstdform["HIGHERNAMEMATCH"]( intostdmatchform(P) ; intostdmatchform(D))
