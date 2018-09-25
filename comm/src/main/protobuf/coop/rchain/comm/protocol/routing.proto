@@ -35,8 +35,9 @@ message ProtocolHandshakeResponse {
 }
 
 message Packet {
-  string typeId  = 1;
-  bytes  content = 2;
+  string typeId     = 1;
+  bool   compressed = 2;
+  bytes  content    = 3;
 }
 
 message Disconnect {
