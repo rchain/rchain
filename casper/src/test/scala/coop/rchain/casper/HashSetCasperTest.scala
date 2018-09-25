@@ -13,7 +13,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator, RevIssuanceTest}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{Costs, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -147,7 +147,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deployDatas = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
       "new unforgable in { @\"add\"!(5, 7, *unforgable) }"
-    ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, Integer.MAX_VALUE))
+    ).zipWithIndex.map(s => ProtoUtil.sourceDeploy(s._1, start + s._2, Costs.MAX_VALUE))
 
     val Created(signedBlock1) = MultiParentCasper[Id].deploy(deployDatas.head) *> MultiParentCasper[
       Id
@@ -175,7 +175,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val startTime = System.currentTimeMillis()
     val source    = " for(@x <- @0){ @0!(x) } | @0!(0) "
     val deploys = (source #:: source #:: Stream.empty[String]).zipWithIndex
-      .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2, Integer.MAX_VALUE))
+      .map(s => ProtoUtil.sourceDeploy(s._1, startTime + s._2, Costs.MAX_VALUE))
     deploys.foreach(MultiParentCasper[Id].deploy(_))
     val Created(block) = MultiParentCasper[Id].createBlock
     val _              = MultiParentCasper[Id].addBlock(block)
@@ -269,7 +269,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       ProtoUtil.sourceDeploy(
         "@1!(1) | for(@x <- @1){ @1!(x) }",
         System.currentTimeMillis(),
-        Integer.MAX_VALUE
+        Costs.MAX_VALUE
       ),
       ProtoUtil.basicDeployData(2)
     )
@@ -430,7 +430,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "for(_ <- @1){ Nil } | @1!(1)",
       "@2!(2)"
     ).zipWithIndex
-      .map(d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, Integer.MAX_VALUE))
+      .map(d => ProtoUtil.sourceDeploy(d._1, System.currentTimeMillis() + d._2, Costs.MAX_VALUE))
 
     val Created(signedBlock1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock

@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator}
 import coop.rchain.casper.helper.HashSetCasperTestNode
 import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{Costs, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
@@ -28,10 +28,14 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.last)
     import node._
 
+    val llDeploy =
+      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), Costs.MAX_VALUE)
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
-    ).zipWithIndex.map { case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, Integer.MAX_VALUE) }
+    ).zipWithIndex.map {
+      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, Costs.MAX_VALUE)
+    }
 
     val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
       Id

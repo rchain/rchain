@@ -5,7 +5,7 @@ import InterpreterUtil._
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.casper.{BlockDag, MultiParentCasperInstances}
 import coop.rchain.casper.protocol.{Event => CasperEvent, _}
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
+import coop.rchain.casper.util.{Costs, EventConverter, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Id, Monad}
@@ -71,7 +71,7 @@ class InterpreterUtilTest
       "@2!(2)",
       "for(@a <- @1){ @123!(5 * a) }"
     ).flatMap(mkTerm(_).toOption)
-      .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+      .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Costs.MAX_VALUE))
     val genesisDeploysCost =
       genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(PCost(1, 0L)))
 
@@ -281,19 +281,19 @@ class InterpreterUtilTest
     val deploy1 = ProtoUtil.termDeploy(
       mkTerm("@1!(Nil)").toOption.get,
       System.currentTimeMillis(),
-      Integer.MAX_VALUE
+      Costs.MAX_VALUE
     )
     val deploy2 =
       ProtoUtil.termDeploy(
         mkTerm("@3!([1,2,3,4])").toOption.get,
         System.currentTimeMillis(),
-        Integer.MAX_VALUE
+        Costs.MAX_VALUE
       )
     val deploy3 =
       ProtoUtil.termDeploy(
         mkTerm("for(@x <- @0) { @4!(x.toByteArray()) }").toOption.get,
         System.currentTimeMillis(),
-        Integer.MAX_VALUE
+        Costs.MAX_VALUE
       )
 
     val cost1 = computeSingleProcessedDeploy(deploy1)
@@ -316,13 +316,13 @@ class InterpreterUtilTest
         ProtoUtil.termDeploy(
           mkTerm("@1!(Nil)").toOption.get,
           System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          Costs.MAX_VALUE
         )
       val deploy2 =
         ProtoUtil.termDeploy(
           mkTerm("@2!([1,2,3,4])").toOption.get,
           System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          Costs.MAX_VALUE
         )
 
       val cost1 = computeSingleProcessedDeploy(deploy1)
@@ -334,7 +334,7 @@ class InterpreterUtilTest
         ProtoUtil.termDeploy(
           mkTerm("@3!(\"a\" + 3)").toOption.get,
           System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          Costs.MAX_VALUE
         )
       val batchDeploy  = Seq(deploy1, deploy2, deployErr)
       val accCostBatch = computeSingleProcessedDeploy(batchDeploy: _*)
@@ -370,7 +370,7 @@ class InterpreterUtilTest
         "for (@x <- @1) { @2!(x) }",
         "for (@x <- @2) { @3!(x) }"
       ).flatMap(mkTerm(_).toOption)
-        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+        .map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Costs.MAX_VALUE))
 
     val (Right((computedTsHash, processedDeploys)), _) =
       computeDeploysCheckpoint[Id](Seq.empty, deploys, initState, knownStateHashes, runtimeManager)
@@ -418,7 +418,7 @@ class InterpreterUtilTest
         ProtoUtil.termDeploy(
           InterpreterUtil.mkTerm(s).right.get,
           System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          Costs.MAX_VALUE
         )
     )
 
@@ -472,7 +472,7 @@ class InterpreterUtilTest
             ProtoUtil.termDeploy(
               InterpreterUtil.mkTerm(s).right.get,
               System.currentTimeMillis(),
-              Integer.MAX_VALUE
+              Costs.MAX_VALUE
             )
         )
 
@@ -523,7 +523,7 @@ class InterpreterUtilTest
           ProtoUtil.termDeploy(
             InterpreterUtil.mkTerm(s).right.get,
             System.currentTimeMillis(),
-            Integer.MAX_VALUE
+            Costs.MAX_VALUE
           )
       )
 
@@ -566,7 +566,7 @@ class InterpreterUtilTest
             ProtoUtil.termDeploy(
               InterpreterUtil.mkTerm(s).right.get,
               System.currentTimeMillis(),
-              Integer.MAX_VALUE
+              Costs.MAX_VALUE
             )
         )
 

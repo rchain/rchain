@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{Costs, ProtoUtil}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
@@ -29,7 +29,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deploys = Seq(
       NonNegativeNumber.term,
       InterpreterUtil.mkTerm(s""" @"NonNegativeNumber"!($purseValue, "nn") """).right.get
-    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Integer.MAX_VALUE))
+    ).map(ProtoUtil.termDeploy(_, System.currentTimeMillis(), Costs.MAX_VALUE))
 
     val (hash, _) = runtimeManager.computeState(runtimeManager.emptyStateHash, deploys)
     val result = runtimeManager.captureResults(
@@ -92,7 +92,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         ProtoUtil.termDeploy(
           InterpreterUtil.mkTerm(t).right.get,
           System.currentTimeMillis(),
-          Integer.MAX_VALUE
+          Costs.MAX_VALUE
         )
     )
     val (_, firstDeploy) =
