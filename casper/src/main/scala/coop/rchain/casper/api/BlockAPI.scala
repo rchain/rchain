@@ -226,7 +226,7 @@ object BlockAPI {
         estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
         mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
-        blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
+        blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
