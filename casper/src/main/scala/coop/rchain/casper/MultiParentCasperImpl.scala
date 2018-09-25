@@ -503,8 +503,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
             acc.updated(p, currChildren + hash)
         }
 
-        val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
-
         bd.copy(
           //Assume that a non-equivocating validator must include
           //its own latest message in the justification. Therefore,
@@ -516,7 +514,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           latestMessagesOfLatestMessages = bd.latestMessagesOfLatestMessages
             .updated(block.sender, toLatestMessageHashes(block.justifications)),
           childMap = newChildMap,
-          currentSeqNum = newSeqNum,
           dataLookup = updatedLookup,
           topoSort = updatedSort
         )

@@ -10,7 +10,6 @@ case class IndexedBlockDag(dag: BlockDag, idToBlocks: Map[Int, BlockMessage], cu
   def latestMessages: Map[Validator, BlockMessage] = dag.latestMessages
   def latestMessagesOfLatestMessages: Map[Validator, LatestMessages] =
     dag.latestMessagesOfLatestMessages
-  def currentSeqNum: Map[Validator, Int]  = dag.currentSeqNum
   def dataLookup: BlockMetadata.Lookup    = dag.dataLookup
   def topoSort: Vector[Vector[BlockHash]] = dag.topoSort
   def sortOffset: Long                    = dag.sortOffset
@@ -31,7 +30,6 @@ object IndexedBlockDag {
       latestMessages: Map[Validator, BlockMessage],
       latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
       currentId: Int,
-      currentSeqNum: Map[Validator, Int],
       dataLookup: BlockMetadata.Lookup,
       topoSort: Vector[Vector[BlockHash]],
       sortOffset: Long
@@ -40,7 +38,6 @@ object IndexedBlockDag {
       childMap,
       latestMessages,
       latestMessagesOfLatestMessages,
-      currentSeqNum,
       dataLookup,
       topoSort,
       sortOffset
