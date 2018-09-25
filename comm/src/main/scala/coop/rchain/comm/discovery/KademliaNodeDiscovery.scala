@@ -2,6 +2,7 @@ package coop.rchain.comm.discovery
 
 import cats._
 import cats.implicits._
+
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.CommError._
@@ -13,19 +14,21 @@ import coop.rchain.shared._
 import scala.collection.mutable
 import scala.concurrent.duration._
 
+import cats.effect.Timer
+
 object KademliaNodeDiscovery {
-  def create[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
+  def create[F[_]: Monad: Capture: Log: Timer: Metrics: KademliaRPC](
       src: PeerNode,
       defaultTimeout: FiniteDuration
   )(init: Option[PeerNode]): F[KademliaNodeDiscovery[F]] =
     for {
-      knd <- (new KademliaNodeDiscovery[F](src, defaultTimeout)).pure[F]
+      knd <- new KademliaNodeDiscovery[F](src, defaultTimeout).pure[F]
       _   <- init.fold(().pure[F])(p => knd.addNode(p))
     } yield knd
 
 }
 
-private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: KademliaRPC](
+private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Timer: Metrics: KademliaRPC](
     src: PeerNode,
     timeout: FiniteDuration
 ) extends NodeDiscovery[F] {
@@ -56,7 +59,7 @@ private[discovery] class KademliaNodeDiscovery[F[_]: Monad: Capture: Log: Time: 
     val initRPC = KademliaRPC[F].receive(pingHandler, lookupHandler)
 
     val findNewAndAdd = for {
-      _     <- Time[F].sleep(5000)
+      _     <- implicitly[Timer[F]].sleep(9.seconds)
       peers <- findMorePeers(10).map(_.toList)
       _     <- peers.traverse(addNode)
     } yield ()
