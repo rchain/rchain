@@ -21,9 +21,11 @@ def docker_network(docker_client):
 
     docker_client.networks.create(network_name, driver="bridge")
 
-    yield network_name
+    try:
+        yield network_name
 
-    for network in docker_client.networks.list():
-        if network_name == network.name:
-            logging.info(f"removing {network.name}")
-            network.remove()
+    finally:
+        for network in docker_client.networks.list():
+            if network_name == network.name:
+                logging.info(f"removing {network.name}")
+                network.remove()

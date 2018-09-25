@@ -25,6 +25,7 @@ Config = collections.namedtuple( "Config",
 
 KeyPair = collections.namedtuple("KeyPair", ["private_key", "public_key"])
 
+ValidatorsData = collections.namedtuple("ValidatorsData", ["bonds_file", "bootstrap_keys", "peers_keys"])
 
 def parse_config(request):
     peer_count = int(request.config.getoption("--peer-count"))
@@ -53,8 +54,11 @@ def parse_config(request):
 
 @pytest.fixture(scope="session")
 def config(request):
-    yield parse_config(request)
-    log_prof_data()
+    try:
+        yield parse_config(request)
+
+    finally:
+        log_prof_data()
 
 @pytest.fixture(scope="session")
 def docker():
@@ -62,10 +66,12 @@ def docker():
 
     docker_client = docker.from_env()
 
-    yield docker_client
+    try:
+        yield docker_client
 
-    logging.info("Remove unused volumes")
-    docker_client.volumes.prune()
+    finally:
+        logging.info("Remove unused volumes")
+        docker_client.volumes.prune()
 
 
 
@@ -79,10 +85,12 @@ def bonds_file(validator_keys):
             bond = random.randint(1, 100)
             f.write(f"{pair.public_key} {bond}\n")
 
-    yield file
+    try:
+        yield file
 
-    os.unlink(file)
-    logging.info(f"Bonds file `{bonds_file}` deleted")
+    finally:
+        os.unlink(file)
+        logging.info(f"Bonds file `{bonds_file}` deleted")
 
 @pytest.fixture(scope="session")
 def validators_data(config):
@@ -97,7 +105,7 @@ def validators_data(config):
     logging.info(f"Using validator keys: {validator_keys}")
 
     with bonds_file(validator_keys) as f:
-        yield (f, validator_keys[0], validator_keys[1:])
+        yield ValidatorsData(f, validator_keys[0], validator_keys[1:])
 
 
 

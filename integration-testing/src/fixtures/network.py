@@ -13,13 +13,13 @@ def complete_network(config, docker, validators_data):
         with start_network(config,
                      docker,
                      bootstrap_node,
-                     validators_data) as n:
+                     validators_data) as network:
 
-            wait_for_started_network(config.node_startup_timeout, n)
+            wait_for_started_network(config.node_startup_timeout, network)
 
-            wait_for_converged_network(config.network_converge_timeout, n, len(n.peers))
+            wait_for_converged_network(config.network_converge_timeout, network, len(network.peers))
 
-            yield n
+            yield network
 
 @pytest.fixture(scope="package")
 def star_network(config, docker, validators_data):
@@ -32,10 +32,10 @@ def star_network(config, docker, validators_data):
                      docker,
                      bootstrap_node,
                      validators_data,
-                     [bootstrap_node.name]) as n:
+                     [bootstrap_node.name]) as network:
 
-            wait_for_started_network(config.node_startup_timeout, n)
+            wait_for_started_network(config.node_startup_timeout, network)
 
-            wait_for_converged_network(config.network_converge_timeout, n, 1)
+            wait_for_converged_network(config.network_converge_timeout, network, 1)
 
-            yield n
+            yield network

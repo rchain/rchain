@@ -16,13 +16,14 @@ class RChain:
 def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
     logging.debug(f"Docker network = {bootstrap.network}")
 
-    bonds_file, _, peer_keys = validators_data
-    peers = create_peer_nodes(docker, bootstrap, bootstrap.network, bonds_file, peer_keys, config.rnode_timeout, allowed_peers)
+    peers = create_peer_nodes(docker, bootstrap, bootstrap.network, validators_data.bonds_file, validators_data.peers_keys, config.rnode_timeout, allowed_peers)
 
-    yield RChain(network = bootstrap.network, bootstrap = bootstrap, peers = peers)
+    try:
+        yield RChain(network = bootstrap.network, bootstrap = bootstrap, peers = peers)
 
-    for peer in peers:
-        peer.cleanup()
+    finally:
+        for peer in peers:
+            peer.cleanup()
 
 
 def wait_for_started_network(node_startup_timeout, network):
