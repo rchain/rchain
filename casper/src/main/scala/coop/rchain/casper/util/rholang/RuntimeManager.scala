@@ -181,7 +181,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     ): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-          val availablePhlos = Cost(deploy.raw.get.phloLimit) // FIXME: This needs to come from the deploy params
+          val availablePhlos = Cost(deploy.raw.get.phloLimit)
           runtime.replayReducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
