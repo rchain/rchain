@@ -3,7 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{Costs, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.crypto.codec.Base16
@@ -14,11 +14,9 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.PathOps.RichPath
-
 import java.nio.file.Files
 
 import monix.execution.Scheduler.Implicits.global
-
 import org.scalatest.{FlatSpec, Matchers}
 
 class RevIssuanceTest extends FlatSpec with Matchers {
@@ -111,7 +109,8 @@ object RevIssuanceTest {
 
     ProtoUtil.sourceDeploy(
       s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")""",
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      Costs.MAX_VALUE
     )
   }
 
@@ -143,7 +142,8 @@ object RevIssuanceTest {
            .encode(transferSig)}", "$destination", "$transferStatusOut")
        |}
      """.stripMargin,
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      Costs.MAX_VALUE
     )
   }
 }

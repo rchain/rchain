@@ -303,13 +303,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val phloLimit =
-      opt[Int](
-        descr = "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+      opt[Long](
+        descr =
+          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
         validate = _ > 0,
         required = true
       )
 
-    val phloPrice = opt[Int](
+    val phloPrice = opt[Long](
       descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
       validate = _ > 0,
       required = true

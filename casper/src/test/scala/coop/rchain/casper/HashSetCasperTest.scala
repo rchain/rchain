@@ -323,7 +323,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
        |  @(pos, "bond")!("${Base16
            .encode(otherPk)}".hexToBytes(), "ed25519Verify", purse, "$pubKey", "$bondingStatusOut")
        |}""".stripMargin,
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      Costs.MAX_VALUE
     )
     val transferStatusOut = "transferOut"
     val bondingTransferDeploy =
@@ -348,7 +349,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val helloWorldDeploy = ProtoUtil.sourceDeploy(
       """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      Costs.MAX_VALUE
     )
     //new validator does deploy/propose
     val Created(block3) = nodes.last.casperEff

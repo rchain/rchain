@@ -13,7 +13,7 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{ChargingReducer, ErrorLog, Runtime}
+import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
@@ -33,7 +33,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       implicit scheduler: Scheduler
   ): Seq[Par] = {
     val runtime                   = runtimeContainer.take()
-    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), Integer.MAX_VALUE)
+    val deploy                    = ProtoUtil.termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
@@ -149,7 +149,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
       terms match {
         case deploy +: rem =>
           runtime.space.reset(hash)
-          val availablePhlos = Cost(deploy.raw.get.phloLimit)
+          val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
           runtime.reducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
           val (phlosLeft, errors) = injAttempt(deploy, runtime.reducer, runtime.errorLog)
           val cost                = phlosLeft.copy(cost = availablePhlos.value - phlosLeft.cost)
@@ -181,7 +181,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     ): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
-          val availablePhlos = Cost(deploy.raw.get.phloLimit)
+          val availablePhlos = Cost(deploy.raw.flatMap(_.phloLimit).get.value)
           runtime.replayReducer.setAvailablePhlos(availablePhlos).runSyncUnsafe(1.second)
           runtime.replaySpace.rig(hash, log.toList)
           //TODO: compare replay deploy cost to given deploy cost
