@@ -25,7 +25,7 @@ const rhoc = new web3.eth.Contract(require('./abi.json'), "0x168296bb09e24a88805
 const keys = new Set();
 
 const fromBlock = 3383352;
-const toBlock   = process.env.BLOCK || 5866762;
+const toBlock   = process.env.BLOCK || 6350512;
 const batch     = 500
 
 // Block range increments
