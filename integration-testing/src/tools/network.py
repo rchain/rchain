@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from tools.wait import wait_for, string_contains, node_logs, network_converged
+from tools.wait import wait_for, has_peers, node_started
 import logging
 from tools.rnode import create_peer_nodes
 
@@ -13,37 +13,28 @@ class RChain:
 
 
 @contextmanager
-def network(config, docker, bootstrap, docker_network, validators_data, allowed_peers=None):
-    logging.debug(f"Docker network = {docker_network}")
+def start_network(config, docker, bootstrap, validators_data, allowed_peers=None):
+    logging.debug(f"Docker network = {bootstrap.network}")
 
     bonds_file, _, peer_keys = validators_data
-    peers = create_peer_nodes(docker, bootstrap, docker_network, bonds_file, peer_keys, config.rnode_timeout, allowed_peers)
+    peers = create_peer_nodes(docker, bootstrap, bootstrap.network, bonds_file, peer_keys, config.rnode_timeout, allowed_peers)
 
-    yield RChain(network = docker_network, bootstrap = bootstrap, peers = peers)
+    yield RChain(network = bootstrap.network, bootstrap = bootstrap, peers = peers)
 
     for peer in peers:
         peer.cleanup()
 
 
-@contextmanager
-def started_network(config, network):
+def wait_for_started_network(node_startup_timeout, network):
     for peer in network.peers:
-        wait_for( string_contains(node_logs(peer),
-                                  "coop.rchain.node.NodeRuntime - Listening for traffic on rnode"),
-                  config.node_startup_timeout,
-                  f"Peer node {peer.name} didn't start correctly")
+        wait_for(node_started(peer), node_startup_timeout, f"Peer {peer.name} did not start correctly.")
 
-    yield network
-
-@contextmanager
-def converged_network(config, network, peer_connections):
-    wait_for( network_converged( network.bootstrap, len(network.peers)),
-              config.network_converge_timeout,
+def wait_for_converged_network(timeout, network, peer_connections):
+    wait_for( has_peers( network.bootstrap, len(network.peers)),
+              timeout,
               "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
 
     for node in network.peers:
-        wait_for( network_converged( node, peer_connections),
-                  config.network_converge_timeout,
+        wait_for( has_peers( node, peer_connections),
+                  timeout,
                   "The network did NOT converge. Check container logs for issues. One or more containers might have failed to start or connect.")
-
-    yield network

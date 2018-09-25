@@ -174,22 +174,21 @@ def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, 
 
 
 @contextmanager
-def bootstrap(docker, docker_network, timeout, validators_data):
+def create_bootstrap(docker, docker_network, timeout, validators_data):
     bonds_file, bootstrap_keys, _ = validators_data
     node = create_bootstrap_node(docker, docker_network, bonds_file, bootstrap_keys, timeout)
-    logging.info(f"Node={node}")
+
     yield node
 
     node.cleanup()
 
-
 @contextmanager
-def start_bootstrap(docker_client, timeout, validators_data):
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
     with docker_network(docker_client) as network:
-        with bootstrap(docker_client, network, timeout, validators_data) as node:
-            logging.info(f"Node={node}")
+        with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
+
             wait_for( node_started(node),
-                      timeout,
+                      node_start_timeout,
                       "Bootstrap node didn't start correctly")
-            logging.info(f"Node={node}")
+
             yield node

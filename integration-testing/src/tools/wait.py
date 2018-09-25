@@ -84,7 +84,7 @@ def string_contains(string_factory, regex_str, flags = 0):
     go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
 
-def network_converged(bootstrap_node, expected_peers):
+def has_peers(bootstrap_node, expected_peers):
     rx = re.compile("^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def go():
@@ -97,7 +97,7 @@ def network_converged(bootstrap_node, expected_peers):
         if peers < expected_peers:
             raise Exception(f"Expected peers: {expected_peers}. Actual peers: {peers}")
 
-    go.__doc__ = f"network {bootstrap_node.name} converged with {expected_peers} expected peers."
+    go.__doc__ = f"Node {bootstrap_node.name} is connected to {expected_peers} peers."
 
     return go
 

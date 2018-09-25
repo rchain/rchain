@@ -3,8 +3,8 @@ from delayed_assert import expect, assert_expectations
 from tools.profiling import profile
 
 @profile
-def test_metrics_api_socket(started_complete_network):
-    for node  in started_complete_network.nodes:
+def test_metrics_api_socket(complete_network):
+    for node  in complete_network.nodes:
         logging.info(f"Test metrics api socket for {node.name}")
         exit_code, output = node.get_metrics()
         expect(exit_code == 0, "Could not get the metrics for node {node.name}")
@@ -13,8 +13,8 @@ def test_metrics_api_socket(started_complete_network):
 
 
 @profile
-def test_node_logs_for_errors(converged_complete_network):
-    for node in converged_complete_network.nodes:
+def test_node_logs_for_errors(complete_network):
+    for node in complete_network.nodes:
         logging.info(f"Testing {node.name} node logs for errors.")
         logs = node.logs()
 
@@ -27,8 +27,8 @@ def test_node_logs_for_errors(converged_complete_network):
     assert_expectations()
 
 @profile
-def test_node_logs_for_RuntimeException(converged_complete_network):
-    for node in converged_complete_network.nodes:
+def test_node_logs_for_RuntimeException(complete_network):
+    for node in complete_network.nodes:
         logging.info(f"Testing {node.name} node logs for \"java RuntimeException\".")
         logs = node.logs()
 

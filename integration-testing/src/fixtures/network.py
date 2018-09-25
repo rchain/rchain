@@ -1,43 +1,41 @@
 import pytest
-from tools.network import network, started_network, converged_network
+from tools.network import start_network, wait_for_started_network, wait_for_converged_network
 from tools.rnode import start_bootstrap
 
 
 @pytest.fixture(scope="package")
 def complete_network(config, docker, validators_data):
-    with start_bootstrap(docker, config.node_startup_timeout, validators_data) as bootstrap_node:
-        with network(config, docker, bootstrap_node, bootstrap_node.network, validators_data) as fixture:
-            yield fixture
+    with start_bootstrap(docker,
+                         config.node_startup_timeout,
+                         config.rnode_timeout,
+                         validators_data) as bootstrap_node:
 
+        with start_network(config,
+                     docker,
+                     bootstrap_node,
+                     validators_data) as n:
 
+            wait_for_started_network(config.node_startup_timeout, n)
 
-@pytest.fixture(scope="package")
-def started_complete_network(config, complete_network):
-    with started_network(config,  complete_network) as fixture:
-        yield fixture
+            wait_for_converged_network(config.network_converge_timeout, n, len(n.peers))
 
-
-
-@pytest.fixture(scope="package")
-def converged_complete_network(config, started_complete_network):
-    with converged_network(config, started_complete_network, len(started_complete_network.peers)) as fixture:
-        yield fixture
-
+            yield n
 
 @pytest.fixture(scope="package")
 def star_network(config, docker, validators_data):
-    with start_bootstrap(docker, config.node_startup_timeout, validators_data) as bootstrap_node:
-        with network(config, docker, bootstrap_node, bootstrap_node.network, validators_data, [bootstrap_node.name]) as fixture:
-            yield fixture
+    with start_bootstrap(docker,
+                         config.node_startup_timeout,
+                         config.rnode_timeout,
+                         validators_data) as bootstrap_node:
 
+        with start_network(config,
+                     docker,
+                     bootstrap_node,
+                     validators_data,
+                     [bootstrap_node.name]) as n:
 
-@pytest.fixture(scope="package")
-def started_star_network(config, star_network):
-    with started_network(config, star_network) as fixture:
-        yield fixture
+            wait_for_started_network(config.node_startup_timeout, n)
 
+            wait_for_converged_network(config.network_converge_timeout, n, 1)
 
-@pytest.fixture(scope="package")
-def converged_star_network(config, started_star_network):
-    with converged_network(config, started_star_network, 1) as fixture:
-        yield fixture
+            yield n
