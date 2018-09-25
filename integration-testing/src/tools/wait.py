@@ -16,7 +16,7 @@ def wait_for(condition, timeout, error_message):
     __tracebackhide__ = True
 
     with log_box(logging.info, f"Waiting maximum timeout={timeout}. Patience please!", "."):
-        logging.info(f"Wait condition `{condition.__doc__}`")
+        logging.info(f"Wait condition is: `{condition.__doc__}`")
         elapsed = 0
         current_ex = None
         while elapsed < timeout:
