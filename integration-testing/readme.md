@@ -76,9 +76,9 @@ $ ./run_tests.sh
 In order to run only specific tests can specify the test subdir where you want the discovery to start
 
 Examples:
-The correctness
+Run the tests for the complete connected network: 
 ```bash
-$ ./run_tests.sh --collect-only  test/correctness
+$ ./run_tests.sh test/complete_connected
 ```
 
 You can see all the options available by running
@@ -104,9 +104,116 @@ Examples
 $ ./run_tests.sh --collect-only
 ```
 ```bash
-$ ./run_tests.sh --collect-only  test/correctness/star_connected
+$ ./run_tests.sh --collect-only  test/star_connected
 ```
 
 
 # Writing your own tests
-TODO
+## Pytest basics
+Bellow is a basic introduction while [here](https://docs.pytest.org/en/latest/) you can see the full pytest documentation.
+
+### Tests
+Pytest tests are python functions which take fixtures as parameters.
+
+Example:
+```python
+def test_one_plus_one():
+    assert 1+1==2, "1+1 should equal 2"
+    
+def test_with_resources(some_resource):
+    #...use resource_fixture
+
+```
+
+A successful test is a test which doesn't throw any exception. The `assert` statement can be used or `pytest.fail` or
+simply an exception can be thrown
+ 
+Note that the second test depends on some_resource. The parameter name has to have a corresponding fixture defined either 
+in the test file or in one of the `conftest.py` visible by the current test.
+
+### Fixtures
+The fixtures define the setup/teardown logic. They are coroutines that look like this:
+
+```python
+@fixture(scope="package")
+def some_resource(other_resource):
+    #allocate the resource r
+    yield r
+    #cleanup the resource r
+
+```
+
+The fixture can depend on other fixtures by listing them in the parameter list the same way as the test functions to.
+
+Fixtures have a scope which can be either `function`, `module`, `package` or `session`. If not specified, the default 
+scope is `function`.
+
+Fixtures are setup/teardown when the test execution enters/leaves its scope. For example `session` fixture will be setup only once 
+at the beginning of the test execution while a `function` scoped fixture will be setup/teardown once for each test function
+that depends on it.
+
+## Test writing
+
+### Test organization
+The tests are organized in a tree-like structure under the directory `test`. Some subdirectories contain a file named 
+`conftest.py` which contains the definitions of the fixtures that are  
+
+Fixtures defined in a test subdirectory describe how different test contexts are setup/teardown. The tree structure of 
+the tests is organized by fixtures. 
+
+For example under `complete_connected` one can find tests that run on a complete connected network.
+
+#### Global Fixtures
+These fixtures are globally defined in `test/conftes.py`
+
+##### config
+This is a fixture that gives access to the command line parameters.
+
+##### docker_network
+This fixture gives access to a docker network with no containers inside
+
+##### validator_data
+This fixture creates a tmp bonds file and the corresponding keys from resources/pregenerated-validator-private-public-key-pairs.txt
+
+#### Package fixtures
+The logic for setting up rnode networks are defined in `tools/network.py` as context managers. These are 
+used in`conftest.py` and wrapped in a `@pytest.fixture` in order to build a network with the given shape.
+
+This way the setup/teardown logic reused in several places.
+
+### Waiting for conditions
+Because simple `sleep`s are unreliable *all* waiting for various conditions happens.
+
+The wait utilities are defined in `src/tools/wait.py`.
+
+The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
+periodically the condition to see if it is fullfilled.
+
+In the same file one can find a few predicates which can be used to define various conditions. One can write custom predicates
+based on these examples. Please note that the predicates' `__doc__` attributes are important for debugging the tests because 
+they are printed in the log files during the waiting. 
+
+### File resources
+The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
+needs access to these resources can access them using the utilities found in  `src/tools/resources.py`
+
+### RNode interface
+The file `src/tools/rnode.py` contains utilities for working with node.
+
+### Profiling tests
+The file `src/tools/profiling.py` contains the `profile` decorator which can be used to collect profiling information.
+The profiling information is printed in the log file at the end of the test execution.
+
+### Mixing fixtures
+The file `src/tools/fixture.py` contains tools for parameterizing tests with different fixtures.
+
+```python
+@parametrize.cartesian(a=["a", "b", "c"], b=[1,2,3])
+def test_network_convergence(a, b):
+    #...
+```  
+
+Based on this test there will be 9 tests generated, each of them called with one of the elemnts of the cartezian product
+`a x b`
+
+
