@@ -9,8 +9,8 @@ there is a contract at that address.
 Clone the repo and run npm install from the project root:
 
 ```bash
-$ git clone https://github.com/desaperados/rrc.git
-$ cd rrc
+$ git clone https://github.com/rchain/rchain.git
+$ cd rchain/scripts/pull-rhoc-balances
 $ npm install
 ```
 
@@ -33,7 +33,7 @@ ETH_WS=<websockets provider>
 Eth provider defaults to Infura so running a local node is optional.
 
 ```bash
-$ BLOCK=5866762 npm run balances
+$ BLOCK=6350512 npm run balances
 ```
 
 ### Improvements
