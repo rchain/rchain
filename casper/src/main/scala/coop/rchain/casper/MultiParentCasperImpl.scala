@@ -503,6 +503,19 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
             acc.updated(p, currChildren + hash)
         }
 
+        //Block which contains newly bonded validators will not
+        //have those validators in its justification
+        val newValidaors =
+          bonds(block).map(_.validator).toSet.diff(block.justifications.map(_.validator).toSet)
+        val newLatestMessages = newValidaors.foldLeft(
+          //update creator of the block
+          bd.latestMessages.updated(block.sender, block)
+        ) {
+          //Update new validators with block in which
+          //they were bonded (i.e. this block)
+          case (acc, v) => acc.updated(v, block)
+        }
+
         bd.copy(
           //Assume that a non-equivocating validator must include
           //its own latest message in the justification. Therefore,
@@ -510,7 +523,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           // Even for a equivocating validator, we just update its latest message
           // to whatever block we have fetched latest among the blocks that
           // constitute the equivocation.
-          latestMessages = bd.latestMessages.updated(block.sender, block),
+          latestMessages = newLatestMessages,
           latestMessagesOfLatestMessages = bd.latestMessagesOfLatestMessages
             .updated(block.sender, toLatestMessageHashes(block.justifications)),
           childMap = newChildMap,

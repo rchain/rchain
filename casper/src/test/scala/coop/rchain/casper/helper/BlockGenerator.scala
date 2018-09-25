@@ -62,7 +62,7 @@ trait BlockGenerator {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
       nextId            = chain.currentId + 1
-      nextCreatorSeqNum = chain.latestMessages.get(creator).fold(0)(_.seqNum) + 1
+      nextCreatorSeqNum = chain.latestMessages.get(creator).fold(-1)(_.seqNum) + 1
       postState = RChainState()
         .withTuplespace(tsHash)
         .withBonds(bonds)
