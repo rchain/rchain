@@ -438,6 +438,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         )
       case InvalidUnslashableBlock =>
         handleInvalidBlockEffect(status, block)
+      case InvalidFollows =>
+        handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
         handleInvalidBlockEffect(status, block)
       case InvalidParents =>
