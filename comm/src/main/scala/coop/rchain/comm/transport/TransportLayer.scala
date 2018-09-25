@@ -11,8 +11,8 @@ import coop.rchain.comm.protocol.routing._
 // TODO TransportLayer should be parametized by type of messages it is able to send
 trait TransportLayer[F[_]] {
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
-  def send(peer: PeerNode, msg: Protocol): F[Unit]
-  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Unit]
+  def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
+  def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
   def shutdown(msg: Protocol): F[Unit]
@@ -41,10 +41,13 @@ sealed abstract class TransportLayerInstances {
       ): EitherT[F, CommError, CommErr[Protocol]] =
         EitherT.liftF(evF.roundTrip(peer, msg, timeout))
 
-      def send(peer: PeerNode, msg: Protocol): EitherT[F, CommError, Unit] =
+      def send(peer: PeerNode, msg: Protocol): EitherT[F, CommError, CommErr[Unit]] =
         EitherT.liftF(evF.send(peer, msg))
 
-      def broadcast(peers: Seq[PeerNode], msg: Protocol): EitherT[F, CommError, Unit] =
+      def broadcast(
+          peers: Seq[PeerNode],
+          msg: Protocol
+      ): EitherT[F, CommError, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
       def receive(
