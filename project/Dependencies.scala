@@ -75,7 +75,7 @@ object Dependencies {
     "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
     "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
-    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7",
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
   )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
