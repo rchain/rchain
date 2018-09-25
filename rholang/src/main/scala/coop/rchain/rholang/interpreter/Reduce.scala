@@ -588,7 +588,7 @@ object Reduce {
 
     private def evalExprToExpr(
         expr: Expr
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Expr] = {
+    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Expr] = Sync[M].defer {
       def relop(
           p1: Par,
           p2: Par,

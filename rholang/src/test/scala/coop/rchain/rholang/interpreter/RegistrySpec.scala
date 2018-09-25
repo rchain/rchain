@@ -781,8 +781,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   }
 
   "Random Registry" should "use the random generator and insert" in {
-    val registerString                  = """
-      new rr(`rho:registry:insertRandom`), rl(`rho:registry:lookup`), x, y in {
+    val registerString =
+      """
+      new rr(`rho:registry:insertArbitrary`), rl(`rho:registry:lookup`), x, y in {
         rr!(bundle+{*x}, *y) |
         for(@{uri /\ Uri} <- y) {
           @"result0"!(uri) |
