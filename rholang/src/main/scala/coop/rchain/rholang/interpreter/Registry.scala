@@ -100,7 +100,9 @@ class RegistryImpl[F[_]](
       freeCount = 2
     )
   )
+  // Testing only
   private val lookupChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](10))))))
+  private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
   private val insertPatterns = List(
     BindPattern(
       Seq(
@@ -111,6 +113,7 @@ class RegistryImpl[F[_]](
       freeCount = 3
     )
   )
+  // Testing only
   private val insertChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](12))))))
   private val deletePatterns = List(
     BindPattern(
@@ -118,8 +121,11 @@ class RegistryImpl[F[_]](
       freeCount = 2
     )
   )
+  // Testing only
   private val deleteChannels = List(Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](14))))))
 
+  private val publicLookupRef: Long = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
+  // Testing only
   private val publicLookupChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](17)))))
   )
@@ -130,6 +136,10 @@ class RegistryImpl[F[_]](
     )
   )
 
+  private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
+  private val publicRegisterInsertCallbackRef: Long =
+    Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+  // Testing only
   private val publicRegisterRandomChannels = List(
     Channel(Quote(GPrivate(ByteString.copyFrom(Array[Byte](18)))))
   )
@@ -828,11 +838,11 @@ object Registry {
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
   val testingUrnMap: Map[String, Par] = Map(
-    "rho:registry:testing:lookup" -> byteName(10),
-    "rho:registry:testing:insert" -> byteName(12),
-    "rho:registry:testing:delete" -> byteName(14),
-    "rho:registry:lookup"         -> byteName(17),
-    "rho:registry:insertRandom"   -> byteName(18)
+    "rho:registry:testing:lookup"  -> byteName(10),
+    "rho:registry:testing:insert"  -> byteName(12),
+    "rho:registry:testing:delete"  -> byteName(14),
+    "rho:registry:lookup"          -> byteName(17),
+    "rho:registry:insertArbitrary" -> byteName(18)
   )
 
   object FixedRefs {
