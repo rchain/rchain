@@ -20,12 +20,38 @@ message Header {
   Node   sender         = 1;
 }
 
-message Protocol {
-  Header header                           = 1;
+message Heartbeat {
+}
 
-  oneof message {
-    google.protobuf.Any upstream        = 2;
-  }
+message HeartbeatResponse {
+}
+
+message ProtocolHandshake {
+  bytes nonce       = 1;
+}
+
+message ProtocolHandshakeResponse {
+  bytes nonce       = 1;
+}
+
+message Packet {
+  string typeId  = 1;
+  bytes  content = 2;
+}
+
+message Disconnect {
+}
+
+message Protocol {
+    Header header                                                 = 1;
+    oneof message {
+        Heartbeat                   heartbeat                     = 2;
+        HeartbeatResponse           heartbeat_response            = 3;
+        ProtocolHandshake           protocol_handshake            = 4;
+        ProtocolHandshakeResponse   protocol_handshake_response   = 5;
+        Packet                      packet                        = 6;
+        Disconnect                  disconnect                    = 7;
+    }
 }
 
 service TransportLayer {

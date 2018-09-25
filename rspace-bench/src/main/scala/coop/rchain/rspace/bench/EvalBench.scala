@@ -28,7 +28,7 @@ class EvalBench {
   def createTest(state: EvalBenchStateBase): Task[Vector[Throwable]] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
     state.runtime.reducer
-      .inj(par)(state.rand, state.costAccountAlg)
+      .inj(par)(state.rand)
       .map(_ => state.runtime.readAndClearErrorVector())
   }
 

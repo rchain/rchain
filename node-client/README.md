@@ -20,16 +20,6 @@ solution:
 pip install -r requirements.txt
 ```
 
-### problem: UnsatisfiedLinkError when starting the server
-
-`Caused by: java.lang.UnsatisfiedLinkError: libsodium.so: cannot open shared object file: No such file or directory`
-
-solution:
-
-```
-$ sudo apt install libsodium18
-```
-
 ### problem: StatusCode.UNAVAILABLE
 
 ```

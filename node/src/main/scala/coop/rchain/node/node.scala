@@ -191,6 +191,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
+                       .mountService(VersionInfo.service, "/version")
                        .start
                    }.toEffect
       _ <- Task.delay {
@@ -218,7 +219,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
-      msg = CommMessages.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
@@ -270,9 +271,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   ): Effect[Unit] = {
 
     val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
-          )
+      _ <- Log[Effect].info(VersionInfo.get)
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
@@ -304,11 +303,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     EitherT[Task, CommError, Unit](
       prog.value
         .onErrorHandleWith {
-          case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
-            Log[Task]
-              .error(
-                "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again."
-              )
           case th =>
             log.error("Caught unhandable error. Exiting. Stacktrace below.") *> Task.delay {
               th.printStackTrace();

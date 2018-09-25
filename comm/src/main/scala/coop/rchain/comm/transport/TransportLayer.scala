@@ -3,8 +3,8 @@ package coop.rchain.comm.transport
 import scala.concurrent.duration.FiniteDuration
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.comm.CommError, CommError.CommErr
-import coop.rchain.comm.{PeerNode, ProtocolHelper}
+import coop.rchain.comm.{CommError, PeerNode}, CommError.CommErr
+import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 

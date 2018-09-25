@@ -6,7 +6,8 @@ import scala.concurrent.duration._
 import cats.implicits._
 
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.{CommError, ProtocolHelper}
+import coop.rchain.comm.CommError
+import coop.rchain.comm.rp.ProtocolHelper
 
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext

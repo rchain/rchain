@@ -22,7 +22,7 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport
-import coop.rchain.comm.transport.CommMessages.packet
+import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
