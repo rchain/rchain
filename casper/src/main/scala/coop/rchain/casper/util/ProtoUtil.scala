@@ -22,43 +22,21 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  def isInMainChain[F[_]: Monad: BlockStore](
-      candidate: BlockMessage,
-      target: BlockMessage
-  ): F[Boolean] =
-    if (candidate == target) {
-      true.pure[F]
-    } else {
-      val maybeMainParentHash = ProtoUtil.parentHashes(target).headOption
-      maybeMainParentHash match {
-        case Some(mainParentHash) =>
-          for {
-            mainParent <- BlockStore[F].get(mainParentHash)
-            isInMainChain <- mainParent match {
-                              case Some(parent) => isInMainChain[F](candidate, parent)
-                              case None         => false.pure[F]
-                            }
-          } yield isInMainChain
-        case None => false.pure[F]
-      }
-    }
-
-  // todo test this method, and replace everything in isInMainChain
-  def isInMainChain[F[_]: Monad](
+  def isInMainChain(
       dag: BlockDag,
       candidate: BlockMessage,
       targetBlockHash: BlockHash
-  ): F[Boolean] =
+  ): Boolean =
     if (candidate.blockHash == targetBlockHash) {
-      true.pure[F]
+      true
     } else {
       dag.dataLookup.get(targetBlockHash) match {
         case Some(targetBlockMeta) =>
           targetBlockMeta.parents.headOption match {
-            case Some(mainParentHash) => isInMainChain[F](dag, candidate, mainParentHash)
-            case None                 => false.pure[F]
+            case Some(mainParentHash) => isInMainChain(dag, candidate, mainParentHash)
+            case None                 => false
           }
-        case None => false.pure[F]
+        case None => false
       }
     }
 
@@ -137,12 +115,12 @@ object ProtoUtil {
     }
   }
 
-  def getCreatorJustificationAsListByInMemory[F[_]: Monad](
+  def getCreatorJustificationAsListByInMemory(
       blockDag: BlockDag,
       blockHash: BlockHash,
       validator: Validator,
       goalFunc: BlockHash => Boolean = _ => false
-  ): F[List[BlockHash]] = {
+  ): List[BlockHash] = {
     val maybeCreatorJustificationHash =
       blockDag.dataLookup(blockHash).justifications.find(_.validator == validator)
     maybeCreatorJustificationHash match {
@@ -150,14 +128,14 @@ object ProtoUtil {
         blockDag.dataLookup.get(creatorJustificationHash.latestBlockHash) match {
           case Some(creatorJustification) =>
             if (goalFunc(creatorJustification.blockHash)) {
-              List.empty[BlockHash].pure[F]
+              List.empty[BlockHash]
             } else {
-              List(creatorJustification.blockHash).pure[F]
+              List(creatorJustification.blockHash)
             }
           case None =>
-            List.empty[BlockHash].pure[F]
+            List.empty[BlockHash]
         }
-      case None => List.empty[BlockHash].pure[F]
+      case None => List.empty[BlockHash]
     }
   }
 

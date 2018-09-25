@@ -163,9 +163,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield newFinalizedBlock
 
   private def isGreaterThanFaultToleranceThreshold(dag: BlockDag, block: BlockMessage): F[Boolean] =
-    for {
-      ft <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
-    } yield ft > faultToleranceThreshold
+    (SafetyOracle[F].normalizedFaultTolerance(dag, block) > faultToleranceThreshold).pure[F]
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))

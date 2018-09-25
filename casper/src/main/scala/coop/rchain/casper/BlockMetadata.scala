@@ -10,7 +10,6 @@ final case class BlockMetadata(
     parents: List[BlockHash],
     sender: ByteString,
     justifications: List[Justification],
-    //todo think about whether this takes up too much space and if it needs to be kept elsewhere
     weightMap: Map[ByteString, Long],
     seqNum: Int
 )

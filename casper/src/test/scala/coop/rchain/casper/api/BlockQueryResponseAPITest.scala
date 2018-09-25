@@ -89,7 +89,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
         tmp
       }
       implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
+        SafetyOracle.turanOracle[Id](syncId)
       val q = BlockQuery(hash = secondBlockQuery)
       val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
         syncId,
@@ -127,7 +127,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
         tmp
       }
       implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
+        SafetyOracle.turanOracle[Id](syncId)
       val q = BlockQuery(hash = badTestHashQuery)
       val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
         syncId,
