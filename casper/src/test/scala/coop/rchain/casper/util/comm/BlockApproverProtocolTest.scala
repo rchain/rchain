@@ -8,7 +8,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.transport
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime

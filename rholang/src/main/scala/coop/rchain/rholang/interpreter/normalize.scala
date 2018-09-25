@@ -273,7 +273,7 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M]
-  ): M[ProcVisitOutputs] = {
+  ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
     ): M[ProcVisitOutputs] =
@@ -835,26 +835,25 @@ object ProcNormalizeMatcher {
           bindingsTrimmed                                                  = bindingsProcessed.map(b => (b._1, b._2, b._3, b._4))
           receipts <- ReceiveBindsSortMatcher
                        .preSortBinds[M, VarSort](bindingsTrimmed)
-          mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
-                          DebruijnLevelMap[VarSort]()
-                        )(
-                          (env, receipt) =>
-                            env.merge(receipt._2) match {
-                              case (newEnv, Nil) => (newEnv: DebruijnLevelMap[VarSort]).pure[M]
-                              case (_, (shadowingVar, line, col) :: _) =>
-                                val Some((_, _, firstUsageLine, firstUsageCol)) =
-                                  env.get(shadowingVar)
-                                sync.raiseError(
-                                  UnexpectedReuseOfNameContextFree(
-                                    shadowingVar,
-                                    firstUsageLine,
-                                    firstUsageCol,
-                                    line,
-                                    col
+          mergedFrees <- receipts.toList
+                          .foldM[M, DebruijnLevelMap[VarSort]](DebruijnLevelMap[VarSort]())(
+                            (env, receipt) =>
+                              env.merge(receipt._2) match {
+                                case (newEnv, Nil) => (newEnv: DebruijnLevelMap[VarSort]).pure[M]
+                                case (_, (shadowingVar, line, col) :: _) =>
+                                  val Some((_, _, firstUsageLine, firstUsageCol)) =
+                                    env.get(shadowingVar)
+                                  sync.raiseError(
+                                    UnexpectedReuseOfNameContextFree(
+                                      shadowingVar,
+                                      firstUsageLine,
+                                      firstUsageCol,
+                                      line,
+                                      col
+                                    )
                                   )
-                                )
-                            }
-                        )
+                              }
+                          )
           bindCount  = mergedFrees.countNoWildcards
           binds      = receipts.map(receipt => receipt._1)
           updatedEnv = input.env.absorbFree(mergedFrees)._1

@@ -14,15 +14,20 @@ import coop.rchain.rspace.spaces._
 import coop.rchain.rspace.trace.{COMM, Consume, IOEvent, Produce}
 import coop.rchain.shared.PathOps._
 import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
 
 import scala.Function.const
 import scala.collection.{immutable, mutable}
-import scala.util.Random
+import scala.concurrent.Future
+import scala.util.{Random, Right}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests
     extends ReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with TestImplicitHelpers {
+    with TestImplicitHelpers
+    with ScalaFutures {
 
   def consumeMany[C, P, A, R, K](
       space: IdISpace[C, P, Nothing, A, R, K],
@@ -794,6 +799,40 @@ trait ReplayRSpaceTests
         replaySpace.produce(channel, data, false)
       )
     }
+
+  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      replaySpace.replayData.take()
+      replaySpace.replayData.put(null)
+
+      an[NullPointerException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, continuation, false)
+      )
+
+      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.futureValue
+      res shouldBe a[Right[_, _]]
+    }
+
+  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel = "ch1"
+      val data    = "datum1"
+
+      replaySpace.replayData.take()
+      replaySpace.replayData.put(null)
+
+      an[NullPointerException] shouldBe thrownBy(
+        replaySpace.produce(channel, data, false)
+      )
+
+      val res = Future { replaySpace.produce(channel, data, false) }.futureValue
+      res shouldBe a[Right[_, _]]
+    }
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {
@@ -895,6 +934,43 @@ trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
     }
   }
 }
+
+trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
+  override def withTestSpaces[S](
+      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      oC: Ordering[C]
+  ): S = {
+
+    val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
+    val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val store =
+      new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
+        trieStore,
+        Branch.REPLAY
+      ) {
+        override private[rspace] def createTxnWrite()
+          : InMemTransaction[coop.rchain.rspace.State[C, P, A, K]] =
+          throw new RuntimeException("Couldn't write to underlying store")
+      }
+
+    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, A, K](store, Branch.REPLAY)
+
+    try {
+      f(space, replaySpace)
+    } finally {
+      space.close()
+      replaySpace.close()
+    }
+  }
+
+}
+
 class LMDBReplayRSpaceTests
     extends LMDBReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
@@ -906,3 +982,36 @@ class InMemoryRSpaceTests
 class FineGrainedReplayRSpaceTests
     extends FineGrainedReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
+
+class FaultyFineGrainedReplayRSpaceTests
+    extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
+    with ScalaFutures {
+
+  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel      = "ch1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.consume(key, patterns, continuation, false)
+      )
+
+      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+
+  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
+    withTestSpaces { (space, replaySpace) =>
+      val channel = "ch1"
+      val data    = "datum1"
+
+      an[RuntimeException] shouldBe thrownBy(
+        replaySpace.produce(channel, data, false)
+      )
+
+      val res = Future { replaySpace.produce(channel, data, false) }.failed.futureValue
+      res.getMessage shouldBe "Couldn't write to underlying store"
+    }
+}

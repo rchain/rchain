@@ -13,7 +13,7 @@ import scala.collection.immutable.Seq
 /**
   * Represents a Blake2b256 Hash
   *
-  * The default constructor is private to prevent construction means other than [[create]]
+  * The default constructor is private to prevent construction means other than [[Blake2b256Hash$.create(bytes:*]] or [[Blake2b256Hash$.create(byteVectors:*]]
   */
 class Blake2b256Hash private (val bytes: ByteVector) {
 

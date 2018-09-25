@@ -40,7 +40,10 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
 lazy val profilerSettings = Seq(
-  javaOptions in run ++= sys.env.get("YOURKIT_AGENT").map(agent => s"-agentpath:$agent=onexit=snapshot,tracing").toSeq,
+  javaOptions in run ++= sys.env
+    .get("YOURKIT_AGENT")
+    .map(agent => s"-agentpath:$agent=onexit=snapshot,tracing")
+    .toSeq,
   javaOptions in reStart ++= (javaOptions in run).value
 )
 
@@ -57,7 +60,7 @@ lazy val shared = (project in file("shared"))
       monix,
       scodecCore,
       scodecBits,
-      scalapbRuntimegGrpc,
+      scalapbRuntimegGrpc
     )
   )
 
@@ -71,13 +74,18 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix
     ),
-    rholangProtoBuildAssembly := (rholangProtoBuild/Compile/incrementalAssembly).value
+    rholangProtoBuildAssembly := (rholangProtoBuild / Compile / incrementalAssembly).value
   )
   .dependsOn(
-    blockStorage  % "compile->compile;test->test",
-    comm          % "compile->compile;test->test",
-    shared        % "compile->compile;test->test",
-    crypto, models, rspace, rholang, rholangProtoBuild)
+    blockStorage % "compile->compile;test->test",
+    comm         % "compile->compile;test->test",
+    shared       % "compile->compile;test->test",
+    crypto,
+    models,
+    rspace,
+    rholang,
+    rholangProtoBuild
+  )
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -96,11 +104,12 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                        -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value,
+      PB.gens.java                              -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
-  ).dependsOn(shared, crypto)
+  )
+  .dependsOn(shared, crypto)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -113,7 +122,8 @@ lazy val crypto = (project in file("crypto"))
       kalium,
       jaxb,
       secp256k1Java,
-      scodecBits),
+      scodecBits
+    ),
     fork := true,
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
@@ -129,7 +139,8 @@ lazy val models = (project in file("models"))
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+      grpcmonix.generators
+        .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(rspace)
@@ -154,8 +165,8 @@ lazy val node = (project in file("node"))
         tomlScala
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf",
+      PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
@@ -176,7 +187,6 @@ lazy val node = (project in file("node"))
       Seq(
         Cmd("FROM", dockerBaseImage.value),
         ExecCmd("RUN", "apt", "update"),
-        ExecCmd("RUN", "apt", "install", "-yq", "libsodium18"),
         ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
         Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
         Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
@@ -187,22 +197,26 @@ lazy val node = (project in file("node"))
       )
     },
     mappings in Docker ++= {
-       val base = (defaultLinuxInstallLocation in Docker).value
-       directory((baseDirectory in rholang).value / "examples")
-         .map { case (f, p) => f -> s"$base/$p" }
-     },
+      val base = (defaultLinuxInstallLocation in Docker).value
+      directory((baseDirectory in rholang).value / "examples")
+        .map { case (f, p) => f -> s"$base/$p" }
+    },
     /* Packaging */
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
         .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
-      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
+      Seq(
+        packageMapping(file -> "/lib/systemd/system/rnode.service"),
+        packageMapping(rholangExamples: _*)
+      )
     },
     /* Debian */
-    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
-                                                "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
-                                                "bash (>= 2.05a-11)",
-                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+    debianPackageDependencies in Debian ++= Seq(
+      "openjdk-8-jre-headless (>= 1.8.0.171)",
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
+      "bash (>= 2.05a-11)"
+    ),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -211,10 +225,11 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-    rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
-                        //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
-                        "openssl",
-                        "libsodium >= 1.0.14-1")
+    rpmPrerequisites := Seq(
+      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+      "openssl"
+    )
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -232,7 +247,13 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, catsEffect, monix, scallop, lightningj),
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsMtl,
+      catsEffect,
+      monix,
+      scallop,
+      lightningj
+    ),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -241,9 +262,11 @@ lazy val rholang = (project in file("rholang"))
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true
+    fork in Test := true,
+    //constrain the resource usage so that we hit SOE-s and OOME-s more quickly should they happen
+    javaOptions in Test ++= Seq("-Xss240k", "-XX:MaxJavaStackTraceDepth=10000", "-Xmx128m")
   )
-  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
+  .dependsOn(models % "compile->compile;test->test", rspace % "compile->compile;test->test", crypto)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
@@ -285,9 +308,11 @@ lazy val roscala = (project in file("roscala"))
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
-      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
+      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))
+    ),
     libraryDependencies ++= commonDependencies
-  ).dependsOn(roscalaMacros)
+  )
+  .dependsOn(roscalaMacros)
 
 lazy val blockStorage = (project in file("block-storage"))
   .settings(commonSettings: _*)
@@ -308,6 +333,9 @@ lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
+    scalacOptions ++= Seq(
+      "-Xfatal-warnings"
+    ),
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
@@ -322,45 +350,49 @@ lazy val rspace = (project in file("rspace"))
     /* Tutorial */
     tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
-    scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
+    scmInfo := Some(
+      ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")
+    ),
     git.remoteRepo := scmInfo.value.get.connection,
     useGpg := true,
-    pomIncludeRepository := { _ => false },
+    pomIncludeRepository := { _ =>
+      false
+    },
     publishMavenStyle := true,
     publishTo := {
       val nexus = "https://oss.sonatype.org/"
       if (isSnapshot.value)
         Some("snapshots" at nexus + "content/repositories/snapshots")
       else
-        Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+        Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
     publishArtifact in Test := false,
     licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
     homepage := Some(url("https://www.rchain.coop")),
     developers := List(
       Developer(
-        id    = "guardbotmk3",
-        name  = "Kyle Butt",
+        id = "guardbotmk3",
+        name = "Kyle Butt",
         email = "kyle@pyrofex.net",
-        url   = url("https://www.pyrofex.net")
+        url = url("https://www.pyrofex.net")
       ),
       Developer(
-        id    = "ys-pyrofex",
-        name  = "Yaraslau Levashkevich",
+        id = "ys-pyrofex",
+        name = "Yaraslau Levashkevich",
         email = "yaraslau@pyrofex.net",
-        url   = url("https://www.pyrofex.net")
+        url = url("https://www.pyrofex.net")
       ),
       Developer(
-        id    = "KentShikama",
-        name  = "Kent Shikama",
+        id = "KentShikama",
+        name = "Kent Shikama",
         email = "kent@kentshikama.com",
-        url   = url("https://www.rchain.coop")
+        url = url("https://www.rchain.coop")
       ),
       Developer(
-        id    = "henrytill",
-        name  = "Henry Till",
+        id = "henrytill",
+        name = "Henry Till",
         email = "henrytill@gmail.com",
-        url   = url("https://www.pyrofex.net")
+        url = url("https://www.pyrofex.net")
       )
     )
   )
@@ -369,7 +401,7 @@ lazy val rspace = (project in file("rspace"))
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
-    libraryDependencies ++= commonDependencies,
+    libraryDependencies ++= commonDependencies
   )
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace, rholang)
