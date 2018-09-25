@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.data.EitherT
 import cats.effect.concurrent.Ref
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -37,7 +37,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
 
   def apply[F[_]](implicit ev: CasperPacketHandler[F]): CasperPacketHandler[F] = ev
 
-  def of[F[_]: LastApprovedBlock: Metrics: Timer: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Log: MultiParentCasperRef](
+  def of[F[_]: LastApprovedBlock: Metrics: BlockStore: ConnectionsCell: NodeDiscovery: TransportLayer: ErrorHandler: RPConfAsk: SafetyOracle: Capture: Sync: Time: Log: MultiParentCasperRef](
       conf: CasperConf,
       delay: FiniteDuration,
       runtimeManager: RuntimeManager,
@@ -237,7 +237,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
   }
 
   object StandaloneCasperHandler {
-    def approveBlockInterval[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: Timer: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef](
+    def approveBlockInterval[F[_]: Sync: Capture: ConnectionsCell: NodeDiscovery: BlockStore: TransportLayer: Log: Time: ErrorHandler: SafetyOracle: RPConfAsk: LastApprovedBlock: MultiParentCasperRef](
         interval: FiniteDuration,
         shardId: String,
         runtimeManager: RuntimeManager,
@@ -245,7 +245,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         capserHandlerInternal: Ref[F, CasperPacketHandlerInternal[F]]
     )(implicit scheduler: Scheduler): F[Unit] =
       for {
-        _                  <- implicitly[Timer[F]].sleep(interval)
+        _                  <- Time[F].sleep(interval)
         lastApprovedBlockO <- LastApprovedBlock[F].get
         cont <- lastApprovedBlockO match {
                  case None =>

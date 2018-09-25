@@ -1,8 +1,9 @@
 package coop.rchain.casper.util.comm
 
 import cats.{Id, Monad, MonadError}
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
+
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
@@ -10,10 +11,11 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.{Channel, Par}
-
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
+
+import coop.rchain.shared.Time
 
 object DeployRuntime {
 
@@ -33,7 +35,7 @@ object DeployRuntime {
   def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
     gracefulExit(DeployService[F].showBlocks.map(println(_)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](name: Id[Name]): F[Unit] =
+  def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](name: Id[Name]): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
         val request = Channel(ChannelInstance.Quote(par))
@@ -41,7 +43,7 @@ object DeployRuntime {
       }
     }
 
-  def listenForContinuationAtName[F[_]: Sync: Timer: DeployService: Capture](
+  def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
