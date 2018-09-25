@@ -52,8 +52,8 @@ object HandleMessages {
 
   def handleCompression(p: Packet): Option[Packet] =
     if (p.compressed)
-      p.content.decompress.map(decompressedContent =>
-        Packet(p.typeId, compressed = false, decompressedContent))
+      p.content.decompress
+        .map(decompressedContent => Packet(p.typeId, compressed = false, decompressedContent))
     else
       Some(p)
 

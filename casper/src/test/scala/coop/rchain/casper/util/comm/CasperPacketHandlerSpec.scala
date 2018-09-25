@@ -24,7 +24,6 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.comm.rp.ProtocolHelper, ProtocolHelper._
 import coop.rchain.comm.rp.HandleMessages
-import coop.rchain.comm.transport.CommMessages._
 import coop.rchain.comm.{transport, _}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256

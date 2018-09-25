@@ -20,9 +20,8 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
 import coop.rchain.comm.rp.HandleMessages
-import coop.rchain.comm.transport.CommMessages.{packet, toPacket}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
@@ -404,7 +403,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     packetToBlockMessage(p) orElse
                     packetToBlockApproval(p) orElse
                     packetToUnapprovedBlock(p) orElse
-                    packetToNoApprovedBlockAvailable(p))
+                    packetToNoApprovedBlockAvailable(p)
+              )
         )
         .andThen {
           case br: BlockRequest =>

@@ -9,8 +9,8 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm.protocol.routing.Packet
+import coop.rchain.comm.rp.ProtocolHelper.toPacket
 import coop.rchain.comm.transport
-import coop.rchain.comm.transport.CommMessages.toPacket
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}

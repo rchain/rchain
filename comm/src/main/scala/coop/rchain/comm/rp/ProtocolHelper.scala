@@ -65,7 +65,7 @@ object ProtocolHelper {
     packet(src, pType, ByteString.copyFrom(content))
 
   def packet(src: PeerNode, pType: PacketType, content: ByteString): Protocol =
-    protocol(src).withPacket(Packet(pType.id, content))
+    protocol(src).withPacket(toPacket(pType, content))
 
   def toPacket(proto: Protocol): CommErr[Packet] =
     proto.message.packet.fold[CommErr[Packet]](
