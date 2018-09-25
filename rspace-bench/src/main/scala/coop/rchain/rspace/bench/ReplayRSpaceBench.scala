@@ -20,7 +20,7 @@ class ReplayRSpaceBench {
   @Warmup(iterations = 1)
   @Fork(value = 1)
   @Measurement(iterations = 1)
-  def singleProduce(bh: Blackhole, state: InMemBenchState) = {
+  def singleProduce(bh: Blackhole, state: ProduceInMemBenchState) = {
     val res = state.replaySpace.produce(state.produceChannel, bob, persist = true)
     assert(res.right.get.isDefined)
     bh.consume(res)
@@ -32,7 +32,7 @@ class ReplayRSpaceBench {
   @Warmup(iterations = 1)
   @Fork(value = 1)
   @Measurement(iterations = 1)
-  def singleConsume(bh: Blackhole, state: InMemBenchState) = {
+  def singleConsume(bh: Blackhole, state: ConsumeInMemBenchState) = {
     val res = state.replaySpace.consume(
       List(state.consumeChannel),
       state.matches,
@@ -56,46 +56,10 @@ object ReplayRSpaceBench {
     val matches        = List(CityMatch(city = "Crystal Lake"))
     val captor         = new EntriesCaptor()
 
-    def prepareConsume() = {
-      (1 to 1000).foreach { _ =>
-        space.produce(consumeChannel, bob, persist = true)
-
-      }
-      (1 to 2).foreach { i =>
-        space.consume(
-          List(consumeChannel),
-          matches,
-          captor,
-          persist = true
-        )
-      }
-    }
-
-    def prepareProduce() = {
-      (1 to 1000).foreach { _ =>
-        space.consume(
-          List(produceChannel),
-          matches,
-          captor,
-          persist = true
-        )
-      }
-      (1 to 2).foreach { i =>
-        space.produce(produceChannel, bob, persist = true)
-      }
-    }
-
     def initSpace() = {
-      prepareConsume()
-      prepareProduce()
       val rigPoint = space.createCheckpoint()
       replaySpace.rig(rigPoint.root, rigPoint.log)
     }
-
-  }
-
-  @State(Scope.Thread)
-  class InMemBenchState extends ReplayRSpaceBenchState {
 
     @Setup
     def setup() = {
@@ -111,7 +75,6 @@ object ReplayRSpaceBench {
         context,
         Branch.REPLAY
       )
-      initSpace
     }
 
     @TearDown
@@ -122,4 +85,52 @@ object ReplayRSpaceBench {
     }
   }
 
+  @State(Scope.Thread)
+  class ConsumeInMemBenchState extends ReplayRSpaceBenchState {
+
+    def prepareConsume() = {
+      (1 to 1000).foreach { _ =>
+        space.produce(consumeChannel, bob, persist = true)
+
+      }
+      (1 to 2).foreach { i =>
+        space.consume(
+          List(consumeChannel),
+          matches,
+          captor,
+          persist = true
+        )
+      }
+    }
+    @Setup
+    override def setup() = {
+      super.setup()
+      prepareConsume()
+      initSpace
+    }
+  }
+
+  @State(Scope.Thread)
+  class ProduceInMemBenchState extends ReplayRSpaceBenchState {
+
+    def prepareProduce() = {
+      (1 to 1000).foreach { _ =>
+        space.consume(
+          List(produceChannel),
+          matches,
+          captor,
+          persist = true
+        )
+      }
+      (1 to 2).foreach { i =>
+        space.produce(produceChannel, bob, persist = true)
+      }
+    }
+    @Setup
+    override def setup() = {
+      super.setup()
+      prepareProduce()
+      initSpace
+    }
+  }
 }
