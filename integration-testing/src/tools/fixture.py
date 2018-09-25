@@ -24,7 +24,7 @@ def {fn.__name__}(request, {parameter_list}):
     # logging.info("fixtures:" + str(fixtures))
     def get_value(p_name, p_value):
         if p_name in fixtures:
-            v = request.getfuncargvalue(p_value.__name__)
+            v = request.getfixturevalue(p_value.__name__)
             # logging.info("Get_value from fixtures: " + p_name + " : " + str(v))
             return v
         else:
