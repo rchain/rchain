@@ -44,7 +44,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   import HashSetCasperTest._
 
-  private val (otherSk, _)                = Ed25519.newKeyPair
+  private val (otherSk, otherPk)          = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
@@ -302,7 +302,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   it should "allow bonding" in {
     val nodes =
-      HashSetCasperTestNode.network(validatorKeys, genesis, storageSize = 1024L * 1024 * 10)
+      HashSetCasperTestNode.network(
+        validatorKeys :+ otherSk,
+        genesis,
+        storageSize = 1024L * 1024 * 10
+      )
     implicit val runtimeManager = nodes(0).runtimeManager
     val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
     val secKey                  = ethPivKeys.head.bytes
@@ -312,7 +316,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val bondingForwarderAddress = "myBondingForwarder"
     val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
       s"""for(@purse <- @"$bondingForwarderAddress"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("04$pubKey".hexToBytes(), "secp256k1Verify", purse, "$pubKey", "$bondingStatusOut")
+       |  @(pos, "bond")!("${Base16
+           .encode(otherPk)}".hexToBytes(), "ed25519Verify", purse, "$pubKey", "$bondingStatusOut")
        |}""".stripMargin,
       System.currentTimeMillis()
     )
@@ -337,12 +342,30 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val block2Status = nodes(1).casperEff.addBlock(block2)
     nodes.foreach(_.receive)
 
+    val helloWorldDeploy = ProtoUtil.sourceDeploy(
+      """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
+      System.currentTimeMillis()
+    )
+    //new validator does deploy/propose
+    val Created(block3) = nodes.last.casperEff
+      .deploy(helloWorldDeploy) *> nodes.last.casperEff.createBlock
+    val block3Status = nodes.last.casperEff.addBlock(block3)
+
+    //previous validator does deploy/propose
+    val Created(block3Prime) = nodes.head.casperEff
+      .deploy(helloWorldDeploy) *> nodes.head.casperEff.createBlock
+    val block3PrimeStatus = nodes.head.casperEff.addBlock(block3Prime)
+
+    nodes.foreach(_.receive) //all nodes get the blocks
+
     block1Status shouldBe Valid
     block2Status shouldBe Valid
+    block3Status shouldBe Valid
+    block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
     val correctBonds = bonds.map { case (key, stake) => Bond(ByteString.copyFrom(key), stake) }.toSet + Bond(
-      ByteString.copyFrom(ethPubKeys.head.bytes),
+      ByteString.copyFrom(otherPk),
       wallets.head.initRevBalance.toLong
     )
     val newBonds = block2.getBody.getPostState.bonds

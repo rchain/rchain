@@ -42,7 +42,7 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 lazy val profilerSettings = Seq(
   javaOptions in run ++= sys.env
     .get("YOURKIT_AGENT")
-    .map(agent => s"-agentpath:$agent=onexit=snapshot,tracing")
+    .map(agent => s"-agentpath:$agent=onexit=snapshot,sampling")
     .toSeq,
   javaOptions in reStart ++= (javaOptions in run).value
 )
