@@ -21,7 +21,8 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
-  scalafmtOnCompile := true
+  scalafmtOnCompile := true,
+  scapegoatVersion in ThisBuild := "1.3.4"
 )
 
 lazy val coverageSettings = Seq(
