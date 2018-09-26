@@ -113,7 +113,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['count', 'eval', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',

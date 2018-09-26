@@ -125,12 +125,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "sending a message" should {
       "deliver the message" in
-        new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+        new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote: PeerNode
-          ): F[Unit] =
+          ): F[CommErr[Unit]] =
             for {
               r <- sendHeartbeat(transportLayer, local, remote)
               _ = await()
@@ -146,7 +146,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           protocol2.message shouldBe 'heartbeat
         }
 
-      "not wait for a response" in
+      "wait for a response" in
         new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
           def execute(
               transportLayer: TransportLayer[F],
@@ -162,7 +162,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val result: TwoNodesResult = run()
 
           val sent = result()
-          sent should be < result.lastProcessedMessageTimestamp
+          sent should be > result.lastProcessedMessageTimestamp
         }
 
       "wait for message being delivered" in {
@@ -173,13 +173,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "broadcasting a message" should {
       "send the message to all peers" in
-        new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+        new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
-          ): F[Unit] =
+          ): F[Seq[CommErr[Unit]]] =
             for {
               r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
               _ = await()
@@ -229,12 +229,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "sending a message" should {
         "not send the message" in
-          new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+          new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Unit] =
+            ): F[CommErr[Unit]] =
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- sendHeartbeat(transportLayer, local, remote)
@@ -249,13 +249,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "broadcasting a message" should {
         "not send any messages" in
-          new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+          new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
                 remote1: PeerNode,
                 remote2: PeerNode
-            ): F[Unit] =
+            ): F[Seq[CommErr[Unit]]] =
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)

@@ -22,7 +22,7 @@ service DeployService {
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
-  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfo) {}
+  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfoWithoutTuplespace) {}
   rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
   rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
 }
@@ -98,7 +98,7 @@ message WaitingContinuationInfo {
 
 message BlocksResponse {
   string status = 1;
-  repeated BlockInfo blocks = 2;
+  repeated BlockInfoWithoutTuplespace blocks = 2;
   int64 length = 3;
 }
 
