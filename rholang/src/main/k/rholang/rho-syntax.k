@@ -261,6 +261,10 @@ syntax KResult ::= Int
               | Id
               | Bool
 
+// For exact text matching
+syntax String ::= "toString(" HigherPat ")"
+
+
 // In Rholang we distinguish between variables and wildcards
 syntax Var ::=
             // Standard variable
@@ -300,6 +304,10 @@ syntax Fun  ::=
               | "fv(" String "," HigherPat "," Id ")"
               // For determining if the entire program has free variables in it
               | "fvInitial(" HigherPat ")"
+              // A function to determine if two names are equivalent
+              | "areNameEquivalent(" HigherNamePat "," HigherNamePat ")"
+              // A function to determine alpha equivalence
+              | "areAlphaEquivalent(" HigherPat "," HigherPat ")"
 
 // Some syntax specifically for the "match" process
 syntax MatchCase  ::= ProcPat "=>" "{" Proc "}" [binder]

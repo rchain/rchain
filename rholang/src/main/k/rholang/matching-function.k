@@ -183,54 +183,27 @@ rule <thread> ... <k> ...
           => match[S]( C ; D ) ... </k> ... </thread>
 
 // When the pattern is a "for"
-// This is not quite correct, but it's on its way. It still needs alpha equivalence, among other
-// things. If you responsibly code, it will still match most things correctly. In a future update
-// it will match exactly the correct terms, while failing to match anything else.
+// The channels in the "for" pattern must match exactly -- not even up to alpha equivalence
 rule <thread> ...
         <k> ... matchstdform[S:String](
                             "listen"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat] ;
                             "listen"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat] ;
                             true
                           )
-          => match["HIGHERNAMEMATCH"](C ; E)
+          => match["TEXTMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
 
-// THIS is how it should be.
-//rule <thread> ... <k> ... matchstdform(
-//                          "listen"[C:HigherName][D:HigherName][P:HigherProc] ;
-//                          "listen"[E:HigherName][F:HigherName][R:HigherProc] ;
-//                          true )
-//          => AreTheseHigherNamesEqual(C ; E) ~> match(D ; F) ~> match(P ; R) ... </k> ...</thread>
-
-
 // When the pattern is a persistent "for"
-// *** This is also incorrect; we need things like in the previous listen construct
+// The channels in the persistent "for" pattern must match exactly--not even up to alpha equivalence
 rule <thread> ... <k> ... matchstdform[S:String](
                               "persistentlisten"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat];
                               "persistentlisten"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat];
                               true
                             )
-          => match["HIGHERNAMEMATCH"](C ; E)
+          => match["TEXTMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
-
-// The (logic of the) code we would use for a more correct version
-
-// When the pattern is a persistent "for"
-//rule <thread> ... <k> ... match(
-//                              "persistentlisten"(C:HigherName)(D:HigherName)(P:HigherProc),
-//                              "persistentlisten"(E:HigherName)(F:HigherName)(R:HigherProc),
-//                              true )
-//          => match("persistentlisten"(D)(P),"persistentlisten"(F)(R),C == E)
-//             ... </k> ... </thread>
-//
-//rule <thread> ... <k> ... match(
-//                              "persistentlisten"(D:HigherName)(P:HigherProc),
-//                              "persistentlisten"(F:HigherName)(R:HigherProc),
-//                              true)
-//          => match(intostdmatchform(D),intostdmatchform(F))
-//          ~> match(intostdmatchform(P),intostdmatchform(R)) ... </k> ... </thread>
 
 
 // When the pattern is "send"
