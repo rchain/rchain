@@ -226,7 +226,7 @@ object BlockAPI {
         estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
         mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
-        blockInfos <- mainChain.toList.traverse(getFullBlockInfo[F])
+        blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
       } yield
         BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
@@ -272,13 +272,12 @@ object BlockAPI {
           Long,
           Int,
           BlockHash,
-          String,
           Long,
           BlockHash,
           Seq[BlockHash],
           Float,
           Float
-      ) => A
+      ) => F[A]
   ): F[A] =
     for {
       dag         <- MultiParentCasper[F].blockDag
@@ -289,25 +288,23 @@ object BlockAPI {
         case Some(hash) => hash
         case None       => ByteString.EMPTY
       }
-      tsDesc                   <- MultiParentCasper[F].storageContents(tsHash)
       timestamp                = header.timestamp
       mainParent               = header.parentsHashList.headOption.getOrElse(ByteString.EMPTY)
       parentsHashList          = header.parentsHashList
-      normalizedFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
+      normalizedFaultTolerance = SafetyOracle[F].normalizedFaultTolerance(dag, block)
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
-    } yield
-      constructor(
-        block,
-        version,
-        deployCount,
-        tsHash,
-        tsDesc,
-        timestamp,
-        mainParent,
-        parentsHashList,
-        normalizedFaultTolerance,
-        initialFault
-      )
+      blockInfo <- constructor(
+                    block,
+                    version,
+                    deployCount,
+                    tsHash,
+                    timestamp,
+                    mainParent,
+                    parentsHashList,
+                    normalizedFaultTolerance,
+                    initialFault
+                  )
+    } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage
@@ -322,40 +319,42 @@ object BlockAPI {
       version: Long,
       deployCount: Int,
       tsHash: BlockHash,
-      tsDesc: String,
       timestamp: Long,
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
       initialFault: Float
-  ): BlockInfo =
-    BlockInfo(
-      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = block.serializedSize.toString,
-      blockNumber = ProtoUtil.blockNumber(block),
-      version = version,
-      deployCount = deployCount,
-      tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
-      tupleSpaceDump = tsDesc,
-      timestamp = timestamp,
-      faultTolerance = normalizedFaultTolerance - initialFault,
-      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.sender),
-      shardId = block.shardId
-    )
+  ): F[BlockInfo] =
+    for {
+      tsDesc <- MultiParentCasper[F].storageContents(tsHash)
+    } yield
+      BlockInfo(
+        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+        blockSize = block.serializedSize.toString,
+        blockNumber = ProtoUtil.blockNumber(block),
+        version = version,
+        deployCount = deployCount,
+        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
+        tupleSpaceDump = tsDesc,
+        timestamp = timestamp,
+        faultTolerance = normalizedFaultTolerance - initialFault,
+        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
+        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
+        sender = PrettyPrinter.buildStringNoLimit(block.sender),
+        shardId = block.shardId
+      )
+
   private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: SafetyOracle: BlockStore](
       block: BlockMessage,
       version: Long,
       deployCount: Int,
       tsHash: BlockHash,
-      tsDesc: String,
       timestamp: Long,
       mainParent: BlockHash,
       parentsHashList: Seq[BlockHash],
       normalizedFaultTolerance: Float,
       initialFault: Float
-  ): BlockInfoWithoutTuplespace =
+  ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       blockSize = block.serializedSize.toString,
@@ -368,7 +367,7 @@ object BlockAPI {
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
       parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
       sender = PrettyPrinter.buildStringNoLimit(block.sender)
-    )
+    ).pure[F]
 
   private def getBlock[F[_]: Monad: MultiParentCasper: BlockStore](
       q: BlockQuery,
