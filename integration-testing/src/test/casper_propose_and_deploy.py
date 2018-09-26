@@ -9,8 +9,7 @@ from shutil import copyfile
 
 def run(config, network):
     """
-    This test represents an integration test that deploys a contract and then checks
-    if all the nodes have received the block containing the contract.
+    Deploy a contract and then checks if all the nodes have received the block containing the contract.
     """
 
     token_size = 20

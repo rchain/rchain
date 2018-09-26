@@ -5,6 +5,7 @@ from delayed_assert import expect, assert_expectations
 from tools.profiling import profile
 from tools.network import start_network, wait_for_started_network, wait_for_converged_network
 from tools.rnode import start_bootstrap
+import test.casper_propose_and_deploy
 
 @pytest.fixture(scope="module")
 def complete_network(config, docker, validators_data):

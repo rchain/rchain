@@ -1,5 +1,5 @@
 import pytest
-import test
+import test.casper_propose_and_deploy
 from tools.network import start_network, wait_for_started_network, wait_for_converged_network
 from tools.rnode import start_bootstrap
 import logging
