@@ -4,6 +4,7 @@ import pytest
 import time
 from tools.util import log_box
 
+
 def wait_for(condition, timeout, error_message):
     """
     Waits for a condition to be fulfilled. It retries until the timeout expires.
@@ -51,27 +52,32 @@ def wait_for(condition, timeout, error_message):
         logging.warning(f"Giving up after {elapsed}s.")
         pytest.fail(error_message)
 
+
 # Predicates
 # For each predicate please provide a nicely formatted __doc__ because it is used in wait_for to display a nice message
 # Warning: The __doc__ has to be explicitly assigned as seen below if it's a formatted string, otherwise it will be None.
+
 
 def node_logs(node):
     def go(): return node.logs()
     go.__doc__ = f"node_logs({node.name})"
     return go
 
+
 def show_blocks(node):
     def go():
         exit_code, output = node.show_blocks()
 
-        if exit_code != 0: raise Exception("Show-blocks failed")
+        if exit_code != 0:
+            raise Exception("Show-blocks failed")
 
         return output
 
     go.__doc__ = f"show_blocks({node.name})"
     return go
 
-def string_contains(string_factory, regex_str, flags = 0):
+
+def string_contains(string_factory, regex_str, flags=0):
     rx = re.compile(regex_str, flags)
 
     def go():
@@ -85,6 +91,7 @@ def string_contains(string_factory, regex_str, flags = 0):
 
     go.__doc__ = f"{string_factory.__doc__} contains regex '{regex_str}'"
     return go
+
 
 def has_peers(bootstrap_node, expected_peers):
     rx = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
@@ -103,6 +110,7 @@ def has_peers(bootstrap_node, expected_peers):
 
     return go
 
+
 def node_started(node):
-    return string_contains( node_logs(node),
-                            "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
+    return string_contains(node_logs(node),
+                           "coop.rchain.node.NodeRuntime - Listening for traffic on rnode")
