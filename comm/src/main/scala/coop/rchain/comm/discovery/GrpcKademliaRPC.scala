@@ -27,12 +27,9 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
     for {
       _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
       channel <- clientChannel(peer)
-      pongErr <- Task
-                  .fromFuture {
-                    KademliaRPCServiceGrpc
-                      .stub(channel)
-                      .sendPing(Ping().withSender(node(src)))
-                  }
+      pongErr <- KademliaGrpcMonix
+                  .stub(channel)
+                  .sendPing(Ping().withSender(node(src)))
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
@@ -45,10 +42,9 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
         .withId(ByteString.copyFrom(key.toArray))
         .withSender(node(src))
       channel <- clientChannel(peer)
-      responseErr <- Task
-                      .fromFuture {
-                        KademliaRPCServiceGrpc.stub(channel).sendLookup(lookup)
-                      }
+      responseErr <- KademliaGrpcMonix
+                      .stub(channel)
+                      .sendLookup(lookup)
                       .nonCancelingTimeout(timeout)
                       .attempt
       _ <- Task.delay(channel.shutdown())
@@ -66,8 +62,8 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       NettyServerBuilder
         .forPort(port)
         .addService(
-          KademliaRPCServiceGrpc
-            .bindService(new SimpleKademliaRPCService[Task](pingHandler, lookupHandler), scheduler)
+          KademliaGrpcMonix
+            .bindService(new SimpleKademliaRPCService(pingHandler, lookupHandler), scheduler)
         )
         .build
         .start
@@ -94,20 +90,19 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
   private def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
-  class SimpleKademliaRPCService[F[_]: Futurable: Functor](
-      pingHandler: PeerNode => F[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
-  ) extends KademliaRPCServiceGrpc.KademliaRPCService {
-    def sendLookup(lookup: Lookup): Future[LookupResponse] = {
+  class SimpleKademliaRPCService(
+      pingHandler: PeerNode => Task[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+  ) extends KademliaGrpcMonix.KademliaRPCService {
+    def sendLookup(lookup: Lookup): Task[LookupResponse] = {
       val id               = lookup.id.toByteArray
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       lookupHandler(sender, id)
         .map(peers => LookupResponse().withNodes(peers.map(node)))
-        .toFuture
     }
-    def sendPing(ping: Ping): Future[Pong] = {
+    def sendPing(ping: Ping): Task[Pong] = {
       val sender: PeerNode = toPeerNode(ping.sender.get)
-      pingHandler(sender).as(Pong()).toFuture
+      pingHandler(sender).as(Pong())
     }
   }
 
