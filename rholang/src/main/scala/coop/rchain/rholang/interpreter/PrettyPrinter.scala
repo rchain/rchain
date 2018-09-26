@@ -13,6 +13,7 @@ import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 import cats.implicits._
+import coop.rchain.shared.Printer
 import monix.eval.Coeval
 
 object PrettyPrinter {
@@ -20,8 +21,11 @@ object PrettyPrinter {
 
   def apply(freeShift: Int, boundShift: Int): PrettyPrinter =
     PrettyPrinter(freeShift, boundShift, "free", "a", 23, 128)
-}
 
+  implicit class CappedOps(val str: String) extends AnyVal {
+    def cap() = Printer.OUTPUT_CAPPED.map(n => s"${str.take(n)}...").getOrElse(str)
+  }
+}
 case class PrettyPrinter(
     freeShift: Int,
     boundShift: Int,
@@ -37,11 +41,12 @@ case class PrettyPrinter(
   def setBaseId(): String = increment(baseId)
 
   import Coeval.pure
+  import PrettyPrinter._
 
-  def buildString(e: Expr): String             = buildStringM(e).value
-  def buildString(v: Var): String              = buildStringM(v).value
-  def buildString(c: Channel): String          = buildStringM(c).value
-  def buildString(m: GeneratedMessage): String = buildStringM(m).value
+  def buildString(e: Expr): String             = buildStringM(e).value.cap()
+  def buildString(v: Var): String              = buildStringM(v).value.cap()
+  def buildString(c: Channel): String          = buildStringM(c).value.cap()
+  def buildString(m: GeneratedMessage): String = buildStringM(m).value.cap()
 
   private def buildStringM(e: Expr): Coeval[String] = Coeval.defer {
     e.exprInstance match {
@@ -117,7 +122,7 @@ case class PrettyPrinter(
   private def buildRemainderString(remainder: Option[Var]): Coeval[String] =
     remainder.fold(pure(""))(v => pure("...") |+| buildStringM(v))
 
-  def buildStringM(v: Var): Coeval[String] =
+  private def buildStringM(v: Var): Coeval[String] =
     v.varInstance match {
       case FreeVar(level)    => pure(s"$freeId${freeShift + level}")
       case BoundVar(level)   => pure(s"$boundId${boundShift - level - 1}")
@@ -125,7 +130,7 @@ case class PrettyPrinter(
       case VarInstance.Empty => pure("@Nil")
     }
 
-  def buildStringM(c: Channel): Coeval[String] =
+  private def buildStringM(c: Channel): Coeval[String] =
     c.channelInstance match {
       case Quote(p) =>
         buildStringM(p).map { b =>
@@ -139,9 +144,9 @@ case class PrettyPrinter(
       case ChannelInstance.Empty => pure("@Nil")
     }
 
-  def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
+  private def buildStringM(t: GeneratedMessage): Coeval[String] = buildStringM(t, 0)
 
-  def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
+  private def buildStringM(t: GeneratedMessage, indent: Int): Coeval[String] = Coeval.defer {
     val content = t match {
       case v: Var     => buildStringM(v)
       case c: Channel => buildStringM(c)
