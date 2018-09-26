@@ -36,7 +36,7 @@ class Node:
 
     def get_rnode_address(self):
         log_content = self.logs()
-        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\?protocol=\d+&discovery=\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
+        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$", log_content, re.MULTILINE | re.DOTALL)
         address = m[1]
 
         logging.info(f"Bootstrap address: `{address}`")
@@ -91,7 +91,7 @@ class Node:
             process.join()
             raise Exception(f"The command '{cmd}' hasn't finished execution after {self.timeout}s")
 
-    __timestamp_rx = "\d\d:\d\d:\d\d\.\d\d\d"
+    __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
 
 

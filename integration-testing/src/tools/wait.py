@@ -85,7 +85,7 @@ def string_contains(string_factory, regex_str, flags = 0):
     return go
 
 def has_peers(bootstrap_node, expected_peers):
-    rx = re.compile("^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
+    rx = re.compile(r"^peers (\d+).0\s*$", re.MULTILINE | re.DOTALL)
 
     def go():
         exit_code, output = bootstrap_node.get_metrics()
