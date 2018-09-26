@@ -1,6 +1,5 @@
 import os
 import inspect
-import logging
 
 def file_path(path):
     frame = inspect.stack()[1]

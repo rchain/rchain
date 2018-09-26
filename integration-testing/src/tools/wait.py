@@ -33,7 +33,9 @@ def wait_for(condition, timeout, error_message):
                 elapsed = int(elapsed + condition_evaluation_duration)
                 time_left = timeout - elapsed
 
-                iteration_duration = int(max(1, int(0.15 * time_left))) # iteration duration is 15% of remaining timeout
+                # iteration duration is 15% of remaining timeout
+                # but no more than 10s and no less than 1s
+                iteration_duration = int(min(10, max(1, int(0.15 * time_left))))
 
                 if str(ex) == current_ex:
                     details = "same as above"
