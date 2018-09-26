@@ -16,6 +16,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
+import coop.rchain.shared.ByteStringOps._
 
 import scala.concurrent.duration._
 
@@ -49,6 +50,13 @@ object HandleMessages {
           .pure[F]
     }
 
+  def handleCompression(p: Packet): Option[Packet] =
+    if (p.compressed)
+      p.content.decompress
+        .map(decompressedContent => Packet(p.typeId, compressed = false, decompressedContent))
+    else
+      Some(p)
+
   def handleDisconnect[F[_]: Monad: Capture: Metrics: TransportLayer: Log: ConnectionsCell](
       sender: PeerNode,
       disconnect: Disconnect
@@ -69,6 +77,7 @@ object HandleMessages {
       maybeResponsePacket <- PacketHandler[F].handlePacket(remote, packet)
     } yield
       maybeResponsePacket
+        .flatMap(handleCompression)
         .fold(notHandled(noResponseForRequest))(
           m => handledWithMessage(ProtocolHelper.protocol(local).withPacket(m))
         )

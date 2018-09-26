@@ -20,12 +20,14 @@ import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.comm.rp.ProtocolHelper.{packet, toPacket}
+import coop.rchain.comm.rp.HandleMessages
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.shared.{Log, LogSource, Time}
+import coop.rchain.shared.ByteStringOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -375,7 +377,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     ): F[Option[Packet]] =
       for {
         _ <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-      } yield Some(Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
+      } yield Some(toPacket(transport.ApprovedBlock, approvedBlock.toByteString))
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =
       for {
@@ -391,13 +393,18 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
       Function
         .unlift(
           (p: Packet) =>
-            packetToBlockRequest(p) orElse
-              packetToApprovedBlock(p) orElse
-              packetToApprovedBlockRequest(p) orElse
-              packetToBlockMessage(p) orElse
-              packetToBlockApproval(p) orElse
-              packetToUnapprovedBlock(p) orElse
-              packetToNoApprovedBlockAvailable(p)
+            HandleMessages
+              .handleCompression(p)
+              .flatMap(
+                p =>
+                  packetToBlockRequest(p) orElse
+                    packetToApprovedBlock(p) orElse
+                    packetToApprovedBlockRequest(p) orElse
+                    packetToBlockMessage(p) orElse
+                    packetToBlockApproval(p) orElse
+                    packetToUnapprovedBlock(p) orElse
+                    packetToNoApprovedBlockAvailable(p)
+              )
         )
         .andThen {
           case br: BlockRequest =>
@@ -537,8 +544,8 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     }
 
   private def noApprovedBlockAvailable(peer: PeerNode): Packet =
-    Packet(
-      transport.NoApprovedBlockAvailable.id,
+    toPacket(
+      transport.NoApprovedBlockAvailable,
       NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
     )
 

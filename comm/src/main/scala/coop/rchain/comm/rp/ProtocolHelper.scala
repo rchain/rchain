@@ -7,6 +7,7 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import com.google.protobuf.ByteString
 import coop.rchain.comm.transport.PacketType
+import coop.rchain.shared.ByteStringOps._
 import com.google.protobuf.ByteString
 
 object ProtocolHelper {
@@ -64,12 +65,19 @@ object ProtocolHelper {
     packet(src, pType, ByteString.copyFrom(content))
 
   def packet(src: PeerNode, pType: PacketType, content: ByteString): Protocol =
-    protocol(src).withPacket(Packet(pType.id, content))
+    protocol(src).withPacket(toPacket(pType, content))
 
   def toPacket(proto: Protocol): CommErr[Packet] =
     proto.message.packet.fold[CommErr[Packet]](
       Left(UnknownProtocolError(s"Was expecting Packet, got ${proto.message}"))
     )(Right(_))
+
+  def toPacket(pType: PacketType, content: ByteString): Packet =
+    // Compressed data can be bigger than uncompressed data if input is too small
+    if (content.size() > 1000)
+      Packet(pType.id, compressed = true, content.compress)
+    else
+      Packet(pType.id, compressed = false, content)
 
   def disconnect(src: PeerNode): Protocol =
     protocol(src).withDisconnect(Disconnect())

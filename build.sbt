@@ -54,10 +54,11 @@ lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    libraryDependencies ++= commonDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
       catsEffect,
       catsMtl,
+      lz4,
       monix,
       scodecCore,
       scodecBits,
