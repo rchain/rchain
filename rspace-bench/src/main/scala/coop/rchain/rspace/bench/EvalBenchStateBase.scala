@@ -6,10 +6,12 @@ import java.nio.file.{Files, Path}
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.{Interpreter, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
+import monix.execution.Scheduler
+import scala.concurrent.duration.Duration
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
@@ -33,6 +35,9 @@ trait EvalBenchStateBase {
     //make sure we always start from clean rspace
     runtime.replaySpace.clear()
     runtime.space.clear()
+
+    implicit val scheduler: Scheduler = monix.execution.Scheduler.Implicits.global
+    runtime.reducer.setAvailablePhlos(Cost(Long.MaxValue)).runSyncUnsafe(Duration.Inf)
   }
 
   @TearDown
