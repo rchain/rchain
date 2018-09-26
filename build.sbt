@@ -21,7 +21,8 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
-  scalafmtOnCompile := true
+  scalafmtOnCompile := true,
+  testOptions in Test += Tests.Argument("-oD") //output test durations
 )
 
 lazy val coverageSettings = Seq(
