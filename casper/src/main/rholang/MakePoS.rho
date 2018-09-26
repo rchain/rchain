@@ -92,11 +92,12 @@ contract @"MakePoS"(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
               bondUpdateLoop!(
                 rest, 
                 feeDist, 
-                updatedMap.set(key, (stake + feeDist.nth(index - 1), sigVerify, rewardsForwarder, index))
+                updatedMap.set(key, (stake + feeDist.nth(index - 1), sigVerify, rewardsForwarder, index)),
+                *return
               )
             }
             
-            _ => return!(updatedMap)
+            _ => { return!(updatedMap) }
           }
         } |
         for(@bonds <- bondsCh; @joiningFee <- joiningFeeCh) {

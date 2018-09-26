@@ -15,6 +15,7 @@ import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCaspe
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
+import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.Capture
@@ -364,9 +365,37 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-    val correctBonds = bonds.map { case (key, stake) => Bond(ByteString.copyFrom(key), stake) }.toSet + Bond(
+    val oldestValidatorQuery = mkTerm("""for(@pos <- @"proofOfStake"){ 
+    |  new bondsCh, findOldest in {
+    |    contract findOldest(@bonds, return) = {
+    |      match bonds {
+    |        {key:(_, _, _, index) ...rest} => {
+    |          if (index == 1){ return!(key)              }
+    |          else           { findOldest!(rest, *return) }
+    |        }
+    |      }
+    |    } |
+    |    @(pos, "getBonds")!(*bondsCh) | for(@bonds <- bondsCh) {
+    |      findOldest!(bonds, "__SCALA__")
+    |    }
+    |  }
+    |}
+    """.stripMargin).right.get
+    val oldestValidator = runtimeManager
+      .captureResults(block1.getBody.getPostState.tuplespace, oldestValidatorQuery)
+      .head
+      .exprs
+      .head
+      .getGByteArray
+    val correctBonds = bonds.map {
+      case (key, stake) =>
+        val k = ByteString.copyFrom(key)
+        //distribute joining fee
+        if (k == oldestValidator) Bond(k, stake + 1)
+        else Bond(k, stake)
+    }.toSet + Bond(
       ByteString.copyFrom(otherPk),
-      wallets.head.initRevBalance.toLong
+      wallets.head.initRevBalance.toLong - 1 //minus joining fee
     )
     val newBonds = block2.getBody.getPostState.bonds
     newBonds.toSet shouldBe correctBonds

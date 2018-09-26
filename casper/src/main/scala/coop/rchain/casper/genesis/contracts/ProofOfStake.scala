@@ -10,11 +10,11 @@ object ProofOfStake {
   def initialBondsCode(validators: Seq[ProofOfStakeValidator]): String = {
     import Sorting.byteArrayOrdering
     val sortedValidators = validators.sortBy(_.id)
-    val mapEntries = sortedValidators
+    val mapEntries = sortedValidators.iterator.zipWithIndex
       .map {
-        case ProofOfStakeValidator(id, stake) =>
+        case (ProofOfStakeValidator(id, stake), index) =>
           val pk = Base16.encode(id)
-          s""" "$pk".hexToBytes() : ($stake, "secp256k1Verify", Nil)"""
+          s""" "$pk".hexToBytes() : ($stake, "secp256k1Verify", Nil, ${index + 1})"""
       }
       .mkString(", ")
 
