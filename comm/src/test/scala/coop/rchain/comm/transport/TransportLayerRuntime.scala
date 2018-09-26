@@ -12,6 +12,7 @@ import cats.implicits._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError.CommErr
+import coop.rchain.comm.rp.ProtocolHelper
 
 abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
 
@@ -64,8 +65,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remote   = e2.peer
             _        <- remoteTl.receive(dispatcher.dispatch(remote))
             r        <- execute(localTl, local, remote)
-            _        <- remoteTl.shutdown(CommMessages.disconnect(remote))
-            _        <- localTl.shutdown(CommMessages.disconnect(local))
+            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
+            _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -92,7 +93,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local   = e1.peer
             remote  = e2.peer
             r       <- execute(localTl, local, remote)
-            _       <- localTl.shutdown(CommMessages.disconnect(local))
+            _       <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode  = local
@@ -128,9 +129,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             _         <- remoteTl1.receive(dispatcher.dispatch(remote1))
             _         <- remoteTl2.receive(dispatcher.dispatch(remote2))
             r         <- execute(localTl, local, remote1, remote2)
-            _         <- remoteTl1.shutdown(CommMessages.disconnect(remote1))
-            _         <- remoteTl2.shutdown(CommMessages.disconnect(remote2))
-            _         <- localTl.shutdown(CommMessages.disconnect(local))
+            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
+            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
+            _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -147,23 +148,31 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  def roundTripWithHeartbeat(transport: TransportLayer[F],
-                             local: PeerNode,
-                             remote: PeerNode,
-                             timeout: FiniteDuration = 3.second): F[CommErr[Protocol]] = {
-    val msg = CommMessages.heartbeat(local)
+  def roundTripWithHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode,
+      timeout: FiniteDuration = 3.second
+  ): F[CommErr[Protocol]] = {
+    val msg = ProtocolHelper.heartbeat(local)
     transport.roundTrip(remote, msg, timeout)
   }
 
-  def sendHeartbeat(transport: TransportLayer[F], local: PeerNode, remote: PeerNode): F[Unit] = {
-    val msg = CommMessages.heartbeat(local)
+  def sendHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remote: PeerNode
+  ): F[CommErr[Unit]] = {
+    val msg = ProtocolHelper.heartbeat(local)
     transport.send(remote, msg)
   }
 
-  def broadcastHeartbeat(transport: TransportLayer[F],
-                         local: PeerNode,
-                         remotes: PeerNode*): F[Unit] = {
-    val msg = CommMessages.heartbeat(local)
+  def broadcastHeartbeat(
+      transport: TransportLayer[F],
+      local: PeerNode,
+      remotes: PeerNode*
+  ): F[Seq[CommErr[Unit]]] = {
+    val msg = ProtocolHelper.heartbeat(local)
     transport.broadcast(remotes, msg)
   }
 
@@ -185,10 +194,8 @@ final class Dispatcher[F[_]: Applicative](
       processed = System.currentTimeMillis()
       latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
-      val isDisconnect =
-        p.message.isUpstream && p.message.upstream.get.typeUrl == "type.googleapis.com/coop.rchain.comm.protocol.rchain.Disconnect"
       // Ignore Disconnect messages to not skew the tests
-      if (!isDisconnect)
+      if (!p.message.isDisconnect)
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
@@ -202,11 +209,12 @@ final class Dispatcher[F[_]: Applicative](
 object Dispatcher {
   def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
     new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)))
+      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer))
+    )
 
   def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
     new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(CommMessages.heartbeatResponse(peer)),
+      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
       delay = Some(delay)
     )
 

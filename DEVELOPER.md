@@ -9,7 +9,7 @@ __Note__ Successfully building from source requires attending to all of the prer
 * [sbt](https://www.scala-sbt.org/download.html)
 * For Rholang
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Official RChain builds use BNFC build from commit `ce7fe1fd08d9d808c14ff626c321218c5b73e38b`. Use the installation command `cabal install bnfc --global` or [stack](#build-bnfc-with-stack).
 
 #### Development environment on macOS
 
@@ -48,13 +48,14 @@ sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
 ```
 
-#### Building BNFC with [`stack`](https://docs.haskellstack.org)
+#### <a name="build-bnfc-with-stack"></a> Building BNFC with [`stack`](https://docs.haskellstack.org)
 ```
 git clone https://github.com/BNFC/bnfc
 cd bnfc
+git checkout ce7fe1fd08d9d808c14ff626c321218c5b73e38b
 stack init
+stack setup
 stack install
-cd -
 export PATH="$HOME/.local/bin:$HOME"
 ```
 
@@ -163,6 +164,15 @@ To run rnode locally from within sbt use the revolver plugin. It will start the 
 > sbt:node> reStart run -s
 ```
 Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
+
+#### Running tests in IntelliJ
+
+For tests of the Rholang module, make sure you've got the following JVM options set in your Run Configuration:
+`-Xss240k -XX:MaxJavaStackTraceDepth=10000 -Xmx128m`
+
+Otherwise the StackSafetySpec is going to be veeery slow and will most likely fail due to timeouts.
+
+You can make the above options default by editing the ScalaTest Template in `Run > Edit configurations > Templates`.  
 
 ### Cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.

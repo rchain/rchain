@@ -442,7 +442,7 @@ class ValidateTest
       )
 
       log.warns.size should be(1)
-      log.warns.forall(_.contains("not follow from bonds of creator justification block")) should be(
+      log.warns.forall(_.contains("do not match the bonded validators")) should be(
         true
       )
   }

@@ -10,7 +10,7 @@ contract @("MakeMint", "int2NN")(@x, return) = {
   }
 } |
 contract @"MakeMint"(return) = {
-  new pairCh, thisMint, internalMakePurse in {
+  new thisMint, internalMakePurse in {
     contract @(*thisMint, "makePurse")(@init, return) = {
       new balanceCh in {
         @("MakeMint", "int2NN")!(init, *balanceCh) | for(@balance <- balanceCh) {

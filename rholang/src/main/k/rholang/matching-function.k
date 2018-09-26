@@ -11,55 +11,6 @@ imports MATCH-PROCESS
 // string to each instance of the match function.
 // ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* ******* //
 
-// Some syntax specifically for the "matching-function" module
-// Some needed syntax for matching
-// This distinguishes between Processes and Names with and without variables
-syntax ProcOrName ::= Id
-              | ProcOrNameNoVars
-              | Name
-              | Proc
-
-syntax HigherProcOrHigherName ::= Id
-              | HigherProcOrHigherNameNoVars
-              | HigherName
-              | HigherProc
-
-// For matching, we need to make a distinction between variables and no variables
-syntax ProcOrNameNoVars ::= NameNoVars
-              | ProcNoVars
-
-syntax HigherProcOrHigherNameNoVars ::= HigherNameNoVars
-              | HigherProcNoVars
-
-syntax StringlessMatchFormSyntax ::=
-              // Quote, Eval and Var
-                "[" HigherPat "]"
-              // Listen and Persistent Listen, as well as Contracts
-              | "[" HigherNamePat "][" HigherNamePat "][" HigherProcPat "]"
-              // New
-              | "[" Ids "][" HigherProcPat "]"
-              // Send
-              | "[" HigherNamePat "][" HigherProcPat "]"
-              // Match
-              | "[" HigherProcPat "][" HigherMatchCasesPat "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-              // Logical And's and Or's
-              | "[" String "][" HigherPat "][" HigherPat "]"
-              // Nil
-              | "[" "]"
-              // Hashed new HigherNames
-              | "[" Int "]"
-              | "[" HigherProcPat "][" HigherProcPat "]"
-
-// Syntax which is needed for various matching operations
-syntax CanBeStdMatched ::= Id
-              | "intostdmatchform(" HigherPat ")"
-              | "intostdtfmatchform(" HigherPat ")"
-              | String StringlessMatchFormSyntax
-              | Ground
-              | HigherNameNoVars
-              | KResult
-
 // Now the semantics of the match function
 // Take the tuples one at a time
 rule <thread> ... <k> ... aritymatch[ S:String ](
@@ -153,7 +104,7 @@ rule intostdmatchform(S:String) => "string"[S]
 rule intostdmatchform(B:Bool) => "bool"[B]
 rule intostdmatchform(I:Int) => "int"[I]
 // Misc
-rule intostdmatchform( #(I:Int) ) => "hash"[I]
+rule intostdmatchform( unforgeable(I:Int) ) => "unforgeable"[I]
 rule intostdmatchform( P1:HigherProcPat | P2:HigherProcPat ) => "par"[P1][P2]
 rule intostdmatchform( X:Id ) => "variable"[X]
 rule intostdmatchform( X:Wildcard ) => "wildcard"[ X ]
@@ -232,54 +183,27 @@ rule <thread> ... <k> ...
           => match[S]( C ; D ) ... </k> ... </thread>
 
 // When the pattern is a "for"
-// This is not quite correct, but it's on its way. It still needs alpha equivalence, among other
-// things. If you responsibly code, it will still match most things correctly. In a future update
-// it will match exactly the correct terms, while failing to match anything else.
+// The channels in the "for" pattern must match exactly -- not even up to alpha equivalence
 rule <thread> ...
         <k> ... matchstdform[S:String](
                             "listen"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat] ;
                             "listen"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat] ;
                             true
                           )
-          => match["HIGHERNAMEMATCH"](C ; E)
+          => match["TEXTMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
 
-// THIS is how it should be.
-//rule <thread> ... <k> ... matchstdform(
-//                          "listen"[C:HigherName][D:HigherName][P:HigherProc] ;
-//                          "listen"[E:HigherName][F:HigherName][R:HigherProc] ;
-//                          true )
-//          => AreTheseHigherNamesEqual(C ; E) ~> match(D ; F) ~> match(P ; R) ... </k> ...</thread>
-
-
 // When the pattern is a persistent "for"
-// *** This is also incorrect; we need things like in the previous listen construct
+// The channels in the persistent "for" pattern must match exactly--not even up to alpha equivalence
 rule <thread> ... <k> ... matchstdform[S:String](
                               "persistentlisten"[C:HigherNamePat][D:HigherNamePat][P:HigherProcPat];
                               "persistentlisten"[E:HigherNamePat][F:HigherNamePat][R:HigherProcPat];
                               true
                             )
-          => match["HIGHERNAMEMATCH"](C ; E)
+          => match["TEXTMATCH"](C ; E)
           ~> match[S](D ; F)
           ~> match[S](P ; R) ... </k> ... </thread>
-
-// The (logic of the) code we would use for a more correct version
-
-// When the pattern is a persistent "for"
-//rule <thread> ... <k> ... match(
-//                              "persistentlisten"(C:HigherName)(D:HigherName)(P:HigherProc),
-//                              "persistentlisten"(E:HigherName)(F:HigherName)(R:HigherProc),
-//                              true )
-//          => match("persistentlisten"(D)(P),"persistentlisten"(F)(R),C == E)
-//             ... </k> ... </thread>
-//
-//rule <thread> ... <k> ... match(
-//                              "persistentlisten"(D:HigherName)(P:HigherProc),
-//                              "persistentlisten"(F:HigherName)(R:HigherProc),
-//                              true)
-//          => match(intostdmatchform(D),intostdmatchform(F))
-//          ~> match(intostdmatchform(P),intostdmatchform(R)) ... </k> ... </thread>
 
 
 // When the pattern is "send"
@@ -297,8 +221,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
           => match[S]( C ; D )
           ~> match[S]( P ; R ) ... </k> ... </thread>
 
-// When the pattern is "hash"
-rule <thread> ... <k> ... matchstdform[S:String]( "hash"[I:Int] ; "hash"[J:Int] ; true)
+// When the pattern is "unforgeable"
+rule <thread> ... <k>... matchstdform[S:String]( "unforgeable"[I:Int] ; "unforgeable"[J:Int] ; true)
           => match[S]( I ; J ) ... </k> ... </thread>
 
 // When the pattern is a "new"
@@ -308,8 +232,8 @@ rule <thread> ... <k> ... matchstdform[S:String](
                                 "new"[X2:Id,L2:Ids][R:HigherProcPat] ;
                                 true)
           => matchstdform[S](
-                    "new"[L1][ P[@ #(!I:Int) / X1] ] ;
-                    "new"[L2][ R[@ #(!I:Int) / X2] ] ;
+                    "new"[L1][ P[@ unforgeable(!I:Int) / X1] ] ;
+                    "new"[L2][ R[@ unforgeable(!I:Int) / X2] ] ;
                     true) ... </k> ... </thread>
 
 // (ii) If either one creates more new variables than the other we fail

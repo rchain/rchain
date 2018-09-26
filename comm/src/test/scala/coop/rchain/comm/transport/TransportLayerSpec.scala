@@ -5,7 +5,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.implicits._
 
-import coop.rchain.comm._
+import coop.rchain.comm._, rp.ProtocolHelper
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.CommError.CommErr
 
@@ -24,9 +24,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "everything is fine" should {
         "send and receive the message" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -36,7 +38,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 val sender = ProtocolHelper.sender(protocol1)
                 sender shouldBe 'defined
                 sender.get shouldEqual result.remoteNode
-                protocol1.message shouldBe 'upstream
+                protocol1.message shouldBe 'heartbeatResponse
             }
 
             result.receivedMessages should have length 1
@@ -44,17 +46,20 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
             val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
             sender shouldBe 'defined
             sender.get shouldEqual result.localNode
-            protocol2.message shouldBe 'upstream
+            protocol2.message shouldBe 'heartbeat
           }
       }
 
       "response takes to long" should {
         "fail with a timeout" in
           new TwoNodesRuntime[CommErr[Protocol]](
-            Dispatcher.heartbeatResponseDispatcherWithDelay(500)) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            Dispatcher.heartbeatResponseDispatcherWithDelay(500)
+          ) {
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote, 200.millis)
 
             val result: TwoNodesResult = run()
@@ -66,9 +71,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "there is no response body" should {
         "fail with a communication error" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.withoutMessageDispatcher) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -82,10 +89,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "peer is not listening" should {
         "fail with peer unavailable error" in
           new TwoNodesRemoteDeadRuntime[CommErr[Protocol]](
-            Dispatcher.heartbeatResponseDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            Dispatcher.heartbeatResponseDispatcher[F]
+          ) {
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -97,9 +107,11 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "there was a peer-side error" should {
         "fail with an internal communication error" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.internalCommunicationErrorDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               roundTripWithHeartbeat(transportLayer, local, remote)
 
             val result: TwoNodesResult = run()
@@ -113,12 +125,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "sending a message" should {
       "deliver the message" in
-        new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+        new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote: PeerNode
-          ): F[Unit] =
+          ): F[CommErr[Unit]] =
             for {
               r <- sendHeartbeat(transportLayer, local, remote)
               _ = await()
@@ -131,10 +143,10 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
           sender.get shouldEqual result.localNode
-          protocol2.message shouldBe 'upstream
+          protocol2.message shouldBe 'heartbeat
         }
 
-      "not wait for a response" in
+      "wait for a response" in
         new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
           def execute(
               transportLayer: TransportLayer[F],
@@ -150,7 +162,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val result: TwoNodesResult = run()
 
           val sent = result()
-          sent should be < result.lastProcessedMessageTimestamp
+          sent should be > result.lastProcessedMessageTimestamp
         }
 
       "wait for message being delivered" in {
@@ -161,13 +173,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "broadcasting a message" should {
       "send the message to all peers" in
-        new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+        new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
-          ): F[Unit] =
+          ): F[Seq[CommErr[Unit]]] =
             for {
               r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
               _ = await()
@@ -183,8 +195,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           sender2 shouldBe 'defined
           sender1.get shouldEqual result.localNode
           sender2.get shouldEqual result.localNode
-          p1.message shouldBe 'upstream
-          p2.message shouldBe 'upstream
+          p1.message shouldBe 'heartbeat
+          p2.message shouldBe 'heartbeat
           r1 should (equal(result.remoteNode1) or equal(result.remoteNode2))
           r2 should (equal(result.remoteNode1) or equal(result.remoteNode2))
         }
@@ -194,11 +206,13 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
       "doing a round trip" should {
         "not send the message" in
           new TwoNodesRuntime[CommErr[Protocol]](Dispatcher.heartbeatResponseDispatcher[F]) {
-            def execute(transportLayer: TransportLayer[F],
-                        local: PeerNode,
-                        remote: PeerNode): F[CommErr[Protocol]] =
+            def execute(
+                transportLayer: TransportLayer[F],
+                local: PeerNode,
+                remote: PeerNode
+            ): F[CommErr[Protocol]] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- roundTripWithHeartbeat(transportLayer, local, remote)
               } yield r
 
@@ -215,14 +229,14 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "sending a message" should {
         "not send the message" in
-          new TwoNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F]()) {
+          new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
                 remote: PeerNode
-            ): F[Unit] =
+            ): F[CommErr[Unit]] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- sendHeartbeat(transportLayer, local, remote)
                 _ = await()
               } yield r
@@ -235,15 +249,15 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "broadcasting a message" should {
         "not send any messages" in
-          new ThreeNodesRuntime[Unit](Dispatcher.dispatcherWithLatch[F](2)) {
+          new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
                 remote1: PeerNode,
                 remote2: PeerNode
-            ): F[Unit] =
+            ): F[Seq[CommErr[Unit]]] =
               for {
-                _ <- transportLayer.shutdown(CommMessages.disconnect(local))
+                _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
                 _ = await()
               } yield r

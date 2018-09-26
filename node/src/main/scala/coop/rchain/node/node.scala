@@ -37,7 +37,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
@@ -191,6 +191,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      BlazeBuilder[IO]
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
+                       .mountService(VersionInfo.service, "/version")
                        .start
                    }.toEffect
       _ <- Task.delay {
@@ -218,7 +219,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- Task.delay(servers.grpcServerInternal.shutdown())
       _   <- log.info("Shutting down transport layer, broadcasting DISCONNECT")
       loc <- rpConfAsk.reader(_.local)
-      msg = CommMessages.disconnect(loc)
+      msg = ProtocolHelper.disconnect(loc)
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
@@ -255,6 +256,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       implicit
       log: Log[Task],
       time: Time[Task],
+      timerTask: Timer[Task],
       rpConfAsk: RPConfAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
@@ -269,17 +271,15 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   ): Effect[Unit] = {
 
     val info: Effect[Unit] = for {
-      _ <- Log[Effect].info(
-            s"RChain Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
-          )
+      _ <- Log[Effect].info(VersionInfo.get)
       _ <- if (conf.server.standalone) Log[Effect].info(s"Starting stand-alone node.")
           else Log[Effect].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
     } yield ()
 
     val loop: Effect[Unit] = for {
       _ <- Connect.clearConnections[Effect]
-      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
-      _ <- time.sleep(5000).toEffect
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+      _ <- timerTask.sleep(5.seconds).toEffect
     } yield ()
 
     for {
@@ -326,7 +326,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   val main: Effect[Unit] = for {
     // 1. set up configurations
     local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
-    defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
+    defaultTimeout = conf.server.defaultTimeout.millis
     rpClearConnConf = ClearConnetionsConf(
       conf.server.maxNumOfConnections,
       numOfConnectionsPinged = 10
@@ -354,7 +354,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(
                         log,
-                        time,
+                        timerTask,
                         metrics,
                         kademliaRPC
                       )
@@ -365,7 +365,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     )
 
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
+    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime        = Runtime.create(storagePath, storageSize, storeType)
     casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
@@ -399,6 +399,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     program = nodeProgram(runtime, casperRuntime)(
       log,
       time,
+      timerTask,
       rpConfAsk,
       metrics,
       transport,
