@@ -74,3 +74,4 @@ research/sharding/ve
 integration-testing/.pytest_cache
 integration-testing/.virtualenv
 integration-testing.log
+*.log

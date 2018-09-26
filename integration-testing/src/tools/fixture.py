@@ -19,12 +19,12 @@ def make_wrapper(fn, fixtures):
     namespace = {"fn":fn, "fixtures":fixtures}
 
     wrapper_code = f"""
-def wrapper(request, {parameter_list}):
+def {fn.__name__}(request, {parameter_list}):
     # import logging
     # logging.info("fixtures:" + str(fixtures))
     def get_value(p_name, p_value):
         if p_name in fixtures:
-            v = request.getfuncargvalue(p_value.__name__)
+            v = request.getfixturevalue(p_value.__name__)
             # logging.info("Get_value from fixtures: " + p_name + " : " + str(v))
             return v
         else:
@@ -35,7 +35,7 @@ def wrapper(request, {parameter_list}):
 """
 
     exec(wrapper_code, locals(), namespace)
-    return namespace["wrapper"]
+    return namespace[fn.__name__]
 
 class parametrize:
     @staticmethod

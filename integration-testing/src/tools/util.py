@@ -8,8 +8,10 @@ def log_box(log_function, title="", char = "*", length=150):
     title_stars_len = int((length - len(full_title)) / 2)
     title_stars = char * title_stars_len
     log_function(title_stars + full_title + title_stars)
-    yield
-    log_function(char * length)
+    try:
+        yield
+    finally:
+        log_function(char * length)
 
 def make_tempfile(prefix, content):
     fd, path = tempfile.mkstemp(dir="/tmp", prefix=prefix)

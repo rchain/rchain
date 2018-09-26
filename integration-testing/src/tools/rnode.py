@@ -1,8 +1,10 @@
 import logging
 import re
-import tempfile
+from contextlib import contextmanager
+from tools.docker import docker_network
 import tools.resources as resources
 from tools.util import log_box, make_tempfile, make_tempdir
+from tools.wait import wait_for, node_started
 
 from multiprocessing import Queue, Process
 from queue import Empty
@@ -20,20 +22,21 @@ class InterruptedException(Exception):
     pass
 
 class Node:
-    def __init__(self, container, deploy_dir, docker_client, timeout):
+    def __init__(self, container, deploy_dir, docker_client, timeout, network):
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
         self.name = container.name
         self.docker_client = docker_client
         self.timeout = timeout
+        self.network = network
 
     def logs(self):
         return self.container.logs().decode('utf-8')
 
     def get_rnode_address(self):
         log_content = self.logs()
-        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\?protocol=\d+&discovery=\d+)\.$", log_content, re.MULTILINE | re.DOTALL)
+        m = re.search(f"Listening for traffic on (rnode://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$", log_content, re.MULTILINE | re.DOTALL)
         address = m[1]
 
         logging.info(f"Bootstrap address: `{address}`")
@@ -79,15 +82,16 @@ class Node:
 
         try:
             exit_code, output = queue.get(self.timeout)
-            printed_output = output if len(output) < 20 else (output[0:20] + "...")
-            logging.info(f"Returning: {exit_code},'{printed_output}'")
+            printed_output = output if len(output) < 150 else (output[0:150] + "...")
+            single_line_output = printed_output.replace("\n", "\\n")
+            logging.info(f"Returning: {exit_code},'{single_line_output}'")
             return exit_code, output
         except Empty:
             process.terminate()
             process.join()
             raise Exception(f"The command '{cmd}' hasn't finished execution after {self.timeout}s")
 
-    __timestamp_rx = "\d\d:\d\d:\d\d\.\d\d\d"
+    __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
 
 
@@ -119,7 +123,7 @@ def __create_node_container(docker_client, image, name, network, bonds_file, com
                                                        ] + extra_volumes,
                                                command=command,
                                                hostname=name)
-    return Node(container, deploy_dir, docker_client, rnode_timeout)
+    return Node(container, deploy_dir, docker_client, rnode_timeout, network)
 
 def create_bootstrap_node(docker_client, network, bonds_file, key_pair, rnode_timeout, allowed_peers = None, image=default_image, memory="1024m", cpuset_cpus="0"):
     """
@@ -168,3 +172,25 @@ def create_peer_nodes(docker_client, bootstrap, network, bonds_file, key_pairs, 
 
     return [ create_peer(i, key_pair)
              for i, key_pair in enumerate(key_pairs)]
+
+
+@contextmanager
+def create_bootstrap(docker, docker_network, timeout, validators_data):
+    node = create_bootstrap_node(docker, docker_network, validators_data.bonds_file, validators_data.bootstrap_keys, timeout)
+
+    try:
+        yield node
+
+    finally:
+        node.cleanup()
+
+@contextmanager
+def start_bootstrap(docker_client, node_start_timeout, node_cmd_timeout, validators_data):
+    with docker_network(docker_client) as network:
+        with create_bootstrap(docker_client, network, node_cmd_timeout, validators_data) as node:
+
+            wait_for( node_started(node),
+                      node_start_timeout,
+                      "Bootstrap node didn't start correctly")
+
+            yield node

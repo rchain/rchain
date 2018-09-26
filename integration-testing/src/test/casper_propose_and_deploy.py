@@ -1,14 +1,15 @@
-from tools.random import random_string
+
 import logging
-import tools.resources as resources
-from shutil import copyfile
 from tools.wait import wait_for, string_contains, show_blocks
 from tools.util import log_box
+from tools.random import random_string
+import tools.resources as resources
+from shutil import copyfile
 
-def casper_propose_and_deploy(config, network):
+
+def run(config, network):
     """
-    This test represents an integration test that deploys a contract and then checks
-    if all the nodes have received the block containing the contract.
+    Deploy a contract and then checks if all the nodes have received the block containing the contract.
     """
 
     token_size = 20
