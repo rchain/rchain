@@ -4,9 +4,9 @@ imports PROCESSES-SEMANTICS
 // *******************************************************************
 //                        SENDING-RECEIVING
 // *******************************************************************
-// Some syntax specifically for the "sending-receiving" module
-// for the data we need to keep on our in and out cells
-syntax InOutData ::= Int ";" Set
+
+
+
 
 
 // Put "sends" in out-cells, and "receives" in in-cells

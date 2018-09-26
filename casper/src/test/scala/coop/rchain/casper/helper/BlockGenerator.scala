@@ -62,7 +62,7 @@ trait BlockGenerator {
       chain             <- blockDagState[F].get
       now               <- Time[F].currentMillis
       nextId            = chain.currentId + 1
-      nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, -1) + 1
+      nextCreatorSeqNum = chain.latestMessages.get(creator).fold(-1)(_.seqNum) + 1
       postState = RChainState()
         .withTuplespace(tsHash)
         .withBonds(bonds)
@@ -102,16 +102,14 @@ trait BlockGenerator {
       }: _*)
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
-      updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
-      updatedSort       = TopologicalSortUtil.update(chain.topoSort, chain.sortOffset, block)
-      updatedLookup     = chain.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
+      updatedSort   = TopologicalSortUtil.update(chain.topoSort, chain.sortOffset, block)
+      updatedLookup = chain.dataLookup.updated(block.blockHash, BlockMetadata.fromBlock(block))
       newChain = IndexedBlockDag(
         idToBlocks,
         childMap,
         latestMessages,
         latestMessagesOfLatestMessages,
         nextId,
-        updatedSeqNumbers,
         updatedLookup,
         updatedSort,
         chain.sortOffset

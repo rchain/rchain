@@ -21,7 +21,8 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
-  scalafmtOnCompile := true
+  scalafmtOnCompile := true,
+  testOptions in Test += Tests.Argument("-oD") //output test durations
 )
 
 lazy val coverageSettings = Seq(
@@ -42,7 +43,7 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 lazy val profilerSettings = Seq(
   javaOptions in run ++= sys.env
     .get("YOURKIT_AGENT")
-    .map(agent => s"-agentpath:$agent=onexit=snapshot,tracing")
+    .map(agent => s"-agentpath:$agent=onexit=snapshot,sampling")
     .toSeq,
   javaOptions in reStart ++= (javaOptions in run).value
 )
