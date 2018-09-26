@@ -1,5 +1,6 @@
 package coop.rchain.rspace.spaces
 
+import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
@@ -14,7 +15,7 @@ import scala.collection.immutable.Seq
 import scala.util.Random
 import kamon._
 
-class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
+class CoarseGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
     store: IStore[C, P, A, K],
     branch: Branch
 )(
@@ -22,8 +23,9 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
-    serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch) {
+    serializeK: Serialize[K],
+    val syncF: Sync[F]
+) extends RSpaceOps[F, C, P, E, A, R, K](store, branch) {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -36,7 +38,7 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
 
   override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
+  ): F[Either[E, Option[(K, Seq[R])]]] = syncF.delay {
     Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
@@ -106,10 +108,11 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
         }
       }
     }
+  }
 
   override def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
+  ): F[Either[E, Option[(K, Seq[R])]]] = syncF.delay {
     Kamon.withSpan(produceSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
@@ -196,8 +199,9 @@ class CoarseGrainedRSpace[C, P, E, A, R, K] private[rspace] (
         }
       }
     }
+  }
 
-  def createCheckpoint(): Checkpoint = {
+  def createCheckpoint(): F[Checkpoint] = syncF.delay {
     val root   = store.createCheckpoint()
     val events = eventLog.take()
     eventLog.put(Seq.empty)
