@@ -5,7 +5,7 @@
 @"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
 @"minimumBond"!(5) |
 @"maximumBond"!(100) |
-@"initBonds"!({}) |
+@"initBonds"!({"someKey" : (37, "verify", "reward", 1)}) |
 
 contract @"bond"(@pos, @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
   new bond in {
@@ -71,7 +71,7 @@ contract @"balance"(@purse, return) = {
           ["bondPurseBalance", 50],
           ["justRightBond", (true, "Bond successful!")],
           ["bondPurseBalance", 0],
-          ["posBonds", {pk : (50, "ed25519Verify", Nil)}]
+          ["posBonds", initBonds ++ {pk : (50 - minimumBond, "ed25519Verify", Nil, initBonds.size() + 1)}]
         ]
       )
     }
