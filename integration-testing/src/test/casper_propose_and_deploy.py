@@ -1,6 +1,4 @@
-from tools.profiling import profile
-from tools.fixture import parametrize
-from fixtures.network import complete_network, star_network
+
 import logging
 from tools.wait import wait_for, string_contains, show_blocks
 from tools.util import log_box
@@ -8,13 +6,8 @@ from tools.random import random_string
 import tools.resources as resources
 from shutil import copyfile
 
-@profile
-@parametrize.cartesian(
-    network=[
-        complete_network,
-        star_network
-    ])
-def test_casper_propose_and_deploy(config, network):
+
+def run(config, network):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
