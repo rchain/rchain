@@ -1,20 +1,30 @@
 package coop.rchain.comm.discovery
 
-import cats._, cats.data._, cats.implicits._, cats.mtl._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import cats._
+import cats.implicits._
+import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
 import coop.rchain.comm._
-import monix.eval._
-import monix.execution.atomic._
-import monix.execution._
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.{Cell, Log, LogSource}
-import scala.concurrent.Future
-import io.grpc._, io.grpc.netty._
-import com.google.protobuf.ByteString
-import scala.concurrent.duration._
-import com.google.protobuf.ByteString
+import coop.rchain.shared.{Log, LogSource}
+import io.grpc._
+import io.grpc.netty._
+import monix.eval._
+import monix.execution._
 
-class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
+import scala.concurrent.Future
+import scala.concurrent.duration._
+
+class GrpcKademliaRPC(
+    src: PeerNode,
+    port: Int,
+    timeout: FiniteDuration,
+    connectionsCache: ConnectionsCache[Task]
+)(
     implicit
     scheduler: Scheduler,
     metrics: Metrics[Task],
@@ -23,10 +33,14 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
+  private val connections = connectionsCache(clientChannel)
+
+  import connections.connection
+
   def ping(peer: PeerNode): Task[Boolean] =
     for {
       _       <- Metrics[Task].incrementCounter("protocol-ping-sends")
-      channel <- clientChannel(peer)
+      channel <- connection(peer, enforce = false)
       pongErr <- Task
                   .fromFuture {
                     KademliaRPCServiceGrpc
@@ -44,7 +58,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       lookup = Lookup()
         .withId(ByteString.copyFrom(key.toArray))
         .withSender(node(src))
-      channel <- clientChannel(peer)
+      channel <- connection(peer, enforce = false)
       responseErr <- Task
                       .fromFuture {
                         KademliaRPCServiceGrpc.stub(channel).sendLookup(lookup)

@@ -2,33 +2,47 @@ package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
 
-import coop.rchain.comm._, CommError._
+import cats.implicits._
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm.CachedConnections.ConnectionsCache
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp.ProtocolHelper
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.shared.{Cell, Log, LogSource}
+import io.grpc._
+import io.grpc.netty._
+import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
+import monix.eval._
+import monix.execution._
 
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 import scala.util._
-import io.grpc._, io.grpc.netty._
-import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
-import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._
-import scala.concurrent.TimeoutException
 
-class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
+class TcpTransportLayer(
+    host: String,
+    port: Int,
+    cert: String,
+    key: String,
+    maxMessageSize: Int,
+    connectionsCache: ConnectionsCache[Task]
+)(
     implicit scheduler: Scheduler,
-    cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task]
 ) extends TransportLayer[Task] {
 
   private val DefaultSendTimeout = 5.seconds
+  private val connections        = connectionsCache(clientChannel)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  import connections.cell
 
   private lazy val serverSslContext: SslContext =
     try {
@@ -70,16 +84,6 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           }
     } yield c
 
-  private def connection(peer: PeerNode, enforce: Boolean): Task[ManagedChannel] =
-    cell.modify { s =>
-      if (s.shutdown && !enforce)
-        Task.raiseError(new RuntimeException("The transport layer has been shut down")).as(s)
-      else
-        for {
-          c <- s.connections.get(peer).fold(clientChannel(peer))(_.pure[Task])
-        } yield s.copy(connections = s.connections + (peer -> c))
-    } >>= kp(cell.read.map(_.connections.apply(peer)))
-
   def disconnect(peer: PeerNode): Task[Unit] =
     cell.modify { s =>
       for {
@@ -104,7 +108,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       f: TransportLayerStub => Task[A]
   ): Task[A] =
     for {
-      channel <- connection(peer, enforce)
+      channel <- connections.connection(peer, enforce)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel))
       result <- f(stub).doOnFinish {
                  case Some(PeerUnavailable()) => disconnect(peer)

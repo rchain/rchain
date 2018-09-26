@@ -337,7 +337,7 @@ object ApproveBlockProtocolTest {
     val src: PeerNode            = peerNode("src", 40400)
     implicit val rpConfAsk       = createRPConfAsk[Task](src)
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
-    implicit val connectionsCell = Cell.mvarCell[Connections](List(src)).unsafeRunSync
+    implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
 
     val (sk, pk)   = Ed25519.newKeyPair
