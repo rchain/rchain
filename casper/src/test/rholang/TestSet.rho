@@ -41,7 +41,7 @@ contract @"TestSet"(desc, @tests) = {
         contract toContract(@test, return) = {
           match test {
             [functionCh, answer] => {
-              new tContract, notHangingCh, delayCh in {
+              new tContract in {
                 contract tContract(return) = {
                   for (function <- @functionCh) {
                     @functionCh!(*function) | //put back for possible re-use
