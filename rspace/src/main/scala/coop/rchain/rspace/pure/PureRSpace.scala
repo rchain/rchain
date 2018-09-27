@@ -1,5 +1,6 @@
 package coop.rchain.rspace.pure
 
+import cats.Id
 import cats.effect.Sync
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
@@ -30,7 +31,7 @@ object PureRSpace {
 
   final class PureRSpaceApplyBuilders[F[_]](val F: Sync[F]) extends AnyVal {
     def of[C, P, E, A, R, K](
-        space: IdISpace[C, P, E, A, R, K]
+        space: ISpace[Id, C, P, E, A, R, K]
     )(implicit mat: Match[P, E, A, R]): PureRSpace[F, C, P, E, A, R, K] =
       new PureRSpace[F, C, P, E, A, R, K] {
         def consume(

@@ -2,6 +2,8 @@ package coop.rchain.rspace
 
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.{initialize, Branch, ITrieStore, InMemoryTrieStore, LMDBTrieStore}
@@ -291,6 +293,9 @@ class InMemoryStoreStorageExamplesTestsBase
     extends StorageTestsBase[Channel, Pattern, Nothing, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => R): R = {
+
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     implicit val cg: Codec[GNAT[Channel, Pattern, Entry, EntriesCaptor]] = codecGNAT(
       implicits.serializeChannel.toCodec,
       implicits.serializePattern.toCodec,
@@ -309,7 +314,7 @@ class InMemoryStoreStorageExamplesTestsBase
       ], Channel, Pattern, Entry, EntriesCaptor](trieStore, branch)
 
     val testSpace =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     trieStore.withTxn(trieStore.createTxnWrite())(trieStore.clear)
     initialize(trieStore, branch)
@@ -335,10 +340,12 @@ class LMDBStoreStorageExamplesTestBase
   val noTls: Boolean = false
 
   override def withTestSpace[R](f: T => R): R = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     val testSpace =
-      RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
         testStore,
         Branch.MASTER
       )

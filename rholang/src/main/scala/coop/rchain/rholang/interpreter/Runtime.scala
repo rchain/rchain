@@ -2,7 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Id
 import cats.mtl.FunctorTell
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -14,8 +16,8 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.IReplaySpace.IdIReplaySpace
-import coop.rchain.rspace.ISpace.IdISpace
+import coop.rchain.rspace.IReplaySpace
+import coop.rchain.rspace.ISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.pure.PureRSpace
@@ -44,9 +46,9 @@ class Runtime private (
 
 object Runtime {
 
-  type RhoISpace          = CPARK[IdISpace]
+  type RhoISpace          = TCPARK[Id, ISpace]
   type RhoPureSpace[F[_]] = TCPARK[F, PureRSpace]
-  type RhoReplayISpace    = CPARK[IdIReplaySpace]
+  type RhoReplayISpace    = TCPARK[Id, IReplaySpace]
 
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
@@ -155,9 +157,26 @@ object Runtime {
       mapSize: Long,
       storeType: StoreType
   ): (RhoContext, RhoISpace, RhoReplayISpace) = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
-      val space: RhoISpace             = RSpace.create(context, Branch.MASTER)
-      val replaySpace: RhoReplayISpace = ReplayRSpace.create(context, Branch.REPLAY)
+      val space: RhoISpace = RSpace.create[
+        Id,
+        Channel,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListChannelWithRandom,
+        ListChannelWithRandom,
+        TaggedContinuation
+      ](context, Branch.MASTER)
+      val replaySpace: RhoReplayISpace = ReplayRSpace.create[
+        Id,
+        Channel,
+        BindPattern,
+        OutOfPhlogistonsError.type,
+        ListChannelWithRandom,
+        ListChannelWithRandom,
+        TaggedContinuation
+      ](context, Branch.REPLAY)
       (context, space, replaySpace)
     }
     storeType match {
@@ -172,10 +191,26 @@ object Runtime {
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        val context: RhoContext          = Context.createFineGrained(dataDir, mapSize)
-        val store                        = context.createStore(Branch.MASTER)
-        val space: RhoISpace             = RSpace.createFineGrained(store, Branch.MASTER)
-        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create(context, Branch.REPLAY)
+        val context: RhoContext = Context.createFineGrained(dataDir, mapSize)
+        val store               = context.createStore(Branch.MASTER)
+        val space: RhoISpace = RSpace.createFineGrained[
+          Id,
+          Channel,
+          BindPattern,
+          OutOfPhlogistonsError.type,
+          ListChannelWithRandom,
+          ListChannelWithRandom,
+          TaggedContinuation
+        ](store, Branch.MASTER)
+        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create[
+          Id,
+          Channel,
+          BindPattern,
+          OutOfPhlogistonsError.type,
+          ListChannelWithRandom,
+          ListChannelWithRandom,
+          TaggedContinuation
+        ](context, Branch.REPLAY)
         (context, space, replaySpace)
       case Mixed =>
         if (Files.notExists(dataDir)) {

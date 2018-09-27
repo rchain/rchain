@@ -236,8 +236,17 @@ object ChargingRSpaceTest {
 
   private def createRhoISpace(): RhoISpace = {
     import coop.rchain.rholang.interpreter.storage.implicits._
-    val context: RhoContext = Context.createInMemory()
-    val space: RhoISpace    = RSpace.create(context, Branch("test"))
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+    val context: RhoContext      = Context.createInMemory()
+    val space: RhoISpace = RSpace.create[
+      Id,
+      Channel,
+      BindPattern,
+      OutOfPhlogistonsError.type,
+      ListChannelWithRandom,
+      ListChannelWithRandom,
+      TaggedContinuation
+    ](context, Branch("test"))
     space
   }
 
