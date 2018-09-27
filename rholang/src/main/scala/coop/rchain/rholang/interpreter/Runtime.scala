@@ -13,6 +13,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
+import coop.rchain.rholang.interpreter.accounting.CostAccount
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.IReplaySpace
@@ -123,6 +124,9 @@ object Runtime {
     val REG_INSERT_RANDOM: Par = byteName(10)
   }
 
+  // because only we do installs
+  private val MATCH_UNLIMITED_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
+
   private def introduceSystemProcesses(
       space: RhoISpace,
       replaySpace: RhoISpace,
@@ -140,8 +144,8 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         Seq(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
+          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
+          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
         )
     }
 

@@ -168,11 +168,7 @@ object Reduce {
         persistent: Boolean,
         rand: Blake2b512Random
     )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
-      for {
-        _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
-      } yield ()
+      tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -190,16 +186,8 @@ object Reduce {
         body: Par,
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] = {
-      val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-      val srcs                                              = sources.map(q => Channel(q)).toList
-      val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
-      for {
-        _ <- costAccountingAlg.charge(rspaceCost)
-        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
-      } yield ()
-    }
+    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+      tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
