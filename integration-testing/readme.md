@@ -51,8 +51,15 @@ Name: docker
 Version: 3.5.0
 Summary: A Python library for the Docker Engine API.
 ...
-
 ``` 
+
+ ## Step 4: Create the rnode docker image
+ The tests use the docker image `coop.rchain/rnode:latest` as a base image for the docker containers. Docker has to be 
+ able to get this image. 
+ 
+ When the tests are run against the current source code one should build the docker image and publish it locally. For 
+ details see [the developer information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md) 
+ 
 
 # Running the tests
 
