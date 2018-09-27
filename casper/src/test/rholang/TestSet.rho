@@ -6,14 +6,14 @@ contract @"delayForCh"(@n, notHangingCh, done) = {
     if(notHanging == false) {
       notHangingCh!(notHanging) | // put back to keep it there for the next call (if false)
       if(n == 0) {
-       done!(false)
+       done!(false) // false if notHanging never set to true
       }
       else {
         @"delayForCh"!(n - 1, *notHangingCh, *done)
       }
     }
     else {
-      done!(true)
+      done!(true) // true if notHanging is set to true
     }
   }
 } |
@@ -49,16 +49,16 @@ contract @"TestSet"(desc, @tests) = {
                     new result in {
                       function!(*result) |
                       @"delayForCh"!(40, *notHangingCh, *delayCh) |
-                      notHangingCh!(false) |
+                      notHangingCh!(false) | // initialize notHanging
                       for(@r <- result) {
-                        for(_ <- notHangingCh) {
-                          notHangingCh!(true) |
+                        for(_ <- notHangingCh) { // throw away false
+                          notHangingCh!(true) | // add true - we have a result so no hanging return
                           return!(r==answer)
                         }
                       }
                     } |
                     for(@hanging<-delayCh) {
-                      if(hanging==false) {
+                      if(hanging==false) { // delay finished with hanging return
                         return!(answer=="hanging return")
                       }
                     }
