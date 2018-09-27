@@ -57,3 +57,4 @@ contract @"MakeMint"(return) = {
     return!(*thisMint)
   }
 }
+
