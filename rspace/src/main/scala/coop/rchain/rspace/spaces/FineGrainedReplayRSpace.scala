@@ -1,11 +1,13 @@
 package coop.rchain.rspace.spaces
 
+import cats.Monad
+import cats.effect.Sync
 import coop.rchain.rspace._
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.{Branch, ITrieStore, InMemoryTrieStore}
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.SyncVarOps._
@@ -15,18 +17,17 @@ import scala.Function.const
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
-import scala.concurrent.SyncVar
-import scala.util.Random
 import kamon._
 
-class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
-    serializeK: Serialize[K]
-) extends FineGrainedRSpaceOps[C, P, E, A, R, K](store, branch)
-    with IReplaySpace[cats.Id, C, P, E, A, R, K] {
+    serializeK: Serialize[K],
+    val syncF: Sync[F]
+) extends FineGrainedRSpaceOps[F, C, P, E, A, R, K](store, branch)
+    with IReplaySpace[F, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -39,25 +40,27 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
-    try {
-      Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-        if (channels.length =!= patterns.length) {
-          val msg = "channels.length must equal patterns.length"
-          logger.error(msg)
-          throw new IllegalArgumentException(msg)
+  ): F[Either[E, Option[(K, Seq[R])]]] =
+    syncF.delay {
+      try {
+        Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+          if (channels.length =!= patterns.length) {
+            val msg = "channels.length must equal patterns.length"
+            logger.error(msg)
+            throw new IllegalArgumentException(msg)
+          }
+          consumeLock(channels) {
+            lockedConsume(channels, patterns, continuation, persist)
+          }
         }
-        consumeLock(channels) {
-          lockedConsume(channels, patterns, continuation, persist)
-        }
+      } catch {
+        case ex: Throwable =>
+          // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
+          if (!replayData.isSet) {
+            replayData.put(ReplayData.empty)
+          }
+          throw ex
       }
-    } catch {
-      case ex: Throwable =>
-        // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
-        if (!replayData.isSet) {
-          replayData.put(ReplayData.empty)
-        }
-        throw ex
     }
 
   private[this] def lockedConsume(
@@ -170,22 +173,23 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
-    try {
-      Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-        produceLock(channel) {
-          lockedProduce(channel, data, persist)
+  ): F[Either[E, Option[(K, Seq[R])]]] =
+    syncF.delay {
+      try {
+        Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+          produceLock(channel) {
+            lockedProduce(channel, data, persist)
+          }
         }
+      } catch {
+        case ex: Throwable =>
+          // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
+          if (!replayData.isSet) {
+            replayData.put(ReplayData.empty)
+          }
+          throw ex
       }
-    } catch {
-      case ex: Throwable =>
-        // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
-        if (!replayData.isSet) {
-          replayData.put(ReplayData.empty)
-        }
-        throw ex
     }
-
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(K, Seq[R])]] = {
@@ -330,7 +334,7 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  def createCheckpoint(): Checkpoint =
+  def createCheckpoint(): F[Checkpoint] = syncF.delay {
     if (replayData.get.isEmpty) {
       val root = store.createCheckpoint()
       Checkpoint(root, Seq.empty)
@@ -340,8 +344,9 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
       logger.error(msg)
       throw new ReplayException(msg)
     }
+  }
 
-  override def clear(): Unit = {
+  override def clear(): F[Unit] = syncF.delay {
     replayData.update(const(ReplayData.empty))
     super.clear()
   }
@@ -349,13 +354,14 @@ class FineGrainedReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branc
 
 object FineGrainedReplayRSpace {
 
-  def create[C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): FineGrainedReplayRSpace[C, P, E, A, R, K] = {
+      sk: Serialize[K],
+      sync: Sync[F]
+  ): F[FineGrainedReplayRSpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -373,7 +379,7 @@ object FineGrainedReplayRSpace {
         InMemoryStore.create(mixedContext.trieStore, branch)
     }
 
-    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, R, K](mainStore, branch)
+    val replaySpace = new FineGrainedReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -381,11 +387,11 @@ object FineGrainedReplayRSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
-    val _ = if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint()
+    if (history.initialize(mainStore.trieStore, branch)) {
+      replaySpace.createCheckpoint().map(_ => replaySpace)
+    } else {
+      replaySpace.pure[F]
     }
-
-    replaySpace
   }
 
 }
