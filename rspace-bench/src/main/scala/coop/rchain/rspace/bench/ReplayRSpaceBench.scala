@@ -2,6 +2,7 @@ package coop.rchain.rspace.bench
 
 import java.util.concurrent.TimeUnit
 
+import cats.Id
 import coop.rchain.rspace.{State => _, _}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
@@ -67,11 +68,11 @@ object ReplayRSpaceBench {
       assert(context.trieStore.toMap.isEmpty)
       val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
       assert(testStore.toMap.isEmpty)
-      space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
         testStore,
         Branch.MASTER
       )
-      replaySpace = ReplayRSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      replaySpace = ReplayRSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
         context,
         Branch.REPLAY
       )

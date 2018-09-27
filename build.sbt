@@ -22,7 +22,8 @@ lazy val projectSettings = Seq(
     "jitpack" at "https://jitpack.io"
   ),
   scalafmtOnCompile := true,
-  scapegoatVersion in ThisBuild := "1.3.4"
+  scapegoatVersion in ThisBuild := "1.3.4",
+  testOptions in Test += Tests.Argument("-oD") //output test durations
 )
 
 lazy val coverageSettings = Seq(
