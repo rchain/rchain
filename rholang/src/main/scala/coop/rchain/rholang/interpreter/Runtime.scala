@@ -123,7 +123,7 @@ object Runtime {
   }
 
   // because only we do installs
-  private implicit val INSTALLS_MATCH_COST = matchListQuote(CostAccount(Integer.MAX_VALUE))
+  private val MATCH_UNLIMITED_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
 
   private def introduceSystemProcesses(
       space: RhoISpace,
@@ -142,8 +142,8 @@ object Runtime {
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
         Seq(
-          space.install(channels, patterns, continuation),
-          replaySpace.install(channels, patterns, continuation)
+          space.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS),
+          replaySpace.install(channels, patterns, continuation)(MATCH_UNLIMITED_PHLOS)
         )
     }
 

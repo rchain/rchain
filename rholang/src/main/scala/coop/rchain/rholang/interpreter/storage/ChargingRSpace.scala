@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
 import coop.rchain.rholang.interpreter.accounting.CostAccount._
 import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg, _}
 import coop.rchain.rholang.interpreter.errors
@@ -31,15 +31,7 @@ object ChargingRSpace {
     channel.storageCost + data.channels.storageCost
 
   def pureRSpace[F[_]: Sync](implicit costAlg: CostAccountingAlg[F], space: RhoISpace) =
-    new PureRSpace[
-      F,
-      Channel,
-      BindPattern,
-      OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
-      TaggedContinuation
-    ] {
+    new RhoPureSpace[F] {
 
       override def consume(
           channels: Seq[Channel],

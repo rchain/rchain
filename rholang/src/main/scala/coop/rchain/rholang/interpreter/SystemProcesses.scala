@@ -20,8 +20,7 @@ object SystemProcesses {
 
   private val prettyPrinter = PrettyPrinter()
 
-  // because only we do installs
-  private implicit val INSTALLS_MATCH_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
+  private val MATCH_UNLIMITED_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
 
   def stdout: Seq[ListChannelWithRandom] => Task[Unit] = {
     case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
@@ -52,7 +51,7 @@ object SystemProcesses {
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
   }
@@ -73,7 +72,7 @@ object SystemProcesses {
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
   }
@@ -109,7 +108,7 @@ object SystemProcesses {
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
   }
@@ -131,7 +130,7 @@ object SystemProcesses {
             ack,
             ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
     case _ =>
@@ -155,7 +154,7 @@ object SystemProcesses {
               cost
             ),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
     case _ =>
@@ -177,7 +176,7 @@ object SystemProcesses {
               cost
             ),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
     case _ =>
@@ -199,7 +198,7 @@ object SystemProcesses {
               cost
             ),
             false
-          )
+          )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
     case _ =>
