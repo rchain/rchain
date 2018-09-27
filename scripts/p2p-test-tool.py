@@ -59,7 +59,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop:40400",
+                    default="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.rchain.coop?protocol=40400&discovery=40404",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peer_amount',
@@ -113,7 +113,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['count', 'eval', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
@@ -152,7 +152,7 @@ def main():
         remove_resources_by_network(args.network)
         boot_p2p_network()
         if not args.skip_convergence_test == True:
-            for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
+            for container in client.containers.list(all=True, filters={"name":f'(bootstrap|peer\\d+).{args.network}'}):
                 if check_network_convergence(container) != 0:
                     show_logs()
                     show_containers()

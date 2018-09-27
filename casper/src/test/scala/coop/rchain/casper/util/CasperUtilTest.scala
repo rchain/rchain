@@ -23,7 +23,7 @@ import coop.rchain.shared.Time
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with BlockStoreFixture {
-  val initState = IndexedBlockDag.empty
+  val initState = IndexedBlockDag.empty.withOffset(1L)
 
   "isInMainChain" should "classify appropriately" in withStore { implicit blockStore =>
     implicit val blockStoreChain = storeForStateWithChain[StateWithChain](blockStore)
@@ -38,10 +38,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
-    isInMainChain[Id](genesis, b3) should be(true)
-    isInMainChain[Id](b2, b3) should be(true)
-    isInMainChain[Id](b3, b2) should be(false)
-    isInMainChain[Id](b3, genesis) should be(false)
+    isInMainChain(chain, genesis, b3.blockHash) should be(true)
+    isInMainChain(chain, b2, b3.blockHash) should be(true)
+    isInMainChain(chain, b3, b2.blockHash) should be(false)
+    isInMainChain(chain, b3, genesis.blockHash) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in withStore { implicit blockStore =>
@@ -60,11 +60,11 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    isInMainChain[Id](genesis, b2) should be(true)
-    isInMainChain[Id](genesis, b3) should be(true)
-    isInMainChain[Id](genesis, b4) should be(true)
-    isInMainChain[Id](b2, b4) should be(true)
-    isInMainChain[Id](b3, b4) should be(false)
+    isInMainChain(chain, genesis, b2.blockHash) should be(true)
+    isInMainChain(chain, genesis, b3.blockHash) should be(true)
+    isInMainChain(chain, genesis, b4.blockHash) should be(true)
+    isInMainChain(chain, b2, b4.blockHash) should be(true)
+    isInMainChain(chain, b3, b4.blockHash) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -95,16 +95,16 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Blo
       val b6      = chain.idToBlocks(6)
       val b7      = chain.idToBlocks(7)
       val b8      = chain.idToBlocks(8)
-      isInMainChain[Id](genesis, b2) should be(true)
-      isInMainChain[Id](b2, b3) should be(false)
-      isInMainChain[Id](b3, b4) should be(false)
-      isInMainChain[Id](b4, b5) should be(false)
-      isInMainChain[Id](b5, b6) should be(false)
-      isInMainChain[Id](b6, b7) should be(false)
-      isInMainChain[Id](b7, b8) should be(true)
-      isInMainChain[Id](b2, b6) should be(true)
-      isInMainChain[Id](b2, b8) should be(true)
-      isInMainChain[Id](b4, b2) should be(false)
+      isInMainChain(chain, genesis, b2.blockHash) should be(true)
+      isInMainChain(chain, b2, b3.blockHash) should be(false)
+      isInMainChain(chain, b3, b4.blockHash) should be(false)
+      isInMainChain(chain, b4, b5.blockHash) should be(false)
+      isInMainChain(chain, b5, b6.blockHash) should be(false)
+      isInMainChain(chain, b6, b7.blockHash) should be(false)
+      isInMainChain(chain, b7, b8.blockHash) should be(true)
+      isInMainChain(chain, b2, b6.blockHash) should be(true)
+      isInMainChain(chain, b2, b8.blockHash) should be(true)
+      isInMainChain(chain, b4, b2.blockHash) should be(false)
   }
 
   /*

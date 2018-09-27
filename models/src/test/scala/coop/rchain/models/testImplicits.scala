@@ -33,7 +33,8 @@ object testImplicits {
     Arbitrary(
       Arbitrary
         .arbitrary[Seq[Par]]
-        .map(pars => SortedParHashSet(pars)))
+        .map(pars => SortedParHashSet(pars))
+    )
 
   implicit def arbParTupleSeq: Arbitrary[Seq[(Par, Par)]] =
     Arbitrary(Gen.listOf(Gen.zip(arbPar.arbitrary, arbPar.arbitrary)))

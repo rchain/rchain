@@ -19,14 +19,16 @@ object Vm {
     * `code` usually equals to `ctxt.code` and `pc` is initially
     * set to `ctxt.pc`.
     */
-  final case class State(var code: Code = null,
-                         var ctxt: Ctxt = null,
-                         var doNextThreadFlag: Boolean = false,
-                         var exitFlag: Boolean = false,
-                         var nextOpFlag: Boolean = false,
-                         var pc: Int = 0,
-                         var vmErrorFlag: Boolean = false,
-                         globalEnv: GlobalEnv)(val strandPool: StrandPool)
+  final case class State(
+      var code: Code = null,
+      var ctxt: Ctxt = null,
+      var doNextThreadFlag: Boolean = false,
+      var exitFlag: Boolean = false,
+      var nextOpFlag: Boolean = false,
+      var pc: Int = 0,
+      var vmErrorFlag: Boolean = false,
+      globalEnv: GlobalEnv
+  )(val strandPool: StrandPool)
 
   def run[E: StrandPoolExecutor](ctxt: Ctxt, state: StrandPool => State): Unit = {
     val strandPool = StrandPoolExecutor.instance[E]
@@ -492,7 +494,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
 
         state.ctxt.argvec.update(arg, env.slot.unsafeGet(offset))
         logger.debug(
-          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to argvec[$arg]")
+          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to argvec[$arg]"
+        )
         state.nextOpFlag = true
 
       /**
@@ -508,7 +511,8 @@ class Vm(val ctxt0: Ctxt, val state0: State) extends RecursiveAction {
 
         state.ctxt.setReg(reg, env.slot.unsafeGet(offset))
         logger.debug(
-          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to ${regName(reg)}")
+          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to ${regName(reg)}"
+        )
         state.nextOpFlag = true
 
       /**

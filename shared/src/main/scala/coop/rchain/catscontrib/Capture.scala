@@ -79,8 +79,8 @@ sealed trait CaptureInstances0 {
 }
 
 private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans](
-    tuu: TransUnsafeUncapture[T, F])
-    extends Capture[T[F, ?]] {
+    tuu: TransUnsafeUncapture[T, F]
+) extends Capture[T[F, ?]] {
   def capture[A](a: => A) =
     MonadTrans[T].liftM(Capture[F].capture(a))
   def unsafeUncapture[A](fa: T[F, A]): A = Capture[F].unsafeUncapture(tuu.unsafeUnlift[A](fa))

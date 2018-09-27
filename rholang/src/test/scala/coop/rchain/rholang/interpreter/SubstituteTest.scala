@@ -89,10 +89,13 @@ class SendSubSpec extends FlatSpec with Matchers {
     implicit val env = Env.makeEnv(source0, source1)
     val result = substituteSend[Coeval]
       .substitute(
-        Send(Quote(Send(ChanVar(BoundVar(1)), List(Par()), false, BitSet(1))),
-             List(Par()),
-             false,
-             BitSet(1)))
+        Send(
+          Quote(Send(ChanVar(BoundVar(1)), List(Par()), false, BitSet(1))),
+          List(Par()),
+          false,
+          BitSet(1)
+        )
+      )
       .value
     result should be(
       Send(
@@ -107,10 +110,12 @@ class SendSubSpec extends FlatSpec with Matchers {
   "Send" should "substitute all Channels for Quotes" in {
     val source: Par  = GPrivateBuilder()
     implicit val env = Env.makeEnv(source)
-    val target = Send(ChanVar(BoundVar(0)),
-                      List(Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))),
-                      false,
-                      BitSet(0))
+    val target = Send(
+      ChanVar(BoundVar(0)),
+      List(Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))),
+      false,
+      BitSet(0)
+    )
     val _target =
       Send(Quote(source), List(Send(Quote(source), List(Par()), false, BitSet())), false, BitSet())
     val result = substituteSend[Coeval].substitute(target).value
@@ -151,32 +156,40 @@ class NewSubSpec extends FlatSpec with Matchers {
       New(1, Send(ChanVar(BoundVar(1)), List(Par()), false, BitSet(1)), Vector.empty, BitSet(0))
     val result = substituteNew[Coeval].substitute(target).value
     result should be(
-      New(1, Send(Quote(source), List(Par()), false, BitSet()), Vector.empty, BitSet()))
+      New(1, Send(Quote(source), List(Par()), false, BitSet()), Vector.empty, BitSet())
+    )
   }
 
   "New" should "only substitute all Channels in body of express" in {
     val source0: Par           = GPrivateBuilder()
     val source1: Par           = GPrivateBuilder()
     implicit val env: Env[Par] = Env.makeEnv(source0, source1)
-    val target = New(2,
-                     Send(ChanVar(BoundVar(3)),
-                          List(Send(ChanVar(BoundVar(2)), List(Par()), false, BitSet(2))),
-                          false,
-                          BitSet(2, 3)),
-                     Vector.empty,
-                     BitSet(0, 1))
+    val target = New(
+      2,
+      Send(
+        ChanVar(BoundVar(3)),
+        List(Send(ChanVar(BoundVar(2)), List(Par()), false, BitSet(2))),
+        false,
+        BitSet(2, 3)
+      ),
+      Vector.empty,
+      BitSet(0, 1)
+    )
 
     val result = substituteNew[Coeval].substitute(target).value
     result should be(
       New(
         2,
-        Send(Quote(source0),
-             List(Send(Quote(source1), List(Par()), false, BitSet())),
-             false,
-             BitSet()),
+        Send(
+          Quote(source0),
+          List(Send(Quote(source1), List(Par()), false, BitSet())),
+          false,
+          BitSet()
+        ),
         Vector.empty,
         BitSet()
-      ))
+      )
+    )
   }
 }
 
@@ -209,19 +222,24 @@ class BundleSubSpec extends FlatSpec with Matchers {
     val source1: Par           = GPrivateBuilder()
     implicit val env: Env[Par] = Env.makeEnv(source0, source1)
     val target = Bundle(
-      Send(ChanVar(BoundVar(1)),
-           List(Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))),
-           false,
-           BitSet(0, 1))
+      Send(
+        ChanVar(BoundVar(1)),
+        List(Send(ChanVar(BoundVar(0)), List(Par()), false, BitSet(0))),
+        false,
+        BitSet(0, 1)
+      )
     )
     val result = substituteBundle[Coeval].substitute(target).value
     result should be(
       Bundle(
-        Send(Quote(source0),
-             List(Send(Quote(source1), List(Par()), false, BitSet())),
-             false,
-             BitSet())
-      ))
+        Send(
+          Quote(source0),
+          List(Send(Quote(source1), List(Par()), false, BitSet())),
+          false,
+          BitSet()
+        )
+      )
+    )
   }
 
   it should "preserve bundles' polarities during substitution" in {
@@ -261,15 +279,22 @@ class VarRefSubSpec extends FlatSpec with Matchers {
     val source: Par  = GPrivateBuilder()
     implicit val env = Env.makeEnv(source).shift(1)
     val target: Par =
-      Match(target = EVar(BoundVar(0)),
-            cases = Seq(
-              MatchCase(pattern = Connective(VarRefBody(VarRef(index = 1, depth = 2))),
-                        source = Par(),
-                        freeCount = 0)))
+      Match(
+        target = EVar(BoundVar(0)),
+        cases = Seq(
+          MatchCase(
+            pattern = Connective(VarRefBody(VarRef(index = 1, depth = 2))),
+            source = Par(),
+            freeCount = 0
+          )
+        )
+      )
     val result = substitutePar[Coeval].substitute(target).value
     val expectedResult: Par =
-      Match(target = EVar(BoundVar(0)),
-            cases = Seq(MatchCase(pattern = source, source = Par(), freeCount = 0)))
+      Match(
+        target = EVar(BoundVar(0)),
+        cases = Seq(MatchCase(pattern = source, source = Par(), freeCount = 0))
+      )
 
     result should be(expectedResult)
   }

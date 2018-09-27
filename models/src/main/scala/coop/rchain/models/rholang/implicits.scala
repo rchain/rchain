@@ -138,13 +138,17 @@ object implicits {
   def apply(r: Receive): Par =
     new Par(receives = Vector(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
   def apply(n: New): Par =
-    new Par(news = Vector(n),
-            locallyFree = NewLocallyFree.locallyFree(n, 0),
-            connectiveUsed = NewLocallyFree.connectiveUsed(n))
+    new Par(
+      news = Vector(n),
+      locallyFree = NewLocallyFree.locallyFree(n, 0),
+      connectiveUsed = NewLocallyFree.connectiveUsed(n)
+    )
   def apply(e: Expr): Par =
-    new Par(exprs = Vector(e),
-            locallyFree = ExprLocallyFree.locallyFree(e, 0),
-            connectiveUsed = ExprLocallyFree.connectiveUsed(e))
+    new Par(
+      exprs = Vector(e),
+      locallyFree = ExprLocallyFree.locallyFree(e, 0),
+      connectiveUsed = ExprLocallyFree.connectiveUsed(e)
+    )
   def apply(m: Match): Par =
     new Par(matches = Vector(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
   def apply(g: GPrivate): Par =
@@ -178,7 +182,7 @@ object implicits {
       matches = Vector.empty[Match],
       ids = Vector.empty[GPrivate],
       bundles = Vector.empty[Bundle],
-      connectives = Vector.empty[Connective],
+      connectives = Vector.empty[Connective]
     )
   }
 
@@ -208,9 +212,11 @@ object implicits {
   implicit class ParExtension[T](p: T)(implicit toPar: T => Par) {
     // Convenience prepend methods
     def prepend(s: Send): Par =
-      p.copy(sends = s +: p.sends,
-             locallyFree = p.locallyFree | s.locallyFree,
-             connectiveUsed = p.connectiveUsed || s.connectiveUsed)
+      p.copy(
+        sends = s +: p.sends,
+        locallyFree = p.locallyFree | s.locallyFree,
+        connectiveUsed = p.connectiveUsed || s.connectiveUsed
+      )
     def prepend(r: Receive): Par =
       p.copy(
         receives = r +: p.receives,
@@ -233,9 +239,11 @@ object implicits {
           .connectiveUsed(e)
       )
     def prepend(m: Match): Par =
-      p.copy(matches = m +: p.matches,
-             locallyFree = p.locallyFree | m.locallyFree,
-             connectiveUsed = p.connectiveUsed || m.connectiveUsed)
+      p.copy(
+        matches = m +: p.matches,
+        locallyFree = p.locallyFree | m.locallyFree,
+        connectiveUsed = p.connectiveUsed || m.connectiveUsed
+      )
     def prepend(b: Bundle): Par =
       p.copy(
         bundles = b +: p.bundles,

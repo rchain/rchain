@@ -45,7 +45,7 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
           ReceiveBind(
             List(Quote(GInt(3))),
             Quote(GInt(2)),
-            None,
+            None
           ),
           emptyMap
         ),
@@ -53,7 +53,7 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
           ReceiveBind(
             List(Quote(GInt(3))),
             Quote(GInt(2)),
-            Some(FreeVar(0)),
+            Some(FreeVar(0))
           ),
           emptyMap
         ),
@@ -61,7 +61,7 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
           ReceiveBind(
             List(Quote(GInt(1))),
             Quote(GInt(3)),
-            None,
+            None
           ),
           emptyMap
         ),
@@ -69,7 +69,7 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
           ReceiveBind(
             List(Quote(GInt(2))),
             Quote(GInt(3)),
-            None,
+            None
           ),
           emptyMap
         )

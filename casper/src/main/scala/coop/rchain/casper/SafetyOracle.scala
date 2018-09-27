@@ -1,15 +1,12 @@
 package coop.rchain.casper
 
 import cats.{Applicative, Foldable, Monad, Now}
-import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
+import cats.Id
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
-import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import cats.syntax.option._
+import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{mainParent, _}
-import coop.rchain.catscontrib.ListContrib
-
-import scala.collection
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's Turan oracle implementation.
@@ -42,7 +39,7 @@ trait SafetyOracle[F[_]] {
     * @param estimate Block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
-  def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): F[Float]
+  def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): Float
 }
 
 object SafetyOracle extends SafetyOracleInstances {
@@ -50,80 +47,75 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def turanOracle[F[_]: Monad: BlockStore]: SafetyOracle[F] =
+  def turanOracle[F[_]: Monad]: SafetyOracle[F] =
     new SafetyOracle[F] {
-      def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): F[Float] =
-        for {
-          totalWeight              <- computeTotalWeight(estimate)
-          minMaxCliqueWeight       <- computeMinMaxCliqueWeight(blockDag, estimate)
-          faultTolerance           = 2 * minMaxCliqueWeight - totalWeight
-          normalizedFaultTolerance = faultTolerance.toFloat / totalWeight
-        } yield normalizedFaultTolerance
+      def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): Float = {
+        val totalWeight        = computeTotalWeight(blockDag, estimate)
+        val minMaxCliqueWeight = computeMinMaxCliqueWeight(blockDag, estimate)
+        val faultTolerance     = 2 * minMaxCliqueWeight - totalWeight
+        faultTolerance.toFloat / totalWeight
+      }
 
       // To have a maximum clique of half the total weight,
       // you need at least twice the weight of the candidateWeights to be greater than the total weight
-      private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): F[Int] =
-        for {
-          candidateWeights <- computeCandidateWeights(blockDag, estimate)
-          totalWeight      <- computeTotalWeight(estimate)
-          minMaxCliqueWeight <- if (2 * candidateWeights.values.sum < totalWeight) {
-                                 0.pure[F]
-                               } else {
-                                 val vertexCount = candidateWeights.keys.size
-                                 for {
-                                   edgeCount <- agreementGraphEdgeCount(blockDag,
-                                                                        estimate,
-                                                                        candidateWeights)
-                                 } yield
-                                   minTotalValidatorWeight(estimate,
-                                                           maxCliqueMinSize(vertexCount, edgeCount))
-                               }
-        } yield minMaxCliqueWeight
+      private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): Long = {
+        val candidateWeights = computeCandidateWeights(blockDag, estimate)
+        val totalWeight      = computeTotalWeight(blockDag, estimate)
+        if (2L * candidateWeights.values.sum < totalWeight) {
+          0L
+        } else {
+          val vertexCount = candidateWeights.keys.size
+          val edgeCount   = agreementGraphEdgeCount(blockDag, estimate, candidateWeights)
+          minTotalValidatorWeight(estimate, maxCliqueMinSize(vertexCount, edgeCount))
+        }
+      }
 
-      private def computeTotalWeight(estimate: BlockMessage): F[Int] =
-        for {
-          mainParentWeightMap <- computeMainParentWeightMap(estimate)
-        } yield weightMapTotal(mainParentWeightMap)
+      private def computeTotalWeight(blockDag: BlockDag, estimate: BlockMessage): Long = {
+        val mainParentWeightMap = computeMainParentWeightMap(blockDag, estimate)
+        weightMapTotal(mainParentWeightMap)
+      }
 
-      private def computeCandidateWeights(blockDag: BlockDag,
-                                          estimate: BlockMessage): F[Map[Validator, Int]] =
-        for {
-          weights <- computeMainParentWeightMap(estimate)
-          candidateWeights <- weights.toList.traverse {
-                               case (validator, stake) =>
-                                 val maybeLatestMessage = blockDag.latestMessages.get(validator)
-                                 maybeLatestMessage match {
-                                   case Some(latestMessage) =>
-                                     for {
-                                       isCompatible <- computeCompatibility(estimate, latestMessage)
-                                       result = if (isCompatible) {
-                                         Some((validator, stake))
-                                       } else {
-                                         none[(Validator, Int)]
-                                       }
-                                     } yield result
-                                   case None =>
-                                     none[(Validator, Int)].pure[F]
-                                 }
-                             }
-        } yield candidateWeights.flatten.toMap
+      private def computeCandidateWeights(
+          blockDag: BlockDag,
+          estimate: BlockMessage
+      ): Map[Validator, Long] = {
+        val weights = computeMainParentWeightMap(blockDag, estimate)
+        val candidateWeights = weights.toList.flatMap {
+          case (validator, stake) =>
+            val maybeLatestMessage = blockDag.latestMessages.get(validator)
+            maybeLatestMessage match {
+              case Some(latestMessage) =>
+                val isCompatible = computeCompatibility(blockDag, estimate, latestMessage.blockHash)
+                if (isCompatible) {
+                  Some((validator, stake))
+                } else {
+                  none[(Validator, Long)]
+                }
+              case None =>
+                none[(Validator, Long)]
+            }
+        }
+        candidateWeights.toMap
+      }
 
-      private def computeMainParentWeightMap(estimate: BlockMessage): F[Map[BlockHash, Int]] =
-        for {
-          estimateMainParent <- mainParent[F](estimate)
-          mainParentWeightMap = estimateMainParent match {
-            case Some(parent) => weightMap(parent)
-            case None         => weightMap(estimate) // Genesis
-          }
-        } yield mainParentWeightMap
+      private def computeMainParentWeightMap(
+          blockDag: BlockDag,
+          estimate: BlockMessage
+      ): Map[BlockHash, Long] =
+        blockDag.dataLookup(estimate.blockHash).parents.headOption match {
+          case Some(parent) => blockDag.dataLookup(parent).weightMap
+          case None         => blockDag.dataLookup(estimate.blockHash).weightMap
+        }
 
-      private def findMaximumClique(edges: List[(Validator, Validator)],
-                                    candidates: Map[Validator, Int]): (List[Validator], Int) =
+      private def findMaximumClique(
+          edges: List[(Validator, Validator)],
+          candidates: Map[Validator, Long]
+      ): (List[Validator], Long) =
         Clique
           .findCliquesRecursive(edges)
-          .foldLeft((List[Validator](), 0)) {
-            case ((maxClique, maxWeight), clique) => {
-              val weight = clique.map(candidates.getOrElse(_, 0)).sum
+          .foldLeft((List[Validator](), 0L)) {
+            case ((maxClique, maxWeight), clique) =>
+              val weight = clique.map(candidates.getOrElse(_, 0L)).sum
               if (weight > maxWeight) {
                 (clique, weight)
               } else if (weight == maxWeight && clique.size > maxClique.size) {
@@ -131,121 +123,108 @@ sealed abstract class SafetyOracleInstances {
               } else {
                 (maxClique, maxWeight)
               }
-            }
           }
 
-      private def agreementGraphEdgeCount(blockDag: BlockDag,
-                                          estimate: BlockMessage,
-                                          candidates: Map[Validator, Int]): F[Int] = {
-        def findAgreeingJustificationHash(justificationHashes: List[BlockHash],
-                                          validator: Validator): F[Option[BlockHash]] =
-          ListContrib.findM(
-            justificationHashes,
-            justificationHash =>
-              for {
-                justificationBlock <- unsafeGetBlock[F](justificationHash)
-                isSenderSecond     = justificationBlock.sender == validator
-                compatible         <- computeCompatibility(estimate, justificationBlock)
-              } yield isSenderSecond && compatible
-          )
+      private def agreementGraphEdgeCount(
+          blockDag: BlockDag,
+          estimate: BlockMessage,
+          candidates: Map[Validator, Long]
+      ): Int = {
+        def findAgreeingJustificationHash(
+            justificationHashes: List[BlockHash],
+            validator: Validator
+        ): Option[BlockHash] =
+          justificationHashes.find(justificationHash => {
+            blockDag.dataLookup.get(justificationHash) match {
+              case Some(justificationMetadata) =>
+                val compatible = computeCompatibility(blockDag, estimate, justificationHash)
+                compatible && justificationMetadata.sender == validator
+              case None => false
+            }
+          })
 
-        def seesAgreement(first: Validator, second: Validator): F[Boolean] = {
+        def seesAgreement(first: Validator, second: Validator): Boolean = {
           val maybeFirstLatest = blockDag.latestMessages.get(first)
           maybeFirstLatest match {
             case Some(firstLatestBlock) =>
-              for {
-                justificationHashes <- firstLatestBlock.justifications
-                                        .map(_.latestBlockHash)
-                                        .pure[F]
-                agreeingJustificationHash <- findAgreeingJustificationHash(
-                                              justificationHashes.toList,
-                                              second)
-              } yield agreeingJustificationHash.isDefined
-            case None => false.pure[F]
+              val justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+              val agreeingJustificationHash = findAgreeingJustificationHash(
+                justificationHashes.toList,
+                second
+              )
+              agreeingJustificationHash.isDefined
+            case None => false
           }
         }
 
-        def filterChildren(candidate: BlockMessage, validator: Validator): F[List[BlockMessage]] =
+        def filterChildren(candidate: BlockMetadata, validator: Validator): List[BlockHash] =
           blockDag.latestMessages.get(validator) match {
             case Some(latestMessageByValidator) =>
-              for {
-                potentialChildren <- DagOperations
-                                      .bfTraverseF[F, BlockMessage](List(latestMessageByValidator)) {
-                                        block =>
-                                          ProtoUtil.getCreatorJustificationAsList[F](
-                                            block,
-                                            validator,
-                                            b => b == candidate)
-                                      }
-                                      .toList
-                children <- potentialChildren.filterA { potentialChild =>
-                             val isFutureBlockIfSameValidator = candidate.seqNum <= potentialChild.seqNum
-                             val validatorCreatedChild        = potentialChild.sender == validator
-                             (isFutureBlockIfSameValidator && validatorCreatedChild).pure[F]
-                           }
-              } yield children
-            case None => List.empty[BlockMessage].pure[F]
+              DagOperations
+                .bfTraverseF[Id, BlockHash](List(latestMessageByValidator.blockHash)) { blockHash =>
+                  ProtoUtil.getCreatorJustificationAsListByInMemory(
+                    blockDag,
+                    blockHash,
+                    validator,
+                    b => b == candidate.blockHash
+                  )
+                }
+                .filter(potentialChild => {
+                  val metadata              = blockDag.dataLookup(potentialChild)
+                  val isFutureBlock         = candidate.seqNum <= metadata.seqNum
+                  val validatorCreatedChild = metadata.sender == validator
+                  validatorCreatedChild && isFutureBlock
+                })
+                .toList
+            case None => List.empty[BlockHash]
           }
 
-        def neverEventuallySeeDisagreement(first: Validator, second: Validator): F[Boolean] = {
+        def neverEventuallySeeDisagreement(first: Validator, second: Validator): Boolean = {
           val maybeFirstLatest = blockDag.latestMessages.get(first)
           maybeFirstLatest match {
             case Some(firstLatestBlock) =>
-              for {
-                justificationHashes <- firstLatestBlock.justifications
-                                        .map(_.latestBlockHash)
-                                        .pure[F]
-                justificationBlockSecondList <- justificationHashes.toList.traverse(
-                                                 justificationHash =>
-                                                   for {
-                                                     justificationBlock <- unsafeGetBlock[F](
-                                                                            justificationHash)
-                                                     isSenderSecond = justificationBlock.sender == second
-                                                     result = if (isSenderSecond) {
-                                                       Some(justificationBlock)
-                                                     } else {
-                                                       none[BlockMessage]
-                                                     }
-                                                   } yield result)
-                _                        = assert(justificationBlockSecondList.flatten.length == 1)
-                justificationBlockSecond = justificationBlockSecondList.flatten.head
-                potentialDisagreements   <- filterChildren(justificationBlockSecond, second)
-                result <- potentialDisagreements.forallM { potentialDisagreement =>
-                           computeCompatibility(estimate, potentialDisagreement)
-                         }
-              } yield result
-            case None => false.pure[F]
+              val justificationHashes = firstLatestBlock.justifications.map(_.latestBlockHash)
+              val justificationBlockSecondList = justificationHashes.toList
+                .flatMap(
+                  justificationHash =>
+                    blockDag.dataLookup
+                      .get(justificationHash)
+                      .filter(_.sender == second)
+                )
+              assert(justificationBlockSecondList.length == 1)
+              val justificationBlockSecond = justificationBlockSecondList.head
+              val potentialDisagreements   = filterChildren(justificationBlockSecond, second)
+              potentialDisagreements.forall(
+                potentialDisagreement =>
+                  computeCompatibility(blockDag, estimate, potentialDisagreement)
+              )
+            case None => false
           }
         }
 
-        def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
+        def computeAgreementGraphEdges: List[(Validator, Validator)] =
           (for {
             x <- candidates.keys
             y <- candidates.keys
             if x.toString > y.toString // TODO: Order ByteString
-          } yield (x, y)).toList.filterA {
+          } yield (x, y)).toList.filter {
             case (first: Validator, second: Validator) =>
-              // TODO: Replace with equivalent of <&&>
-              Monad[F].ifM(seesAgreement(first, second))(
-                Monad[F].ifM(seesAgreement(second, first))(
-                  Monad[F].ifM(neverEventuallySeeDisagreement(first, second))(
-                    Monad[F].ifM(neverEventuallySeeDisagreement(second, first))(true.pure[F],
-                                                                                false.pure[F]),
-                    false.pure[F]),
-                  false.pure[F]
-                ),
-                false.pure[F]
-              )
+              seesAgreement(first, second) && seesAgreement(second, first) &&
+                neverEventuallySeeDisagreement(first, second) &&
+                neverEventuallySeeDisagreement(second, first)
           }
 
-        for {
-          edges <- computeAgreementGraphEdges
-        } yield findMaximumClique(edges, candidates)._1.size
+        val edges = computeAgreementGraphEdges
+        findMaximumClique(edges, candidates)._1.size
       }
 
       // TODO: Change to isInBlockDAG
-      private def computeCompatibility(candidate: BlockMessage, target: BlockMessage): F[Boolean] =
-        isInMainChain[F](candidate, target)
+      private def computeCompatibility(
+          blockDag: BlockDag,
+          candidate: BlockMessage,
+          targetBlockHash: BlockHash
+      ): Boolean =
+        isInMainChain(blockDag, candidate, targetBlockHash)
 
       // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
       private def maxCliqueMinSize(vertices: Int, edges: Int) = {

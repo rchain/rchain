@@ -34,10 +34,14 @@ class ScoredTermSpec extends FlatSpec with Matchers {
     unsortedTerms.sorted should be(sortedTerms)
   }
   "ScoredTerm" should "Sort so that smaller nodes are put first" in {
-    val unsortedTerms = Seq(ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2)))),
-                            ScoredTerm("bar", Node(Seq(Leaves(1, 1), Leaves(2, 2)))))
-    val sortedTerms = Seq(ScoredTerm("bar", Node(Seq(Leaves(1, 1), Leaves(2, 2)))),
-                          ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2)))))
+    val unsortedTerms = Seq(
+      ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2)))),
+      ScoredTerm("bar", Node(Seq(Leaves(1, 1), Leaves(2, 2))))
+    )
+    val sortedTerms = Seq(
+      ScoredTerm("bar", Node(Seq(Leaves(1, 1), Leaves(2, 2)))),
+      ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2))))
+    )
     unsortedTerms.sorted should be(sortedTerms)
   }
 }
@@ -45,24 +49,28 @@ class ScoredTermSpec extends FlatSpec with Matchers {
 class VarSortMatcherSpec extends FlatSpec with Matchers {
   "Different kinds of variables" should "bin separately" in {
     val parVars = Par(
-      exprs = List(EVar(BoundVar(2)),
-                   EVar(Wildcard(Var.WildcardMsg())),
-                   EVar(BoundVar(1)),
-                   EVar(FreeVar(0)),
-                   EVar(FreeVar(2)),
-                   EVar(BoundVar(0)),
-                   EVar(FreeVar(1))),
+      exprs = List(
+        EVar(BoundVar(2)),
+        EVar(Wildcard(Var.WildcardMsg())),
+        EVar(BoundVar(1)),
+        EVar(FreeVar(0)),
+        EVar(FreeVar(2)),
+        EVar(BoundVar(0)),
+        EVar(FreeVar(1))
+      ),
       locallyFree = BitSet(0, 1, 2),
       connectiveUsed = true
     )
     val sortedParVars: Option[Par] = Par(
-      exprs = List(EVar(BoundVar(0)),
-                   EVar(BoundVar(1)),
-                   EVar(BoundVar(2)),
-                   EVar(FreeVar(0)),
-                   EVar(FreeVar(1)),
-                   EVar(FreeVar(2)),
-                   EVar(Wildcard(Var.WildcardMsg()))),
+      exprs = List(
+        EVar(BoundVar(0)),
+        EVar(BoundVar(1)),
+        EVar(BoundVar(2)),
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2)),
+        EVar(Wildcard(Var.WildcardMsg()))
+      ),
       locallyFree = BitSet(0, 1, 2),
       connectiveUsed = true
     )
@@ -120,7 +128,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
           (GInt(2), GInt(1)),
           (GInt(1), GInt(1))
-        ))
+        )
+      )
     val sortedParGround: Par =
       ParMap(Seq[(Par, Par)]((GInt(1), GInt(1)), (GInt(2), GInt(1))))
 
@@ -138,10 +147,13 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   "Par" should "Sort according to PEMDAS" in {
     val parExpr =
       Par(
-        exprs = List(EMinus(GInt(4), GInt(3)),
-                     EDiv(GInt(1), GInt(5)),
-                     EPlus(GInt(1), GInt(3)),
-                     EMult(GInt(6), GInt(3))))
+        exprs = List(
+          EMinus(GInt(4), GInt(3)),
+          EDiv(GInt(1), GInt(5)),
+          EPlus(GInt(1), GInt(3)),
+          EMult(GInt(6), GInt(3))
+        )
+      )
     val sortedParExpr: Par =
       Par(
         exprs = List(
@@ -149,7 +161,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EDiv(GInt(1), GInt(5)),
           EPlus(GInt(1), GInt(3)),
           EMinus(GInt(4), GInt(3))
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -164,7 +177,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EGt(GBool(false), GBool(true)),
           ELte(GInt(1), GInt(5)),
           EGte(GBool(false), GBool(true))
-        ))
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         exprs = List(
@@ -174,7 +188,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EGte(GBool(false), GBool(true)),
           EEq(GInt(4), GInt(3)),
           ENeq(GInt(1), GInt(5))
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -186,14 +201,16 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(EVar(BoundVar(0)), EVar(BoundVar(1))),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EOr(EVar(BoundVar(3)), EVar(BoundVar(4)))
-        ))
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         exprs = List(
           EOr(EVar(BoundVar(0)), EVar(BoundVar(1))),
           EOr(EVar(BoundVar(3)), EVar(BoundVar(4))),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -206,15 +223,17 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMethod("mth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2))
-        ))
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         exprs = List(
           EMethod("mth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2)),
-          EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
-        ))
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -227,7 +246,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(Quote(GInt(5)), List(GInt(3)), true, BitSet()),
           Send(Quote(GInt(4)), List(GInt(2)), false, BitSet()),
           Send(Quote(GInt(5)), List(GInt(2)), false, BitSet())
-        ))
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         sends = List(
@@ -235,7 +255,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(Quote(GInt(5)), List(GInt(2)), false, BitSet()),
           Send(Quote(GInt(5)), List(GInt(3)), false, BitSet()),
           Send(Quote(GInt(5)), List(GInt(3)), true, BitSet())
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -244,11 +265,13 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val parExpr =
       Par(
         receives = List(
-          Receive(List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet()),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          ),
           Receive(
             List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
             EVar(BoundVar(0)),
@@ -256,35 +279,46 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             0,
             BitSet()
           ),
-          Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet()),
-          Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
-                  Par(),
-                  true,
-                  0,
-                  BitSet()),
-          Receive(List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet())
-        ))
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          ),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            Par(),
+            true,
+            0,
+            BitSet()
+          ),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          )
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         receives = List(
-          Receive(List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet()),
-          Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet()),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          ),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          ),
           Receive(
             List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
             EVar(BoundVar(0)),
@@ -292,13 +326,16 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             0,
             BitSet()
           ),
-          Receive(List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
-                  Par(),
-                  false,
-                  0,
-                  BitSet()),
+          Receive(
+            List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
+            Par(),
+            false,
+            0,
+            BitSet()
+          ),
           Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))), Par(), true, 0, BitSet())
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -308,24 +345,34 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(
         matches = List(
           Match(GInt(5), List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))), BitSet()),
-          Match(GBool(true),
-                List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))),
-                BitSet()),
-          Match(GBool(true),
-                List(MatchCase(GInt(4), GInt(4)), MatchCase(GInt(3), GInt(3))),
-                BitSet())
-        ))
+          Match(
+            GBool(true),
+            List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))),
+            BitSet()
+          ),
+          Match(
+            GBool(true),
+            List(MatchCase(GInt(4), GInt(4)), MatchCase(GInt(3), GInt(3))),
+            BitSet()
+          )
+        )
+      )
     val sortedParMatch: Option[Par] =
       Par(
         matches = List(
-          Match(GBool(true),
-                List(MatchCase(GInt(4), GInt(4)), MatchCase(GInt(3), GInt(3))),
-                BitSet()),
-          Match(GBool(true),
-                List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))),
-                BitSet()),
+          Match(
+            GBool(true),
+            List(MatchCase(GInt(4), GInt(4)), MatchCase(GInt(3), GInt(3))),
+            BitSet()
+          ),
+          Match(
+            GBool(true),
+            List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))),
+            BitSet()
+          ),
           Match(GInt(5), List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))), BitSet())
-        ))
+        )
+      )
     val result = SortTest.sort(parMatch)
     result.term should be(sortedParMatch.get)
   }
@@ -339,7 +386,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           New(bindCount = 2, p = Par()),
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
           New(bindCount = 2, uri = Vector("rho:io:stderr"), p = Par())
-        ))
+        )
+      )
     val sortedParNew =
       Par(
         news = List(
@@ -348,7 +396,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = Par()),
           New(bindCount = 2, uri = Vector("rho:io:stdout"), p = GInt(7)),
           New(bindCount = 2, p = Par())
-        ))
+        )
+      )
     val result = SortTest.sort(parNew)
     result.term should be(sortedParNew.get)
   }
@@ -371,7 +420,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EVar(BoundVar(1)),
           EOr(GBool(false), GBool(true)),
           GInt(1)
-        ))
+        )
+      )
     val sortedParExpr: Option[Par] =
       Par(
         exprs = List(
@@ -380,7 +430,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EDiv(GInt(1), GInt(5)),
           EEq(GInt(4), GInt(3)),
           EOr(GBool(false), GBool(true))
-        ))
+        )
+      )
     val result = SortTest.sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
@@ -394,7 +445,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EVar(BoundVar(1)),
           EOr(GBool(false), GBool(true)),
           GInt(1)
-        ))
+        )
+      )
     val sortedParExpr: Par =
       Par(
         exprs = List(
@@ -403,7 +455,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EDiv(GInt(1), GInt(5)),
           EEq(GInt(4), GInt(3)),
           EOr(GBool(false), GBool(true))
-        ))
+        )
+      )
 
     val bundle = Bundle(parExpr)
     val result = SortTest.sort(bundle)
@@ -419,7 +472,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EVar(BoundVar(1)),
           EOr(GBool(false), GBool(true)),
           GInt(1)
-        ))
+        )
+      )
     val sortedParExpr: Par =
       Par(
         exprs = List(
@@ -428,18 +482,26 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EDiv(GInt(1), GInt(5)),
           EEq(GInt(4), GInt(3)),
           EOr(GBool(false), GBool(true))
-        ))
+        )
+      )
 
     val nestedBundle = Bundle(
-      Bundle(Bundle(parExpr, writeFlag = true, readFlag = false),
-             writeFlag = false,
-             readFlag = true))
+      Bundle(
+        Bundle(parExpr, writeFlag = true, readFlag = false),
+        writeFlag = false,
+        readFlag = true
+      )
+    )
     val result = SortTest.sort(nestedBundle)
     result.term should be(
       Bundle(
-        Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false),
-               writeFlag = false,
-               readFlag = true)))
+        Bundle(
+          Bundle(sortedParExpr, writeFlag = true, readFlag = false),
+          writeFlag = false,
+          readFlag = true
+        )
+      )
+    )
   }
 
   it should "sort logical connectives in \"not\", \"and\", \"or\" order" in {
@@ -447,11 +509,22 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(
         connectives = List(
           Connective(
-            ConnAndBody(ConnectiveBody(
-              List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
+            ConnAndBody(
+              ConnectiveBody(
+                List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
+              )
+            )
+          ),
           Connective(
-            ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
-                                           New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+            ConnOrBody(
+              ConnectiveBody(
+                List(
+                  New(1, EVar(Wildcard(Var.WildcardMsg()))),
+                  New(2, EVar(Wildcard(Var.WildcardMsg())))
+                )
+              )
+            )
+          ),
           Connective(VarRefBody(VarRef(0, 2))),
           Connective(ConnInt(true)),
           Connective(ConnBool(true)),
@@ -472,11 +545,22 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Connective(ConnByteArray(true)),
           Connective(ConnNotBody(Par())),
           Connective(
-            ConnAndBody(ConnectiveBody(
-              List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
+            ConnAndBody(
+              ConnectiveBody(
+                List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
+              )
+            )
+          ),
           Connective(
-            ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
-                                           New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+            ConnOrBody(
+              ConnectiveBody(
+                List(
+                  New(1, EVar(Wildcard(Var.WildcardMsg()))),
+                  New(2, EVar(Wildcard(Var.WildcardMsg())))
+                )
+              )
+            )
+          ),
           Connective(VarRefBody(VarRef(0, 2)))
         ),
         connectiveUsed = true

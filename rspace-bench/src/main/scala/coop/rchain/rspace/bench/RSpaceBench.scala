@@ -3,6 +3,7 @@ package coop.rchain.rspace.bench
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
 
+import cats.Id
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
@@ -20,7 +21,7 @@ import scala.concurrent.{Await, Future}
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBench {
 
-  var space: FreudianSpace[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
+  var space: ISpace[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor] = null
 
   val channel  = Channel("friends#" + 1.toString)
   val channels = List(channel)
@@ -96,8 +97,10 @@ class LMDBBench extends RSpaceBench {
     val context   = Context.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](context)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown
@@ -120,8 +123,10 @@ class InMemBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown
@@ -149,8 +154,10 @@ class MixedBench extends RSpaceBench {
     assert(context.trieStore.toMap.isEmpty)
     val testStore = InMemoryStore.create(context.trieStore, Branch.MASTER)
     assert(testStore.toMap.isEmpty)
-    space = RSpace.create[Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](testStore,
-                                                                                  Branch.MASTER)
+    space = RSpace.create[Id, Channel, Pattern, Nothing, Entry, Entry, EntriesCaptor](
+      testStore,
+      Branch.MASTER
+    )
   }
 
   @TearDown

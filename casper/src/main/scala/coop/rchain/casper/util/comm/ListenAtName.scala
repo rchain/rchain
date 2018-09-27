@@ -66,8 +66,9 @@ object ListenAtName {
     loop
   }
 
-  def listenAtNameUntilChanges[A, G[_], F[_]: Sync: Timer](name: G[Name])(
-      request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[A => F[G[A]]]]) = {
+  def listenAtNameUntilChanges[A, G[_], F[_]: Sync: Timer](
+      name: G[Name]
+  )(request: G[Par] => F[Seq[A]])(implicit par: BuildPar[λ[A => F[G[A]]]]) = {
     val nameF = name.pure[F]
 
     val retrieve =
