@@ -2,6 +2,7 @@
 
 //based on http://erights.org/elib/capability/ode/ode-capabilities.html#simple-money
 //requires NonNegativeNumber
+
 contract @("MakeMint", "int2NN")(@x, return) = {
   new nnCh in {
     @"NonNegativeNumber"!(x, *nnCh) | for(@nn <- nnCh) {

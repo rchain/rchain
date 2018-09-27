@@ -1,6 +1,22 @@
 //scalapackage coop.rchain.rholang.unittest
 
 //requires ListOps
+contract @"delayForCh"(@n, notHangingCh, done) = {
+  for(@notHanging <- notHangingCh) {
+    if(notHanging == false) {
+      notHangingCh!(notHanging) | // put back to keep it there for the next call (if false)
+      if(n == 0) {
+       done!(false)
+      }
+      else {
+        @"delayForCh"!(n - 1, *notHangingCh, *done)
+      }
+    }
+    else {
+      done!(true)
+    }
+  }
+} |
 contract @"TestSet"(desc, @tests) = {
   new addTests, execTests, testsCh in {
     contract execTests(return) = {
@@ -26,13 +42,24 @@ contract @"TestSet"(desc, @tests) = {
         contract toContract(@test, return) = {
           match test {
             [functionCh, answer] => {
-              new tContract in {
+              new tContract, notHangingCh, delayCh in {
                 contract tContract(return) = {
                   for (function <- @functionCh) {
                     @functionCh!(*function) | //put back for possible re-use
                     new result in {
-                      function!(*result) | for(@r <- result) {
-                        return!(r == answer)
+                      function!(*result) |
+                      @"delayForCh"!(40, *notHangingCh, *delayCh) |
+                      notHangingCh!(false) |
+                      for(@r <- result) {
+                        for(_ <- notHangingCh) {
+                          notHangingCh!(true) |
+                          return!(r==answer)
+                        }
+                      }
+                    } |
+                    for(@hanging<-delayCh) {
+                      if(hanging==false) {
+                        return!(answer=="hanging return")
                       }
                     }
                   }
