@@ -1,0 +1,8 @@
+// A successful match rewrites to
+// Nil!("success")
+
+match
+  {new x in { x!(Nil) }}
+{
+  {new y in { y!(z) }} => { @z!("success") }
+}

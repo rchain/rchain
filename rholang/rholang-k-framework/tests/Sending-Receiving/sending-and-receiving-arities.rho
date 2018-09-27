@@ -1,0 +1,6 @@
+// This is a send/receive with -arity matching.
+// A successful run will rewrite to
+//    @Nil!("success")
+
+@Nil!( @Nil!("success") , @{Nil|Nil}!(Nil) , for( x <- @Nil ){ Nil } ) |
+for(@{@Nil!(x)} , @{@{Nil|Nil}!(_)} , @{for( x <- @Nil ){ _ } } <- @Nil){ @Nil!(x) }

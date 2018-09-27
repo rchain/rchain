@@ -1,0 +1,17 @@
+// In Rholang, ground processes include expressions and the empty process Nil
+// Ground processes *at the top level* evaluate to the empty process and are equivalent to the empty process.
+// However, one should note that ground processes are not in general semantically equivalent.
+// For example, the channels @10 and @Nil are not the same. Only at the top level are we guaranteed that
+// they will behave similarly.
+
+
+// Test:
+// Since ground processes evaluate to the empty process at the top level, if G is a ground process and P is a process,
+// then P | G should evaluate to P. Like wise, for G_1, ... , G_n ground processes, P | G_1 | ... | G_n = P
+
+@Nil!("success") | "fails if you see anything but the send" | 10 | Nil
+
+
+// Arithmetic operations are not yet implemented in the framework; we should be able to add, for example,
+//    | 10 + 5
+// to this test in the future.

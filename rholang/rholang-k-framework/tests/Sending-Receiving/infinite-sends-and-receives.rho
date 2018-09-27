@@ -1,0 +1,5 @@
+// This code will never terminate because of the persistence of the sends/receives
+// It will produce infinitely sends of the form @"success"!"success"
+
+@Nil!!("sucess") |
+for( x <= @Nil ){ x!("success") }
