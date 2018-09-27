@@ -8,7 +8,6 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 trait CostAccountingAlg[F[_]] {
   def charge(cost: Cost): F[Unit]
-  def charge(cost: CostAccount): F[Unit]
   def get(): F[CostAccount]
   def set(cost: CostAccount): F[Unit]
   def refund(refund: Cost): F[Unit]
@@ -28,8 +27,6 @@ object CostAccountingAlg {
   private class CostAccountingAlgImpl[F[_]](state: Ref[F, CostAccount])(implicit F: Sync[F])
       extends CostAccountingAlg[F] {
     override def charge(cost: Cost): F[Unit] = chargeInternal(_ - cost)
-
-    override def charge(cost: CostAccount): F[Unit] = chargeInternal(_ - cost)
 
     private def chargeInternal(f: CostAccount => CostAccount): F[Unit] =
       for {

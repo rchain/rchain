@@ -44,7 +44,7 @@ object ChargingRSpace {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(matchListQuote(_))
+          matchF  <- costAlg.get().map(ca => matchListQuote(ca.cost))
           consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
           _       <- handleResult(consRes, storageCost, persist)
         } yield consRes
@@ -57,7 +57,7 @@ object ChargingRSpace {
       ): F[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
         Sync[F].delay(
           space.install(channels, patterns, continuation)(
-            matchListQuote(CostAccount(Integer.MAX_VALUE))
+            matchListQuote(Cost(Integer.MAX_VALUE))
           )
         )
 
@@ -71,7 +71,7 @@ object ChargingRSpace {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
-          matchF  <- costAlg.get().map(matchListQuote(_))
+          matchF  <- costAlg.get().map(ca => matchListQuote(ca.cost))
           prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
           _       <- handleResult(prodRes, storageCost, persist)
         } yield prodRes
@@ -87,12 +87,14 @@ object ChargingRSpace {
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
-            costAlg.get().flatMap(costAlg.charge(_)) >> Sync[F].raiseError(oope)
+            costAlg.get().flatMap(ca => costAlg.charge(ca.cost)) >> Sync[F].raiseError(oope)
           case Right(Some((_, dataList))) =>
-            val rspaceMatchCost = dataList
-              .map(_.cost.map(CostAccount.fromProto(_)).get)
-              .toList
-              .combineAll
+            val rspaceMatchCost = Cost(
+              dataList
+                .map(_.cost)
+                .toList
+                .combineAll
+            )
 
             costAlg
               .charge(rspaceMatchCost)

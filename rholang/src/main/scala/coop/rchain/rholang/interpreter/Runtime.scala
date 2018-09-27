@@ -13,7 +13,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.IReplaySpace
@@ -125,7 +125,7 @@ object Runtime {
   }
 
   // because only we do installs
-  private val MATCH_UNLIMITED_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
+  private val MATCH_UNLIMITED_PHLOS = matchListQuote(Cost(Integer.MAX_VALUE))
 
   private def introduceSystemProcesses(
       space: RhoISpace,

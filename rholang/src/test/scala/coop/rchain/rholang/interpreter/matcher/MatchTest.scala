@@ -38,8 +38,8 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     expectedCaptures.foreach(
       _.values.foreach((v: Par) => assertSorted(v, "expected captured term"))
     )
-    val intermediate: Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, Unit)])] =
-      spatialMatch(target, pattern).runWithCost(CostAccount(Integer.MAX_VALUE))
+    val intermediate: Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, Unit)])] =
+      spatialMatch(target, pattern).runWithCost(Cost(Integer.MAX_VALUE))
     assert(intermediate.isRight)
     val result = intermediate.right.get._2.map(_._1)
     assert(prettyCaptures(result) == prettyCaptures(expectedCaptures))
@@ -923,7 +923,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val target: Par = EList(Seq(GInt(1), GInt(2), GInt(3)))
     val pattern: Par =
       EList(Seq(GInt(1), EVar(FreeVar(0)), EVar(FreeVar(1))), connectiveUsed = true)
-    val res = spatialMatch(target, pattern).runWithCost(CostAccount(0, Cost(0)))
+    val res = spatialMatch(target, pattern).runWithCost(Cost(0))
     res should be(Left(OutOfPhlogistonsError))
   }
 }
