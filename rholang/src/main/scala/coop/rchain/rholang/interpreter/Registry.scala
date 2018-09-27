@@ -5,7 +5,8 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.ByteString.ByteIterator
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -49,6 +50,8 @@ trait Registry[F[_]] {
 
   def insertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
 
+  def nonceInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+
   def delete(args: RootSeq[ListParWithRandom]): F[Unit]
 
   def deleteRootCallback(args: RootSeq[ListParWithRandom]): F[Unit]
@@ -60,6 +63,8 @@ trait Registry[F[_]] {
   def publicRegisterRandom(args: RootSeq[ListParWithRandom]): F[Unit]
 
   def publicRegisterInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+
+  def publicRegisterSigned(args: RootSeq[ListParWithRandom]): F[Unit]
 }
 
 class RegistryImpl[F[_]](
@@ -173,6 +178,23 @@ class RegistryImpl[F[_]](
     )
   )
 
+  private val registerSignedRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
+  private val registerSignedPatterns = List(
+    BindPattern(
+      Seq(
+        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
+        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
+        Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true),
+        EVar(FreeVar(3))
+      ),
+      freeCount = 4
+    )
+  )
+  // Testing only
+  private val registerSignedChannels = List[Par](
+    GPrivate(ByteString.copyFrom(Array[Byte](19)))
+  )
+
   def testInstall(): F[Unit] =
     for {
       _ <- space.install(
@@ -199,6 +221,11 @@ class RegistryImpl[F[_]](
             publicRegisterRandomChannels,
             publicRegisterRandomPatterns,
             TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef))
+          )
+      _ <- space.install(
+            registerSignedChannels,
+            registerSignedPatterns,
+            TaggedContinuation(ScalaBodyRef(registerSignedRef))
           )
     } yield Unit
 
@@ -293,7 +320,7 @@ class RegistryImpl[F[_]](
     } yield ()
   }
 
-  private def fetchDataInsert(
+  private def fetchDataInsertGeneric(ref: Long)(
       dataSource: Par,
       key: Par,
       value: Par,
@@ -313,12 +340,28 @@ class RegistryImpl[F[_]](
             space.consume(
               Seq[Par](channel, dataSource),
               Seq(prefixValueRetReplacePattern, triePattern),
-              TaggedContinuation(ScalaBodyRef(insertCallbackRef)),
+              TaggedContinuation(ScalaBodyRef(ref)),
               false
             )
           )
     } yield ()
   }
+
+  private def fetchDataInsert(
+      dataSource: Par,
+      key: Par,
+      value: Par,
+      ret: Par,
+      rand: Blake2b512Random
+  ): F[Unit] = fetchDataInsertGeneric(insertCallbackRef)(dataSource, key, value, ret, rand)
+
+  private def fetchDataNonceInsert(
+      dataSource: Par,
+      key: Par,
+      value: Par,
+      ret: Par,
+      rand: Blake2b512Random
+  ): F[Unit] = fetchDataInsertGeneric(nonceInsertCallbackRef)(dataSource, key, value, ret, rand)
 
   private def fetchDataRootDelete(
       dataSource: Par,
@@ -461,6 +504,25 @@ class RegistryImpl[F[_]](
     }
 
   def insertCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+    genericInsertCallback(args, (x, y) => true, fetchDataInsert)
+
+  def nonceInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit] = {
+    def nonceCheck(original: Par, replacement: Par): Boolean = {
+      val Some(Expr(ETupleBody(ETuple(Seq(oldNonce, _), _, _)))) = original.singleExpr
+      val Some(Expr(ETupleBody(ETuple(Seq(newNonce, _), _, _)))) = replacement.singleExpr
+      val Some(Expr(GInt(oldNonceInt)))                          = oldNonce.singleExpr
+      val Some(Expr(GInt(newNonceInt)))                          = newNonce.singleExpr
+      return newNonceInt > oldNonceInt
+    }
+    genericInsertCallback(args, nonceCheck, fetchDataNonceInsert)
+  }
+
+  def genericInsertCallback(
+      args: RootSeq[ListParWithRandom],
+      check: (Par, Par) => Boolean,
+      // Channel, Remaining Key, Value, Return Channel, Random State
+      recurse: (Par, Par, Par, Par, Blake2b512Random) => F[Unit]
+  ): F[Unit] =
     args match {
       case Seq(
           ListParWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
@@ -520,7 +582,11 @@ class RegistryImpl[F[_]](
                   case Some(Expr(GInt(0))) =>
                     // Replace key
                     if (tail == edgeAdditional) {
-                      insert()
+                      if (check(ps(2), value)) {
+                        insert()
+                      } else {
+                        localFail()
+                      }
                     } else {
                       split()
                     }
@@ -531,7 +597,7 @@ class RegistryImpl[F[_]](
 
                       replace(data, replaceChan, dataRand).flatMap(
                         _ =>
-                          fetchDataInsert(
+                          recurse(
                             ps(2),
                             parByteArray(newKey),
                             value,
@@ -548,7 +614,8 @@ class RegistryImpl[F[_]](
         } catch {
           case _: MatchError => localFail()
         }
-      case _ => F.unit
+      case _ =>
+        F.unit
     }
 
   def delete(args: RootSeq[ListParWithRandom]): F[Unit] =
@@ -782,12 +849,58 @@ class RegistryImpl[F[_]](
                       false
                     )
                   )
-              _ <- insert(args)
+              _ <- fetchDataInsert(registryRoot, partialKey, value, resultChan, rand)
             } yield ()
           }
         } catch {
           case _: MatchError               => localFail()
           case _: IllegalArgumentException => localFail()
+        }
+      case _ => F.unit
+    }
+
+  def publicRegisterSigned(args: RootSeq[ListParWithRandom]): F[Unit] =
+    args match {
+      case Seq(ListParWithRandom(Seq(pubKey, value, sig, ret), rand, cost)) =>
+        try {
+          val Some(Expr(GByteArray(keyBytes))) = pubKey.singleExpr
+          // Check that the value is of the correct shape.
+          val Some(Expr(ETupleBody(valTuple))) = value.singleExpr
+          val ETuple(Seq(nonce, _), _, _)      = valTuple
+          val Some(Expr(GInt(_)))              = nonce.singleExpr
+          // Then check the signature
+          val Some(Expr(GByteArray(sigBytes))) = sig.singleExpr
+          if (keyBytes.size == 32 && sigBytes.size == 64 &&
+              Ed25519.verify(value.toByteArray, sigBytes.toByteArray, keyBytes.toByteArray)) {
+            val curryChan: Par  = GPrivate(ByteString.copyFrom(rand.next()))
+            val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
+            val hashKeyBytes    = Blake2b256.hash(keyBytes.toByteArray)
+            val hashKey: Par    = GByteArray(ByteString.copyFrom(hashKeyBytes))
+            val uri: Par        = GUri(buildURI(hashKeyBytes))
+            for {
+              _ <- handleResult(
+                    space.produce(
+                      curryChan,
+                      // This re-use of rand is fine because we throw it away in the callback below.
+                      ListParWithRandom(Seq(uri, value, ret), rand),
+                      false
+                    )
+                  )
+              _ <- handleResult(
+                    space.consume(
+                      Seq[Par](curryChan, resultChan),
+                      publicRegisterInsertCallbackPatterns,
+                      TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
+                      false
+                    )
+                  )
+              _ <- fetchDataNonceInsert(registryRoot, hashKey, value, resultChan, rand)
+            } yield ()
+          } else {
+            fail(ret, rand)
+          }
+        } catch {
+          case _: MatchError => fail(ret, rand)
         }
       case _ => F.unit
     }
@@ -798,10 +911,11 @@ class RegistryImpl[F[_]](
           ListParWithRandom(Seq(urn, expectedValue, ret), _, callCost),
           ListParWithRandom(Seq(value), valRand, valCost)
           ) =>
-        if (expectedValue == value)
+        if (expectedValue == value) {
           singleSend(urn, ret, valRand)
-        else
+        } else {
           fail(ret, valRand)
+        }
       case _ =>
         F.unit
     }
@@ -820,7 +934,8 @@ object Registry {
     "rho:registry:testing:insert"  -> byteName(12),
     "rho:registry:testing:delete"  -> byteName(14),
     "rho:registry:lookup"          -> byteName(17),
-    "rho:registry:insertArbitrary" -> byteName(18)
+    "rho:registry:insertArbitrary" -> byteName(18),
+    "rho:registry:insertSigned"    -> byteName(19)
   )
 
   object FixedRefs {
@@ -829,13 +944,15 @@ object Registry {
     val insertRef: Long               = Runtime.BodyRefs.REG_INSERT
     val deleteRef: Long               = Runtime.BodyRefs.REG_DELETE
     val insertCallbackRef: Long       = Runtime.BodyRefs.REG_INSERT_CALLBACK
+    val nonceInsertCallbackRef: Long  = Runtime.BodyRefs.REG_NONCE_INSERT_CALLBACK
     val deleteRootCallbackRef: Long   = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
     val deleteCallbackRef: Long       = Runtime.BodyRefs.REG_DELETE_CALLBACK
     val publicLookupRef: Long         = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
     val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
     val publicRegisterInsertCallbackRef: Long =
       Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
-
+    val publicRegisterSignedRef: Long =
+      Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
   }
 
   object CRC14 {

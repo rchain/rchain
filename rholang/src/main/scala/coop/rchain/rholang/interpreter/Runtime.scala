@@ -105,6 +105,8 @@ object Runtime {
     val REG_PUBLIC_LOOKUP: Long                   = 17L
     val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
     val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
+    val REG_PUBLIC_REGISTER_SIGNED: Long          = 20L
+    val REG_NONCE_INSERT_CALLBACK: Long           = 21L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -246,6 +248,7 @@ object Runtime {
         REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
         REG_INSERT                 -> (registry.insert(_)),
         REG_INSERT_CALLBACK        -> (registry.insertCallback(_)),
+        REG_NONCE_INSERT_CALLBACK  -> (registry.nonceInsertCallback(_)),
         REG_DELETE                 -> (registry.delete(_)),
         REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
         REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
