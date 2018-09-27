@@ -10,7 +10,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, _}
+import coop.rchain.rholang.interpreter.accounting.{Cost, _}
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
@@ -508,7 +508,7 @@ trait SpatialMatcherInstances {
               case Nil => OptionalFreeMapWithCost.emptyMap
               case p +: rem =>
                 OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-                  OptionT(StateT((c: CostAccount) => {
+                  OptionT(StateT((c: Cost) => {
                     spatialMatch(target, p).run(s).value.run(c).flatMap {
                       case (cost, None) =>
                         firstMatch(target, rem).run(s).value.run(cost)
@@ -522,7 +522,7 @@ trait SpatialMatcherInstances {
         }
         case ConnNotBody(p) =>
           OptionalFreeMapWithCost[Unit]((s: FreeMap) => {
-            OptionT(StateT((c: CostAccount) => {
+            OptionT(StateT((c: Cost) => {
               spatialMatch(target, p).run(s).value.run(c).map {
                 case (cost, None)         => (cost, Some((s, Unit)))
                 case (cost, Some((_, _))) => (cost, None)

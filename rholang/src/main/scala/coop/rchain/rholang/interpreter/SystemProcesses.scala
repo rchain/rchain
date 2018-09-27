@@ -8,10 +8,10 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.storage.implicits.matchListQuote
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
+import coop.rchain.rholang.interpreter.storage.implicits.matchListQuote
 import monix.eval.Task
 
 import scala.util.Try
@@ -20,7 +20,7 @@ object SystemProcesses {
 
   private val prettyPrinter = PrettyPrinter()
 
-  private val MATCH_UNLIMITED_PHLOS = matchListQuote(CostAccount(Integer.MAX_VALUE))
+  private val MATCH_UNLIMITED_PHLOS = matchListQuote(Cost(Integer.MAX_VALUE))
 
   def stdout: Seq[ListChannelWithRandom] => Task[Unit] = {
     case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
