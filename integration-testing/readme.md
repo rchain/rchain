@@ -54,9 +54,6 @@ Summary: A Python library for the Docker Engine API.
 
 ``` 
 
-
-# Test organization
-The tests are organized in a treee structure. The 
 # Running the tests
 
 ## Configuration
@@ -78,7 +75,7 @@ In order to run only specific tests can specify the test subdir where you want t
 Examples:
 Run the tests for the complete connected network: 
 ```bash
-$ ./run_tests.sh test/complete_connected
+$ ./run_tests.sh test/test_complete_connected.py
 ```
 
 You can see all the options available by running
@@ -104,7 +101,7 @@ Examples
 $ ./run_tests.sh --collect-only
 ```
 ```bash
-$ ./run_tests.sh --collect-only  test/star_connected
+$ ./run_tests.sh --collect-only  test/test_star_connected.py
 ```
 
 
@@ -121,7 +118,7 @@ def test_one_plus_one():
     assert 1+1==2, "1+1 should equal 2"
     
 def test_with_resources(some_resource):
-    #...use resource_fixture
+    #...use the fixture some_resource
 
 ```
 
@@ -156,24 +153,26 @@ that depends on it.
 
 ### Test organization
 The tests are organized in a tree-like structure under the directory `test`. Some subdirectories contain a file named 
-`conftest.py` which contains the definitions of the fixtures that are  
+`conftest.py` which contains the definitions of the fixtures that are available in that subdirectory.
 
-Fixtures defined in a test subdirectory describe how different test contexts are setup/teardown. The tree structure of 
+Fixtures defined in a test subdirectory describe how the test contexts are setup/teardown. The tree structure of 
 the tests is organized by fixtures. 
 
 For example under `complete_connected` one can find tests that run on a complete connected network.
 
-#### Global Fixtures
-These fixtures are globally defined in `test/conftes.py`
+#### System fixture
+This fixture is a *session* fixture, which means that it's created only once per test session. It is defined in `test/conftes.py`
+and contains the elements needed for most tests:
 
-##### config
-This is a fixture that gives access to the command line parameters.
+1. config - the command line parameters
+2. docker - an instance of a docker client
+3. validator_data - contains the path to a tmp bonds file and the corresponding keys from resources/pregenerated-validator-private-public-key-pairs.txt
 
-##### docker_network
-This fixture gives access to a docker network with no containers inside
+When this fixture is destroyed it:
+1. removes all the docker unused networks and volumes 
+2. removes the validator_data file
+logs the profiling information for all the fucntions decorated with @profile
 
-##### validator_data
-This fixture creates a tmp bonds file and the corresponding keys from resources/pregenerated-validator-private-public-key-pairs.txt
 
 #### Package fixtures
 The logic for setting up rnode networks are defined in `tools/network.py` as context managers. These are 
@@ -182,16 +181,18 @@ used in`conftest.py` and wrapped in a `@pytest.fixture` in order to build a netw
 This way the setup/teardown logic reused in several places.
 
 ### Waiting for conditions
-Because simple `sleep`s are unreliable *all* waiting for various conditions happens.
+Because simple `sleep`s are unreliable *all* waiting for various conditions is done via calls to wait-for.
 
 The wait utilities are defined in `src/tools/wait.py`.
 
 The key function is `wait_for` which waits for a given condition a certain number of seconds. This function checks 
 periodically the condition to see if it is fullfilled.
 
-In the same file one can find a few predicates which can be used to define various conditions. One can write custom predicates
-based on these examples. Please note that the predicates' `__doc__` attributes are important for debugging the tests because 
-they are printed in the log files during the waiting. 
+There are also a predicates which can be used to define various conditions. One can write custom predicates
+based on these examples. 
+
+Please note that the predicates should have a readable `__doc__` attribute. 
+They `__doc__` is important for debugging the tests because it's printed in the log files during the waiting. 
 
 ### File resources
 The resources like contracts to be deployed, certificates etc. are stored in the `resources` directory. The code that 
@@ -208,12 +209,33 @@ The profiling information is printed in the log file at the end of the test exec
 The file `src/tools/fixture.py` contains tools for parameterizing tests with different fixtures.
 
 ```python
-@parametrize.cartesian(a=["a", "b", "c"], b=[1,2,3])
-def test_network_convergence(a, b):
+@parametrize.cartesian(x=[a, b, c], y=[q,w,e])
+def test_network_convergence(x, y):
     #...
 ```  
 
 Based on this test there will be 9 tests generated, each of them called with one of the elemnts of the cartezian product
-`a x b`
+of the two fixture sets.
 
+
+A similar result can be achieved by creating the 9 tests separately:
+```python
+def test_network_convergence_a_q(a, q):
+    #...
+def test_network_convergence_a_w(a, w):
+    #...
+def test_network_convergence_a_e(a, e):
+    #...
+def test_network_convergence_b_q(b , q):
+    #...
+...
+```
+
+The difference between the two approaches is the fact that wih `@parametrize.cartezian`, if the fixtures are session, 
+package or module scoped, they are setup at the same time. In the above example if a,b,c,q,w,e will all live at the same 
+time and might make the tests slow or fail if they use a lot of resources. This is the reason why test_casper_propose_and_deploy 
+is not using `@paremetrize.cartesian`.
+
+The second approach is more verbose but you have a finer control over the lifetime of the fixtures and you can control 
+the resource usage better.
 
