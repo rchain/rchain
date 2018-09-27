@@ -8,7 +8,6 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
@@ -37,20 +36,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     val (_, Seq(processedDeploy)) = newEval(deploy :: Nil, runtime, start)
 
     //TODO: Is better error handling needed here?
-    val result: Seq[Datum[ListChannelWithRandom]] =
+    val result: Seq[Datum[ListParWithRandom]] =
       if (processedDeploy.status.isFailed) Nil
       else {
-        val returnChannel = Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
+        val returnChannel = Par().copy(exprs = Seq(Expr(GString(name))))
         runtime.space.getData(returnChannel)
       }
 
     runtimeContainer.put(runtime)
 
-    for {
-      datum   <- result
-      channel <- datum.a.channels
-      par     <- channel.channelInstance.quote
-    } yield par
+    result.flatMap(_.a.pars)
   }
 
   def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
@@ -112,20 +107,16 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
         Bond(validatorName, stakeAmount)
     }.toList
 
-  def getData(hash: ByteString, channel: Channel): Seq[Par] = {
-    val resetRuntime                              = getResetRuntime(hash)
-    val result: Seq[Datum[ListChannelWithRandom]] = resetRuntime.space.getData(channel)
+  def getData(hash: ByteString, channel: Par): Seq[Par] = {
+    val resetRuntime                          = getResetRuntime(hash)
+    val result: Seq[Datum[ListParWithRandom]] = resetRuntime.space.getData(channel)
     runtimeContainer.put(resetRuntime)
-    for {
-      datum   <- result
-      channel <- datum.a.channels
-      par     <- channel.channelInstance.quote
-    } yield par
+    result.flatMap(_.a.pars)
   }
 
   def getContinuation(
       hash: ByteString,
-      channels: immutable.Seq[Channel]
+      channels: immutable.Seq[Par]
   ): Seq[(Seq[BindPattern], Par)] = {
     val resetRuntime = getResetRuntime(hash)
     val results: Seq[WaitingContinuation[BindPattern, TaggedContinuation]] =
