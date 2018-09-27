@@ -1,8 +1,0 @@
-// We can match patterns on the Par
-// The binding is greedy for parallel processes, so x should get everything
-
-// A successful run will result in:
-// @1!("success" | "success") | @2!(Nil)
-// or something equivalent to it
-
-for( @{x | y} <- @Nil ){ @1!(x) | @2!(y) } | @Nil!( "success" | "success" )

@@ -1,9 +1,0 @@
-// This example shows that the "match" construct works in a
-// very simple case. We will give more complicated examples in
-// a later example.
-
-// A successful run of this test returns the send @Nil!("success")
-
-match "success" {
-x => { @Nil!(x) }
-}
