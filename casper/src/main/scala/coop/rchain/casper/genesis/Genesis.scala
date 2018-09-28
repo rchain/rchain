@@ -33,6 +33,7 @@ import monix.execution.Scheduler
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
+import coop.rchain.rholang.interpreter.accounting
 
 object Genesis {
 
@@ -52,7 +53,7 @@ object Genesis {
       BasicWallet,
       WalletCheck,
       new PreWalletRev(wallets, validators)
-    ).map(compiledSourceDeploy(_, timestamp))
+    ).map(compiledSourceDeploy(_, timestamp, accounting.MAX_VALUE))
 
   def withContracts(
       initial: BlockMessage,
