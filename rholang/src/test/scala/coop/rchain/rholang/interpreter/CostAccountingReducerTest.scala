@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.StringReader
-
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.Quote
@@ -10,13 +8,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
-import coop.rchain.rholang.interpreter.accounting.{
-  Chargeable,
-  Cost,
-  CostAccount,
-  CostAccountingAlg,
-  _
-}
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccount, CostAccountingAlg, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, TuplespaceAlg}
@@ -82,30 +74,17 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   }
 
   it should "stop interpreter threads as soon as deploy runs out of phlo" in {
-    // we want to make two contracts run in parallel where the shorter one
-    // will use up all the phlos before 2nd will hit the RSpace. We want to test
-    // that only first program will change the Tuplespace and 2nd one fails with OOPE.
-    //
-    // @"x"!("a") | new x in { @"x"!("a" ++ "a" ++ "a" ++ … ++ "a") }
+    // Given
+    // new x in { @x!("a") | @x!("b") }
+    // and not enough phlos to reduce successfully
+    // only one of the branches we should be persisted in the tuplespace
 
-    val channel      = Channel(Quote(GString("x")))
-    val depth        = 500
-    val stringConcat = Seq.fill(depth)("\"a\"").mkString("++")
-    val plainSendStorageCost = ChargingRSpace.storageCostProduce(
-      channel,
-      ListChannelWithRandom(Seq(Channel(Quote(GString("a")))))
-    )
-    val nestedSendStorageCost = ChargingRSpace.storageCostProduce(
-      channel,
-      ListChannelWithRandom(Seq(Channel(Quote(GString("a" * depth)))))
-    )
+    val channel = Quote(GPrivateBuilder("x"))
 
-    val raw =
-      s"""
-        new x in { @"x"!($stringConcat) } | @"x"!("a")
-      """
-
-    val program = Interpreter.buildNormalizedTerm(new StringReader(raw)).value
+    val a: Par = GString("a")
+    val b: Par = GString("b")
+    val program =
+      Par(sends = Seq(Send(channel, Seq(a)), Send(channel, Seq(b))))
 
     implicit val rand   = Blake2b512Random(Array.empty[Byte])
     implicit val errLog = new ErrorLog()
@@ -113,39 +92,42 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     lazy val (_, reducer, _) =
       RholangAndScalaDispatcher.create[Task, Task.Par](pureRSpace, Map.empty, Map.empty)
 
-    val plainSendCost = CHANNEL_EVAL_COST + Cost(Chargeable[Channel].cost(channel)) + plainSendStorageCost + SEND_EVAL_COST
-    val appendCost    = STRING_APPEND_COST * (2 to depth).sum
-    val nestedSendCost = newBindingsCost(1) + CHANNEL_EVAL_COST +
-      Cost(Chargeable[Channel].cost(channel)) + Cost(
-      Chargeable[Channel].cost(Channel(Quote(GString("a" * depth))))
-    ) +
-      OP_CALL_COST * (depth - 1) +
-      appendCost +
-      nestedSendStorageCost + SEND_EVAL_COST
-    val initPhlos = plainSendCost + nestedSendCost - SEND_EVAL_COST
+    def plainSendCost(p: Par): Cost = {
+      val storageCost = ChargingRSpace.storageCostProduce(
+        channel,
+        ListChannelWithRandom(Seq(Channel(Quote(p))))
+      )
+      val substitutionCost = Cost(Chargeable[Channel].cost(channel)) + Cost(
+        Chargeable[Par].cost(p)
+      )
+      CHANNEL_EVAL_COST + substitutionCost + storageCost + SEND_EVAL_COST
+    }
+    val sendACost = plainSendCost(a)
+    val sendBCost = plainSendCost(b)
+
+    val initPhlos = sendACost + sendBCost - SEND_EVAL_COST - Cost(1)
     reducer.setAvailablePhlos(initPhlos).runSyncUnsafe(1.second)
 
     val test   = reducer.inj(program)
     val result = test.attempt.runSyncUnsafe(5.seconds)
-    val store  = pureRSpace.store.toMap
-    val x      = store.get(List(channel))
-
-    val left = reducer.getAvailablePhlos().runSyncUnsafe(1.second)
-    pureRSpace.close()
-
+    val errors = errLog.readAndClearErrorVector()
+    assert(errors === Vector.empty)
     assert(result === Left(OutOfPhlogistonsError))
-    x shouldBe Some(
-      Row(
-        List(
-          Datum.create(
-            channel,
-            ListChannelWithRandom(Seq(Channel(Quote(GString("a")))), rand.splitByte(0)),
-            false
-          )
-        ),
-        List()
-      )
+
+    def data(p: Par, rand: Blake2b512Random) = Row(
+      List(
+        Datum.create(
+          Channel(channel),
+          ListChannelWithRandom(Seq(Channel(Quote(p))), rand),
+          false
+        )
+      ),
+      List()
     )
 
+    def stored(p: Par, rand: Blake2b512Random): Boolean =
+      pureRSpace.store.toMap.get(List(channel)) === Some(data(p, rand))
+
+    assert(stored(a, rand.splitByte(0)) || stored(b, rand.splitByte(1)))
   }
 }
