@@ -5,7 +5,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.accounting.CostAccount
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher._
@@ -24,7 +24,7 @@ object implicits {
       }
     }
 
-  implicit val matchListQuote: StorageMatch[
+  def matchListQuote(init: Cost): StorageMatch[
     BindPattern,
     OutOfPhlogistonsError.type,
     ListChannelWithRandom,
@@ -37,15 +37,18 @@ object implicits {
       ListChannelWithRandom
     ] {
 
+      private def calcUsed(init: Cost, left: Cost): Cost = init - left
+
       def get(
           pattern: BindPattern,
           data: ListChannelWithRandom
       ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
         SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
-          .runWithCost(CostAccount(Integer.MAX_VALUE)) // FIXME -- must come from the input args
+          .runWithCost(init)
           .map {
-            case (cost, resultMatch) =>
+            case (left, resultMatch) =>
+              val cost = calcUsed(init, left)
               resultMatch
                 .map {
                   case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
@@ -60,7 +63,7 @@ object implicits {
                     ListChannelWithRandom(
                       toChannels(remainderMap, pattern.freeCount),
                       data.randomState,
-                      Some(CostAccount.toProto(cost))
+                      cost.value
                     )
                 }
           }

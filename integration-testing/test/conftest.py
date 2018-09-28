@@ -68,7 +68,6 @@ def docker():
 
     try:
         yield docker_client
-
     finally:
         logging.info("Remove unused volumes")
         docker_client.volumes.prune()
@@ -87,7 +86,6 @@ def bonds_file(validator_keys):
 
     try:
         yield file
-
     finally:
         os.unlink(file)
         logging.info(f"Bonds file `{bonds_file}` deleted")

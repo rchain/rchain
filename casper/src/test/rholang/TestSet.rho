@@ -1,6 +1,21 @@
 //scalapackage coop.rchain.rholang.unittest
 
 //requires ListOps
+
+contract @"runWithTimeout"(function, @t, return) = {
+  new result, ticksCh in {
+    ticksCh!(t) |
+    for(@ticks <= ticksCh) {
+      if (ticks == 0) { return!([]) }
+      else { ticksCh!(ticks - 1) }
+    } |
+    function!(*result) |
+    for(@r <- result){
+      return!([r]) |
+      for(_ <- ticksCh){ Nil } //stop the clock
+    }
+  }
+} |
 contract @"TestSet"(desc, @tests) = {
   new addTests, execTests, testsCh in {
     contract execTests(return) = {
@@ -31,8 +46,16 @@ contract @"TestSet"(desc, @tests) = {
                   for (function <- @functionCh) {
                     @functionCh!(*function) | //put back for possible re-use
                     new result in {
-                      function!(*result) | for(@r <- result) {
-                        return!(r == answer)
+                      @"runWithTimeout"!(*function, 100, *result) |
+                      for(@r <- result) {
+                        match r {
+                          [result] => {
+                            return!(result==answer)
+                          }
+                          [] => {
+                            return!(answer == "hanging return")
+                          }
+                        }
                       }
                     }
                   }

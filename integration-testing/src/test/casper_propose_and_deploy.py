@@ -16,7 +16,7 @@ def run(config, network):
 
     contract_name = 'contract.rho'
 
-    def mk_expected_string(node, i, random_token) : return f"<{node.container.name}:{i}:{random_token}>"
+    def mk_expected_string(node, i, random_token): return f"<{node.container.name}:{i}:{random_token}>"
 
     def deploy_block(i, node, expected_string):
         logging.info(f"Expected string: {expected_string}")
@@ -34,7 +34,6 @@ def run(config, network):
         exit_code, output = node.propose()
         logging.debug(f"Propose result: {exit_code}, output: {output}")
 
-
     def check_blocks(i, node, expected_string):
         logging.info(f"Check all peer logs for blocks containing {expected_string}")
 
@@ -43,9 +42,9 @@ def run(config, network):
                        if n.container.name != node.container.name]
 
         for node in other_nodes:
-            wait_for( string_contains(show_blocks(node), expected_string),
-                      config.receive_timeout,
-                      f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
+            wait_for(string_contains(show_blocks(node), expected_string),
+                     config.receive_timeout,
+                     f"Container: {node.container.name}: String {expected_string} NOT found in blocks added.")
 
             logging.info(f"Container: {node.container.name}: block {i} : SUCCESS!")
 
@@ -53,7 +52,7 @@ def run(config, network):
         with log_box(logging.info, f"Run test on node '{node.name}'"):
             random_token = random_string(token_size)
 
-            for i in range(0,config.blocks):
+            for i in range(0, config.blocks):
                 deploy_block(i, node, mk_expected_string(node, i, random_token))
 
             for i in range(0, config.blocks):
