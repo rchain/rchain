@@ -154,6 +154,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     casperEff.deploy(registerDeploy)
     val Created(block) = casperEff.createBlock
+    val blockStatus    = casperEff.addBlock(block)
 
     val id: String = casperEff
       .storageContents(block.getBody.getPostState.tuplespace)
@@ -171,7 +172,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     casperEff.deploy(callDeploy)
     val Created(block2) = casperEff.createBlock
+    val block2Status    = casperEff.addBlock(block2)
 
+    blockStatus shouldBe Valid
+    block2Status shouldBe Valid
     casperEff
       .storageContents(block2.getBody.getPostState.tuplespace)
       .contains("Hello, World!") shouldBe true
