@@ -3,6 +3,8 @@ package coop.rchain.rspace
 import coop.rchain.rspace.spaces.FineGrainedRSpace
 import java.nio.file.{Files, Path}
 
+import cats.Id
+import cats.effect.Sync
 import com.typesafe.scalalogging.Logger
 import com.google.common.collect.HashMultiset
 import coop.rchain.rspace.ISpace.IdISpace
@@ -124,6 +126,8 @@ class InMemoryStoreTestsBase
     with BeforeAndAfterAll {
 
   override def withTestSpace[S](f: T => S): S = {
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -138,7 +142,7 @@ class InMemoryStoreTestsBase
       ], String, Pattern, String, StringsCaptor](trieStore, branch)
 
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
+      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](testStore, branch)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -167,6 +171,7 @@ class LMDBStoreTestsBase
   val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withTestSpace[S](f: T => S): S = {
+    implicit val syncF: Sync[Id]              = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -175,7 +180,10 @@ class LMDBStoreTestsBase
     val env        = Context.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore  = LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
+        testStore,
+        testBranch
+      )
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -205,6 +213,7 @@ class MixedStoreTestsBase
   val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withTestSpace[S](f: T => S): S = {
+    implicit val syncF: Sync[Id]              = coop.rchain.catscontrib.effect.implicits.syncId
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
@@ -218,7 +227,10 @@ class MixedStoreTestsBase
       )
 
     val testSpace =
-      RSpace.create[String, Pattern, Nothing, String, String, StringsCaptor](testStore, testBranch)
+      RSpace.create[Id, String, Pattern, Nothing, String, String, StringsCaptor](
+        testStore,
+        testBranch
+      )
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.withTrieTxn(txn) { trieTxn =>
         testStore.clear(txn)
@@ -252,12 +264,14 @@ class FineGrainedTestsBase
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val testBranch = Branch("test")
     val env        = Context.createFineGrained[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     val testStore =
       LMDBStore.create[String, Pattern, String, StringsCaptor](env, testBranch)
     val testSpace =
-      new FineGrainedRSpace[String, Pattern, Nothing, String, String, StringsCaptor](
+      new FineGrainedRSpace[Id, String, Pattern, Nothing, String, String, StringsCaptor](
         testStore,
         testBranch
       )

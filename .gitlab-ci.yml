@@ -5,7 +5,9 @@ stages:
 test:integration-test-for-p2p-network:
   stage: test 
   tags:
-    - preloaded-ubuntu1804 
+    - preloaded-ubuntu1804
+  before_script:
+    - export PRETTY_PRINTER_OUTPUT_TRIM_AFTER=150
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal

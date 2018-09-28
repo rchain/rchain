@@ -22,6 +22,7 @@ lazy val projectSettings = Seq(
     "jitpack" at "https://jitpack.io"
   ),
   scalafmtOnCompile := true,
+  scapegoatVersion in ThisBuild := "1.3.4",
   testOptions in Test += Tests.Argument("-oD") //output test durations
 )
 
@@ -110,7 +111,7 @@ lazy val comm = (project in file("comm"))
       grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, crypto)
+  .dependsOn(shared, crypto, models)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)

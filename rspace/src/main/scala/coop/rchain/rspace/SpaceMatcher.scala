@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Id
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.catscontrib._
 import coop.rchain.rspace.ISpace.IdISpace
@@ -22,7 +23,7 @@ import scala.concurrent.SyncVar
   * @tparam R a type representing a match result
   * @tparam K a type representing a continuation
   */
-private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A, R, K] {
+private[rspace] trait SpaceMatcher[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
   /**
     * A store which satisfies the [[IStore]] interface.
@@ -33,6 +34,8 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
 
   protected[this] val eventLog: SyncVar[Log] =
     SyncVarOps.create[Log](Seq.empty)
+
+  implicit val syncF: Sync[F]
 
   /* Consume */
 
@@ -71,14 +74,18 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
         }
     }
 
-  def getData(channel: C): Seq[Datum[A]] =
-    store.withTxn(store.createTxnRead()) { txn =>
-      store.getData(txn, Seq(channel))
+  def getData(channel: C): F[Seq[Datum[A]]] =
+    syncF.delay {
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getData(txn, Seq(channel))
+      }
     }
 
-  def getWaitingContinuations(channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
-    store.withTxn(store.createTxnRead()) { txn =>
-      store.getWaitingContinuation(txn, channels)
+  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+    syncF.delay {
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getWaitingContinuation(txn, channels)
+      }
     }
 
   /** Iterates through (channel, pattern) pairs looking for matching data.
@@ -145,5 +152,5 @@ private[rspace] trait SpaceMatcher[C, P, E, A, R, K] extends IdISpace[C, P, E, A
         }
     }
 
-  override def close(): Id[Unit] = store.close()
+  override def close(): F[Unit] = syncF.delay { store.close() }
 }
