@@ -46,7 +46,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
     val deployData = ProtoUtil.sourceDeploy(
       """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
-      System.currentTimeMillis()
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
     )
     val Created(signedBlock) = nodes(0).casperEff
       .deploy(deployData) *> nodes(0).casperEff.createBlock
