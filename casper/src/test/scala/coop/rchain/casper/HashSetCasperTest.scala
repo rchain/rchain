@@ -142,13 +142,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node.casperEff
 
-    def now        = System.currentTimeMillis()
-    val helloWorld = "Hello, World!"
+    def now = System.currentTimeMillis()
     val registerDeploy = ProtoUtil.sourceDeploy(
-      s"""new rr(`rho:registry:insertArbitrary`), helloWorld, uriCh in {
-         |  contract helloWorld(return) = { return!("$helloWorld") } |
-         |  rr!(bundle+{*helloWorld}, *uriCh)
-         |}
+      """new rr(`rho:registry:insertArbitrary`), hello, uriCh in {
+        |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
+        |  rr!(bundle+{*hello}, *uriCh)
+        |}
       """.stripMargin,
       now
     )
@@ -163,9 +162,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .get
       .split('`')(1)
     val callDeploy = ProtoUtil.sourceDeploy(
-      s"""new rl(`rho:registry:lookup`), hwCh, out in {
-         |  rl!(`$id`, *hwCh) |
-         |  for(helloWorld <- hwCh){ helloWorld!(*out) }
+      s"""new rl(`rho:registry:lookup`), helloCh, out in {
+         |  rl!(`$id`, *helloCh) |
+         |  for(hello <- helloCh){ hello!("World", *out) }
          |}
       """.stripMargin,
       now
@@ -175,7 +174,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     casperEff
       .storageContents(block2.getBody.getPostState.tuplespace)
-      .contains(helloWorld) shouldBe true
+      .contains("Hello, World!") shouldBe true
+
+    node.tearDown()
   }
 
   it should "be able to create a chain of blocks from different deploys" in {
