@@ -22,18 +22,20 @@ object SystemProcesses {
 
   private val MATCH_UNLIMITED_PHLOS = matchListQuote(Cost(Integer.MAX_VALUE))
 
-  def stdout: Seq[ListChannelWithRandom] => Task[Unit] = {
-    case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
+  def stdout: Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case (Seq(ListChannelWithRandomAndPhlos(Seq(arg), _, _))) =>
       Task.now(Console.println(prettyPrinter.buildString(arg)))
   }
 
   private implicit class ProduceOps(
       res: Id[
-        Either[OutOfPhlogistonsError.type, Option[(TaggedContinuation, Seq[ListChannelWithRandom])]]
+        Either[OutOfPhlogistonsError.type, Option[
+          (TaggedContinuation, Seq[ListChannelWithRandomAndPhlos])
+        ]]
       ]
   ) {
     def foldResult(
-        dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+        dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
         case (cont, channels) => _dispatch(dispatcher)(cont, channels)
@@ -42,35 +44,35 @@ object SystemProcesses {
 
   def stdoutAck(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListChannelWithRandomAndPhlos(Seq(arg, ack), rand, cost)) =>
       Task.now(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
+            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
       }
   }
 
-  def stderr: Seq[ListChannelWithRandom] => Task[Unit] = {
-    case (Seq(ListChannelWithRandom(Seq(arg), _, _))) =>
+  def stderr: Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case (Seq(ListChannelWithRandomAndPhlos(Seq(arg), _, _))) =>
       Task.now(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
   def stderrAck(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(arg, ack), rand, cost)) =>
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListChannelWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
       Task.now(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand, cost),
+            ListChannelWithRandom(Seq(Channel(Quote(Par.defaultInstance))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
@@ -93,20 +95,20 @@ object SystemProcesses {
 
   def secp256k1Verify(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
     case Seq(
-        ListChannelWithRandom(
+        ListChannelWithRandomAndPhlos(
           Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
           rand,
-          cost
+          _
         )
         ) =>
       Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
+            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
@@ -115,20 +117,20 @@ object SystemProcesses {
 
   def ed25519Verify(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
     case Seq(
-        ListChannelWithRandom(
+        ListChannelWithRandomAndPhlos(
           Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack),
           rand,
-          cost
+          _
         )
         ) =>
       Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
         space
           .produce(
             ack,
-            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand, cost),
+            ListChannelWithRandom(Seq(Channel(Quote(Expr(GBool(verified))))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
           .foldResult(dispatcher)
@@ -141,17 +143,16 @@ object SystemProcesses {
 
   def sha256Hash(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListChannelWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(
               Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-              rand,
-              cost
+              rand
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
@@ -163,17 +164,16 @@ object SystemProcesses {
 
   def keccak256Hash(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListChannelWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(
               Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-              rand,
-              cost
+              rand
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
@@ -185,17 +185,16 @@ object SystemProcesses {
 
   def blake2b256Hash(
       space: RhoISpace,
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  ): Seq[ListChannelWithRandom] => Task[Unit] = {
-    case Seq(ListChannelWithRandom(Seq(IsByteArray(input), ack), rand, cost)) =>
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  ): Seq[ListChannelWithRandomAndPhlos] => Task[Unit] = {
+    case Seq(ListChannelWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>
         space
           .produce(
             ack,
             ListChannelWithRandom(
               Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))),
-              rand,
-              cost
+              rand
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
@@ -206,8 +205,8 @@ object SystemProcesses {
   }
 
   private def _dispatch(
-      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
-  )(cont: TaggedContinuation, dataList: Seq[ListChannelWithRandom]): Task[Unit] =
+      dispatcher: Dispatch[Task, ListChannelWithRandomAndPhlos, TaggedContinuation]
+  )(cont: TaggedContinuation, dataList: Seq[ListChannelWithRandomAndPhlos]): Task[Unit] =
     dispatcher.dispatch(cont, dataList)
 
   private def illegalArgumentException(msg: String): Task[Unit] =

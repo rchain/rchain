@@ -28,13 +28,13 @@ object implicits {
     BindPattern,
     OutOfPhlogistonsError.type,
     ListChannelWithRandom,
-    ListChannelWithRandom
+    ListChannelWithRandomAndPhlos
   ] =
     new StorageMatch[
       BindPattern,
       OutOfPhlogistonsError.type,
       ListChannelWithRandom,
-      ListChannelWithRandom
+      ListChannelWithRandomAndPhlos
     ] {
 
       private def calcUsed(init: Cost, left: Cost): Cost = init - left
@@ -42,7 +42,7 @@ object implicits {
       def get(
           pattern: BindPattern,
           data: ListChannelWithRandom
-      ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandom]] =
+      ): Either[OutOfPhlogistonsError.type, Option[ListChannelWithRandomAndPhlos]] =
         SpatialMatcher
           .foldMatch(data.channels, pattern.patterns, pattern.remainder)
           .runWithCost(init)
@@ -60,7 +60,7 @@ object implicits {
                         freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
                       case _ => freeMap
                     }
-                    ListChannelWithRandom(
+                    ListChannelWithRandomAndPhlos(
                       toChannels(remainderMap, pattern.freeCount),
                       data.randomState,
                       cost.value
