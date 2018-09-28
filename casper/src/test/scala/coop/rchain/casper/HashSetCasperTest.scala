@@ -683,6 +683,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     assert(block.body.get.deploys.head.errored)
   }
 
+  it should "succeed if given enough phlos for deploy" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node._
+
+    val deployData = ProtoUtil.basicDeployData(0).withPhloLimit(PhloLimit(100))
+    node.casperEff.deploy(deployData)
+
+    val Created(block) = MultiParentCasper[Id].createBlock
+    assert(!block.body.get.deploys.head.errored)
+  }
+
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[HashSetCasperTestNode[Id]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
