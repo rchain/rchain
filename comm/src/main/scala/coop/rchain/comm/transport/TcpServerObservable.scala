@@ -61,6 +61,8 @@ class TcpServerObservable(
             }
           }
 
+      def stream(request: TLBlob): Task[TLBlobResponse] = TLBlobResponse().pure[Task]
+
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))
 
