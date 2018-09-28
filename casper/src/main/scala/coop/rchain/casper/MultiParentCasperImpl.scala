@@ -345,6 +345,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       postTransactionsCheckStatus <- postValidationStatus.traverse(
                                       _ =>
                                         Validate.transactions[F](
+                                          validatorId,
                                           b,
                                           dag,
                                           emptyStateHash,
