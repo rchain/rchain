@@ -189,6 +189,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      val prometheusService     = NewPrometheusReporter.service(prometheusReporter)
                      implicit val contextShift = IO.contextShift(scheduler)
                      BlazeBuilder[IO]
+                       .withExecutionContext(Scheduler.singleThread("http-server"))
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
                        .mountService(VersionInfo.service, "/version")
@@ -223,7 +224,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- transport.shutdown(msg)
       _   <- log.info("Shutting down HTTP server....")
       _   <- Task.delay(Kamon.stopAllReporters())
-      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown)
+      _   <- LiftIO[Task].liftIO(servers.httpServer.shutdown).attempt
       _   <- log.info("Shutting down interpreter runtime ...")
       _   <- Task.delay(runtime.close)
       _   <- log.info("Shutting down Casper runtime ...")
