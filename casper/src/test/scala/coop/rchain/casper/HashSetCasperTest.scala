@@ -138,6 +138,46 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
+  it should "be able to use the registry" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node.casperEff
+
+    def now        = System.currentTimeMillis()
+    val helloWorld = "Hello, World!"
+    val registerDeploy = ProtoUtil.sourceDeploy(
+      s"""new rr(`rho:registry:insertArbitrary`), helloWorld, uriCh in {
+         |  contract helloWorld(return) = { return!("$helloWorld") } |
+         |  rr!(bundle+{*helloWorld}, *uriCh)
+         |}
+      """.stripMargin,
+      now
+    )
+
+    casperEff.deploy(registerDeploy)
+    val Created(block) = casperEff.createBlock
+
+    val id: String = casperEff
+      .storageContents(block.getBody.getPostState.tuplespace)
+      .split('|')
+      .find(_.contains("rho:id"))
+      .get
+      .split('`')(1)
+    val callDeploy = ProtoUtil.sourceDeploy(
+      s"""new rl(`rho:registry:lookup`), hwCh, out in {
+         |  rl!(`$id`, *hwCh) |
+         |  for(helloWorld <- hwCh){ helloWorld!(*out) }
+         |}
+      """.stripMargin,
+      now
+    )
+    casperEff.deploy(callDeploy)
+    val Created(block2) = casperEff.createBlock
+
+    casperEff
+      .storageContents(block2.getBody.getPostState.tuplespace)
+      .contains(helloWorld) shouldBe true
+  }
+
   it should "be able to create a chain of blocks from different deploys" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._

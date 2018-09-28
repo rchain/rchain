@@ -77,6 +77,28 @@ object SystemProcesses {
       }
   }
 
+  def initRegistry(
+      space: RhoISpace,
+      dispatcher: Dispatch[Task, ListChannelWithRandom, TaggedContinuation]
+  ): Seq[ListChannelWithRandom] => Task[Unit] = {
+    case Seq(ListChannelWithRandom(_, rand, cost)) =>
+      Task.now {
+        val rootPar: Par         = Registry.registryRoot
+        val rootChannel: Channel = Channel(Quote(rootPar))
+        val rootData             = space.getData(rootChannel)
+        if (rootData.isEmpty) {
+          val emptyMap: Par = ParMap(Nil)
+          space
+            .produce(
+              rootChannel,
+              ListChannelWithRandom(Seq(Channel(Quote(emptyMap))), rand, cost),
+              false
+            )(MATCH_UNLIMITED_PHLOS)
+            .foldResult(dispatcher)
+        } else ()
+      }
+  }
+
   object IsByteArray {
     import coop.rchain.models.rholang.implicits._
     def unapply(p: Channel): Option[Array[Byte]] =

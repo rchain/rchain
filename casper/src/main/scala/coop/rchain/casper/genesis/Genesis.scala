@@ -7,12 +7,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, Foldable, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.genesis.contracts.{
-  PreWallet,
-  PreWalletRev,
-  ProofOfStake,
-  ProofOfStakeValidator
-}
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, compiledSourceDeploy, unsignedBlockProto}
 import coop.rchain.casper.util.{EventConverter, Sorting}
@@ -51,7 +46,8 @@ object Genesis {
       MakePoS,
       BasicWallet,
       WalletCheck,
-      new PreWalletRev(wallets, validators)
+      new PreWalletRev(wallets, validators),
+      Registry
     ).map(compiledSourceDeploy(_, timestamp))
 
   def withContracts(
