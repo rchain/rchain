@@ -52,3 +52,4 @@ case object Run                          extends Command
 case object Help                         extends Command
 case class DataAtName(name: Name)        extends Command
 case class ContAtName(names: List[Name]) extends Command
+case object Dump                         extends Command

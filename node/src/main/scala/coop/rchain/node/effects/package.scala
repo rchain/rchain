@@ -2,19 +2,25 @@ package coop.rchain.node
 
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
+
 import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
+import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.{Sync, Timer}
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
 import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
+
 import scala.concurrent.duration.FiniteDuration
 import java.nio.file.Path
+import java.time.{LocalDate, LocalDateTime}
+
 import scala.io.Source
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.rp._, Connect._
+import coop.rchain.comm.rp._
+import Connect._
+
 import scala.concurrent.duration._
 
 package object effects {
@@ -41,6 +47,11 @@ package object effects {
     def sleep(millis: Int): Task[Unit] = Task.delay {
       Thread.sleep(millis.toLong)
     }
+  }
+
+  def dateTimeFromSync[F[_]: Sync]: DateTime[F] = new DateTime[F] {
+    override def dateTime: F[LocalDateTime] = Sync[F].delay(LocalDateTime.now())
+    override def date: F[LocalDate]         = Sync[F].delay(LocalDate.now())
   }
 
   def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(

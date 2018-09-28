@@ -10,6 +10,7 @@ import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.{Channel, Par}
+import coop.rchain.shared.DateTime
 
 import scala.io.Source
 import scala.language.higherKinds
@@ -87,6 +88,9 @@ object DeployRuntime {
   //Simulates user requests by randomly deploying things to Casper.
   def deployDemoProgram[F[_]: Monad: ErrorHandler: Capture: DeployService]: F[Unit] =
     gracefulExit(MonadOps.forever(singleDeploy[F]))
+
+  def dump[F[_]: Sync: DeployService: DateTime]: F[Unit] =
+    new DumpProgram[F].run
 
   private def singleDeploy[F[_]: Monad: Capture: DeployService]: F[Unit] =
     for {
