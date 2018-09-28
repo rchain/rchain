@@ -207,6 +207,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
     }
 
+  def streamBlob(peers: Seq[PeerNode], msg: Blob): Task[Unit] = ???
+
   def shutdown(msg: Protocol): Task[Unit] = {
     def shutdownServer: Task[Unit] = cell.modify { s =>
       for {

@@ -37,6 +37,8 @@ class TransportLayerTestImpl[F[_]: Monad](
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
+  def streamBlob(peers: Seq[PeerNode], msg: Blob): F[Unit] = ???
+
   def disconnect(peer: PeerNode): F[Unit] = ???
 
   def shutdown(msg: Protocol): F[Unit] = ???

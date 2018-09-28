@@ -93,6 +93,8 @@ object EffectsTestInstances {
       Seq()
     }
 
+    def streamBlob(peers: Seq[PeerNode], msg: Blob): F[Unit] = ???
+
     def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit] = ???
 
     def disconnect(peer: PeerNode): F[Unit] = ???

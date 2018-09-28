@@ -14,6 +14,7 @@ trait TransportLayer[F[_]] {
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
   def receive(dispatch: Protocol => F[CommunicationResponse]): F[Unit]
+  def streamBlob(peers: Seq[PeerNode], msg: Blob): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
   def shutdown(msg: Protocol): F[Unit]
 }
@@ -63,6 +64,9 @@ sealed abstract class TransportLayerInstances {
           }
         EitherT.liftF(evF.receive(dis))
       }
+
+      def streamBlob(peers: Seq[PeerNode], msg: Blob): EitherT[F, CommError, Unit] =
+        EitherT.liftF(evF.streamBlob(peers, msg))
 
       def disconnect(peer: PeerNode): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.disconnect(peer))
