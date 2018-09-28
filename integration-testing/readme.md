@@ -221,7 +221,7 @@ def test_network_convergence(x, y):
     #...
 ```  
 
-Based on this test there will be 9 tests generated, each of them called with one of the elemnts of the cartezian product
+Based on this test there will be 9 tests generated, each of them called with one of the elements of the cartesian product
 of the two fixture sets.
 
 
@@ -238,7 +238,7 @@ def test_network_convergence_b_q(b , q):
 ...
 ```
 
-The difference between the two approaches is the fact that wih `@parametrize.cartezian`, if the fixtures are session, 
+The difference between the two approaches is the fact that wih `@parametrize.cartesian`, if the fixtures are session, 
 package or module scoped, they are setup at the same time. In the above example if a,b,c,q,w,e will all live at the same 
 time and might make the tests slow or fail if they use a lot of resources. This is the reason why test_casper_propose_and_deploy 
 is not using `@paremetrize.cartesian`.
