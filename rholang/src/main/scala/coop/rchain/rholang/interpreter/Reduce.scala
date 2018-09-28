@@ -234,7 +234,6 @@ object Reduce {
             rand.splitByte((start + ta._2).toByte)
         eval(ta._1)(env, newRand, costAccountingAlg).handleErrorWith {
           case e: OutOfPhlogistonsError.type =>
-            fTell.tell(e)
             s.raiseError(e)
           case e =>
             fTell.tell(e) *> s.unit
