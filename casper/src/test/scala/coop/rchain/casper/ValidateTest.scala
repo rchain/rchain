@@ -17,7 +17,7 @@ import coop.rchain.casper.helper.{BlockGenerator, BlockStoreFixture, IndexedBloc
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol.Event.EventInstance
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{Costs, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.termDeploy
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16

@@ -3,7 +3,7 @@ package coop.rchain.casper.genesis.contracts
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.{Costs, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.crypto.codec.Base16
@@ -12,7 +12,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.Files
 
@@ -110,7 +110,7 @@ object RevIssuanceTest {
     ProtoUtil.sourceDeploy(
       s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")""",
       System.currentTimeMillis(),
-      Costs.MAX_VALUE
+      accounting.MAX_VALUE
     )
   }
 
@@ -143,7 +143,7 @@ object RevIssuanceTest {
        |}
      """.stripMargin,
       System.currentTimeMillis(),
-      Costs.MAX_VALUE
+      accounting.MAX_VALUE
     )
   }
 }

@@ -19,6 +19,7 @@ import coop.rchain.shared.AttemptOps._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
+import coop.rchain.rholang.interpreter.accounting
 
 import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
@@ -40,7 +41,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers {
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
-    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), Costs.MAX_VALUE))
+    ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis(), accounting.MAX_VALUE))
 
     implicit val logEff = new LogStub[Effect]
     def testProgram(

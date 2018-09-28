@@ -1,18 +1,12 @@
 package coop.rchain.casper
 
-import java.nio.file.Files
-
 import cats.Id
 import cats.implicits._
-import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, ProofOfStakeValidator}
 import coop.rchain.casper.helper.HashSetCasperTestNode
-import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.{Costs, ProtoUtil}
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.ListOps
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -29,12 +23,12 @@ class RholangBuildTest extends FlatSpec with Matchers {
     import node._
 
     val llDeploy =
-      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), Costs.MAX_VALUE)
+      ProtoUtil.sourceDeploy(ListOps.code, System.currentTimeMillis(), accounting.MAX_VALUE)
     val deploys = Vector(
       "contract @\"double\"(@x, ret) = { ret!(2 * x) }",
       "@(\"ListOps\", \"map\")!([2, 3, 5, 7], \"double\", \"dprimes\")"
     ).zipWithIndex.map {
-      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, Costs.MAX_VALUE)
+      case (d, i) => ProtoUtil.sourceDeploy(d, i.toLong + 1L, accounting.MAX_VALUE)
     }
 
     val Created(signedBlock) = deploys.traverse(MultiParentCasper[Id].deploy) *> MultiParentCasper[
