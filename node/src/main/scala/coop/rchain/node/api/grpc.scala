@@ -1,6 +1,5 @@
 package coop.rchain.node.api
 
-import cats._
 import cats.effect.Sync
 
 import coop.rchain.blockstorage.BlockStore
@@ -21,14 +20,15 @@ import io.grpc.netty.NettyServerBuilder
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
+import monix.execution.schedulers.SchedulerService
 
 object GrpcServer {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private implicit val logSource: LogSource        = LogSource(this.getClass)
+  private implicit val scheduler: SchedulerService = Scheduler.singleThread("api-grpc")
 
   def acquireInternalServer(port: Int, maxMessageSize: Int, runtime: Runtime)(
-      implicit scheduler: Scheduler,
-      nodeDiscovery: NodeDiscovery[Task],
+      implicit nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
@@ -36,6 +36,7 @@ object GrpcServer {
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .executor(scheduler)
         .maxMessageSize(maxMessageSize)
         .addService(ReplGrpcMonix.bindService(new ReplGrpcService(runtime), scheduler))
         .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, scheduler))
@@ -45,10 +46,11 @@ object GrpcServer {
   def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int
-  )(implicit scheduler: Scheduler): F[Server] =
+  ): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
+        .executor(scheduler)
         .maxMessageSize(maxMessageSize)
         .addService(CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, scheduler))
         .build
