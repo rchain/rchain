@@ -34,14 +34,13 @@ object Main {
         poolSize = conf.server.threadPoolSize
         //TODO create separate scheduler for casper
         scheduler = Scheduler.fixedPool("node-io", poolSize)
-        _         <- Task.unit.asyncBoundary(scheduler)
-        _         <- mainProgram(conf)(scheduler)
+        _         <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)
       } yield ()
 
-    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
+    exec.unsafeRunSync(Scheduler.singleThread("main-io"))
   }
 
-  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def mainProgram(conf: Configuration, scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
       new GrpcReplClient(
         conf.grpcServer.host,
@@ -73,7 +72,7 @@ object Main {
       case ShowBlocks        => DeployRuntime.showBlocks[Task]()
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf)
+      case Run               => nodeProgram(conf)(scheduler)
       case _                 => conf.printHelp()
     }
 
