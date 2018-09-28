@@ -117,6 +117,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
+  def streamBlob(peers: Seq[PeerNode], msg: Blob): Task[Unit] = ???
+
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
@@ -172,7 +174,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   private def receiveInternal(
       parallelism: Int
-  )(dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
+  )(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleBlob: Blob => Task[Unit]
+  ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
@@ -182,6 +187,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           case Left(e)         => sender.failWith(e)
           case Right(response) => sender.reply(response)
         }.void
+      case BlobMessage(blob) => handleBlob(blob)
     }
 
     Task.delay {
@@ -191,7 +197,9 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     }
   }
 
-  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
+  def receive(
+      dispatch: Protocol => Task[CommunicationResponse]
+  ): Task[Unit] =
     cell.modify { s =>
       for {
         server <- s.server match {
@@ -201,13 +209,11 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                      )
                    case _ =>
                      val parallelism = Runtime.getRuntime.availableProcessors()
-                     receiveInternal(parallelism)(dispatch)
+                     receiveInternal(parallelism)(dispatch, kp(Task.unit)) // FIX-ME
                  }
       } yield s.copy(server = Some(server))
 
     }
-
-  def streamBlob(peers: Seq[PeerNode], msg: Blob): Task[Unit] = ???
 
   def shutdown(msg: Protocol): Task[Unit] = {
     def shutdownServer: Task[Unit] = cell.modify { s =>
