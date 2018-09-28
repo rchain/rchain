@@ -255,6 +255,28 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
+  "eval of Send on forgeable channel" should "not place something in the tuplespace." in {
+    implicit val errorLog = new ErrorLog()
+
+    val splitRand = rand.splitByte(0)
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        val send =
+          Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+        implicit val env = Env[Par]()
+        val resultTask   = reducer.eval(send)(env, splitRand)
+        val inspectTask = for {
+          _ <- resultTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel = Channel(Quote(GPrivateBuilder("channel")))
+
+    result should be(HashMap())
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
   it should "verify that Bundle is writeable before sending on Bundle " in {
     implicit val errorLog = new ErrorLog()
 
