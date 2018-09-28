@@ -61,7 +61,7 @@ PSend.           Proc3  ::= Name Send "(" [Proc] ")" ;
 PContr.          Proc2  ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" Proc "}" ;
 PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
-PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
+PMatch.          Proc2  ::= "match" Proc3 "{" [Case] "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
 PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
