@@ -49,6 +49,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             logger.error(msg)
             throw new IllegalArgumentException(msg)
           }
+          Kamon.currentSpan().mark("before-lock-acquired")
           consumeLock(channels) {
             lockedConsume(channels, patterns, continuation, persist)
           }
@@ -71,7 +72,11 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   )(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(K, Seq[R])]] = {
+    val span = Kamon.currentSpan()
+    span.mark("after-lock-acquired")
     def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
+
+      span.mark("channel-to-indexed-data")
       val channelToIndexedData = channels.map { (c: C) =>
         c -> {
           store.withTxn(store.createTxnRead()) { txn =>
@@ -81,6 +86,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
           }
         }
       }.toMap
+      span.mark("extract-data-candidates")
       extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil)
         .flatMap(_.toOption)
         .sequence
@@ -91,7 +97,9 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
     ): None.type = {
+      span.mark("before-put-continuation-lock")
       store.withTxn(store.createTxnWrite()) { txn =>
+        span.mark("put-continuation")
         store.putWaitingContinuation(
           txn,
           channels,
@@ -112,6 +120,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         consumeRef: Consume,
         comms: Multiset[COMM]
     ): Option[(K, Seq[R])] = {
+      span.mark("handle-matches-begin")
       consumeCommCounter.increment()
       val commRef = COMM(consumeRef, mats.map(_.datum.source))
       assert(comms.contains(commRef), "COMM Event was not contained in the trace")
@@ -120,13 +129,16 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         .foreach {
           case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
             if (!persistData) {
+              span.mark("before-remove-datum")
               store.withTxn(store.createTxnWrite()) { txn =>
+                span.mark("remove-datum")
                 store.removeDatum(txn, Seq(candidateChannel), dataIndex)
               }
             }
         }
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
       replayData.put(replaysLessCommRef(replays, commRef))
+      span.mark("handle-matches-end")
       Some((continuation, mats.map(_.datum.a)))
     }
 
@@ -153,19 +165,26 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                      |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
     val consumeRef = Consume.create(channels, patterns, continuation, persist)
-    val replays    = replayData.take()
+
+    span.mark("before-replay-data-acquired")
+    val replays = replayData.take()
+    span.mark("after-replay-data-acquired")
 
     replays.get(consumeRef) match {
       case None =>
+        span.mark("no-consume-ref-found")
         Right(storeWaitingContinuation(replays, consumeRef, None))
       case Some(comms) =>
+        span.mark("ref-found")
         val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
           getCommOrDataCandidates(comms.iterator().asScala.toList)
 
         commOrDataCandidates match {
           case Left(commRef) =>
+            span.mark("no-data-candidates-found")
             Right(storeWaitingContinuation(replays, consumeRef, Some(commRef)))
           case Right(dataCandidates) =>
+            span.mark("data-candidates-found")
             Right(handleMatches(dataCandidates, replays, consumeRef, comms))
         }
     }
@@ -177,6 +196,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     syncF.delay {
       try {
         Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+          Kamon.currentSpan().mark("before-lock-acquired")
           produceLock(channel) {
             lockedProduce(channel, data, persist)
           }
@@ -193,6 +213,8 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
   ): Either[E, Option[(K, Seq[R])]] = {
+    val span = Kamon.currentSpan()
+    span.mark("after-lock-acquired")
     @tailrec
     def runMatcher(
         comm: COMM,
@@ -233,7 +255,9 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         produceRef: Produce,
         maybeCommRef: Option[COMM]
     ): None.type = {
+      span.mark("before-put-datum-lock")
       store.withTxn(store.createTxnWrite()) { txn =>
+        span.mark("put-datum")
         store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
       }
       logger.debug(s"""|produce: no matching continuation found
@@ -248,6 +272,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         produceRef: Produce,
         comms: Multiset[COMM]
     ): Option[(K, Seq[R])] =
+      // TODO: why is matching done here?
       mat match {
         case ProduceCandidate(
             channels,
@@ -255,11 +280,14 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             continuationIndex,
             dataCandidates
             ) =>
+          span.mark("handle-match-begin")
           produceCommCounter.increment()
           val commRef = COMM(consumeRef, dataCandidates.map(_.datum.source))
           assert(comms.contains(commRef), "COMM Event was not contained in the trace")
           if (!persistK) {
+            span.mark("before-put-continuation-lock")
             store.withTxn(store.createTxnWrite()) { txn =>
+              span.mark("put-continuation")
               store.removeWaitingContinuation(txn, channels, continuationIndex)
             }
           }
@@ -267,7 +295,9 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
+                span.mark("before-remove-datum")
                 store.withTxn(store.createTxnWrite()) { txn =>
+                  span.mark("remove-datum")
                   if (!persistData && dataIndex >= 0) {
                     store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                   }
@@ -276,6 +306,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           replayData.put(replaysLessCommRef(replays, commRef))
+          span.mark("handle-match-end")
           Some((continuation, dataCandidates.map(_.datum.a)))
       }
 
@@ -286,7 +317,10 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                        |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
       val produceRef = Produce.create(channel, data, persist)
-      val replays    = replayData.take()
+
+      span.mark("before-replay-data-acquired")
+      val replays = replayData.take()
+      span.mark("after-replay-data-acquired")
 
       @tailrec
       def getCommOrProduceCandidate(
@@ -311,14 +345,17 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
       replays.get(produceRef) match {
         case None =>
+          span.mark("no-produce-ref-found")
           Right(storeDatum(replays, produceRef, None))
         case Some(comms) =>
           val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
             getCommOrProduceCandidate(comms.iterator().asScala.toList)
           commOrProduceCandidate match {
             case Left(comm) =>
+              span.mark("no-produce-candidate-found")
               Right(storeDatum(replays, produceRef, Some(comm)))
             case Right(produceCandidate) =>
+              span.mark("produce-candidate-found")
               Right(handleMatch(produceCandidate, replays, produceRef, comms))
           }
       }

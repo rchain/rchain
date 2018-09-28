@@ -52,7 +52,10 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
           logger.error(msg)
           throw new IllegalArgumentException(msg)
         }
+        val span = Kamon.currentSpan()
+        span.mark("before-lock-acquired")
         consumeLock(channels) {
+          span.mark("lock-acquired")
           logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
@@ -67,12 +70,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
            * affecting the actual store contents.
            */
 
+          span.mark("channel-to-indexed-data")
           val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
             channels.map { c: C =>
               c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
             }.toMap
           }
 
+          span.mark("extract-data-candidates")
           val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
             extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
               .map(_.sequence)
@@ -81,7 +86,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
             case Left(e) =>
               Left(e)
             case Right(None) =>
+              span.mark("before-put-continuation")
               store.withTxn(store.createTxnWrite()) { txn =>
+                span.mark("put-continuation")
                 store.putWaitingContinuation(
                   txn,
                   channels,
@@ -97,14 +104,18 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
             case Right(Some(dataCandidates)) =>
               consumeCommCounter.increment()
 
+              span.mark("before-event-log-update")
               eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
+              span.mark("after-event-log-update")
 
               dataCandidates
                 .sortBy(_.datumIndex)(Ordering[Int].reverse)
                 .foreach {
                   case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
                       if !persistData =>
+                    span.mark("before-remove-datum")
                     store.withTxn(store.createTxnWrite()) { txn =>
+                      span.mark("remove-datum")
                       store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                     }
                   case _ =>
@@ -124,11 +135,15 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
   ): F[Either[E, Option[(K, Seq[R])]]] =
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+        val span = Kamon.currentSpan()
+        span.mark("before-lock-acquired")
         produceLock(channel) {
+          span.mark("lock-acquired")
           //TODO fix double join fetch
           val groupedChannels: Seq[Seq[C]] = store.withTxn(store.createTxnRead()) { txn =>
             store.getJoin(txn, channel)
           }
+          span.mark("grouped-channels")
           logger.debug(s"""|produce: searching for matching continuations
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
@@ -178,6 +193,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                 }
             }
 
+          span.mark("extract-produce-candidate")
           extractProduceCandidate(groupedChannels, channel, Datum(data, persist, produceRef)) match {
             case Left(e) => Left(e)
             case Right(
@@ -195,7 +211,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
               if (!persistK) {
+                span.mark("before-remove-continuation")
                 store.withTxn(store.createTxnWrite()) { txn =>
+                  span.mark("remove-continuation")
                   store.removeWaitingContinuation(txn, channels, continuationIndex)
                 }
               }
@@ -204,11 +222,15 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                 .foreach {
                   case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
                     if (!persistData && dataIndex >= 0) {
+                      span.mark("before-remove-datum")
                       store.withTxn(store.createTxnWrite()) { txn =>
+                        span.mark("remove-datum")
                         store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                       }
                     }
+                    span.mark("before-remove-join")
                     store.withTxn(store.createTxnWrite()) { txn =>
+                      span.mark("remove-join")
                       store.removeJoin(txn, candidateChannel, channels)
                     }
                 }
@@ -216,7 +238,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               Right(Some(continuation, dataCandidates.map(_.datum.a)))
             case Right(None) =>
               logger.debug(s"produce: no matching continuation found")
+              span.mark("before-put-datum")
               store.withTxn(store.createTxnWrite()) { txn =>
+                span.mark("put-datum")
                 store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
               }
               logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")

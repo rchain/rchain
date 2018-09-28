@@ -23,7 +23,10 @@ lazy val projectSettings = Seq(
   ),
   scalafmtOnCompile := true,
   scapegoatVersion in ThisBuild := "1.3.4",
-  testOptions in Test += Tests.Argument("-oD") //output test durations
+  testOptions in Test += Tests.Argument("-oD"), //output test durations
+  dependencyOverrides ++= Seq(
+    "io.kamon" %% "kamon-core" % kamonVersion
+  )
 )
 
 lazy val coverageSettings = Seq(
@@ -93,6 +96,7 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
       nettyBoringSsl,
@@ -341,6 +345,7 @@ lazy val rspace = (project in file("rspace"))
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
+
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
