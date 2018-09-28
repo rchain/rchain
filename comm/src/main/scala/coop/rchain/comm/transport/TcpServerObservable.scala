@@ -23,12 +23,12 @@ class TcpServerObservable(
     serverSslContext: SslContext,
     maxMessageSize: Int,
     tellBufferSize: Int = 1024,
-    askBufferSize: Int = 128,
+    askBufferSize: Int = 64,
     askTimeout: FiniteDuration = 5.second
 ) extends Observable[ServerMessage] {
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
-    implicit val scheduler: Scheduler = subscriber.scheduler
+    implicit val scheduler: Scheduler = Scheduler.cached("tl-grpc", askBufferSize, Int.MaxValue)
 
     val subjectTell = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
     val subjectAsk  = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))
@@ -79,6 +79,7 @@ class TcpServerObservable(
 
     val server = NettyServerBuilder
       .forPort(port)
+      .executor(scheduler)
       .maxMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
       .addService(RoutingGrpcMonix.bindService(service, scheduler))

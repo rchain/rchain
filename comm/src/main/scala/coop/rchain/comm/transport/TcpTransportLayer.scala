@@ -18,8 +18,7 @@ import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
-    implicit scheduler: Scheduler,
-    cell: TcpTransportLayer.TransportCell[Task],
+    implicit cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task]
 ) extends TransportLayer[Task] {
 
@@ -187,7 +186,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     Task.delay {
       new TcpServerObservable(port, serverSslContext, maxMessageSize)
         .mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()
+        .subscribe()(Scheduler.computation(parallelism, "tl-dispatcher"))
     }
   }
 
@@ -200,7 +199,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                        new RuntimeException("TransportLayer server is already started")
                      )
                    case _ =>
-                     val parallelism = Runtime.getRuntime.availableProcessors()
+                     val parallelism = Runtime.getRuntime.availableProcessors() + 1
                      receiveInternal(parallelism)(dispatch)
                  }
       } yield s.copy(server = Some(server))
