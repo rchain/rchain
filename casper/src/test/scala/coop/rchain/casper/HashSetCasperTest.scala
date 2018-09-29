@@ -141,6 +141,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "skip replay",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"
