@@ -14,10 +14,10 @@ new stdout(`rho:io:stdout`) in {
   stdout!(Set(1,2,3).add(1)) |
 
   // prints Set(1,2)
-  stdout!(Set(1,2,3).add(3)) |
+  stdout!(Set(1,2,3).delete(3)) |
 
-  // prints Set(1,2,3,4)
-  stdout!(Set(1,2,3).add(4)) |
+  // prints Set(1,2,3)
+  stdout!(Set(1,2,3).delete(4)) |
 
   // prints Set(1, 2, 3, 4, 5, 6)
   stdout!(Set(1,2,3).union(Set(4,5,6))) |
