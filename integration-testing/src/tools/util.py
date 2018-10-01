@@ -92,14 +92,14 @@ def docker():
 @contextmanager
 def bonds_file(validator_keys):
     (fd, file) = tempfile.mkstemp(prefix="rchain-bonds-file-", suffix=".txt", dir="/tmp")
-    logging.info(f"Using bonds file: `{bonds_file}`")
-
-    with os.fdopen(fd, "w") as f:
-        for pair in validator_keys:
-            bond = random.randint(1, 100)
-            f.write(f"{pair.public_key} {bond}\n")
 
     try:
+        logging.info(f"Using bonds file: `{bonds_file}`")
+
+        with os.fdopen(fd, "w") as f:
+            for pair in validator_keys:
+                bond = random.randint(1, 100)
+                f.write(f"{pair.public_key} {bond}\n")
         yield file
     finally:
         os.unlink(file)
