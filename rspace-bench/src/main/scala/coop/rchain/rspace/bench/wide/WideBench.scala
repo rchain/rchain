@@ -51,12 +51,12 @@ class WideBench {
 
 @State(Scope.Benchmark)
 class FineBenchState extends WideBenchState {
-  override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize, StoreType.FineGrainedLMDB)
+  override def createRuntime() = Runtime.create(dbDir, mapSize, StoreType.FineGrainedLMDB)
 }
 
 @State(Scope.Benchmark)
 class CoarseBenchState extends WideBenchState {
-  override lazy val runtime: Runtime = Runtime.create(dbDir, mapSize)
+  override def createRuntime() = Runtime.create(dbDir, mapSize)
 }
 
 abstract class WideBenchState extends WideBenchBaseState {

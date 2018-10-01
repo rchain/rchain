@@ -25,26 +25,22 @@ abstract class WideBenchBaseState {
   val rhoScriptSource: String    = "/rholang/wide.rho"
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 100)
-  lazy val dbDir: Path              = Files.createTempDirectory("rchain-wide-bench-")
+  lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
   val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-  lazy val runtime: Runtime = Runtime.create(dbDir, mapSize)
-  runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-  runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-
+  var runtime: Runtime       = null
   var setupTerm: Option[Par] = None
   var term: Option[Par]      = None
 
   var runTask: Task[Vector[Throwable]] = Task.now(Vector.empty)
 
-  val emptyCheckpoint = runtime.space.createCheckpoint()
-
   implicit def readErrors = () => runtime.readAndClearErrorVector()
+
+  def createRuntime(): Runtime = Runtime.create(dbDir, mapSize)
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
-
     setupTerm =
       Interpreter.buildNormalizedTerm(resourceFileReader(rhoSetupScriptPath)).runAttempt match {
         case Right(par) => Some(par)
@@ -55,7 +51,11 @@ abstract class WideBenchBaseState {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
+    runtime = createRuntime()
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
+    runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
 
+    val emptyCheckpoint = runtime.space.createCheckpoint()
     //make sure we always start from clean rspace & trie
     runtime.replaySpace.clear()
     runtime.replaySpace.reset(emptyCheckpoint.root)

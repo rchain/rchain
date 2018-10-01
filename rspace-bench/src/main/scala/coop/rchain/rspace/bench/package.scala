@@ -6,6 +6,8 @@ import coop.rchain.shared.PathOps.RichPath
 
 package object bench {
 
+  val BenchStorageDirPrefix = "rspace-bench-"
+
   /**
     * until we add flag 'delete_lmdb_dir_on_close' for benchmarks and unit-tests
     * this prevents periodic out of disk space failures
@@ -13,7 +15,7 @@ package object bench {
   def deleteOldStorage(dbDir: Path): Unit =
     dbDir.getParent.toFile.listFiles
       .filter(dir => dir.isDirectory && (dir.toPath != dbDir))
-      .filter(_.getName.startsWith("rchain-storage-test-"))
+      .filter(_.getName.startsWith(BenchStorageDirPrefix))
       .foreach(
         dir =>
           try {
