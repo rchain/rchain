@@ -53,7 +53,7 @@ case class Deploy(
 case object DeployDemo                   extends Command
 case object Propose                      extends Command
 case class ShowBlock(hash: String)       extends Command
-case object ShowMainChain                extends Command
+case class ShowMainChain(depth: Long)    extends Command
 case object Run                          extends Command
 case object Help                         extends Command
 case class DataAtName(name: Name)        extends Command
