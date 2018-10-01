@@ -46,7 +46,7 @@ contract @"TestSet"(desc, @tests) = {
                   for (function <- @functionCh) {
                     @functionCh!(*function) | //put back for possible re-use
                     new result in {
-                      @"runWithTimeout"!(*function, 100, *result) |
+                      @"runWithTimeout"!(*function, 1000, *result) |
                       for(@r <- result) {
                         match r {
                           [result] => {

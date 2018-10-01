@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter.storage
 
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -14,18 +13,15 @@ object StoragePrinter {
     val pars: Seq[Par] = store.toMap.map {
       case (
           (
-          channels: Seq[Channel],
-          row: Row[BindPattern, ListChannelWithRandom, TaggedContinuation]
+          channels: Seq[Par],
+          row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
           )
           ) => {
-        def toSends(data: Seq[Datum[ListChannelWithRandom]]): Par = {
+        def toSends(data: Seq[Datum[ListParWithRandom]]): Par = {
           val sends: Seq[Send] = data.flatMap {
-            case Datum(as: ListChannelWithRandom, persist: Boolean, _: Produce) =>
+            case Datum(as: ListParWithRandom, persist: Boolean, _: Produce) =>
               channels.map { channel =>
-                Send(channel, as.channels.map {
-                  case Channel(Quote(p)) => p
-                  case Channel(_)        => Par() // Should never happen
-                }, persist)
+                Send(channel, as.pars, persist)
               }
           }
           sends.foldLeft(Par()) { (acc: Par, send: Send) =>
@@ -59,12 +55,12 @@ object StoragePrinter {
         row match {
           case Row(Nil, Nil) =>
             Par()
-          case Row(data: Seq[Datum[ListChannelWithRandom]], Nil) =>
+          case Row(data: Seq[Datum[ListParWithRandom]], Nil) =>
             toSends(data)
           case Row(Nil, wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]) =>
             toReceive(wks)
           case Row(
-              data: Seq[Datum[ListChannelWithRandom]],
+              data: Seq[Datum[ListParWithRandom]],
               wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]
               ) =>
             toSends(data) ++ toReceive(wks)

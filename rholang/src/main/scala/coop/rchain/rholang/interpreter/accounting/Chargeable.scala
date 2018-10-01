@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import coop.rchain.models.Channel
-import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Par
 import scalapb.{GeneratedMessage, Message}
 
 trait Chargeable[A] {
@@ -16,11 +15,7 @@ object Chargeable {
       override def cost(a: T): Int = a.serializedSize
     }
 
-  implicit val chargeableQuote: Chargeable[Quote] = new Chargeable[Quote] {
-    override def cost(a: Quote): Int = Channel(a).serializedSize
-  }
-
-  implicit val chargeableChannel: Chargeable[Channel] = new Chargeable[Channel] {
-    override def cost(a: Channel): Int = a.serializedSize
+  implicit val chargeableQuote: Chargeable[Par] = new Chargeable[Par] {
+    override def cost(a: Par): Int = a.serializedSize
   }
 }

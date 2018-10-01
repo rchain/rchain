@@ -24,8 +24,10 @@ object TestSetUtil {
   def eval_term(
       term: Par,
       runtime: Runtime
-  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit =
+  )(implicit scheduler: Scheduler, rand: Blake2b512Random): Unit = {
+    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     runtime.reducer.inj(term).unsafeRunSync
+  }
 
   def eval(
       code: String,
@@ -43,7 +45,6 @@ object TestSetUtil {
   )(implicit scheduler: Scheduler): Unit = {
     //load "libraries" required for all tests
     val rand = Blake2b512Random(128)
-    runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     eval(ListOps.code, runtime)(implicitly, rand.splitShort(0))
     eval(TestSet.code, runtime)(implicitly, rand.splitShort(1))
 

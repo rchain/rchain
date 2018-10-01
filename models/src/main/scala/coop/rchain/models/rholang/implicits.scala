@@ -1,7 +1,5 @@
 package coop.rchain.models.rholang
 
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
@@ -14,11 +12,6 @@ import com.google.protobuf.ByteString
 import scala.collection.immutable.{BitSet, Vector}
 
 object implicits {
-
-  // Channel Related
-  def apply(c: ChannelInstance): Channel                                               = new Channel(channelInstance = c)
-  implicit def fromChannelInstance(c: ChannelInstance): Channel                        = apply(c)
-  implicit def fromChannel[T](c: T)(implicit toChannel: T => Channel): Option[Channel] = Some(c)
 
   // Var Related
   def apply(v: VarInstance): Var                                       = new Var(v)
@@ -256,16 +249,6 @@ object implicits {
         locallyFree = ConnectiveLocallyFree.locallyFree(c, depth)
       )
 
-    def singleEval(): Option[Channel] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.exprs match {
-          case Seq(Expr(EEvalBody(c))) => Some(c)
-          case _                       => None
-        }
-      } else {
-        None
-      }
-
     def singleExpr(): Option[Expr] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
         p.exprs match {
@@ -337,7 +320,6 @@ object implicits {
         case ESetBody(e)                                  => e.connectiveUsed
         case EMapBody(e)                                  => e.connectiveUsed
         case EVarBody(EVar(v))                            => VarLocallyFree.connectiveUsed(v)
-        case EEvalBody(chan)                              => ChannelLocallyFree.connectiveUsed(chan)
         case ENotBody(ENot(p))                            => p.connectiveUsed
         case ENegBody(ENeg(p))                            => p.connectiveUsed
         case EMultBody(EMult(p1, p2))                     => p1.connectiveUsed || p2.connectiveUsed
@@ -372,7 +354,6 @@ object implicits {
         case ESetBody(e)                                  => e.locallyFree.value
         case EMapBody(e)                                  => e.locallyFree.value
         case EVarBody(EVar(v))                            => VarLocallyFree.locallyFree(v, depth)
-        case EEvalBody(chan)                              => ChannelLocallyFree.locallyFree(chan, depth)
         case ENotBody(ENot(p))                            => p.locallyFree
         case ENegBody(ENeg(p))                            => p.locallyFree
         case EMultBody(EMult(p1, p2))                     => p1.locallyFree | p2.locallyFree
@@ -399,22 +380,6 @@ object implicits {
   implicit val GPrivateLocallyFree: HasLocallyFree[GPrivate] = new HasLocallyFree[GPrivate] {
     def connectiveUsed(g: GPrivate)          = false
     def locallyFree(g: GPrivate, depth: Int) = BitSet()
-  }
-
-  implicit val ChannelLocallyFree: HasLocallyFree[Channel] = new HasLocallyFree[Channel] {
-    def connectiveUsed(c: Channel) =
-      c.channelInstance match {
-        case Quote(p)              => p.connectiveUsed
-        case ChanVar(v)            => VarLocallyFree.connectiveUsed(v)
-        case ChannelInstance.Empty => false
-      }
-
-    def locallyFree(c: Channel, depth: Int) =
-      c.channelInstance match {
-        case Quote(p)              => p.locallyFree
-        case ChanVar(v)            => VarLocallyFree.locallyFree(v, depth)
-        case ChannelInstance.Empty => BitSet()
-      }
   }
 
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
@@ -455,12 +420,12 @@ object implicits {
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
-        ChannelLocallyFree.connectiveUsed(rb.source)
+        ParLocallyFree.connectiveUsed(rb.source)
 
       def locallyFree(rb: ReceiveBind, depth: Int) =
-        ChannelLocallyFree.locallyFree(rb.source, depth) |
+        ParLocallyFree.locallyFree(rb.source, depth) |
           rb.patterns.foldLeft(BitSet()) { (acc, pat) =>
-            acc | ChannelLocallyFree.locallyFree(pat, depth + 1)
+            acc | ParLocallyFree.locallyFree(pat, depth + 1)
           }
     }
 
