@@ -32,13 +32,11 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
   it should "charge for the successful substitution" in {
     val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
-    val varTerm           = term(Expr(EVarBody(EVar(Var(BoundVar(0))))))
     val substTerm         = term(Expr(GString("1")))
-    val env               = Env.makeEnv[Par](Expr(GString("1")))
     val termCost          = Chargeable[Par].cost(substTerm)
     val initCost          = CostAccount(1000)
-    val costAlg           = CostAccountingAlg.unsafe[Coeval](initCost)
-    val res               = Substitute.substituteAndCharge[Par, Coeval](varTerm, 0, env, costAlg).attempt.value
+    implicit val costAlg  = CostAccountingAlg.unsafe[Coeval](initCost)
+    val res               = Substitute.charge(Coeval.pure(substTerm), Cost(10000)).attempt.value
     assert(res === Right(substTerm))
     assert(costAlg.get().value.cost === (initCost.cost - Cost(termCost)))
   }
@@ -46,11 +44,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   it should "charge for failed substitution" in {
     val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
     val varTerm           = term(Expr(EVarBody(EVar(Var(FreeVar(0))))))
-    val env               = Env.makeEnv[Par](Expr(GString("1")))
     val originalTermCost  = Chargeable[Par].cost(varTerm)
     val initCost          = CostAccount(1000)
-    val costAlg           = CostAccountingAlg.unsafe[Coeval](initCost)
-    val res               = Substitute.substituteAndCharge[Par, Coeval](varTerm, 0, env, costAlg).attempt.value
+    implicit val costAlg  = CostAccountingAlg.unsafe[Coeval](initCost)
+    val res = Substitute
+      .charge(Coeval.raiseError[Par](new RuntimeException("")), Cost(originalTermCost))
+      .attempt
+      .value
     assert(res.isLeft)
     assert(costAlg.get().value.cost === (initCost.cost - Cost(originalTermCost)))
   }

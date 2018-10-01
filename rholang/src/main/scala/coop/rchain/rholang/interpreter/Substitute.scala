@@ -21,44 +21,34 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+  def charge[A: Chargeable, M[_]: Sync: CostAccountingAlg](
+      substitutionResult: M[A],
+      failureCost: Cost
+  ): M[A] =
+    substitutionResult.attempt
+      .map(
+        _.fold(
+          th => (Left(th), failureCost),
+          substTerm => (Right(substTerm), Cost(substTerm))
+        )
+      )
+      .flatMap({ case (result, cost) => CostAccountingAlg[M].charge(cost) *> Sync[M].pure(result) })
+      .rethrow
 
-  def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+  def substituteAndCharge[A: Chargeable, M[_]: CostAccountingAlg: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par]
+  ): M[A] =
+    charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
+
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccountingAlg: Substitute[?[_], A]: Sync](
       term: A,
       depth: Int,
       env: Env[Par],
       costAccountingAlg: CostAccountingAlg[M]
   ): M[A] =
-    Substitute[M, A]
-      .substitute(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
-
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
-      term: A,
-      depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccountingAlg[M]
-  ): M[A] =
-    Substitute[M, A]
-      .substituteNoSort(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
+    charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
 
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C
