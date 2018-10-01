@@ -32,6 +32,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import kamon._
+import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -197,6 +198,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _ <- Task.delay {
             Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
+            Kamon.addReporter(new ZipkinReporter())
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
 
