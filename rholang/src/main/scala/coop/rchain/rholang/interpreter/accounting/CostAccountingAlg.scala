@@ -8,9 +8,9 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 trait CostAccountingAlg[F[_]] {
   def charge(cost: Cost): F[Unit]
-  def charge(cost: CostAccount): F[Unit]
   def get(): F[CostAccount]
   def set(cost: CostAccount): F[Unit]
+  def refund(refund: Cost): F[Unit]
 }
 
 object CostAccountingAlg {
@@ -28,8 +28,6 @@ object CostAccountingAlg {
       extends CostAccountingAlg[F] {
     override def charge(cost: Cost): F[Unit] = chargeInternal(_ - cost)
 
-    override def charge(cost: CostAccount): F[Unit] = chargeInternal(_ - cost)
-
     private def chargeInternal(f: CostAccount => CostAccount): F[Unit] =
       for {
         _ <- failOnOutOfPhlo
@@ -40,6 +38,8 @@ object CostAccountingAlg {
     override def get: F[CostAccount] = state.get
     override def set(cost: CostAccount): F[Unit] =
       state.set(cost)
+
+    override def refund(refund: Cost): F[Unit] = state.update(_ + refund)
     private val failOnOutOfPhlo: F[Unit] =
       FlatMap[F].ifM(state.get.map(_.cost.value < 0))(F.raiseError(OutOfPhlogistonsError), F.unit)
   }

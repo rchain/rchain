@@ -32,12 +32,13 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import kamon._
+import kamon.zipkin.ZipkinReporter
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.server.{Server => Http4sServer}
 import org.http4s.server.blaze._
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
@@ -197,6 +198,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _ <- Task.delay {
             Kamon.addReporter(prometheusReporter)
             Kamon.addReporter(new JmxReporter())
+            Kamon.addReporter(new ZipkinReporter())
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
 
@@ -256,6 +258,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       implicit
       log: Log[Task],
       time: Time[Task],
+      timerTask: Timer[Task],
       rpConfAsk: RPConfAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
@@ -277,8 +280,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
 
     val loop: Effect[Unit] = for {
       _ <- Connect.clearConnections[Effect]
-      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect] _)
-      _ <- time.sleep(5000).toEffect
+      _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
+      _ <- timerTask.sleep(5.seconds).toEffect
     } yield ()
 
     for {
@@ -325,7 +328,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   val main: Effect[Unit] = for {
     // 1. set up configurations
     local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
-    defaultTimeout = FiniteDuration(conf.server.defaultTimeout.toLong, MILLISECONDS)
+    defaultTimeout = conf.server.defaultTimeout.millis
     rpClearConnConf = ClearConnetionsConf(
       conf.server.maxNumOfConnections,
       numOfConnectionsPinged = 10
@@ -353,7 +356,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(
                         log,
-                        time,
+                        timerTask,
                         metrics,
                         kademliaRPC
                       )
@@ -364,7 +367,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     )
 
     _              <- blockStore.clear() // TODO: Replace with a proper casper init when it's available
-    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect], blockStore)
+    oracle         = SafetyOracle.turanOracle[Effect](Monad[Effect])
     runtime        = Runtime.create(storagePath, storageSize, storeType)
     casperRuntime  = Runtime.create(casperStoragePath, storageSize, storeType)
     runtimeManager = RuntimeManager.fromRuntime(casperRuntime)
@@ -398,6 +401,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     program = nodeProgram(runtime, casperRuntime)(
       log,
       time,
+      timerTask,
       rpConfAsk,
       metrics,
       transport,

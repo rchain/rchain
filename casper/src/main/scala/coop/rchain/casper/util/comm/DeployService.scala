@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.protocol._
-import coop.rchain.models.Channel
+import coop.rchain.models.Par
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -15,8 +15,8 @@ trait DeployService[F[_]] {
   def showBlock(q: BlockQuery): F[String]
   def showBlocks(): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
-  def listenForDataAtName(request: Channel): F[ListeningNameDataResponse]
-  def listenForContinuationAtName(request: Channels): F[ListeningNameContinuationResponse]
+  def listenForDataAtName(request: Par): F[ListeningNameDataResponse]
+  def listenForContinuationAtName(request: Pars): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
@@ -77,11 +77,11 @@ Blockchain length: ${response.length}
     (response.success, response.message)
   }
 
-  def listenForDataAtName(request: Channel): Task[ListeningNameDataResponse] = Task.delay {
+  def listenForDataAtName(request: Par): Task[ListeningNameDataResponse] = Task.delay {
     blockingStub.listenForDataAtName(request)
   }
 
-  def listenForContinuationAtName(request: Channels): Task[ListeningNameContinuationResponse] =
+  def listenForContinuationAtName(request: Pars): Task[ListeningNameContinuationResponse] =
     Task.delay {
       blockingStub.listenForContinuationAtName(request)
     }

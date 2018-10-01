@@ -20,7 +20,6 @@ object implicits {
   }
 
   implicit val serializePar: Serialize[Par]         = mkProtobufInstance(Par)
-  implicit val serializeChannel: Serialize[Channel] = mkProtobufInstance(Channel)
   implicit val serializeVar: Serialize[Var]         = mkProtobufInstance(Var)
   implicit val serializeSend: Serialize[Send]       = mkProtobufInstance(Send)
   implicit val serializeReceive: Serialize[Receive] = mkProtobufInstance(Receive)

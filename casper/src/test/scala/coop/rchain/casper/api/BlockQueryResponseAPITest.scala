@@ -66,11 +66,21 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockQueryResponse" should "return successful block info response" in withStore {
     implicit blockStore =>
+      val dag = BlockDag.empty
+        .copy(
+          dataLookup = Map(
+            ProtoUtil.stringToByteString(genesisHashString) -> BlockMetadata
+              .fromBlock(genesisBlock),
+            ProtoUtil.stringToByteString(secondHashString) -> BlockMetadata.fromBlock(secondBlock)
+          )
+        )
       implicit val casperEffect = NoOpsCasperEffect(
         HashMap[BlockHash, BlockMessage](
           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
           (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-        )
+        ),
+        Vector(BlockMessage()),
+        dag
       )(syncId, blockStore)
       implicit val logEff = new LogStub[Id]()(syncId)
       implicit val casperRef = {
@@ -79,7 +89,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
         tmp
       }
       implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
+        SafetyOracle.turanOracle[Id](syncId)
       val q = BlockQuery(hash = secondBlockQuery)
       val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
         syncId,
@@ -117,7 +127,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
         tmp
       }
       implicit val turanOracleEffect: SafetyOracle[Id] =
-        SafetyOracle.turanOracle[Id](syncId, blockStore)
+        SafetyOracle.turanOracle[Id](syncId)
       val q = BlockQuery(hash = badTestHashQuery)
       val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)(
         syncId,

@@ -4,7 +4,7 @@ import cats.arrow.FunctionK
 import cats.data.{OptionT, StateT}
 import cats.implicits._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
 import scala.collection.immutable.Stream
@@ -13,13 +13,13 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  //FreeMap => CostAccount => Either[OOPE, (CostAccount, Option[(FreeMap, A)])]
+  //FreeMap => Cost => Either[OOPE, (Cost, Option[(FreeMap, A)])]
   type OptionalFreeMapWithCost[A] = StateT[OptionWithCost, FreeMap, A]
   type OptionWithCost[A]          = OptionT[ErroredOrCostA, A]
 
-  type ErroredOrCostA[A] = StateT[Either[OutOfPhlogistonsError.type, ?], CostAccount, A]
+  type ErroredOrCostA[A] = StateT[Either[OutOfPhlogistonsError.type, ?], Cost, A]
 
-  //FreeMap => CostAccount => Either[OOPE, (CostAccount, Stream[(FreeMap, A)])]
+  //FreeMap => Cost => Either[OOPE, (Cost, Stream[(FreeMap, A)])]
   type NonDetFreeMapWithCost[A] = StateT[StreamWithCost, FreeMap, A]
   type StreamWithCost[A]        = StreamT[ErroredOrCostA, A]
 
@@ -28,11 +28,11 @@ package object matcher {
     class OptionalFreeMapWithCostOps[A](s: OptionalFreeMapWithCost[A]) {
       def charge(amount: Cost): OptionalFreeMapWithCost[A] =
         StateT((m: FreeMap) => {
-          OptionT(StateT((c: CostAccount) => {
+          OptionT(StateT((c: Cost) => {
             s.run(m).value.run(c).flatMap {
               case (cost, result) =>
                 val newCost = cost - amount
-                if (newCost.cost.value < 0)
+                if (newCost.value < 0)
                   Left(OutOfPhlogistonsError)
                 else
                   Right((newCost, result))
@@ -42,7 +42,7 @@ package object matcher {
 
       def attemptOpt: OptionalFreeMapWithCost[Option[A]] =
         StateT((m: FreeMap) => {
-          OptionT(StateT((c: CostAccount) => {
+          OptionT(StateT((c: Cost) => {
             s.run(m).value.run(c).map {
               case (cost, result) =>
                 val recovered: Option[(FreeMap, Option[A])] = result match {
@@ -56,8 +56,8 @@ package object matcher {
         })
 
       def runWithCost(
-          initCost: CostAccount
-      ): Either[OutOfPhlogistonsError.type, (CostAccount, Option[(FreeMap, A)])] =
+          initCost: Cost
+      ): Either[OutOfPhlogistonsError.type, (Cost, Option[(FreeMap, A)])] =
         s.run(Map.empty).value.run(initCost)
 
       def toNonDet(): NonDetFreeMapWithCost[A] =
@@ -78,7 +78,7 @@ package object matcher {
     def emptyMap[A]: OptionalFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
         OptionT(
-          StateT((c: CostAccount) => {
+          StateT((c: Cost) => {
             Right((c, None))
           })
         )
@@ -87,7 +87,7 @@ package object matcher {
     def pure[A](value: A): OptionalFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
         OptionT(
-          StateT((c: CostAccount) => {
+          StateT((c: Cost) => {
             Right((c, Some((m, value))))
           })
         )
@@ -95,7 +95,7 @@ package object matcher {
 
     def liftF[A](option: Option[A]): OptionalFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
-        OptionT(StateT((c: CostAccount) => {
+        OptionT(StateT((c: Cost) => {
           Right((c, option.map(m -> _)))
         }))
       })
@@ -105,11 +105,11 @@ package object matcher {
     class NonDetFreeMapWithCostOps[A](s: NonDetFreeMapWithCost[A]) {
       def charge(amount: Cost): NonDetFreeMapWithCost[A] =
         StateT((m: FreeMap) => {
-          StreamT(StateT((c: CostAccount) => {
+          StreamT(StateT((c: Cost) => {
             s.run(m).value.run(c).flatMap {
               case (cost, result) =>
                 val newCost = cost - amount
-                if (newCost.cost.value < 0)
+                if (newCost.value < 0)
                   Left(OutOfPhlogistonsError)
                 else
                   Right((newCost, result))
@@ -118,8 +118,8 @@ package object matcher {
         })
 
       def runWithCost(
-          initCost: CostAccount
-      ): Either[OutOfPhlogistonsError.type, (CostAccount, Stream[(FreeMap, A)])] =
+          initCost: Cost
+      ): Either[OutOfPhlogistonsError.type, (Cost, Stream[(FreeMap, A)])] =
         s.run(Map.empty).value.run(initCost)
 
       def toDet(): OptionalFreeMapWithCost[A] =
@@ -137,21 +137,21 @@ package object matcher {
 
     def emptyMap[A]: NonDetFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
-        StreamT(StateT((c: CostAccount) => {
+        StreamT(StateT((c: Cost) => {
           Right((c, Stream.empty))
         }))
       })
 
     def pure[A](value: A): NonDetFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
-        StreamT(StateT((c: CostAccount) => {
+        StreamT(StateT((c: Cost) => {
           Right((c, Stream((m, value))))
         }))
       })
 
     def liftF[A](stream: Stream[A]): NonDetFreeMapWithCost[A] =
       StateT((m: FreeMap) => {
-        StreamT(StateT((c: CostAccount) => {
+        StreamT(StateT((c: Cost) => {
           Right((c, stream.map(m -> _)))
         }))
       })

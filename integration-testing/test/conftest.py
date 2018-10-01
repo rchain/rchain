@@ -1,6 +1,9 @@
-from fixtures.common import *
+import pytest
+import collections
+from tools.profiling import log_prof_data
+from tools.util import parse_config, docker, validators_data
 
-
+System = collections.namedtuple("System", ["config", "docker", "validators_data"])
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -21,3 +24,15 @@ def pytest_addoption(parser):
     parser.addoption(
         "--blocks", action="store", default="1", help="The number of deploys per test deploy"
     )
+
+
+
+@pytest.fixture(scope="session")
+def system(request):
+    cfg = parse_config(request)
+
+    with docker() as docker_client, validators_data(cfg) as vd:
+        try:
+            yield System(cfg, docker_client, vd)
+        finally:
+            log_prof_data()

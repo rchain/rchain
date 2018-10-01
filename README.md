@@ -13,7 +13,7 @@ The open-source RChain project is building a decentralized, economic, censorship
 
 Assuming you have Docker running on your system, use the following command to fetch the latest version of RNode from the remote Docker hub and run it (exit with `C-c`):
 ```
-<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 coop.rchain/rnode:latest --profile docker
+<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 rchain/rnode:latest --profile docker
 08:30:30.894 [main] INFO  conf - uPnP: None -> None
 08:30:32.599 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:40402
 08:30:32.600 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
@@ -35,11 +35,11 @@ In order to use both the peer-to-peer network and REPL capabilities of the node,
 ```bash
 > docker network create rnode-net
 
-> docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+> docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
 
 > docker ps
 CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              PORTS               NAMES
-15aa78b45da4        coop.rchain/rnode:latest   "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
+15aa78b45da4        rchain/rnode:latest   "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
 ```
 
 In a new terminal:
@@ -66,7 +66,7 @@ Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:404
 
 A repl instance can be invoked this way:
 ```bash
-> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
 
   ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
   ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
@@ -88,7 +88,7 @@ Evaluating:
 
 A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
 ```bash
-> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net coop.rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400
+> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:40400
 08:58:34.595 [main] INFO  conf - uPnP: None -> None
 08:58:36.053 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:40402
 08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _

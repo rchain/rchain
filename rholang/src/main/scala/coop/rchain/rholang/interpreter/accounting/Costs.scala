@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import coop.rchain.casper.protocol.PhloLimit
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 
 //TODO(mateusz.gorski): Adjust the costs of operations
@@ -78,4 +79,6 @@ trait Costs {
   ) {
     def storageCost: Cost = Cost(a.map(a => gm.toByteArray(a).size).sum)
   }
+
+  final val MAX_VALUE = PhloLimit(Long.MaxValue)
 }

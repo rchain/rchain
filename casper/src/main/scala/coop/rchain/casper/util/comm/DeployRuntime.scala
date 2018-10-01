@@ -8,8 +8,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.{Channel, Par}
+import coop.rchain.models.Par
 
 import scala.io.Source
 import scala.language.higherKinds
@@ -36,7 +35,7 @@ object DeployRuntime {
   def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](name: Id[Name]): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val request = Channel(ChannelInstance.Quote(par))
+        val request = par
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
       }
     }
@@ -46,8 +45,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
-        val request  = Channels(channels)
+        val request = Pars(pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }
@@ -55,8 +53,8 @@ object DeployRuntime {
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: ErrorHandler: Capture: DeployService](
       purseAddress: String,
-      phloLimit: Int,
-      phloPrice: Int,
+      phloLimit: PhloLimit,
+      phloPrice: PhloPrice,
       nonce: Int,
       file: String
   ): F[Unit] =

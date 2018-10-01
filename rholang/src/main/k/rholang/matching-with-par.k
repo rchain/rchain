@@ -5,18 +5,6 @@ imports SPECIFIC-MATCHING-RULES
 //                     MATCHING-WITH-PAR
 // *******************************************************************
 
-// Some syntax specifically for matching with "|"
-
-// When matching against the pattern "par" the matching process becomes a little more complicated
-syntax PatternMatchingCells ::=
-   "[" String "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" Int "]["
-                                                                           HigherProcPat "]{"Set"}"
- | "[" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "]"
-     // For variable matching at the end
- | "[" HigherProcPat "][" HigherProcPat "][" HigherProcPat "][" HigherProcPat "]["
-                                                                  HigherProcPat "]{"HigherProcPat"}"
-
-
 // If we get a pattern or a process sent that has a "|" in it, we pause computation and invoke
 // the par match. The processes sent go in the "from" cells; the patterns go in the "to" cells.
 // The intuition for this is that we match from the process sent to the pattern.

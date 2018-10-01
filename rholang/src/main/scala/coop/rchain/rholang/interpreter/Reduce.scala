@@ -7,8 +7,6 @@ import cats.{Applicative, FlatMap, Foldable, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -129,17 +127,17 @@ object Reduce {
                  .fromEither(
                    SpatialMatcher
                      .spatialMatch(target, pattern)
-                     .runWithCost(phlosAvailable)
+                     .runWithCost(phlosAvailable.cost)
                  )
                  .flatMap {
                    case (phlosLeft, result) =>
-                     val phloUsed = phlosLeft.copy(cost = phlosAvailable.cost - phlosLeft.cost)
-                     costAlg.charge(phloUsed).map(_ => result)
+                     val matchCost = phlosAvailable.cost - phlosLeft
+                     costAlg.charge(matchCost).map(_ => result)
                  }
                  .onError {
                    case OutOfPhlogistonsError =>
                      // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(costAlg.charge(_))
+                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
                  }
     } yield result
 
@@ -163,21 +161,17 @@ object Reduce {
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     private def produce(
-        chan: Quote,
-        data: Seq[Channel],
+        chan: Par,
+        data: Seq[Par],
         persistent: Boolean,
         rand: Blake2b512Random
     )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
-      for {
-        _ <- costAccountingAlg.charge(Channel(chan).storageCost + data.storageCost)
-        c <- tuplespaceAlg.produce(Channel(chan), ListChannelWithRandom(data, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
-      } yield ()
+      tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent)
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
       *
-      * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Channel].
+      * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Par].
       *               The Seq is for arity matching, and each term in the Seq is a name pattern.
       * @param body  A Par object which will be run in the envirnoment resulting from the match.
       * @param env  The current environment, to which the matches will be added before resuming
@@ -186,20 +180,12 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     private def consume(
-        binds: Seq[(BindPattern, Quote)],
+        binds: Seq[(BindPattern, Par)],
         body: Par,
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] = {
-      val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-      val srcs                                              = sources.map(q => Channel(q)).toList
-      val rspaceCost                                        = body.storageCost + patterns.storageCost + srcs.storageCost
-      for {
-        _ <- costAccountingAlg.charge(rspaceCost)
-        c <- tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
-        _ <- costAccountingAlg.charge(c)
-      } yield ()
-    }
+    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+      tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
@@ -220,7 +206,6 @@ object Reduce {
       val filteredExprs = par.exprs.filter { expr =>
         expr.exprInstance match {
           case _: EVarBody    => true
-          case _: EEvalBody   => true
           case _: EMethodBody => true
           case _              => false
         }
@@ -267,11 +252,6 @@ object Reduce {
                 varref <- eval(v)
                 _      <- eval(varref)(env, newRand, costAccountingAlg)
               } yield ()).handleError(fTell.tell)
-            case e: EEvalBody =>
-              (for {
-                p <- evalExprToPar(Expr(e))
-                _ <- eval(p)(env, newRand, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
             case e: EMethodBody =>
               (for {
                 p <- evalExprToPar(Expr(e))
@@ -298,7 +278,6 @@ object Reduce {
     /** Algorithm as follows:
       *
       * 1. Fully evaluate the channel in given environment.
-      *    (See eval(Channel) to see all that entails)
       * 2. Substitute any variable references in the channel so that it can be
       *    correctly used as a key in the tuple space.
       * 3. Evaluate any top level expressions in the data being sent.
@@ -314,30 +293,28 @@ object Reduce {
         costAccountingAlg: CostAccountingAlg[M]
     ): M[Unit] =
       for {
-        quote   <- eval(send.chan)
-        subChan <- substituteAndCharge[Quote, M](quote, 0, env, costAccountingAlg)
+        evalChan <- evalExpr(send.chan)
+        subChan  <- substituteAndCharge[Par, M](evalChan, 0, env, costAccountingAlg)
         _ <- {
-          if (ParIsForgeable.isForgeable(subChan.value))
+          if (ParIsForgeable.isForgeable(subChan))
             Applicative[M].pure(())
           else
             for {
-              unbundled <- subChan.value.singleBundle() match {
+              unbundled <- subChan.singleBundle() match {
                             case Some(value) =>
                               if (!value.writeFlag) {
                                 s.raiseError(
                                   ReduceError("Trying to send on non-writeable channel.")
                                 )
                               } else {
-                                s.pure(Quote(value.body))
+                                s.pure(value.body)
                               }
                             case None => Applicative[M].pure(subChan)
                           }
 
               data <- send.data.toList.traverse(x => evalExpr(x))
               substData <- data.traverse(
-                            p =>
-                              substituteAndCharge[Par, M](p, 0, env, costAccountingAlg)
-                                .map(par => Channel(Quote(par)))
+                            p => substituteAndCharge[Par, M](p, 0, env, costAccountingAlg)
                           )
               _ <- produce(unbundled, substData, send.persistent, rand)
               _ <- costAccountingAlg.charge(SEND_EVAL_COST)
@@ -363,7 +340,7 @@ object Reduce {
                         q <- unbundleReceive(rb)
                         substPatterns <- rb.patterns.toList.traverse(
                                           pattern =>
-                                            substituteAndCharge[Channel, M](
+                                            substituteAndCharge[Par, M](
                                               pattern,
                                               1,
                                               env,
@@ -419,39 +396,6 @@ object Reduce {
             s.raiseError(ReduceError("Unbound variable: attempting to evaluate a pattern"))
           case VarInstance.Empty =>
             s.raiseError(ReduceError("Impossible var instance EMPTY"))
-        }
-      }
-
-    /**
-      * Evaluating a channel always returns a
-      * quote. If a quote is given to be evaluated, the quote
-      * is lifted into the monadic context. If a channel
-      * variable is given, the variable is evaluated and
-      * the resulting par is quoted.
-      * In either case the top level expressions of the quoted process are evaluated
-      * when the channel is evaluated.
-      *
-      * @param channel The channel to be evaluated
-      * @param env An environment that (possibly) has
-      *            a binding for channel
-      * @return A quoted process or "channel value"
-      */
-    private def eval(
-        channel: Channel
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Quote] =
-      costAccountingAlg.charge(CHANNEL_EVAL_COST) *> {
-        channel.channelInstance match {
-          case Quote(p) =>
-            for {
-              evaled <- evalExpr(p)
-            } yield Quote(evaled)
-          case ChanVar(varue) =>
-            for {
-              par    <- eval(varue)
-              evaled <- evalExpr(par)
-            } yield Quote(evaled)
-          case ChannelInstance.Empty =>
-            s.raiseError(ReduceError("Impossible channel instance EMPTY"))
         }
       }
 
@@ -560,17 +504,17 @@ object Reduce {
 
     private[this] def unbundleReceive(
         rb: ReceiveBind
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Quote] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
       for {
-        quote <- eval(rb.source)
-        subst <- substituteAndCharge[Quote, M](quote, 0, env, costAccountingAlg)
+        evalSrc <- evalExpr(rb.source)
+        subst   <- substituteAndCharge[Par, M](evalSrc, 0, env, costAccountingAlg)
         // Check if we try to read from bundled channel
-        unbndl <- subst.quote.get.singleBundle() match {
+        unbndl <- subst.singleBundle() match {
                    case Some(value) =>
                      if (!value.readFlag) {
                        s.raiseError(ReduceError("Trying to read from non-readable channel."))
                      } else {
-                       s.pure(Quote(value.body))
+                       s.pure(value.body)
                      }
                    case None =>
                      s.pure(subst)
@@ -610,8 +554,7 @@ object Reduce {
                         }
           } yield resultPar
         }
-        case EEvalBody(chan) => eval(chan).map(q => q.value)
-        case _               => evalExprToExpr(expr).map(e => fromExpr(e)(identity))
+        case _ => evalExprToExpr(expr).map(e => fromExpr(e)(identity))
       }
 
     private def evalExprToExpr(
@@ -940,11 +883,6 @@ object Reduce {
             resultExpr <- evalSingleExpr(resultPar)
           } yield resultExpr
         }
-        case EEvalBody(chan) =>
-          for {
-            q      <- eval(chan)
-            result <- evalSingleExpr(q.value)
-          } yield result
         case _ => s.raiseError(ReduceError("Unimplemented expression: " + expr))
       }
     }

@@ -23,7 +23,6 @@ final case class BlockDag(
     childMap: Map[BlockHash, Set[BlockHash]],
     latestMessages: Map[Validator, BlockMessage],
     latestMessagesOfLatestMessages: Map[Validator, LatestMessages],
-    currentSeqNum: Map[Validator, Int],
     dataLookup: BlockMetadata.Lookup,
     topoSort: Vector[Vector[BlockHash]],
     sortOffset: Long
@@ -40,7 +39,6 @@ object BlockDag {
       HashMap.empty[BlockHash, HashSet[BlockHash]],
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[Validator, LatestMessages],
-      HashMap.empty[Validator, Int],
       HashMap.empty[BlockHash, BlockMetadata],
       Vector.empty[Vector[BlockHash]],
       0L

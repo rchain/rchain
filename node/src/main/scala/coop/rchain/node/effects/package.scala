@@ -3,16 +3,14 @@ package coop.rchain.node
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
 import scala.tools.jline.console._
-import cats._, cats.data._, cats.implicits._, cats.mtl._
+import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
-import monix.execution.atomic._
 import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
-import java.io.File
 import java.nio.file.Path
 import scala.io.Source
 import coop.rchain.comm.protocol.routing._
@@ -26,7 +24,7 @@ package object effects {
   def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
       log: Log[Task],
-      time: Time[Task],
+      time: Timer[Task],
       metrics: Metrics[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =

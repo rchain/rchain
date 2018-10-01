@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import java.nio.file.Files
 
 import cats.Id
+import cats.effect.Sync
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.ISpace.IdISpace
@@ -865,10 +866,12 @@ trait LMDBReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, 
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val dbDir       = Files.createTempDirectory("rchain-storage-test-")
     val context     = Context.create[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
-    val replaySpace = ReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+    val space       = RSpace.create[Id, C, P, E, A, A, K](context, Branch.MASTER)
+    val replaySpace = ReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -893,10 +896,12 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val space     = RSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
     val replaySpace =
-      ReplayRSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+      ReplayRSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -919,10 +924,15 @@ trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       oC: Ordering[C]
   ): S = {
 
-    val dbDir       = Files.createTempDirectory("rchain-storage-test-")
-    val context     = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space       = RSpace.create[C, P, E, A, A, K](context, Branch.MASTER)
-    val replaySpace = FineGrainedReplayRSpace.create[C, P, E, A, A, K](context, Branch.REPLAY)
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
+    val dbDir   = Files.createTempDirectory("rchain-storage-test-")
+    val context = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
+    val space = RSpace.createFineGrained[Id, C, P, E, A, A, K](
+      context.createStore(Branch.MASTER),
+      Branch.MASTER
+    )
+    val replaySpace = FineGrainedReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
@@ -947,8 +957,10 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
       oC: Ordering[C]
   ): S = {
 
+    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
+
     val trieStore = InMemoryTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]]()
-    val space     = RSpace.createInMemory[C, P, E, A, A, K](trieStore, Branch.REPLAY)
+    val space     = RSpace.createInMemory[Id, C, P, E, A, A, K](trieStore, Branch.REPLAY)
     val store =
       new InMemoryStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], C, P, A, K](
         trieStore,
@@ -959,7 +971,7 @@ trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsB
           throw new RuntimeException("Couldn't write to underlying store")
       }
 
-    val replaySpace = new FineGrainedReplayRSpace[C, P, E, A, A, K](store, Branch.REPLAY)
+    val replaySpace = new FineGrainedReplayRSpace[Id, C, P, E, A, A, K](store, Branch.REPLAY)
 
     try {
       f(space, replaySpace)
