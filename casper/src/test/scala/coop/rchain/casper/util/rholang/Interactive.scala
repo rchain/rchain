@@ -53,7 +53,14 @@ class Interactive private (runtime: Runtime) {
 
   def tuplespace: String = StoragePrinter.prettyPrint(runtime.space.store)
 
-  def eval(code: String): Unit     = TestSetUtil.eval(code, runtime)
+  def eval(code: String): Unit = {
+    TestSetUtil.eval(code, runtime)
+    val errors = runtime.errorLog.readAndClearErrorVector()
+    if (errors.nonEmpty) {
+      println("Errors during execution:")
+      errors.foreach(println)
+    }
+  }
   def evalFile(path: String): Unit = eval(scala.io.Source.fromFile(path).mkString)
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
