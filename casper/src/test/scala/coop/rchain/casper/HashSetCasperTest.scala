@@ -373,10 +373,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node.casperEff
 
-    val (sk, pk)         = Ed25519.newKeyPair
-    val pkStr            = Base16.encode(pk)
-    val amount           = 157L
-    val createWalletCode = s"""@"faucet"!($amount, "ed25519", "$pkStr", "myWallet")"""
+    val (_, pk) = Ed25519.newKeyPair
+    val pkStr   = Base16.encode(pk)
+    val amount  = 157L
+    val createWalletCode =
+      s"""for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pkStr", "myWallet") }"""
     val createWalletDeploy =
       ProtoUtil.sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
 
@@ -384,11 +385,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val blockStatus    = casperEff.addBlock(block)
 
     val balanceQuery =
-      mkTerm("""for(@wallet <- "myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
+      mkTerm("""for(@[wallet] <- @"myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
     val newWalletBalance =
       node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
 
+    blockStatus shouldBe Valid
     newWalletBalance.head.exprs.head.getGInt shouldBe amount
+
+    node.tearDown()
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
