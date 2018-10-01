@@ -50,11 +50,11 @@ case class Deploy(
     nonce: Int,
     location: String
 ) extends Command
-case object DeployDemo                                extends Command
-case object Propose                                   extends Command
-case class ShowBlock(hash: String)                    extends Command
-case class ShowMainChain(depth: Long)                 extends Command
-case object Run                                       extends Command
-case object Help                                      extends Command
-case class DataAtName(depth: Long, name: Name)        extends Command
-case class ContAtName(depth: Long, names: List[Name]) extends Command
+case object DeployDemo                               extends Command
+case object Propose                                  extends Command
+case class ShowBlock(hash: String)                   extends Command
+case class ShowMainChain(depth: Int)                 extends Command
+case object Run                                      extends Command
+case object Help                                     extends Command
+case class DataAtName(depth: Int, name: Name)        extends Command
+case class ContAtName(depth: Int, names: List[Name]) extends Command

@@ -83,7 +83,7 @@ object BlockAPI {
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Long,
+      depth: Int,
       listeningName: Channel
   ): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
@@ -115,7 +115,7 @@ object BlockAPI {
   }
 
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Long,
+      depth: Int,
       listeningNames: Seq[Channel]
   ): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
@@ -148,7 +148,7 @@ object BlockAPI {
   }
 
   private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
-      depth: Long
+      depth: Int
   ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
@@ -222,7 +222,7 @@ object BlockAPI {
   }
 
   def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Long
+      depth: Int
   ): F[List[BlockInfosAtHeight]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
@@ -263,7 +263,7 @@ object BlockAPI {
   }
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      depth: Long
+      depth: Int
   ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {

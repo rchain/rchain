@@ -339,7 +339,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "View list of blocks on the main chain in the current Casper view on an existing running node."
     )
     val depth =
-      opt[Long](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
+      opt[Int](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
 
   }
   addSubcommand(showMainChain)
@@ -358,7 +358,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val depth =
-      opt[Long](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
+      opt[Int](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
 
     val content =
       opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')

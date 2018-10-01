@@ -201,7 +201,7 @@ object Configuration {
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showMainChain) =>
         import options.showMainChain._
-        ShowMainChain(depth.getOrElse(1L))
+        ShowMainChain(depth.getOrElse(1))
       case Some(options.run) => Run
       case _                 => Help
     }
@@ -391,17 +391,17 @@ object Configuration {
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showMainChain) =>
         import options.showMainChain._
-        ShowMainChain(depth.getOrElse(1L))
+        ShowMainChain(depth.getOrElse(1))
       case Some(options.run) => Run
       case Some(options.dataAtName) =>
         import options.dataAtName._
         DataAtName(
-          depth.getOrElse(default = Long.MaxValue),
+          depth.getOrElse(default = Int.MaxValue),
           options.dataAtName.name()
         )
       case Some(options.contAtName) =>
         import options.contAtName._
-        ContAtName(depth.getOrElse(default = Long.MaxValue), options.contAtName.name())
+        ContAtName(depth.getOrElse(default = Int.MaxValue), options.contAtName.name())
       case _ => Help
     }
 }

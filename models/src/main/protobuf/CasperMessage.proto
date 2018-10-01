@@ -61,16 +61,16 @@ message BlockQuery {
 }
 
 message BlocksQuery {
-  int64 depth = 1;
+  int32 depth = 1;
 }
 
 message DataAtNameQuery {
-  int64 depth = 1;
+  int32 depth = 1;
   Channel channel = 2;
 }
 
 message ContinuationAtNameQuery {
-  int64 depth = 1;
+  int32 depth = 1;
   repeated Channel channels = 2;
 }
 

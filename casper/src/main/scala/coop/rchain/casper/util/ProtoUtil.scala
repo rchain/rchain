@@ -44,7 +44,7 @@ object ProtoUtil {
   def getMainChainUntilDepth[F[_]: Monad: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
-      depth: Long
+      depth: Int
   ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
