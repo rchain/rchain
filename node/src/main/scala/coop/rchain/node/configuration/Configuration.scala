@@ -389,7 +389,9 @@ object Configuration {
       case Some(options.deployDemo)    => DeployDemo
       case Some(options.propose)       => Propose
       case Some(options.showBlock)     => ShowBlock(options.showBlock.hash())
-      case Some(options.showMainChain) => ShowMainChain(options.showMainChain.depth())
+      case Some(options.showMainChain) =>
+        import options.showMainChain._
+        ShowMainChain(depth.getOrElse(1L))
       case Some(options.run)           => Run
       case Some(options.dataAtName)    => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)    => ContAtName(options.contAtName.name())
