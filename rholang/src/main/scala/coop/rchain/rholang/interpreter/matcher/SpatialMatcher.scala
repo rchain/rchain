@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.matcher
 
 import cats.data.{OptionT, StateT}
+import cats.effect.Sync
 import cats.implicits._
 import cats.{Monad, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
@@ -11,6 +12,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter.accounting.{Cost, _}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.NonDetFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
@@ -33,6 +35,31 @@ trait SpatialMatcher[T, P] {
 }
 
 object SpatialMatcher extends SpatialMatcherInstances {
+
+  def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
+      implicit costAlg: CostAccountingAlg[M]
+  ): M[Option[(FreeMap, Unit)]] =
+    for {
+      // phlos available before going to the matcher
+      phlosAvailable <- costAlg.get()
+      result <- Sync[M]
+                 .fromEither(
+                   SpatialMatcher
+                     .spatialMatch(target, pattern)
+                     .runWithCost(phlosAvailable.cost)
+                 )
+                 .flatMap {
+                   case (phlosLeft, result) =>
+                     val matchCost = phlosAvailable.cost - phlosLeft
+                     costAlg.charge(matchCost).map(_ => result)
+                 }
+                 .onError {
+                   case OutOfPhlogistonsError =>
+                     // if we run out of phlos during the match we have to zero phlos available
+                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
+                 }
+    } yield result
+
   def spatialMatch[T, P](target: T, pattern: P)(
       implicit sm: SpatialMatcher[T, P]
   ): OptionalFreeMapWithCost[Unit] =

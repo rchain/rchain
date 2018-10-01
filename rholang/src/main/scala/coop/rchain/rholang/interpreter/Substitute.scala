@@ -12,6 +12,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort._
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
 trait Substitute[M[_], A] {
@@ -20,6 +21,45 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+
+  def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par],
+      costAccountingAlg: CostAccountingAlg[M]
+  ): M[A] =
+    Substitute[M, A]
+      .substitute(term)(depth, env)
+      .attempt
+      .flatMap(
+        _.fold(
+          th => // On error charge for the initial term
+            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
+              .raiseError[A](th),
+          substTerm =>
+            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
+        )
+      )
+
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par],
+      costAccountingAlg: CostAccountingAlg[M]
+  ): M[A] =
+    Substitute[M, A]
+      .substituteNoSort(term)(depth, env)
+      .attempt
+      .flatMap(
+        _.fold(
+          th => // On error charge for the initial term
+            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
+              .raiseError[A](th),
+          substTerm =>
+            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
+        )
+      )
+
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C
   )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =

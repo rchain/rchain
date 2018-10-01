@@ -18,12 +18,11 @@ import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-
+import SpatialMatcher.spatialMatchAndCharge
 import scala.collection.immutable.BitSet
 import scala.util.Try
 
@@ -80,68 +79,6 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccountingAlg[M]) {
 }
 
 object Reduce {
-
-  def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
-      term: A,
-      depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccountingAlg[M]
-  ): M[A] =
-    Substitute[M, A]
-      .substitute(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
-
-  def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
-      term: A,
-      depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccountingAlg[M]
-  ): M[A] =
-    Substitute[M, A]
-      .substituteNoSort(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
-
-  def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
-      implicit costAlg: CostAccountingAlg[M]
-  ): M[Option[(FreeMap, Unit)]] =
-    for {
-      // phlos available before going to the matcher
-      phlosAvailable <- costAlg.get()
-      result <- Sync[M]
-                 .fromEither(
-                   SpatialMatcher
-                     .spatialMatch(target, pattern)
-                     .runWithCost(phlosAvailable.cost)
-                 )
-                 .flatMap {
-                   case (phlosLeft, result) =>
-                     val matchCost = phlosAvailable.cost - phlosLeft
-                     costAlg.charge(matchCost).map(_ => result)
-                 }
-                 .onError {
-                   case OutOfPhlogistonsError =>
-                     // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
-                 }
-    } yield result
 
   class DebruijnInterpreter[M[_], F[_]](
       tuplespaceAlg: TuplespaceAlg[M],
