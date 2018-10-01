@@ -55,7 +55,7 @@ object ProtoUtil {
                         updatedEstimate <- unsafeGetBlock[F](mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta
-                        mainChain <- if (newDepth < 0) {
+                        mainChain <- if (newDepth <= 0) {
                                       (acc :+ estimate).pure[F]
                                     } else {
                                       getMainChainUntilDepth[F](
