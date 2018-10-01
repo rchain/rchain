@@ -9,8 +9,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.{Channel, Par}
+import coop.rchain.models.Par
 
 import scala.io.Source
 import scala.language.higherKinds
@@ -40,8 +39,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val channel = Channel(ChannelInstance.Quote(par))
-        val request = DataAtNameQuery(depth, Some(channel))
+        val request = DataAtNameQuery(depth, Some(par))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
       }
     }
@@ -52,8 +50,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
-        val request  = ContinuationAtNameQuery(depth, channels)
+        val request  = ContinuationAtNameQuery(depth, pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }

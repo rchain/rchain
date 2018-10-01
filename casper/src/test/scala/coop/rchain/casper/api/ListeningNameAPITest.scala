@@ -9,7 +9,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{Created, HashSetCasperTest}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting
@@ -41,7 +40,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     node.casperEff.addBlock(block)
 
     val listeningName =
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
+      Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
     val resultData = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
       BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
@@ -67,7 +66,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     nodes(1).receive()
     nodes(2).receive()
 
-    val listeningName = Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(0))))))
+    val listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
     val resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
       BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
@@ -166,14 +165,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     node.casperEff.addBlock(block)
 
     val listeningNamesShuffled1 =
-      List(
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))))),
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))))
-      )
+        List(
+          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
+          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
+        )
     val result = WaitingContinuationInfo(
       List(
-        BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(1))))))), None, 0),
-        BindPattern(Vector(Channel(Quote(Par().copy(exprs = Vector(Expr(GInt(0))))))), None, 0)
+        BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
+        BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
       ),
       Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
     )
@@ -186,10 +185,10 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     listeningNameResponse1.length should be(1)
 
     val listeningNamesShuffled2 =
-      List(
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))))),
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))))
-      )
+        List(
+          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
+          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
+        )
     val listeningNameResponse2 =
       BlockAPI.getListeningNameContinuationResponse[Id](Int.MaxValue, listeningNamesShuffled2)
     val continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)

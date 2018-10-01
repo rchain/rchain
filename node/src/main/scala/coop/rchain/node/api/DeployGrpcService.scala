@@ -9,7 +9,7 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Taskable
-import coop.rchain.models.Channel
+import coop.rchain.models.Par
 import coop.rchain.shared._
 
 import com.google.protobuf.empty.Empty
@@ -45,11 +45,11 @@ private[api] object DeployGrpcService {
 
       // TODO: Handle error case
       override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-        BlockAPI.getListeningNameDataResponse[F](request.depth, request.channel.get).toTask
+        BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get).toTask
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[ListeningNameContinuationResponse] =
-        BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.channels).toTask
+        BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names).toTask
     }
 }

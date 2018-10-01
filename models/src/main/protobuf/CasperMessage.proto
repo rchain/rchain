@@ -66,12 +66,12 @@ message BlocksQuery {
 
 message DataAtNameQuery {
   int32 depth = 1;
-  Channel channel = 2;
+  Par name = 2;
 }
 
 message ContinuationAtNameQuery {
   int32 depth = 1;
-  repeated Channel channels = 2;
+  repeated Par names = 2;
 }
 
 message DeployServiceResponse {

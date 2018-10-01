@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.protocol._
-import coop.rchain.models.Channel
+import coop.rchain.models.Par
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
