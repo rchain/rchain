@@ -324,7 +324,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deploy)
 
-  val showBlock = new Subcommand("show block") {
+  val showBlock = new Subcommand("show-block") {
     descr(
       "View properties of a block known by Casper on an existing running node." +
         "Output includes: parent hashes, storage contents of the tuplespace."
@@ -334,7 +334,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlock)
 
-  val showMainChain = new Subcommand("show main-chain") {
+  val showMainChain = new Subcommand("show-main-chain") {
     descr(
       "View list of blocks on the main chain in the current Casper view on an existing running node."
     )
