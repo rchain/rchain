@@ -115,4 +115,16 @@ class BlocksResponseAPITest
       )
     blocksResponse.length should be(5)
   }
+
+  "showBlocks" should "return all blocks" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](Long.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(8)
+  }
 }

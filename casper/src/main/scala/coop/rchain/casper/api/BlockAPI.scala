@@ -221,6 +221,47 @@ object BlockAPI {
     }
   }
 
+  def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Long
+  ): F[List[BlockInfosAtHeight]] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      for {
+        dag         <- MultiParentCasper[F].blockDag
+        startHeight = dag.topoSort.length - depth
+        indexedBlockInfosAtHeightList <- dag.topoSort.foldM(
+                                          (startHeight, List.empty[BlockInfosAtHeight])
+                                        ) {
+                                          case (
+                                              (height, blockInfosAtHeightAcc),
+                                              blockHashesAtHeight
+                                              ) =>
+                                            for {
+                                              blocksAtHeight <- blockHashesAtHeight.toList.traverse(
+                                                                 ProtoUtil.unsafeGetBlock[F]
+                                                               )
+                                              blockInfosAtHeight <- blocksAtHeight.traverse(
+                                                                     getBlockInfoWithoutTuplespace[
+                                                                       F
+                                                                     ]
+                                                                   )
+                                            } yield
+                                              (
+                                                height + 1,
+                                                blockInfosAtHeightAcc :+ BlockInfosAtHeight(
+                                                  blockHeight = height,
+                                                  blockCountAtHeight = blockInfosAtHeight.length,
+                                                  blockInfos = blockInfosAtHeight
+                                                )
+                                              )
+                                        }
+      } yield indexedBlockInfosAtHeightList._2
+
+    MultiParentCasperRef.withCasper[F, List[BlockInfosAtHeight]](
+      casperResponse(_),
+      List.empty[BlockInfosAtHeight]
+    )
+  }
+
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Long
   ): F[List[BlockInfoWithoutTuplespace]] = {
