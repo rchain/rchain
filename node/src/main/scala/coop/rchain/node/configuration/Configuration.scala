@@ -196,12 +196,12 @@ object Configuration {
           nonce.getOrElse(0),
           location()
         )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
-      case Some(options.run)        => Run
-      case _                        => Help
+      case Some(options.deployDemo)    => DeployDemo
+      case Some(options.propose)       => Propose
+      case Some(options.showBlock)     => ShowBlock(options.showBlock.hash())
+      case Some(options.showMainChain) => ShowMainChain
+      case Some(options.run)           => Run
+      case _                           => Help
     }
 
     import commandline.Options._
@@ -384,14 +384,14 @@ object Configuration {
           nonce.getOrElse(0),
           location()
         )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
-      case Some(options.run)        => Run
-      case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName) => ContAtName(options.contAtName.name())
-      case _                        => Help
+      case Some(options.deployDemo)    => DeployDemo
+      case Some(options.propose)       => Propose
+      case Some(options.showBlock)     => ShowBlock(options.showBlock.hash())
+      case Some(options.showMainChain) => ShowMainChain
+      case Some(options.run)           => Run
+      case Some(options.dataAtName)    => DataAtName(options.dataAtName.name())
+      case Some(options.contAtName)    => ContAtName(options.contAtName.name())
+      case _                           => Help
     }
 }
 

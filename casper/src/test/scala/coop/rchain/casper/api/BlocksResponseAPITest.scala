@@ -104,11 +104,15 @@ class BlocksResponseAPITest
   }
   implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
 
-  "getBlocksResponse" should "return only blocks in the main chain" in {
+  "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.getBlocksResponse[Id](syncId, casperRef, logEff, turanOracleEffect, blockStore)
-    val blocks = blocksResponse.blocks
+      BlockAPI.showMainChain[Id](Long.MaxValue)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
     blocksResponse.length should be(5)
-    blocks.length should be(5)
   }
 }

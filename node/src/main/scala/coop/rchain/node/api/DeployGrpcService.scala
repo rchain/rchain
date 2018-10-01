@@ -31,19 +31,20 @@ private[api] object DeployGrpcService {
         BlockAPI.addBlock[F](b).toTask
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
-        BlockAPI.getBlockQueryResponse[F](q).toTask
+        BlockAPI.showBlock[F](q).toTask
 
-      override def showBlocks(request: Empty): Observable[BlockInfoWithoutTuplespace] =
+      override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
-          .fromTask(BlockAPI.getBlocksResponse[F].toTask)
-          .flatMap(b => Observable.fromIterable(b.blocks))
+          .fromTask(BlockAPI.showMainChain[F](request.depth).toTask)
+          .flatMap(Observable.fromIterable)
 
-      override def listenForDataAtName(listeningName: Channel): Task[ListeningNameDataResponse] =
-        BlockAPI.getListeningNameDataResponse[F](listeningName).toTask
+      // TODO: Handle error case
+      override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
+        BlockAPI.getListeningNameDataResponse[F](request.depth, request.channel.get).toTask
 
       override def listenForContinuationAtName(
-          listeningNames: Channels
+          request: ContinuationAtNameQuery
       ): Task[ListeningNameContinuationResponse] =
-        BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toTask
+        BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.channels).toTask
     }
 }

@@ -83,11 +83,12 @@ object BlockAPI {
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Long,
       listeningName: Channel
   ): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
-        mainChain           <- getMainChainFromTip[F]
+        mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         sortedListeningName <- channelSortable.sortMatch[F](listeningName).map(_.term)
@@ -114,14 +115,15 @@ object BlockAPI {
   }
 
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      listeningNames: Channels
+      depth: Long,
+      listeningNames: Seq[Channel]
   ): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
       for {
-        mainChain           <- getMainChainFromTip[F]
+        mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningNames <- listeningNames.channels.toList
+        sortedListeningNames <- listeningNames.toList
                                  .traverse(channelSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getContinuationsWithBlockInfo[F](
@@ -145,13 +147,14 @@ object BlockAPI {
     )
   }
 
-  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
-    : F[IndexedSeq[BlockMessage]] =
+  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+      depth: Long
+  ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       estimates <- MultiParentCasper[F].estimator(dag)
       tip       = estimates.head
-      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+      mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
@@ -218,25 +221,25 @@ object BlockAPI {
     }
   }
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore]
-    : F[BlocksResponse] = {
+  def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Long
+  ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
         estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
-        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+        mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
-      } yield
-        BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
+      } yield blockInfos
 
-    MultiParentCasperRef.withCasper[F, BlocksResponse](
+    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      BlocksResponse(status = "Error: Casper instance not available")
+      List.empty[BlockInfoWithoutTuplespace]
     )
   }
 
-  def getBlockQueryResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =

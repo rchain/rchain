@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import scala.collection.immutable.{HashMap, HashSet}
 
 /*
- * toposort - Topological sort of the DAG. The index in the outer Vector
+ * topoSort - Topological sort of the DAG. The index in the outer Vector
  *            is the block number (length of the longest path back to
  *            genesis) and the index of the inner Vector breaks ties for
  *            blocks with the same number based when the node observed the block.

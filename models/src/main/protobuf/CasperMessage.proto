@@ -22,9 +22,10 @@ service DeployService {
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
-  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfoWithoutTuplespace) {}
-  rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
-  rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
+  rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  // rpc showBlocks(BlocksQuery) returns (stream BlockInfosAtHeight) {}
+  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
 }
 
 message PhloLimit {
@@ -59,8 +60,18 @@ message BlockQuery {
   string hash = 1;
 }
 
-message Channels {
-  repeated Channel channels = 1;
+message BlocksQuery {
+  int64 depth = 1;
+}
+
+message DataAtNameQuery {
+  int64 depth = 1;
+  Channel channel = 2;
+}
+
+message ContinuationAtNameQuery {
+  int64 depth = 1;
+  repeated Channel channels = 2;
 }
 
 message DeployServiceResponse {

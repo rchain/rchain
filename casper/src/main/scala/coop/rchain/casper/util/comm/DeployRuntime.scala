@@ -3,6 +3,7 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad, MonadError}
 import cats.effect.{Sync, Timer}
 import cats.implicits._
+import coop.rchain.casper.protocol
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._
@@ -30,13 +31,15 @@ object DeployRuntime {
   def showBlock[F[_]: Monad: ErrorHandler: Capture: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showBlock(BlockQuery(hash)).map(println(_)))
 
-  def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks.map(println(_)))
+  def showMainChain[F[_]: Monad: ErrorHandler: Capture: DeployService](): F[Unit] =
+    gracefulExit(DeployService[F].showMainChain(BlocksQuery(1L)).map(println(_)))
 
   def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](name: Id[Name]): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val request = Channel(ChannelInstance.Quote(par))
+        val depth   = 1L
+        val channel = Channel(ChannelInstance.Quote(par))
+        val request = DataAtNameQuery(depth, Some(channel))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
       }
     }
@@ -46,8 +49,9 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
+        val depth    = 1L
         val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
-        val request  = Channels(channels)
+        val request  = ContinuationAtNameQuery(depth, channels)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }

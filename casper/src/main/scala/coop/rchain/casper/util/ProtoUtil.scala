@@ -41,9 +41,10 @@ object ProtoUtil {
       }
     }
 
-  def getMainChain[F[_]: Monad: BlockStore](
+  def getMainChainUntilDepth[F[_]: Monad: BlockStore](
       estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage]
+      acc: IndexedSeq[BlockMessage],
+      depth: Long
   ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = ProtoUtil.parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
@@ -52,7 +53,17 @@ object ProtoUtil {
                     case Some(mainParentHash) =>
                       for {
                         updatedEstimate <- unsafeGetBlock[F](mainParentHash)
-                        mainChain       <- getMainChain[F](updatedEstimate, acc :+ estimate)
+                        depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
+                        newDepth        = depth + depthDelta
+                        mainChain <- if (newDepth < 0) {
+                                      (acc :+ estimate).pure[F]
+                                    } else {
+                                      getMainChainUntilDepth[F](
+                                        updatedEstimate,
+                                        acc :+ estimate,
+                                        newDepth
+                                      )
+                                    }
                       } yield mainChain
                     case None => (acc :+ estimate).pure[F]
                   }

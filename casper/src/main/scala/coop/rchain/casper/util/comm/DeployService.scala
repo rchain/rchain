@@ -13,10 +13,12 @@ trait DeployService[F[_]] {
   def deploy(d: DeployData): F[(Boolean, String)]
   def createBlock(): F[(Boolean, String)] //create block and add to Casper internal state
   def showBlock(q: BlockQuery): F[String]
-  def showBlocks(): F[String]
+  def showMainChain(q: BlocksQuery): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
-  def listenForDataAtName(request: Channel): F[ListeningNameDataResponse]
-  def listenForContinuationAtName(request: Channels): F[ListeningNameContinuationResponse]
+  def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
+  def listenForContinuationAtName(
+      request: ContinuationAtNameQuery
+  ): F[ListeningNameContinuationResponse]
 }
 
 object DeployService {
@@ -51,19 +53,14 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
     response.toProtoString
   }
 
-  def showBlocks(): Task[String] = Task.delay {
-    val response = blockingStub.showBlocks(Empty()).toList
+  def showMainChain(q: BlocksQuery): Task[String] = Task.delay {
+    val response = blockingStub.showMainChain(q).toList
 
-    val showResponses = response
-      .map {
-        case bi =>
-          s"""
+    val showResponses = response.map(bi => s"""
 ------------- block ${bi.blockNumber} ---------------
 ${bi.toProtoString}
 -----------------------------------------------------
-"""
-      }
-      .mkString("\n")
+""").mkString("\n")
 
     val showLength =
       s"""
@@ -77,11 +74,13 @@ Blockchain length: ${response.length}
     (response.success, response.message)
   }
 
-  def listenForDataAtName(request: Channel): Task[ListeningNameDataResponse] = Task.delay {
+  def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] = Task.delay {
     blockingStub.listenForDataAtName(request)
   }
 
-  def listenForContinuationAtName(request: Channels): Task[ListeningNameContinuationResponse] =
+  def listenForContinuationAtName(
+      request: ContinuationAtNameQuery
+  ): Task[ListeningNameContinuationResponse] =
     Task.delay {
       blockingStub.listenForContinuationAtName(request)
     }
