@@ -53,14 +53,16 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
           throw new IllegalArgumentException(msg)
         }
         val span = Kamon.currentSpan()
-        span.mark("before-lock-acquired")
+        span.mark("before-consume-lock")
         consumeLock(channels) {
-          span.mark("lock-acquired")
+          span.mark("consume-lock-acquired")
           logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
                          |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
           val consumeRef = Consume.create(channels, patterns, continuation, persist)
+          span.mark("before-event-log-lock-acquired")
           eventLog.update(consumeRef +: _)
+          span.mark("event-log-updated")
           /*
            * Here, we create a cache of the data at each channel as `channelToIndexedData`
            * which is used for finding matches.  When a speculative match is found, we can
@@ -70,14 +72,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
            * affecting the actual store contents.
            */
 
-          span.mark("channel-to-indexed-data")
+          span.mark("before-channel-to-indexed-data")
           val channelToIndexedData = store.withTxn(store.createTxnRead()) { txn =>
             channels.map { c: C =>
               c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
             }.toMap
           }
 
-          span.mark("extract-data-candidates")
+          span.mark("before-extract-data-candidates")
           val options: Either[E, Option[Seq[DataCandidate[C, R]]]] =
             extractDataCandidates(channels.zip(patterns), channelToIndexedData, Nil).sequence
               .map(_.sequence)
@@ -86,14 +88,15 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
             case Left(e) =>
               Left(e)
             case Right(None) =>
-              span.mark("before-put-continuation")
+              span.mark("acquire-write-lock")
               store.withTxn(store.createTxnWrite()) { txn =>
-                span.mark("put-continuation")
+                span.mark("before-put-continuation")
                 store.putWaitingContinuation(
                   txn,
                   channels,
                   WaitingContinuation(patterns, continuation, persist, consumeRef)
                 )
+                span.mark("after-put-continuation")
                 for (channel <- channels)
                   store.addJoin(txn, channel, channels)
               }
@@ -106,17 +109,18 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
               span.mark("before-event-log-update")
               eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
-              span.mark("after-event-log-update")
+              span.mark("event-log-updated")
 
               dataCandidates
                 .sortBy(_.datumIndex)(Ordering[Int].reverse)
                 .foreach {
                   case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
                       if !persistData =>
-                    span.mark("before-remove-datum")
+                    span.mark("acquire-write-lock")
                     store.withTxn(store.createTxnWrite()) { txn =>
-                      span.mark("remove-datum")
+                      span.mark("before-remove-datum")
                       store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                      span.mark("after-remove-datum")
                     }
                   case _ =>
                     ()
@@ -136,9 +140,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
         val span = Kamon.currentSpan()
-        span.mark("before-lock-acquired")
+        span.mark("before-produce-lock")
         produceLock(channel) {
-          span.mark("lock-acquired")
+          span.mark("produce-lock-acquired")
           //TODO fix double join fetch
           val groupedChannels: Seq[Seq[C]] = store.withTxn(store.createTxnRead()) { txn =>
             store.getJoin(txn, channel)
@@ -148,7 +152,9 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                          |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
           val produceRef = Produce.create(channel, data, persist)
+          span.mark("before-event-log-lock-acquired")
           eventLog.update(produceRef +: _)
+          span.mark("event-log-updated")
 
           /*
            * Find produce candidate
@@ -164,6 +170,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
             groupedChannels match {
               case Nil => Right(None)
               case channels :: remaining =>
+                span.mark("before-match-candidates")
                 val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
                   store.withTxn(store.createTxnRead()) { txn =>
                     Random.shuffle(store.getWaitingContinuation(txn, channels).zipWithIndex)
@@ -178,6 +185,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                  *
                  * In this version, we also add the produced data directly to this cache.
                  */
+                span.mark("before-channel-to-indexed-data")
                 val channelToIndexedData: Map[C, Seq[(Datum[A], Int)]] = channels.map { (c: C) =>
                   val as = store.withTxn(store.createTxnRead()) { txn =>
                     Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
@@ -211,37 +219,38 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
               if (!persistK) {
-                span.mark("before-remove-continuation")
+                span.mark("acquire-write-lock")
                 store.withTxn(store.createTxnWrite()) { txn =>
-                  span.mark("remove-continuation")
+                  span.mark("before-remove-continuation")
                   store.removeWaitingContinuation(txn, channels, continuationIndex)
+                  span.mark("after-remove-continuation")
                 }
               }
               dataCandidates
                 .sortBy(_.datumIndex)(Ordering[Int].reverse)
                 .foreach {
                   case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex) =>
-                    if (!persistData && dataIndex >= 0) {
-                      span.mark("before-remove-datum")
-                      store.withTxn(store.createTxnWrite()) { txn =>
-                        span.mark("remove-datum")
-                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                      }
-                    }
-                    span.mark("before-remove-join")
+                    span.mark("acquire-write-lock")
                     store.withTxn(store.createTxnWrite()) { txn =>
-                      span.mark("remove-join")
+                      if (!persistData && dataIndex >= 0) {
+                        span.mark("before-remove-datum")
+                        store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                        span.mark("after-remove-datum")
+                      }
+                      span.mark("before-remove-join")
                       store.removeJoin(txn, candidateChannel, channels)
+                      span.mark("remove-join")
                     }
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
               Right(Some(continuation, dataCandidates.map(_.datum.a)))
             case Right(None) =>
               logger.debug(s"produce: no matching continuation found")
-              span.mark("before-put-datum")
+              span.mark("acquire-write-lock")
               store.withTxn(store.createTxnWrite()) { txn =>
-                span.mark("put-datum")
+                span.mark("before-put-datum")
                 store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+                span.mark("after-put-datum")
               }
               logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
               Right(None)
