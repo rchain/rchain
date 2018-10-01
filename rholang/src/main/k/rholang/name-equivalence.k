@@ -9,6 +9,6 @@ imports FREE
 //        2. any `| Nil` , except the same caveat as (1)
 //        3. arithmetic expressions on the top level
 //        4. alpha equivalence
-//        5. added evals/quots, e.g. the names @{@Nil!(0)} and @{*@{@Nil!(0)}} are equivalent.
+//        5. added evals/quotes, e.g. the names @{@Nil!(0)} and @{*@{@Nil!(0)}} are equivalent.
 
 endmodule
