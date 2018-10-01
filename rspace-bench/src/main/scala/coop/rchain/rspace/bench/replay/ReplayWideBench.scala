@@ -1,5 +1,6 @@
 package coop.rchain.rspace.bench.replay
 
+import coop.rchain.rholang.interpreter.ChargingReducer
 import coop.rchain.rspace.bench.EvalBenchStateBase
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
@@ -22,13 +23,13 @@ import scala.concurrent.duration.{Duration, _}
 
 class ReplayWideBench {
 
-  import WideEvalBenchState._
-
   @Benchmark
   @BenchmarkMode(Array(Mode.SingleShotTime))
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Warmup(iterations = 2)
+  @Fork(value = 1)
   @Threads(1)
+  @Warmup(iterations = 2)
+  @Measurement(iterations = 5)
   def wideReduce(bh: Blackhole, state: ReplayWideBench.FineBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val result             = state.runReplayTask.unsafeRunSync
@@ -47,14 +48,14 @@ object ReplayWideBench {
   abstract class WideBenchState {
     val rhoSetupScriptPath: String = "/rholang/wide-setup.rho"
     val rhoScriptSource: String    = "/rholang/wide.rho"
-    import WideEvalBenchState._
+    import coop.rchain.rspace.bench.WideEvalBenchState._
 
     implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "wide-1", poolSize = 100)
     lazy val dbDir: Path              = Files.createTempDirectory("rchain-storage-test-")
     val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-    lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
-    val rand: Blake2b512Random = Blake2b512Random(128)
+    lazy val runtime: Runtime           = Runtime.create(dbDir, mapSize)
+    implicit val rand: Blake2b512Random = Blake2b512Random(128)
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     runtime.replayReducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     var setupTerm: Option[Par] = None
@@ -63,6 +64,8 @@ object ReplayWideBench {
     val emptyCheckpoint = runtime.space.createCheckpoint()
 
     var runReplayTask: Task[Vector[Throwable]] = Task.now(Vector.empty)
+
+    implicit def readErrors = () => runtime.readAndClearErrorVector()
 
     @Setup(value = Level.Iteration)
     def doSetup(): Unit = {
@@ -86,61 +89,23 @@ object ReplayWideBench {
       runtime.space.reset(emptyCheckpoint.root)
 
       {
-        assert(createTest(setupTerm, this).unsafeRunSync.isEmpty)
+        assert(createTest(setupTerm, runtime.reducer).unsafeRunSync.isEmpty)
         val checkpoint = runtime.space.createCheckpoint()
         runtime.replaySpace.rig(checkpoint.root, checkpoint.log)
       }
 
-      assert(createReplayTest(setupTerm, this).unsafeRunSync.isEmpty)
+      assert(createTest(setupTerm, runtime.replayReducer).unsafeRunSync.isEmpty)
 
-      val runTask = createTest(term, this)
+      val runTask = createTest(term, runtime.reducer)
       assert(runTask.unsafeRunSync.isEmpty)
 
       val checkpoint = runtime.space.createCheckpoint()
       runtime.replaySpace.rig(checkpoint.root, checkpoint.log)
-      runReplayTask = createReplayTest(term, this)
+      runReplayTask = createTest(term, runtime.replayReducer)
     }
 
     @TearDown
     def tearDown(): Unit =
       runtime.close()
   }
-}
-
-object WideEvalBenchState {
-
-  def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
-    if (errors.nonEmpty) {
-      errors.foreach(_.printStackTrace())
-      throw new RuntimeException(
-        errors
-          .map(_.toString())
-          .mkString("Errors received during evaluation:\n", "\n", "\n")
-      )
-    }
-    errors
-  }
-
-  def createTest(t: Option[Par], state: ReplayWideBench.WideBenchState): Task[Vector[Throwable]] = {
-    val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    state.runtime.reducer
-      .inj(par)(state.rand)
-      .map(_ => state.runtime.readAndClearErrorVector())
-  }
-
-  def createReplayTest(
-      t: Option[Par],
-      state: ReplayWideBench.WideBenchState
-  ): Task[Vector[Throwable]] = {
-    val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    state.runtime.replayReducer
-      .inj(par)(state.rand)
-      .map(_ => state.runtime.readAndClearErrorVector())
-  }
-
-  def resourceFileReader(path: String): InputStreamReader =
-    new InputStreamReader(
-      Option(getClass.getResourceAsStream(path))
-        .getOrElse(throw new FileNotFoundException(path))
-    )
 }

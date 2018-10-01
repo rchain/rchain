@@ -1,4 +1,5 @@
 package coop.rchain.rspace.bench
+import coop.rchain.rholang.interpreter.ChargingReducer
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
@@ -29,8 +30,8 @@ class WideBench {
   @Threads(1)
   def wideReduceCoarse(bh: Blackhole, state: CoarseBenchState): Unit = {
     implicit val scheduler = state.scheduler
-    val runTask            = createTest(state.term, state)
-    bh.consume(processErrors(runTask.unsafeRunSync))
+    val result             = state.runTask.unsafeRunSync
+    bh.consume(processErrors(result))
   }
 
   @Benchmark
@@ -40,8 +41,8 @@ class WideBench {
   @Threads(1)
   def wideReduceFine(bh: Blackhole, state: FineBenchState): Unit = {
     implicit val scheduler = state.scheduler
-    val runTask            = createTest(state.term, state)
-    bh.consume(processErrors(runTask.unsafeRunSync))
+    val result             = state.runTask.unsafeRunSync
+    bh.consume(processErrors(result))
   }
 }
 
@@ -66,11 +67,15 @@ object WideBench {
     lazy val dbDir: Path              = Files.createTempDirectory("rchain-storage-test-")
     val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-    lazy val runtime: Runtime  = Runtime.create(dbDir, mapSize)
-    def rand: Blake2b512Random = Blake2b512Random(128)
+    lazy val runtime: Runtime           = Runtime.create(dbDir, mapSize)
+    implicit def rand: Blake2b512Random = Blake2b512Random(128)
     runtime.reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
     var setupTerm: Option[Par] = None
     var term: Option[Par]      = None
+
+    var runTask: Task[Vector[Throwable]] = Task.now(Vector.empty)
+
+    implicit def readErrors = () => runtime.readAndClearErrorVector()
 
     @Setup(value = Level.Iteration)
     def doSetup(): Unit = {
@@ -90,9 +95,9 @@ object WideBench {
       //make sure we always start from clean rspace
       runtime.replaySpace.clear()
       runtime.space.clear()
-      processErrors(Await.result(createTest(setupTerm, this).runAsync, Duration.Inf))
+      processErrors(Await.result(createTest(setupTerm, runtime.reducer).runAsync, Duration.Inf))
+      runTask = createTest(term, runtime.reducer)
     }
-
     @TearDown
     def tearDown(): Unit =
       runtime.close()
@@ -100,7 +105,9 @@ object WideBench {
 }
 
 object WideEvalBenchState {
+
   def processErrors(errors: Vector[Throwable]): Vector[Throwable] = {
+
     if (errors.nonEmpty) {
       errors.foreach(_.printStackTrace())
       throw new RuntimeException(
@@ -112,11 +119,14 @@ object WideEvalBenchState {
     errors
   }
 
-  def createTest(t: Option[Par], state: WideBenchState): Task[Vector[Throwable]] = {
+  def createTest(t: Option[Par], reducer: ChargingReducer[Task])(
+      implicit errorProcessor: () => Vector[Throwable],
+      rand: Blake2b512Random
+  ): Task[Vector[Throwable]] = {
     val par = t.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    state.runtime.reducer
-      .inj(par)(state.rand)
-      .map(_ => state.runtime.readAndClearErrorVector())
+    reducer
+      .inj(par)
+      .map(_ => errorProcessor())
   }
 
   def resourceFileReader(path: String): InputStreamReader =
