@@ -1968,7 +1968,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val test = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         implicit val env = Env.makeEnv[Par]()
-        reducer.setAvailablePhlos(Cost(5)).runSyncUnsafe(1.second)
+        val notEnoughPhlos = Cost(5)
+        reducer.setAvailablePhlos(notEnoughPhlos).runSyncUnsafe(1.second)
         val splitRand = rand.splitByte(0)
         val receive =
           Receive(
