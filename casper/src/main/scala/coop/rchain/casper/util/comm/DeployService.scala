@@ -64,7 +64,7 @@ ${bi.toProtoString}
 
     val showLength =
       s"""
-Blockchain length: ${response.length}
+(sub)chain length: ${response.length}
 """
     showResponses + "\n" + showLength
   }
