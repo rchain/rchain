@@ -2,12 +2,12 @@ package coop.rchain.casper.util.comm
 
 import cats.Monad
 import cats.implicits._
+import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib.Capture
 import coop.rchain.catscontrib.Catscontrib._
@@ -20,8 +20,7 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
 import monix.execution.Scheduler
-import cats.data._
-import cats._
+
 import scala.util.Try
 
 /**
@@ -145,6 +144,9 @@ object BlockApproverProtocol {
     if (msg.typeId == transport.UnapprovedBlock.id)
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
+
+  implicit val phloPriceEq = Eq.by[PhloPrice, Long](_.value)
+  implicit val phloLimitEq = Eq.by[PhloLimit, Long](_.value)
 
   val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
     override def eqv(x: DeployData, y: DeployData): Boolean =

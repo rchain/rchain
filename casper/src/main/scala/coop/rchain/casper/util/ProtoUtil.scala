@@ -14,6 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
 import coop.rchain.rholang.build.CompiledRholangSource
+import coop.rchain.rholang.interpreter.accounting
 
 import scala.collection.immutable
 
@@ -412,6 +413,7 @@ object ProtoUtil {
       .withUser(ByteString.EMPTY)
       .withTimestamp(timestamp)
       .withTerm(term)
+      .withPhloLimit(accounting.MAX_VALUE)
   }
 
   def basicDeploy(id: Int): Deploy = {
@@ -431,23 +433,39 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long): DeployData =
-    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+  def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = Some(phlos)
+    )
 
-  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long): Deploy =
+  def compiledSourceDeploy(
+      source: CompiledRholangSource,
+      timestamp: Long,
+      phloLimit: PhloLimit
+  ): Deploy =
     Deploy(
       term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp))
+      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long): Deploy =
+  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
     Deploy(
       term = Some(term),
-      raw =
-        Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
+      raw = Some(
+        DeployData(
+          user = ByteString.EMPTY,
+          timestamp = timestamp,
+          term = term.toProtoString,
+          phloLimit = Some(phloLimit)
+        )
+      )
     )
 
-  def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+  def termDeployNow(term: Par): Deploy =
+    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,
