@@ -73,6 +73,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
       numValidators,
       genesisPath,
       None,
+      1L,
+      Long.MaxValue,
+      false,
       runtimeManager,
       rchainShardId,
       Some(System.currentTimeMillis())
@@ -91,6 +94,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
       numValidators,
       genesisPath,
       None,
+      1L,
+      Long.MaxValue,
+      false,
       runtimeManager,
       rchainShardId,
       Some(System.currentTimeMillis())
@@ -119,6 +125,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
         numValidators,
         path,
         None,
+        1L,
+        Long.MaxValue,
+        false,
         runtimeManager,
         rchainShardId,
         Some(System.currentTimeMillis())
@@ -144,6 +153,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
         numValidators,
         path,
         None,
+        1L,
+        Long.MaxValue,
+        false,
         runtimeManager,
         rchainShardId,
         Some(System.currentTimeMillis())
@@ -154,7 +166,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     log.infos.isEmpty should be(true)
     validators
       .map {
-        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)
+        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
       }
       .forall(
         bonds.contains(_)
@@ -171,6 +183,9 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
       numValidators,
       genesisPath,
       None,
+      1L,
+      Long.MaxValue,
+      false,
       runtimeManager,
       rchainShardId,
       Some(System.currentTimeMillis())
@@ -198,14 +213,25 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
     val genesis = Genesis
-      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
+      .fromInputFiles[Id](
+        None,
+        numValidators,
+        path,
+        None,
+        1L,
+        Long.MaxValue,
+        false,
+        runtimeManager,
+        rchainShardId,
+        None
+      )
     runtime.close()
     val bonds = ProtoUtil.bonds(genesis)
 
     log.infos.length should be(1)
     validators
       .map {
-        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)
+        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
       }
       .forall(
         bonds.contains(_)
@@ -220,7 +246,18 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     val runtime        = Runtime.create(storageLocation, storageSize)
     val runtimeManager = RuntimeManager.fromRuntime(runtime)
     val _ = Genesis
-      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
+      .fromInputFiles[Id](
+        None,
+        numValidators,
+        path,
+        None,
+        1L,
+        Long.MaxValue,
+        false,
+        runtimeManager,
+        rchainShardId,
+        None
+      )
     val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
     runtime.close()
 

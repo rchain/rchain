@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.contracts.Faucet
 import coop.rchain.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
@@ -51,7 +52,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L)
+    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
     val scheduler                  = Scheduler.io("test")
     val bap = new BlockApproverProtocol(
@@ -60,6 +61,9 @@ class CasperPacketHandlerSpec extends WordSpec {
       runtimeManager,
       bonds,
       Seq.empty,
+      1L,
+      Long.MaxValue,
+      false,
       requiredSigs
     )(scheduler)
     val local: PeerNode = peerNode("src", 40400)

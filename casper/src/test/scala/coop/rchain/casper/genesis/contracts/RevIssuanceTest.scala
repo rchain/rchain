@@ -30,11 +30,13 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val wallet          = PreWallet(ethAddress, initBalance)
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
+    val posValidators   = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesisDeploys =
       Genesis.defaultBlessedTerms(
         0L,
-        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-        wallet :: Nil
+        ProofOfStakeParams(1L, Long.MaxValue, posValidators),
+        wallet :: Nil,
+        Faucet.noopFaucet
       )
 
     val secKey = Base16.decode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
