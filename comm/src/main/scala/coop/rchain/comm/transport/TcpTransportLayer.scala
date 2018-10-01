@@ -22,7 +22,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     log: Log[Task]
 ) extends TransportLayer[Task] {
 
-  private val DefaultSendTimeout = 5.seconds
+  private val DefaultSendTimeout   = 5.seconds
+  private val scheduler: Scheduler = Scheduler.io("tl-grpc-client")
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -60,6 +61,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .executor(scheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
@@ -109,6 +111,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                  case Some(PeerUnavailable()) => disconnect(peer)
                  case _                       => Task.unit
                }
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
   private def transport(peer: PeerNode, enforce: Boolean)(
