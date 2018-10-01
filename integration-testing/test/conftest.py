@@ -31,9 +31,8 @@ def pytest_addoption(parser):
 def system(request):
     cfg = parse_config(request)
 
-    with docker() as docker_client, \
-         validators_data(cfg) as vd:
-            try:
-                yield System(cfg, docker_client, vd)
-            finally:
-                log_prof_data()
+    with docker() as docker_client, validators_data(cfg) as vd:
+        try:
+            yield System(cfg, docker_client, vd)
+        finally:
+            log_prof_data()
