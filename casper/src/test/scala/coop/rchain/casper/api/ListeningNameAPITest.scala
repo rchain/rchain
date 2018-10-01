@@ -6,19 +6,15 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.{BlockStoreFixture, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.crypto.signatures.Ed25519
-import coop.rchain.models._
 import coop.rchain.casper.{Created, HashSetCasperTest}
-
+import coop.rchain.catscontrib.effect.implicits._
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.accounting
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-
-import scala.collection.immutable
-import scala.collection.immutable.BitSet
-import coop.rchain.catscontrib.effect.implicits._
 
 class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture {
 
@@ -38,6 +34,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         .withUser(ByteString.EMPTY)
         .withTimestamp(timestamp)
         .withTerm("@{ 3 | 2 | 1 }!(0)")
+        .withPhloLimit(accounting.MAX_VALUE)
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
@@ -162,6 +159,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
         .withUser(ByteString.EMPTY)
         .withTimestamp(timestamp)
         .withTerm("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
+        .withPhloLimit(accounting.MAX_VALUE)
     }
 
     val Created(block) = node.casperEff.deploy(basicDeployData) *> node.casperEff.createBlock
