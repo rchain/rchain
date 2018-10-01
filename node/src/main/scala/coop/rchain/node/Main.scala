@@ -30,11 +30,11 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf     <- Configuration(args)
-        poolSize = conf.server.threadPoolSize
-        //TODO create separate scheduler for casper
-        scheduler = Scheduler.fixedPool("node-io", poolSize)
-        _         <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)
+        conf        <- Configuration(args)
+        minPoolSize = Runtime.getRuntime.availableProcessors() + 1
+        maxPoolSize = Math.max(conf.server.threadPoolSize, minPoolSize)
+        scheduler   = Scheduler.cached("node-io", minPoolSize, maxPoolSize)
+        _           <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)
       } yield ()
 
     exec.unsafeRunSync(Scheduler.singleThread("main-io"))

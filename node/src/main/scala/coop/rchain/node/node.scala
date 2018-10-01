@@ -1,7 +1,5 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -17,7 +15,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
@@ -26,10 +23,8 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
-import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import kamon._
 import io.grpc.Server
@@ -324,6 +319,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     * 2. create instances of typeclasses
     * 3. run the node program.
     */
+  // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
   val main: Effect[Unit] = for {
     // 1. set up configurations
     local          <- EitherT.fromEither[Task](PeerNode.fromAddress(address))
