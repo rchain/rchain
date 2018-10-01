@@ -386,16 +386,23 @@ object Configuration {
           nonce.getOrElse(0),
           location()
         )
-      case Some(options.deployDemo)    => DeployDemo
-      case Some(options.propose)       => Propose
-      case Some(options.showBlock)     => ShowBlock(options.showBlock.hash())
+      case Some(options.deployDemo) => DeployDemo
+      case Some(options.propose)    => Propose
+      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
       case Some(options.showMainChain) =>
         import options.showMainChain._
         ShowMainChain(depth.getOrElse(1L))
-      case Some(options.run)           => Run
-      case Some(options.dataAtName)    => DataAtName(options.dataAtName.name())
-      case Some(options.contAtName)    => ContAtName(options.contAtName.name())
-      case _                           => Help
+      case Some(options.run) => Run
+      case Some(options.dataAtName) =>
+        import options.dataAtName._
+        DataAtName(
+          depth.getOrElse(default = Long.MaxValue),
+          options.dataAtName.name()
+        )
+      case Some(options.contAtName) =>
+        import options.contAtName._
+        ContAtName(depth.getOrElse(default = Long.MaxValue), options.contAtName.name())
+      case _ => Help
     }
 }
 

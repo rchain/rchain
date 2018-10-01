@@ -34,10 +34,12 @@ object DeployRuntime {
   def showMainChain[F[_]: Monad: ErrorHandler: Capture: DeployService](depth: Long): F[Unit] =
     gracefulExit(DeployService[F].showMainChain(BlocksQuery(depth)).map(println(_)))
 
-  def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](name: Id[Name]): F[Unit] =
+  def listenForDataAtName[F[_]: Sync: DeployService: Timer: Capture](
+      depth: Long,
+      name: Id[Name]
+  ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val depth   = 1L
         val channel = Channel(ChannelInstance.Quote(par))
         val request = DataAtNameQuery(depth, Some(channel))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
@@ -45,11 +47,11 @@ object DeployRuntime {
     }
 
   def listenForContinuationAtName[F[_]: Sync: Timer: DeployService: Capture](
+      depth: Long,
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val depth    = 1L
         val channels = pars.map(par => Channel(ChannelInstance.Quote(par)))
         val request  = ContinuationAtNameQuery(depth, channels)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
