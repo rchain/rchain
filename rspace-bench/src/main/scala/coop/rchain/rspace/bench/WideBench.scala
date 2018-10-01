@@ -26,8 +26,10 @@ class WideBench {
   @Benchmark
   @BenchmarkMode(Array(Mode.SingleShotTime))
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Warmup(iterations = 0)
+  @Fork(value = 1)
   @Threads(1)
+  @Warmup(iterations = 2)
+  @Measurement(iterations = 5)
   def wideReduceCoarse(bh: Blackhole, state: CoarseBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val result             = state.runTask.unsafeRunSync
@@ -37,8 +39,10 @@ class WideBench {
   @Benchmark
   @BenchmarkMode(Array(Mode.SingleShotTime))
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Warmup(iterations = 0)
+  @Fork(value = 1)
   @Threads(1)
+  @Warmup(iterations = 2)
+  @Measurement(iterations = 5)
   def wideReduceFine(bh: Blackhole, state: FineBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val result             = state.runTask.unsafeRunSync
