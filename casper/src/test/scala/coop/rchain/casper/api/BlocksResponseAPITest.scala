@@ -106,7 +106,7 @@ class BlocksResponseAPITest
 
   "showMainChain" should "return only blocks in the main chain" in {
     val blocksResponse =
-      BlockAPI.showMainChain[Id](Long.MaxValue)(
+      BlockAPI.showMainChain[Id](Int.MaxValue)(
         syncId,
         casperRef,
         logEff,
@@ -118,7 +118,7 @@ class BlocksResponseAPITest
 
   "showBlocks" should "return all blocks" in {
     val blocksResponse =
-      BlockAPI.showBlocks[Id](Long.MaxValue)(
+      BlockAPI.showBlocks[Id](Int.MaxValue)(
         syncId,
         casperRef,
         logEff,
