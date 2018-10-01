@@ -38,6 +38,11 @@ private[api] object DeployGrpcService {
           .fromTask(BlockAPI.showMainChain[F](request.depth).toTask)
           .flatMap(Observable.fromIterable)
 
+      override def showBlocks(request: BlocksQuery): Observable[BlockInfosAtHeight] =
+        Observable
+          .fromTask(BlockAPI.showBlocks[F](request.depth).toTask)
+          .flatMap(Observable.fromIterable)
+
       // TODO: Handle error case
       override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         BlockAPI.getListeningNameDataResponse[F](request.depth, request.channel.get).toTask
