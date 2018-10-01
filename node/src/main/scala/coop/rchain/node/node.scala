@@ -292,7 +292,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
       _       <- NodeDiscovery[Task].discover.executeOn(Scheduler.singleThread("kademlia")).start.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- loop.forever
+      _       <- EitherT(Task.defer(loop.forever.value).executeOn(Scheduler.singleThread("connect")))
     } yield ()
   }
 
