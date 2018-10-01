@@ -125,6 +125,18 @@ class BlocksResponseAPITest
         turanOracleEffect,
         blockStore
       )
-    blocksResponse.length should be(8)
+    blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
+  }
+
+  it should "return until depth" in {
+    val blocksResponse =
+      BlockAPI.showBlocks[Id](2)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+    blocksResponse.length should be(2) // TODO: Switch to 3 when we implement block height correctly
   }
 }

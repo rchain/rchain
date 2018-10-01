@@ -227,33 +227,13 @@ object BlockAPI {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag         <- MultiParentCasper[F].blockDag
-        startHeight = dag.topoSort.length - depth
-        indexedBlockInfosAtHeightList <- dag.topoSort.foldM(
-                                          (startHeight, List.empty[BlockInfosAtHeight])
-                                        ) {
-                                          case (
-                                              (height, blockInfosAtHeightAcc),
-                                              blockHashesAtHeight
-                                              ) =>
-                                            for {
-                                              blocksAtHeight <- blockHashesAtHeight.toList.traverse(
-                                                                 ProtoUtil.unsafeGetBlock[F]
-                                                               )
-                                              blockInfosAtHeight <- blocksAtHeight.traverse(
-                                                                     getBlockInfoWithoutTuplespace[
-                                                                       F
-                                                                     ]
-                                                                   )
-                                            } yield
-                                              (
-                                                height + 1,
-                                                blockInfosAtHeightAcc :+ BlockInfosAtHeight(
-                                                  blockHeight = height,
-                                                  blockCountAtHeight = blockInfosAtHeight.length,
-                                                  blockInfos = blockInfosAtHeight
-                                                )
-                                              )
-                                        }
+        maxHeight   = dag.topoSort.length + dag.sortOffset - 1
+        startHeight = math.max(0, maxHeight - depth)
+        indexedBlockInfosAtHeightList <- getIndexedBlockInfosAtHeightList[F](
+                                          depth,
+                                          dag,
+                                          startHeight
+                                        )
       } yield indexedBlockInfosAtHeightList._2
 
     MultiParentCasperRef.withCasper[F, List[BlockInfosAtHeight]](
@@ -261,6 +241,27 @@ object BlockAPI {
       List.empty[BlockInfosAtHeight]
     )
   }
+
+  private def getIndexedBlockInfosAtHeightList[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+      depth: Int,
+      dag: BlockDag,
+      startHeight: Long
+  ): F[(Long, List[BlockInfosAtHeight])] =
+    dag.topoSort.takeRight(depth).foldM((startHeight, List.empty[BlockInfosAtHeight])) {
+      case ((height, blockInfosAtHeightAcc), blockHashesAtHeight) =>
+        for {
+          blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+          blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
+        } yield
+          (
+            height + 1,
+            blockInfosAtHeightAcc :+ BlockInfosAtHeight(
+              blockHeight = height,
+              blockCountAtHeight = blockInfosAtHeight.length,
+              blockInfos = blockInfosAtHeight
+            )
+          )
+    }
 
   def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       depth: Int
