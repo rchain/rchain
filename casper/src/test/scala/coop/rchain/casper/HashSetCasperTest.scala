@@ -11,7 +11,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator, RevIssuanceTest}
 import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
@@ -303,19 +303,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     implicit val runtimeManager = nodes(0).runtimeManager
     val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
     val secKey                  = ethPivKeys.head.bytes
+    val ethAddress              = ethAddresses.head
+    val bondKey                 = Base16.encode(otherPk)
     val walletUnlockDeploy =
-      RevIssuanceTest.preWalletUnlockDeploy(ethAddresses.head, pubKey, secKey, "unlockOut")
-    val bondingStatusOut        = "bondingOut"
-    val bondingForwarderAddress = "myBondingForwarder"
+      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
+    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
     val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
-      s"""for(@purse <- @"$bondingForwarderAddress"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("${Base16
-           .encode(otherPk)}".hexToBytes(), "ed25519Verify", purse, "$pubKey", "$bondingStatusOut")
-       |}""".stripMargin,
+      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )
-    val transferStatusOut = "transferOut"
+    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
     val bondingTransferDeploy =
       RevIssuanceTest.walletTransferDeploy(
         0,

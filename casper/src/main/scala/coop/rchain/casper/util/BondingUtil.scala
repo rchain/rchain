@@ -17,13 +17,16 @@ import java.nio.file.Files
 import monix.execution.Scheduler
 
 object BondingUtil {
-  def bondingForwarderDeploy(bondKey: String, ethAddress: String): String = {
-    val bondingStatusOut        = s"${ethAddress}_bondingOut"
-    val bondingForwarderAddress = s"${ethAddress}_bondingForwarder"
-    s"""for(@purse <- @"$bondingForwarderAddress"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "$bondingStatusOut")
+  def bondingForwarderAddress(ethAddress: String): String = s"${ethAddress}_bondingForwarder"
+  def bondingStatusOut(ethAddress: String): String        = s"${ethAddress}_bondingOut"
+  def transferStatusOut(ethAddress: String): String       = s"${ethAddress}_transferOut"
+
+  def bondingForwarderDeploy(bondKey: String, ethAddress: String): String =
+    s"""for(@purse <- @"${bondingForwarderAddress(ethAddress)}"; @pos <- @"proofOfStake"){
+       |  @(pos, "bond")!("$bondKey".hexToBytes(), "ed25519Verify", purse, "$ethAddress", "${bondingStatusOut(
+         ethAddress
+       )}")
        |}""".stripMargin
-  }
 
   def unlockDeploy[F[_]: Sync](ethAddress: String, pubKey: String, secKey: String)(
       implicit runtimeManager: RuntimeManager,
@@ -34,18 +37,15 @@ object BondingUtil {
   def bondDeploy[F[_]: Sync](amount: Long, ethAddress: String, pubKey: String, secKey: String)(
       implicit runtimeManager: RuntimeManager,
       scheduler: Scheduler
-  ): F[String] = {
-    val bondingForwarderAddress = s"${ethAddress}_bondingForwarder"
-    val transferStatusOut       = s"${ethAddress}_transferOut"
+  ): F[String] =
     walletTransferDeploy(
       0, //nonce
       amount,
-      bondingForwarderAddress,
-      transferStatusOut,
+      bondingForwarderAddress(ethAddress),
+      transferStatusOut(ethAddress),
       pubKey,
       Base16.decode(secKey)
     )
-  }
 
   def preWalletUnlockDeploy[F[_]: Sync](
       ethAddress: String,
