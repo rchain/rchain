@@ -193,7 +193,6 @@ final class Dispatcher[F[_]: Applicative, R, S](
 ) {
   def dispatch(peer: PeerNode): R => F[S] =
     p => {
-      processed = System.currentTimeMillis()
       delay.foreach(Thread.sleep)
       // Ignore Disconnect messages to not skew the tests
       if (!ignore(p))
@@ -201,9 +200,7 @@ final class Dispatcher[F[_]: Applicative, R, S](
       response(peer).pure[F]
     }
   def received: Seq[(PeerNode, R)] = receivedMessages
-  def lastProcessedTimestamp: Long = processed
   private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
-  private var processed            = 0L
 }
 
 object Dispatcher {
