@@ -117,7 +117,22 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
-  def streamBlob(peers: Seq[PeerNode], msg: Blob): Task[Unit] = ???
+  /**
+    * This implmementation is temporary, it sequentially sends blob to each peers.
+    * TODO Provide solution that stacks blob on a queue that is later consumed
+    */
+  def streamBlob(peers: Seq[PeerNode], msg: Blob): Task[Unit] =
+    peers.toList
+      .traverse(
+        peer =>
+          withClient(peer, enforce = false) { stub =>
+            stub.stream(TLBlob())
+          }.attempt.map {
+            case Left(error) => log.debug(s"Error while streaming blob, error: $error")
+            case Right(_)    => Task.unit
+          }
+      )
+      .as(())
 
   private def processResponse(
       peer: PeerNode,
