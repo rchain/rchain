@@ -1,7 +1,5 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-
 import cats._
 import cats.data._
 import cats.effect._
@@ -17,7 +15,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
@@ -26,10 +23,8 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.Configuration
 import coop.rchain.node.diagnostics._
-import coop.rchain.shared.StoreType
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared._
 import kamon._
 import kamon.zipkin.ZipkinReporter
@@ -258,7 +253,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       implicit
       log: Log[Task],
       time: Time[Task],
-      timerTask: Timer[Task],
       rpConfAsk: RPConfAsk[Task],
       metrics: Metrics[Task],
       transport: TransportLayer[Task],
@@ -281,7 +275,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     val loop: Effect[Unit] = for {
       _ <- Connect.clearConnections[Effect]
       _ <- Connect.findAndConnect[Effect](Connect.connect[Effect])
-      _ <- timerTask.sleep(5.seconds).toEffect
+      _ <- time.sleep(5.seconds).toEffect
     } yield ()
 
     for {
@@ -312,9 +306,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
         } *> exit0.as(Right(()))
     )
 
-  private def timerEff(implicit timerTask: Timer[Task]): Timer[Effect] =
-    Timer.deriveEitherT(Functor[Task], timerTask)
-
   private val syncEffect = SyncInstances.syncEffect[CommError](commError => {
     new Exception(s"CommError: $commError")
   }, e => { UnknownCommError(e.getMessage) })
@@ -339,7 +330,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     rpConnections        <- effects.rpConnections.toEffect
     log                  = effects.log
     time                 = effects.time
-    timerTask            = Task.timer
     metrics              = diagnostics.metrics[Task]
     multiParentCasperRef <- MultiParentCasperRef.of[Effect]
     lab                  <- LastApprovedBlock.of[Task].toEffect
@@ -356,7 +346,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(
                         log,
-                        timerTask,
+                        time,
                         metrics,
                         kademliaRPC
                       )
@@ -375,7 +365,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                             .of[Effect](conf.casper, defaultTimeout, runtimeManager, _.value)(
                               labEff,
                               Metrics.eitherT(Monad[Task], metrics),
-                              timerEff(timerTask),
                               blockStore,
                               Cell.eitherTCell(Monad[Task], rpConnections),
                               NodeDiscovery.eitherTNodeDiscovery(Monad[Task], nodeDiscovery),
@@ -401,7 +390,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
     program = nodeProgram(runtime, casperRuntime)(
       log,
       time,
-      timerTask,
       rpConfAsk,
       metrics,
       transport,
