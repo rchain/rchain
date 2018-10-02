@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -410,6 +412,18 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     an[SyntaxError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    }
+  }
+
+  "PSend" should "Not compile if data contains wildcard" in {
+    an[TopLevelWildcardsNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(_)""")).value()
+    }
+  }
+
+  "PSend" should "Not compile if data contains free variable" in {
+    an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(y)""")).value()
     }
   }
 
