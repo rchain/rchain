@@ -39,26 +39,29 @@ class TcpServerObservable(
       def tell(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.fromFuture(subjectTell.onNext(Tell(protocol)).map(_ => noResponse))
+            Task.delay {
+              subjectTell.onNext(Tell(protocol))
+              noResponse
+            }
           }
 
       def ask(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            val p = ReplyPromise(askTimeout)
-            val result = for {
-              _     <- Task.fromFuture(subjectAsk.onNext(Ask(protocol, p)))
-              reply <- p.task
-            } yield
-              reply match {
+            Task
+              .create[CommunicationResponse] { (_, cb) =>
+                subjectAsk.onNext(Ask(protocol, Reply(cb)))
+                Cancelable.empty
+              }
+              .timeout(askTimeout)
+              .map {
                 case NotHandled(error)            => internalServerError(error.message)
                 case HandledWitoutMessage         => noResponse
                 case HandledWithMessage(response) => returnProtocol(response)
               }
-
-            result.onErrorRecover {
-              case _: TimeoutException => internalServerError(CommError.timeout.message)
-            }
+              .onErrorRecover {
+                case _: TimeoutException => internalServerError(CommError.timeout.message)
+              }
           }
 
       private def returnProtocol(protocol: Protocol): TLResponse =
