@@ -13,12 +13,12 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.{BindPattern, Channel, Par}
+import coop.rchain.models.{BindPattern, Par}
 import coop.rchain.models.rholang.sort.Sortable
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.{Log, SyncLock}
-import coop.rchain.models.serialization.implicits.serializeChannel
+import coop.rchain.models.serialization.implicits.serializePar
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.models.rholang.sort.Sortable._
 import scodec.Codec
@@ -83,14 +83,14 @@ object BlockAPI {
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      listeningName: Channel
+      listeningName: Par
   ): F[ListeningNameDataResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
+    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F]
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningName <- channelSortable.sortMatch[F](listeningName).map(_.term)
+        sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getDataWithBlockInfo[F](
                                         runtimeManager,
@@ -106,7 +106,7 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
+    implicit val channelCodec: Codec[Par] = serializePar.toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameDataResponse](
       casperResponse(_, channelCodec),
       ListeningNameDataResponse(status = "Error: Casper instance not available")
@@ -114,15 +114,15 @@ object BlockAPI {
   }
 
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      listeningNames: Channels
+      listeningNames: Pars
   ): F[ListeningNameContinuationResponse] = {
-    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Channel]) =
+    def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
         mainChain           <- getMainChainFromTip[F]
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningNames <- listeningNames.channels.toList
-                                 .traverse(channelSortable.sortMatch[F](_).map(_.term))
+        sortedListeningNames <- listeningNames.pars.toList
+                                 .traverse(parSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getContinuationsWithBlockInfo[F](
                                         runtimeManager,
@@ -138,7 +138,7 @@ object BlockAPI {
           length = blocksWithActiveName.length
         )
 
-    implicit val channelCodec: Codec[Channel] = serializeChannel.toCodec
+    implicit val channelCodec: Codec[Par] = serializePar.toCodec
     MultiParentCasperRef.withCasper[F, ListeningNameContinuationResponse](
       casperResponse(_, channelCodec),
       ListeningNameContinuationResponse(status = "Error: Casper instance not available")
@@ -156,9 +156,9 @@ object BlockAPI {
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
-      sortedListeningName: Channel,
+      sortedListeningName: Par,
       block: BlockMessage
-  )(implicit channelCodec: Codec[Channel]): F[Option[DataWithBlockInfo]] =
+  )(implicit channelCodec: Codec[Par]): F[Option[DataWithBlockInfo]] =
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -173,9 +173,9 @@ object BlockAPI {
 
   private def getContinuationsWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       runtimeManager: RuntimeManager,
-      sortedListeningNames: immutable.Seq[Channel],
+      sortedListeningNames: immutable.Seq[Par],
       block: BlockMessage
-  )(implicit channelCodec: Codec[Channel]): F[Option[ContinuationsWithBlockInfo]] =
+  )(implicit channelCodec: Codec[Par]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash =
         ProtoUtil.tuplespace(block).get
@@ -196,8 +196,8 @@ object BlockAPI {
 
   private def isListeningNameReduced(
       block: BlockMessage,
-      sortedListeningName: immutable.Seq[Channel]
-  )(implicit channelCodec: Codec[Channel]) = {
+      sortedListeningName: immutable.Seq[Par]
+  )(implicit channelCodec: Codec[Par]) = {
     val serializedLog = for {
       bd    <- block.body.toSeq
       pd    <- bd.deploys
