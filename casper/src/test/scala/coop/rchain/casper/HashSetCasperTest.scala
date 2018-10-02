@@ -42,6 +42,32 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   private val bonds   = createBonds(validators)
   private val genesis = buildGenesis(wallets, bonds, 0L)
 
+  it should "not replay when adding block from itself" in {
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
+    val deployData = ProtoUtil.sourceDeploy(
+      """new s(`rho:io:stdout`) in { s!("Hello, World!") }""",
+      System.currentTimeMillis(),
+      accounting.MAX_VALUE
+    )
+    val Created(signedBlock) = nodes(0).casperEff
+      .deploy(deployData) *> nodes(0).casperEff.createBlock
+
+    nodes(0).casperEff.addBlock(signedBlock)
+    nodes(1).receive()
+
+    val received = nodes(1).casperEff.contains(signedBlock)
+    received should be(true)
+    nodes(0).logEff.infos
+      .count(it => it.contains("skip replay the deploys sent from itself")) should be(
+      1
+    )
+
+    nodes(1).logEff.infos
+      .exists(it => it.contains("skip replay the deploys sent from itself")) should be(
+      false
+    )
+  }
+
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "HashSetCasper" should "accept deploys" in {
@@ -115,6 +141,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val logMessages = List(
       "Received Deploy",
+      "skip replay",
       "Sent Block #1",
       "Added",
       "New fork-choice tip is block"

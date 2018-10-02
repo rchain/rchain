@@ -18,6 +18,7 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.shared._
 import monix.execution.Scheduler
 
+import scala.None
 import scala.util.{Failure, Success, Try}
 
 object Validate {
@@ -545,33 +546,45 @@ object Validate {
       }
 
   def transactions[F[_]: Sync: Log: BlockStore](
+      validatorID: Option[ValidatorIdentity],
       block: BlockMessage,
       dag: BlockDag,
       emptyStateHash: StateHash,
       runtimeManager: RuntimeManager,
       knownStateHashesContainer: AtomicSyncVarF[F, Set[StateHash]]
-  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] =
-    for {
-      maybeStateHash <- knownStateHashesContainer
-                         .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
-                           for {
-                             //invalid blocks return None and don't update the checkpoints
-                             validateBlockCheckpointResult <- InterpreterUtil
-                                                               .validateBlockCheckpoint[F](
-                                                                 block,
-                                                                 dag,
-                                                                 knownStateHashes,
-                                                                 runtimeManager
-                                                               )
-                             (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
-                           } yield (updatedknownStateHashes, maybeStateHash)
-                         }
-    } yield
-      maybeStateHash match {
-        case Left(ex)       => Left(ex)
-        case Right(Some(_)) => Right(Valid)
-        case Right(None)    => Left(InvalidTransaction)
-      }
+  )(implicit scheduler: Scheduler): F[Either[BlockStatus, ValidBlock]] = {
+    val fromSelf = validatorID match {
+      case Some(id) => ByteString.copyFrom(id.publicKey) == block.sender
+      case None     => false
+    }
+    if (fromSelf) {
+      for {
+        _ <- Log[F].info("skip replay the deploys sent from itself")
+      } yield Right(Valid)
+    } else {
+      for {
+        maybeStateHash <- knownStateHashesContainer
+                           .modify[Either[BlockException, Option[StateHash]]] { knownStateHashes =>
+                             for {
+                               //invalid blocks return None and don't update the checkpoints
+                               validateBlockCheckpointResult <- InterpreterUtil
+                                                                 .validateBlockCheckpoint[F](
+                                                                   block,
+                                                                   dag,
+                                                                   knownStateHashes,
+                                                                   runtimeManager
+                                                                 )
+                               (maybeStateHash, updatedknownStateHashes) = validateBlockCheckpointResult
+                             } yield (updatedknownStateHashes, maybeStateHash)
+                           }
+      } yield
+        maybeStateHash match {
+          case Left(ex)       => Left(ex)
+          case Right(Some(_)) => Right(Valid)
+          case Right(None)    => Left(InvalidTransaction)
+        }
+    }
+  }
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,
