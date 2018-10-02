@@ -25,10 +25,10 @@ class TcpServerObservable(
     tellBufferSize: Int = 1024,
     askBufferSize: Int = 64,
     askTimeout: FiniteDuration = 5.second
-) extends Observable[ServerMessage] {
+)(implicit scheduler: Scheduler)
+    extends Observable[ServerMessage] {
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
-    implicit val scheduler: Scheduler = Scheduler.cached("tl-grpc", askBufferSize, Int.MaxValue)
 
     val subjectTell = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
     val subjectAsk  = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))

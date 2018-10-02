@@ -4,6 +4,7 @@ import cats._
 import cats.data._
 import cats.effect._
 import cats.implicits._
+
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.util.comm.CasperPacketHandler
@@ -26,6 +27,7 @@ import coop.rchain.node.diagnostics._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared._
+
 import kamon._
 import io.grpc.Server
 import monix.eval.Task
@@ -35,7 +37,12 @@ import org.http4s.server.blaze._
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
-class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Scheduler) {
+import monix.execution.schedulers.SchedulerService
+
+class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
+
+  private val loopScheduler = Scheduler.fixedPool("loop", 4)
+  private val grpcScheduler = Scheduler.cached("grpc-io", 0, 2000)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -164,7 +171,8 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       nodeCoreMetrics: NodeMetrics[Task],
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
-  ): Effect[Servers] =
+  ): Effect[Servers] = {
+    implicit val s: SchedulerService = grpcScheduler
     for {
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
@@ -184,7 +192,6 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
                      val prometheusService     = NewPrometheusReporter.service(prometheusReporter)
                      implicit val contextShift = IO.contextShift(scheduler)
                      BlazeBuilder[IO]
-                       .withExecutionContext(Scheduler.singleThread("http-server"))
                        .bindHttp(conf.server.httpPort, "0.0.0.0")
                        .mountService(prometheusService, "/metrics")
                        .mountService(VersionInfo.service, "/version")
@@ -195,6 +202,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
             Kamon.addReporter(new JmxReporter())
           }.toEffect
     } yield Servers(grpcServerExternal, grpcServerInternal, httpServer)
+  }
 
   def startServers(servers: Servers)(
       implicit
@@ -227,7 +235,7 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _   <- log.info("Bringing BlockStore down ...")
       _   <- blockStore.close().value
       _   <- log.info("Goodbye.")
-    } yield ()).unsafeRunSync
+    } yield ()).unsafeRunSync(scheduler)
 
   def startReportJvmMetrics(
       implicit metrics: Metrics[Task],
@@ -235,7 +243,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
   ): Task[Unit] =
     Task.delay {
       import scala.concurrent.duration._
-      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+      loopScheduler.scheduleAtFixedRate(3.seconds, 3.second)(
+        JvmMetrics.report[Task].unsafeRunSync(scheduler)
+      )
     }
 
   def addShutdownHook(servers: Servers, runtime: Runtime, casperRuntime: Runtime)(
@@ -285,9 +295,9 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
       _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
-      _       <- NodeDiscovery[Task].discover.executeOn(Scheduler.singleThread("kademlia")).start.toEffect
+      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- EitherT(Task.defer(loop.forever.value).executeOn(Scheduler.singleThread("connect")))
+      _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 
@@ -345,9 +355,13 @@ class NodeRuntime(conf: Configuration, host: String)(implicit scheduler: Schedul
       conf.tls.certificate,
       conf.tls.key,
       conf.server.maxMessageSize
-    )(tcpConnections, log)
-    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(metrics, log)
-    initPeer    = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    )(grpcScheduler, tcpConnections, log)
+    kademliaRPC = effects.kademliaRPC(local, kademliaPort, defaultTimeout)(
+      grpcScheduler,
+      metrics,
+      log
+    )
+    initPeer = if (conf.server.standalone) None else Some(conf.server.bootstrap)
     nodeDiscovery <- effects
                       .nodeDiscovery(local, defaultTimeout)(initPeer)(
                         log,

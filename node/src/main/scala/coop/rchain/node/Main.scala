@@ -72,7 +72,7 @@ object Main {
       case ShowBlocks        => DeployRuntime.showBlocks[Task]()
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf)(scheduler)
+      case Run               => nodeProgram(conf, scheduler)
       case _                 => conf.printHelp()
     }
 
@@ -86,10 +86,10 @@ object Main {
     )
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
+  private def nodeProgram(conf: Configuration, scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host).main.value
+      result <- new NodeRuntime(conf, host, scheduler).main.value
       _ <- result match {
             case Right(_) =>
               Task.unit

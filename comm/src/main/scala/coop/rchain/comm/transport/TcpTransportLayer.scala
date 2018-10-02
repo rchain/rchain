@@ -18,12 +18,12 @@ import monix.eval._, monix.execution._
 import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
-    implicit cell: TcpTransportLayer.TransportCell[Task],
+    implicit scheduler: Scheduler,
+    cell: TcpTransportLayer.TransportCell[Task],
     log: Log[Task]
 ) extends TransportLayer[Task] {
 
-  private val DefaultSendTimeout   = 5.seconds
-  private val scheduler: Scheduler = Scheduler.io("tl-grpc-client")
+  private val DefaultSendTimeout = 5.seconds
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 

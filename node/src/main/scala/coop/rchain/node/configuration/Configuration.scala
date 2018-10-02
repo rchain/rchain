@@ -58,7 +58,7 @@ object Configuration {
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
-  private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultThreadPoolSize: Int        = 2000
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(

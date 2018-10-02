@@ -20,15 +20,14 @@ import io.grpc.netty.NettyServerBuilder
 import io.grpc.Server
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.execution.schedulers.SchedulerService
 
 object GrpcServer {
 
-  private implicit val logSource: LogSource        = LogSource(this.getClass)
-  private implicit val scheduler: SchedulerService = Scheduler.singleThread("api-grpc")
+  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   def acquireInternalServer(port: Int, maxMessageSize: Int, runtime: Runtime)(
-      implicit nodeDiscovery: NodeDiscovery[Task],
+      implicit scheduler: Scheduler,
+      nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
@@ -46,7 +45,7 @@ object GrpcServer {
   def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
       maxMessageSize: Int
-  ): F[Server] =
+  )(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)

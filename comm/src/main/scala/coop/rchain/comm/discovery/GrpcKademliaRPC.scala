@@ -15,12 +15,13 @@ import scala.concurrent.duration._
 import com.google.protobuf.ByteString
 
 class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
-    implicit metrics: Metrics[Task],
+    implicit
+    scheduler: Scheduler,
+    metrics: Metrics[Task],
     log: Log[Task]
 ) extends KademliaRPC[Task] {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val scheduler                     = Scheduler.io("kademlia-grpc")
 
   def ping(peer: PeerNode): Task[Boolean] =
     for {

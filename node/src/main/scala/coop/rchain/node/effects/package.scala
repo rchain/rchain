@@ -6,6 +6,7 @@ import scala.tools.jline.console._
 import cats._, cats.data._, cats.implicits._, cats.mtl._, cats.effect.Timer
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval._
+import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
@@ -41,7 +42,9 @@ package object effects {
   }
 
   def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
-      implicit metrics: Metrics[Task],
+      implicit
+      scheduler: Scheduler,
+      metrics: Metrics[Task],
       log: Log[Task]
   ): KademliaRPC[Task] = new GrpcKademliaRPC(src, port, timeout)
 
@@ -52,7 +55,8 @@ package object effects {
       keyPath: Path,
       maxMessageSize: Int
   )(
-      implicit connections: TcpTransportLayer.TransportCell[Task],
+      implicit scheduler: Scheduler,
+      connections: TcpTransportLayer.TransportCell[Task],
       log: Log[Task]
   ): TcpTransportLayer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
