@@ -363,6 +363,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     )
     val newBonds = block2.getBody.getPostState.bonds
     newBonds.toSet shouldBe correctBonds
+
+    nodes.foreach(_.tearDown())
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {

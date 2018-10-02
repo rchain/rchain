@@ -126,8 +126,11 @@ object BondingUtil {
                    runtimeManager,
                    scheduler
                  )
-      _ <- writeFile(s"unlock_${ethAddress}.rho", unlockCode)
-      _ <- writeFile(s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
-      _ <- writeFile(s"bond_${ethAddress}.rho", bondCode)
+      _ <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
+      _ <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
+      _ <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
+
+      _ <- Sync[F].delay { activeRuntime.close() }
+      _ <- Sync[F].delay { runtimeDir.recursivelyDelete() }
     } yield ()
 }
