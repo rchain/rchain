@@ -40,17 +40,20 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     } yield r
 
   trait Runtime[A] {
-    protected def dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+    protected def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+    protected def blobDispatcher: Dispatcher[F, Blob, Unit]
     def run(): Result
     trait Result {
       def localNode: PeerNode
       def apply(): A
-      def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] = dispatcher
     }
   }
 
-  abstract class TwoNodesRuntime[A](val dispatcher: Dispatcher[F, Protocol, CommunicationResponse])
-      extends Runtime[A] {
+  abstract class TwoNodesRuntime[A](
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val blobDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullBlobDispatcher[F]
+  ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
@@ -61,10 +64,13 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
-            _        <- remoteTl.receive(dispatcher.dispatch(remote), kp(().pure[F])) // TODO
-            r        <- execute(localTl, local, remote)
-            _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
-            _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- remoteTl.receive(
+                  protocolDispatcher.dispatch(remote),
+                  blobDispatcher.dispatch(remote)
+                )
+            r <- execute(localTl, local, remote)
+            _ <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
+            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new TwoNodesResult {
               def localNode: PeerNode        = local
@@ -81,7 +87,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   }
 
   abstract class TwoNodesRemoteDeadRuntime[A](
-      val dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val blobDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullBlobDispatcher[F]
   ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
@@ -109,7 +117,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   }
 
   abstract class ThreeNodesRuntime[A](
-      val dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+      val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
+        Dispatcher.withoutMessageDispatcher[F],
+      val blobDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullBlobDispatcher[F]
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
@@ -128,12 +138,14 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
-            _         <- remoteTl1.receive(dispatcher.dispatch(remote1), kp(().pure[F])) // TODO test blobs
-            _         <- remoteTl2.receive(dispatcher.dispatch(remote2), kp(().pure[F]))
-            r         <- execute(localTl, local, remote1, remote2)
-            _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
-            _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
-            _         <- localTl.shutdown(ProtocolHelper.disconnect(local))
+            _ <- remoteTl1
+                  .receive(protocolDispatcher.dispatch(remote1), blobDispatcher.dispatch(remote1))
+            _ <- remoteTl2
+                  .receive(protocolDispatcher.dispatch(remote2), blobDispatcher.dispatch(remote2))
+            r <- execute(localTl, local, remote1, remote2)
+            _ <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
+            _ <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
+            _ <- localTl.shutdown(ProtocolHelper.disconnect(local))
           } yield
             new ThreeNodesResult {
               def localNode: PeerNode   = local
@@ -189,12 +201,12 @@ trait Environment {
 final class Dispatcher[F[_]: Applicative, R, S](
     response: PeerNode => S,
     delay: Option[Long] = None,
-    ignore: R => Boolean
+    ignore: R => Boolean = kp(false)
 ) {
   def dispatch(peer: PeerNode): R => F[S] =
     p => {
+      println(s"received $p")
       delay.foreach(Thread.sleep)
-      // Ignore Disconnect messages to not skew the tests
       if (!ignore(p))
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
@@ -231,6 +243,11 @@ object Dispatcher {
     new Dispatcher[F, Protocol, CommunicationResponse](
       _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
       ignore = _.message.isDisconnect
+    )
+
+  def devNullBlobDispatcher[F[_]: Applicative]: Dispatcher[F, Blob, Unit] =
+    new Dispatcher[F, Blob, Unit](
+      kp(())
     )
 
 }
