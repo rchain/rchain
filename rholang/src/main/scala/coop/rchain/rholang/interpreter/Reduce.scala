@@ -16,12 +16,11 @@ import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.matcher.OptionalFreeMapWithCost._
 import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
-
+import SpatialMatcher.spatialMatchAndCharge
 import scala.collection.immutable.BitSet
 import scala.util.Try
 
@@ -78,68 +77,6 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccountingAlg[M]) {
 }
 
 object Reduce {
-
-  private def substituteAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
-      term: A,
-      depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccountingAlg[M]
-  ): M[A] =
-    Substitute[M, A]
-      .substitute(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
-
-  private def substituteNoSortAndCharge[A: Chargeable, M[_]: Substitute[?[_], A]: Sync](
-      term: A,
-      depth: Int,
-      env: Env[Par],
-      costAccountingAlg: CostAccountingAlg[M]
-  ): M[A] =
-    Substitute[M, A]
-      .substituteNoSort(term)(depth, env)
-      .attempt
-      .flatMap(
-        _.fold(
-          th => // On error charge for the initial term
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(term))) *> Sync[M]
-              .raiseError[A](th),
-          substTerm =>
-            costAccountingAlg.charge(Cost(Chargeable[A].cost(substTerm))) *> Sync[M].pure(substTerm)
-        )
-      )
-
-  private def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
-      implicit costAlg: CostAccountingAlg[M]
-  ): M[Option[(FreeMap, Unit)]] =
-    for {
-      // phlos available before going to the matcher
-      phlosAvailable <- costAlg.get()
-      result <- Sync[M]
-                 .fromEither(
-                   SpatialMatcher
-                     .spatialMatch(target, pattern)
-                     .runWithCost(phlosAvailable.cost)
-                 )
-                 .flatMap {
-                   case (phlosLeft, result) =>
-                     val matchCost = phlosAvailable.cost - phlosLeft
-                     costAlg.charge(matchCost).map(_ => result)
-                 }
-                 .onError {
-                   case OutOfPhlogistonsError =>
-                     // if we run out of phlos during the match we have to zero phlos available
-                     costAlg.get().flatMap(ca => costAlg.charge(ca.cost))
-                 }
-    } yield result
 
   class DebruijnInterpreter[M[_], F[_]](
       tuplespaceAlg: TuplespaceAlg[M],
@@ -229,7 +166,12 @@ object Reduce {
             rand.splitShort((start + ta._2).toShort)
           else
             rand.splitByte((start + ta._2).toByte)
-        eval(ta._1)(env, newRand, costAccountingAlg).handleError(fTell.tell)
+        eval(ta._1)(env, newRand, costAccountingAlg).handleErrorWith {
+          case e: OutOfPhlogistonsError.type =>
+            s.raiseError(e)
+          case e =>
+            fTell.tell(e) *> s.unit
+        }
       }
       List(
         Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(evalExplicit, starts(0))),
@@ -294,7 +236,7 @@ object Reduce {
     ): M[Unit] =
       for {
         evalChan <- evalExpr(send.chan)
-        subChan  <- substituteAndCharge[Par, M](evalChan, 0, env, costAccountingAlg)
+        subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
         unbundled <- subChan.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -307,7 +249,7 @@ object Reduce {
 
         data <- send.data.toList.traverse(x => evalExpr(x))
         substData <- data.traverse(
-                      p => substituteAndCharge[Par, M](p, 0, env, costAccountingAlg)
+                      p => substituteAndCharge[Par, M](p, 0, env)
                     )
         _ <- produce(unbundled, substData, send.persistent, rand)
         _ <- costAccountingAlg.charge(SEND_EVAL_COST)
@@ -334,8 +276,7 @@ object Reduce {
                                             substituteAndCharge[Par, M](
                                               pattern,
                                               1,
-                                              env,
-                                              costAccountingAlg
+                                              env
                                             )
                                         )
                       } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
@@ -415,8 +356,7 @@ object Reduce {
                 pattern <- substituteAndCharge[Par, M](
                             singleCase.pattern,
                             1,
-                            env,
-                            costAccountingAlg
+                            env
                           )
                 matchResult <- spatialMatchAndCharge[M](target, pattern)
                 res <- matchResult match {
@@ -436,7 +376,7 @@ object Reduce {
       for {
         evaledTarget <- evalExpr(mat.target)
         // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
-        substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
+        substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
         _           <- firstMatch(substTarget, mat.cases)
         _           <- costAccountingAlg.charge(MATCH_EVAL_COST)
       } yield ()
@@ -491,7 +431,7 @@ object Reduce {
     )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
       for {
         evalSrc <- evalExpr(rb.source)
-        subst   <- substituteAndCharge[Par, M](evalSrc, 0, env, costAccountingAlg)
+        subst   <- substituteAndCharge[Par, M](evalSrc, 0, env)
         // Check if we try to read from bundled channel
         unbndl <- subst.singleBundle() match {
                    case Some(value) =>
@@ -658,16 +598,16 @@ object Reduce {
             v1 <- evalExpr(p1)
             v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env, costAccountingAlg)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env, costAccountingAlg)
+            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
             _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1)
             v2  <- evalExpr(p2)
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env, costAccountingAlg)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env, costAccountingAlg)
+            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
             _   <- costAccountingAlg.charge(equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
@@ -686,8 +626,8 @@ object Reduce {
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
             evaledTarget <- evalExpr(target)
-            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env, costAccountingAlg)
-            substPattern <- substituteAndCharge[Par, M](pattern, 1, env, costAccountingAlg)
+            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
+            substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
             matchResult  <- spatialMatchAndCharge[M](substTarget, substPattern)
           } yield GBool(matchResult.isDefined)
 
@@ -931,7 +871,7 @@ object Reduce {
         } else {
           for {
             exprEvaled <- evalExpr(p)
-            exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env, costAccountingAlg)
+            exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
             _          <- costAccountingAlg.charge(toByteArrayCost(exprSubst))
             ba         <- s.fromEither(serialize(exprSubst))
           } yield Expr(GByteArray(ByteString.copyFrom(ba)))

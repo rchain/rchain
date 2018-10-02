@@ -106,7 +106,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       Await.result(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(ListParWithRandom(Seq(expected), rand, 0))
+      storeContainsTest(ListParWithRandom(Seq(expected), rand))
       clearStore(store, reduce, ackChannel)
     }
   }
@@ -166,7 +166,7 @@ class CryptoChannelsSpec
         )
         Await.result(reduce.eval(send).runAsync, 3.seconds)
         storeContainsTest(
-          ListParWithRandom(Seq(Expr(GBool(true))), rand, 0)
+          ListParWithRandom(Seq(Expr(GBool(true))), rand)
         )
         clearStore(store, reduce, ackChannel)
       }
@@ -206,7 +206,7 @@ class CryptoChannelsSpec
         )
         Await.result(reduce.eval(send).runAsync, 3.seconds)
         storeContainsTest(
-          ListParWithRandom(List(Expr(GBool(true))), rand, 0)
+          ListParWithRandom(List(Expr(GBool(true))), rand)
         )
         clearStore(store, reduce, ackChannel)
       }
