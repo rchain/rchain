@@ -41,8 +41,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 protocol1.message shouldBe 'heartbeatResponse
             }
 
-            result.receivedMessages should have length 1
-            val (_, protocol2)           = result.receivedMessages.head
+            result.protocolDispatcher.received should have length 1
+            val (_, protocol2)           = result.protocolDispatcher.received.head
             val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
             sender shouldBe 'defined
             sender.get shouldEqual result.localNode
@@ -134,30 +134,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
           val result: TwoNodesResult = run()
 
-          result.receivedMessages should have length 1
-          val (_, protocol2)           = result.receivedMessages.head
+          result.protocolDispatcher.received should have length 1
+          val (_, protocol2)           = result.protocolDispatcher.received.head
           val sender: Option[PeerNode] = ProtocolHelper.sender(protocol2)
           sender shouldBe 'defined
           sender.get shouldEqual result.localNode
           protocol2.message shouldBe 'heartbeat
-        }
-
-      "wait for a response" in
-        new TwoNodesRuntime[Long](Dispatcher.withoutMessageDispatcher[F]) {
-          def execute(
-              transportLayer: TransportLayer[F],
-              local: PeerNode,
-              remote: PeerNode
-          ): F[Long] =
-            for {
-              _ <- sendHeartbeat(transportLayer, local, remote)
-              t = System.currentTimeMillis()
-            } yield t
-
-          val result: TwoNodesResult = run()
-
-          val sent = result()
-          sent should be > result.lastProcessedMessageTimestamp
         }
     }
 
@@ -173,8 +155,8 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
           val result: ThreeNodesResult = run()
 
-          result.receivedMessages should have length 2
-          val Seq((r1, p1), (r2, p2))   = result.receivedMessages
+          result.protocolDispatcher.received should have length 2
+          val Seq((r1, p1), (r2, p2))   = result.protocolDispatcher.received
           val sender1: Option[PeerNode] = ProtocolHelper.sender(p1)
           val sender2: Option[PeerNode] = ProtocolHelper.sender(p2)
           sender1 shouldBe 'defined
@@ -209,7 +191,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
                 e.getMessage shouldEqual "The transport layer has been shut down"
             }
 
-            result.receivedMessages shouldBe 'empty
+            result.protocolDispatcher.received shouldBe 'empty
           }
       }
 
@@ -228,7 +210,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
             val result: TwoNodesResult = run()
 
-            result.receivedMessages shouldBe 'empty
+            result.protocolDispatcher.received shouldBe 'empty
           }
       }
 
@@ -248,9 +230,10 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
             val result: ThreeNodesResult = run()
 
-            result.receivedMessages shouldBe 'empty
+            result.protocolDispatcher.received shouldBe 'empty
           }
       }
+
     }
   }
 }

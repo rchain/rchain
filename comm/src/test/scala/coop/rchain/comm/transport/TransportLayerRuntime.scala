@@ -45,8 +45,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     trait Result {
       def localNode: PeerNode
       def apply(): A
-      def receivedMessages: Seq[(PeerNode, Protocol)] = dispatcher.received
-      def lastProcessedMessageTimestamp: Long         = dispatcher.lastProcessedTimestamp
+      def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] = dispatcher
     }
   }
 
