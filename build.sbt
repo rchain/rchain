@@ -284,7 +284,7 @@ lazy val rholangCLI = (project in file("rholang-cli"))
 lazy val rholangProtoBuildJar = Def.task(
   (assemblyOutputPath in (assembly)).value
 )
-lazy val _incrementalAssembly = Def.taskDyn(
+lazy val incrementalAssembly2 = Def.taskDyn(
   if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
     (assembly)
   else
@@ -295,7 +295,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   .settings(commonSettings: _*)
   .settings(
     name := "rholang-proto-build",
-    incrementalAssembly in Compile := _incrementalAssembly.value
+    incrementalAssembly in Compile := incrementalAssembly2.value
   )
   .dependsOn(rholang)
 
