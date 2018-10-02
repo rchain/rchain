@@ -15,7 +15,6 @@ object Sortable {
 
   implicit val boolSortable: Sortable[GBool]            = BoolSortMatcher
   implicit val bundleSortable: Sortable[Bundle]         = BundleSortMatcher
-  implicit val channelSortable: Sortable[Channel]       = ChannelSortMatcher
   implicit val connectiveSortable: Sortable[Connective] = ConnectiveSortMatcher
   implicit val exprSortable: Sortable[Expr]             = ExprSortMatcher
   implicit val groundSortable: Sortable[ExprInstance]   = GroundSortMatcher

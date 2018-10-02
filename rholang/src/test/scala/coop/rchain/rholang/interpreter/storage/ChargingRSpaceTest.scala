@@ -6,7 +6,6 @@ import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -150,17 +149,17 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 object ChargingRSpaceTest {
   val RSPACE_MATCH_PCOST     = 100L
   val RSPACE_MATCH_COST      = Cost(RSPACE_MATCH_PCOST)
-  val NilPar                 = ListChannelWithRandom().withChannels(Seq(Channel(Quote(Par()))))
+  val NilPar                 = ListParWithRandom().withPars(Seq(Par()))
   val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-  private def byteName(b: Byte): GPrivate = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+  private def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
-  def channelsN(n: Int): List[Channel] =
-    (1 to n).map(x => Channel(Quote(byteName(x.toByte)))).toList
+  def channelsN(n: Int): List[Par] =
+    (1 to n).map(x => byteName(x.toByte)).toList
   def patternsN(n: Int): List[BindPattern] =
     (1 to n)
       .map(
-        _ => BindPattern(Vector(Channel(ChanVar(Var(FreeVar(0))))))
+        _ => BindPattern(Vector(EVar(Var(FreeVar(0)))))
       )
       .toList
   def continuation(par: Par = Par(), r: Blake2b512Random = rand): TaggedContinuation =
@@ -174,7 +173,7 @@ object ChargingRSpaceTest {
     private val rspace = createRhoISpace()
 
     override def consume(
-        channels: immutable.Seq[Channel],
+        channels: immutable.Seq[Par],
         patterns: immutable.Seq[BindPattern],
         continuation: TaggedContinuation,
         persist: Boolean
@@ -182,56 +181,56 @@ object ChargingRSpaceTest {
         implicit m: Match[
           BindPattern,
           errors.OutOfPhlogistonsError.type,
-          ListChannelWithRandom,
-          ListChannelWithRandomAndPhlos
+          ListParWithRandom,
+          ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListChannelWithRandomAndPhlos])
+      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
     ]]] =
       rspace
         .consume(channels, patterns, continuation, persist)
         .map(_.map { case (cont, data) => cont -> data.map(_.withCost(RSPACE_MATCH_PCOST)) })
 
-    override def produce(channel: Channel, data: ListChannelWithRandom, persist: Boolean)(
+    override def produce(channel: Par, data: ListParWithRandom, persist: Boolean)(
         implicit m: Match[
           BindPattern,
           errors.OutOfPhlogistonsError.type,
-          ListChannelWithRandom,
-          ListChannelWithRandomAndPhlos
+          ListParWithRandom,
+          ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListChannelWithRandomAndPhlos])
+      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
     ]]] =
       rspace
         .produce(channel, data, persist)
         .map(_.map { case (cont, pars) => cont -> pars.map(_.withCost(RSPACE_MATCH_PCOST)) })
 
     override def close(): Id[Unit] = rspace.close()
-    override val store: IStore[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation] =
+    override val store: IStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =
       rspace.store
     override def install(
-        channels: immutable.Seq[Channel],
+        channels: immutable.Seq[Par],
         patterns: immutable.Seq[BindPattern],
         continuation: TaggedContinuation
     )(
         implicit m: Match[
           BindPattern,
           errors.OutOfPhlogistonsError.type,
-          ListChannelWithRandom,
-          ListChannelWithRandomAndPhlos
+          ListParWithRandom,
+          ListParWithRandomAndPhlos
         ]
-    ): Id[Option[(TaggedContinuation, immutable.Seq[ListChannelWithRandomAndPhlos])]] = ???
-    override def createCheckpoint(): Id[Checkpoint]                                   = ???
-    override def reset(root: Blake2b256Hash): Id[Unit]                                = ???
+    ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
+    override def createCheckpoint(): Id[Checkpoint]                               = ???
+    override def reset(root: Blake2b256Hash): Id[Unit]                            = ???
     override def retrieve(
         root: Blake2b256Hash,
         channelsHash: Blake2b256Hash
-    ): Id[Option[internal.GNAT[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]]] =
+    ): Id[Option[internal.GNAT[Par, BindPattern, ListParWithRandom, TaggedContinuation]]] =
       ???
-    override def getData(channel: Channel): immutable.Seq[internal.Datum[ListChannelWithRandom]] =
+    override def getData(channel: Par): immutable.Seq[internal.Datum[ListParWithRandom]] =
       ???
     override def getWaitingContinuations(
-        channels: immutable.Seq[Channel]
+        channels: immutable.Seq[Par]
     ): immutable.Seq[internal.WaitingContinuation[BindPattern, TaggedContinuation]] = ???
     override def clear(): Id[Unit]                                                  = ???
   }
@@ -243,11 +242,11 @@ object ChargingRSpaceTest {
     val context: RhoContext = Context.createFineGrained(dbDir, 1024L * 1024L * 4)
     val space: RhoISpace = RSpace.create[
       Id,
-      Channel,
+      Par,
       BindPattern,
       OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandomAndPhlos,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ](context, Branch("test"))
     space

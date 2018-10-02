@@ -1,10 +1,8 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
@@ -58,13 +56,13 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   it should "stop if OutOfPhloError is returned from RSpace" in {
     val tuplespaceAlg = new TuplespaceAlg[Task] {
       override def produce(
-          chan: Channel,
-          data: ListChannelWithRandom,
+          chan: Par,
+          data: ListParWithRandom,
           persistent: Boolean
       ): Task[Unit] =
         Task.raiseError(OutOfPhlogistonsError)
       override def consume(
-          binds: Seq[(BindPattern, ChannelInstance.Quote)],
+          binds: Seq[(BindPattern, Par)],
           body: ParWithRandom,
           persistent: Boolean
       ): Task[Unit] = Task.raiseError(OutOfPhlogistonsError)
@@ -74,7 +72,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     implicit val rand     = Blake2b512Random(128)
     implicit val costAlg  = CostAccountingAlg.unsafe[Task](CostAccount(1000))
     val reducer           = new DebruijnInterpreter[Task, Task.Par](tuplespaceAlg, Map.empty)
-    val send              = Send(Channel(Quote(GString("x"))), Seq(Par()))
+    val send              = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test              = reducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
   }
@@ -85,7 +83,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     // and not enough phlos to reduce successfully
     // only one of the branches we should be persisted in the tuplespace
 
-    val channel = Quote(GPrivateBuilder("x"))
+    val channel: Par = GPrivateBuilder("x")
 
     val a: Par = GString("a")
     val b: Par = GString("b")
@@ -101,12 +99,12 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     def plainSendCost(p: Par): Cost = {
       val storageCost = ChargingRSpace.storageCostProduce(
         channel,
-        ListChannelWithRandom(Seq(Channel(Quote(p))))
+        ListParWithRandom(Seq(p))
       )
-      val substitutionCost = Cost(Chargeable[Channel].cost(channel)) + Cost(
+      val substitutionCost = Cost(Chargeable[Par].cost(channel)) + Cost(
         Chargeable[Par].cost(p)
       )
-      CHANNEL_EVAL_COST + substitutionCost + storageCost + SEND_EVAL_COST
+      substitutionCost + storageCost + SEND_EVAL_COST
     }
     val sendACost = plainSendCost(a)
     val sendBCost = plainSendCost(b)
@@ -123,8 +121,8 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     def data(p: Par, rand: Blake2b512Random) = Row(
       List(
         Datum.create(
-          Channel(channel),
-          ListChannelWithRandom(Seq(Channel(Quote(p))), rand),
+          channel,
+          ListParWithRandom(Seq(p), rand),
           false
         )
       ),
