@@ -288,6 +288,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deployDemo)
 
+  val addressCheck: String => Boolean = addr =>
+    addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
+
   val deploy = new Subcommand("deploy") {
     descr(
       "Deploy a Rholang source file to Casper on an existing running node. " +
@@ -295,8 +298,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val addressCheck: String => Boolean = addr =>
-      addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
     val from = opt[String](
       descr = "Purse address that will be used to pay for the deployment.",
       validate = addressCheck
@@ -379,6 +380,48 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
   }
   addSubcommand(propose)
+
+  val bondingDeployGen = new Subcommand("bdg") {
+    descr(
+      "Creates the rholang source files needed for bonding. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
+        "and `bond*.rho` in a separate block after those."
+    )
+
+    val ethAddr = opt[String](
+      descr = "Ethereum address associated with the \"pre-wallet\" to bond.",
+      validate = addressCheck,
+      required = true
+    )
+
+    val bondKey = opt[String](
+      descr = "Hex-encoded public key which will be used as the validator idenity after bonding. " +
+        "Note: as of this version of node this must be an ED25519 key.",
+      validate = _.matches("[0-9a-fA-F]+"),
+      required = true
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key associated with the Ethereum address of the pre-wallet.",
+      validate = _.matches("[0-9a-fA-F]+"),
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the Ethereum address of the pre-wallet.",
+      validate = _.matches("[0-9a-fA-F]+"),
+      required = true
+    )
+  }
+  addSubcommand(bondingDeployGen)
 
   verify()
 }

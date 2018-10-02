@@ -9,6 +9,7 @@ import cats.implicits._
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.casper.util.BondingUtil
 import coop.rchain.comm._
 import coop.rchain.node.configuration._
 import coop.rchain.node.diagnostics.client.GrpcDiagnosticsService
@@ -74,7 +75,9 @@ object Main {
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)
-      case _                 => conf.printHelp()
+      case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
+        BondingUtil.writeRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
+      case _ => conf.printHelp()
     }
 
     program.doOnFinish(

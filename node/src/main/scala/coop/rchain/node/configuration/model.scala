@@ -58,3 +58,10 @@ case object Run                          extends Command
 case object Help                         extends Command
 case class DataAtName(name: Name)        extends Command
 case class ContAtName(names: List[Name]) extends Command
+case class BondingDeployGen(
+    bondKey: String,
+    ethAddress: String,
+    amount: Long,
+    secKey: String,
+    pubKey: String
+) extends Command

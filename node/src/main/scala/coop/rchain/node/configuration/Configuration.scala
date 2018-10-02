@@ -391,7 +391,10 @@ object Configuration {
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
-      case _                        => Help
+      case Some(options.bondingDeployGen) =>
+        import options.bondingDeployGen._
+        BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())
+      case _ => Help
     }
 }
 
