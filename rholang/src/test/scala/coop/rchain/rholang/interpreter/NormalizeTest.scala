@@ -390,7 +390,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PNegation(new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SyntaxError] should be thrownBy {
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
@@ -400,7 +400,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PConjunction(new PNil(), new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SyntaxError] should be thrownBy {
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
@@ -410,7 +410,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PDisjunction(new PNil(), new PNil()))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[SyntaxError] should be thrownBy {
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
     }
   }
