@@ -40,7 +40,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     } yield r
 
   trait Runtime[A] {
-    protected def dispatcher: Dispatcher[F]
+    protected def dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
     def run(): Result
     trait Result {
       def localNode: PeerNode
@@ -50,7 +50,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  abstract class TwoNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class TwoNodesRuntime[A](val dispatcher: Dispatcher[F, Protocol, CommunicationResponse])
+      extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
@@ -80,7 +81,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  abstract class TwoNodesRemoteDeadRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class TwoNodesRemoteDeadRuntime[A](
+      val dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+  ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
     def run(): TwoNodesResult =
@@ -106,7 +109,9 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
     }
   }
 
-  abstract class ThreeNodesRuntime[A](val dispatcher: Dispatcher[F]) extends Runtime[A] {
+  abstract class ThreeNodesRuntime[A](
+      val dispatcher: Dispatcher[F, Protocol, CommunicationResponse]
+  ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
         local: PeerNode,
@@ -182,41 +187,54 @@ trait Environment {
   def port: Int
 }
 
-final class Dispatcher[F[_]: Applicative](
-    response: PeerNode => CommunicationResponse,
-    delay: Option[Long] = None
+final class Dispatcher[F[_]: Applicative, R, S](
+    response: PeerNode => S,
+    delay: Option[Long] = None,
+    ignore: R => Boolean
 ) {
-  def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
+  def dispatch(peer: PeerNode): R => F[S] =
     p => {
       processed = System.currentTimeMillis()
       delay.foreach(Thread.sleep)
       // Ignore Disconnect messages to not skew the tests
-      if (!p.message.isDisconnect)
+      if (!ignore(p))
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
       response(peer).pure[F]
     }
-  def received: Seq[(PeerNode, Protocol)] = receivedMessages
-  def lastProcessedTimestamp: Long        = processed
-  private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
-  private var processed                   = 0L
+  def received: Seq[(PeerNode, R)] = receivedMessages
+  def lastProcessedTimestamp: Long = processed
+  private val receivedMessages     = mutable.MutableList.empty[(PeerNode, R)]
+  private var processed            = 0L
 }
 
 object Dispatcher {
-  def heartbeatResponseDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(
-      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer))
-    )
-
-  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](delay: Long): Dispatcher[F] =
-    new Dispatcher(
+  def heartbeatResponseDispatcher[F[_]: Applicative]
+    : Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
-      delay = Some(delay)
+      ignore = _.message.isDisconnect
     )
 
-  def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(_ => CommunicationResponse.handledWithoutMessage)
+  def heartbeatResponseDispatcherWithDelay[F[_]: Applicative](
+      delay: Long
+  ): Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
+      peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
+      delay = Some(delay),
+      ignore = _.message.isDisconnect
+    )
 
-  def internalCommunicationErrorDispatcher[F[_]: Applicative]: Dispatcher[F] =
-    new Dispatcher(_ => CommunicationResponse.notHandled(InternalCommunicationError("Test")))
+  def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
+      _ => CommunicationResponse.handledWithoutMessage,
+      ignore = _.message.isDisconnect
+    )
+
+  def internalCommunicationErrorDispatcher[F[_]: Applicative]
+    : Dispatcher[F, Protocol, CommunicationResponse] =
+    new Dispatcher[F, Protocol, CommunicationResponse](
+      _ => CommunicationResponse.notHandled(InternalCommunicationError("Test")),
+      ignore = _.message.isDisconnect
+    )
 
 }
