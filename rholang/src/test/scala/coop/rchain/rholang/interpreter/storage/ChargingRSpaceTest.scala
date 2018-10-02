@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
+import java.nio.file.Files
+
 import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
@@ -180,10 +182,10 @@ object ChargingRSpaceTest {
           BindPattern,
           errors.OutOfPhlogistonsError.type,
           ListParWithRandom,
-          ListParWithRandom
+          ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListParWithRandom])
+      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
     ]]] =
       rspace
         .consume(channels, patterns, continuation, persist)
@@ -194,10 +196,10 @@ object ChargingRSpaceTest {
           BindPattern,
           errors.OutOfPhlogistonsError.type,
           ListParWithRandom,
-          ListParWithRandom
+          ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListParWithRandom])
+      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
     ]]] =
       rspace
         .produce(channel, data, persist)
@@ -215,11 +217,11 @@ object ChargingRSpaceTest {
           BindPattern,
           errors.OutOfPhlogistonsError.type,
           ListParWithRandom,
-          ListParWithRandom
+          ListParWithRandomAndPhlos
         ]
-    ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandom])]] = ???
-    override def createCheckpoint(): Id[Checkpoint]                       = ???
-    override def reset(root: Blake2b256Hash): Id[Unit]                    = ???
+    ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
+    override def createCheckpoint(): Id[Checkpoint]                               = ???
+    override def reset(root: Blake2b256Hash): Id[Unit]                            = ???
     override def retrieve(
         root: Blake2b256Hash,
         channelsHash: Blake2b256Hash
@@ -233,17 +235,18 @@ object ChargingRSpaceTest {
     override def clear(): Id[Unit]                                                  = ???
   }
 
-  private def createRhoISpace(): RhoISpace = {
-    import coop.rchain.rholang.interpreter.storage.implicits._
+  def createRhoISpace(): RhoISpace = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    val context: RhoContext      = Context.createInMemory()
+    import coop.rchain.rholang.interpreter.storage.implicits._
+    val dbDir               = Files.createTempDirectory("rchain-charging-rspace-test-")
+    val context: RhoContext = Context.createFineGrained(dbDir, 1024L * 1024L * 4)
     val space: RhoISpace = RSpace.create[
       Id,
       Par,
       BindPattern,
       OutOfPhlogistonsError.type,
       ListParWithRandom,
-      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ](context, Branch("test"))
     space

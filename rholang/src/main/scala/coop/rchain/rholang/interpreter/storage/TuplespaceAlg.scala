@@ -29,10 +29,10 @@ object TuplespaceAlg {
         BindPattern,
         OutOfPhlogistonsError.type,
         ListParWithRandom,
-        ListParWithRandom,
+        ListParWithRandomAndPhlos,
         TaggedContinuation
       ],
-      dispatcher: => Dispatch[F, ListParWithRandom, TaggedContinuation]
+      dispatcher: => Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   )(implicit F: Sync[F], P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
     override def produce(
         channel: Par,
@@ -42,7 +42,7 @@ object TuplespaceAlg {
       // TODO: Handle the environment in the store
       def go(
           res: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListParWithRandom])
+            (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
           ]]
       ): F[Unit] =
         res match {
@@ -79,7 +79,7 @@ object TuplespaceAlg {
           val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
               res: Either[OutOfPhlogistonsError.type, Option[
-                (TaggedContinuation, Seq[ListParWithRandom])
+                (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
               ]]
           ): F[Unit] =
             res match {

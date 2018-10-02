@@ -42,29 +42,29 @@ trait Registry[F[_]] {
 
   def testInstall(): F[Unit]
 
-  def lookup(args: RootSeq[ListParWithRandom]): F[Unit]
+  def lookup(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def lookupCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def lookupCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def insert(args: RootSeq[ListParWithRandom]): F[Unit]
+  def insert(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def insertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def insertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def nonceInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def nonceInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def delete(args: RootSeq[ListParWithRandom]): F[Unit]
+  def delete(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def deleteRootCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def deleteRootCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def deleteCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def deleteCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def publicLookup(args: RootSeq[ListParWithRandom]): F[Unit]
+  def publicLookup(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def publicRegisterRandom(args: RootSeq[ListParWithRandom]): F[Unit]
+  def publicRegisterRandom(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit]
+  def publicRegisterSigned(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def publicRegisterSigned(args: RootSeq[ListParWithRandom]): F[Unit]
+  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 }
 
 class RegistryImpl[F[_]](
@@ -262,7 +262,7 @@ class RegistryImpl[F[_]](
   private def parByteArray(bs: ByteString): Par = GByteArray(bs)
 
   private def handleResult[E <: Throwable](
-      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListParWithRandom])]]]
+      resultF: F[Either[E, Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]]]
   ): F[Unit] =
     resultF.flatMap({
       case Right(Some((continuation, dataList))) => dispatcher.dispatch(continuation, dataList)
@@ -427,9 +427,9 @@ class RegistryImpl[F[_]](
     } yield ()
   }
 
-  def lookup(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def lookup(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(key, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(key, ret), rand, cost)) =>
         try {
           val Some(Expr(GByteArray(_))) = key.singleExpr
           fetchDataLookup(registryRoot, key, ret, rand)
@@ -444,11 +444,11 @@ class RegistryImpl[F[_]](
   // Result there, return it.
   // Further lookup needed, recurse.
 
-  def lookupCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def lookupCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
       case Seq(
-          ListParWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
-          ListParWithRandom(Seq(data), dataRand, dataCost)
+          ListParWithRandomAndPhlos(Seq(key, ret, replaceChan), callRand, callCost),
+          ListParWithRandomAndPhlos(Seq(data), dataRand, dataCost)
           ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
@@ -491,9 +491,9 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def insert(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def insert(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(key, value, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(key, value, ret), rand, cost)) =>
         try {
           val Some(Expr(GByteArray(_))) = key.singleExpr
           fetchDataInsert(registryRoot, key, value, ret, rand)
@@ -503,10 +503,10 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def insertCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def insertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     genericInsertCallback(args, (x, y) => true, fetchDataInsert)
 
-  def nonceInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit] = {
+  def nonceInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] = {
     def nonceCheck(original: Par, replacement: Par): Boolean = {
       val Some(Expr(ETupleBody(ETuple(Seq(oldNonce, _), _, _)))) = original.singleExpr
       val Some(Expr(ETupleBody(ETuple(Seq(newNonce, _), _, _)))) = replacement.singleExpr
@@ -518,15 +518,15 @@ class RegistryImpl[F[_]](
   }
 
   def genericInsertCallback(
-      args: RootSeq[ListParWithRandom],
+      args: RootSeq[ListParWithRandomAndPhlos],
       check: (Par, Par) => Boolean,
       // Channel, Remaining Key, Value, Return Channel, Random State
       recurse: (Par, Par, Par, Par, Blake2b512Random) => F[Unit]
   ): F[Unit] =
     args match {
       case Seq(
-          ListParWithRandom(Seq(key, value, ret, replaceChan), callRand, callCost),
-          ListParWithRandom(Seq(data), dataRand, dataCost)
+          ListParWithRandomAndPhlos(Seq(key, value, ret, replaceChan), callRand, callCost),
+          ListParWithRandomAndPhlos(Seq(data), dataRand, dataCost)
           ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
@@ -618,9 +618,9 @@ class RegistryImpl[F[_]](
         F.unit
     }
 
-  def delete(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def delete(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(key, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(key, ret), rand, cost)) =>
         try {
           val Some(Expr(GByteArray(_))) = key.singleExpr
           fetchDataRootDelete(registryRoot, key, ret, rand)
@@ -630,11 +630,11 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def deleteRootCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def deleteRootCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
       case Seq(
-          ListParWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
-          ListParWithRandom(Seq(data), dataRand, dataCost)
+          ListParWithRandomAndPhlos(Seq(key, ret, replaceChan), callRand, callCost),
+          ListParWithRandomAndPhlos(Seq(data), dataRand, dataCost)
           ) =>
         def localFail() = failAndReplace(data, replaceChan, ret, dataRand, callRand)
         try {
@@ -681,12 +681,16 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def deleteCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def deleteCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
       case Seq(
-          ListParWithRandom(Seq(key, ret, replaceChan), callRand, callCost),
-          ListParWithRandom(Seq(parentKey, parentData, parentReplace), parentRand, parentCost),
-          ListParWithRandom(Seq(data), dataRand, dataCost)
+          ListParWithRandomAndPhlos(Seq(key, ret, replaceChan), callRand, callCost),
+          ListParWithRandomAndPhlos(
+            Seq(parentKey, parentData, parentReplace),
+            parentRand,
+            parentCost
+          ),
+          ListParWithRandomAndPhlos(Seq(data), dataRand, dataCost)
           ) =>
         def localFail() =
           replace(parentData, parentReplace, parentRand).flatMap(
@@ -778,9 +782,9 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def publicLookup(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def publicLookup(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(key, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(key, ret), rand, cost)) =>
         def localFail() = fail(ret, rand)
         try {
           val Some(Expr(GUri(uri))) = key.singleExpr
@@ -796,7 +800,7 @@ class RegistryImpl[F[_]](
                 ((bytes(32).toShort & 0xff) | ((bytes(33).toShort & 0xfc) << 6)).toShort
               if (crc == CRC14.compute(bytes.view.slice(0, 32))) {
                 val args = RootSeq(
-                  ListParWithRandom(
+                  ListParWithRandomAndPhlos(
                     Seq(parByteArray(ByteString.copyFrom(bytes, 0, 32)), ret),
                     rand
                   )
@@ -816,9 +820,9 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def publicRegisterRandom(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def publicRegisterRandom(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(value, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(value, ret), rand, cost)) =>
         def localFail() = fail(ret, rand)
         try {
           if (value.serializedSize > 1024)
@@ -830,7 +834,7 @@ class RegistryImpl[F[_]](
             val resultChan: Par = GPrivate(ByteString.copyFrom(rand.next()))
             val uri: Par        = GUri(buildURI(bytes))
             val args = RootSeq(
-              ListParWithRandom(Seq(partialKey, value, resultChan), rand)
+              ListParWithRandomAndPhlos(Seq(partialKey, value, resultChan), rand)
             )
             for {
               _ <- handleResult(
@@ -859,9 +863,9 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def publicRegisterSigned(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def publicRegisterSigned(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
-      case Seq(ListParWithRandom(Seq(pubKey, value, sig, ret), rand, cost)) =>
+      case Seq(ListParWithRandomAndPhlos(Seq(pubKey, value, sig, ret), rand, cost)) =>
         try {
           val Some(Expr(GByteArray(keyBytes))) = pubKey.singleExpr
           // Check that the value is of the correct shape.
@@ -905,11 +909,11 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandom]): F[Unit] =
+  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
       case Seq(
-          ListParWithRandom(Seq(urn, expectedValue, ret), _, callCost),
-          ListParWithRandom(Seq(value), valRand, valCost)
+          ListParWithRandomAndPhlos(Seq(urn, expectedValue, ret), _, callCost),
+          ListParWithRandomAndPhlos(Seq(value), valRand, valCost)
           ) =>
         if (expectedValue == value) {
           singleSend(urn, ret, valRand)

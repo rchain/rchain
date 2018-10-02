@@ -44,6 +44,11 @@ message PCost {
 message ListParWithRandom {
     repeated Par pars = 1;
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
+}
+
+message ListParWithRandomAndPhlos {
+    repeated Par pars = 1;
+    bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
     // cost of performing the spatial match
     uint64 cost = 3;
 }

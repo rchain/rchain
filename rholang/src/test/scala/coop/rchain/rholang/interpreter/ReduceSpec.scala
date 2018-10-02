@@ -23,7 +23,7 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-
+import coop.rchain.shared.PathOps._
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
@@ -42,7 +42,7 @@ trait PersistentStoreTester {
       BindPattern,
       OutOfPhlogistonsError.type,
       ListParWithRandom,
-      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ](context, Branch("test"))
     implicit val errLog = errorLog
@@ -53,6 +53,7 @@ trait PersistentStoreTester {
     } finally {
       space.close()
       context.close()
+      dbDir.recursivelyDelete()
     }
   }
 }
@@ -1958,5 +1959,35 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     errorLog.readAndClearErrorVector should be(
       Vector(MethodNotDefined("add", "Map"))
     )
+  }
+
+  "Running out of phlogistons" should "stop the evaluation" in {
+    implicit val errorLog = new ErrorLog()
+
+    val test = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env   = Env.makeEnv[Par]()
+        val notEnoughPhlos = Cost(5)
+        reducer.setAvailablePhlos(notEnoughPhlos).runSyncUnsafe(1.second)
+        val splitRand = rand.splitByte(0)
+        val receive =
+          Receive(
+            Seq(
+              ReceiveBind(
+                Seq(Par(exprs = Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))))),
+                Par(exprs = Seq(GString("channel")))
+              )
+            ),
+            Par(),
+            false,
+            3,
+            BitSet()
+          )
+        reducer.eval(receive)(env, splitRand)
+    }
+
+    val result = test.attempt.runSyncUnsafe(1.second)
+    assert(result === Left(OutOfPhlogistonsError))
+    errorLog.readAndClearErrorVector() should be(Vector.empty)
   }
 }
