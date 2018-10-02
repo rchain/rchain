@@ -12,6 +12,7 @@ case class ProofOfStakeParams(
     validators: Seq[ProofOfStakeValidator]
 ) {
   require(minimumBond <= maximumBond)
+  require(validators.nonEmpty)
 }
 
 object ProofOfStake {
