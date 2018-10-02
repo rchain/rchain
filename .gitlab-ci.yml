@@ -9,6 +9,7 @@ test:integration-test-for-p2p-network:
   before_script:
     - export PRETTY_PRINTER_OUTPUT_TRIM_AFTER=150
   script:
+    - java -version
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
@@ -20,7 +21,7 @@ test:integration-test-for-p2p-network:
 test:integration-test-for-artifact-creation:
   stage: test 
   tags:
-    - preloaded-ubuntu1804 
+    - preloaded-ubuntu1804-java10
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
@@ -33,6 +34,7 @@ deploy:deploy-rnode-to-dockerhub:
   tags:
     - preloaded-ubuntu1804 
   script:
+    - java -version
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate casper/test:compile node/docker:publishLocal
     - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
