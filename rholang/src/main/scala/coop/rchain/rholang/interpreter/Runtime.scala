@@ -123,6 +123,7 @@ object Runtime {
     val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
+    val REG_INSERT_SIGNED: Par = byteName(11)
   }
 
   // because only we do installs
@@ -253,7 +254,8 @@ object Runtime {
         REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
         REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
         REG_PUBLIC_LOOKUP          -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_))
+        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_)),
+        REG_PUBLIC_REGISTER_SIGNED -> (registry.publicRegisterSigned(_))
       )
     }
 
@@ -263,7 +265,8 @@ object Runtime {
       "rho:io:stderr"                -> FixedChannels.STDERR,
       "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
       "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
-      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
+      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM,
+      "rho:registry:insertSigned"    -> FixedChannels.REG_INSERT_SIGNED
     )
 
     lazy val dispatchTable: RhoDispatchMap =
@@ -291,7 +294,13 @@ object Runtime {
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
-        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM)
+        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
+        (
+          FixedChannels.REG_INSERT_SIGNED,
+          4,
+          None,
+          REG_PUBLIC_REGISTER_SIGNED
+        )
       )
     }
 
