@@ -42,8 +42,6 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   trait Runtime[A] {
     protected def dispatcher: Dispatcher[F]
     def run(): Result
-    def await(): Unit = dispatcher.await()
-
     trait Result {
       def localNode: PeerNode
       def apply(): A
@@ -186,13 +184,11 @@ trait Environment {
 
 final class Dispatcher[F[_]: Applicative](
     response: PeerNode => CommunicationResponse,
-    latch: Option[java.util.concurrent.CountDownLatch] = None,
     delay: Option[Long] = None
 ) {
   def dispatch(peer: PeerNode): Protocol => F[CommunicationResponse] =
     p => {
       processed = System.currentTimeMillis()
-      latch.foreach(_.countDown())
       delay.foreach(Thread.sleep)
       // Ignore Disconnect messages to not skew the tests
       if (!p.message.isDisconnect)
@@ -201,7 +197,6 @@ final class Dispatcher[F[_]: Applicative](
     }
   def received: Seq[(PeerNode, Protocol)] = receivedMessages
   def lastProcessedTimestamp: Long        = processed
-  def await(): Unit                       = latch.foreach(_.await(2, TimeUnit.SECONDS))
   private val receivedMessages            = mutable.MutableList.empty[(PeerNode, Protocol)]
   private var processed                   = 0L
 }
@@ -216,12 +211,6 @@ object Dispatcher {
     new Dispatcher(
       peer => CommunicationResponse.handledWithMessage(ProtocolHelper.heartbeatResponse(peer)),
       delay = Some(delay)
-    )
-
-  def dispatcherWithLatch[F[_]: Applicative](countDown: Int = 1): Dispatcher[F] =
-    new Dispatcher(
-      _ => CommunicationResponse.handledWithoutMessage,
-      latch = Some(new java.util.concurrent.CountDownLatch(countDown))
     )
 
   def withoutMessageDispatcher[F[_]: Applicative]: Dispatcher[F] =

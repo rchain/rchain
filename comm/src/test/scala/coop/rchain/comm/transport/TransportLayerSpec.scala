@@ -125,16 +125,12 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
     "sending a message" should {
       "deliver the message" in
-        new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
+        new TwoNodesRuntime[CommErr[Unit]](Dispatcher.withoutMessageDispatcher[F]) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote: PeerNode
-          ): F[CommErr[Unit]] =
-            for {
-              r <- sendHeartbeat(transportLayer, local, remote)
-              _ = await()
-            } yield r
+          ): F[CommErr[Unit]] = sendHeartbeat(transportLayer, local, remote)
 
           val result: TwoNodesResult = run()
 
@@ -147,7 +143,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
         }
 
       "wait for a response" in
-        new TwoNodesRuntime[Long](Dispatcher.dispatcherWithLatch[F]()) {
+        new TwoNodesRuntime[Long](Dispatcher.withoutMessageDispatcher[F]) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
@@ -156,7 +152,6 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
             for {
               _ <- sendHeartbeat(transportLayer, local, remote)
               t = System.currentTimeMillis()
-              _ = await()
             } yield t
 
           val result: TwoNodesResult = run()
@@ -164,26 +159,17 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           val sent = result()
           sent should be > result.lastProcessedMessageTimestamp
         }
-
-      "wait for message being delivered" in {
-        // future feature, not yet implemented
-        pending
-      }
     }
 
     "broadcasting a message" should {
       "send the message to all peers" in
-        new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
+        new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.withoutMessageDispatcher[F]) {
           def execute(
               transportLayer: TransportLayer[F],
               local: PeerNode,
               remote1: PeerNode,
               remote2: PeerNode
-          ): F[Seq[CommErr[Unit]]] =
-            for {
-              r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-              _ = await()
-            } yield r
+          ): F[Seq[CommErr[Unit]]] = broadcastHeartbeat(transportLayer, local, remote1, remote2)
 
           val result: ThreeNodesResult = run()
 
@@ -229,7 +215,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "sending a message" should {
         "not send the message" in
-          new TwoNodesRuntime[CommErr[Unit]](Dispatcher.dispatcherWithLatch[F]()) {
+          new TwoNodesRuntime[CommErr[Unit]](Dispatcher.withoutMessageDispatcher[F]) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -238,7 +224,6 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- sendHeartbeat(transportLayer, local, remote)
-                _ = await()
               } yield r
 
             val result: TwoNodesResult = run()
@@ -249,7 +234,7 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
 
       "broadcasting a message" should {
         "not send any messages" in
-          new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.dispatcherWithLatch[F](2)) {
+          new ThreeNodesRuntime[Seq[CommErr[Unit]]](Dispatcher.withoutMessageDispatcher[F]) {
             def execute(
                 transportLayer: TransportLayer[F],
                 local: PeerNode,
@@ -259,7 +244,6 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               for {
                 _ <- transportLayer.shutdown(ProtocolHelper.disconnect(local))
                 r <- broadcastHeartbeat(transportLayer, local, remote1, remote2)
-                _ = await()
               } yield r
 
             val result: ThreeNodesResult = run()
