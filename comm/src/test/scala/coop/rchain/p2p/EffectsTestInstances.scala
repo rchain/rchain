@@ -30,7 +30,7 @@ object EffectsTestInstances {
       clock
     }
 
-    def sleep(millis: Int): F[Unit] = Capture[F].capture(())
+    def sleep(duration: FiniteDuration): F[Unit] = Capture[F].capture(())
 
     def reset(): Unit = this.clock = 0
   }

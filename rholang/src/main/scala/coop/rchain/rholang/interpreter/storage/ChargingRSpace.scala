@@ -39,7 +39,7 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandom])
+        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
@@ -54,7 +54,7 @@ object ChargingRSpace {
           channels: Seq[Par],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
-      ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
+      ): F[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
         Sync[F].delay(
           space.install(channels, patterns, continuation)(
             matchListPar(Cost(Integer.MAX_VALUE))
@@ -66,7 +66,7 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandom])
+        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
         for {
@@ -79,7 +79,7 @@ object ChargingRSpace {
 
       private def handleResult(
           result: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListParWithRandom])
+            (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
           ]],
           storageCost: Cost,
           persist: Boolean

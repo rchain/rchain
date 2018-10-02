@@ -1,23 +1,21 @@
 package coop.rchain.comm.rp
 
+import scala.concurrent.duration._
+
 import cats._
-import cats.effect.Timer
 import cats.implicits._
-import com.google.protobuf.any.{Any => AnyProto}
+
 import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError._
 import coop.rchain.comm._
-import coop.rchain.comm.discovery._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.rp.Connect.Connections._
-import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.CommunicationResponse._
 import coop.rchain.comm.transport._
+import coop.rchain.comm.transport.CommunicationResponse._
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
-
-import scala.concurrent.duration._
 
 object HandleMessages {
 
