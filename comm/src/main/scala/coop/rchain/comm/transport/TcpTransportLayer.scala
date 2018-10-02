@@ -198,7 +198,8 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   }
 
   def receive(
-      dispatch: Protocol => Task[CommunicationResponse]
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleBlob: Blob => Task[Unit]
   ): Task[Unit] =
     cell.modify { s =>
       for {
@@ -209,7 +210,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                      )
                    case _ =>
                      val parallelism = Runtime.getRuntime.availableProcessors()
-                     receiveInternal(parallelism)(dispatch, kp(Task.unit)) // FIX-ME
+                     receiveInternal(parallelism)(dispatch, handleBlob)
                  }
       } yield s.copy(server = Some(server))
 

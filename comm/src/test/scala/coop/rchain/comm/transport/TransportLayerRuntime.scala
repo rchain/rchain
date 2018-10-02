@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable
 import scala.concurrent.duration._
-
+import coop.rchain.catscontrib.ski._
 import cats._
 import cats.implicits._
 
 import coop.rchain.comm._
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.protocol.routing.{Blob, Protocol}
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.rp.ProtocolHelper
 
@@ -63,7 +63,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             remoteTl <- createTransportLayer(e2)
             local    = e1.peer
             remote   = e2.peer
-            _        <- remoteTl.receive(dispatcher.dispatch(remote))
+            _        <- remoteTl.receive(dispatcher.dispatch(remote), kp(().pure[F])) // TODO
             r        <- execute(localTl, local, remote)
             _        <- remoteTl.shutdown(ProtocolHelper.disconnect(remote))
             _        <- localTl.shutdown(ProtocolHelper.disconnect(local))
@@ -126,8 +126,8 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
             local     = e1.peer
             remote1   = e2.peer
             remote2   = e3.peer
-            _         <- remoteTl1.receive(dispatcher.dispatch(remote1))
-            _         <- remoteTl2.receive(dispatcher.dispatch(remote2))
+            _         <- remoteTl1.receive(dispatcher.dispatch(remote1), kp(().pure[F])) // TODO test blobs
+            _         <- remoteTl2.receive(dispatcher.dispatch(remote2), kp(().pure[F]))
             r         <- execute(localTl, local, remote1, remote2)
             _         <- remoteTl1.shutdown(ProtocolHelper.disconnect(remote1))
             _         <- remoteTl2.shutdown(ProtocolHelper.disconnect(remote2))
