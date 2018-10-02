@@ -10,6 +10,11 @@ final case class Cost(value: Long) extends AnyVal {
   def -(other: Cost): Cost = Cost(value - other.value)
 }
 
+object Cost {
+  def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
+    Cost(chargeable.cost(term))
+}
+
 trait Costs {
 
   final val SUM_COST: Cost         = Cost(3)

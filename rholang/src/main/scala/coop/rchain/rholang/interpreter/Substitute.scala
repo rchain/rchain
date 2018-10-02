@@ -10,6 +10,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort._
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.SubstituteError
 
 trait Substitute[M[_], A] {
@@ -18,6 +19,35 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+  def charge[A: Chargeable, M[_]: Sync: CostAccountingAlg](
+      substitutionResult: M[A],
+      failureCost: Cost
+  ): M[A] =
+    substitutionResult.attempt
+      .map(
+        _.fold(
+          th => (Left(th), failureCost),
+          substTerm => (Right(substTerm), Cost(substTerm))
+        )
+      )
+      .flatMap({ case (result, cost) => CostAccountingAlg[M].charge(cost) *> Sync[M].pure(result) })
+      .rethrow
+
+  def substituteAndCharge[A: Chargeable, M[_]: CostAccountingAlg: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par]
+  ): M[A] =
+    charge(Substitute[M, A].substitute(term)(depth, env), Cost(term))
+
+  def substituteNoSortAndCharge[A: Chargeable, M[_]: CostAccountingAlg: Substitute[?[_], A]: Sync](
+      term: A,
+      depth: Int,
+      env: Env[Par],
+      costAccountingAlg: CostAccountingAlg[M]
+  ): M[A] =
+    charge(Substitute[M, A].substituteNoSort(term)(depth, env), Cost(term))
+
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C
   )(implicit evA: Substitute[M, A], evB: Substitute[M, B], depth: Int, env: Env[Par]): M[C] =
