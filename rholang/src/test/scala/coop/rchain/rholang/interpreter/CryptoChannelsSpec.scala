@@ -6,7 +6,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
@@ -36,10 +35,10 @@ class CryptoChannelsSpec
 
   behavior of "Crypto channels"
 
-  implicit val rand: Blake2b512Random               = Blake2b512Random(Array.empty[Byte])
-  implicit val serializeChannel: Serialize[Channel] = storage.implicits.serializeChannel
-  implicit val serializeChannels: Serialize[ListChannelWithRandom] =
-    storage.implicits.serializeChannels
+  implicit val rand: Blake2b512Random       = Blake2b512Random(Array.empty[Byte])
+  implicit val serializePar: Serialize[Par] = storage.implicits.serializePar
+  implicit val serializePars: Serialize[ListParWithRandom] =
+    storage.implicits.serializePars
 
   val serialize: Par => Array[Byte]                    = Serialize[Par].encode(_).toArray
   val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
@@ -56,20 +55,20 @@ class CryptoChannelsSpec
       timeout: Duration = 3.seconds
   )(implicit env: Env[Par]): Unit = {
     val consume = Receive(
-      Seq(ReceiveBind(Seq(Channel(ChanVar(Var(Wildcard(WildcardMsg()))))), Quote(ackChannel))),
+      Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
     Await.ready(reduce.eval(consume).runAsync, 3.seconds)
   }
 
-  def assertStoreContains(store: RhoIStore)(ackChannel: GString)(data: ListChannelWithRandom)(
+  def assertStoreContains(store: RhoIStore)(ackChannel: GString)(data: ListParWithRandom)(
       implicit
-      serializeChannel: Serialize[Channel],
-      serializeChannels: Serialize[ListChannelWithRandom]
+      serializePar: Serialize[Par],
+      serializePars: Serialize[ListParWithRandom]
   ): Assertion = {
-    val channel = Channel(Quote(ackChannel))
-    val datum   = store.toMap(List(channel)).data.head
-    assert(datum.a.channels == data.channels)
+    val channel: Par = ackChannel
+    val datum        = store.toMap(List(channel)).data.head
+    assert(datum.a.pars == data.pars)
     assert(datum.a.randomState == data.randomState)
     assert(!datum.persist)
   }
@@ -80,21 +79,21 @@ class CryptoChannelsSpec
       fixture: FixtureParam
   )(
       implicit
-      serializeChannel: Serialize[Channel],
-      serializeChannels: Serialize[ListChannelWithRandom]
+      serializePar: Serialize[Par],
+      serializePars: Serialize[ListParWithRandom]
   ): Any = {
     val (reduce, store) = fixture
 
     val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
       hashFn => serialize andThen hashFn
 
-    val hashChannel              = Quote(GString(channelName))
+    val hashChannel: Par         = GString(channelName)
     val hash: Par => Array[Byte] = serializeAndHash(hashFn)
 
     val ackChannel        = GString("x")
     implicit val emptyEnv = Env[Par]()
 
-    val storeContainsTest: ListChannelWithRandom => Assertion =
+    val storeContainsTest: ListParWithRandom => Assertion =
       assertStoreContains(store)(ackChannel)(_)
 
     forAll { (par: Par) =>
@@ -107,7 +106,7 @@ class CryptoChannelsSpec
       // 2. hash input array
       // 3. send result on supplied ack channel
       Await.result(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(ListChannelWithRandom(Seq(Quote(expected)), rand, 0))
+      storeContainsTest(ListParWithRandom(Seq(expected), rand, 0))
       clearStore(store, reduce, ackChannel)
     }
   }
@@ -135,7 +134,7 @@ class CryptoChannelsSpec
     fixture =>
       val (reduce, store) = fixture
 
-      val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
+      val secp256k1VerifyhashChannel = GString("secp256k1Verify")
 
       val pubKey = Base16.decode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
@@ -144,7 +143,7 @@ class CryptoChannelsSpec
 
       val ackChannel        = GString("x")
       implicit val emptyEnv = Env[Par]()
-      val storeContainsTest: ListChannelWithRandom => Assertion =
+      val storeContainsTest: ListParWithRandom => Assertion =
         assertStoreContains(store)(ackChannel) _
 
       forAll { (par: Par) =>
@@ -167,7 +166,7 @@ class CryptoChannelsSpec
         )
         Await.result(reduce.eval(send).runAsync, 3.seconds)
         storeContainsTest(
-          ListChannelWithRandom(Seq(Quote(Expr(GBool(true)))), rand, 0)
+          ListParWithRandom(Seq(Expr(GBool(true))), rand, 0)
         )
         clearStore(store, reduce, ackChannel)
       }
@@ -179,12 +178,12 @@ class CryptoChannelsSpec
 
       implicit val rand = Blake2b512Random(Array.empty[Byte])
 
-      val ed25519VerifyChannel = Quote(GString("ed25519Verify"))
+      val ed25519VerifyChannel = GString("ed25519Verify")
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
       val ackChannel        = GString("x")
       implicit val emptyEnv = Env[Par]()
-      val storeContainsTest: ListChannelWithRandom => Assertion =
+      val storeContainsTest: ListParWithRandom => Assertion =
         assertStoreContains(store)(ackChannel) _
 
       forAll { (par: Par) =>
@@ -207,7 +206,7 @@ class CryptoChannelsSpec
         )
         Await.result(reduce.eval(send).runAsync, 3.seconds)
         storeContainsTest(
-          ListChannelWithRandom(List(Quote(Expr(GBool(true)))), rand, 0)
+          ListParWithRandom(List(Expr(GBool(true))), rand, 0)
         )
         clearStore(store, reduce, ackChannel)
       }

@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.Parallel
 import cats.effect.Sync
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
@@ -11,12 +10,12 @@ import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
-import coop.rchain.rholang.interpreter.storage.implicits.matchListQuote
+import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 
 trait TuplespaceAlg[F[_]] {
-  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[Unit]
+  def produce(chan: Par, data: ListParWithRandom, persistent: Boolean): F[Unit]
   def consume(
-      binds: Seq[(BindPattern, Quote)],
+      binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
       persistent: Boolean
   ): F[Unit]
@@ -26,24 +25,24 @@ object TuplespaceAlg {
   def rspaceTuplespace[F[_], M[_]](
       pureRSpace: PureRSpace[
         F,
-        Channel,
+        Par,
         BindPattern,
         OutOfPhlogistonsError.type,
-        ListChannelWithRandom,
-        ListChannelWithRandom,
+        ListParWithRandom,
+        ListParWithRandom,
         TaggedContinuation
       ],
-      dispatcher: => Dispatch[F, ListChannelWithRandom, TaggedContinuation]
+      dispatcher: => Dispatch[F, ListParWithRandom, TaggedContinuation]
   )(implicit F: Sync[F], P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
     override def produce(
-        channel: Channel,
-        data: ListChannelWithRandom,
+        channel: Par,
+        data: ListParWithRandom,
         persistent: Boolean
     ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
           res: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListChannelWithRandom])
+            (TaggedContinuation, Seq[ListParWithRandom])
           ]]
       ): F[Unit] =
         res match {
@@ -70,17 +69,17 @@ object TuplespaceAlg {
     }
 
     override def consume(
-        binds: Seq[(BindPattern, Quote)],
+        binds: Seq[(BindPattern, Par)],
         body: ParWithRandom,
         persistent: Boolean
     ): F[Unit] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
+          val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
               res: Either[OutOfPhlogistonsError.type, Option[
-                (TaggedContinuation, Seq[ListChannelWithRandom])
+                (TaggedContinuation, Seq[ListParWithRandom])
               ]]
           ): F[Unit] =
             res match {
@@ -101,7 +100,7 @@ object TuplespaceAlg {
 
           for {
             res <- pureRSpace.consume(
-                    sources.map(q => Channel(q)).toList,
+                    sources.toList,
                     patterns.toList,
                     TaggedContinuation(ParBody(body)),
                     persist = persistent
