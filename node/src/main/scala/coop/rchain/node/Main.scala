@@ -31,7 +31,7 @@ object Main {
     val exec: Task[Unit] =
       for {
         conf        <- Configuration(args)
-        minPoolSize = Runtime.getRuntime.availableProcessors() + 1
+        minPoolSize = Math.max(Runtime.getRuntime.availableProcessors(), 2)
         maxPoolSize = Math.max(conf.server.threadPoolSize, minPoolSize)
         scheduler   = Scheduler.cached("node-io", minPoolSize, maxPoolSize)
         _           <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)

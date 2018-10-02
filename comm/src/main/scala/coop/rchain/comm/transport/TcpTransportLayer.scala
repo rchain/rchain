@@ -202,7 +202,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                        new RuntimeException("TransportLayer server is already started")
                      )
                    case _ =>
-                     val parallelism = Runtime.getRuntime.availableProcessors() + 1
+                     val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
                      receiveInternal(parallelism)(dispatch)
                  }
       } yield s.copy(server = Some(server))
