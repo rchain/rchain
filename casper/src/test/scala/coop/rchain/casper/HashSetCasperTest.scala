@@ -140,7 +140,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
         |  rr!(bundle+{*hello}, *uriCh)
         |}
       """.stripMargin,
-      now
+      now,
+      accounting.MAX_VALUE
     )
 
     casperEff.deploy(registerDeploy)
@@ -159,7 +160,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
          |  for(hello <- helloCh){ hello!("World", *out) }
          |}
       """.stripMargin,
-      now
+      now,
+      accounting.MAX_VALUE
     )
     casperEff.deploy(callDeploy)
     val Created(block2) = casperEff.createBlock

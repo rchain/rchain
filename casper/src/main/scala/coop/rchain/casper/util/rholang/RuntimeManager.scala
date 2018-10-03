@@ -8,8 +8,9 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.models.Expr.ExprInstance.{EMapBody, GString}
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.Registry
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
@@ -190,6 +191,8 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                     doReplayEval(rem, newCheckpoint.root)
                   case Failure(ex: ReplayException) =>
                     Left(none[Deploy] -> UnusedCommEvent(ex))
+                  case Failure(ex) =>
+                    Left(none[Deploy] -> InternalErrors(Vector(ex)))
                 }
               }
           }
@@ -224,9 +227,24 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(active: Runtime): RuntimeManager = {
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
     active.space.clear()
     active.replaySpace.clear()
+
+    //populate registry root with empty map
+    val emptyMap     = Par().withExprs(List(Expr(EMapBody(ParMap(Nil)))))
+    val registryRoot = Par().withIds(List(Registry.registryRoot))
+    val produceTerm  = Par().withSends(List(Send(registryRoot, List(emptyMap))))
+    implicit val rand = Blake2b512Random(
+      Array[Byte](3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3)
+    )
+    val registryInit = for {
+      _ <- active.reducer.setAvailablePhlos(Cost(Long.MaxValue))
+      _ <- active.reducer.inj(produceTerm)
+      _ <- active.reducer.setAvailablePhlos(Cost(0L))
+    } yield ()
+    registryInit.unsafeRunSync
+
     val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
     assert(hash == replayHash)

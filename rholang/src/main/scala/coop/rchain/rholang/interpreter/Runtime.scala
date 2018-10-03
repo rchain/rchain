@@ -105,7 +105,6 @@ object Runtime {
     val REG_PUBLIC_LOOKUP: Long                   = 17L
     val REG_PUBLIC_REGISTER_RANDOM: Long          = 18L
     val REG_PUBLIC_REGISTER_INSERT_CALLBACK: Long = 19L
-    val REG_INITIALIZE: Long                      = 20L
   }
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
@@ -122,7 +121,6 @@ object Runtime {
     val SECP256K1_VERIFY: Par  = GString("secp256k1Verify")
     val REG_LOOKUP: Par        = byteName(9)
     val REG_INSERT_RANDOM: Par = byteName(10)
-    val REG_INIT: Par          = byteName(11)
   }
 
   // because only we do installs
@@ -253,8 +251,7 @@ object Runtime {
         REG_DELETE_CALLBACK                 -> (registry.deleteCallback(_)),
         REG_PUBLIC_LOOKUP                   -> (registry.publicLookup(_)),
         REG_PUBLIC_REGISTER_RANDOM          -> (registry.publicRegisterRandom(_)),
-        REG_PUBLIC_REGISTER_INSERT_CALLBACK -> (registry.publicRegisterInsertCallback(_)),
-        REG_INITIALIZE                      -> SystemProcesses.initRegistry(space, dispatcher)
+        REG_PUBLIC_REGISTER_INSERT_CALLBACK -> (registry.publicRegisterInsertCallback(_))
       )
     }
 
@@ -264,8 +261,7 @@ object Runtime {
       "rho:io:stderr"                -> FixedChannels.STDERR,
       "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
       "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
-      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM,
-      "rho:registry:initialize"      -> FixedChannels.REG_INIT
+      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
     )
 
     lazy val dispatchTable: RhoDispatchMap =
@@ -293,8 +289,7 @@ object Runtime {
         (FixedChannels.BLAKE2B256_HASH, 2, None, BLAKE2B256_HASH),
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
-        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
-        (FixedChannels.REG_INIT, 0, None, REG_INITIALIZE)
+        (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM)
       )
     }
 
