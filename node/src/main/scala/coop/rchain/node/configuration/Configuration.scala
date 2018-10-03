@@ -372,10 +372,10 @@ object Configuration {
       case Some(options.run) => Run
       case Some(options.dataAtName) =>
         import options.dataAtName._
-        DataAtName(depth.getOrElse(default = Int.MaxValue), name())
+        DataAtName(name())
       case Some(options.contAtName) =>
         import options.contAtName._
-        ContAtName(depth.getOrElse(default = Int.MaxValue), name())
+        ContAtName(name())
       case _ => Help
     }
 }

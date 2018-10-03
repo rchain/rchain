@@ -67,14 +67,14 @@ object Main {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
-      case DeployDemo               => DeployRuntime.deployDemoProgram[Task]
-      case Propose                  => DeployRuntime.propose[Task]()
-      case ShowBlock(hash)          => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks(depth)        => DeployRuntime.showBlocks[Task](depth)
-      case DataAtName(depth, name)  => DeployRuntime.listenForDataAtName[Task](depth, name)
-      case ContAtName(depth, names) => DeployRuntime.listenForContinuationAtName[Task](depth, names)
-      case Run                      => nodeProgram(conf)
-      case _                        => conf.printHelp()
+      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
+      case Propose           => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
+      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Run               => nodeProgram(conf)
+      case _                 => conf.printHelp()
     }
 
     program.doOnFinish(

@@ -35,23 +35,21 @@ object DeployRuntime {
     gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)).map(println(_)))
 
   def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
-      depth: Int,
       name: Id[Name]
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val request = DataAtNameQuery(depth, Some(par))
+        val request = DataAtNameQuery(Int.MaxValue, Some(par))
         DeployService[F].listenForDataAtName(request) map (_.blockResults)
       }
     }
 
   def listenForContinuationAtName[F[_]: Sync: Time: DeployService: Capture](
-      depth: Int,
       names: List[Name]
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val request = ContinuationAtNameQuery(depth, pars)
+        val request = ContinuationAtNameQuery(Int.MaxValue, pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }

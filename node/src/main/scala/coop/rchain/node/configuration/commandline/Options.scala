@@ -361,9 +361,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         short = 't'
       )
 
-    val depth =
-      opt[Int](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
-
     val content =
       opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')
 
