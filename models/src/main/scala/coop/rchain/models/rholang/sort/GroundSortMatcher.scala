@@ -72,9 +72,14 @@ private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
           )
       case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toStringUtf8))).pure[F]
-      case _ => //TODO(mateusz.gorski): rethink it
+
+      //TODO get rid of Empty nodes in Protobuf unless they represent sth indeed optional
+      case Empty =>
+        ScoredTerm(g, Node(Score.ABSENT)).pure[F]
+
+      case expr => //TODO(mateusz.gorski): rethink it
         Sync[F].raiseError(
-          new IllegalArgumentException("GroundSortMatcher passed unknown Expr instance")
+          new IllegalArgumentException(s"GroundSortMatcher passed unknown Expr instance:\n$expr")
         )
     }
 }

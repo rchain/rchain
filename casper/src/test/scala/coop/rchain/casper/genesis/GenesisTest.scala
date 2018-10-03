@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.helper.BlockStoreFixture
-import coop.rchain.casper.protocol.Bond
+import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.catscontrib._
@@ -16,17 +16,14 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.shared.PathOps.RichPath
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
-class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with BlockStoreFixture {
-  val storageSize     = 1024L * 1024
-  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
-  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
-  val numValidators   = 5
-  val rchainShardId   = "rchain"
-  implicit val log    = new LogStub[Id]
-  implicit val time   = new LogicalTime[Id]
+import java.nio.file.Path
+
+class GenesisTest extends FlatSpec with Matchers with BlockStoreFixture {
+  import GenesisTest._
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -62,169 +59,178 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     pw.close()
   }
 
-  override def beforeEach(): Unit =
-    log.reset()
+  "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in withGenResources {
+    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val _ = fromInputFiles()(runtimeManager, genesisPath, log, time)
 
-  "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in {
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ = Genesis.fromInputFiles[Id](
-      None,
-      numValidators,
-      genesisPath,
-      None,
-      runtimeManager,
-      rchainShardId,
-      Some(System.currentTimeMillis())
-    )
-    runtime.close()
+      log.warns.find(_.contains("bonds")) should be(None)
+      log.infos.count(_.contains("Created validator")) should be(numValidators)
 
-    log.warns.find(_.contains("bonds")) should be(None)
-    log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
-  it should "generate random validators, with a warning, when bonds file does not exist" in {
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ = Genesis.fromInputFiles[Id](
-      Some("not/a/real/file"),
-      numValidators,
-      genesisPath,
-      None,
-      runtimeManager,
-      rchainShardId,
-      Some(System.currentTimeMillis())
-    )
-    runtime.close()
-
-    log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
-      1
-    )
-    log.infos.count(_.contains("Created validator")) should be(numValidators)
-  }
-
-  it should "generate random validators, with a warning, when bonds file cannot be parsed" in {
-    val path         = genesisPath
-    val badBondsFile = path.resolve("misformatted.txt").toString
-
-    val pw = new PrintWriter(badBondsFile)
-    pw.println("xzy 1\nabc 123 7")
-    pw.close()
-
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ =
-      Genesis.fromInputFiles[Id](
-        Some(badBondsFile),
-        numValidators,
-        path,
-        None,
+  it should "generate random validators, with a warning, when bonds file does not exist" in withGenResources {
+    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val _ = fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
         runtimeManager,
-        rchainShardId,
-        Some(System.currentTimeMillis())
+        genesisPath,
+        log,
+        time
       )
-    runtime.close()
 
-    log.warns.count(_.contains("cannot be parsed. Falling back on generating random validators.")) should be(
-      1
-    )
-    log.infos.count(_.contains("Created validator")) should be(numValidators)
+      log.warns.count(_.contains("does not exist. Falling back on generating random validators.")) should be(
+        1
+      )
+      log.infos.count(_.contains("Created validator")) should be(numValidators)
   }
 
-  it should "create a genesis block with the right bonds when a proper bonds file is given" in {
-    val path      = genesisPath
-    val bondsFile = path.resolve("givenBonds.txt").toString
-    printBonds(bondsFile)
+  it should "generate random validators, with a warning, when bonds file cannot be parsed" in withGenResources {
+    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val badBondsFile = genesisPath.resolve("misformatted.txt").toString
 
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val genesis =
-      Genesis.fromInputFiles[Id](
-        Some(bondsFile),
-        numValidators,
-        path,
-        None,
-        runtimeManager,
-        rchainShardId,
-        Some(System.currentTimeMillis())
+      val pw = new PrintWriter(badBondsFile)
+      pw.println("xzy 1\nabc 123 7")
+      pw.close()
+
+      val _ =
+        fromInputFiles(maybeBondsPath = Some(badBondsFile))(runtimeManager, genesisPath, log, time)
+
+      log.warns.count(_.contains("cannot be parsed. Falling back on generating random validators.")) should be(
+        1
       )
-    runtime.close()
-    val bonds = ProtoUtil.bonds(genesis)
+      log.infos.count(_.contains("Created validator")) should be(numValidators)
+  }
 
-    log.infos.isEmpty should be(true)
-    validators
-      .map {
-        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)
-      }
-      .forall(
-        bonds.contains(_)
-      ) should be(true)
+  it should "create a genesis block with the right bonds when a proper bonds file is given" in withGenResources {
+    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val bondsFile = genesisPath.resolve("givenBonds.txt").toString
+      printBonds(bondsFile)
+
+      val genesis =
+        fromInputFiles(maybeBondsPath = Some(bondsFile))(runtimeManager, genesisPath, log, time)
+      val bonds = ProtoUtil.bonds(genesis)
+
+      log.infos.isEmpty should be(true)
+      validators
+        .map {
+          case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+        }
+        .forall(
+          bonds.contains(_)
+        ) should be(true)
   }
 
   it should "create a valid genesis block" in withStore { implicit store =>
-    val activeRuntime  = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-    val emptyStateHash = runtimeManager.emptyStateHash
+    withGenResources {
+      (
+          runtimeManager: RuntimeManager,
+          genesisPath: Path,
+          log: LogStub[Id],
+          time: LogicalTime[Id]
+      ) =>
+        val emptyStateHash  = runtimeManager.emptyStateHash
+        implicit val logEff = log
+        val genesis         = fromInputFiles()(runtimeManager, genesisPath, log, time)
+        BlockStore[Id].put(genesis.blockHash, genesis)
+        val blockDag = BlockDag.empty
 
-    val genesis = Genesis.fromInputFiles[Id](
-      None,
-      numValidators,
-      genesisPath,
-      None,
-      runtimeManager,
-      rchainShardId,
-      Some(System.currentTimeMillis())
-    )
-    BlockStore[Id].put(genesis.blockHash, genesis)
-    val blockDag = BlockDag.empty
+        val (maybePostGenesisStateHash, _) = InterpreterUtil
+          .validateBlockCheckpoint[Id](
+            genesis,
+            blockDag,
+            Set[ByteString](emptyStateHash),
+            runtimeManager
+          )
 
-    val (maybePostGenesisStateHash, _) = InterpreterUtil
-      .validateBlockCheckpoint[Id](
-        genesis,
-        blockDag,
-        Set[ByteString](emptyStateHash),
-        runtimeManager
+        maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
+    }
+  }
+
+  it should "detect an existing bonds file in the default location" in withGenResources {
+    (runtimeManager: RuntimeManager, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val bondsFile = genesisPath.resolve("bonds.txt").toString
+      printBonds(bondsFile)
+
+      val genesis = fromInputFiles()(runtimeManager, genesisPath, log, time)
+      val bonds   = ProtoUtil.bonds(genesis)
+
+      log.infos.length should be(1)
+      validators
+        .map {
+          case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i.toLong)
+        }
+        .forall(
+          bonds.contains(_)
+        ) should be(true)
+  }
+
+  it should "parse the wallets file and include it in the genesis state" in withRawGenResources {
+    (runtime: Runtime, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+      val walletsFile = genesisPath.resolve("wallets.txt").toString
+      printWallets(walletsFile)
+
+      val runtimeManager  = RuntimeManager.fromRuntime(runtime)
+      val _               = fromInputFiles()(runtimeManager, genesisPath, log, time)
+      val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
+
+      walletAddresses.forall(storageContents contains _._1) should be(true)
+  }
+
+}
+
+object GenesisTest {
+  val storageSize     = 1024L * 1024
+  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime")
+  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test")
+  val numValidators   = 5
+  val rchainShardId   = "rchain"
+
+  def fromInputFiles(
+      maybeBondsPath: Option[String] = None,
+      numValidators: Int = numValidators,
+      maybeWalletsPath: Option[String] = None,
+      minimumBond: Long = 1L,
+      maximumBond: Long = Long.MaxValue,
+      faucet: Boolean = false,
+      shardId: String = rchainShardId,
+      deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
+  )(
+      implicit runtimeManager: RuntimeManager,
+      genesisPath: Path,
+      log: LogStub[Id],
+      time: LogicalTime[Id]
+  ): BlockMessage =
+    Genesis
+      .fromInputFiles[Id](
+        maybeBondsPath,
+        numValidators,
+        genesisPath,
+        maybeWalletsPath,
+        minimumBond,
+        maximumBond,
+        faucet,
+        runtimeManager,
+        shardId,
+        deployTimestamp
       )
-    activeRuntime.close()
 
-    maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
-  }
+  def withRawGenResources(body: (Runtime, Path, LogStub[Id], LogicalTime[Id]) => Unit): Unit = {
+    val storePath = storageLocation
+    val runtime   = Runtime.create(storePath, storageSize)
+    val gp        = genesisPath
+    val log       = new LogStub[Id]
+    val time      = new LogicalTime[Id]
 
-  it should "detect an existing bonds file in the default location" in {
-    val path      = genesisPath
-    val bondsFile = path.resolve("bonds.txt").toString
-    printBonds(bondsFile)
+    body(runtime, genesisPath, log, time)
 
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val genesis = Genesis
-      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
     runtime.close()
-    val bonds = ProtoUtil.bonds(genesis)
-
-    log.infos.length should be(1)
-    validators
-      .map {
-        case (v, i) => Bond(ByteString.copyFrom(Base16.decode(v)), i)
-      }
-      .forall(
-        bonds.contains(_)
-      ) should be(true)
+    storePath.recursivelyDelete()
+    gp.recursivelyDelete()
   }
 
-  it should "parse the wallets file and include it in the genesis state" in {
-    val path        = genesisPath
-    val walletsFile = path.resolve("wallets.txt").toString
-    printWallets(walletsFile)
-
-    val runtime        = Runtime.create(storageLocation, storageSize)
-    val runtimeManager = RuntimeManager.fromRuntime(runtime)
-    val _ = Genesis
-      .fromInputFiles[Id](None, numValidators, path, None, runtimeManager, rchainShardId, None)
-    val storageContents = StoragePrinter.prettyPrint(runtime.space.store)
-    runtime.close()
-
-    walletAddresses.forall(storageContents contains _._1) should be(true)
-  }
-
+  def withGenResources(body: (RuntimeManager, Path, LogStub[Id], LogicalTime[Id]) => Unit): Unit =
+    withRawGenResources {
+      (runtime: Runtime, genesisPath: Path, log: LogStub[Id], time: LogicalTime[Id]) =>
+        val runtimeManager = RuntimeManager.fromRuntime(runtime)
+        body(runtimeManager, genesisPath, log, time)
+    }
 }

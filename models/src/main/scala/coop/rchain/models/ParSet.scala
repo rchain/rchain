@@ -17,11 +17,12 @@ case class ParSet(
   override def equals(o: scala.Any): Boolean = o match {
     case parSet: ParSet =>
       this.ps == parSet.ps &&
-        this.remainder == parSet.remainder
+        this.remainder == parSet.remainder &&
+        this.connectiveUsed == parSet.connectiveUsed
     case _ => false
   }
 
-  override def hashCode(): Int = Objects.hash(ps, remainder)
+  override def hashCode(): Int = Objects.hash(ps, remainder, Boolean.box(connectiveUsed))
 }
 
 object ParSet {
