@@ -113,7 +113,7 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests_to_run',
                     type=str,
                     nargs='+',
-                    default=['count', 'eval', 'repl', 'propose', 'errors', 'RuntimeException'],
+                    default=['count', 'eval', 'propose', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
 parser.add_argument("--thread-pool-size",
                     dest='thread_pool_size',
@@ -279,7 +279,7 @@ def test_propose(container):
         print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
         # Deploy example contracts using 3 random example files
-        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done'
+        cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do echo "running deploy with ${i}"; /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
         try:
             r = container.exec_run(['sh', '-c', cmd])
             for line in r.output.decode('utf-8').splitlines():
@@ -327,7 +327,7 @@ class rnode:
 
     @staticmethod
     def deploy_cmd(f):
-        return rnode.binary + f' deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {f}'
+        return rnode.binary + f' deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 {f}'
 
     propose_cmd = binary + " propose"
 
@@ -519,7 +519,7 @@ def test_performance():
                 print(f"Loop number {i} of {args.propose_loop_amount} on {container.name}")
 
                 # Deploy example contracts using 3 random example files
-                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 ${i}; done'
+                cmd = 'for i in `ls /opt/docker/examples/*.rho | sort -R | tail -n 3`; do /opt/docker/bin/rnode deploy --from "0x1" --phlo-limit 100000 --phlo-price 1 --nonce 0 ${i}; done'
                 try: 
                     r = container.exec_run(['sh', '-c', cmd])
                     for line in r.output.decode('utf-8').splitlines():

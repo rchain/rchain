@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.Parallel
 import cats.effect.Sync
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
@@ -11,117 +10,103 @@ import coop.rchain.rspace.pure.PureRSpace
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
-import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 
 trait TuplespaceAlg[F[_]] {
-  def produce(chan: Channel, data: ListChannelWithRandom, persistent: Boolean): F[CostAccount]
+  def produce(chan: Par, data: ListParWithRandom, persistent: Boolean): F[Unit]
   def consume(
-      binds: Seq[(BindPattern, Quote)],
+      binds: Seq[(BindPattern, Par)],
       body: ParWithRandom,
       persistent: Boolean
-  ): F[CostAccount]
+  ): F[Unit]
 }
 
 object TuplespaceAlg {
   def rspaceTuplespace[F[_], M[_]](
       pureRSpace: PureRSpace[
         F,
-        Channel,
+        Par,
         BindPattern,
         OutOfPhlogistonsError.type,
-        ListChannelWithRandom,
-        ListChannelWithRandom,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
         TaggedContinuation
       ],
-      dispatcher: => Dispatch[F, ListChannelWithRandom, TaggedContinuation]
+      dispatcher: => Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
   )(implicit F: Sync[F], P: Parallel[F, M]): TuplespaceAlg[F] = new TuplespaceAlg[F] {
     override def produce(
-        channel: Channel,
-        data: ListChannelWithRandom,
+        channel: Par,
+        data: ListParWithRandom,
         persistent: Boolean
-    ): F[CostAccount] = {
+    ): F[Unit] = {
       // TODO: Handle the environment in the store
       def go(
           res: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListChannelWithRandom])
+            (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
           ]]
-      ): F[CostAccount] =
+      ): F[Unit] =
         res match {
+          case Left(oope) => F.raiseError(oope)
           case Right(Some((continuation, dataList))) =>
-            val rspaceMatchCost =
-              dataList
-                .map(_.cost.map(CostAccount.fromProto(_)).getOrElse(CostAccount(0)))
-                .toList
-                .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
-                .combineAll
             if (persistent) {
-              List(
-                dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
-                produce(channel, data, persistent)
-              ).parSequence
-                .map(_.combineAll + rspaceMatchCost)
+              Parallel
+                .parProduct(
+                  dispatcher.dispatch(continuation, dataList),
+                  produce(channel, data, persistent)
+                )
+                .as(())
             } else {
-              dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
+              dispatcher.dispatch(continuation, dataList)
             }
 
-          case Right(None) => F.pure(CostAccount(0))
+          case Right(None) => F.unit
         }
 
       for {
-        res  <- pureRSpace.produce(channel, data, persist = persistent)
-        cost <- go(res)
-      } yield cost
+        res <- pureRSpace.produce(channel, data, persist = persistent)
+        _   <- go(res)
+      } yield ()
     }
 
     override def consume(
-        binds: Seq[(BindPattern, Quote)],
+        binds: Seq[(BindPattern, Par)],
         body: ParWithRandom,
         persistent: Boolean
-    ): F[CostAccount] =
+    ): F[Unit] =
       binds match {
         case Nil => F.raiseError(ReduceError("Error: empty binds"))
         case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
+          val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
           def go(
               res: Either[OutOfPhlogistonsError.type, Option[
-                (TaggedContinuation, Seq[ListChannelWithRandom])
+                (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
               ]]
-          ): F[CostAccount] =
+          ): F[Unit] =
             res match {
+              case Left(oope) => F.raiseError(oope)
               case Right(Some((continuation, dataList))) =>
-                val rspaceMatchCost =
-                  dataList
-                    .map(
-                      _.cost
-                        .map(CostAccount.fromProto(_))
-                        .getOrElse(CostAccount(0))
-                    )
-                    .toList
-                    .map(ca => ca.copy(cost = Cost(Integer.MAX_VALUE) - ca.cost))
-                    .combineAll
-
-                dispatcher.dispatch(continuation, dataList)
                 if (persistent) {
-                  List(
-                    dispatcher.dispatch(continuation, dataList) *> F.pure(CostAccount(0)),
-                    consume(binds, body, persistent)
-                  ).parSequence
-                    .map(_.combineAll + rspaceMatchCost)
+                  Parallel
+                    .parProduct(
+                      dispatcher.dispatch(continuation, dataList),
+                      consume(binds, body, persistent)
+                    )
+                    .as(())
                 } else {
-                  dispatcher.dispatch(continuation, dataList) *> rspaceMatchCost.pure[F]
+                  dispatcher.dispatch(continuation, dataList)
                 }
-              case Right(None) => F.pure(CostAccount(0))
+              case Right(None) => F.unit
             }
 
           for {
             res <- pureRSpace.consume(
-                    sources.map(q => Channel(q)).toList,
+                    sources.toList,
                     patterns.toList,
                     TaggedContinuation(ParBody(body)),
                     persist = persistent
                   )
-            cost <- go(res)
-          } yield cost
+            _ <- go(res)
+          } yield ()
       }
   }
 }

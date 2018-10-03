@@ -2,6 +2,7 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
+import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.StoreType
@@ -42,8 +43,13 @@ sealed trait Command
 case class Eval(files: List[String]) extends Command
 case object Repl                     extends Command
 case object Diagnostics              extends Command
-case class Deploy(address: String, phlo: Int, phloPrice: Int, nonce: Int, location: String)
-    extends Command
+case class Deploy(
+    address: String,
+    phloLimit: PhloLimit,
+    phloPrice: PhloPrice,
+    nonce: Int,
+    location: String
+) extends Command
 case object DeployDemo                   extends Command
 case object Propose                      extends Command
 case class ShowBlock(hash: String)       extends Command

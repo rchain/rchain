@@ -163,9 +163,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     } yield newFinalizedBlock
 
   private def isGreaterThanFaultToleranceThreshold(dag: BlockDag, block: BlockMessage): F[Boolean] =
-    for {
-      ft <- SafetyOracle[F].normalizedFaultTolerance(dag, block)
-    } yield ft > faultToleranceThreshold
+    (SafetyOracle[F].normalizedFaultTolerance(dag, block) > faultToleranceThreshold).pure[F]
 
   def contains(b: BlockMessage): F[Boolean] =
     BlockStore[F].contains(b.blockHash).map(_ || blockBuffer.contains(b))
@@ -438,6 +436,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
         )
       case InvalidUnslashableBlock =>
         handleInvalidBlockEffect(status, block)
+      case InvalidFollows =>
+        handleInvalidBlockEffect(status, block)
       case InvalidBlockNumber =>
         handleInvalidBlockEffect(status, block)
       case InvalidParents =>
@@ -503,7 +503,26 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
             acc.updated(p, currChildren + hash)
         }
 
-        val newSeqNum = bd.currentSeqNum.updated(block.sender, block.seqNum)
+        //Block which contains newly bonded validators will not
+        //have those validators in its justification
+        val newValidators =
+          bonds(block).map(_.validator).toSet.diff(block.justifications.map(_.validator).toSet)
+        val newLatestMessages = newValidators.foldLeft(
+          //update creator of the block
+          bd.latestMessages.updated(block.sender, block)
+        ) {
+          //Update new validators with block in which
+          //they were bonded (i.e. this block)
+          case (acc, v) => acc.updated(v, block)
+        }
+
+        val lmJustifications = toLatestMessageHashes(block.justifications)
+        //ditto for latestMessagesOfLatestMessages
+        val newLatestLatestMessages = newValidators.foldLeft(
+          bd.latestMessagesOfLatestMessages.updated(block.sender, lmJustifications)
+        ) {
+          case (acc, v) => acc.updated(v, lmJustifications)
+        }
 
         bd.copy(
           //Assume that a non-equivocating validator must include
@@ -512,11 +531,9 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           // Even for a equivocating validator, we just update its latest message
           // to whatever block we have fetched latest among the blocks that
           // constitute the equivocation.
-          latestMessages = bd.latestMessages.updated(block.sender, block),
-          latestMessagesOfLatestMessages = bd.latestMessagesOfLatestMessages
-            .updated(block.sender, toLatestMessageHashes(block.justifications)),
+          latestMessages = newLatestMessages,
+          latestMessagesOfLatestMessages = newLatestLatestMessages,
           childMap = newChildMap,
-          currentSeqNum = newSeqNum,
           dataLookup = updatedLookup,
           topoSort = updatedSort
         )

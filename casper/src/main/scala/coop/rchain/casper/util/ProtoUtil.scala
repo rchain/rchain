@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{BlockDag, PrettyPrinter}
+import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
@@ -14,6 +14,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
 import coop.rchain.rholang.build.CompiledRholangSource
+import coop.rchain.rholang.interpreter.accounting
 
 import scala.collection.immutable
 
@@ -22,24 +23,21 @@ object ProtoUtil {
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
-  def isInMainChain[F[_]: Monad: BlockStore](
+  def isInMainChain(
+      dag: BlockDag,
       candidate: BlockMessage,
-      target: BlockMessage
-  ): F[Boolean] =
-    if (candidate == target) {
-      true.pure[F]
+      targetBlockHash: BlockHash
+  ): Boolean =
+    if (candidate.blockHash == targetBlockHash) {
+      true
     } else {
-      val maybeMainParentHash = ProtoUtil.parentHashes(target).headOption
-      maybeMainParentHash match {
-        case Some(mainParentHash) =>
-          for {
-            mainParent <- BlockStore[F].get(mainParentHash)
-            isInMainChain <- mainParent match {
-                              case Some(parent) => isInMainChain[F](candidate, parent)
-                              case None         => false.pure[F]
-                            }
-          } yield isInMainChain
-        case None => false.pure[F]
+      dag.dataLookup.get(targetBlockHash) match {
+        case Some(targetBlockMeta) =>
+          targetBlockMeta.parents.headOption match {
+            case Some(mainParentHash) => isInMainChain(dag, candidate, mainParentHash)
+            case None                 => false
+          }
+        case None => false
       }
     }
 
@@ -115,6 +113,30 @@ object ProtoUtil {
           }
         } yield maybeCreatorJustificationAsList
       case None => List.empty[BlockMessage].pure[F]
+    }
+  }
+
+  def getCreatorJustificationAsListByInMemory(
+      blockDag: BlockDag,
+      blockHash: BlockHash,
+      validator: Validator,
+      goalFunc: BlockHash => Boolean = _ => false
+  ): List[BlockHash] = {
+    val maybeCreatorJustificationHash =
+      blockDag.dataLookup(blockHash).justifications.find(_.validator == validator)
+    maybeCreatorJustificationHash match {
+      case Some(creatorJustificationHash) =>
+        blockDag.dataLookup.get(creatorJustificationHash.latestBlockHash) match {
+          case Some(creatorJustification) =>
+            if (goalFunc(creatorJustification.blockHash)) {
+              List.empty[BlockHash]
+            } else {
+              List(creatorJustification.blockHash)
+            }
+          case None =>
+            List.empty[BlockHash]
+        }
+      case None => List.empty[BlockHash]
     }
   }
 
@@ -358,7 +380,7 @@ object ProtoUtil {
     }
 
     val sender = ByteString.copyFrom(pk)
-    val seqNum = dag.currentSeqNum.getOrElse(sender, 0) + 1
+    val seqNum = dag.latestMessages.get(sender).fold(0)(_.seqNum) + 1
 
     val blockHash = hashSignedBlock(header, sender, sigAlgorithm, seqNum, shardId, block.extraBytes)
 
@@ -391,6 +413,7 @@ object ProtoUtil {
       .withUser(ByteString.EMPTY)
       .withTimestamp(timestamp)
       .withTerm(term)
+      .withPhloLimit(accounting.MAX_VALUE)
   }
 
   def basicDeploy(id: Int): Deploy = {
@@ -410,23 +433,39 @@ object ProtoUtil {
     )
   }
 
-  def sourceDeploy(source: String, timestamp: Long): DeployData =
-    DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = source)
+  def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
+    DeployData(
+      user = ByteString.EMPTY,
+      timestamp = timestamp,
+      term = source,
+      phloLimit = Some(phlos)
+    )
 
-  def compiledSourceDeploy(source: CompiledRholangSource, timestamp: Long): Deploy =
+  def compiledSourceDeploy(
+      source: CompiledRholangSource,
+      timestamp: Long,
+      phloLimit: PhloLimit
+  ): Deploy =
     Deploy(
       term = Some(source.term),
-      raw = Some(sourceDeploy(source.code, timestamp))
+      raw = Some(sourceDeploy(source.code, timestamp, phloLimit))
     )
 
-  def termDeploy(term: Par, timestamp: Long): Deploy =
+  def termDeploy(term: Par, timestamp: Long, phloLimit: PhloLimit): Deploy =
     Deploy(
       term = Some(term),
-      raw =
-        Some(DeployData(user = ByteString.EMPTY, timestamp = timestamp, term = term.toProtoString))
+      raw = Some(
+        DeployData(
+          user = ByteString.EMPTY,
+          timestamp = timestamp,
+          term = term.toProtoString,
+          phloLimit = Some(phloLimit)
+        )
+      )
     )
 
-  def termDeployNow(term: Par): Deploy = termDeploy(term, System.currentTimeMillis())
+  def termDeployNow(term: Par): Deploy =
+    termDeploy(term, System.currentTimeMillis(), accounting.MAX_VALUE)
 
   def deployDataToDeploy(dd: DeployData): Deploy = Deploy(
     term = InterpreterUtil.mkTerm(dd.term).toOption,

@@ -2,7 +2,7 @@ syntax = "proto3";
 package coop.rchain.comm.protocol.routing;
 
 import "scalapb/scalapb.proto";
-import "google/protobuf/any.proto";
+import "CasperMessage.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.comm.protocol.routing"
@@ -54,9 +54,21 @@ message Protocol {
     }
 }
 
+message Blob {
+  string blobType = 1;
+  oneof message {
+    coop.rchain.casper.protocol.BlockMessage  blockMessage      = 2; 
+    coop.rchain.casper.protocol.ApprovedBlock  approvedBlock    = 3;
+    coop.rchain.casper.protocol.UnapprovedBlock unapprovedBlock = 4;
+    coop.rchain.casper.protocol.BlockApproval blockApproval     = 5;
+  }
+}
+
 service TransportLayer {
   rpc Tell (TLRequest) returns (TLResponse) {}
   rpc Ask (TLRequest) returns (TLResponse) {}
+  // this eventually will become streamed API, for now regular call
+  rpc Stream (TLBlob) returns (TLBlobResponse) {}
 }
 
 message TLRequest {
@@ -76,4 +88,12 @@ message TLResponse {
     NoResponse noResponse                   = 2;
     InternalServerError internalServerError = 3;
   }
+}
+
+message TLBlob {
+  Blob blob = 1;
+}
+
+message TLBlobResponse {
+
 }

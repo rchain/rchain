@@ -36,6 +36,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.TestScheduler
 import org.scalatest.WordSpec
+import coop.rchain.casper.util.TestTime
 
 import scala.concurrent.duration._
 
@@ -70,7 +71,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       Cell.unsafe[Task, Connections](List(local))
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
-    implicit val time           = new LogicalTime[Task]
+    implicit val time           = TestTime.instance
     implicit val log            = new LogStub[Task]
     implicit val errHandler = new ApplicativeError_[Task, CommError] {
       override def raiseError[A](e: CommError): Task[A] =
@@ -88,8 +89,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       override def normalizedFaultTolerance(
           blockDag: BlockDag,
           estimate: BlockMessage
-      ): Task[Float] =
-        Task.pure(1.0f)
+      ): Float = 1.0f
     }
   }
 

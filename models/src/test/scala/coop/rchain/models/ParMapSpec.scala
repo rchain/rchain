@@ -1,7 +1,6 @@
 package coop.rchain.models
 
-import coop.rchain.models.Channel.ChannelInstance.ChanVar
-import coop.rchain.models.Expr.ExprInstance.{EEvalBody, EMapBody, GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.{EMapBody, GInt, GString}
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
 import org.scalatest.{FlatSpec, Matchers}
@@ -13,7 +12,7 @@ class ParMapSpec extends FlatSpec with Matchers {
       Seq[(Par, Par)](
         (GInt(7), GString("Seven")),
         (GInt(7), GString("SeVen")),
-        (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0)))),
+        (EVar(BoundVar(1)), EVar(BoundVar(0))),
         (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
         (GInt(2), ParSet(Seq[Par](GInt(2))))
       )
@@ -25,7 +24,7 @@ class ParMapSpec extends FlatSpec with Matchers {
         (GInt(7), GString("SeVen")),
         (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
         (GInt(2), ParSet(Seq[Par](GInt(2)))),
-        (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))
+        (EVar(BoundVar(1)), EVar(BoundVar(0)))
       )
     )
 

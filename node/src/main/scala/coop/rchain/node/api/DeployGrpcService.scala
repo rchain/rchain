@@ -9,7 +9,7 @@ import coop.rchain.casper.api.BlockAPI
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Taskable
-import coop.rchain.models.Channel
+import coop.rchain.models.Par
 import coop.rchain.shared._
 
 import com.google.protobuf.empty.Empty
@@ -33,16 +33,16 @@ private[api] object DeployGrpcService {
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         BlockAPI.getBlockQueryResponse[F](q).toTask
 
-      override def showBlocks(request: Empty): Observable[BlockInfo] =
+      override def showBlocks(request: Empty): Observable[BlockInfoWithoutTuplespace] =
         Observable
           .fromTask(BlockAPI.getBlocksResponse[F].toTask)
           .flatMap(b => Observable.fromIterable(b.blocks))
 
-      override def listenForDataAtName(listeningName: Channel): Task[ListeningNameDataResponse] =
+      override def listenForDataAtName(listeningName: Par): Task[ListeningNameDataResponse] =
         BlockAPI.getListeningNameDataResponse[F](listeningName).toTask
 
       override def listenForContinuationAtName(
-          listeningNames: Channels
+          listeningNames: Pars
       ): Task[ListeningNameContinuationResponse] =
         BlockAPI.getListeningNameContinuationResponse[F](listeningNames).toTask
     }

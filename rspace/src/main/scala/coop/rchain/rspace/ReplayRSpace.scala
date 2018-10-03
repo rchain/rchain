@@ -1,11 +1,11 @@
 package coop.rchain.rspace
 
-import cats.Id
+import cats.{Id, Monad}
+import cats.effect.Sync
 import cats.implicits._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.IReplaySpace.IdIReplaySpace
 import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
@@ -19,14 +19,15 @@ import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
 import kamon._
 
-class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
+class ReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
     implicit
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
-    serializeK: Serialize[K]
-) extends RSpaceOps[C, P, E, A, R, K](store, branch)
-    with IdIReplaySpace[C, P, E, A, R, K] {
+    serializeK: Serialize[K],
+    val syncF: Sync[F]
+) extends RSpaceOps[F, C, P, E, A, R, K](store, branch)
+    with IReplaySpace[F, C, P, E, A, R, K] {
 
   override protected[this] val logger: Logger = Logger[this.type]
 
@@ -39,7 +40,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
+  ): F[Either[E, Option[(K, Seq[R])]]] = syncF.delay {
     try {
       Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
         if (channels.length =!= patterns.length) {
@@ -150,10 +151,11 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         }
         throw ex
     }
+  }
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] =
+  ): F[Either[E, Option[(K, Seq[R])]]] = syncF.delay {
     try {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
         store.withTxn(store.createTxnWrite()) { txn =>
@@ -281,6 +283,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         }
         throw ex
     }
+  }
 
   private def replaysLessCommRef(
       replays: ReplayData,
@@ -291,7 +294,7 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
         updatedReplays.removeBinding(produceRef, commRef)
     }
 
-  def createCheckpoint(): Checkpoint =
+  def createCheckpoint(): F[Checkpoint] = syncF.delay {
     if (replayData.get.isEmpty) {
       val root = store.createCheckpoint()
       Checkpoint(root, Seq.empty)
@@ -301,11 +304,14 @@ class ReplayRSpace[C, P, E, A, R, K](store: IStore[C, P, A, K], branch: Branch)(
       logger.error(msg)
       throw new ReplayException(msg)
     }
-
-  override def clear(): Unit = {
-    replayData.update(const(ReplayData.empty))
-    super.clear()
   }
+
+  override def clear(): F[Unit] =
+    syncF
+      .delay {
+        replayData.update(const(ReplayData.empty))
+      }
+      .flatMap(_ => super.clear())
 }
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
@@ -344,19 +350,16 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
   }
 }
 
-object IReplaySpace {
-  type IdIReplaySpace[C, P, E, A, R, K] = IReplaySpace[Id, C, P, E, A, R, K]
-}
-
 object ReplayRSpace {
 
-  def create[C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
+  def create[F[_], C, P, E, A, R, K](context: Context[C, P, A, K], branch: Branch)(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): IReplaySpace[Id, C, P, E, A, R, K] = {
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): F[IReplaySpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -374,7 +377,8 @@ object ReplayRSpace {
         InMemoryStore.create(mixedContext.trieStore, branch)
     }
 
-    val replaySpace = new ReplayRSpace[C, P, E, A, R, K](mainStore, branch)
+    val replaySpace: IReplaySpace[F, C, P, E, A, R, K] =
+      new ReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -382,14 +386,14 @@ object ReplayRSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
-    val _ = if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint()
+    if (history.initialize(mainStore.trieStore, branch)) {
+      replaySpace.createCheckpoint().map(_ => replaySpace)
+    } else {
+      replaySpace.pure[F]
     }
-
-    replaySpace
   }
 
-  def createInMemory[C, P, E, A, R, K](
+  def createInMemory[F[_], C, P, E, A, R, K](
       trieStore: ITrieStore[InMemTransaction[history.State[Blake2b256Hash, GNAT[C, P, A, K]]], Blake2b256Hash, GNAT[
         C,
         P,
@@ -402,8 +406,9 @@ object ReplayRSpace {
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K]
-  ): ReplayRSpace[C, P, E, A, R, K] = {
+      sk: Serialize[K],
+      syncF: Sync[F]
+  ): F[IReplaySpace[F, C, P, E, A, R, K]] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
@@ -415,7 +420,8 @@ object ReplayRSpace {
         trieStore,
         branch
       )
-    val replaySpace = new ReplayRSpace[C, P, E, A, R, K](mainStore, branch)
+    val replaySpace: IReplaySpace[F, C, P, E, A, R, K] =
+      new ReplayRSpace[F, C, P, E, A, R, K](mainStore, branch)
 
     /*
      * history.initialize returns true if the history trie contains no root (i.e. is empty).
@@ -423,10 +429,10 @@ object ReplayRSpace {
      * In this case, we create a checkpoint for the empty store so that we can reset
      * to the empty store state with the clear method.
      */
-    val _ = if (history.initialize(mainStore.trieStore, branch)) {
-      replaySpace.createCheckpoint()
+    if (history.initialize(mainStore.trieStore, branch)) {
+      replaySpace.createCheckpoint().map(_ => replaySpace)
+    } else {
+      replaySpace.pure[F]
     }
-
-    replaySpace
   }
 }

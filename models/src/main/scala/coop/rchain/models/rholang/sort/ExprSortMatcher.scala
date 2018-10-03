@@ -22,10 +22,6 @@ private[sort] object ExprSortMatcher extends Sortable[Expr] {
         for {
           sortedVar <- Sortable.sortMatch(ev.v)
         } yield constructExpr(EVarBody(EVar(sortedVar.term)), Node(Score.EVAR, sortedVar.score))
-      case EEvalBody(chan) =>
-        for {
-          sortedChan <- Sortable.sortMatch(chan)
-        } yield constructExpr(EEvalBody(sortedChan.term), Node(Score.EEVAL, sortedChan.score))
       case ENotBody(en) =>
         for {
           sortedPar <- Sortable.sortMatch(en.p)
