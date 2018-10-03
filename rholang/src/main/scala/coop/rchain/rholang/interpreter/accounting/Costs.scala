@@ -48,8 +48,7 @@ trait Costs {
   // + then it copies all elements of the Par
   def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
 
-  //TODO(mateusz.gorski): adjust the cost of the nth method call.
-  def nthMethodCost(nth: Int): Cost = Cost(nth)
+  final val NTH_METHOD_CALL_COST: Cost = Cost(10)
 
   final val METHOD_CALL_COST  = Cost(10)
   final val OP_CALL_COST      = Cost(10)

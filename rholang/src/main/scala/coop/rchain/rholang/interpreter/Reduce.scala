@@ -844,7 +844,7 @@ object Reduce {
             nthRaw <- evalToLong(args(0))
             nth    <- restrictToInt(nthRaw)
             v      <- evalSingleExpr(p)
-            _      <- costAccountingAlg.charge(nthMethodCost(nth))
+            _      <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
             result <- v.exprInstance match {
                        case EListBody(EList(ps, _, _, _)) =>
                          s.fromEither(localNth(ps, nth))
