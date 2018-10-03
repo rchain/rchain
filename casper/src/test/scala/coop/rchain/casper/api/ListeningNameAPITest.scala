@@ -145,6 +145,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     blocks3.length should be(7)
     listeningNameResponse3.length should be(7)
 
+    val listeningNameResponse3UntilDepth =
+      BlockAPI.getListeningNameDataResponse[Id](1, listeningName)
+    listeningNameResponse3UntilDepth.length should be(1)
+
+    val listeningNameResponse3UntilDepth2 =
+      BlockAPI.getListeningNameDataResponse[Id](2, listeningName)
+    listeningNameResponse3UntilDepth2.length should be(2)
+
     nodes.foreach(_.tearDown())
   }
 
