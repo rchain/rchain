@@ -37,13 +37,16 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
     installs
   }
 
-  protected[this] def restoreInstalls(txn: store.Transaction): Unit =
-    installs.get.foreach {
+  protected[this] def restoreInstalls(txn: store.Transaction): Unit = {
+    val current = installs.take()
+    current.foreach {
       case (Install.Consume(channels, patterns, continuation, _match)) =>
         install(txn, channels, patterns, continuation, update = false)(_match)
       case (Install.Produce(channel, data, persist, _match)) =>
         install(txn, channel, data, persist, update = false)(_match)
     }
+    installs.put(current)
+  }
 
   private[this] def install(
       txn: store.Transaction,
