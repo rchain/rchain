@@ -234,7 +234,7 @@ object BlockAPI {
                                           dag,
                                           startHeight
                                         )
-      } yield flattenedBlockInfosUntilDepth
+      } yield flattenedBlockInfosUntilDepth.reverse
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
