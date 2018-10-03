@@ -19,6 +19,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import javax.management.ObjectName
 import monix.eval.Task
+import coop.rchain.metrics.MetricsTimer
 
 package object diagnostics {
 
@@ -165,6 +166,7 @@ package object diagnostics {
   def metrics[F[_]: Capture]: Metrics[F] =
     new Metrics[F] {
       import kamon._
+      import kamon.metric._
 
       private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
@@ -216,6 +218,13 @@ package object diagnostics {
             case c: metric.Histogram => c.record(value, count)
           }
         }
+
+      def startTimer(name: String): MetricsTimer = {
+        val t = Kamon.timer(name).start()
+        new MetricsTimer {
+          def stop(): Unit = t.stop()
+        }
+      }
     }
 
   def grpc(

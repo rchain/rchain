@@ -1,6 +1,7 @@
 package coop.rchain.shared
 import cats.effect.Sync
 import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.MetricsTimer
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -40,4 +41,5 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
       val recordsSeq = records.get(name).map(s => record :: s).getOrElse(List(record))
       set(name, recordsSeq)(records)
     }
+  override def startTimer(name: String): MetricsTimer = ???
 }

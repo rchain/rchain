@@ -3,6 +3,10 @@ package coop.rchain.metrics
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
+trait MetricsTimer {
+  def stop(): Unit
+}
+
 trait Metrics[F[_]] {
   // Counter
   def incrementCounter(name: String, delta: Long = 1): F[Unit]
@@ -20,6 +24,9 @@ trait Metrics[F[_]] {
 
   // Histogram
   def record(name: String, value: Long, count: Long = 1): F[Unit]
+
+  // Timers
+  def startTimer(name: String): MetricsTimer
 }
 
 object Metrics extends MetricsInstances {
@@ -34,6 +41,7 @@ object Metrics extends MetricsInstances {
       def incrementGauge(name: String, delta: Long)      = M.incrementGauge(name, delta).liftM[T]
       def decrementGauge(name: String, delta: Long)      = M.decrementGauge(name, delta).liftM[T]
       def record(name: String, value: Long, count: Long) = M.record(name, value, count).liftM[T]
+      def startTimer(name: String)                       = M.startTimer(name)
     }
 
   class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
@@ -44,6 +52,10 @@ object Metrics extends MetricsInstances {
     def incrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
     def decrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
     def record(name: String, value: Long, count: Long = 1): F[Unit] = ().pure[F]
+    def startTimer(name: String): MetricsTimer =
+      new MetricsTimer {
+        def stop(): Unit = ().pure[F]
+      }
   }
 
 }

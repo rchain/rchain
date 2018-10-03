@@ -184,6 +184,9 @@ You will need a virtual machine running the appropriate version of Linux.
 
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
 
+### Metrics in RNode
+See https://rchain.atlassian.net/wiki/spaces/DOC/pages/550240410/RChain+RNode+Metrics+-+Developer for information on how to add Metric instrumentation to your code.
+
 ## Description of subprojects
 
 ### Communication
