@@ -288,8 +288,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(deployDemo)
 
-  val addressCheck: String => Boolean = addr =>
-    addr.startsWith("0x") && addr.drop(2).matches("[0-9a-fA-F]+")
+  val hexCheck: String => Boolean     = _.matches("[0-9a-fA-F]+")
+  val addressCheck: String => Boolean = addr => addr.startsWith("0x") && hexCheck(addr.drop(2))
 
   val deploy = new Subcommand("deploy") {
     descr(
@@ -387,7 +387,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "deployed to a node operated by a presently bonded validator. The rho files" +
         "are created in the working directory where the command is executed. Note: " +
         "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
-        "and `bond*.rho` in a separate block after those."
+        "and `bond*.rho` in a separate block after those (i.e. only deploy `bond*.rho` " +
+        "after `unlock*.rho` and `forward*.rho` have safely been included in a propsed block)."
     )
 
     val ethAddr = opt[String](
@@ -399,7 +400,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val bondKey = opt[String](
       descr = "Hex-encoded public key which will be used as the validator idenity after bonding. " +
         "Note: as of this version of node this must be an ED25519 key.",
-      validate = _.matches("[0-9a-fA-F]+"),
+      validate = hexCheck,
       required = true
     )
 
@@ -411,13 +412,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val publicKey = opt[String](
       descr = "Hex-encoded public key associated with the Ethereum address of the pre-wallet.",
-      validate = _.matches("[0-9a-fA-F]+"),
+      validate = hexCheck,
       required = true
     )
 
     val privateKey = opt[String](
       descr = "Hex-encoded private key associated with the Ethereum address of the pre-wallet.",
-      validate = _.matches("[0-9a-fA-F]+"),
+      validate = hexCheck,
       required = true
     )
   }

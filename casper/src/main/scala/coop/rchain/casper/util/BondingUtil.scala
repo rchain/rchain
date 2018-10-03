@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.effect.{Sync}
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.PathOps.RichPath
 
 import java.io.PrintWriter
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import monix.execution.Scheduler
 
@@ -101,12 +101,35 @@ object BondingUtil {
              |}""".stripMargin
   }
 
-  def writeFile[F[_]: Sync](name: String, content: String): F[Unit] =
-    for {
-      out <- Sync[F].delay { new PrintWriter(name) }
-      _   <- Sync[F].delay { out.println(content) }
-      _   <- Sync[F].delay { out.close() }
-    } yield ()
+  def writeFile[F[_]: Sync](name: String, content: String): F[Unit] = {
+    val file =
+      Resource.make[F, PrintWriter](Sync[F].delay { new PrintWriter(name) })(
+        pw => Sync[F].delay { pw.close() }
+      )
+    file.use(pw => Sync[F].delay { pw.println(content) })
+  }
+
+  def makeRuntimeDir[F[_]: Sync]: Resource[F, Path] =
+    Resource.make[F, Path](Sync[F].delay { Files.createTempDirectory("casper-bonding-helper-") })(
+      runtimeDir => Sync[F].delay { runtimeDir.recursivelyDelete() }
+    )
+
+  def makeRuntimeResource[F[_]: Sync](runtimeDirResource: Resource[F, Path]): Resource[F, Runtime] =
+    runtimeDirResource.flatMap(
+      runtimeDir =>
+        Resource
+          .make(Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) })(
+            runtime => Sync[F].delay { runtime.close() }
+          )
+    )
+
+  def makeRuntimeManagerResource[F[_]: Sync](
+      runtimeResource: Resource[F, Runtime]
+  ): Resource[F, RuntimeManager] =
+    runtimeResource.flatMap(
+      activeRuntime =>
+        Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)
+    )
 
   def writeRhoFiles[F[_]: Sync](
       bondKey: String,
@@ -114,23 +137,28 @@ object BondingUtil {
       amount: Long,
       secKey: String,
       pubKey: String
-  )(implicit scheduler: Scheduler): F[Unit] =
-    for {
-      runtimeDir     <- Sync[F].delay { Files.createTempDirectory("casper-bonding-helper-") }
-      activeRuntime  <- Sync[F].delay { Runtime.create(runtimeDir, 1024L * 1024 * 1024) }
-      runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
-      unlockCode     <- unlockDeploy[F](ethAddress, pubKey, secKey)(Sync[F], runtimeManager, scheduler)
-      forwardCode    = bondingForwarderDeploy(bondKey, ethAddress)
-      bondCode <- bondDeploy[F](amount, ethAddress, pubKey, secKey)(
-                   Sync[F],
-                   runtimeManager,
-                   scheduler
-                 )
-      _ <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
-      _ <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
-      _ <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
-
-      _ <- Sync[F].delay { activeRuntime.close() }
-      _ <- Sync[F].delay { runtimeDir.recursivelyDelete() }
-    } yield ()
+  )(implicit scheduler: Scheduler): F[Unit] = {
+    val runtimeDirResource     = makeRuntimeDir[F]
+    val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
+    val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
+    runtimeManagerResource.use(
+      runtimeManager =>
+        for {
+          unlockCode <- unlockDeploy[F](ethAddress, pubKey, secKey)(
+                         Sync[F],
+                         runtimeManager,
+                         scheduler
+                       )
+          forwardCode = bondingForwarderDeploy(bondKey, ethAddress)
+          bondCode <- bondDeploy[F](amount, ethAddress, pubKey, secKey)(
+                       Sync[F],
+                       runtimeManager,
+                       scheduler
+                     )
+          _ <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
+          _ <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
+          _ <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
+        } yield ()
+    )
+  }
 }
