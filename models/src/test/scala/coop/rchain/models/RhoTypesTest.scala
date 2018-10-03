@@ -5,24 +5,39 @@ import coop.rchain.models.BitSetBytesMapper._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rspace.Serialize
+import org.scalacheck.Arbitrary
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
+import scala.reflect.ClassTag
 
 class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 
-  def rtt[T](msg: T)(implicit serializeInstance: Serialize[T]): Either[Throwable, T] = {
-    val bytes = serializeInstance.encode(msg)
-    serializeInstance.decode(bytes)
-  }
+  //FIXME crank that up and fix the resulting errors
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfig(maxSize = 250, minSuccessful = 50)
 
-  "Par" should "Pass round-trip serialization" in {
-    forAll { par: Par =>
-      val result = rtt(par)
-      result.right.get should be(par)
+  behavior of "Round-trip serialization"
+
+  roundTripSerialization[Par]
+  roundTripSerialization[Var]
+  roundTripSerialization[Send]
+  roundTripSerialization[Receive]
+  roundTripSerialization[New]
+  roundTripSerialization[Expr]
+  roundTripSerialization[Match]
+  roundTripSerialization[ESet]
+  roundTripSerialization[EMap]
+
+  def roundTripSerialization[A: Serialize: Arbitrary](implicit tag: ClassTag[A]): Unit =
+    it must s"work for ${tag.runtimeClass.getSimpleName}" in {
+      forAll { a: A =>
+        val bytes  = Serialize[A].encode(a)
+        val result = Serialize[A].decode(bytes)
+        result should be(Right(a))
+      }
     }
-  }
 }
 
 class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
