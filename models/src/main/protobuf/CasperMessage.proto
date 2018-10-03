@@ -23,7 +23,7 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
-  rpc showBlocks(BlocksQuery) returns (stream BlockInfosAtHeight) {}
+  rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
 }
@@ -113,18 +113,6 @@ message ContinuationsWithBlockInfo {
 message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
   Par postBlockContinuation = 2;
-}
-
-message BlocksResponse {
-  string status = 1;
-  repeated BlockInfoWithoutTuplespace blocks = 2;
-  int64 length = 3;
-}
-
-message BlockInfosAtHeight {
-  int64 blockHeight = 1;
-  int32 blockCountAtHeight = 2;
-  repeated BlockInfoWithoutTuplespace blockInfos = 3;
 }
 
 message BlockInfoWithoutTuplespace {

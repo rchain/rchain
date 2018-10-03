@@ -33,12 +33,7 @@ private[api] object DeployGrpcService {
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
         BlockAPI.showBlock[F](q).toTask
 
-      override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
-        Observable
-          .fromTask(BlockAPI.showMainChain[F](request.depth).toTask)
-          .flatMap(Observable.fromIterable)
-
-      override def showBlocks(request: BlocksQuery): Observable[BlockInfosAtHeight] =
+      override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
           .fromTask(BlockAPI.showBlocks[F](request.depth).toTask)
           .flatMap(Observable.fromIterable)
@@ -51,5 +46,10 @@ private[api] object DeployGrpcService {
           request: ContinuationAtNameQuery
       ): Task[ListeningNameContinuationResponse] =
         BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names).toTask
+
+      override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
+        Observable
+          .fromTask(BlockAPI.showMainChain[F](request.depth).toTask)
+          .flatMap(Observable.fromIterable)
     }
 }

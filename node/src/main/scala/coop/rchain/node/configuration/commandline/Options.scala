@@ -334,15 +334,19 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlock)
 
-  val showMainChain = new Subcommand("show-main-chain") {
+  val showBlocks = new Subcommand("show-blocks") {
     descr(
-      "View list of blocks on the main chain in the current Casper view on an existing running node."
+      "View list of blocks in the current Casper view on an existing running node."
     )
     val depth =
-      opt[Int](name = "depth", validate = _ > 0, descr = "lists blocks to the given depth")
+      opt[Int](
+        name = "depth",
+        validate = _ > 0,
+        descr = "lists blocks to the given depth in terms of block height"
+      )
 
   }
-  addSubcommand(showMainChain)
+  addSubcommand(showBlocks)
 
   def listenAtName[R](name: String, desc: String)(
       implicit conv: ValueConverter[List[String] => R]

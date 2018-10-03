@@ -198,8 +198,8 @@ object Configuration {
         )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
-      case Some(options.run) => Run
-      case _                 => Help
+      case Some(options.run)        => Run
+      case _                        => Help
     }
 
     import commandline.Options._
@@ -385,9 +385,9 @@ object Configuration {
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showMainChain) =>
-        import options.showMainChain._
-        ShowMainChain(depth.getOrElse(1))
+      case Some(options.showBlocks) =>
+        import options.showBlocks._
+        ShowBlocks(depth.getOrElse(1))
       case Some(options.run) => Run
       case Some(options.dataAtName) =>
         import options.dataAtName._

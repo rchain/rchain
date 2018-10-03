@@ -70,7 +70,7 @@ object Main {
       case DeployDemo               => DeployRuntime.deployDemoProgram[Task]
       case Propose                  => DeployRuntime.propose[Task]()
       case ShowBlock(hash)          => DeployRuntime.showBlock[Task](hash)
-      case ShowMainChain(depth)     => DeployRuntime.showMainChain[Task](depth)
+      case ShowBlocks(depth)        => DeployRuntime.showBlocks[Task](depth)
       case DataAtName(depth, name)  => DeployRuntime.listenForDataAtName[Task](depth, name)
       case ContAtName(depth, names) => DeployRuntime.listenForContinuationAtName[Task](depth, names)
       case Run                      => nodeProgram(conf)

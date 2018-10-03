@@ -31,8 +31,8 @@ object DeployRuntime {
   def showBlock[F[_]: Monad: ErrorHandler: Capture: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showBlock(BlockQuery(hash)).map(println(_)))
 
-  def showMainChain[F[_]: Monad: ErrorHandler: Capture: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showMainChain(BlocksQuery(depth)).map(println(_)))
+  def showBlocks[F[_]: Monad: ErrorHandler: Capture: DeployService](depth: Int): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(BlocksQuery(depth)).map(println(_)))
 
   def listenForDataAtName[F[_]: Sync: DeployService: Time: Capture](
       depth: Int,

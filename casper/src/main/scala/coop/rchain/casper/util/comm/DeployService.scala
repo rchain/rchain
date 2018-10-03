@@ -13,7 +13,7 @@ trait DeployService[F[_]] {
   def deploy(d: DeployData): F[(Boolean, String)]
   def createBlock(): F[(Boolean, String)] //create block and add to Casper internal state
   def showBlock(q: BlockQuery): F[String]
-  def showMainChain(q: BlocksQuery): F[String]
+  def showBlocks(q: BlocksQuery): F[String]
   def addBlock(b: BlockMessage): F[(Boolean, String)]
   def listenForDataAtName(request: DataAtNameQuery): F[ListeningNameDataResponse]
   def listenForContinuationAtName(
@@ -53,8 +53,8 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
     response.toProtoString
   }
 
-  def showMainChain(q: BlocksQuery): Task[String] = Task.delay {
-    val response = blockingStub.showMainChain(q).toList
+  def showBlocks(q: BlocksQuery): Task[String] = Task.delay {
+    val response = blockingStub.showBlocks(q).toList
 
     val showResponses = response.map(bi => s"""
 ------------- block ${bi.blockNumber} ---------------
@@ -64,7 +64,7 @@ ${bi.toProtoString}
 
     val showLength =
       s"""
-(sub)chain length: ${response.length}
+count: ${response.length}
 """
     showResponses + "\n" + showLength
   }
