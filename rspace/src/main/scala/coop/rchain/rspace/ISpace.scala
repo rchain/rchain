@@ -1,9 +1,9 @@
 package coop.rchain.rspace
 
+import scala.collection.immutable.Seq
+
 import cats.Id
 import coop.rchain.rspace.internal._
-
-import scala.collection.immutable.Seq
 
 /** The interface for RSpace
   *
@@ -73,6 +73,10 @@ trait ISpace[F[_], C, P, E, A, R, K] {
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(K, Seq[R])]]]
+
+  def install(channel: C, data: A, persist: Boolean)(
+      implicit m: Match[P, E, A, R]
+  ): F[Option[(K, Seq[R])]]
 
   /** Creates a checkpoint.
     *
