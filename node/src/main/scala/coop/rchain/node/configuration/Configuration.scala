@@ -198,10 +198,6 @@ object Configuration {
         )
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showMainChain) =>
-        import options.showMainChain._
-        ShowMainChain(depth.getOrElse(1))
       case Some(options.run) => Run
       case _                 => Help
     }
