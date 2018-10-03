@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import coop.rchain.models.ProtoM
+import monix.eval.Coeval
 import scalapb.GeneratedMessage
 
 trait Chargeable[A] {
@@ -11,6 +13,6 @@ object Chargeable {
 
   implicit def fromProtobuf[T <: GeneratedMessage] =
     new Chargeable[T] {
-      override def cost(a: T): Long = a.serializedSize.toLong
+      override def cost(a: T): Long = ProtoM.serializedSize[Coeval](a).value.toLong
     }
 }

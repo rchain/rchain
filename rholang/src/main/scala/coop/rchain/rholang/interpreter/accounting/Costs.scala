@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter.accounting
 
 import com.google.protobuf.ByteString
 import coop.rchain.models.Par
+import coop.rchain.models.ProtoM
+import monix.eval.Coeval
 import scalapb.GeneratedMessage
 
 //TODO(mateusz.gorski): Adjust the costs of operations
@@ -23,7 +25,9 @@ trait Costs {
   final val SUBTRACTION_COST: Cost = Cost(3)
 
   def equalityCheckCost[T <: GeneratedMessage, P <: GeneratedMessage](x: T, y: P): Cost =
-    Cost(scala.math.min(x.serializedSize, y.serializedSize))
+    Cost(
+      scala.math.min(ProtoM.serializedSize[Coeval](x).value, ProtoM.serializedSize[Coeval](y).value)
+    )
 
   final val BOOLEAN_AND_COST = Cost(2)
   final val BOOLEAN_OR_COST  = Cost(2)
@@ -62,7 +66,8 @@ trait Costs {
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
-  def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
+  def toByteArrayCost[T <: GeneratedMessage](a: T): Cost =
+    Cost(ProtoM.serializedSize[Coeval](a).value)
   //TODO: adjust the cost of size method
   def sizeMethodCost(size: Int): Cost = Cost(size)
   // slice(from, to) needs to drop `from` elements and then append `to - from` elements
@@ -95,7 +100,7 @@ trait Costs {
   implicit def toStorageCostOps[A <: GeneratedMessage](a: A) = new StorageCostOps(a)
 
   class StorageCostOps[A <: GeneratedMessage](a: A*) {
-    def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
+    def storageCost: Cost = Cost(a.map(a => ProtoM.serializedSize[Coeval](a).value).sum)
   }
 
   // Even though we use Long for phlo limit we can't use Long.MaxValue here.
