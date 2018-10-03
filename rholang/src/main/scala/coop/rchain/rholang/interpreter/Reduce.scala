@@ -710,7 +710,7 @@ object Reduce {
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 STRING_APPEND_COST * (lhs.size() + rhs.size())
+                                 PREPEND_COST * (lhs.size() + rhs.size())
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
