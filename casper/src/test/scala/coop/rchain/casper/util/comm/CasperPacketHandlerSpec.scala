@@ -292,7 +292,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
-        val genesis = HashSetCasperTest.createGenesis(Map.empty)
 
         val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
 
