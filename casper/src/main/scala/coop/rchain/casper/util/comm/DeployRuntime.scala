@@ -50,7 +50,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(names) { pars: List[Par] =>
-        val request  = ContinuationAtNameQuery(depth, pars)
+        val request = ContinuationAtNameQuery(depth, pars)
         DeployService[F].listenForContinuationAtName(request) map (_.blockResults)
       }
     }
