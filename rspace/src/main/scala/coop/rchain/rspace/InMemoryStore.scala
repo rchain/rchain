@@ -260,6 +260,19 @@ class InMemoryStore[T, C, P, A, K](
       (ns, ())
     })
   }
+
+  private[rspace] def installDatum(
+      txn: Transaction,
+      channels: Seq[C],
+      datum: Datum[A]
+  ): Unit = {
+    val key  = hashChannels(channels)
+    val gnat = GNAT[C, P, A, K](channels, Seq(datum), Seq.empty)
+    txn.writeState(state => {
+      val ns = state.chageGNATs(state.dbGNATs + (key -> gnat))
+      (ns, ())
+    })
+  }
 }
 
 object InMemoryStore {

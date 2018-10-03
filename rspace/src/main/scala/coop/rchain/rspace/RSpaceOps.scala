@@ -176,9 +176,9 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
         installs.update(
           curr => Install.Produce[C, P, E, A, R, K](channel, data, persist, m) :: curr
         )
-        span.mark("before-put-datum")
-        store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
-        span.mark("after-put-datum")
+        span.mark("before-install-datum")
+        store.installDatum(txn, Seq(channel), Datum(data, persist, produceRef))
+        span.mark("after-install-datum")
         logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
         None
     }
