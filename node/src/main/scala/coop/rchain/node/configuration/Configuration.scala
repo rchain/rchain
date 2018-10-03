@@ -405,6 +405,7 @@ object Configuration {
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
+      case Some(options.dump)       => Dump
       case _                        => Help
     }
 }

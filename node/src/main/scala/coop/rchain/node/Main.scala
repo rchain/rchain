@@ -61,6 +61,8 @@ object Main {
 
     implicit val time: Time[Task] = effects.time
 
+    implicit val dateTime = dateTimeFromSync[Task]
+
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
       case Repl        => new ReplRuntime().replProgram[Task].as(())
@@ -73,6 +75,7 @@ object Main {
       case ShowBlocks        => DeployRuntime.showBlocks[Task]()
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Dump              => DeployRuntime.dump[Task]
       case Run               => nodeProgram(conf)
       case _                 => conf.printHelp()
     }

@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.comm
 
-import cats.{Id, Monad, MonadError}
+import cats.{Id, Monad}
 import cats.effect.Sync
 import cats.implicits._
 
@@ -10,6 +10,8 @@ import coop.rchain.casper.util.comm.ListenAtName._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.models.Par
+import coop.rchain.shared.DateTime
+
 import scala.io.Source
 import scala.language.higherKinds
 import scala.util._
@@ -87,6 +89,9 @@ object DeployRuntime {
   //Simulates user requests by randomly deploying things to Casper.
   def deployDemoProgram[F[_]: Monad: ErrorHandler: Capture: DeployService]: F[Unit] =
     gracefulExit(MonadOps.forever(singleDeploy[F]))
+
+  def dump[F[_]: Sync: DeployService: DateTime]: F[Unit] =
+    new DumpProgram[F].run
 
   private def singleDeploy[F[_]: Monad: Capture: DeployService]: F[Unit] =
     for {

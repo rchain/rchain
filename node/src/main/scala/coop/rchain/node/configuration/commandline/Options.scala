@@ -389,5 +389,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(propose)
 
+  val dump = new Subcommand("dump") {
+    descr("Dumps the current state of the Node to the file")
+  }
+  addSubcommand(dump)
+
   verify()
 }
