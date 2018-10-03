@@ -639,6 +639,8 @@ object Reduce {
                 Applicative[M].pure[(String, String)](keyString -> valueString)
               case (GString(keyString), GInt(valueInt)) =>
                 Applicative[M].pure[(String, String)](keyString -> valueInt.toString)
+              case (GString(keyString), GBool(valueBool)) =>
+                Applicative[M].pure[(String, String)](keyString -> valueBool.toString)
               // TODO: Add cases for other ground terms as well? Maybe it would be better
               // to implement cats.Show for all ground terms.
               case (_: GString, value) =>
@@ -688,7 +690,7 @@ object Reduce {
                                       .map(
                                         keyValuePairs => GString(interpolate(lhs, keyValuePairs))
                                       )
-                           _ <- costAccountingAlg.charge(LOOKUP_COST * lhs.length)
+                           _ <- costAccountingAlg.charge(LOOKUP_COST * (lhs.length + rhs.size))
                          } yield result
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
@@ -711,12 +713,12 @@ object Reduce {
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 PREPEND_COST * lhs.size()
+                                 PREPEND_COST * (lhs.size() + rhs.size())
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(PREPEND_COST * lhs.ps.length)
+                           _ <- costAccountingAlg.charge(PREPEND_COST * (lhs.ps.length + rhs.ps.length))
                          } yield
                            Expr(
                              EListBody(
@@ -953,7 +955,7 @@ object Reduce {
               ESetBody(base @ ParSet(basePs, _, _, _)),
               ESetBody(other @ ParSet(otherPs, _, _, _))
               ) =>
-            costAccountingAlg.charge(ADD_COST * basePs.size) *> Applicative[M].pure[Expr](
+            costAccountingAlg.charge(ADD_COST * otherPs.size) *> Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(
                   basePs.union(otherPs.sortedPars.toSet),
@@ -967,7 +969,7 @@ object Reduce {
               EMapBody(base @ ParMap(baseMap, _, _, _)),
               EMapBody(other @ ParMap(otherMap, _, _, _))
               ) =>
-            costAccountingAlg.charge(ADD_COST * baseMap.size) *>
+            costAccountingAlg.charge(ADD_COST * otherMap.size) *>
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap(
@@ -1237,20 +1239,23 @@ object Reduce {
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
+                s.raiseError(MethodArgumentNumberMismatch("key", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- keys(baseExpr)
+          _ <- costAccountingAlg.charge(KEYS_METHOD_COST)
         } yield result
     }
 
     private[this] val size: Method = new Method() {
-      def size(baseExpr: Expr): M[Par] =
+      def size(baseExpr: Expr): M[(Int, Par)] =
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _, _)) =>
-            Applicative[M].pure[Par](GInt(basePs.size.toLong))
+            val size = basePs.size
+            Applicative[M].pure((size, GInt(size)))
           case ESetBody(ParSet(ps, _, _, _)) =>
-            Applicative[M].pure[Par](GInt(ps.size.toLong))
+            val size = ps.size
+            Applicative[M].pure((size, GInt(size)))
           case other =>
             s.raiseError(MethodNotDefined("size", other.typ))
         }
@@ -1265,7 +1270,8 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- size(baseExpr)
-        } yield result
+          _ <- costAccountingAlg.charge(sizeMethodCost(result._1))
+        } yield result._2
     }
 
     private[this] val length: Method = new Method() {
@@ -1289,6 +1295,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- length(baseExpr)
+          _ <- costAccountingAlg.charge(LENGTH_METHOD_COST)
         } yield result
     }
 

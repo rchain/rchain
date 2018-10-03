@@ -47,9 +47,14 @@ trait Costs {
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
   def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
+  //TODO: adjust the cost of size method
+  def sizeMethodCost(size: Int): Cost = Cost(size)
 
   final val NTH_METHOD_CALL_COST: Cost = Cost(10)
 
+  final val KEYS_METHOD_COST: Cost = Cost(10)
+
+  final val LENGTH_METHOD_COST = Cost(10)
   final val METHOD_CALL_COST  = Cost(10)
   final val OP_CALL_COST      = Cost(10)
   final val VAR_EVAL_COST     = Cost(10)
