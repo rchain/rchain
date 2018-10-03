@@ -142,6 +142,7 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       magnolia,
+      scalapbCompiler,
       scalacheck,
       scalacheckShapeless,
       scalapbRuntimegGrpc
