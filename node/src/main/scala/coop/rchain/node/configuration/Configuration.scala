@@ -59,6 +59,9 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
   private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultMinimumBond: Long          = 1L
+  private val DefaultMaximumBond: Long          = Long.MaxValue
+  private val DefaultHasFaucet: Boolean         = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
@@ -169,7 +172,10 @@ object Configuration {
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
             approveGenesisInterval = 1.day,
-            deployTimestamp = None
+            deployTimestamp = None,
+            minimumBond = DefaultMinimumBond,
+            maximumBond = DefaultMaximumBond,
+            hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -291,6 +297,11 @@ object Configuration {
       DefaultValidatorSigAlgorithm
     )
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val minimumBond =
+      get(_.run.minimumBond, _.validators.flatMap(_.minimumBond), DefaultMinimumBond)
+    val maximumBond =
+      get(_.run.maximumBond, _.validators.flatMap(_.maximumBond), DefaultMaximumBond)
+    val hasFaucet = get(_.run.hasFaucet, _.validators.flatMap(_.hasFaucet), DefaultHasFaucet)
     val maxNumOfConnections = get(
       _.run.maxNumOfConnections,
       _.server.flatMap(_.maxNumOfConnections),
@@ -345,6 +356,9 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        minimumBond,
+        maximumBond,
+        hasFaucet,
         requiredSigs,
         shardId,
         standalone,

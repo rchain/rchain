@@ -189,6 +189,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
         "is the amount of Rev in the wallet."
     )
+    val minimumBond = opt[Long](
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
+    )
+    val maximumBond = opt[Long](
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
+    )
+    val hasFaucet = opt[Boolean](
+      descr = "True if there should be a public access Rev faucet in the genesis block."
+    )
 
     val bootstrap =
       opt[PeerNode](

@@ -58,6 +58,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
           runtimeManager,
           bonds,
           wallets,
+          conf.minimumBond,
+          conf.maximumBond,
+          conf.hasFaucet,
           conf.requiredSigs
         )
         gv <- Ref.of[F, CasperPacketHandlerInternal[F]](
@@ -71,6 +74,9 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
                     conf.numValidators,
                     conf.genesisPath,
                     conf.walletsFile,
+                    conf.minimumBond,
+                    conf.maximumBond,
+                    conf.hasFaucet,
                     runtimeManager,
                     conf.shardId,
                     conf.deployTimestamp
