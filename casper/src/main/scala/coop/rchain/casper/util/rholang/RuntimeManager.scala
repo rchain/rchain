@@ -73,9 +73,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] =
+    Try(tryComputeBonds(hash)) match {
+      case Success(value) => value
+      case Failure(ex) =>
+        ex.printStackTrace()
+        throw ex
+    }
+
+  private def tryComputeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
-    val bondsQuery = """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
+    val bondsQuery =
+      """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
     //TODO: construct directly instead of parsing rholang source
     val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
     val bondsPar       = captureResults(hash, bondsQueryTerm)
