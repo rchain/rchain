@@ -913,6 +913,26 @@ object Reduce {
         }
     }
 
+    private[this] val toUtf8Bytes: Method = new Method() {
+
+      override def apply(
+          p: Par,
+          args: Seq[Par]
+      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        if (args.nonEmpty) {
+          s.raiseError(ReduceError("Error: toUtf8Bytes does not take arguments"))
+        } else {
+          p.singleExpr() match {
+            case Some(Expr(GString(encoded))) =>
+              for {
+                _ <- costAccountingAlg.charge(hexToByteCost(encoded))
+              } yield Expr(GByteArray(ByteString.copyFrom(encoded.getBytes("UTF-8"))))
+            case _ =>
+              s.raiseError(ReduceError("Error: toUtf8Bytes can be called only on single strings."))
+          }
+        }
+    }
+
     private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
         thunk: => M[Par]
     ): M[Par] =
@@ -1313,6 +1333,7 @@ object Reduce {
         "nth"         -> nth,
         "toByteArray" -> toByteArray,
         "hexToBytes"  -> hexToBytes,
+        "toUtf8Bytes" -> toUtf8Bytes,
         "union"       -> union,
         "diff"        -> diff,
         "add"         -> add,
