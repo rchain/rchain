@@ -10,7 +10,7 @@ import monix.execution._
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import java.nio.file.Path
 import scala.io.Source
 import coop.rchain.comm.rp._, Connect._
