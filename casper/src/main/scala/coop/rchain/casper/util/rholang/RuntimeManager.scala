@@ -238,19 +238,26 @@ object RuntimeManager {
     implicit val rand = Blake2b512Random(
       Array[Byte](3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3)
     )
-    val registryInit = for {
-      _ <- active.reducer.setAvailablePhlos(Cost(Long.MaxValue))
-      _ <- active.reducer.inj(produceTerm)
-      _ <- active.reducer.setAvailablePhlos(Cost(0L))
-    } yield ()
-    registryInit.unsafeRunSync
+    val max       = Cost(Long.MaxValue)
+    val zero      = Cost(0L)
+    val emptyChPt = active.space.createCheckpoint()
+    val registryInit: Task[Array[Byte]] = for {
+      _          <- active.reducer.setAvailablePhlos(max)
+      _          <- active.reducer.inj(produceTerm)
+      checkpoint = active.space.createCheckpoint()
+      hash       = checkpoint.root.bytes.toArray
+      _          <- active.reducer.setAvailablePhlos(zero)
+      _          <- active.replayReducer.setAvailablePhlos(max)
+      _          = active.replaySpace.rig(emptyChPt.root, checkpoint.log)
+      _          <- active.replayReducer.inj(produceTerm)
+      replayHash = active.replaySpace.createCheckpoint().root.bytes.toArray
+      _          = assert(hash.zip(replayHash).forall { case (a, b) => a == b })
+    } yield hash
 
-    val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
-    val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
-    assert(hash == replayHash)
+    val hash    = registryInit.unsafeRunSync
     val runtime = new SyncVar[Runtime]()
     runtime.put(active)
 
-    new RuntimeManager(hash, runtime)
+    new RuntimeManager(ByteString.copyFrom(hash), runtime)
   }
 }
