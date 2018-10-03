@@ -142,22 +142,14 @@ object BondingUtil {
     val runtimeResource        = makeRuntimeResource[F](runtimeDirResource)
     val runtimeManagerResource = makeRuntimeManagerResource[F](runtimeResource)
     runtimeManagerResource.use(
-      runtimeManager =>
+      implicit runtimeManager =>
         for {
-          unlockCode <- unlockDeploy[F](ethAddress, pubKey, secKey)(
-                         Sync[F],
-                         runtimeManager,
-                         scheduler
-                       )
+          unlockCode  <- unlockDeploy[F](ethAddress, pubKey, secKey)
           forwardCode = bondingForwarderDeploy(bondKey, ethAddress)
-          bondCode <- bondDeploy[F](amount, ethAddress, pubKey, secKey)(
-                       Sync[F],
-                       runtimeManager,
-                       scheduler
-                     )
-          _ <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
-          _ <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
-          _ <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
+          bondCode    <- bondDeploy[F](amount, ethAddress, pubKey, secKey)
+          _           <- writeFile[F](s"unlock_${ethAddress}.rho", unlockCode)
+          _           <- writeFile[F](s"forward_${ethAddress}_${bondKey}.rho", forwardCode)
+          _           <- writeFile[F](s"bond_${ethAddress}.rho", bondCode)
         } yield ()
     )
   }

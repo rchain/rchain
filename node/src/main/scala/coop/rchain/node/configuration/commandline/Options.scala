@@ -390,7 +390,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(propose)
 
-  val bondingDeployGen = new Subcommand("bdg") {
+  val bondingDeployGen = new Subcommand("generateBondingDeploys") {
     descr(
       "Creates the rholang source files needed for bonding. These files must be" +
         "deployed to a node operated by a presently bonded validator. The rho files" +
