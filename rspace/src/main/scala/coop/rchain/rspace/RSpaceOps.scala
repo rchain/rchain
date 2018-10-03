@@ -33,14 +33,16 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
 
   private[this] val installs: SyncVar[Installs[C, P, E, A, R, K]] = {
     val installs = new SyncVar[Installs[C, P, E, A, R, K]]()
-    installs.put(Map.empty)
+    installs.put(List.empty)
     installs
   }
 
   protected[this] def restoreInstalls(txn: store.Transaction): Unit =
     installs.get.foreach {
-      case (channels, Install(patterns, continuation, _match)) =>
+      case (Install.Consume(channels, patterns, continuation, _match)) =>
         install(txn, channels, patterns, continuation)(_match)
+      case (Install.Produce(channel, data, persist, _match)) =>
+        install(txn, channel, data, persist)(_match)
     }
 
   private[this] def install(
@@ -80,7 +82,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
       case Left(e) =>
         throw new RuntimeException(s"Installing can never result in an invalid match: $e")
       case Right(None) =>
-        installs.update(_.updated(channels, Install(patterns, continuation, m)))
+        installs.update(curr => Install.Consume(channels, patterns, continuation, m) :: curr)
         store.installWaitingContinuation(
           txn,
           channels,
@@ -171,9 +173,10 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
         throw new RuntimeException(invalidInstallMsg)
       case Right(None) =>
         logger.debug(s"produce: no matching continuation found")
+        installs.update(
+          curr => Install.Produce[C, P, E, A, R, K](channel, data, persist, m) :: curr
+        )
         span.mark("before-put-datum")
-        // TODO
-        // installs.update()
         store.putDatum(txn, Seq(channel), Datum(data, persist, produceRef))
         span.mark("after-put-datum")
         logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
