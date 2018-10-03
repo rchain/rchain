@@ -7,6 +7,7 @@ import java.nio.file.{Path, Paths}
 import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
+import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
@@ -15,7 +16,6 @@ import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -191,8 +191,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          PhloLimit(phloLimit()),
+          PhloPrice(phloPrice()),
           nonce.getOrElse(0),
           location()
         )
@@ -379,8 +379,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          PhloLimit(phloLimit()),
+          PhloPrice(phloPrice()),
           nonce.getOrElse(0),
           location()
         )
