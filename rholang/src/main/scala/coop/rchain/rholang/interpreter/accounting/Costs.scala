@@ -82,7 +82,7 @@ trait Costs {
   class StorageCostOps[A <: GeneratedMessage with Message[A]](a: A*)(
       gm: GeneratedMessageCompanion[A]
   ) {
-    def storageCost: Cost = Cost(a.map(a => gm.toByteArray(a).size).sum)
+    def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
   }
 
   final val MAX_VALUE = PhloLimit(Long.MaxValue)
