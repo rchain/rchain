@@ -15,11 +15,12 @@ case class ParMap(
 ) {
 
   override def equals(o: scala.Any): Boolean = o match {
-    case parMap: ParMap => this.ps == parMap.ps && this.remainder == parMap.remainder
-    case _              => false
+    case parMap: ParMap =>
+      this.ps == parMap.ps && this.remainder == parMap.remainder && this.connectiveUsed == parMap.connectiveUsed
+    case _ => false
   }
 
-  override def hashCode(): Int = Objects.hash(ps, remainder)
+  override def hashCode(): Int = Objects.hash(ps, remainder, Boolean.box(connectiveUsed))
 }
 
 object ParMap {

@@ -7,6 +7,7 @@ import java.nio.file.{Path, Paths}
 import cats.implicits._
 import coop.rchain.blockstorage.LMDBBlockStore
 import coop.rchain.casper.CasperConf
+import coop.rchain.casper.protocol.{PhloLimit, PhloPrice}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.{PeerNode, UPnP}
 import coop.rchain.node.IpChecker
@@ -15,7 +16,6 @@ import coop.rchain.node.configuration.toml.{Configuration => TomlConfiguration}
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.StoreType
 import coop.rchain.shared.StoreType._
-
 import monix.eval.Task
 
 import scala.concurrent.duration._
@@ -59,6 +59,9 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
   private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultMinimumBond: Long          = 1L
+  private val DefaultMaximumBond: Long          = Long.MaxValue
+  private val DefaultHasFaucet: Boolean         = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
@@ -169,7 +172,10 @@ object Configuration {
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
             approveGenesisInterval = 1.day,
-            deployTimestamp = None
+            deployTimestamp = None,
+            minimumBond = DefaultMinimumBond,
+            maximumBond = DefaultMaximumBond,
+            hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -191,8 +197,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          PhloLimit(phloLimit()),
+          PhloPrice(phloPrice()),
           nonce.getOrElse(0),
           location()
         )
@@ -291,6 +297,11 @@ object Configuration {
       DefaultValidatorSigAlgorithm
     )
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val minimumBond =
+      get(_.run.minimumBond, _.validators.flatMap(_.minimumBond), DefaultMinimumBond)
+    val maximumBond =
+      get(_.run.maximumBond, _.validators.flatMap(_.maximumBond), DefaultMaximumBond)
+    val hasFaucet = get(_.run.hasFaucet, _.validators.flatMap(_.hasFaucet), DefaultHasFaucet)
     val maxNumOfConnections = get(
       _.run.maxNumOfConnections,
       _.server.flatMap(_.maxNumOfConnections),
@@ -345,6 +356,9 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        minimumBond,
+        maximumBond,
+        hasFaucet,
         requiredSigs,
         shardId,
         standalone,
@@ -379,8 +393,8 @@ object Configuration {
         import options.deploy._
         Deploy(
           from.getOrElse("0x"),
-          phloLimit.getOrElse(0),
-          phloPrice.getOrElse(0),
+          PhloLimit(phloLimit()),
+          PhloPrice(phloPrice()),
           nonce.getOrElse(0),
           location()
         )

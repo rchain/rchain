@@ -189,6 +189,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
         "is the amount of Rev in the wallet."
     )
+    val minimumBond = opt[Long](
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
+    )
+    val maximumBond = opt[Long](
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
+    )
+    val hasFaucet = opt[Boolean](
+      descr = "True if there should be a public access Rev faucet in the genesis block."
+    )
 
     val bootstrap =
       opt[PeerNode](
@@ -303,10 +312,17 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val phloLimit =
-      opt[Int](descr = "The amount of phlo to use for the transaction (unused phlo is refunded).")
+      opt[Long](
+        descr =
+          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+        validate = _ > 0,
+        required = true
+      )
 
-    val phloPrice = opt[Int](
-      descr = "The price of phlo for this transaction in units dust/phlo."
+    val phloPrice = opt[Long](
+      descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
+      validate = _ > 0,
+      required = true
     )
 
     val nonce = opt[Int](

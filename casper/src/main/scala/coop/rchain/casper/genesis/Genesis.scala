@@ -19,7 +19,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.rholang.collection.{Either, ListOps}
 import coop.rchain.rholang.math.NonNegativeNumber
-import coop.rchain.rholang.mint.MakeMint
+import coop.rchain.rholang.mint.{BasicWalletFaucet, MakeMint}
 import coop.rchain.rholang.proofofstake.MakePoS
 import coop.rchain.rholang.wallet.{BasicWallet, WalletCheck}
 import coop.rchain.shared.{Log, LogSource, Time}
@@ -28,6 +28,7 @@ import monix.execution.Scheduler
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
+import coop.rchain.rholang.interpreter.accounting
 
 object Genesis {
 
@@ -35,8 +36,9 @@ object Genesis {
 
   def defaultBlessedTerms(
       timestamp: Long,
-      validators: Seq[ProofOfStakeValidator],
-      wallets: Seq[PreWallet]
+      posParams: ProofOfStakeParams,
+      wallets: Seq[PreWallet],
+      faucetCode: String => String
   ): List[Deploy] =
     List(
       ListOps,
@@ -45,21 +47,22 @@ object Genesis {
       MakeMint,
       MakePoS,
       BasicWallet,
+      BasicWalletFaucet,
       WalletCheck,
-      new PreWalletRev(wallets, validators),
-      Registry
-    ).map(compiledSourceDeploy(_, timestamp))
+      new PreWalletRev(wallets, faucetCode, posParams)
+    ).map(compiledSourceDeploy(_, timestamp, accounting.MAX_VALUE))
 
   def withContracts(
       initial: BlockMessage,
-      validators: Seq[ProofOfStakeValidator],
+      posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
+      faucetCode: String => String,
       startHash: StateHash,
       runtimeManager: RuntimeManager,
       timestamp: Long
   )(implicit scheduler: Scheduler): BlockMessage =
     withContracts(
-      defaultBlessedTerms(timestamp, validators, wallets),
+      defaultBlessedTerms(timestamp, posParams, wallets, faucetCode),
       initial,
       startHash,
       runtimeManager
@@ -121,6 +124,9 @@ object Genesis {
       numValidators: Int,
       genesisPath: Path,
       maybeWalletsPath: Option[String],
+      minimumBond: Long,
+      maximumBond: Long,
+      faucet: Boolean,
       runtimeManager: RuntimeManager,
       shardId: String,
       deployTimestamp: Option[Long]
@@ -140,10 +146,13 @@ object Genesis {
       bonds       <- getBonds[F](bondsFile, numValidators, genesisPath)
       timestamp   <- deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
       initial     = withoutContracts(bonds = bonds, timestamp = 1L, version = 0L, shardId = shardId)
+      validators  = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
+      faucetCode  = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
       withContr = withContracts(
         initial,
-        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+        ProofOfStakeParams(minimumBond, maximumBond, validators),
         wallets,
+        faucetCode,
         runtimeManager.emptyStateHash,
         runtimeManager,
         timestamp

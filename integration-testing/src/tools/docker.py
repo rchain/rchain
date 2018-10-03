@@ -28,5 +28,5 @@ def docker_network(docker_client):
     finally:
         for network in docker_client.networks.list():
             if network_name == network.name:
-                logging.info(f"removing {network.name}")
+                logging.info(f"Removing docker network {network.name}")
                 network.remove()

@@ -23,8 +23,16 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
   rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfoWithoutTuplespace) {}
-  rpc listenForDataAtName(Channel) returns (ListeningNameDataResponse) {}
-  rpc listenForContinuationAtName(Channels) returns (ListeningNameContinuationResponse) {}
+  rpc listenForDataAtName(Par) returns (ListeningNameDataResponse) {}
+  rpc listenForContinuationAtName(Pars) returns (ListeningNameContinuationResponse) {}
+}
+
+message PhloLimit {
+  int64 value = 1;
+}
+
+message PhloPrice {
+  int64 value = 1;
 }
 
 message DeployData {
@@ -34,8 +42,8 @@ message DeployData {
   bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
   string sigAlgorithm = 5; // name of the algorithm used to sign
   string from         = 6; //wallet address which will be used to pay for the deployment
-  int32 phloPrice     = 7; //phlo price
-  int32 phloLimit     = 8; //phlo limit for the deployment
+  PhloPrice phloPrice  = 7; //phlo price
+  PhloLimit phloLimit  = 8; //phlo limit for the deployment
   int32 nonce         = 9; //nonce for transaction made against `from` wallet
 }
 
@@ -51,8 +59,8 @@ message BlockQuery {
   string hash = 1;
 }
 
-message Channels {
-  repeated Channel channels = 1;
+message Pars {
+  repeated Par pars = 1;
 }
 
 message DeployServiceResponse {

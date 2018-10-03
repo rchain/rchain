@@ -14,7 +14,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.6",
+  scalaVersion := "2.12.7",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -23,7 +23,10 @@ lazy val projectSettings = Seq(
   ),
   scalafmtOnCompile := true,
   scapegoatVersion in ThisBuild := "1.3.4",
-  testOptions in Test += Tests.Argument("-oD") //output test durations
+  testOptions in Test += Tests.Argument("-oD"), //output test durations
+  dependencyOverrides ++= Seq(
+    "io.kamon" %% "kamon-core" % kamonVersion
+  )
 )
 
 lazy val coverageSettings = Seq(
@@ -93,6 +96,7 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
+    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
       nettyBoringSsl,
@@ -280,7 +284,7 @@ lazy val rholangCLI = (project in file("rholang-cli"))
 lazy val rholangProtoBuildJar = Def.task(
   (assemblyOutputPath in (assembly)).value
 )
-lazy val _incrementalAssembly = Def.taskDyn(
+lazy val incrementalAssembly2 = Def.taskDyn(
   if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
     (assembly)
   else
@@ -291,7 +295,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   .settings(commonSettings: _*)
   .settings(
     name := "rholang-proto-build",
-    incrementalAssembly in Compile := _incrementalAssembly.value
+    incrementalAssembly in Compile := incrementalAssembly2.value
   )
   .dependsOn(rholang)
 
@@ -341,6 +345,7 @@ lazy val rspace = (project in file("rspace"))
     Defaults.itSettings,
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
+
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,

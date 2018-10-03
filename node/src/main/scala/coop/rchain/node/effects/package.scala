@@ -13,7 +13,6 @@ import coop.rchain.shared._
 import scala.concurrent.duration.FiniteDuration
 import java.nio.file.Path
 import scala.io.Source
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp._, Connect._
 import scala.concurrent.duration._
 
@@ -24,24 +23,18 @@ package object effects {
   def nodeDiscovery(src: PeerNode, defaultTimeout: FiniteDuration)(init: Option[PeerNode])(
       implicit
       log: Log[Task],
-      time: Timer[Task],
+      time: Time[Task],
       metrics: Metrics[Task],
       kademliaRPC: KademliaRPC[Task]
   ): Task[NodeDiscovery[Task]] =
     KademliaNodeDiscovery.create[Task](src, defaultTimeout)(init)
 
-  def time: Time[Task] = new Time[Task] {
-    def currentMillis: Task[Long] = Task.delay {
-      System.currentTimeMillis
+  def time(implicit timer: Timer[Task]): Time[Task] =
+    new Time[Task] {
+      def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
+      def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
+      def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    def nanoTime: Task[Long] = Task.delay {
-      System.nanoTime
-    }
-
-    def sleep(millis: Int): Task[Unit] = Task.delay {
-      Thread.sleep(millis.toLong)
-    }
-  }
 
   def kademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       implicit
