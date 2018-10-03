@@ -27,13 +27,13 @@ object implicits {
     BindPattern,
     OutOfPhlogistonsError.type,
     ListParWithRandom,
-    ListParWithRandom
+    ListParWithRandomAndPhlos
   ] =
     new StorageMatch[
       BindPattern,
       OutOfPhlogistonsError.type,
       ListParWithRandom,
-      ListParWithRandom
+      ListParWithRandomAndPhlos
     ] {
 
       private def calcUsed(init: Cost, left: Cost): Cost = init - left
@@ -41,7 +41,7 @@ object implicits {
       def get(
           pattern: BindPattern,
           data: ListParWithRandom
-      ): Either[OutOfPhlogistonsError.type, Option[ListParWithRandom]] =
+      ): Either[OutOfPhlogistonsError.type, Option[ListParWithRandomAndPhlos]] =
         SpatialMatcher
           .foldMatch(data.pars, pattern.patterns, pattern.remainder)
           .runWithCost(init)
@@ -56,7 +56,7 @@ object implicits {
                         freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
                       case _ => freeMap
                     }
-                    ListParWithRandom(
+                    ListParWithRandomAndPhlos(
                       toSeq(remainderMap, pattern.freeCount),
                       data.randomState,
                       cost.value
