@@ -23,7 +23,7 @@ class TcpServerObservable(
     serverSslContext: SslContext,
     maxMessageSize: Int,
     tellBufferSize: Int = 1024,
-    askBufferSize: Int = 64,
+    askBufferSize: Int = 1024,
     askTimeout: FiniteDuration = 5.second
 )(implicit scheduler: Scheduler)
     extends Observable[ServerMessage] {
@@ -49,11 +49,12 @@ class TcpServerObservable(
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
             Task
-              .create[CommunicationResponse] { (_, cb) =>
-                subjectAsk.onNext(Ask(protocol, Reply(cb)))
+              .create[CommunicationResponse] { (s, cb) =>
+                val reply = Reply(cb)
+                subjectAsk.onNext(Ask(protocol, reply))
+                s.scheduleOnce(askTimeout)(reply.failWith(new TimeoutException))
                 Cancelable.empty
               }
-              .timeout(askTimeout)
               .map {
                 case NotHandled(error)            => internalServerError(error.message)
                 case HandledWitoutMessage         => noResponse

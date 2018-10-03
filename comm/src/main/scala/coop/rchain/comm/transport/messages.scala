@@ -13,6 +13,7 @@ final case class Tell(msg: Protocol)                      extends ServerMessage
 trait SenderHandle {
   def reply(msg: CommunicationResponse): Unit
   def failWith(e: Throwable): Unit
+  def complete: Boolean
 }
 
 final class Reply(callback: Callback[CommunicationResponse]) extends SenderHandle {
@@ -28,6 +29,8 @@ final class Reply(callback: Callback[CommunicationResponse]) extends SenderHandl
     if (!called.getAndSet(true)) {
       callback.onError(e)
     }
+
+  def complete: Boolean = called.get()
 }
 
 object Reply {

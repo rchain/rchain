@@ -179,11 +179,12 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attempt.void
-      case Ask(protocol, sender) =>
+      case Ask(protocol, sender) if !sender.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => sender.failWith(e)
           case Right(response) => sender.reply(response)
         }.void
+      case _ => Task.unit // sender timeout
     }
 
     Task.delay {
