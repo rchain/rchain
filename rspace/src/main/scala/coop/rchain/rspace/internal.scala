@@ -135,9 +135,23 @@ object internal {
       }
   }
 
-  case class Install[P, E, A, R, K](patterns: Seq[P], continuation: K, _match: Match[P, E, A, R])
+  sealed trait Install[C, P, E, A, R, K]
+  object Install {
+    final case class Consume[C, P, E, A, R, K](
+        channels: Seq[C],
+        patterns: Seq[P],
+        continuation: K,
+        _match: Match[P, E, A, R]
+    ) extends Install[C, P, E, A, R, K]
+    final case class Produce[C, P, E, A, R, K](
+        channel: C,
+        data: A,
+        persist: Boolean,
+        _match: Match[P, E, A, R]
+    ) extends Install[C, P, E, A, R, K]
+  }
 
-  type Installs[C, P, E, A, R, K] = Map[Seq[C], Install[P, E, A, R, K]]
+  type Installs[C, P, E, A, R, K] = List[Install[C, P, E, A, R, K]]
 
   import scodec.{Attempt, Err}
 

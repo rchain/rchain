@@ -220,8 +220,21 @@ object ChargingRSpaceTest {
           ListParWithRandomAndPhlos
         ]
     ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
-    override def createCheckpoint(): Id[Checkpoint]                               = ???
-    override def reset(root: Blake2b256Hash): Id[Unit]                            = ???
+    override def install(
+        channels: Par,
+        data: ListParWithRandom,
+        persist: Boolean
+    )(
+        implicit m: Match[
+          BindPattern,
+          errors.OutOfPhlogistonsError.type,
+          ListParWithRandom,
+          ListParWithRandomAndPhlos
+        ]
+    ): Id[Option[(TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])]] = ???
+
+    override def createCheckpoint(): Id[Checkpoint]    = ???
+    override def reset(root: Blake2b256Hash): Id[Unit] = ???
     override def retrieve(
         root: Blake2b256Hash,
         channelsHash: Blake2b256Hash

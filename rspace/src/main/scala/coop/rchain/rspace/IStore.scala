@@ -39,6 +39,8 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def putDatum(txn: Transaction, channels: Seq[C], datum: Datum[A]): Unit
 
+  private[rspace] def installDatum(txn: Transaction, channels: Seq[C], datum: Datum[A]): Unit
+
   private[rspace] def getData(txn: Transaction, channels: Seq[C]): Seq[Datum[A]]
 
   private[rspace] def removeDatum(txn: Transaction, channel: Seq[C], index: Int): Unit

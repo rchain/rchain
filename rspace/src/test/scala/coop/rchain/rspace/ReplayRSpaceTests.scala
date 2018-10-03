@@ -685,7 +685,7 @@ trait ReplayRSpaceTests
     cp1.root shouldBe cp2.root
   }
 
-  "an install" should "be available after resetting to a checkpoint" in withTestSpaces {
+  "installed continuation" should "be available after resetting to a checkpoint" in withTestSpaces {
     (space, replaySpace) =>
       val channel      = "ch1"
       val datum        = "datum1"
@@ -702,6 +702,25 @@ trait ReplayRSpaceTests
       replaySpace.rig(afterProduce.root, afterProduce.log)
 
       replaySpace.produce(channel, datum, persist = false) shouldBe defined
+  }
+
+  "installed data" should "be available after resetting to a checkpoint" in withTestSpaces {
+    (space, replaySpace) =>
+      val channel      = "ch1"
+      val datum        = "datum1"
+      val key          = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = "continuation"
+
+      space.install(channel, datum, false)
+      replaySpace.install(channel, datum, false)
+
+      space.consume(key, patterns, continuation, persist = false) shouldBe defined
+      val afterProduce = space.createCheckpoint()
+
+      replaySpace.rig(afterProduce.root, afterProduce.log)
+
+      replaySpace.consume(key, patterns, continuation, persist = false) shouldBe defined
   }
 
   "reset" should

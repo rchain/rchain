@@ -1504,17 +1504,32 @@ trait StorageActionsTests
     )
   }
 
-  "an install" should "not allow installing after a produce operation" in withTestSpace { space =>
-    val channel  = "ch1"
-    val datum    = "datum1"
-    val key      = List(channel)
-    val patterns = List(Wildcard)
+  "installing a continuation" should "not allow installing after a produce operation" in withTestSpace {
+    space =>
+      val channel  = "ch1"
+      val datum    = "datum1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
 
-    space.produce(channel, datum, persist = false)
-    val ex = the[RuntimeException] thrownBy {
-      space.install(key, patterns, new StringsCaptor)
-    }
-    ex.getMessage shouldBe "Installing can be done only on startup"
+      space.produce(channel, datum, persist = false)
+      val ex = the[RuntimeException] thrownBy {
+        space.install(key, patterns, new StringsCaptor)
+      }
+      ex.getMessage shouldBe "Installing can never trigger a COMM event"
+  }
+
+  "installing data" should "not allow installing after a consume operation" in withTestSpace {
+    space =>
+      val channel  = "ch1"
+      val datum    = "datum1"
+      val key      = List(channel)
+      val patterns = List(Wildcard)
+
+      space.consume(key, patterns, new StringsCaptor, persist = false)
+      val ex = the[RuntimeException] thrownBy {
+        space.install(channel, datum, persist = false)
+      }
+      ex.getMessage shouldBe "Installing can never trigger a COMM event"
   }
 
   "after close space" should "throw RSpaceClosedException on all store operations" in withTestSpace {

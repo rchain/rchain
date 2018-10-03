@@ -132,6 +132,17 @@ class LMDBStore[C, P, A, K] private (
 
   /* Continuations */
 
+  private[rspace] def installDatum(
+      txn: Transaction,
+      channels: Seq[C],
+      datum: Datum[A]
+  ): Unit =
+    _dbGNATs.put(
+      txn,
+      hashChannels(channels),
+      GNAT[C, P, A, K](channels, Seq(datum), Seq.empty)
+    )
+
   private[rspace] def installWaitingContinuation(
       txn: Transaction,
       channels: Seq[C],
