@@ -40,16 +40,17 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
   protected[this] def restoreInstalls(txn: store.Transaction): Unit =
     installs.get.foreach {
       case (Install.Consume(channels, patterns, continuation, _match)) =>
-        install(txn, channels, patterns, continuation)(_match)
+        install(txn, channels, patterns, continuation, update = false)(_match)
       case (Install.Produce(channel, data, persist, _match)) =>
-        install(txn, channel, data, persist)(_match)
+        install(txn, channel, data, persist, update = false)(_match)
     }
 
   private[this] def install(
       txn: store.Transaction,
       channels: Seq[C],
       patterns: Seq[P],
-      continuation: K
+      continuation: K,
+      update: Boolean
   )(implicit m: Match[P, E, A, R]): Option[(K, Seq[R])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
@@ -82,7 +83,8 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
       case Left(e) =>
         throw new RuntimeException(s"Installing can never result in an invalid match: $e")
       case Right(None) =>
-        installs.update(curr => Install.Consume(channels, patterns, continuation, m) :: curr)
+        if (update)
+          installs.update(curr => Install.Consume(channels, patterns, continuation, m) :: curr)
         store.installWaitingContinuation(
           txn,
           channels,
@@ -103,12 +105,18 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
   ): F[Option[(K, Seq[R])]] = syncF.delay {
     Kamon.withSpan(installSpan.start(), finishSpan = true) {
       store.withTxn(store.createTxnWrite()) { txn =>
-        install(txn, channels, patterns, continuation)
+        install(txn, channels, patterns, continuation, true)
       }
     }
   }
 
-  private[this] def install(txn: store.Transaction, channel: C, data: A, persist: Boolean)(
+  private[this] def install(
+      txn: store.Transaction,
+      channel: C,
+      data: A,
+      persist: Boolean,
+      update: Boolean
+  )(
       implicit m: Match[P, E, A, R]
   ): Option[(K, Seq[R])] = {
 
@@ -173,9 +181,10 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
         throw new RuntimeException(invalidInstallMsg)
       case Right(None) =>
         logger.debug(s"produce: no matching continuation found")
-        installs.update(
-          curr => Install.Produce[C, P, E, A, R, K](channel, data, persist, m) :: curr
-        )
+        if (update)
+          installs.update(
+            curr => Install.Produce[C, P, E, A, R, K](channel, data, persist, m) :: curr
+          )
         span.mark("before-install-datum")
         store.installDatum(txn, Seq(channel), Datum(data, persist, produceRef))
         span.mark("after-install-datum")
@@ -190,7 +199,7 @@ abstract class RSpaceOps[F[_], C, P, E, A, R, K](val store: IStore[C, P, A, K], 
     syncF.delay {
       Kamon.withSpan(installSpan.start(), finishSpan = true) {
         store.withTxn(store.createTxnWrite()) { txn =>
-          install(txn, channel, data, persist)
+          install(txn, channel, data, persist, true)
         }
       }
     }
