@@ -6,6 +6,15 @@ import coop.rchain.crypto.codec.Base16
 //TODO: include other fields relevent to PoS (e.g. rewards channel)
 case class ProofOfStakeValidator(id: Array[Byte], stake: Long)
 
+case class ProofOfStakeParams(
+    minimumBond: Long,
+    maximumBond: Long,
+    validators: Seq[ProofOfStakeValidator]
+) {
+  require(minimumBond <= maximumBond)
+  require(validators.nonEmpty)
+}
+
 object ProofOfStake {
   def initialBondsCode(validators: Seq[ProofOfStakeValidator]): String = {
     import Sorting.byteArrayOrdering

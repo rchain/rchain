@@ -4,14 +4,19 @@ import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.models.Par
 
-class Rev[A](rhoCode: A => String, wallets: Seq[A], validators: Seq[ProofOfStakeValidator])
-    extends CompiledRholangSource {
-  private val initialTotalBond = validators.foldLeft(0L) { case (acc, v) => acc + v.stake }
-  private val initialBondsCode = ProofOfStake.initialBondsCode(validators)
+class Rev[A](
+    rhoCode: A => String,
+    wallets: Seq[A],
+    faucetCode: String => String,
+    posParams: ProofOfStakeParams
+) extends CompiledRholangSource {
+  private val initialTotalBond = posParams.validators.foldLeft(0L) {
+    case (acc, v) => acc + v.stake
+  }
+  private val initialBondsCode = ProofOfStake.initialBondsCode(posParams.validators)
 
-  //TODO: what should these values be?
-  private val minimumBond = 1L
-  private val maximumBond = Long.MaxValue
+  private val minimumBond = posParams.minimumBond
+  private val maximumBond = posParams.maximumBond
 
   final val code = s"""
     |//requires MakeMint, BasicWallet
@@ -23,6 +28,8 @@ class Rev[A](rhoCode: A => String, wallets: Seq[A], validators: Seq[ProofOfStake
     |    contract @("Rev", "makePurse")(return) = {
     |       @(revMint, "makePurse")!(0, *return)
     |    } |
+    |
+    |    ${faucetCode("revMint")} |
     |
     |    //PoS purse and contract creation
     |    @(revMint, "makePurse")!($initialTotalBond, *posPurseCh) |
@@ -46,5 +53,8 @@ class Rev[A](rhoCode: A => String, wallets: Seq[A], validators: Seq[ProofOfStake
   final override val term: Par = InterpreterUtil.mkTerm(code).right.get
 }
 
-class PreWalletRev(wallets: Seq[PreWallet], validators: Seq[ProofOfStakeValidator])
-    extends Rev[PreWallet](PreWallet.rhoCode, wallets, validators)
+class PreWalletRev(
+    wallets: Seq[PreWallet],
+    faucetCode: String => String,
+    posParams: ProofOfStakeParams
+) extends Rev[PreWallet](PreWallet.rhoCode, wallets, faucetCode, posParams)

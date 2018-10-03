@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import cats.{Applicative, Functor, Monad}
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -229,11 +228,11 @@ object NameNormalizeMatcher {
     n match {
       case wc: NameWildcard =>
         val wildcardBindResult = input.knownFree.addWildcard(wc.line_num, wc.col_num)
-        NameVisitOutputs(ChanVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[M]
+        NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[M]
       case n: NameVar =>
         input.env.get(n.var_) match {
           case Some((level, NameSort, _, _)) => {
-            NameVisitOutputs(ChanVar(BoundVar(level)), input.knownFree).pure[M]
+            NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[M]
           }
           case Some((_, ProcSort, line, col)) => {
             err.raiseError(UnexpectedNameContext(n.var_, line, col, n.line_num, n.col_num))
@@ -243,7 +242,7 @@ object NameNormalizeMatcher {
               case None =>
                 val newBindingsPair =
                   input.knownFree.newBinding((n.var_, NameSort, n.line_num, n.col_num))
-                NameVisitOutputs(ChanVar(FreeVar(newBindingsPair._2)), newBindingsPair._1).pure[M]
+                NameVisitOutputs(EVar(FreeVar(newBindingsPair._2)), newBindingsPair._1).pure[M]
               case Some((_, _, line, col)) =>
                 err.raiseError(
                   UnexpectedReuseOfNameContextFree(n.var_, line, col, n.line_num, n.col_num)
@@ -253,17 +252,10 @@ object NameNormalizeMatcher {
         }
 
       case n: NameQuote => {
-        def collapseQuoteEval(p: Par): Channel =
-          p.singleEval() match {
-            case Some(chanNew) => chanNew
-            case _             => Quote(p)
-          }
-
         ProcNormalizeMatcher
           .normalizeMatch[M](n.proc_, ProcVisitInputs(VectorPar(), input.env, input.knownFree))
           .map(
-            procVisitResult =>
-              NameVisitOutputs(collapseQuoteEval(procVisitResult.par), procVisitResult.knownFree)
+            procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.knownFree)
           )
       }
     }
@@ -303,6 +295,15 @@ object ProcNormalizeMatcher {
           input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
           rightResult.knownFree
         )
+
+    def containsConnective(listProc: ListProc): Option[String] =
+      listProc
+        .collectFirst {
+          case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
+          case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
+          case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
+        }
+        .map { case (c, line, col) => s"$c at $line:$col" }
 
     def normalizeIfElse(
         valueProc: Proc,
@@ -522,18 +523,12 @@ object ProcNormalizeMatcher {
       case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[M]
 
       case p: PEval =>
-        def collapseEvalQuote(chan: Channel): Par =
-          chan.channelInstance match {
-            case Quote(q) => q
-            case _        => Expr(EEvalBody(chan))
-          }
-
         NameNormalizeMatcher
           .normalizeMatch[M](p.name_, NameVisitInputs(input.env, input.knownFree))
           .map(
             nameMatchResult =>
               ProcVisitOutputs(
-                input.par ++ collapseEvalQuote(nameMatchResult.chan),
+                input.par ++ nameMatchResult.chan,
                 nameMatchResult.knownFree
               )
           )
@@ -621,53 +616,61 @@ object ProcNormalizeMatcher {
       case p: PExprs =>
         normalizeMatch[M](p.proc_, input)
 
-      case p: PSend => {
-        for {
-          nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
-                              p.name_,
-                              NameVisitInputs(input.env, input.knownFree)
-                            )
-          initAcc = (
-            Vector[Par](),
-            ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
-            BitSet(),
-            false
-          )
-          dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
-                          (acc, e) =>
-                            normalizeMatch[M](e, acc._2).map(
-                              procMatchResult =>
-                                (
-                                  procMatchResult.par +: acc._1,
-                                  ProcVisitInputs(
-                                    VectorPar(),
-                                    input.env,
-                                    procMatchResult.knownFree
-                                  ),
-                                  acc._3 | procMatchResult.par.locallyFree,
-                                  acc._4 || procMatchResult.par.connectiveUsed
+      case p: PSend =>
+        containsConnective(p.listproc_) match {
+          case Some(errMsg) =>
+            sync.raiseError(
+              SendDataConnectivesNotAllowedError(errMsg)
+            )
+          case None =>
+            for {
+              nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
+                                  p.name_,
+                                  NameVisitInputs(input.env, input.knownFree)
                                 )
-                            )
-                        )
-          persistent = p.send_ match {
-            case _: SendSingle   => false
-            case _: SendMultiple => true
-          }
-        } yield
-          ProcVisitOutputs(
-            input.par.prepend(
-              Send(
-                nameMatchResult.chan,
-                dataResults._1,
-                persistent,
-                ChannelLocallyFree
-                  .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
-                ChannelLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
+              initAcc = (
+                Vector[Par](),
+                ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
+                BitSet(),
+                false
               )
-            ),
-            dataResults._2.knownFree
-          )
-      }
+
+              dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
+                              (acc, e) => {
+                                normalizeMatch[M](e, acc._2).map(
+                                  procMatchResult =>
+                                    (
+                                      procMatchResult.par +: acc._1,
+                                      ProcVisitInputs(
+                                        VectorPar(),
+                                        input.env,
+                                        procMatchResult.knownFree
+                                      ),
+                                      acc._3 | procMatchResult.par.locallyFree,
+                                      acc._4 || procMatchResult.par.connectiveUsed
+                                    )
+                                )
+                              }
+                            )
+              persistent = p.send_ match {
+                case _: SendSingle   => false
+                case _: SendMultiple => true
+              }
+            } yield
+              ProcVisitOutputs(
+                input.par.prepend(
+                  Send(
+                    nameMatchResult.chan,
+                    dataResults._1,
+                    persistent,
+                    ParLocallyFree
+                      .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
+                    ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
+                  )
+                ),
+                dataResults._2.knownFree
+              )
+        }
 
       case p: PContr => {
         // A free variable can only be used once in any of the parameters.
@@ -679,7 +682,7 @@ object ProcNormalizeMatcher {
                                 p.name_,
                                 NameVisitInputs(input.env, input.knownFree)
                               )
-          initAcc = (Vector[Channel](), DebruijnLevelMap[VarSort](), BitSet())
+          initAcc = (Vector[Par](), DebruijnLevelMap[VarSort](), BitSet())
           // Note that we go over these in the order they were given and reverse
           // down below. This is because it makes more sense to number the free
           // variables in the order given, rather than in reverse.
@@ -695,7 +698,7 @@ object ProcNormalizeMatcher {
                                      (
                                        result.chan +: acc._1,
                                        result.knownFree,
-                                       acc._3 | ChannelLocallyFree
+                                       acc._3 | ParLocallyFree
                                          .locallyFree(result.chan, input.env.depth + 1)
                                      )
                                  )
@@ -724,12 +727,12 @@ object ProcNormalizeMatcher {
                 body = bodyResult.par,
                 persistent = true,
                 bindCount = boundCount,
-                locallyFree = ChannelLocallyFree
+                locallyFree = ParLocallyFree
                   .locallyFree(nameMatchResult.chan, input.env.depth) | formalsResults._3
                   | (bodyResult.par.locallyFree
                     .from(boundCount)
                     .map(x => x - boundCount)),
-                connectiveUsed = ChannelLocallyFree
+                connectiveUsed = ParLocallyFree
                   .connectiveUsed(nameMatchResult.chan) || bodyResult.par.connectiveUsed
               )
             ),
@@ -744,10 +747,10 @@ object ProcNormalizeMatcher {
 
         // We split this into parts. First we process all the sources, then we process all the bindings.
         def processSources(sources: List[(List[Name], Name, NameRemainder)]): M[
-          (Vector[(List[Name], Channel, NameRemainder)], DebruijnLevelMap[VarSort], BitSet, Boolean)
+          (Vector[(List[Name], Par, NameRemainder)], DebruijnLevelMap[VarSort], BitSet, Boolean)
         ] = {
           val initAcc =
-            (Vector[(List[Name], Channel, NameRemainder)](), input.knownFree, BitSet(), false)
+            (Vector[(List[Name], Par, NameRemainder)](), input.knownFree, BitSet(), false)
           sources
             .foldM(initAcc)((acc, e) => {
               NameNormalizeMatcher
@@ -757,8 +760,8 @@ object ProcNormalizeMatcher {
                     (
                       (e._1, sourceResult.chan, e._3) +: acc._1,
                       sourceResult.knownFree,
-                      acc._3 | ChannelLocallyFree.locallyFree(sourceResult.chan, input.env.depth),
-                      acc._4 || ChannelLocallyFree.connectiveUsed(sourceResult.chan)
+                      acc._3 | ParLocallyFree.locallyFree(sourceResult.chan, input.env.depth),
+                      acc._4 || ParLocallyFree.connectiveUsed(sourceResult.chan)
                     )
                 )
             })
@@ -766,11 +769,11 @@ object ProcNormalizeMatcher {
         }
 
         def processBindings(
-            bindings: Vector[(List[Name], Channel, NameRemainder)]
-        ): M[Vector[(Vector[Channel], Channel, Option[Var], DebruijnLevelMap[VarSort], BitSet)]] =
+            bindings: Vector[(List[Name], Par, NameRemainder)]
+        ): M[Vector[(Vector[Par], Par, Option[Var], DebruijnLevelMap[VarSort], BitSet)]] =
           bindings.traverse {
-            case (names: List[Name], chan: Channel, nr: NameRemainder) => {
-              val initAcc = (Vector[Channel](), DebruijnLevelMap[VarSort](), BitSet())
+            case (names: List[Name], chan: Par, nr: NameRemainder) => {
+              val initAcc = (Vector[Par](), DebruijnLevelMap[VarSort](), BitSet())
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
@@ -780,7 +783,7 @@ object ProcNormalizeMatcher {
                         (
                           result.chan +: acc._1,
                           result.knownFree,
-                          acc._3 | ChannelLocallyFree.locallyFree(result.chan, input.env.depth + 1)
+                          acc._3 | ParLocallyFree.locallyFree(result.chan, input.env.depth + 1)
                         )
                     )
                 })
@@ -1047,7 +1050,7 @@ case class ProcVisitInputs(
 case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 
 case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
-case class NameVisitOutputs(chan: Channel, knownFree: DebruijnLevelMap[VarSort])
+case class NameVisitOutputs(chan: Par, knownFree: DebruijnLevelMap[VarSort])
 
 case class CollectVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])

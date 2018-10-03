@@ -2,8 +2,7 @@ package coop.rchain.models
 
 import java.util
 
-import coop.rchain.models.Channel.ChannelInstance.ChanVar
-import coop.rchain.models.Expr.ExprInstance.{EEvalBody, GInt}
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.Var.VarInstance.BoundVar
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.rspace.Serialize
@@ -21,7 +20,7 @@ class SortedParMapSpec extends FlatSpec with Matchers {
   val pars: Seq[(Par, Par)] = Seq[(Par, Par)](
     (GInt(7), GString("Seven")),
     (GInt(7), GString("SeVen")),
-    (EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0)))),
+    (EVar(BoundVar(1)), EVar(BoundVar(0))),
     (GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
     (GInt(2), ParSet(Seq[Par](GInt(2))))
   )

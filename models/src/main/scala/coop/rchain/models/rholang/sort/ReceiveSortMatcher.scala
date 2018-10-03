@@ -1,7 +1,7 @@
 package coop.rchain.models.rholang.sort
 
 import cats.effect.Sync
-import coop.rchain.models.{Channel, Receive, ReceiveBind, Var}
+import coop.rchain.models.{Par, Receive, ReceiveBind, Var}
 import cats.implicits._
 
 object ReceiveSortMatcher extends Sortable[Receive] {
@@ -10,7 +10,7 @@ object ReceiveSortMatcher extends Sortable[Receive] {
     val patterns = bind.patterns
     val source   = bind.source
     for {
-      sortedPatterns <- patterns.toList.traverse(Sortable[Channel].sortMatch[F])
+      sortedPatterns <- patterns.toList.traverse(Sortable[Par].sortMatch[F])
       sortedChannel  <- Sortable.sortMatch(source)
       sortedRemainder <- bind.remainder match {
                           case Some(bindRemainder) =>

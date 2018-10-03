@@ -8,13 +8,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator, RevIssuanceTest}
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.comm.transport
@@ -42,7 +43,8 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
   private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(Random.nextInt(499) + 1)))
   private val bonds   = createBonds(validators)
-  private val genesis = buildGenesis(wallets, bonds, 0L)
+  private val genesis =
+    buildGenesis(wallets, bonds, 100L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -397,6 +399,32 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     newBonds.toSet shouldBe correctBonds
   }
 
+  it should "have a working faucet (in testnet)" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node.casperEff
+
+    val (_, pk) = Ed25519.newKeyPair
+    val pkStr   = Base16.encode(pk)
+    val amount  = 157L
+    val createWalletCode =
+      s"""for(faucet <- @"faucet"){ faucet!($amount, "ed25519", "$pkStr", "myWallet") }"""
+    val createWalletDeploy =
+      ProtoUtil.sourceDeploy(createWalletCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+
+    val Created(block) = casperEff.deploy(createWalletDeploy) *> casperEff.createBlock
+    val blockStatus    = casperEff.addBlock(block)
+
+    val balanceQuery =
+      mkTerm("""for(@[wallet] <- @"myWallet"){ @(wallet, "getBalance")!("__SCALA__") }""").right.get
+    val newWalletBalance =
+      node.runtimeManager.captureResults(block.getBody.getPostState.tuplespace, balanceQuery)
+
+    blockStatus shouldBe Valid
+    newWalletBalance.head.exprs.head.getGInt shouldBe amount
+
+    node.tearDown()
+  }
+
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
@@ -637,11 +665,12 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "increment last finalized block as appropriate in round robin" in {
-    val stake                 = 10L
-    val equalBonds            = validators.map(_ -> stake).toMap
-    val genesisWithEqualBonds = buildGenesis(Seq.empty, equalBonds, 0L)
-    val nodes                 = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
-    val deployDatas           = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
+    val stake      = 10L
+    val equalBonds = validators.map(_ -> stake).toMap
+    val genesisWithEqualBonds =
+      buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
+    val nodes       = HashSetCasperTestNode.network(validatorKeys.take(3), genesisWithEqualBonds)
+    val deployDatas = (0 to 7).map(i => ProtoUtil.basicDeployData(i))
 
     val Created(block1) = nodes(0).casperEff
       .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
@@ -772,11 +801,14 @@ object HashSetCasperTest {
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(bonds: Map[Array[Byte], Long]): BlockMessage =
-    buildGenesis(Seq.empty, bonds, 0L)
+    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
       bonds: Map[Array[Byte], Long],
+      minimumBond: Long,
+      maximumBond: Long,
+      faucetCode: String => String,
       deployTimestamp: Long
   ): BlockMessage = {
     val initial           = Genesis.withoutContracts(bonds, 0L, deployTimestamp, "rchain")
@@ -785,10 +817,12 @@ object HashSetCasperTest {
     val activeRuntime     = Runtime.create(storageDirectory, storageSize)
     val runtimeManager    = RuntimeManager.fromRuntime(activeRuntime)
     val emptyStateHash    = runtimeManager.emptyStateHash
+    val validators        = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesis = Genesis.withContracts(
       initial,
-      bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
+      ProofOfStakeParams(minimumBond, maximumBond, validators),
       wallets,
+      faucetCode,
       emptyStateHash,
       runtimeManager,
       deployTimestamp

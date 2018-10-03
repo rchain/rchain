@@ -1,6 +1,5 @@
 package coop.rchain.models.rholang
 
-import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -242,19 +241,19 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val parExpr =
       Par(
         sends = List(
-          Send(Quote(GInt(5)), List(GInt(3)), false, BitSet()),
-          Send(Quote(GInt(5)), List(GInt(3)), true, BitSet()),
-          Send(Quote(GInt(4)), List(GInt(2)), false, BitSet()),
-          Send(Quote(GInt(5)), List(GInt(2)), false, BitSet())
+          Send(GInt(5), List(GInt(3)), false, BitSet()),
+          Send(GInt(5), List(GInt(3)), true, BitSet()),
+          Send(GInt(4), List(GInt(2)), false, BitSet()),
+          Send(GInt(5), List(GInt(2)), false, BitSet())
         )
       )
     val sortedParExpr: Option[Par] =
       Par(
         sends = List(
-          Send(Quote(GInt(4)), List(GInt(2)), false, BitSet()),
-          Send(Quote(GInt(5)), List(GInt(2)), false, BitSet()),
-          Send(Quote(GInt(5)), List(GInt(3)), false, BitSet()),
-          Send(Quote(GInt(5)), List(GInt(3)), true, BitSet())
+          Send(GInt(4), List(GInt(2)), false, BitSet()),
+          Send(GInt(5), List(GInt(2)), false, BitSet()),
+          Send(GInt(5), List(GInt(3)), false, BitSet()),
+          Send(GInt(5), List(GInt(3)), true, BitSet())
         )
       )
     val result = SortTest.sort(parExpr)
@@ -266,35 +265,35 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(
         receives = List(
           Receive(
-            List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(1)), GInt(3))),
             Par(),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
             EVar(BoundVar(0)),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
             true,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
+            List(ReceiveBind(List(GInt(100)), GInt(2))),
             Par(),
             false,
             0,
@@ -306,34 +305,34 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       Par(
         receives = List(
           Receive(
-            List(ReceiveBind(List(Quote(GInt(100))), Quote(GInt(2)))),
+            List(ReceiveBind(List(GInt(100)), GInt(2))),
             Par(),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
             Par(),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(0)), GInt(3))),
             EVar(BoundVar(0)),
             false,
             0,
             BitSet()
           ),
           Receive(
-            List(ReceiveBind(List(Quote(GInt(1))), Quote(GInt(3)))),
+            List(ReceiveBind(List(GInt(1)), GInt(3))),
             Par(),
             false,
             0,
             BitSet()
           ),
-          Receive(List(ReceiveBind(List(Quote(GInt(0))), Quote(GInt(3)))), Par(), true, 0, BitSet())
+          Receive(List(ReceiveBind(List(GInt(0)), GInt(3))), Par(), true, 0, BitSet())
         )
       )
     val result = SortTest.sort(parExpr)
@@ -511,7 +510,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Connective(
             ConnAndBody(
               ConnectiveBody(
-                List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
+                List(EVar(FreeVar(0)), Send(EVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
               )
             )
           ),
@@ -547,7 +546,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Connective(
             ConnAndBody(
               ConnectiveBody(
-                List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
+                List(EVar(FreeVar(0)), Send(EVar(FreeVar(1)), List(EVar(FreeVar(2))), false))
               )
             )
           ),

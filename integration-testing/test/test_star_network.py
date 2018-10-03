@@ -5,21 +5,21 @@ from tools.rnode import start_bootstrap
 import logging
 
 @pytest.fixture(scope="module")
-def star_network(config, docker, validators_data):
-    with start_bootstrap(docker,
-                         config.node_startup_timeout,
-                         config.rnode_timeout,
-                         validators_data) as bootstrap_node:
+def star_network(system):
+    with start_bootstrap(system.docker,
+                         system.config.node_startup_timeout,
+                         system.config.rnode_timeout,
+                         system.validators_data) as bootstrap_node:
 
-        with start_network(config,
-                           docker,
+        with start_network(system.config,
+                           system.docker,
                            bootstrap_node,
-                           validators_data,
+                           system.validators_data,
                            [bootstrap_node.name]) as network:
 
-            wait_for_started_network(config.node_startup_timeout, network)
+            wait_for_started_network(system.config.node_startup_timeout, network)
 
-            wait_for_converged_network(config.network_converge_timeout, network, 1)
+            wait_for_converged_network(system.config.network_converge_timeout, network, 1)
 
             yield network
 

@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import coop.rchain.casper.protocol.PhloLimit
-import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import scalapb.GeneratedMessage
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long) extends AnyVal {
@@ -10,14 +10,17 @@ final case class Cost(value: Long) extends AnyVal {
   def -(other: Cost): Cost = Cost(value - other.value)
 }
 
+object Cost {
+  def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
+    Cost(chargeable.cost(term))
+}
+
 trait Costs {
 
   final val SUM_COST: Cost         = Cost(3)
   final val SUBTRACTION_COST: Cost = Cost(3)
 
-  def equalityCheckCost[T <: GeneratedMessage with Message[T], P <: GeneratedMessage with Message[
-    P
-  ]](x: T, y: P): Cost =
+  def equalityCheckCost[T <: GeneratedMessage, P <: GeneratedMessage](x: T, y: P): Cost =
     Cost(scala.math.min(x.serializedSize, y.serializedSize))
 
   final val BOOLEAN_AND_COST = Cost(2)
@@ -43,10 +46,7 @@ trait Costs {
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
-  def toByteArrayCost[T <: GeneratedMessage with Message[T]](
-      a: T
-  )(implicit comp: GeneratedMessageCompanion[T]): Cost =
-    Cost(a.serializedSize)
+  def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
 
   //TODO(mateusz.gorski): adjust the cost of the nth method call.
   def nthMethodCost(nth: Int): Cost = Cost(nth)
@@ -66,18 +66,12 @@ trait Costs {
 
   final val MATCH_EVAL_COST = Cost(12)
 
-  implicit def toStorageCostOps[A <: GeneratedMessage with Message[A]](a: Seq[A])(
-      implicit gm: GeneratedMessageCompanion[A]
-  ) = new StorageCostOps(a: _*)(gm)
+  implicit def toStorageCostOps[A <: GeneratedMessage](a: Seq[A]) = new StorageCostOps(a: _*)
 
-  implicit def toStorageCostOps[A <: GeneratedMessage with Message[A]](a: A)(
-      implicit gm: GeneratedMessageCompanion[A]
-  ) = new StorageCostOps(a)(gm)
+  implicit def toStorageCostOps[A <: GeneratedMessage](a: A) = new StorageCostOps(a)
 
-  class StorageCostOps[A <: GeneratedMessage with Message[A]](a: A*)(
-      gm: GeneratedMessageCompanion[A]
-  ) {
-    def storageCost: Cost = Cost(a.map(a => gm.toByteArray(a).size).sum)
+  class StorageCostOps[A <: GeneratedMessage](a: A*) {
+    def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
   }
 
   final val MAX_VALUE = PhloLimit(Long.MaxValue)

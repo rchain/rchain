@@ -6,7 +6,6 @@ import cats.Id
 import cats.mtl.FunctorTell
 import cats.effect.Sync
 import com.google.protobuf.ByteString
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -53,31 +52,31 @@ object Runtime {
   type RhoIStore  = CPAK[IStore]
   type RhoContext = CPAK[Context]
 
-  type RhoDispatch[F[_]] = Dispatch[F, ListChannelWithRandom, TaggedContinuation]
-  type RhoSysFunction    = Function1[Seq[ListChannelWithRandom], Task[Unit]]
+  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandomAndPhlos, TaggedContinuation]
+  type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
   private type CPAK[F[_, _, _, _]] =
-    F[Channel, BindPattern, ListChannelWithRandom, TaggedContinuation]
+    F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   private type CPARK[F[_, _, _, _, _, _]] =
     F[
-      Channel,
+      Par,
       BindPattern,
       OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ]
 
   private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
-      Channel,
+      Par,
       BindPattern,
       OutOfPhlogistonsError.type,
-      ListChannelWithRandom,
-      ListChannelWithRandom,
+      ListParWithRandom,
+      ListParWithRandomAndPhlos,
       TaggedContinuation
     ]
 
@@ -125,19 +124,19 @@ object Runtime {
   }
 
   // because only we do installs
-  private val MATCH_UNLIMITED_PHLOS = matchListQuote(Cost(Integer.MAX_VALUE))
+  private val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
 
   private def introduceSystemProcesses(
       space: RhoISpace,
       replaySpace: RhoISpace,
       processes: immutable.Seq[(Name, Arity, Remainder, Ref)]
-  ): Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
+  ): Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
     processes.flatMap {
       case (name, arity, remainder, ref) =>
-        val channels = List(Channel(Quote(name)))
+        val channels = List(name)
         val patterns = List(
           BindPattern(
-            (0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
+            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
             remainder,
             freeCount = arity
           )
@@ -161,20 +160,20 @@ object Runtime {
     def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
       val space: RhoISpace = RSpace.create[
         Id,
-        Channel,
+        Par,
         BindPattern,
         OutOfPhlogistonsError.type,
-        ListChannelWithRandom,
-        ListChannelWithRandom,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
         TaggedContinuation
       ](context, Branch.MASTER)
       val replaySpace: RhoReplayISpace = ReplayRSpace.create[
         Id,
-        Channel,
+        Par,
         BindPattern,
         OutOfPhlogistonsError.type,
-        ListChannelWithRandom,
-        ListChannelWithRandom,
+        ListParWithRandom,
+        ListParWithRandomAndPhlos,
         TaggedContinuation
       ](context, Branch.REPLAY)
       (context, space, replaySpace)
@@ -195,20 +194,20 @@ object Runtime {
         val store               = context.createStore(Branch.MASTER)
         val space: RhoISpace = RSpace.createFineGrained[
           Id,
-          Channel,
+          Par,
           BindPattern,
           OutOfPhlogistonsError.type,
-          ListChannelWithRandom,
-          ListChannelWithRandom,
+          ListParWithRandom,
+          ListParWithRandomAndPhlos,
           TaggedContinuation
         ](store, Branch.MASTER)
         val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create[
           Id,
-          Channel,
+          Par,
           BindPattern,
           OutOfPhlogistonsError.type,
-          ListChannelWithRandom,
-          ListChannelWithRandom,
+          ListParWithRandom,
+          ListParWithRandomAndPhlos,
           TaggedContinuation
         ](context, Branch.REPLAY)
         (context, space, replaySpace)
@@ -293,7 +292,7 @@ object Runtime {
       )
     }
 
-    val res: Seq[Option[(TaggedContinuation, Seq[ListChannelWithRandom])]] =
+    val res: Seq[Option[(TaggedContinuation, Seq[ListParWithRandomAndPhlos])]] =
       introduceSystemProcesses(space, replaySpace, procDefs)
 
     assert(res.forall(_.isEmpty))

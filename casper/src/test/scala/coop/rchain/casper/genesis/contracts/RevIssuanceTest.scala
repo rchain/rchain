@@ -10,7 +10,6 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.shared.PathOps.RichPath
@@ -30,11 +29,13 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val wallet          = PreWallet(ethAddress, initBalance)
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
+    val posValidators   = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesisDeploys =
       Genesis.defaultBlessedTerms(
         0L,
-        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-        wallet :: Nil
+        ProofOfStakeParams(1L, Long.MaxValue, posValidators),
+        wallet :: Nil,
+        Faucet.noopFaucet
       )
 
     val secKey = Base16.decode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
@@ -64,19 +65,19 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val unlockResult =
       runtimeManager.getData(
         postUnlockHash,
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(statusOut))))))
+        Par().copy(exprs = Seq(Expr(GString(statusOut))))
       )
     assert(unlockResult.head.exprs.head.getEListBody.ps.head.exprs.head.getGBool) //assert unlock success
 
     val (postTransferHash, _) = runtimeManager.computeState(postUnlockHash, transferDeploy :: Nil)
     val transferSuccess = runtimeManager.getData(
       postTransferHash,
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))))
+      Par().copy(exprs = Seq(Expr(GString(transferStatusOut))))
     )
     val transferResult =
       runtimeManager.getData(
         postTransferHash,
-        Channel(Quote(Par().copy(exprs = Seq(Expr(GString(destination))))))
+        Par().copy(exprs = Seq(Expr(GString(destination))))
       )
     assert(transferSuccess.head.exprs.head.getGString == "Success") //assert transfer success
     assert(transferResult.nonEmpty)

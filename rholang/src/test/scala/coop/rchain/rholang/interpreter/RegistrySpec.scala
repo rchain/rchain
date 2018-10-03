@@ -5,7 +5,6 @@ import java.io.StringReader
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
@@ -47,11 +46,11 @@ trait RegistryTester extends PersistentStoreTester {
       f: (
           ChargingReducer[Task],
           IdISpace[
-            Channel,
+            Par,
             BindPattern,
             OutOfPhlogistonsError.type,
-            ListChannelWithRandom,
-            ListChannelWithRandom,
+            ListParWithRandom,
+            ListParWithRandomAndPhlos,
             TaggedContinuation
           ]
       ) => R
@@ -84,7 +83,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   )
   // format: off
   val rootSend: Send = Send(
-    chan = Quote(Registry.registryRoot),
+    chan = Registry.registryRoot,
     data = Seq(
       Expr(EMapBody(
         ParMap(Seq(eightByteArray -> Par(exprs = Seq(Expr(ETupleBody(ETuple(Seq(GInt(1), ninetySevenByteArray, branchName))))))))))),
@@ -109,7 +108,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     ByteString.copyFrom(Base16.decode("7e047d2fc591185812e4a9526ded5509544e6586092c25a17abf366ea3"))
   )
   val branchSend: Send = Send(
-    chan = Quote(branchName),
+    chan = branchName,
     data = Seq(
       Expr(
         EMapBody(
@@ -133,7 +132,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   )
 
   val fullBranchSend: Send = Send(
-    chan = Quote(branchName),
+    chan = branchName,
     data = Seq(
       Expr(
         EMapBody(
@@ -190,15 +189,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     }
 
     def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
+      List[Par](GString(s))
 
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(7))), randResult0),
+            Datum.create[Par, ListParWithRandom](
+              GString("result0"),
+              ListParWithRandom(Seq(GInt(7)), randResult0),
               false
             )
           ),
@@ -210,9 +209,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
+            Datum.create[Par, ListParWithRandom](
+              GString("result1"),
+              ListParWithRandom(Seq(GInt(9)), randResult1),
               false
             )
           ),
@@ -224,9 +223,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult2),
+            Datum.create[Par, ListParWithRandom](
+              GString("result2"),
+              ListParWithRandom(Seq(GInt(8)), randResult2),
               false
             )
           ),
@@ -345,15 +344,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     }
 
     def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
+      List[Par](GString(s))
 
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result0"),
+              ListParWithRandom(Seq(GInt(8)), result0Rand),
               false
             )
           ),
@@ -365,9 +364,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result1Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result1"),
+              ListParWithRandom(Seq(GInt(10)), result1Rand),
               false
             )
           ),
@@ -379,9 +378,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result2Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result2"),
+              ListParWithRandom(Seq(GInt(8)), result2Rand),
               false
             )
           ),
@@ -393,9 +392,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result3"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result3Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result3"),
+              ListParWithRandom(Seq(GInt(10)), result3Rand),
               false
             )
           ),
@@ -407,9 +406,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result4"))),
-              ListChannelWithRandom(Seq(Quote(GInt(11))), result4Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result4"),
+              ListParWithRandom(Seq(GInt(11)), result4Rand),
               false
             )
           ),
@@ -421,9 +420,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result5"))),
-              ListChannelWithRandom(Seq(Quote(GInt(7))), result5Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result5"),
+              ListParWithRandom(Seq(GInt(7)), result5Rand),
               false
             )
           ),
@@ -435,9 +434,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result6"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result6Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result6"),
+              ListParWithRandom(Seq(GInt(9)), result6Rand),
               false
             )
           ),
@@ -449,9 +448,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result7"))),
-              ListChannelWithRandom(Seq(Quote(GInt(11))), result7Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result7"),
+              ListParWithRandom(Seq(GInt(11)), result7Rand),
               false
             )
           ),
@@ -463,9 +462,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result8"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result8Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result8"),
+              ListParWithRandom(Seq(GInt(10)), result8Rand),
               false
             )
           ),
@@ -477,9 +476,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result9"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result9Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result9"),
+              ListParWithRandom(Seq(GInt(8)), result9Rand),
               false
             )
           ),
@@ -491,9 +490,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result10"))),
-              ListChannelWithRandom(Seq(Quote(GInt(12))), result10Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result10"),
+              ListParWithRandom(Seq(GInt(12)), result10Rand),
               false
             )
           ),
@@ -607,15 +606,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     result6Rand.next()
 
     def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
+      List[Par](GString(s))
 
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result0Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result0"),
+              ListParWithRandom(Seq(GInt(8)), result0Rand),
               false
             )
           ),
@@ -627,9 +626,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result1Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result1"),
+              ListParWithRandom(Seq(GInt(9)), result1Rand),
               false
             )
           ),
@@ -641,9 +640,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result2"))),
-              ListChannelWithRandom(Seq(Quote(GInt(10))), result2Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result2"),
+              ListParWithRandom(Seq(GInt(10)), result2Rand),
               false
             )
           ),
@@ -655,9 +654,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result3"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result3Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result3"),
+              ListParWithRandom(Seq(GInt(8)), result3Rand),
               false
             )
           ),
@@ -669,9 +668,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result4"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), result4Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result4"),
+              ListParWithRandom(Seq(GInt(9)), result4Rand),
               false
             )
           ),
@@ -683,9 +682,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result5"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result5Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result5"),
+              ListParWithRandom(Seq(GInt(8)), result5Rand),
               false
             )
           ),
@@ -697,9 +696,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result6"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), result6Rand),
+            Datum.create[Par, ListParWithRandom](
+              GString("result6"),
+              ListParWithRandom(Seq(GInt(8)), result6Rand),
               false
             )
           ),
@@ -707,13 +706,13 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
         )
       )
     )
-    result.get(List[Channel](Quote(Registry.registryRoot))) should be(
+    result.get(List[Par](Registry.registryRoot)) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(Registry.registryRoot)),
-              ListChannelWithRandom(Seq(Quote(EMapBody(ParMap(SortedParMap.empty)))), rootRand),
+            Datum.create[Par, ListParWithRandom](
+              Registry.registryRoot,
+              ListParWithRandom(Seq(EMapBody(ParMap(SortedParMap.empty))), rootRand),
               false
             )
           ),
@@ -748,15 +747,15 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     }
 
     def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
+      List[Par](GString(s))
 
     result.get(resultChanList("result0")) should be(
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GInt(8))), randResult0),
+            Datum.create[Par, ListParWithRandom](
+              GString("result0"),
+              ListParWithRandom(Seq(GInt(8)), randResult0),
               false
             )
           ),
@@ -768,9 +767,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(GInt(9))), randResult1),
+            Datum.create[Par, ListParWithRandom](
+              GString("result1"),
+              ListParWithRandom(Seq(GInt(9)), randResult1),
               false
             )
           ),
@@ -818,7 +817,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     }
 
     def resultChanList(s: String) =
-      List(Channel(Quote(GString(s))))
+      List[Par](GString(s))
 
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
@@ -829,9 +828,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result0"))),
-              ListChannelWithRandom(Seq(Quote(GUri(expectedUri))), randResult0),
+            Datum.create[Par, ListParWithRandom](
+              GString("result0"),
+              ListParWithRandom(Seq(GUri(expectedUri)), randResult0),
               false
             )
           ),
@@ -843,9 +842,9 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       Some(
         Row(
           List(
-            Datum.create(
-              Channel(Quote(GString("result1"))),
-              ListChannelWithRandom(Seq(Quote(expectedBundle)), randResult1),
+            Datum.create[Par, ListParWithRandom](
+              GString("result1"),
+              ListParWithRandom(Seq(expectedBundle), randResult1),
               false
             )
           ),

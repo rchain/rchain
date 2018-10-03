@@ -12,7 +12,6 @@ import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.StoreType.InMem
 import coop.rchain.models._
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import scala.collection.mutable
 
@@ -66,16 +65,12 @@ class Interactive private (runtime: Runtime) {
     checkpoint("preQuery")
     eval(code)
     val result = runtime.space.getData(
-      Channel(Quote(Par().copy(exprs = Seq(Expr(GString(name))))))
+      Par().copy(exprs = Seq(Expr(GString(name))))
     )
     restore("preQuery")
     checkpoints.remove("preQuery")
 
-    for {
-      datum   <- result
-      channel <- datum.a.channels
-      par     <- channel.channelInstance.quote
-    } yield par
+    result.flatMap(_.a.pars)
   }
   def pp(term: Par): String = prettyPrinter.buildString(term)
 
