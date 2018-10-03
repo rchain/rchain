@@ -137,8 +137,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         val fixture      = setup()
         import fixture._
 
-        val requiredSigns = 1
-
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
             new GenesisValidatorHandler(runtimeManager, validatorId, shardId, bap)
@@ -376,7 +374,9 @@ class CasperPacketHandlerSpec extends WordSpec {
       val fixture = setup()
       import fixture._
 
-      val genesis                = HashSetCasperTest.createGenesis(Map.empty)
+      val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                  = HashSetCasperTest.createBonds(validators)
+      val genesis                = HashSetCasperTest.createGenesis(bonds)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),
