@@ -8,10 +8,8 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.models.Expr.ExprInstance.{EMapBody, GString}
+import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Registry
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{accounting, ChargingReducer, ErrorLog, Runtime}
@@ -20,8 +18,6 @@ import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
-
-import java.util.Arrays
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -203,8 +199,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                     doReplayEval(rem, newCheckpoint.root)
                   case Failure(ex: ReplayException) =>
                     Left(none[Deploy] -> UnusedCommEvent(ex))
-                  case Failure(ex) =>
-                    Left(none[Deploy] -> InternalErrors(Vector(ex)))
                 }
               }
           }
@@ -242,32 +236,13 @@ object RuntimeManager {
   def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
     active.space.clear()
     active.replaySpace.clear()
-
-    //populate registry root with empty map
-    val produceTerm: Par = Send(Registry.registryRoot, List(Expr(EMapBody(ParMap(Nil)))))
-    implicit val rand = Blake2b512Random(
-      Array[Byte](3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3)
-    )
-    val max       = Cost(Long.MaxValue)
-    val zero      = Cost(0L)
-    val emptyChPt = active.space.createCheckpoint()
-    val registryInit: Task[Array[Byte]] = for {
-      _          <- active.reducer.setAvailablePhlos(max)
-      _          <- active.reducer.inj(produceTerm)
-      checkpoint = active.space.createCheckpoint()
-      hash       = checkpoint.root.bytes.toArray
-      _          <- active.reducer.setAvailablePhlos(zero)
-      _          <- active.replayReducer.setAvailablePhlos(max)
-      _          = active.replaySpace.rig(emptyChPt.root, checkpoint.log)
-      _          <- active.replayReducer.inj(produceTerm)
-      replayHash = active.replaySpace.createCheckpoint().root.bytes.toArray
-      _          = assert(Arrays.equals(hash, replayHash))
-    } yield hash
-
-    val hash    = registryInit.unsafeRunSync
+    active.injectEmptyRegistryRoot[Task].unsafeRunSync
+    val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
+    val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
+    assert(hash == replayHash)
     val runtime = new SyncVar[Runtime]()
     runtime.put(active)
 
-    new RuntimeManager(ByteString.copyFrom(hash), runtime)
+    new RuntimeManager(hash, runtime)
   }
 }
