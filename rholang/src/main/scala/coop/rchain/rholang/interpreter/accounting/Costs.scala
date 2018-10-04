@@ -43,6 +43,10 @@ trait Costs {
   // decoding to bytes is linear with respect to the length of the string
   def hexToByteCost(str: String): Cost = Cost(str.size)
 
+  def diffCost(numElements: Int): Cost = REMOVE_COST * numElements
+
+  def unionCost(numElements: Int): Cost = ADD_COST * numElements
+
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par

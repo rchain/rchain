@@ -955,7 +955,7 @@ object Reduce {
               ESetBody(base @ ParSet(basePs, _, _, _)),
               ESetBody(other @ ParSet(otherPs, _, _, _))
               ) =>
-            costAccountingAlg.charge(ADD_COST * otherPs.size) *> Applicative[M].pure[Expr](
+            costAccountingAlg.charge(unionCost(otherPs.size)) *> Applicative[M].pure[Expr](
               ESetBody(
                 ParSet(
                   basePs.union(otherPs.sortedPars.toSet),
@@ -969,7 +969,7 @@ object Reduce {
               EMapBody(base @ ParMap(baseMap, _, _, _)),
               EMapBody(other @ ParMap(otherMap, _, _, _))
               ) =>
-            costAccountingAlg.charge(ADD_COST * otherMap.size) *>
+            costAccountingAlg.charge(unionCost(otherMap.size)) *>
               Applicative[M].pure[Expr](
                 EMapBody(
                   ParMap(
@@ -999,9 +999,6 @@ object Reduce {
     }
 
     private[this] val diff: Method = new Method() {
-      def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
-        base.flatMap(b => other.map(o => b | o))
-
       def diff(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccountingAlg[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
@@ -1010,20 +1007,15 @@ object Reduce {
               ) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
-            costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
+            costAccountingAlg.charge(diffCost(otherPs.size)) *>
               Applicative[M].pure[Expr](
                 ESetBody(
-                  ParSet(
-                    basePs.diff(otherPs.sortedPars.toSet),
-                    base.connectiveUsed || other.connectiveUsed,
-                    locallyFreeUnion(base.locallyFree, other.locallyFree),
-                    None
-                  )
+                  ParSet(basePs.sortedPars.toSet.diff(otherPs.sortedPars.toSet).toSeq)
                 )
               )
           case (EMapBody(ParMap(basePs, _, _, _)), EMapBody(ParMap(otherPs, _, _, _))) =>
             val newMap = basePs -- otherPs.keys
-            costAccountingAlg.charge(REMOVE_COST * basePs.size) *>
+            costAccountingAlg.charge(diffCost(otherPs.size)) *>
               Applicative[M].pure[Expr](
                 EMapBody(ParMap(newMap))
               )
