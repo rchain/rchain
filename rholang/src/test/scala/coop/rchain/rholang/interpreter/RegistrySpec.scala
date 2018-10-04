@@ -550,7 +550,7 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
     // d039d5c634ad95d968fc18368d81b97aaecd32fc7cf6eec07a97c5ac9f9fcb5b11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
     val registerString =
       """
-      new rr(`rho:registry:insertSigned`), rl(`rho:registry:lookup`), ack in {
+      new rr(`rho:registry:insertSigned:ed25519`), rl(`rho:registry:lookup`), ack in {
         rr!("11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d".hexToBytes(),
             (789, "entry"),
             "20c3b7da06565933400cb61301ffa14df82ef09b046c8152e02e8047d6f69ee2c2a2e4114db7ceb01eb828dfc98c15e40a502f9d85c58ca03734cab549e85e0d".hexToBytes(),

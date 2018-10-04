@@ -260,13 +260,13 @@ object Runtime {
     }
 
     val urnMap: Map[String, Par] = Map(
-      "rho:io:stdout"                -> FixedChannels.STDOUT,
-      "rho:io:stdoutAck"             -> FixedChannels.STDOUT_ACK,
-      "rho:io:stderr"                -> FixedChannels.STDERR,
-      "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
-      "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
-      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM,
-      "rho:registry:insertSigned"    -> FixedChannels.REG_INSERT_SIGNED
+      "rho:io:stdout"                     -> FixedChannels.STDOUT,
+      "rho:io:stdoutAck"                  -> FixedChannels.STDOUT_ACK,
+      "rho:io:stderr"                     -> FixedChannels.STDERR,
+      "rho:io:stderrAck"                  -> FixedChannels.STDERR_ACK,
+      "rho:registry:lookup"               -> FixedChannels.REG_LOOKUP,
+      "rho:registry:insertArbitrary"      -> FixedChannels.REG_INSERT_RANDOM,
+      "rho:registry:insertSigned:ed25519" -> FixedChannels.REG_INSERT_SIGNED
     )
 
     lazy val dispatchTable: RhoDispatchMap =

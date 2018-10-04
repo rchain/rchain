@@ -934,12 +934,12 @@ object Registry {
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
   val testingUrnMap: Map[String, Par] = Map(
-    "rho:registry:testing:lookup"  -> byteName(10),
-    "rho:registry:testing:insert"  -> byteName(12),
-    "rho:registry:testing:delete"  -> byteName(14),
-    "rho:registry:lookup"          -> byteName(17),
-    "rho:registry:insertArbitrary" -> byteName(18),
-    "rho:registry:insertSigned"    -> byteName(19)
+    "rho:registry:testing:lookup"       -> byteName(10),
+    "rho:registry:testing:insert"       -> byteName(12),
+    "rho:registry:testing:delete"       -> byteName(14),
+    "rho:registry:lookup"               -> byteName(17),
+    "rho:registry:insertArbitrary"      -> byteName(18),
+    "rho:registry:insertSigned:ed25519" -> byteName(19)
   )
 
   object FixedRefs {
