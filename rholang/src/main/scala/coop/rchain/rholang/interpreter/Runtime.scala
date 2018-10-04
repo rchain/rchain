@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.Id
 import cats.mtl.FunctorTell
 import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -43,7 +44,7 @@ class Runtime private (
     replaySpace.close()
     context.close()
   }
-  def injectEmptyRegistryRoot[F[_]]()(implicit F: Sync[F]): F[Unit] = {
+  def injectEmptyRegistryRoot[F[_]](implicit F: Sync[F]): F[Unit] = {
     // This random value stays dead in the tuplespace, so we can have some fun.
     // This is from Jeremy Bentham's "Defence of Usury"
     val rand = Blake2b512Random(
@@ -52,28 +53,36 @@ class Runtime private (
         .getBytes()
     )
     implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
-    val spaceResult =
-      space.produce(Registry.registryRoot, ListParWithRandom(Seq(Registry.emptyMap), rand), false)
-    val replayResult =
-      replaySpace.produce(
-        Registry.registryRoot,
-        ListParWithRandom(Seq(Registry.emptyMap), rand),
-        false
-      )
-    spaceResult match {
-      case Right(None) =>
-        replayResult match {
-          case Right(None) => F.unit
-          case Right(Some(_)) =>
-            F.raiseError(
-              new SetupError("Registry insertion in replay fired continuation.")
-            )
-          case Left(err) => F.raiseError(err)
-        }
-      case Right(Some(_)) =>
-        F.raiseError(new SetupError("Registry insertion fired continuation."))
-      case Left(err) => F.raiseError(err)
-    }
+    for {
+      spaceResult <- F.delay(
+                      space.produce(
+                        Registry.registryRoot,
+                        ListParWithRandom(Seq(Registry.emptyMap), rand),
+                        false
+                      )
+                    )
+      replayResult <- F.delay(
+                       replaySpace.produce(
+                         Registry.registryRoot,
+                         ListParWithRandom(Seq(Registry.emptyMap), rand),
+                         false
+                       )
+                     )
+      _ <- spaceResult match {
+            case Right(None) =>
+              replayResult match {
+                case Right(None) => F.unit
+                case Right(Some(_)) =>
+                  F.raiseError(
+                    new SetupError("Registry insertion in replay fired continuation.")
+                  )
+                case Left(err) => F.raiseError(err)
+              }
+            case Right(Some(_)) =>
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
+          }
+    } yield ()
   }
 }
 
