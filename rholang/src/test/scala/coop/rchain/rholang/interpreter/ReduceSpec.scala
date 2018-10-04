@@ -1229,7 +1229,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     result should be(HashMap.empty)
     errorLog.readAndClearErrorVector should be(
-      Vector(ReduceError("Error: toByteArray does not take arguments"))
+      Vector(MethodArgumentNumberMismatch("toByteArray", 0, 1))
     )
   }
 
@@ -1266,6 +1266,87 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
+    import coop.rchain.models.serialization.implicits._
+    implicit val errorLog         = new ErrorLog()
+    val splitRand                 = rand.splitByte(0)
+    val testString                = "testing testing"
+    val proc: Par                 = GString(testString)
+    val toUtf8BytesCall           = EMethod("toUtf8Bytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), false, BitSet())
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        val env         = Env[Par]()
+        val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
+        val inspectTask = for { _ <- task } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel: Par = GString("result")
+
+    result should be(
+      HashMap(
+        List(channel) ->
+          Row(
+            List(
+              Datum.create(
+                channel,
+                ListParWithRandom(
+                  Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
+                  splitRand
+                ),
+                persist = false
+              )
+            ),
+            List()
+          )
+      )
+    )
+
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  it should "return an error when `toUtf8Bytes` is called with arguments" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesWithArgumentsCall: EMethod =
+      EMethod(
+        "toUtf8Bytes",
+        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
+        List[Par](GInt(1))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1))
+    )
+  }
+
+  it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44), List[Par]())
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(Vector(MethodNotDefined("toUtf8Bytes", "Int")))
   }
 
   "variable references" should "be substituted before being used." in {
@@ -1575,6 +1656,26 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runAsync, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          EPlusPlusBody(
+            EPlusPlus(
+              GByteArray(ByteString.copyFrom(Base16.decode("dead"))),
+              GByteArray(ByteString.copyFrom(Base16.decode("beef")))
+            )
+          )
+        )
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
