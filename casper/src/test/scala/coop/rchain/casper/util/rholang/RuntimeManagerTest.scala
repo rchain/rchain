@@ -12,7 +12,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize      = 1024L * 1024
   val storageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
-  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.FineGrainedLMDB)
+  val activeRuntime    = Runtime.create(storageDirectory, storageSize, StoreType.LMDB)
   val runtimeManager   = RuntimeManager.fromRuntime(activeRuntime)
 
   "computeState" should "capture rholang errors" in {

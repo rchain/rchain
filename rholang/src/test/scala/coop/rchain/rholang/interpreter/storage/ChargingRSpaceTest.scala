@@ -239,7 +239,7 @@ object ChargingRSpaceTest {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     import coop.rchain.rholang.interpreter.storage.implicits._
     val dbDir               = Files.createTempDirectory("rchain-charging-rspace-test-")
-    val context: RhoContext = Context.createFineGrained(dbDir, 1024L * 1024L * 4)
+    val context: RhoContext = Context.create(dbDir, 1024L * 1024L * 4)
     val space: RhoISpace = RSpace.create[
       Id,
       Par,

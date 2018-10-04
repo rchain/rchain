@@ -545,7 +545,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channels = List[Par](GInt(2))
 
     // Because they are evaluated separately, nothing is split.
-    checkContinuation(sendFirstResult)(channels, List(BindPattern(List(GInt(2)))), ParWithRandom(Par(), mergeRand))
+    checkContinuation(sendFirstResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
+    )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
@@ -558,7 +562,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
 
-    checkContinuation(receiveFirstResult)(channels, List(BindPattern(List(GInt(2)))), ParWithRandom(Par(), mergeRand))
+    checkContinuation(receiveFirstResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
+    )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val bothResult = withTestSpace(errorLog) {
@@ -570,7 +578,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
 
-    checkContinuation(bothResult)(channels, List(BindPattern(List(GInt(2)))), ParWithRandom(Par(), mergeRand))
+    checkContinuation(bothResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
+    )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -977,7 +989,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    checkData(result)(channel, Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))), splitRand)
+    checkData(result)(
+      channel,
+      Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
+      splitRand
+    )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -999,7 +1015,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    checkData(result)(channel, Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))), splitRand)
+    checkData(result)(
+      channel,
+      Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
+      splitRand
+    )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
