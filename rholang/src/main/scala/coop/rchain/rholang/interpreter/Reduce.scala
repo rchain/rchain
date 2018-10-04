@@ -159,8 +159,7 @@ object Reduce {
       ).scanLeft(0)(_ + _)
 
       def handle[A](
-          evalImpl: ((A, Blake2b512Random) => M[Unit]),
-          start: Int
+          evalImpl: ((A, Blake2b512Random) => M[Unit])
       )(input: (A, Int)): M[Unit] = {
         val (term, idx) = input
 
@@ -168,9 +167,9 @@ object Reduce {
           if (starts(6) == 1)
             rand
           else if (starts(6) > 256)
-            rand.splitShort((start + idx).toShort)
+            rand.splitShort((starts(idx) + idx).toShort)
           else
-            rand.splitByte((start + idx).toByte)
+            rand.splitByte((starts(idx) + idx).toByte)
 
         evalImpl(term, newRand)
       }
@@ -202,12 +201,12 @@ object Reduce {
         }
 
       List(
-        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(0))),
-        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(1))),
-        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(2))),
-        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(3))),
-        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(4))),
-        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(handle(exprHandler, starts(5)))
+        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
+        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
+        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
+        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
+        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
+        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(handle(exprHandler))
       ).parSequence.as(Unit)
     }
 
