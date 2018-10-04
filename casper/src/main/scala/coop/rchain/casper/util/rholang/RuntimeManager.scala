@@ -10,6 +10,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{EMapBody, GString}
 import coop.rchain.models._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Registry
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -19,6 +20,8 @@ import coop.rchain.rspace.trace.Produce
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import monix.eval.Task
 import monix.execution.Scheduler
+
+import java.util.Arrays
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -241,9 +244,7 @@ object RuntimeManager {
     active.replaySpace.clear()
 
     //populate registry root with empty map
-    val emptyMap     = Par().withExprs(List(Expr(EMapBody(ParMap(Nil)))))
-    val registryRoot = Par().withIds(List(Registry.registryRoot))
-    val produceTerm  = Par().withSends(List(Send(registryRoot, List(emptyMap))))
+    val produceTerm: Par = Send(Registry.registryRoot, List(Expr(EMapBody(ParMap(Nil)))))
     implicit val rand = Blake2b512Random(
       Array[Byte](3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3)
     )
@@ -260,7 +261,7 @@ object RuntimeManager {
       _          = active.replaySpace.rig(emptyChPt.root, checkpoint.log)
       _          <- active.replayReducer.inj(produceTerm)
       replayHash = active.replaySpace.createCheckpoint().root.bytes.toArray
-      _          = assert(hash.zip(replayHash).forall { case (a, b) => a == b })
+      _          = assert(Arrays.equals(hash, replayHash))
     } yield hash
 
     val hash    = registryInit.unsafeRunSync
