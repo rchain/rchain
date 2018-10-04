@@ -817,6 +817,8 @@ object Registry {
       .copyFrom(Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697"))
   )
 
+  val emptyMap: Par = EMapBody(ParMap(SortedParMap.empty))
+
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 
   val testingUrnMap: Map[String, Par] = Map(

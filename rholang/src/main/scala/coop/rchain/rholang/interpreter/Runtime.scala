@@ -6,6 +6,7 @@ import cats.Id
 import cats.mtl.FunctorTell
 import cats.effect.Sync
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -13,6 +14,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.IReplaySpace
@@ -40,6 +42,38 @@ class Runtime private (
     space.close()
     replaySpace.close()
     context.close()
+  }
+  def injectEmptyRegistryRoot[F[_]]()(implicit F: Sync[F]): F[Unit] = {
+    // This random value stays dead in the tuplespace, so we can have some fun.
+    // This is from Jeremy Bentham's "Defence of Usury"
+    val rand = Blake2b512Random(
+      ("there can be no such thing as usury: " +
+        "for what rate of interest is there that can naturally be more proper than another?")
+        .getBytes()
+    )
+    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    val spaceResult =
+      space.produce(Registry.registryRoot, ListParWithRandom(Seq(Registry.emptyMap), rand), false)
+    val replayResult =
+      replaySpace.produce(
+        Registry.registryRoot,
+        ListParWithRandom(Seq(Registry.emptyMap), rand),
+        false
+      )
+    spaceResult match {
+      case Right(None) =>
+        replayResult match {
+          case Right(None) => F.unit
+          case Right(Some(_)) =>
+            F.raiseError(
+              new SetupError("Registry insertion in replay fired continuation.")
+            )
+          case Left(err) => F.raiseError(err)
+        }
+      case Right(Some(_)) =>
+        F.raiseError(new SetupError("Registry insertion fired continuation."))
+      case Left(err) => F.raiseError(err)
+    }
   }
 }
 
@@ -233,24 +267,25 @@ object Runtime {
     ): RhoDispatchMap = {
       import BodyRefs._
       Map(
-        STDOUT                     -> SystemProcesses.stdout,
-        STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
-        STDERR                     -> SystemProcesses.stderr,
-        STDERR_ACK                 -> SystemProcesses.stderrAck(space, dispatcher),
-        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(space, dispatcher),
-        SHA256_HASH                -> SystemProcesses.sha256Hash(space, dispatcher),
-        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(space, dispatcher),
-        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(space, dispatcher),
-        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                 -> (registry.lookup(_)),
-        REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
-        REG_INSERT                 -> (registry.insert(_)),
-        REG_INSERT_CALLBACK        -> (registry.insertCallback(_)),
-        REG_DELETE                 -> (registry.delete(_)),
-        REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
-        REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
-        REG_PUBLIC_LOOKUP          -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_))
+        STDOUT                              -> SystemProcesses.stdout,
+        STDOUT_ACK                          -> SystemProcesses.stdoutAck(space, dispatcher),
+        STDERR                              -> SystemProcesses.stderr,
+        STDERR_ACK                          -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY                      -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                         -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH                      -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH                     -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY                    -> SystemProcesses.secp256k1Verify(space, dispatcher),
+        REG_LOOKUP                          -> (registry.lookup(_)),
+        REG_LOOKUP_CALLBACK                 -> (registry.lookupCallback(_)),
+        REG_INSERT                          -> (registry.insert(_)),
+        REG_INSERT_CALLBACK                 -> (registry.insertCallback(_)),
+        REG_PUBLIC_REGISTER_INSERT_CALLBACK -> (registry.publicRegisterInsertCallback(_)),
+        REG_DELETE                          -> (registry.delete(_)),
+        REG_DELETE_ROOT_CALLBACK            -> (registry.deleteRootCallback(_)),
+        REG_DELETE_CALLBACK                 -> (registry.deleteCallback(_)),
+        REG_PUBLIC_LOOKUP                   -> (registry.publicLookup(_)),
+        REG_PUBLIC_REGISTER_RANDOM          -> (registry.publicRegisterRandom(_))
       )
     }
 
