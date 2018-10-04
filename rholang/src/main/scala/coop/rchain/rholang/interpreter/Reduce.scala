@@ -1231,7 +1231,7 @@ object Reduce {
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
-                s.raiseError(MethodArgumentNumberMismatch("key", 0, args.length))
+                s.raiseError(MethodArgumentNumberMismatch("keys", 0, args.length))
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- keys(baseExpr)
