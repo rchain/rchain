@@ -454,7 +454,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val forwardDeploy =
       ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
     val bondingDeploy =
-      ProtoUtil.sourceDeploy(bondingCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+      ProtoUtil.sourceDeploy(bondingCode, forwardDeploy.timestamp + 1, accounting.MAX_VALUE)
     val Created(block1) = casperEff.deploy(forwardDeploy) *> casperEff.createBlock
     val block1Status    = casperEff.addBlock(block1)
     val Created(block2) = casperEff.deploy(bondingDeploy) *> casperEff.createBlock
