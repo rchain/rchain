@@ -117,6 +117,23 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
+  /**
+    * This implmementation is temporary, it sequentially sends blob to each peers.
+    * TODO Provide solution that stacks blob on a queue that is later consumed
+    */
+  def streamBlob(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+    peers.toList
+      .traverse(
+        peer =>
+          withClient(peer, enforce = false) { stub =>
+            stub.stream(TLBlob().withBlob(blob))
+          }.attempt.flatMap {
+            case Left(error) => log.debug(s"Error while streaming blob, error: $error")
+            case Right(_)    => Task.unit
+          }
+      )
+      .as(())
+
   private def processResponse(
       peer: PeerNode,
       response: Either[Throwable, TLResponse]
@@ -172,7 +189,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   private def receiveInternal(
       parallelism: Int
-  )(dispatch: Protocol => Task[CommunicationResponse]): Task[Cancelable] = {
+  )(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleBlob: Blob => Task[Unit]
+  ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
@@ -182,6 +202,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           case Left(e)         => sender.failWith(e)
           case Right(response) => sender.reply(response)
         }.void
+      case BlobMessage(blob) => handleBlob(blob)
     }
 
     Task.delay {
@@ -191,7 +212,10 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     }
   }
 
-  def receive(dispatch: Protocol => Task[CommunicationResponse]): Task[Unit] =
+  def receive(
+      dispatch: Protocol => Task[CommunicationResponse],
+      handleBlob: Blob => Task[Unit]
+  ): Task[Unit] =
     cell.modify { s =>
       for {
         server <- s.server match {
@@ -201,7 +225,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                      )
                    case _ =>
                      val parallelism = Runtime.getRuntime.availableProcessors()
-                     receiveInternal(parallelism)(dispatch)
+                     receiveInternal(parallelism)(dispatch, handleBlob)
                  }
       } yield s.copy(server = Some(server))
 

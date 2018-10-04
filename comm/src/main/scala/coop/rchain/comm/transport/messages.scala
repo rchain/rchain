@@ -5,14 +5,16 @@ import java.util.concurrent.TimeoutException
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration.FiniteDuration
 
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.protocol.routing.{Blob, Protocol}
 
 import monix.eval.Task
 import monix.execution.Scheduler
 
 trait ServerMessage
+// TODO rename to AksMesage and TellMesssage
 final case class Ask(msg: Protocol, sender: SenderHandle) extends ServerMessage
 final case class Tell(msg: Protocol)                      extends ServerMessage
+final case class BlobMessage(blob: Blob)                  extends ServerMessage
 
 trait SenderHandle {
   def reply(msg: CommunicationResponse): Boolean
