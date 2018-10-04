@@ -520,5 +520,3 @@ trait HistoryActionsTests
 class MixedStoreHistoryActionsTests extends MixedStoreTestsBase with HistoryActionsTests
 class LMDBStoreHistoryActionsTests  extends LMDBStoreTestsBase with HistoryActionsTests
 class InMemStoreHistoryActionsTests extends InMemoryStoreTestsBase with HistoryActionsTests
-
-class FineGrainedHistoryActionsTests extends FineGrainedTestsBase with HistoryActionsTests
