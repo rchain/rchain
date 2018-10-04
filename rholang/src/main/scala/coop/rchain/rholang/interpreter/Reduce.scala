@@ -21,6 +21,7 @@ import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
 import SpatialMatcher.spatialMatchAndCharge
+
 import scala.collection.immutable.BitSet
 import scala.util.Try
 
@@ -837,7 +838,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.length != 1) {
-          s.raiseError(ReduceError("Error: nth expects 1 argument"))
+          s.raiseError(errors.MethodArgumentNumberMismatch("nth", 1, args.length))
         } else {
           for {
             nthRaw <- evalToLong(args(0))
