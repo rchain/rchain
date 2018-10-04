@@ -123,14 +123,14 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     * This implmementation is temporary, it sequentially sends blob to each peers.
     * TODO Provide solution that stacks blob on a queue that is later consumed
     */
-  def streamBlob(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
+  def stream(peers: Seq[PeerNode], packet: Packet): Task[Unit] =
     peers.toList
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(TLBlob().withBlob(blob))
+            stub.stream(TLBlob().withPacket(packet))
           }.attempt.flatMap {
-            case Left(error) => log.debug(s"Error while streaming blob, error: $error")
+            case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
           }
       )
@@ -193,7 +193,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       parallelism: Int
   )(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleBlob: Blob => Task[Unit]
+      handleStreamed: Packet => Task[Unit]
   ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
@@ -204,7 +204,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           case Left(e)         => sender.failWith(e)
           case Right(response) => sender.reply(response)
         }.void
-      case BlobMessage(blob) => handleBlob(blob)
+      case StreamMessage(packet) => handleStreamed(packet)
       case _                 => Task.unit // sender timeout
     }
 
@@ -217,7 +217,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   def receive(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleBlob: Blob => Task[Unit]
+      handleStreamed: Packet => Task[Unit]
   ): Task[Unit] =
     cell.modify { s =>
       for {
@@ -228,7 +228,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                      )
                    case _ =>
                      val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
-                     receiveInternal(parallelism)(dispatch, handleBlob)
+                     receiveInternal(parallelism)(dispatch, handleStreamed)
                  }
       } yield s.copy(server = Some(server))
 

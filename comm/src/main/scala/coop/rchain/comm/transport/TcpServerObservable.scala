@@ -68,8 +68,8 @@ class TcpServerObservable(
           }
 
       def stream(request: TLBlob): Task[TLBlobResponse] = Task.delay {
-        request.blob
-          .map(blob => subjectBlobMessage.onNext(BlobMessage(blob)))
+        request.packet
+          .map(packet => subjectBlobMessage.onNext(StreamMessage(packet)))
         TLBlobResponse()
       }
 

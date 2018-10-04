@@ -6,7 +6,7 @@ import cats._
 import cats.implicits._
 
 import coop.rchain.comm._, rp.ProtocolHelper
-import coop.rchain.comm.protocol.routing.{Blob, Protocol}
+import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.casper.protocol.{BlockApproval => CasperBlockApproval}
 import coop.rchain.comm.CommError.CommErr
 
@@ -245,16 +245,17 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               local: PeerNode,
               remote: PeerNode
           ): F[Unit] =
-            transportLayer.streamBlob(
+            transportLayer.stream(
               List(remote),
-              Blob().withBlockApproval(CasperBlockApproval(sig = None))
+              Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter"))
             )
 
           run()
 
-          blobDispatcher.received should have length 1
-          val (_, blob) = blobDispatcher.received.head
-          blob.message.isBlockApproval shouldBe (true)
+          streamDispatcher.received should have length 1
+          val (_, packet) = streamDispatcher.received.head
+          packet.typeId shouldBe ("N/A")
+          packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
 
@@ -266,18 +267,20 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
               remote1: PeerNode,
               remote2: PeerNode
           ): F[Unit] =
-            transportLayer.streamBlob(
+            transportLayer.stream(
               List(remote1, remote2),
-              Blob().withBlockApproval(CasperBlockApproval(sig = None))
+              Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter"))
             )
 
           run()
 
-          blobDispatcher.received should have length 2
-          val (_, blob1) = blobDispatcher.received(0)
-          val (_, blob2) = blobDispatcher.received(1)
-          blob1.message.isBlockApproval shouldBe (true)
-          blob2.message.isBlockApproval shouldBe (true)
+          streamDispatcher.received should have length 2
+          val (_, packet1) = streamDispatcher.received(0)
+          val (_, packet2) = streamDispatcher.received(1)
+          packet1.typeId shouldBe ("N/A")
+          packet1.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          packet2.typeId shouldBe ("N/A")
+          packet2.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
     }

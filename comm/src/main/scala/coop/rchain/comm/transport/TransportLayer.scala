@@ -14,9 +14,9 @@ trait TransportLayer[F[_]] {
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
   def receive(
       dispatch: Protocol => F[CommunicationResponse],
-      handleBlob: Blob => F[Unit]
+      handleStreamed: Packet => F[Unit]
   ): F[Unit]
-  def streamBlob(peers: Seq[PeerNode], msg: Blob): F[Unit]
+  def stream(peers: Seq[PeerNode], packet: Packet): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
   def shutdown(msg: Protocol): F[Unit]
 }
@@ -53,9 +53,12 @@ sealed abstract class TransportLayerInstances {
       ): EitherT[F, CommError, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
+      def stream(peers: Seq[PeerNode], packet: Packet): EitherT[F, CommError, Unit] =
+        EitherT.liftF(evF.stream(peers, packet))
+
       def receive(
           dispatch: Protocol => EitherT[F, CommError, CommunicationResponse],
-          handleBlob: Blob => EitherT[F, CommError, Unit]
+          handleStreamed: Packet => EitherT[F, CommError, Unit]
       ): EitherT[F, CommError, Unit] = {
         val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap {
@@ -65,17 +68,14 @@ sealed abstract class TransportLayerInstances {
               ).pure[F]
             case Right(m) => m.pure[F]
           }
-        val hb: Blob => F[Unit] = msg =>
-          handleBlob(msg).value.flatMap {
+        val hb: Packet => F[Unit] = msg =>
+          handleStreamed(msg).value.flatMap {
             case Left(err) =>
-              Log[F].error(s"Error while handling Blob message. Error: ${err.message}")
+              Log[F].error(s"Error while handling streamed Packet message. Error: ${err.message}")
             case Right(_) => ().pure[F]
           }
         EitherT.liftF(evF.receive(dis, hb))
       }
-
-      def streamBlob(peers: Seq[PeerNode], msg: Blob): EitherT[F, CommError, Unit] =
-        EitherT.liftF(evF.streamBlob(peers, msg))
 
       def disconnect(peer: PeerNode): EitherT[F, CommError, Unit] =
         EitherT.liftF(evF.disconnect(peer))

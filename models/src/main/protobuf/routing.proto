@@ -54,16 +54,6 @@ message Protocol {
     }
 }
 
-message Blob {
-  string blobType = 1;
-  oneof message {
-    coop.rchain.casper.protocol.BlockMessage  blockMessage      = 2; 
-    coop.rchain.casper.protocol.ApprovedBlock  approvedBlock    = 3;
-    coop.rchain.casper.protocol.UnapprovedBlock unapprovedBlock = 4;
-    coop.rchain.casper.protocol.BlockApproval blockApproval     = 5;
-  }
-}
-
 service TransportLayer {
   rpc Tell (TLRequest) returns (TLResponse) {}
   rpc Ask (TLRequest) returns (TLResponse) {}
@@ -91,7 +81,7 @@ message TLResponse {
 }
 
 message TLBlob {
-  Blob blob = 1;
+  Packet packet = 1;
 }
 
 message TLBlobResponse {
