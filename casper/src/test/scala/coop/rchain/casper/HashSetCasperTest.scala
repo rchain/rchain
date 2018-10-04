@@ -544,13 +544,13 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     val Created(signedBlock4) = nodes(1).casperEff
       .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
-    nodes(1).casperEff.addBlock(signedBlock4) // should fail
-    nodes(0).receive()                        // doesn't receive anything as signedBlock4 is invalid
+    nodes(1).casperEff.addBlock(signedBlock4) // should succeed
+    nodes(0).receive()                        // still receive signedBlock4
 
     nodes(1).casperEff.contains(signedBlock4) should be(true) // Invalid blocks are still added
-    nodes(0).casperEff.contains(signedBlock4) should be(false)
+    nodes(0).casperEff.contains(signedBlock4) should be(true)
 
-    nodes(1).logEff.warns
+    nodes(0).logEff.warns
       .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") should be(
       1
     )
@@ -610,20 +610,26 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   }
 
   it should "ignore adding equivocation blocks" in {
-    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
     // Creates a pair that constitutes equivocation blocks
-    val Created(signedBlock1)      = node.casperEff.deploy(ProtoUtil.basicDeployData(0)) *> node.casperEff.createBlock
-    val Created(signedBlock1Prime) = node.casperEff.deploy(ProtoUtil.basicDeployData(1)) *> node.casperEff.createBlock
+    val Created(signedBlock1) = nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData(0)) *> nodes(0).casperEff.createBlock
+    val Created(signedBlock1Prime) = nodes(0).casperEff
+      .deploy(ProtoUtil.basicDeployData(1)) *> nodes(0).casperEff.createBlock
 
-    node.casperEff.addBlock(signedBlock1)
-    node.casperEff.addBlock(signedBlock1Prime)
+    nodes(0).casperEff.addBlock(signedBlock1)
+    nodes(1).receive()
+    nodes(0).casperEff.addBlock(signedBlock1Prime)
+    nodes(1).receive()
 
-    node.casperEff.contains(signedBlock1) should be(true)
-    node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
+    nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(1).casperEff
+      .contains(signedBlock1Prime) should be(false) // we still add the equivocation pair
 
-    node.tearDownNode()
-    validateBlockStore(node) { blockStore =>
+    nodes(0).tearDownNode()
+    nodes(1).tearDownNode()
+    validateBlockStore(nodes(1)) { blockStore =>
       blockStore.get(signedBlock1.blockHash) shouldBe Some(signedBlock1)
       blockStore.get(signedBlock1Prime.blockHash) shouldBe None
     }
@@ -631,7 +637,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
   it should "not ignore equivocation blocks that are required for parents of proper nodes" in {
-    val nodes       = HashSetCasperTestNode.network(validatorKeys.take(3), genesis)
+    val nodes       = HashSetCasperTestNode.network(validatorKeys.take(4), genesis)
     val deployDatas = (0 to 5).map(i => ProtoUtil.basicDeployData(i))
 
     // Creates a pair that constitutes equivocation blocks
@@ -641,17 +647,22 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
 
     nodes(1).casperEff.addBlock(signedBlock1)
+    nodes(3).receive()                               //node(3) receive block1
     nodes(0).transportLayerEff.clear(nodes(0).local) //nodes(0) misses this block
     nodes(2).transportLayerEff.clear(nodes(2).local) //nodes(2) misses this block
 
     nodes(0).casperEff.addBlock(signedBlock1Prime)
-    nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
     nodes(2).receive()
+    nodes(1).transportLayerEff.clear(nodes(1).local) //nodes(1) misses this block
+    nodes(3).transportLayerEff.clear(nodes(3).local) //nodes(3) misses this block
 
     nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(3).casperEff.contains(signedBlock1) should be(true)
     nodes(2).casperEff.contains(signedBlock1) should be(false)
+
     nodes(1).casperEff.contains(signedBlock1Prime) should be(false)
     nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
+    nodes(3).casperEff.contains(signedBlock1Prime) should be(false)
 
     val Created(signedBlock2) = nodes(1).casperEff
       .deploy(deployDatas(2)) *> nodes(1).casperEff.createBlock
@@ -664,6 +675,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).receive()                               // receives block3; asks for block1'
     nodes(2).receive()                               // receives request for block1'; sends block1'
     nodes(1).receive()                               // receives block1'; adds both block3 and block1'
+    nodes(3).transportLayerEff.clear(nodes(3).local) // nodes(3) misses these blocks
 
     nodes(1).casperEff.contains(signedBlock3) should be(true)
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
@@ -672,6 +684,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
 
     nodes(1).casperEff.addBlock(signedBlock4)
+    nodes(3).receive() // receives block4, ask for block1', block2, block3
+    nodes(1).receive() // receive request, send these blocks
+    nodes(3).receive() // receives block1', block2 and block3, adds all these block
 
     // Node 1 should contain both blocks constituting the equivocation
     nodes(1).casperEff.contains(signedBlock1) should be(true)
@@ -680,7 +695,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock4) should be(true) // However, in invalidBlockTracker
 
     nodes(1).logEff.infos.count(_ startsWith "Added admissible equivocation") should be(1)
-    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+    nodes(3).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
+    nodes(2).logEff.warns.size should be(0)
+    nodes(1).logEff.warns.size should be(0)
+    nodes(0).logEff.warns.size should be(0)
 
     nodes(1).casperEff.normalizedInitialFault(ProtoUtil.weightMap(genesis)) should be(
       1f / (1f + 3f + 5f + 7f)
@@ -723,7 +741,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(0).transportLayerEff.send(nodes(1).local, signedInvalidBlockPacketMessage)
     nodes(1).receive() // receives signedInvalidBlock; attempts to add both blocks
 
-    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(2)
+    nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
     nodes.foreach(_.tearDown())
   }
 
