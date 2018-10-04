@@ -873,7 +873,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.nonEmpty) {
-          s.raiseError(ReduceError("Error: toByteArray does not take arguments"))
+          s.raiseError(MethodArgumentNumberMismatch("toByteArray", 0, args.length))
         } else {
           for {
             exprEvaled <- evalExpr(p)
@@ -891,7 +891,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.nonEmpty) {
-          s.raiseError(ReduceError("Error: hexToBytes does not take arguments"))
+          s.raiseError(MethodArgumentNumberMismatch("hexToBytes", 0, args.length))
         } else {
           p.singleExpr() match {
             case Some(Expr(GString(encoded))) =>
@@ -907,8 +907,8 @@ object Reduce {
                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba)))
                       )
               } yield res
-            case _ =>
-              s.raiseError(ReduceError("Error: hexToBytes can be called only on single strings."))
+            case Some(Expr(other)) =>
+              s.raiseError(MethodNotDefined("hexToBytes", other.typ))
           }
         }
     }
@@ -920,15 +920,15 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.nonEmpty) {
-          s.raiseError(ReduceError("Error: toUtf8Bytes does not take arguments"))
+          s.raiseError(MethodArgumentNumberMismatch("toUtf8Bytes", 0, args.length))
         } else {
           p.singleExpr() match {
             case Some(Expr(GString(encoded))) =>
               for {
                 _ <- costAccountingAlg.charge(hexToByteCost(encoded))
               } yield Expr(GByteArray(ByteString.copyFrom(encoded.getBytes("UTF-8"))))
-            case _ =>
-              s.raiseError(ReduceError("Error: toUtf8Bytes can be called only on single strings."))
+            case Some(Expr(other)) =>
+              s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
           }
         }
     }

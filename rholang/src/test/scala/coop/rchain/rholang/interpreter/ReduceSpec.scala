@@ -1229,7 +1229,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     result should be(HashMap.empty)
     errorLog.readAndClearErrorVector should be(
-      Vector(ReduceError("Error: toByteArray does not take arguments"))
+      Vector(MethodArgumentNumberMismatch("toByteArray", 0, 1))
     )
   }
 
@@ -1266,49 +1266,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
     // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
-  }
-
-  it should "return an error when `toUtf8Bytes` is called with arguments" in {
-    implicit val errorLog = new ErrorLog()
-    val toUtfBytesWithArgumentsCall: EMethod =
-      EMethod(
-        "toUtf8Bytes",
-        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
-        List[Par](GInt(1))
-      )
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
-        val inspectTask = for {
-          _ <- nthTask
-        } yield space.store.toMap
-        Await.result(inspectTask.runAsync, 3.seconds)
-    }
-    result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
-      Vector(ReduceError("Error: toUtf8Bytes does not take arguments"))
-    )
-  }
-
-  it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
-    implicit val errorLog = new ErrorLog()
-    val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44), List[Par]())
-
-    val result = withTestSpace(errorLog) {
-      case TestFixture(space, reducer) =>
-        implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toUtfBytesCall)
-        val inspectTask = for {
-          _ <- nthTask
-        } yield space.store.toMap
-        Await.result(inspectTask.runAsync, 3.seconds)
-    }
-    result should be(HashMap.empty)
-    errorLog.readAndClearErrorVector should be(
-      Vector(ReduceError("Error: toUtf8Bytes can be called only on single strings."))
-    )
   }
 
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
@@ -1349,6 +1306,47 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  it should "return an error when `toUtf8Bytes` is called with arguments" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesWithArgumentsCall: EMethod =
+      EMethod(
+        "toUtf8Bytes",
+        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
+        List[Par](GInt(1))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1))
+    )
+  }
+
+  it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44), List[Par]())
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(Vector(MethodNotDefined("toUtf8Bytes", "Int")))
   }
 
   "variable references" should "be substituted before being used." in {
