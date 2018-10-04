@@ -7,6 +7,7 @@ Add link to corresponding JIRA issue.
 ### Complete this checklist before you submit the PR
 - [ ] This PR contains no more than 200 lines of code, excluding test code.
 - [ ] This PR meets [RChain development coding standards](https://rchain.atlassian.net/wiki/spaces/DOC/pages/28082177/Coding+Standards).
+- [ ] If this PR adds a new feature, this PR includes tests related to this feature.
 - [ ] You assigned one person to review this PR
 
 ### If you are not a member of the core development team, please confirm:
