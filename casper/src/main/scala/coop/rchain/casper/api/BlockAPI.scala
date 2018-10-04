@@ -83,11 +83,12 @@ object BlockAPI {
     )
 
   def getListeningNameDataResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Int,
       listeningName: Par
   ): F[ListeningNameDataResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
-        mainChain           <- getMainChainFromTip[F]
+        mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
@@ -114,14 +115,15 @@ object BlockAPI {
   }
 
   def getListeningNameContinuationResponse[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
-      listeningNames: Pars
+      depth: Int,
+      listeningNames: Seq[Par]
   ): F[ListeningNameContinuationResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F], channelCodec: Codec[Par]) =
       for {
-        mainChain           <- getMainChainFromTip[F]
+        mainChain           <- getMainChainFromTip[F](depth)
         maybeRuntimeManager <- casper.getRuntimeManager
         runtimeManager      = maybeRuntimeManager.get // This is safe. Please reluctantly accept until runtimeManager is no longer exposed.
-        sortedListeningNames <- listeningNames.pars.toList
+        sortedListeningNames <- listeningNames.toList
                                  .traverse(parSortable.sortMatch[F](_).map(_.term))
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
                                       getContinuationsWithBlockInfo[F](
@@ -145,13 +147,14 @@ object BlockAPI {
     )
   }
 
-  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore]
-    : F[IndexedSeq[BlockMessage]] =
+  private def getMainChainFromTip[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+      depth: Int
+  ): F[IndexedSeq[BlockMessage]] =
     for {
       dag       <- MultiParentCasper[F].blockDag
       estimates <- MultiParentCasper[F].estimator(dag)
       tip       = estimates.head
-      mainChain <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+      mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
@@ -218,25 +221,57 @@ object BlockAPI {
     }
   }
 
-  def getBlocksResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore]
-    : F[BlocksResponse] = {
+  def showBlocks[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Int
+  ): F[List[BlockInfoWithoutTuplespace]] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]) =
+      for {
+        dag         <- MultiParentCasper[F].blockDag
+        maxHeight   = dag.topoSort.length + dag.sortOffset - 1
+        startHeight = math.max(0, maxHeight - depth)
+        flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
+                                          depth,
+                                          dag
+                                        )
+      } yield flattenedBlockInfosUntilDepth.reverse
+
+    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
+      casperResponse(_),
+      List.empty[BlockInfoWithoutTuplespace]
+    )
+  }
+
+  private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
+      depth: Int,
+      dag: BlockDag
+  ): F[List[BlockInfoWithoutTuplespace]] =
+    dag.topoSort.takeRight(depth).foldM(List.empty[BlockInfoWithoutTuplespace]) {
+      case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+        for {
+          blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
+          blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
+        } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+    }
+
+  def showMainChain[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      depth: Int
+  ): F[List[BlockInfoWithoutTuplespace]] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
         dag        <- MultiParentCasper[F].blockDag
         estimates  <- MultiParentCasper[F].estimator(dag)
         tip        = estimates.head
-        mainChain  <- ProtoUtil.getMainChain[F](tip, IndexedSeq.empty[BlockMessage])
+        mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
-      } yield
-        BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
+      } yield blockInfos
 
-    MultiParentCasperRef.withCasper[F, BlocksResponse](
+    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
       casperResponse(_),
-      BlocksResponse(status = "Error: Casper instance not available")
+      List.empty[BlockInfoWithoutTuplespace]
     )
   }
 
-  def getBlockQueryResponse[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {
     def casperResponse(implicit casper: MultiParentCasper[F]) =
