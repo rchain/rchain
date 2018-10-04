@@ -7,7 +7,7 @@ import cats.implicits._
 
 import coop.rchain.blockstorage.{BlockStore, LMDBBlockStore}
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
-import coop.rchain.casper.util.comm.CasperPacketHandler
+import coop.rchain.casper.util.comm.{BlobHandler, CasperPacketHandler}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{LastApprovedBlock, MultiParentCasperRef, SafetyOracle}
 import coop.rchain.catscontrib.Catscontrib._
@@ -295,10 +295,13 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
       _       <- addShutdownHook(servers, runtime, casperRuntime).toEffect
       _       <- startServers(servers)
       _       <- startReportJvmMetrics.toEffect
-      _       <- TransportLayer[Effect].receive(pm => HandleMessages.handle[Effect](pm, defaultTimeout))
-      _       <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
-      _       <- Log[Effect].info(s"Listening for traffic on $address.")
-      _       <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
+      _ <- TransportLayer[Effect].receive(
+            pm => HandleMessages.handle[Effect](pm, defaultTimeout),
+            BlobHandler.handleBlob[Effect]
+          )
+      _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
+      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _ <- EitherT(Task.defer(loop.forever.value).executeOn(loopScheduler))
     } yield ()
   }
 

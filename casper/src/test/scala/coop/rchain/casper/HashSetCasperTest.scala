@@ -11,7 +11,8 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.{BlockStoreTestFixture, BlockUtil, HashSetCasperTestNode}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil.{chooseNonConflicting, signBlock, toJustification}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -39,10 +40,11 @@ class HashSetCasperTest extends FlatSpec with Matchers {
   private val (ethPivKeys, ethPubKeys)    = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   private val ethAddresses =
     ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.bytes.drop(1)).takeRight(20)))
-  private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(Random.nextInt(499) + 1)))
-  private val bonds   = createBonds(validators)
+  private val wallets     = ethAddresses.map(addr => PreWallet(addr, BigInt(Random.nextInt(499) + 101)))
+  private val bonds       = createBonds(validators)
+  private val minimumBond = 100L
   private val genesis =
-    buildGenesis(wallets, bonds, 100L, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
+    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, Faucet.basicWalletFaucet, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -295,7 +297,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes.foreach(_.tearDown())
   }
 
-  it should "allow bonding" in {
+  it should "allow bonding and distribute the joining fee" in {
     val nodes =
       HashSetCasperTestNode.network(
         validatorKeys :+ otherSk,
@@ -305,19 +307,17 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     implicit val runtimeManager = nodes(0).runtimeManager
     val pubKey                  = Base16.encode(ethPubKeys.head.bytes.drop(1))
     val secKey                  = ethPivKeys.head.bytes
+    val ethAddress              = ethAddresses.head
+    val bondKey                 = Base16.encode(otherPk)
     val walletUnlockDeploy =
-      RevIssuanceTest.preWalletUnlockDeploy(ethAddresses.head, pubKey, secKey, "unlockOut")
-    val bondingStatusOut        = "bondingOut"
-    val bondingForwarderAddress = "myBondingForwarder"
+      RevIssuanceTest.preWalletUnlockDeploy(ethAddress, pubKey, secKey, "unlockOut")
+    val bondingForwarderAddress = BondingUtil.bondingForwarderAddress(ethAddress)
     val bondingForwarderDeploy = ProtoUtil.sourceDeploy(
-      s"""for(@purse <- @"$bondingForwarderAddress"; @pos <- @"proofOfStake"){
-       |  @(pos, "bond")!("${Base16
-           .encode(otherPk)}".hexToBytes(), "ed25519Verify", purse, "$pubKey", "$bondingStatusOut")
-       |}""".stripMargin,
+      BondingUtil.bondingForwarderDeploy(bondKey, ethAddress),
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )
-    val transferStatusOut = "transferOut"
+    val transferStatusOut = BondingUtil.transferStatusOut(ethAddress)
     val bondingTransferDeploy =
       RevIssuanceTest.walletTransferDeploy(
         0,
@@ -361,12 +361,56 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     block3PrimeStatus shouldBe Valid
     nodes.forall(_.logEff.warns.isEmpty) shouldBe true
 
-    val correctBonds = bonds.map { case (key, stake) => Bond(ByteString.copyFrom(key), stake) }.toSet + Bond(
+    val rankedValidatorQuery =
+      mkTerm("""for(@pos <- @"proofOfStake"){ 
+    |  new bondsCh, getRanking in {
+    |    contract getRanking(@bonds, @acc, return) = {
+    |      match bonds {
+    |        {key:(stake, _, _, index) ...rest} => {
+    |          getRanking!(rest, acc ++ [(key, stake, index)], *return)
+    |        }
+    |        _ => { return!(acc) }
+    |      }
+    |    } |
+    |    @(pos, "getBonds")!(*bondsCh) | for(@bonds <- bondsCh) {
+    |      getRanking!(bonds, [], "__SCALA__")
+    |    }
+    |  }
+    |}""".stripMargin).right.get
+    val validatorBondsAndRanks: Seq[(ByteString, Long, Int)] = runtimeManager
+      .captureResults(block1.getBody.getPostState.tuplespace, rankedValidatorQuery)
+      .head
+      .exprs
+      .head
+      .getEListBody
+      .ps
+      .map(
+        _.exprs.head.getETupleBody.ps match {
+          case Seq(a, b, c) =>
+            (a.exprs.head.getGByteArray, b.exprs.head.getGInt, c.exprs.head.getGInt.toInt)
+        }
+      )
+
+    val joiningFee = minimumBond
+    val n          = validatorBondsAndRanks.size
+    val joiningFeeDistribution = (1 to n).map { k =>
+      k -> ((2L * minimumBond * (n + 1 - k)) / (n * (n + 1)))
+    }.toMap
+    val total = joiningFeeDistribution.values.sum
+    val finalFeesDist =
+      joiningFeeDistribution.updated(1, joiningFeeDistribution(1) + joiningFee - total)
+    val correctBonds = validatorBondsAndRanks.map {
+      case (key, stake, rank) =>
+        Bond(key, stake + finalFeesDist(rank))
+    }.toSet + Bond(
       ByteString.copyFrom(otherPk),
-      wallets.head.initRevBalance.toLong
+      wallets.head.initRevBalance.toLong - joiningFee
     )
+
     val newBonds = block2.getBody.getPostState.bonds
     newBonds.toSet shouldBe correctBonds
+
+    nodes.foreach(_.tearDown())
   }
 
   it should "have a working faucet (in testnet)" in {

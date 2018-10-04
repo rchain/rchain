@@ -24,15 +24,17 @@ class TcpServerObservable(
     maxMessageSize: Int,
     tellBufferSize: Int = 1024,
     askBufferSize: Int = 1024,
+    blobBufferSize: Int = 32,
     askTimeout: FiniteDuration = 5.second
 )(implicit scheduler: Scheduler)
     extends Observable[ServerMessage] {
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
 
-    val subjectTell = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
-    val subjectAsk  = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))
-    val merged      = Observable.merge(subjectTell, subjectAsk)(BackPressure(10))
+    val subjectTell        = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
+    val subjectAsk         = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))
+    val subjectBlobMessage = ConcurrentSubject.publishToOne[ServerMessage](DropNew(blobBufferSize))
+    val merged             = Observable.merge(subjectTell, subjectAsk, subjectBlobMessage)(BackPressure(10))
 
     val service = new RoutingGrpcMonix.TransportLayer {
 
@@ -65,7 +67,11 @@ class TcpServerObservable(
               }
           }
 
-      def stream(request: TLBlob): Task[TLBlobResponse] = TLBlobResponse().pure[Task]
+      def stream(request: TLBlob): Task[TLBlobResponse] = Task.delay {
+        request.blob
+          .map(blob => subjectBlobMessage.onNext(BlobMessage(blob)))
+        TLBlobResponse()
+      }
 
       private def returnProtocol(protocol: Protocol): TLResponse =
         TLResponse(TLResponse.Payload.Protocol(protocol))

@@ -2,13 +2,15 @@ package coop.rchain.comm.transport
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.comm.protocol.routing.{Blob, Protocol}
 
 import monix.eval.Callback
 
 trait ServerMessage
+// TODO rename to AksMesage and TellMesssage
 final case class Ask(msg: Protocol, sender: SenderHandle) extends ServerMessage
 final case class Tell(msg: Protocol)                      extends ServerMessage
+final case class BlobMessage(blob: Blob)                  extends ServerMessage
 
 trait SenderHandle {
   def reply(msg: CommunicationResponse): Unit
