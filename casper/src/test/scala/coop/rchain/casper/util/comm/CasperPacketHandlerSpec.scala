@@ -43,9 +43,10 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
+    val scheduler      = Scheduler.io("test")
     val runtimeDir     = BlockStoreTestFixture.dbDir
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
@@ -55,7 +56,6 @@ class CasperPacketHandlerSpec extends WordSpec {
     val deployTimestamp            = 1L
     val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val scheduler                  = Scheduler.io("test")
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,

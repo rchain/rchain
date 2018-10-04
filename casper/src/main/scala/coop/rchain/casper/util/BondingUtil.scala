@@ -125,7 +125,7 @@ object BondingUtil {
 
   def makeRuntimeManagerResource[F[_]: Sync](
       runtimeResource: Resource[F, Runtime]
-  ): Resource[F, RuntimeManager] =
+  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager] =
     runtimeResource.flatMap(
       activeRuntime =>
         Resource.make(RuntimeManager.fromRuntime(activeRuntime).pure[F])(_ => Sync[F].unit)

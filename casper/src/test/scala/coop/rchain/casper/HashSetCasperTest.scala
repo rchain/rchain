@@ -131,6 +131,53 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
+  it should "be able to use the registry" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node.casperEff
+
+    def now = System.currentTimeMillis()
+    val registerDeploy = ProtoUtil.sourceDeploy(
+      """new rr(`rho:registry:insertArbitrary`), hello, uriCh in {
+        |  contract hello(@name, return) = { return!("Hello, ${name}!" %% {"name" : name}) } |
+        |  rr!(bundle+{*hello}, *uriCh)
+        |}
+      """.stripMargin,
+      now,
+      accounting.MAX_VALUE
+    )
+
+    casperEff.deploy(registerDeploy)
+    val Created(block) = casperEff.createBlock
+    val blockStatus    = casperEff.addBlock(block)
+
+    val id: String = casperEff
+      .storageContents(block.getBody.getPostState.tuplespace)
+      .split('|')
+      .find(_.contains("rho:id"))
+      .get
+      .split('`')(1)
+    val callDeploy = ProtoUtil.sourceDeploy(
+      s"""new rl(`rho:registry:lookup`), helloCh, out in {
+         |  rl!(`$id`, *helloCh) |
+         |  for(hello <- helloCh){ hello!("World", *out) }
+         |}
+      """.stripMargin,
+      now,
+      accounting.MAX_VALUE
+    )
+    casperEff.deploy(callDeploy)
+    val Created(block2) = casperEff.createBlock
+    val block2Status    = casperEff.addBlock(block2)
+
+    blockStatus shouldBe Valid
+    block2Status shouldBe Valid
+    casperEff
+      .storageContents(block2.getBody.getPostState.tuplespace)
+      .contains("Hello, World!") shouldBe true
+
+    node.tearDown()
+  }
+
   it should "be able to create a chain of blocks from different deploys" in {
     val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
     import node._
