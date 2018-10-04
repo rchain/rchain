@@ -3,7 +3,6 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad, MonadError}
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.casper.protocol
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.ListenAtName._

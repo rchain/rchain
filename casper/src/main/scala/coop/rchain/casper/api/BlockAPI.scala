@@ -231,8 +231,7 @@ object BlockAPI {
         startHeight = math.max(0, maxHeight - depth)
         flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
                                           depth,
-                                          dag,
-                                          startHeight
+                                          dag
                                         )
       } yield flattenedBlockInfosUntilDepth.reverse
 
@@ -244,8 +243,7 @@ object BlockAPI {
 
   private def getFlattenedBlockInfosUntilDepth[F[_]: Monad: MultiParentCasper: Log: SafetyOracle: BlockStore](
       depth: Int,
-      dag: BlockDag,
-      startHeight: Long
+      dag: BlockDag
   ): F[List[BlockInfoWithoutTuplespace]] =
     dag.topoSort.takeRight(depth).foldM(List.empty[BlockInfoWithoutTuplespace]) {
       case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
