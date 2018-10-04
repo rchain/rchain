@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.PrettyPrinter.buildString
@@ -54,7 +55,7 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   def replayComputeState(hash: StateHash, terms: Seq[InternalProcessedDeploy])(
-      implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
+      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
     val runtime = runtimeContainer.take()
     val result  = replayEval(terms, runtime, hash)
     runtimeContainer.put(runtime)
@@ -97,19 +98,19 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
   }
 
   private def toBondSeq(data: Seq[Datum[ListChannelWithRandom]]): Seq[Bond] = {
-    assert(data.length == 1)
+    assert(data.length == 1, s"Data length ${data.length} for bonds map was not 1.")
     val Datum(as: ListChannelWithRandom, _: Boolean, _: Produce) = data.head
     as.channels.head match {
       case Channel(Quote(p)) =>
         p.exprs.head.getEMapBody.ps.map {
           case (validator: Par, bond: Par) =>
-            assert(validator.exprs.length == 1)
-            assert(bond.exprs.length == 1)
+            assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
+            assert(bond.exprs.length == 1, "Stake in bonds map wasn't a single integer.")
             val validatorName = validator.exprs.head.getGString
-            val stakeAmount   = bond.exprs.head.getGInt
+            val stakeAmount   = Math.toIntExact(bond.exprs.head.getGInt)
             Bond(ByteString.copyFrom(Base16.decode(validatorName)), stakeAmount)
         }.toList
-      case Channel(_) => throw new Error("Should never happen")
+      case Channel(_) => throw new Error("Matched a Channel that did not contain a Quote inside.")
     }
   }
 
@@ -151,7 +152,6 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
                                                      cost,
                                                      newCheckpoint.log,
                                                      DeployStatus.fromErrors(errors))
-
           if (errors.isEmpty) doEval(rem, newCheckpoint.root, acc :+ deployResult)
           else doEval(rem, hash, acc :+ deployResult)
 
@@ -161,13 +161,13 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     doEval(terms, Blake2b256Hash.fromByteArray(initHash.toByteArray), Vector.empty)
   }
 
-  private def replayEval(
-      terms: Seq[InternalProcessedDeploy],
-      runtime: Runtime,
-      initHash: StateHash)(implicit scheduler: Scheduler): Either[(Deploy, Failed), StateHash] = {
+  private def replayEval(terms: Seq[InternalProcessedDeploy],
+                         runtime: Runtime,
+                         initHash: StateHash)(
+      implicit scheduler: Scheduler): Either[(Option[Deploy], Failed), StateHash] = {
 
     def doReplayEval(terms: Seq[InternalProcessedDeploy],
-                     hash: Blake2b256Hash): Either[(Deploy, Failed), StateHash] =
+                     hash: Blake2b256Hash): Either[(Option[Deploy], Failed), StateHash] =
       terms match {
         case InternalProcessedDeploy(deploy, _, log, status) +: rem =>
           implicit val costAccountingAlg = CostAccountingAlg.unsafe[Task](CostAccount.zero)
@@ -175,15 +175,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
           //TODO: compare replay deploy cost to given deploy cost
           val (_, errors) = injAttempt(deploy, runtime.replayReducer, runtime.errorLog)
           DeployStatus.fromErrors(errors) match {
-            case ute: UntracedCommEvent => Left(deploy -> ute)
-            case int: InternalErrors    => Left(deploy -> int)
+            case int: InternalErrors => Left(Some(deploy) -> int)
             case replayStatus =>
               if (status.isFailed != replayStatus.isFailed)
-                Left(deploy -> ReplayStatusMismatch(replayStatus, status))
+                Left(Some(deploy) -> ReplayStatusMismatch(replayStatus, status))
               else if (errors.nonEmpty) doReplayEval(rem, hash)
               else {
-                val newCheckpoint = runtime.replaySpace.createCheckpoint()
-                doReplayEval(rem, newCheckpoint.root)
+                Try(runtime.replaySpace.createCheckpoint()) match {
+                  case Success(newCheckpoint) =>
+                    doReplayEval(rem, newCheckpoint.root)
+                  case Failure(ex: ReplayException) =>
+                    Left(none[Deploy] -> UnusedCommEvent(ex))
+                }
               }
           }
 

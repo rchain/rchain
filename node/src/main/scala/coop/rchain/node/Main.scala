@@ -43,12 +43,17 @@ object Main {
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
-      new GrpcReplClient(conf.grpcServer.host, conf.grpcServer.portInternal)
+      new GrpcReplClient(conf.grpcServer.host,
+                         conf.grpcServer.portInternal,
+                         conf.server.maxMessageSize)
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcServer.host,
-                                                    conf.grpcServer.portInternal)
+                                                    conf.grpcServer.portInternal,
+                                                    conf.server.maxMessageSize)
     implicit val deployService: GrpcDeployService =
-      new GrpcDeployService(conf.grpcServer.host, conf.grpcServer.portExternal)
+      new GrpcDeployService(conf.grpcServer.host,
+                            conf.grpcServer.portExternal,
+                            conf.server.maxMessageSize)
 
     val program = conf.command match {
       case Eval(files) => new ReplRuntime().evalProgram[Task](files)
@@ -56,12 +61,14 @@ object Main {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
       case Deploy(address, phlo, phloPrice, nonce, location) =>
         DeployRuntime.deployFileProgram[Task](address, phlo, phloPrice, nonce, location)
-      case DeployDemo      => DeployRuntime.deployDemoProgram[Task]
-      case Propose         => DeployRuntime.propose[Task]()
-      case ShowBlock(hash) => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks      => DeployRuntime.showBlocks[Task]()
-      case Run             => nodeProgram(conf)
-      case _               => conf.printHelp()
+      case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
+      case Propose           => DeployRuntime.propose[Task]()
+      case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
+      case ShowBlocks        => DeployRuntime.showBlocks[Task]()
+      case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
+      case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
+      case Run               => nodeProgram(conf)
+      case _                 => conf.printHelp()
     }
 
     program.doOnFinish(_ =>

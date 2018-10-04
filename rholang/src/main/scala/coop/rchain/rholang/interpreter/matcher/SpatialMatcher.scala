@@ -44,6 +44,17 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
+  implicit def forTuple[A, B, C, D](
+      implicit matcherAC: SpatialMatcher[A, C],
+      matcherBD: SpatialMatcher[B, D]
+  ): SpatialMatcher[(A, B), (C, D)] = new SpatialMatcher[(A, B), (C, D)] {
+    override def spatialMatch(target: (A, B), pattern: (C, D)): OptionalFreeMapWithCost[Unit] =
+      matcherAC.spatialMatch(target._1, pattern._1) >> matcherBD.spatialMatch(target._2, pattern._2)
+
+    override def nonDetMatch(target: (A, B), pattern: (C, D)): NonDetFreeMapWithCost[Unit] =
+      matcherAC.nonDetMatch(target._1, pattern._1) >> matcherBD.nonDetMatch(target._2, pattern._2)
+  }
+
   def fromFunction[T, P](fn: (T, P) => OptionalFreeMapWithCost[Unit]): SpatialMatcher[T, P] =
     new SpatialMatcher[T, P] {
       override def spatialMatch(target: T, pattern: P): OptionalFreeMapWithCost[Unit] =
@@ -241,7 +252,14 @@ object SpatialMatcher extends SpatialMatcherInstances {
         NonDetFreeMapWithCost.emptyMap[Unit].modifyCost(_.charge(COMPARISON_COST))
       else if (plen == 0 && tlen == 0 && varLevel.isEmpty)
         NonDetFreeMapWithCost.pure(())
-      else
+      else if (plen == 0 && varLevel.isDefined) {
+        val matchResult =
+          if (tlist.forall(lf.locallyFree(_, 0).isEmpty))
+            handleRemainder(tlist, varLevel.get, merger).toNonDet()
+          else
+            NonDetFreeMapWithCost.emptyMap[Unit]
+        matchResult.modifyCost(_.charge(COMPARISON_COST * tlist.size))
+      } else
         listMatch(tlist, plist, merger, varLevel, wildcard).toNonDet()
 
     result
@@ -677,8 +695,16 @@ trait SpatialMatcherInstances {
         case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
           val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
           val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
-          val merger = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
-          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard).toDet()
+          val merger          = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+            .toDet()
+
+        case (EMapBody(ParMap(tlist, _, _, _)), EMapBody(ParMap(plist, _, _, rem))) =>
+          val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
+          val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
+          val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
+          listMatchSingleNonDet(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+            .toDet()
 
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           val cost = equalityCheckCost(vp, vt)

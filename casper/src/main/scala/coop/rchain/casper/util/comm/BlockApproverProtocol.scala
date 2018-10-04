@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{ProofOfStakeValidator, Wallet}
+import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
@@ -20,7 +20,8 @@ import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.shared._
 import monix.execution.Scheduler
-
+import cats.data._
+import cats._
 import scala.util.Try
 
 /**
@@ -31,7 +32,7 @@ class BlockApproverProtocol(validatorId: ValidatorIdentity,
                             deployTimestamp: Long,
                             runtimeManager: RuntimeManager,
                             bonds: Map[Array[Byte], Int],
-                            wallets: Seq[Wallet],
+                            wallets: Seq[PreWallet],
                             requiredSigs: Int)(implicit scheduler: Scheduler) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
@@ -88,7 +89,7 @@ object BlockApproverProtocol {
       candidate: ApprovedBlockCandidate,
       requiredSigs: Int,
       timestamp: Long,
-      wallets: Seq[Wallet],
+      wallets: Seq[PreWallet],
       bonds: Map[ByteString, Int])(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
@@ -101,14 +102,19 @@ object BlockApproverProtocol {
       _ <- (blockBonds == bonds)
             .either(())
             .or("Block bonds don't match expected.")
-      validators          = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-      genesisBlessedTerms = Genesis.defaultBlessedTerms(timestamp, validators, wallets).toSet
-      blockDeploys        = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
+      validators              = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
+      genesisBlessedContracts = Genesis.defaultBlessedTerms(timestamp, validators, wallets).toSet
+      blockDeploys            = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
+      genesisBlessedTerms     = genesisBlessedContracts.flatMap(_.term)
+      genesisBlessedDeploys   = genesisBlessedContracts.flatMap(_.raw)
       _ <- blockDeploys
-            .forall(d => genesisBlessedTerms.contains(d.deploy))
+            .forall(
+              d =>
+                genesisBlessedTerms.contains(d.deploy.term.get) && genesisBlessedDeploys
+                  .exists(dd => deployDataEq.eqv(dd, d.deploy.raw.get)))
             .either(())
             .or("Candidate deploys do not match expected deploys.")
-      _ <- (blockDeploys.size == genesisBlessedTerms.size)
+      _ <- (blockDeploys.size == genesisBlessedContracts.size)
             .either(())
             .or("Mismatch between number of candidate deploys and expected number of deploys.")
       stateHash <- runtimeManager
@@ -129,4 +135,16 @@ object BlockApproverProtocol {
     if (msg.typeId == transport.UnapprovedBlock.id)
       Try(UnapprovedBlock.parseFrom(msg.content.toByteArray)).toOption
     else None
+
+  val deployDataEq: cats.kernel.Eq[DeployData] = new cats.kernel.Eq[DeployData] {
+    override def eqv(x: DeployData, y: DeployData): Boolean =
+      x.user.equals(y.user) &&
+        x.timestamp === y.timestamp &&
+        x.sig.equals(y.sig) &&
+        x.sigAlgorithm === y.sigAlgorithm &&
+        x.from === y.from &&
+        x.phloPrice === y.phloPrice &&
+        x.phloLimit === y.phloLimit &&
+        x.nonce === y.nonce
+  }
 }

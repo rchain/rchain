@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{Send, _}
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
@@ -26,7 +27,7 @@ class BoolPrinterSpec extends FlatSpec with Matchers {
 class GroundPrinterSpec extends FlatSpec with Matchers {
 
   "GroundInt" should "Print as \"" + 7 + "\"" in {
-    val gi             = new GroundInt(7)
+    val gi             = new GroundInt("7")
     val target: String = "7"
     PrettyPrinter().buildString(GroundNormalizeMatcher.normalizeMatch(gi)) shouldBe target
   }
@@ -55,7 +56,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     val listData = new ListProc()
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
-    listData.add(new PGround(new GroundInt(7)))
+    listData.add(new PGround(new GroundInt("7")))
     val list =
       new PCollect(new CollectList(listData, new ProcRemainderVar(new ProcVarVar("ignored"))))
 
@@ -69,8 +70,9 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     val listData = new ListProc()
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
-    listData.add(new PGround(new GroundInt(7)))
-    val list = new PCollect(new CollectSet(listData, new ProcRemainderVar(new ProcVarVar("ignored"))))
+    listData.add(new PGround(new GroundInt("7")))
+    val list =
+      new PCollect(new CollectSet(listData, new ProcRemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(
@@ -81,14 +83,14 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
   "Map" should "Print" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
-      new KeyValuePairImpl(new PGround(new GroundInt(7)), new PGround(new GroundString("Seven"))))
+      new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven"))))
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("x"))))
-    val map = new PCollect(new CollectMap(mapData))
+    val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("ignored"))))
 
     val result =
       PrettyPrinter(0, 2).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value.par)
-    result shouldBe "{7 : \"" + "Seven" + "\", x0 : *x1}"
+    result shouldBe "{7 : \"" + "Seven" + "\", x0 : *x1...free0}"
   }
 
 }
@@ -129,7 +131,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
         EPercentPercentBody(
           EPercentPercent(
             GString("Hello, ${name}"),
-            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice"))), false, BitSet()))
+            EMapBody(ParMap(List[(Par, Par)]((GString("name"), GString("Alice")))))
           )
         ))
     )
@@ -358,8 +360,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PSend" should "Print" in {
     val sentData = new ListProc()
-    sentData.add(new PGround(new GroundInt(7)))
-    sentData.add(new PGround(new GroundInt(8)))
+    sentData.add(new PGround(new GroundInt("7")))
+    sentData.add(new PGround(new GroundInt("8")))
     val pSend = new PSend(new NameQuote(new PNil()), new SendSingle(), sentData)
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value.par)
@@ -368,8 +370,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PSend" should "Identify variables as they're bound" in {
     val sentData = new ListProc()
-    sentData.add(new PGround(new GroundInt(7)))
-    sentData.add(new PGround(new GroundInt(8)))
+    sentData.add(new PGround(new GroundInt("7")))
+    sentData.add(new PGround(new GroundInt("8")))
     val pSend       = new PSend(new NameVar("x"), new SendSingle(), sentData)
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
     val result =
@@ -379,7 +381,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PPar" should "Respect sorting" in {
-    val parGround = new PPar(new PGround(new GroundInt(7)), new PGround(new GroundInt(8)))
+    val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](parGround, inputs).value.par)
@@ -464,7 +466,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val body = new PPar(new PSend(new NameVar("x1"), new SendSingle(), listSend1),
                         new PSend(new NameVar("x2"), new SendSingle(), listSend2))
     val listCases = new ListCase()
-    listCases.add(new CaseImpl(new PGround(new GroundInt(42)), new PNil()))
+    listCases.add(new CaseImpl(new PGround(new GroundInt("42")), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarVar("y")), new PVar(new ProcVarVar("y2"))))
     val body3 = new PPar(body,
                          new PInput(receipt2,
@@ -488,11 +490,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listNameDecl.add(new NameDeclSimpl("y"))
     listNameDecl.add(new NameDeclSimpl("z"))
     val listData1 = new ListProc()
-    listData1.add(new PGround(new GroundInt(7)))
+    listData1.add(new PGround(new GroundInt("7")))
     val listData2 = new ListProc()
-    listData2.add(new PGround(new GroundInt(8)))
+    listData2.add(new PGround(new GroundInt("8")))
     val listData3 = new ListProc()
-    listData3.add(new PGround(new GroundInt(9)))
+    listData3.add(new PGround(new GroundInt("9")))
     val pNew = new PNew(
       listNameDecl,
       new PPar(
@@ -521,11 +523,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val listCases    = new ListCase()
-    listCases.add(new CaseImpl(new PGround(new GroundInt(42)), new PNil()))
+    listCases.add(new CaseImpl(new PGround(new GroundInt("42")), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarVar("y")), new PNil()))
     val body     = new PMatch(new PVar(new ProcVarVar("x")), listCases)
     val listData = new ListProc()
-    listData.add(new PGround(new GroundInt(47)))
+    listData.add(new PGround(new GroundInt("47")))
     val send47OnNil = new PSend(new NameQuote(new PNil()), new SendSingle(), listData)
     val pPar = new PPar(
       new PInput(receipt, body),
@@ -539,7 +541,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   "PIf" should "Print as a match" in {
     val condition = new PGround(new GroundBool(new BoolTrue()))
     val listSend  = new ListProc()
-    listSend.add(new PGround(new GroundInt(47)))
+    listSend.add(new PGround(new GroundInt("47")))
     val body       = new PSend(new NameQuote(new PNil()), new SendSingle(), listSend)
     val basicInput = new PIf(condition, body)
     val result =
@@ -550,11 +552,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PIfElse" should "Print" in {
     // if (47 == 47) { new x in { x!(47) } } else { new y in { y!(47) } }
-    val condition = new PEq(new PGround(new GroundInt(47)), new PGround(new GroundInt(47)))
+    val condition = new PEq(new PGround(new GroundInt("47")), new PGround(new GroundInt("47")))
     val xNameDecl = new ListNameDecl()
     xNameDecl.add(new NameDeclSimpl("x"))
     val xSendData = new ListProc()
-    xSendData.add(new PGround(new GroundInt(47)))
+    xSendData.add(new PGround(new GroundInt("47")))
     val pNewIf = new PNew(
       xNameDecl,
       new PSend(new NameVar("x"), new SendSingle(), xSendData)
@@ -562,7 +564,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val yNameDecl = new ListNameDecl()
     yNameDecl.add(new NameDeclSimpl("y"))
     val ySendData = new ListProc()
-    ySendData.add(new PGround(new GroundInt(47)))
+    ySendData.add(new PGround(new GroundInt("47")))
     val pNewElse = new PNew(
       yNameDecl,
       new PSend(new NameVar("y"), new SendSingle(), ySendData)
@@ -577,7 +579,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   "PMatch" should "Print" in {
     // for (@{match {x | y} { 47 => Nil }} <- @Nil) { Nil }
     val listCases = new ListCase()
-    listCases.add(new CaseImpl(new PGround(new GroundInt(47)), new PNil()))
+    listCases.add(new CaseImpl(new PGround(new GroundInt("47")), new PNil()))
     val pMatch =
       new PMatch(new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y"))), listCases)
     val listBindings = new ListName()
@@ -594,7 +596,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PMatches" should "display matches" in {
-    val pMatches = new PMatches(new PGround(new GroundInt(1)), new PVar(new ProcVarWildcard()))
+    val pMatches = new PMatches(new PGround(new GroundInt("1")), new PVar(new ProcVarWildcard()))
 
     val result = PrettyPrinter(0, 1).buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](pMatches, inputs).value.par)

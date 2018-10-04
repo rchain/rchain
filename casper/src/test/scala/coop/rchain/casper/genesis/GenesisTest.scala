@@ -34,8 +34,8 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
   ).zipWithIndex
 
   val walletAddresses = Seq(
-    "c0dcab7f3a2d485071c5b8b3e95b21bd0ae491978566c3fd653d1e65cd9e67e9",
-    "ed5f090de933a726d24fe98a77d4864f6e59f67e1217f1db82eb3eab13afe806"
+    "0x20356b6fae3a94db5f01bdd45347faFad3dd18ef",
+    "0x041e1eec23d118f0c4ffc814d4f415ac3ef3dcff"
   ).zipWithIndex
 
   def printBonds(bondsFile: String): Unit = {
@@ -55,7 +55,7 @@ class GenesisTest extends FlatSpec with Matchers with BeforeAndAfterEach with Bl
     pw.println(
       walletAddresses
         .map {
-          case (v, i) => s"ed25519 $v $i"
+          case (v, i) => s"$v,$i,0"
         }
         .mkString("\n")
     )

@@ -4,10 +4,8 @@ import tools.resources as resources
 from shutil import copyfile
 from tools.wait import wait_for, string_contains, show_blocks
 from tools.util import log_box
-from tools.profiling import profile
 
-@profile
-def test_casper_propose_and_deploy(config, converged_network):
+def casper_propose_and_deploy(config, network):
     """
     This test represents an integration test that deploys a contract and then checks
     if all the nodes have received the block containing the contract.
@@ -17,7 +15,7 @@ def test_casper_propose_and_deploy(config, converged_network):
 
     contract_name = 'contract.rho'
 
-    for node in converged_network.nodes:
+    for node in network.nodes:
         with log_box(logging.info, f"Run test on node '{node.name}'"):
             expected_string = f"<{node.container.name}:{random_string(token_size)}>"
 
@@ -41,7 +39,7 @@ def test_casper_propose_and_deploy(config, converged_network):
             logging.info(f"Check all peer logs for blocks containing {expected_string}")
 
             other_nodes = [n
-                            for n in converged_network.nodes
+                            for n in network.nodes
                             if n.container.name != node.container.name]
 
             for node in other_nodes:
