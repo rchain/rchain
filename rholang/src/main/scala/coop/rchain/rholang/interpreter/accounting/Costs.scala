@@ -53,18 +53,22 @@ trait Costs {
   def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
   //TODO: adjust the cost of size method
   def sizeMethodCost(size: Int): Cost = Cost(size)
+  // slice(from, to) needs to drop `from` elements and then append `to - from` elements
+  // we charge proportionally to `to` and fail if the method call is incorrect, for example
+  // if underlying string is shorter then the `to` value.
+  def sliceCost(to: Int): Cost = Cost(to)
 
   final val NTH_METHOD_CALL_COST: Cost = Cost(10)
 
   final val KEYS_METHOD_COST: Cost = Cost(10)
 
   final val LENGTH_METHOD_COST = Cost(10)
-  final val METHOD_CALL_COST  = Cost(10)
-  final val OP_CALL_COST      = Cost(10)
-  final val VAR_EVAL_COST     = Cost(10)
-  final val SEND_EVAL_COST    = Cost(11)
-  final val RECEIVE_EVAL_COST = Cost(11)
-  final val CHANNEL_EVAL_COST = Cost(11)
+  final val METHOD_CALL_COST   = Cost(10)
+  final val OP_CALL_COST       = Cost(10)
+  final val VAR_EVAL_COST      = Cost(10)
+  final val SEND_EVAL_COST     = Cost(11)
+  final val RECEIVE_EVAL_COST  = Cost(11)
+  final val CHANNEL_EVAL_COST  = Cost(11)
 
   // The idea is that evaluation of `new x1, x2, …, xn in { }` should be charged depending
   // on the # of bindings and constant cost of evaluating `new … in  { … }` construct

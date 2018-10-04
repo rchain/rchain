@@ -1235,7 +1235,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- keys(baseExpr)
-          _ <- costAccountingAlg.charge(KEYS_METHOD_COST)
+          _        <- costAccountingAlg.charge(KEYS_METHOD_COST)
         } yield result
     }
 
@@ -1262,7 +1262,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- size(baseExpr)
-          _ <- costAccountingAlg.charge(sizeMethodCost(result._1))
+          _        <- costAccountingAlg.charge(sizeMethodCost(result._1))
         } yield result._2
     }
 
@@ -1276,7 +1276,6 @@ object Reduce {
           case other =>
             s.raiseError(MethodNotDefined("length", other.typ))
         }
-      //TODO(mateusz.gorski): add cost accounting
       override def apply(
           p: Par,
           args: Seq[Par]
@@ -1287,7 +1286,7 @@ object Reduce {
               else Applicative[M].unit
           baseExpr <- evalSingleExpr(p)
           result   <- length(baseExpr)
-          _ <- costAccountingAlg.charge(LENGTH_METHOD_COST)
+          _        <- costAccountingAlg.charge(LENGTH_METHOD_COST)
         } yield result
     }
 
@@ -1295,22 +1294,24 @@ object Reduce {
       def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
         baseExpr.exprInstance match {
           case GString(string) =>
-            Applicative[M].pure[Par](GString(string.slice(from, until)))
+            Sync[M].delay {
+              GString(string.slice(from, until))
+            }
           case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-            Applicative[M].pure[Par](
+            Sync[M].delay {
               EList(
                 ps.slice(from, until),
                 locallyFree,
                 connectiveUsed,
                 remainder
               )
-            )
+            }
           case GByteArray(bytes) =>
-            Applicative[M].pure[Par](GByteArray(bytes.substring(from, until)))
+            Sync[M].delay(GByteArray(bytes.substring(from, until)))
           case other =>
             s.raiseError(MethodNotDefined("slice", other.typ))
         }
-      //TODO(mateusz.gorski): add cost accounting
+
       override def apply(
           p: Par,
           args: Seq[Par]
@@ -1325,6 +1326,7 @@ object Reduce {
           toArgRaw   <- evalToLong(args(1))
           toArg      <- restrictToInt(toArgRaw)
           result     <- slice(baseExpr, fromArg, toArg)
+          _          <- costAccountingAlg.charge(sliceCost(toArg))
         } yield result
     }
 
