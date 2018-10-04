@@ -923,10 +923,10 @@ object Reduce {
           s.raiseError(MethodArgumentNumberMismatch("toUtf8Bytes", 0, args.length))
         } else {
           p.singleExpr() match {
-            case Some(Expr(GString(encoded))) =>
+            case Some(Expr(GString(utf8string))) =>
               for {
-                _ <- costAccountingAlg.charge(hexToByteCost(encoded))
-              } yield Expr(GByteArray(ByteString.copyFrom(encoded.getBytes("UTF-8"))))
+                _ <- costAccountingAlg.charge(hexToByteCost(utf8string))
+              } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
           }
