@@ -125,6 +125,39 @@ object Reduce {
     )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
+    private trait EvalJob {
+      def run(rand: Blake2b512Random, starts: Vector[Int], startIdx: Int): M[List[Unit]]
+    }
+
+    private object EvalJob {
+
+      def split(
+          starts: Vector[Int],
+          rand: Blake2b512Random,
+          startIdx: Int,
+          idx: Int
+      ): Blake2b512Random =
+        if (starts(6) == 1)
+          rand
+        else if (starts(6) > 256)
+          rand.splitShort((starts(startIdx) + idx).toShort)
+        else
+          rand.splitByte((starts(startIdx) + idx).toByte)
+
+      def apply[A](input: Seq[A], handler: (A, Blake2b512Random) => M[Unit]): EvalJob =
+        new EvalJob() {
+          override def run(
+              rand: Blake2b512Random,
+              starts: Vector[Int],
+              startIdx: Int
+          ): M[List[Unit]] =
+            Parallel.parTraverse(input.zipWithIndex.toList) {
+              case (term, idx) => handler(term, split(starts, rand, startIdx, idx))
+            }
+        }
+
+    }
+
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
       *
@@ -158,16 +191,8 @@ object Reduce {
         filteredExprs.size
       ).scanLeft(0)(_ + _)
 
-      def split(rand: Blake2b512Random, startIdx: Int, idx: Int): Blake2b512Random =
-        if (starts(6) == 1)
-          rand
-        else if (starts(6) > 256)
-          rand.splitShort((starts(startIdx) + idx).toShort)
-        else
-          rand.splitByte((starts(startIdx) + idx).toByte)
-
       def mkTermHandler[A](
-          impl: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit])
+          impl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
       )(term: A, rand: Blake2b512Random): M[Unit] =
         impl(term)(env, rand, costAccountingAlg)
           .handleErrorWith {
@@ -192,23 +217,17 @@ object Reduce {
           case _ => s.unit
         }
 
-      def mkJob[A](
-          terms: Seq[A],
-          handler: (A, Blake2b512Random) => M[Unit],
-          startIdx: Int
-      ): M[List[Unit]] =
-        Parallel.parTraverse(terms.zipWithIndex.toList) {
-          case (term, idx) => handler(term, split(rand, startIdx, idx))
-        }
-
       List(
-        mkJob(par.sends, mkTermHandler[Send](evalExplicit), 0),
-        mkJob(par.receives, mkTermHandler[Receive](evalExplicit), 1),
-        mkJob(par.news, mkTermHandler[New](evalExplicit), 2),
-        mkJob(par.matches, mkTermHandler[Match](evalExplicit), 3),
-        mkJob(par.bundles, mkTermHandler[Bundle](evalExplicit), 4),
-        mkJob(filteredExprs, exprHandler, 5)
-      ).parSequence.as(Unit)
+        EvalJob(par.sends, mkTermHandler[Send](evalExplicit)),
+        EvalJob(par.receives, mkTermHandler[Receive](evalExplicit)),
+        EvalJob(par.news, mkTermHandler[New](evalExplicit)),
+        EvalJob(par.matches, mkTermHandler[Match](evalExplicit)),
+        EvalJob(par.bundles, mkTermHandler[Bundle](evalExplicit)),
+        EvalJob(filteredExprs, exprHandler)
+      ).zipWithIndex
+        .map { case (job, idx) => job.run(rand, starts, idx) }
+        .parSequence
+        .as(Unit)
     }
 
     override def inj(
