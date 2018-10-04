@@ -148,6 +148,7 @@ object Reduce {
           case _              => false
         }
       }
+
       val starts = Vector(
         par.sends.size,
         par.receives.size,
@@ -156,18 +157,22 @@ object Reduce {
         par.bundles.size,
         filteredExprs.size
       ).scanLeft(0)(_ + _)
+
       def handle[A](
           eval: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]),
           start: Int
-      )(ta: (A, Int)): M[Unit] = {
+      )(input: (A, Int)): M[Unit] = {
+        val (term, idx) = input
+
         val newRand =
           if (starts(6) == 1)
             rand
           else if (starts(6) > 256)
-            rand.splitShort((start + ta._2).toShort)
+            rand.splitShort((start + idx).toShort)
           else
-            rand.splitByte((start + ta._2).toByte)
-        eval(ta._1)(env, newRand, costAccountingAlg).handleErrorWith {
+            rand.splitByte((start + idx).toByte)
+
+        eval(term)(env, newRand, costAccountingAlg).handleErrorWith {
           case e: OutOfPhlogistonsError.type =>
             s.raiseError(e)
           case e =>
@@ -189,6 +194,7 @@ object Reduce {
               rand.splitShort((starts(5) + idx).toShort)
             else
               rand.splitByte((starts(5) + idx).toByte)
+
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
