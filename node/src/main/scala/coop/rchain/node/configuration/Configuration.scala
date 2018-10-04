@@ -119,7 +119,7 @@ object Configuration {
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
                            )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
-        result <- Task.pure(apply(effectiveDataDir, options, config))
+        result <- Task.pure(apply(effectiveDataDir, command, options, config))
         _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
@@ -185,31 +185,10 @@ object Configuration {
 
   private def apply(
       dataDir: Path,
+      command: Command,
       options: commandline.Options,
       config: Option[TomlConfiguration]
   ): Configuration = {
-    val command: Command = options.subcommand match {
-      case Some(options.eval)        => Eval(options.eval.fileNames())
-      case Some(options.repl)        => Repl
-      case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      =>
-        //TODO: change the defaults before main net
-        import options.deploy._
-        Deploy(
-          from.getOrElse("0x"),
-          PhloLimit(phloLimit()),
-          PhloPrice(phloPrice()),
-          nonce.getOrElse(0),
-          location()
-        )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
-      case Some(options.run)        => Run
-      case _                        => Help
-    }
-
     import commandline.Options._
 
     def getOpt[A](
@@ -401,11 +380,16 @@ object Configuration {
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.showBlocks) =>
+        import options.showBlocks._
+        ShowBlocks(depth.getOrElse(1))
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
-      case _                        => Help
+      case Some(options.bondingDeployGen) =>
+        import options.bondingDeployGen._
+        BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())
+      case _ => Help
     }
 }
 
