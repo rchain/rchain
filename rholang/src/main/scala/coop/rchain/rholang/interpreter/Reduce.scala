@@ -159,7 +159,7 @@ object Reduce {
       ).scanLeft(0)(_ + _)
 
       def handle[A](
-          eval: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]),
+          evalImpl: ((A, Blake2b512Random) => M[Unit]),
           start: Int
       )(input: (A, Int)): M[Unit] = {
         val (term, idx) = input
@@ -172,19 +172,36 @@ object Reduce {
           else
             rand.splitByte((start + idx).toByte)
 
-        eval(term)(env, newRand, costAccountingAlg).handleErrorWith {
-          case e: OutOfPhlogistonsError.type =>
-            s.raiseError(e)
-          case e =>
-            fTell.tell(e) *> s.unit
-        }
+        evalImpl(term, newRand)
       }
+
+      def mkTermHandler[A](
+          impl: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit])
+      )(term: A, rand: Blake2b512Random): M[Unit] =
+        impl(term)(env, rand, costAccountingAlg)
+          .handleErrorWith {
+            case e: OutOfPhlogistonsError.type =>
+              s.raiseError(e)
+            case e =>
+              fTell.tell(e) *> s.unit
+          }
+
+      def exprHandler(expr: Expr, rand: Blake2b512Random): M[Unit] =
+        expr.exprInstance match {
+          case EVarBody(EVar(v)) =>
+            (for {
+              varref <- eval(v)
+              _      <- eval(varref)(env, rand, costAccountingAlg)
+            } yield ()).handleError(fTell.tell)
+          case e: EMethodBody =>
+            (for {
+              p <- evalExprToPar(Expr(e))
+              _ <- eval(p)(env, rand, costAccountingAlg)
+            } yield ()).handleError(fTell.tell)
+          case _ => s.unit
+        }
+
       List(
-        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(evalExplicit, starts(0))),
-        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(evalExplicit, starts(1))),
-        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(evalExplicit, starts(2))),
-        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(evalExplicit, starts(3))),
-        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(evalExplicit, starts(4))),
         Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(texpr => {
           val (expr, idx) = texpr
           val newRand =
@@ -195,20 +212,13 @@ object Reduce {
             else
               rand.splitByte((starts(5) + idx).toByte)
 
-          expr.exprInstance match {
-            case EVarBody(EVar(v)) =>
-              (for {
-                varref <- eval(v)
-                _      <- eval(varref)(env, newRand, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
-            case e: EMethodBody =>
-              (for {
-                p <- evalExprToPar(Expr(e))
-                _ <- eval(p)(env, newRand, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
-            case _ => s.unit
-          }
+          exprHandler(expr, newRand)
         })
+        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(0))),
+        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(1))),
+        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(2))),
+        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(3))),
+        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(4))),
       ).parSequence.as(Unit)
     }
 
