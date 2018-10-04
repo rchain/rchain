@@ -76,7 +76,9 @@ object Connect {
         local   <- RPConfAsk[F].reader(_.local)
         timeout <- RPConfAsk[F].reader(_.defaultTimeout)
         hb      = heartbeat(local)
+        timer   <- Metrics[F].startTimer("heartbeat")
         res     <- TransportLayer[F].roundTrip(peer, hb, timeout)
+        _       = timer.stop()
       } yield (peer, res)
 
     def clear(connections: Connections): F[Int] =
@@ -105,6 +107,8 @@ object Connect {
       connections      <- ConnectionsCell[F].read
       tout             <- RPConfAsk[F].reader(_.defaultTimeout)
       peers            <- NodeDiscovery[F].peers.map(p => (p.toSet -- connections).toList)
+      timer            <- Metrics[F].startTimer("find-more-peers")
+      tries            <- Metrics[F].incrementCounter("find-more-tries")
       responses        <- peers.traverse(conn(_, tout).attempt)
       peersAndResonses = peers.zip(responses)
       _ <- peersAndResonses.traverse {
@@ -113,6 +117,7 @@ object Connect {
             case (peer, Right(_)) =>
               Log[F].info(s"Connected to ${peer.toAddress}.")
           }
+      _ = timer.stop()
     } yield peersAndResonses.filter(_._2.isRight).map(_._1)
 
   def connect[F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: ErrorHandler: ConnectionsCell: RPConfAsk](

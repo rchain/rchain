@@ -26,7 +26,7 @@ trait Metrics[F[_]] {
   def record(name: String, value: Long, count: Long = 1): F[Unit]
 
   // Timers
-  def startTimer(name: String): MetricsTimer
+  def startTimer(name: String): F[MetricsTimer]
 }
 
 object Metrics extends MetricsInstances {
@@ -41,7 +41,7 @@ object Metrics extends MetricsInstances {
       def incrementGauge(name: String, delta: Long)      = M.incrementGauge(name, delta).liftM[T]
       def decrementGauge(name: String, delta: Long)      = M.decrementGauge(name, delta).liftM[T]
       def record(name: String, value: Long, count: Long) = M.record(name, value, count).liftM[T]
-      def startTimer(name: String)                       = M.startTimer(name)
+      def startTimer(name: String)                       = M.startTimer(name).liftM[T]
     }
 
   class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
@@ -52,10 +52,10 @@ object Metrics extends MetricsInstances {
     def incrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
     def decrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
     def record(name: String, value: Long, count: Long = 1): F[Unit] = ().pure[F]
-    def startTimer(name: String): MetricsTimer =
-      new MetricsTimer {
-        def stop(): Unit = ().pure[F]
-      }
+    def startTimer(name: String): F[MetricsTimer] =
+      (new MetricsTimer {
+        def stop(): Unit = ()
+      }).pure[F]
   }
 
 }

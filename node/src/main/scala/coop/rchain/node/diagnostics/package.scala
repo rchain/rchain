@@ -219,12 +219,13 @@ package object diagnostics {
           }
         }
 
-      def startTimer(name: String): MetricsTimer = {
-        val t = Kamon.timer(name).start()
-        new MetricsTimer {
-          def stop(): Unit = t.stop()
+      def startTimer(name: String): F[MetricsTimer] =
+        Capture[F].capture {
+          val t = Kamon.timer(name).start()
+          new MetricsTimer {
+            def stop(): Unit = t.stop()
+          }
         }
-      }
     }
 
   def grpc(
