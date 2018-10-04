@@ -138,9 +138,9 @@ object Reduce {
           startIdx: Int,
           idx: Int
       ): Blake2b512Random =
-        if (starts(6) == 1)
+        if (starts.last == 1)
           rand
-        else if (starts(6) > 256)
+        else if (starts.last > 256)
           rand.splitShort((starts(startIdx) + idx).toShort)
         else
           rand.splitByte((starts(startIdx) + idx).toByte)
