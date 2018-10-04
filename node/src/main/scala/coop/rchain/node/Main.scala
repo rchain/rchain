@@ -71,7 +71,7 @@ object Main {
       case DeployDemo        => DeployRuntime.deployDemoProgram[Task]
       case Propose           => DeployRuntime.propose[Task]()
       case ShowBlock(hash)   => DeployRuntime.showBlock[Task](hash)
-      case ShowBlocks        => DeployRuntime.showBlocks[Task]()
+      case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf)

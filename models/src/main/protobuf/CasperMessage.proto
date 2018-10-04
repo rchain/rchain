@@ -22,9 +22,10 @@ service DeployService {
   rpc addBlock(BlockMessage) returns (DeployServiceResponse) {}
   rpc createBlock(google.protobuf.Empty) returns (DeployServiceResponse) {}
   rpc showBlock(BlockQuery) returns (BlockQueryResponse) {}
-  rpc showBlocks(google.protobuf.Empty) returns (stream BlockInfoWithoutTuplespace) {}
-  rpc listenForDataAtName(Par) returns (ListeningNameDataResponse) {}
-  rpc listenForContinuationAtName(Pars) returns (ListeningNameContinuationResponse) {}
+  rpc showMainChain(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  rpc showBlocks(BlocksQuery) returns (stream BlockInfoWithoutTuplespace) {}
+  rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ListeningNameContinuationResponse) {}
 }
 
 message PhloLimit {
@@ -59,8 +60,18 @@ message BlockQuery {
   string hash = 1;
 }
 
-message Pars {
-  repeated Par pars = 1;
+message BlocksQuery {
+  int32 depth = 1;
+}
+
+message DataAtNameQuery {
+  int32 depth = 1;
+  Par name = 2;
+}
+
+message ContinuationAtNameQuery {
+  int32 depth = 1;
+  repeated Par names = 2;
 }
 
 message DeployServiceResponse {
@@ -102,12 +113,6 @@ message ContinuationsWithBlockInfo {
 message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
   Par postBlockContinuation = 2;
-}
-
-message BlocksResponse {
-  string status = 1;
-  repeated BlockInfoWithoutTuplespace blocks = 2;
-  int64 length = 3;
 }
 
 message BlockInfoWithoutTuplespace {
