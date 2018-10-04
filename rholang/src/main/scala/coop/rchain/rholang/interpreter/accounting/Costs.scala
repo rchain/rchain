@@ -30,15 +30,11 @@ trait Costs {
   final val MULTIPLICATION_COST: Cost = Cost(9)
   final val DIVISION_COST: Cost       = Cost(9)
 
-  final val STRING_APPEND_COST = Cost(3)
-
   // operations on collections
   // source: https://docs.scala-lang.org/overviews/collections/performance-characteristics.html
   final val LOOKUP_COST = Cost(3) // map/set lookup is eC
   final val REMOVE_COST = Cost(3) // map/set remove is eC
   final val ADD_COST    = Cost(3) // map/set add is eC
-
-  final val PREPEND_COST = Cost(2) // list prepend is C
 
   // decoding to bytes is linear with respect to the length of the string
   def hexToByteCost(str: String): Cost = Cost(str.size)
@@ -46,6 +42,12 @@ trait Costs {
   def diffCost(numElements: Int): Cost = REMOVE_COST * numElements
 
   def unionCost(numElements: Int): Cost = ADD_COST * numElements
+
+  def appendCost(n: Int, m: Int): Cost = Cost(n + m)
+
+  // To interpolate we traverse whole base string and for each placeholder
+  // we look for matching key in the interpolation map
+  def interpolateCost(strLength: Int, mapSize: Int): Cost = Cost(strLength * mapSize)
 
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`

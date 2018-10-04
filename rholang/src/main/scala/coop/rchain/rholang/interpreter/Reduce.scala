@@ -690,7 +690,7 @@ object Reduce {
                                       .map(
                                         keyValuePairs => GString(interpolate(lhs, keyValuePairs))
                                       )
-                           _ <- costAccountingAlg.charge(LOOKUP_COST * (lhs.length + rhs.size))
+                           _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
                          } yield result
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
