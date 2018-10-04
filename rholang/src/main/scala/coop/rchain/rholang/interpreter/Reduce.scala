@@ -200,13 +200,16 @@ object Reduce {
           case _ => s.unit
         }
 
+      def mkJob[A](terms : Seq[A], handler : (A, Blake2b512Random) => M[Unit]) : M[List[Unit]] =
+        Parallel.parTraverse(terms.zipWithIndex.toList)(handle(handler))
+
       List(
-        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
-        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
-        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
-        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
-        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit))),
-        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(handle(exprHandler))
+        mkJob(par.sends, mkTermHandler[Send](evalExplicit)),
+        mkJob(par.receives, mkTermHandler[Receive](evalExplicit)),
+        mkJob(par.news, mkTermHandler[New](evalExplicit)),
+        mkJob(par.matches, mkTermHandler[Match](evalExplicit)),
+        mkJob(par.bundles, mkTermHandler[Bundle](evalExplicit)),
+        mkJob(filteredExprs, exprHandler)
       ).parSequence.as(Unit)
     }
 
