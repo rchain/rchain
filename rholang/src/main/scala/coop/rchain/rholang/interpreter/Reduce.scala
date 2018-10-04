@@ -158,13 +158,13 @@ object Reduce {
         filteredExprs.size
       ).scanLeft(0)(_ + _)
 
-      def split(rand: Blake2b512Random, idx: Int): Blake2b512Random =
+      def split(rand: Blake2b512Random, startIdx: Int, idx: Int): Blake2b512Random =
         if (starts(6) == 1)
           rand
         else if (starts(6) > 256)
-          rand.splitShort((starts(idx) + idx).toShort)
+          rand.splitShort((starts(startIdx) + idx).toShort)
         else
-          rand.splitByte((starts(idx) + idx).toByte)
+          rand.splitByte((starts(startIdx) + idx).toByte)
 
       def mkTermHandler[A](
           impl: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit])
@@ -192,18 +192,22 @@ object Reduce {
           case _ => s.unit
         }
 
-      def mkJob[A](terms: Seq[A], handler: (A, Blake2b512Random) => M[Unit]): M[List[Unit]] =
+      def mkJob[A](
+          terms: Seq[A],
+          handler: (A, Blake2b512Random) => M[Unit],
+          startIdx: Int
+      ): M[List[Unit]] =
         Parallel.parTraverse(terms.zipWithIndex.toList) {
-          case (term, idx) => handler(term, split(rand, idx))
+          case (term, idx) => handler(term, split(rand, startIdx, idx))
         }
 
       List(
-        mkJob(par.sends, mkTermHandler[Send](evalExplicit)),
-        mkJob(par.receives, mkTermHandler[Receive](evalExplicit)),
-        mkJob(par.news, mkTermHandler[New](evalExplicit)),
-        mkJob(par.matches, mkTermHandler[Match](evalExplicit)),
-        mkJob(par.bundles, mkTermHandler[Bundle](evalExplicit)),
-        mkJob(filteredExprs, exprHandler)
+        mkJob(par.sends, mkTermHandler[Send](evalExplicit), 0),
+        mkJob(par.receives, mkTermHandler[Receive](evalExplicit), 1),
+        mkJob(par.news, mkTermHandler[New](evalExplicit), 2),
+        mkJob(par.matches, mkTermHandler[Match](evalExplicit), 3),
+        mkJob(par.bundles, mkTermHandler[Bundle](evalExplicit), 4),
+        mkJob(filteredExprs, exprHandler, 5)
       ).parSequence.as(Unit)
     }
 
