@@ -127,6 +127,7 @@ object Reduce {
 
     private trait EvalJob {
       def run(rand: Blake2b512Random, starts: Vector[Int], startIdx: Int): M[List[Unit]]
+      def size: Int
     }
 
     private object EvalJob {
@@ -154,6 +155,8 @@ object Reduce {
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) => handler(term, split(starts, rand, startIdx, idx))
             }
+
+          override def size = input.size
         }
 
     }
@@ -182,15 +185,6 @@ object Reduce {
         }
       }
 
-      val starts = Vector(
-        par.sends.size,
-        par.receives.size,
-        par.news.size,
-        par.matches.size,
-        par.bundles.size,
-        filteredExprs.size
-      ).scanLeft(0)(_ + _)
-
       def mkTermHandler[A](
           impl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
       )(term: A, rand: Blake2b512Random): M[Unit] =
@@ -217,14 +211,18 @@ object Reduce {
           case _ => s.unit
         }
 
-      List(
+      val jobs = List(
         EvalJob(par.sends, mkTermHandler[Send](evalExplicit)),
         EvalJob(par.receives, mkTermHandler[Receive](evalExplicit)),
         EvalJob(par.news, mkTermHandler[New](evalExplicit)),
         EvalJob(par.matches, mkTermHandler[Match](evalExplicit)),
         EvalJob(par.bundles, mkTermHandler[Bundle](evalExplicit)),
         EvalJob(filteredExprs, exprHandler)
-      ).zipWithIndex
+      )
+
+      val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
+
+      jobs.zipWithIndex
         .map { case (job, idx) => job.run(rand, starts, idx) }
         .parSequence
         .as(Unit)
