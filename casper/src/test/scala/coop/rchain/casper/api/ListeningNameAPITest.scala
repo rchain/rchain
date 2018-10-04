@@ -43,7 +43,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
       Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
     val resultData = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
-      BlockAPI.getListeningNameDataResponse[Id](listeningName)
+      BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
     val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
     val blocks1 = listeningNameResponse1.blockResults.map(_.block)
     data1 should be(List(List(resultData)))
@@ -69,7 +69,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     val listeningName = Par().copy(exprs = Seq(Expr(GInt(0))))
     val resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
     val listeningNameResponse1 =
-      BlockAPI.getListeningNameDataResponse[Id](listeningName)
+      BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
     val data1   = listeningNameResponse1.blockResults.map(_.postBlockData)
     val blocks1 = listeningNameResponse1.blockResults.map(_.block)
     data1 should be(List(List(resultData)))
@@ -95,7 +95,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     nodes(2).receive()
 
     val listeningNameResponse2 =
-      BlockAPI.getListeningNameDataResponse[Id](listeningName)
+      BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
     val data2   = listeningNameResponse2.blockResults.map(_.postBlockData)
     val blocks2 = listeningNameResponse2.blockResults.map(_.block)
     data2 should be(
@@ -128,7 +128,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     nodes(2).receive()
 
     val listeningNameResponse3 =
-      BlockAPI.getListeningNameDataResponse[Id](listeningName)
+      BlockAPI.getListeningNameDataResponse[Id](Int.MaxValue, listeningName)
     val data3   = listeningNameResponse3.blockResults.map(_.postBlockData)
     val blocks3 = listeningNameResponse3.blockResults.map(_.block)
     data3 should be(
@@ -144,6 +144,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     )
     blocks3.length should be(7)
     listeningNameResponse3.length should be(7)
+
+    val listeningNameResponse3UntilDepth =
+      BlockAPI.getListeningNameDataResponse[Id](1, listeningName)
+    listeningNameResponse3UntilDepth.length should be(1)
+
+    val listeningNameResponse3UntilDepth2 =
+      BlockAPI.getListeningNameDataResponse[Id](2, listeningName)
+    listeningNameResponse3UntilDepth2.length should be(2)
 
     nodes.foreach(_.tearDown())
   }
@@ -165,11 +173,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     node.casperEff.addBlock(block)
 
     val listeningNamesShuffled1 =
-      Pars(
-        Seq(
-          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
-          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
-        )
+      List(
+        Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2)))),
+        Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
       )
     val result = WaitingContinuationInfo(
       List(
@@ -179,7 +185,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
       Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
     )
     val listeningNameResponse1 =
-      BlockAPI.getListeningNameContinuationResponse[Id](listeningNamesShuffled1)
+      BlockAPI.getListeningNameContinuationResponse[Id](Int.MaxValue, listeningNamesShuffled1)
     val continuations1 = listeningNameResponse1.blockResults.map(_.postBlockContinuations)
     val blocks1        = listeningNameResponse1.blockResults.map(_.block)
     continuations1 should be(List(List(result)))
@@ -187,14 +193,12 @@ class ListeningNameAPITest extends FlatSpec with Matchers with BlockStoreFixture
     listeningNameResponse1.length should be(1)
 
     val listeningNamesShuffled2 =
-      Pars(
-        Seq(
-          Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
-          Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
-        )
+      List(
+        Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3)))),
+        Par().copy(exprs = Seq(Expr(GInt(1)), Expr(GInt(2))))
       )
     val listeningNameResponse2 =
-      BlockAPI.getListeningNameContinuationResponse[Id](listeningNamesShuffled2)
+      BlockAPI.getListeningNameContinuationResponse[Id](Int.MaxValue, listeningNamesShuffled2)
     val continuations2 = listeningNameResponse2.blockResults.map(_.postBlockContinuations)
     val blocks2        = listeningNameResponse2.blockResults.map(_.block)
     continuations2 should be(List(List(result)))

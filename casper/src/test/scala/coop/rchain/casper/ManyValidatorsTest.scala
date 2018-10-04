@@ -60,6 +60,6 @@ class ManyValidatorsTest
       tmp
     }
     implicit val turanOracleEffect: SafetyOracle[Id] = SafetyOracle.turanOracle[Id]
-    Await.result(Future(BlockAPI.getBlocksResponse[Id]), 1 minute)
+    Await.result(Future(BlockAPI.showBlocks[Id](Int.MaxValue)), 1 minute)
   }
 }

@@ -22,8 +22,9 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 import coop.rchain.shared.PathOps._
+
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
@@ -60,6 +61,54 @@ trait PersistentStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+
+  def checkData(
+      result: Map[
+        scala.collection.immutable.Seq[Par],
+        Row[BindPattern, ListParWithRandom, TaggedContinuation]
+      ]
+  )(channel: Par, data: Seq[Par], rand: Blake2b512Random): Assertion =
+    result should be(
+      HashMap(
+        List(channel) ->
+          Row(
+            List(
+              Datum.create(
+                channel,
+                ListParWithRandom(
+                  data,
+                  rand
+                ),
+                false
+              )
+            ),
+            List()
+          )
+      )
+    )
+
+  def checkContinuation(
+      result: Map[
+        scala.collection.immutable.Seq[Par],
+        Row[BindPattern, ListParWithRandom, TaggedContinuation]
+      ]
+  )(channels: List[Par], bindPatterns: List[BindPattern], body: ParWithRandom): Assertion =
+    result should be(
+      HashMap(
+        channels ->
+          Row(
+            List(),
+            List(
+              WaitingContinuation.create[Par, BindPattern, TaggedContinuation](
+                channels,
+                bindPatterns,
+                TaggedContinuation(ParBody(body)),
+                false
+              )
+            )
+          )
+      )
+    )
 
   "evalExpr" should "handle simple addition" in {
     implicit val errorLog = new ErrorLog()
@@ -137,10 +186,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of Bundle" should "evaluate contents of bundle" in {
     implicit val errorLog = new ErrorLog()
     val splitRand         = rand.splitByte(0)
+    val channel: Par      = GString("channel")
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val bundleSend =
-          Bundle(Send(GString("channel"), List(GInt(7), GInt(8), GInt(9)), false, BitSet()))
+          Bundle(Send(channel, List(GInt(7), GInt(8), GInt(9)), false, BitSet()))
         implicit val env = Env[Par]()
         val resultTask   = reducer.eval(bundleSend)(env, splitRand)
         val inspectTask = for {
@@ -149,26 +199,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runAsync, 3.seconds)
     }
 
-    val channel: Par = GString("channel")
-
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(
-                  Seq(GInt(7), GInt(8), GInt(9)),
-                  splitRand
-                ),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(result)(channel, Seq(GInt(7), GInt(8), GInt(9)), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -215,12 +246,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send" should "place something in the tuplespace." in {
     implicit val errorLog = new ErrorLog()
-
-    val splitRand = rand.splitByte(0)
+    val channel: Par      = GString("channel")
+    val splitRand         = rand.splitByte(0)
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val send =
-          Send(GString("channel"), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+          Send(channel, List(GInt(7), GInt(8), GInt(9)), false, BitSet())
         implicit val env = Env[Par]()
         val resultTask   = reducer.eval(send)(env, splitRand)
         val inspectTask = for {
@@ -229,26 +260,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runAsync, 3.seconds)
     }
 
-    val channel: Par = GString("channel")
-
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(
-                  Seq(GInt(7), GInt(8), GInt(9)),
-                  splitRand
-                ),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(result)(channel, Seq(GInt(7), GInt(8), GInt(9)), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -258,9 +270,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val splitRand = rand.splitByte(0)
     /* @bundle+ { x } !(7) -> x!(7)
      */
-    val x = GString("channel")
+    val channel = GString("channel")
     val send =
-      Send(Bundle(x, writeFlag = true, readFlag = false), Seq(Expr(GInt(7))))
+      Send(Bundle(channel, writeFlag = true, readFlag = false), Seq(Expr(GInt(7))))
 
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
@@ -269,23 +281,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(task.runAsync, 3.seconds)
     }
 
-    val channel: Par = x
-
-    result should be(
-      HashMap(
-        List(channel) -> Row(
-          List(Datum.create(channel, ListParWithRandom(Seq(GInt(7)), splitRand), false)),
-          List()
-        )
-      )
-    )
+    checkData(result)(channel, Seq(GInt(7)), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
     implicit val errorLog = new ErrorLog()
 
-    val splitRand = rand.splitByte(0)
+    val splitRand    = rand.splitByte(0)
+    val channel: Par = GString("channel")
     val result = withTestSpace(errorLog) {
       case TestFixture(space, reducer) =>
         val receive =
@@ -293,7 +297,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             Seq(
               ReceiveBind(
                 Seq(EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(FreeVar(2))),
-                GString("channel")
+                channel
               )
             ),
             Par(),
@@ -308,35 +312,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTask.runAsync, 3.seconds)
     }
-
-    val channels = List[Par](GString("channel"))
-
-    result should be(
-      HashMap(
-        channels ->
-          Row(
-            List(),
-            List(
-              WaitingContinuation
-                .create[Par, BindPattern, TaggedContinuation](
-                  channels,
-                  List(
-                    BindPattern(
-                      List(
-                        EVar(FreeVar(0)),
-                        EVar(FreeVar(1)),
-                        EVar(FreeVar(2))
-                      ),
-                      None
-                    )
-                  ),
-                  TaggedContinuation(ParBody(ParWithRandom(Par(), splitRand))),
-                  false
-                )
-            )
-          )
-      )
+    val bindPattern = BindPattern(
+      List(
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2))
+      ),
+      None
     )
+    checkContinuation(result)(List(channel), List(bindPattern), ParWithRandom(Par(), splitRand))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -366,22 +350,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     val channels = List[Par](y)
-
-    result should be(
-      HashMap(
-        channels ->
-          Row(
-            List(),
-            List(
-              WaitingContinuation.create[Par, BindPattern, TaggedContinuation](
-                channels,
-                List(BindPattern(List(Par()), None)),
-                TaggedContinuation(ParBody(ParWithRandom(Par(), splitRand))),
-                false
-              )
-            )
-          )
-      )
+    checkContinuation(result)(
+      channels,
+      List(BindPattern(List(Par()), None)),
+      ParWithRandom(Par(), splitRand)
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -419,21 +391,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    sendFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
@@ -446,21 +404,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
 
-    receiveFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -497,21 +441,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    sendFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
@@ -524,21 +454,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
 
-    receiveFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -576,21 +492,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    sendFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
@@ -602,21 +504,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
-    receiveFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -657,21 +545,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channels = List[Par](GInt(2))
 
     // Because they are evaluated separately, nothing is split.
-    sendFirstResult should be(
-      HashMap(
-        channels ->
-          Row(
-            List(),
-            List(
-              WaitingContinuation.create[Par, BindPattern, TaggedContinuation](
-                channels,
-                List(BindPattern(List(GInt(2)))),
-                TaggedContinuation(ParBody(ParWithRandom(Par(), mergeRand))),
-                false
-              )
-            )
-          )
-      )
+    checkContinuation(sendFirstResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
@@ -684,21 +561,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
-    receiveFirstResult should be(
-      HashMap(
-        channels ->
-          Row(
-            List(),
-            List(
-              WaitingContinuation.create[Par, BindPattern, TaggedContinuation](
-                channels,
-                List(BindPattern(List(GInt(2)))),
-                TaggedContinuation(ParBody(ParWithRandom(Par(), mergeRand))),
-                false
-              )
-            )
-          )
-      )
+
+    checkContinuation(receiveFirstResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
@@ -710,21 +577,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
-    bothResult should be(
-      HashMap(
-        channels ->
-          Row(
-            List(),
-            List(
-              WaitingContinuation.create[Par, BindPattern, TaggedContinuation](
-                channels,
-                List(BindPattern(List(GInt(2)))),
-                TaggedContinuation(ParBody(ParWithRandom(Par(), mergeRand))),
-                false
-              )
-            )
-          )
-      )
+
+    checkContinuation(bothResult)(
+      channels,
+      List(BindPattern(List(GInt(2)))),
+      ParWithRandom(Par(), mergeRand)
     )
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -766,24 +623,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(
-                  Seq(GPrivateBuilder("one"), GPrivateBuilder("zero")),
-                  splitRand
-                ),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(result)(channel, Seq(GPrivateBuilder("one"), GPrivateBuilder("zero")), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -829,21 +669,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    sendFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(sendFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace(errorLog) {
@@ -856,21 +682,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
-    receiveFirstResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+
+    checkData(receiveFirstResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val interleavedResult = withTestSpace(errorLog) {
@@ -883,21 +696,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         } yield space.store.toMap
         Await.result(inspectTaskInterleaved.runAsync, 3.seconds)
     }
-    interleavedResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), mergeRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+
+    checkData(interleavedResult)(channel, Seq(GString("Success")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -927,18 +727,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    // format: off
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(List(
-                Datum.create(channel,
-                             ListParWithRandom(Seq(EList(List(GInt(7), GInt(8), GInt(9)))), mergeRand),
-                             false)),
-              List())
-      )
-    )
-    // format: on
+    checkData(result)(channel, Seq(EList(List(GInt(7), GInt(8), GInt(9)))), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -981,21 +770,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    indirectResult should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("Success")), splitRand),
-                false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(indirectResult)(channel, Seq(GString("Success")), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1092,19 +867,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val channel: Par = GString("result")
 
     // format: off
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(
-                  Send(GString("result"), List(GString("Success")), false, BitSet())), splitRand),
-                false)),
-            List())
-      )
-    )
+    checkData(result)(channel, Seq(Send(GString("result"), List(GString("Success")), false, BitSet())), splitRand)
     // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
@@ -1152,21 +915,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(Expr(GByteArray(serializedProcess))), splitRand),
-                persist = false
-              )
-            ),
-            List()
-          )
-      )
-    )
+    checkData(result)(channel, Seq(Expr(GByteArray(serializedProcess))), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1190,21 +939,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         val inspectTask = for { _ <- task } yield space.store.toMap
         Await.result(inspectTask.runAsync, 3.seconds)
     }
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(Expr(GByteArray(serializedProcess))), splitRand),
-                persist = false
-              )
-            ),
-            List()
-          )
-      )
-    )
+
+    checkData(result)(channel, Seq(Expr(GByteArray(serializedProcess))), splitRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1229,7 +965,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     result should be(HashMap.empty)
     errorLog.readAndClearErrorVector should be(
-      Vector(ReduceError("Error: toByteArray does not take arguments"))
+      Vector(MethodArgumentNumberMismatch("toByteArray", 0, 1))
     )
   }
 
@@ -1253,19 +989,79 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val channel: Par = GString("result")
 
-    // format: off
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(List(
-                Datum.create(channel,
-                  ListParWithRandom(Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))), splitRand),
-                  persist = false)),
-              List())
-      )
+    checkData(result)(
+      channel,
+      Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
+      splitRand
     )
-    // format: on
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
+    import coop.rchain.models.serialization.implicits._
+    implicit val errorLog         = new ErrorLog()
+    val splitRand                 = rand.splitByte(0)
+    val testString                = "testing testing"
+    val proc: Par                 = GString(testString)
+    val toUtf8BytesCall           = EMethod("toUtf8Bytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par = Send(GString("result"), List[Par](p), false, BitSet())
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        val env         = Env[Par]()
+        val task        = reducer.eval(wrapWithSend(toUtf8BytesCall))(env, splitRand)
+        val inspectTask = for { _ <- task } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    val channel: Par = GString("result")
+
+    checkData(result)(
+      channel,
+      Seq(Expr(GByteArray(ByteString.copyFrom(testString.getBytes)))),
+      splitRand
+    )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  it should "return an error when `toUtf8Bytes` is called with arguments" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesWithArgumentsCall: EMethod =
+      EMethod(
+        "toUtf8Bytes",
+        Par(sends = Seq(Send(GString("result"), List(GString("Success")), false, BitSet()))),
+        List[Par](GInt(1))
+      )
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesWithArgumentsCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(MethodArgumentNumberMismatch("toUtf8Bytes", 0, 1))
+    )
+  }
+
+  it should "return an error when `toUtf8Bytes` is evaluated on a non String" in {
+    implicit val errorLog = new ErrorLog()
+    val toUtfBytesCall    = EMethod("toUtf8Bytes", GInt(44), List[Par]())
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toUtfBytesCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield space.store.toMap
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(Vector(MethodNotDefined("toUtf8Bytes", "Int")))
   }
 
   "variable references" should "be substituted before being used." in {
@@ -1311,23 +1107,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     val channel: Par = GString("result")
-
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("true")), mergeRand),
-                persist = false
-              )
-            ),
-            List()
-          )
-      )
-    )
-
+    checkData(result)(channel, Seq(GString("true")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1359,22 +1139,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val channel: Par = GString("result")
 
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("true")), splitRandResult),
-                persist = false
-              )
-            ),
-            List()
-          )
-      )
-    )
-
+    checkData(result)(channel, Seq(GString("true")), splitRandResult)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1418,23 +1183,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     val channel: Par = GString("result")
-
-    result should be(
-      HashMap(
-        List(channel) ->
-          Row(
-            List(
-              Datum.create(
-                channel,
-                ListParWithRandom(Seq(GString("true")), mergeRand),
-                persist = false
-              )
-            ),
-            List()
-          )
-      )
-    )
-
+    checkData(result)(channel, Seq(GString("true")), mergeRand)
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
@@ -1575,6 +1324,26 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         Await.result(inspectTask.runAsync, 3.seconds)
     }
     result.exprs should be(Seq(Expr(GString("abcdef"))))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
+  }
+
+  "ByteArray('dead') ++ ByteArray('beef)'" should "return ByteArray('deadbeef')" in {
+    implicit val errorLog = new ErrorLog()
+
+    val result = withTestSpace(errorLog) {
+      case TestFixture(space, reducer) =>
+        implicit val env = Env.makeEnv[Par]()
+        val inspectTask = reducer.evalExpr(
+          EPlusPlusBody(
+            EPlusPlus(
+              GByteArray(ByteString.copyFrom(Base16.decode("dead"))),
+              GByteArray(ByteString.copyFrom(Base16.decode("beef")))
+            )
+          )
+        )
+        Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result.exprs should be(Seq(Expr(GByteArray(ByteString.copyFrom(Base16.decode("deadbeef"))))))
     errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 

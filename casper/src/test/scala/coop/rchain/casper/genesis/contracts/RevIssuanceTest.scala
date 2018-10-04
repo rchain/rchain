@@ -1,9 +1,11 @@
 package coop.rchain.casper.genesis.contracts
 
+import cats.Id
+
 import coop.rchain.casper.HashSetCasperTest.createBonds
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{Deploy, DeployData}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{BondingUtil, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.InterpreterUtil.mkTerm
 import coop.rchain.crypto.codec.Base16
@@ -12,6 +14,7 @@ import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
+import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.Files
 
@@ -29,11 +32,13 @@ class RevIssuanceTest extends FlatSpec with Matchers {
     val wallet          = PreWallet(ethAddress, initBalance)
     val (_, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
     val bonds           = createBonds(validators)
+    val posValidators   = bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq
     val genesisDeploys =
       Genesis.defaultBlessedTerms(
         0L,
-        bonds.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq,
-        wallet :: Nil
+        ProofOfStakeParams(1L, Long.MaxValue, posValidators),
+        wallet :: Nil,
+        Faucet.noopFaucet
       )
 
     val secKey = Base16.decode("a68a6e6cca30f81bd24a719f3145d20e8424bd7b396309b0708a16c7d8000b76")
@@ -91,23 +96,9 @@ object RevIssuanceTest {
       secKey: Array[Byte],
       statusOut: String
   )(implicit runtimeManager: RuntimeManager): DeployData = {
-    assert(Base16.encode(Keccak256.hash(Base16.decode(pubKey)).drop(12)) == ethAddress.drop(2))
-    val unlockSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!(["$pubKey", "$statusOut"].toByteArray())  """).right.get
-    val unlockSigData = Keccak256.hash(
-      runtimeManager
-        .captureResults(runtimeManager.emptyStateHash, unlockSigDataTerm)
-        .head
-        .exprs
-        .head
-        .getGByteArray
-        .toByteArray
-    )
-    val unlockSig = Secp256k1.sign(unlockSigData, secKey)
-    assert(Secp256k1.verify(unlockSigData, unlockSig, Base16.decode("04" + pubKey)))
-
+    val code = BondingUtil.preWalletUnlockDeploy[Id](ethAddress, pubKey, secKey, statusOut)
     ProtoUtil.sourceDeploy(
-      s"""@"$ethAddress"!(["$pubKey", "$statusOut"], "${Base16.encode(unlockSig)}")""",
+      code,
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )
@@ -121,26 +112,17 @@ object RevIssuanceTest {
       pubKey: String,
       secKey: Array[Byte]
   )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val transferSigDataTerm =
-      mkTerm(s""" @"__SCALA__"!([$nonce, $amount, "$destination"].toByteArray())  """).right.get
-    val transferSigData = Blake2b256.hash(
-      runtimeManager
-        .captureResults(runtimeManager.emptyStateHash, transferSigDataTerm)
-        .head
-        .exprs
-        .head
-        .getGByteArray
-        .toByteArray
+    val code = BondingUtil.issuanceWalletTransferDeploy(
+      nonce,
+      amount,
+      destination,
+      transferStatusOut,
+      pubKey,
+      secKey
     )
-    val transferSig = Secp256k1.sign(transferSigData, secKey)
 
     ProtoUtil.sourceDeploy(
-      s"""
-       |for(@wallet <- @"$pubKey") {
-       |  @(wallet, "transfer")!($amount, $nonce, "${Base16
-           .encode(transferSig)}", "$destination", "$transferStatusOut")
-       |}
-     """.stripMargin,
+      code,
       System.currentTimeMillis(),
       accounting.MAX_VALUE
     )

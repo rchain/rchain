@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.BlockStore.BlockHash
 import coop.rchain.blockstorage.InMemBlockStore
 import coop.rchain.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.contracts.Faucet
 import coop.rchain.casper.helper.{BlockStoreTestFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.casper.util.comm.CasperPacketHandler.{
@@ -42,9 +43,10 @@ import scala.concurrent.duration._
 
 class CasperPacketHandlerSpec extends WordSpec {
   private def setup() = new {
+    val scheduler      = Scheduler.io("test")
     val runtimeDir     = BlockStoreTestFixture.dbDir
     val activeRuntime  = Runtime.create(runtimeDir, 1024L * 1024)
-    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)
+    val runtimeManager = RuntimeManager.fromRuntime(activeRuntime)(scheduler)
 
     implicit val captureTask       = Capture.taskCapture
     val (genesisSk, genesisPk)     = Ed25519.newKeyPair
@@ -52,15 +54,17 @@ class CasperPacketHandlerSpec extends WordSpec {
     val bonds                      = createBonds(Seq(validatorPk))
     val requiredSigs               = 1
     val deployTimestamp            = 1L
-    val genesis                    = buildGenesis(Seq.empty, bonds, 1L)
+    val genesis                    = buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, Faucet.noopFaucet, 1L)
     val validatorId                = ValidatorIdentity(validatorPk, validatorSk, "ed25519")
-    val scheduler                  = Scheduler.io("test")
     val bap = new BlockApproverProtocol(
       validatorId,
       deployTimestamp,
       runtimeManager,
       bonds,
       Seq.empty,
+      1L,
+      Long.MaxValue,
+      false,
       requiredSigs
     )(scheduler)
     val local: PeerNode = peerNode("src", 40400)
@@ -132,8 +136,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         implicit val ctx = TestScheduler()
         val fixture      = setup()
         import fixture._
-
-        val requiredSigns = 1
 
         val ref =
           Ref.unsafe[Task, CasperPacketHandlerInternal[Task]](
@@ -290,7 +292,6 @@ class CasperPacketHandlerSpec extends WordSpec {
         // interval and duration don't really matter since we don't require and signs from validators
         val bootstrapCasper =
           new BootstrapCasperHandler[Task](runtimeManager, shardId, Some(validatorId), validators)
-        val genesis = HashSetCasperTest.createGenesis(Map.empty)
 
         val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
 
@@ -372,7 +373,9 @@ class CasperPacketHandlerSpec extends WordSpec {
       val fixture = setup()
       import fixture._
 
-      val genesis                = HashSetCasperTest.createGenesis(Map.empty)
+      val (_, validators)        = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+      val bonds                  = HashSetCasperTest.createBonds(validators)
+      val genesis                = HashSetCasperTest.createGenesis(bonds)
       val approvedBlockCandidate = ApprovedBlockCandidate(block = Some(genesis))
       val approvedBlock: ApprovedBlock = ApprovedBlock(
         candidate = Some(approvedBlockCandidate),

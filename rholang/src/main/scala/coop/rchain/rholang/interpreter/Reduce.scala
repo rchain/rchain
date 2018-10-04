@@ -21,6 +21,7 @@ import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
 import SpatialMatcher.spatialMatchAndCharge
+
 import scala.collection.immutable.BitSet
 import scala.util.Try
 
@@ -707,6 +708,12 @@ object Reduce {
                                  STRING_APPEND_COST * (lhs.length + rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
+                       case (GByteArray(lhs), GByteArray(rhs)) =>
+                         for {
+                           _ <- costAccountingAlg.charge(
+                                 PREPEND_COST * lhs.size()
+                               )
+                         } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(PREPEND_COST * lhs.ps.length)
@@ -831,7 +838,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.length != 1) {
-          s.raiseError(ReduceError("Error: nth expects 1 argument"))
+          s.raiseError(errors.MethodArgumentNumberMismatch("nth", 1, args.length))
         } else {
           for {
             nthRaw <- evalToLong(args(0))
@@ -867,7 +874,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.nonEmpty) {
-          s.raiseError(ReduceError("Error: toByteArray does not take arguments"))
+          s.raiseError(MethodArgumentNumberMismatch("toByteArray", 0, args.length))
         } else {
           for {
             exprEvaled <- evalExpr(p)
@@ -885,7 +892,7 @@ object Reduce {
           args: Seq[Par]
       )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
         if (args.nonEmpty) {
-          s.raiseError(ReduceError("Error: hexToBytes does not take arguments"))
+          s.raiseError(MethodArgumentNumberMismatch("hexToBytes", 0, args.length))
         } else {
           p.singleExpr() match {
             case Some(Expr(GString(encoded))) =>
@@ -901,8 +908,28 @@ object Reduce {
                         ba => Applicative[M].pure[Par](Expr(GByteArray(ba)))
                       )
               } yield res
-            case _ =>
-              s.raiseError(ReduceError("Error: hexToBytes can be called only on single strings."))
+            case Some(Expr(other)) =>
+              s.raiseError(MethodNotDefined("hexToBytes", other.typ))
+          }
+        }
+    }
+
+    private[this] val toUtf8Bytes: Method = new Method() {
+
+      override def apply(
+          p: Par,
+          args: Seq[Par]
+      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+        if (args.nonEmpty) {
+          s.raiseError(MethodArgumentNumberMismatch("toUtf8Bytes", 0, args.length))
+        } else {
+          p.singleExpr() match {
+            case Some(Expr(GString(utf8string))) =>
+              for {
+                _ <- costAccountingAlg.charge(hexToByteCost(utf8string))
+              } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
+            case Some(Expr(other)) =>
+              s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
           }
         }
     }
@@ -1307,6 +1334,7 @@ object Reduce {
         "nth"         -> nth,
         "toByteArray" -> toByteArray,
         "hexToBytes"  -> hexToBytes,
+        "toUtf8Bytes" -> toUtf8Bytes,
         "union"       -> union,
         "diff"        -> diff,
         "add"         -> add,

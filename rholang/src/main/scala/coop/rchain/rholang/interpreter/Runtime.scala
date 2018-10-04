@@ -5,7 +5,9 @@ import java.nio.file.{Files, Path}
 import cats.Id
 import cats.mtl.FunctorTell
 import cats.effect.Sync
+import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
@@ -13,6 +15,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.errors.SetupError
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.IReplaySpace
@@ -40,6 +43,46 @@ class Runtime private (
     space.close()
     replaySpace.close()
     context.close()
+  }
+  def injectEmptyRegistryRoot[F[_]](implicit F: Sync[F]): F[Unit] = {
+    // This random value stays dead in the tuplespace, so we can have some fun.
+    // This is from Jeremy Bentham's "Defence of Usury"
+    val rand = Blake2b512Random(
+      ("there can be no such thing as usury: " +
+        "for what rate of interest is there that can naturally be more proper than another?")
+        .getBytes()
+    )
+    implicit val MATCH_UNLIMITED_PHLOS = matchListPar(Cost(Integer.MAX_VALUE))
+    for {
+      spaceResult <- F.delay(
+                      space.produce(
+                        Registry.registryRoot,
+                        ListParWithRandom(Seq(Registry.emptyMap), rand),
+                        false
+                      )
+                    )
+      replayResult <- F.delay(
+                       replaySpace.produce(
+                         Registry.registryRoot,
+                         ListParWithRandom(Seq(Registry.emptyMap), rand),
+                         false
+                       )
+                     )
+      _ <- spaceResult match {
+            case Right(None) =>
+              replayResult match {
+                case Right(None) => F.unit
+                case Right(Some(_)) =>
+                  F.raiseError(
+                    new SetupError("Registry insertion in replay fired continuation.")
+                  )
+                case Left(err) => F.raiseError(err)
+              }
+            case Right(Some(_)) =>
+              F.raiseError(new SetupError("Registry insertion fired continuation."))
+            case Left(err) => F.raiseError(err)
+          }
+    } yield ()
   }
 }
 
@@ -151,16 +194,13 @@ object Runtime {
         )
     }
 
-  /**
-    * TODO this needs to go away when double locking is good enough
-    */
   def setupRSpace(
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
   ): (RhoContext, RhoISpace, RhoReplayISpace) = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
+    def createSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
       val space: RhoISpace = RSpace.create[
         Id,
         Par,
@@ -183,47 +223,22 @@ object Runtime {
     }
     storeType match {
       case InMem =>
-        createCoarseRSpace(Context.createInMemory())
+        createSpace(Context.createInMemory())
       case LMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.create(dataDir, mapSize, true))
-      case FineGrainedLMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        val context: RhoContext = Context.createFineGrained(dataDir, mapSize)
-        val store               = context.createStore(Branch.MASTER)
-        val space: RhoISpace = RSpace.createFineGrained[
-          Id,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](store, Branch.MASTER)
-        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create[
-          Id,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](context, Branch.REPLAY)
-        (context, space, replaySpace)
+        createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.createMixed(dataDir, mapSize))
+        createSpace(Context.createMixed(dataDir, mapSize))
     }
   }
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = FineGrainedLMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
     val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
 
     val errorLog                                  = new ErrorLog()
@@ -236,26 +251,26 @@ object Runtime {
     ): RhoDispatchMap = {
       import BodyRefs._
       Map(
-        STDOUT                     -> SystemProcesses.stdout,
-        STDOUT_ACK                 -> SystemProcesses.stdoutAck(space, dispatcher),
-        STDERR                     -> SystemProcesses.stderr,
-        STDERR_ACK                 -> SystemProcesses.stderrAck(space, dispatcher),
-        ED25519_VERIFY             -> SystemProcesses.ed25519Verify(space, dispatcher),
-        SHA256_HASH                -> SystemProcesses.sha256Hash(space, dispatcher),
-        KECCAK256_HASH             -> SystemProcesses.keccak256Hash(space, dispatcher),
-        BLAKE2B256_HASH            -> SystemProcesses.blake2b256Hash(space, dispatcher),
-        SECP256K1_VERIFY           -> SystemProcesses.secp256k1Verify(space, dispatcher),
-        REG_LOOKUP                 -> (registry.lookup(_)),
-        REG_LOOKUP_CALLBACK        -> (registry.lookupCallback(_)),
-        REG_INSERT                 -> (registry.insert(_)),
-        REG_INSERT_CALLBACK        -> (registry.insertCallback(_)),
-        REG_NONCE_INSERT_CALLBACK  -> (registry.nonceInsertCallback(_)),
-        REG_DELETE                 -> (registry.delete(_)),
-        REG_DELETE_ROOT_CALLBACK   -> (registry.deleteRootCallback(_)),
-        REG_DELETE_CALLBACK        -> (registry.deleteCallback(_)),
-        REG_PUBLIC_LOOKUP          -> (registry.publicLookup(_)),
-        REG_PUBLIC_REGISTER_RANDOM -> (registry.publicRegisterRandom(_)),
-        REG_PUBLIC_REGISTER_SIGNED -> (registry.publicRegisterSigned(_))
+        STDOUT                              -> SystemProcesses.stdout,
+        STDOUT_ACK                          -> SystemProcesses.stdoutAck(space, dispatcher),
+        STDERR                              -> SystemProcesses.stderr,
+        STDERR_ACK                          -> SystemProcesses.stderrAck(space, dispatcher),
+        ED25519_VERIFY                      -> SystemProcesses.ed25519Verify(space, dispatcher),
+        SHA256_HASH                         -> SystemProcesses.sha256Hash(space, dispatcher),
+        KECCAK256_HASH                      -> SystemProcesses.keccak256Hash(space, dispatcher),
+        BLAKE2B256_HASH                     -> SystemProcesses.blake2b256Hash(space, dispatcher),
+        SECP256K1_VERIFY                    -> SystemProcesses.secp256k1Verify(space, dispatcher),
+        REG_LOOKUP                          -> (registry.lookup(_)),
+        REG_LOOKUP_CALLBACK                 -> (registry.lookupCallback(_)),
+        REG_INSERT                          -> (registry.insert(_)),
+        REG_INSERT_CALLBACK                 -> (registry.insertCallback(_)),
+        REG_PUBLIC_REGISTER_INSERT_CALLBACK -> (registry.publicRegisterInsertCallback(_)),
+        REG_DELETE                          -> (registry.delete(_)),
+        REG_DELETE_ROOT_CALLBACK            -> (registry.deleteRootCallback(_)),
+        REG_DELETE_CALLBACK                 -> (registry.deleteCallback(_)),
+        REG_PUBLIC_LOOKUP                   -> (registry.publicLookup(_)),
+        REG_PUBLIC_REGISTER_RANDOM          -> (registry.publicRegisterRandom(_)),
+        REG_PUBLIC_REGISTER_SIGNED          -> (registry.publicRegisterSigned(_))
       )
     }
 

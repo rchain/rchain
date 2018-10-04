@@ -6,7 +6,7 @@ import cats.kernel.Eq
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
-import coop.rchain.casper.genesis.contracts.{PreWallet, ProofOfStakeValidator}
+import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.{ProcessedDeployUtil, RuntimeManager}
 import coop.rchain.catscontrib.Capture
@@ -33,6 +33,9 @@ class BlockApproverProtocol(
     runtimeManager: RuntimeManager,
     bonds: Map[Array[Byte], Long],
     wallets: Seq[PreWallet],
+    minimumBond: Long,
+    maximumBond: Long,
+    faucet: Boolean,
     requiredSigs: Int
 )(implicit scheduler: Scheduler) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
@@ -54,7 +57,10 @@ class BlockApproverProtocol(
         requiredSigs,
         deployTimestamp,
         wallets,
-        _bonds
+        _bonds,
+        minimumBond,
+        maximumBond,
+        faucet
       )
       validCandidate match {
         case Right(_) =>
@@ -97,7 +103,10 @@ object BlockApproverProtocol {
       requiredSigs: Int,
       timestamp: Long,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Long]
+      bonds: Map[ByteString, Long],
+      minimumBond: Long,
+      maximumBond: Long,
+      faucet: Boolean
   )(implicit scheduler: Scheduler): Either[String, Unit] =
     for {
       _ <- (candidate.requiredSigs == requiredSigs)
@@ -110,11 +119,15 @@ object BlockApproverProtocol {
       _ <- (blockBonds == bonds)
             .either(())
             .or("Block bonds don't match expected.")
-      validators              = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-      genesisBlessedContracts = Genesis.defaultBlessedTerms(timestamp, validators, wallets).toSet
-      blockDeploys            = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
-      genesisBlessedTerms     = genesisBlessedContracts.flatMap(_.term)
-      genesisBlessedDeploys   = genesisBlessedContracts.flatMap(_.raw)
+      validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
+      posParams  = ProofOfStakeParams(minimumBond, maximumBond, validators)
+      faucetCode = if (faucet) Faucet.basicWalletFaucet(_) else Faucet.noopFaucet
+      genesisBlessedContracts = Genesis
+        .defaultBlessedTerms(timestamp, posParams, wallets, faucetCode)
+        .toSet
+      blockDeploys          = body.deploys.flatMap(ProcessedDeployUtil.toInternal)
+      genesisBlessedTerms   = genesisBlessedContracts.flatMap(_.term)
+      genesisBlessedDeploys = genesisBlessedContracts.flatMap(_.raw)
       _ <- blockDeploys
             .forall(
               d =>

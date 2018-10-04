@@ -73,9 +73,18 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     result
   }
 
-  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
+  def computeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] =
+    Try(unsafeComputeBonds(hash)) match {
+      case Success(value) => value
+      case Failure(ex) =>
+        ex.printStackTrace()
+        throw ex
+    }
+
+  private def unsafeComputeBonds(hash: StateHash)(implicit scheduler: Scheduler): Seq[Bond] = {
     // TODO: Switch to a read only name
-    val bondsQuery = """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
+    val bondsQuery =
+      """for(@pos <- @"proofOfStake"){ @(pos, "getBonds")!("__SCALA__") }"""
     //TODO: construct directly instead of parsing rholang source
     val bondsQueryTerm = InterpreterUtil.mkTerm(bondsQuery).right.get
     val bondsPar       = captureResults(hash, bondsQueryTerm)
@@ -224,9 +233,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(active: Runtime): RuntimeManager = {
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
     active.space.clear()
     active.replaySpace.clear()
+    active.injectEmptyRegistryRoot[Task].unsafeRunSync
     val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
     assert(hash == replayHash)

@@ -81,7 +81,12 @@ object errors {
   final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
       extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
 
+  final case class SendDataConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Connectives are not allowed in send data: $connectives")
+
   final case class SubstituteError(message: String) extends InterpreterError(message)
+
+  final case class SetupError(message: String) extends InterpreterError(message)
 
   final case class UnrecognizedInterpreterError(throwable: Throwable)
       extends InterpreterError("Unrecognized interpreter error", throwable)

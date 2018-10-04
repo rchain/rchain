@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import java.io.StringReader
+
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -379,6 +381,48 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    }
+  }
+
+  "PSend" should "Not compile if data contains negation" in {
+    val sentData = new ListProc()
+    sentData.add(new PNegation(new PNil()))
+    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
+
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    }
+  }
+
+  "PSend" should "Not compile if data contains conjunction" in {
+    val sentData = new ListProc()
+    sentData.add(new PConjunction(new PNil(), new PNil()))
+    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
+
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    }
+  }
+
+  "PSend" should "Not compile if data contains disjunction" in {
+    val sentData = new ListProc()
+    sentData.add(new PDisjunction(new PNil(), new PNil()))
+    val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
+
+    an[SendDataConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, inputs).value
+    }
+  }
+
+  "PSend" should "Not compile if data contains wildcard" in {
+    an[TopLevelWildcardsNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(_)""")).value()
+    }
+  }
+
+  "PSend" should "Not compile if data contains free variable" in {
+    an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
+      Interpreter.buildNormalizedTerm(new StringReader("""@"x"!(y)""")).value()
     }
   }
 

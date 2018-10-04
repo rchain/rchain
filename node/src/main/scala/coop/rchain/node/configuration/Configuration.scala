@@ -46,7 +46,7 @@ object Configuration {
   private val DefaultTimeout                    = 2000
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultStoreType: StoreType       = FineGrainedLMDB
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -59,6 +59,9 @@ object Configuration {
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
   private val DefaultThreadPoolSize: Int        = 4000
+  private val DefaultMinimumBond: Long          = 1L
+  private val DefaultMaximumBond: Long          = Long.MaxValue
+  private val DefaultHasFaucet: Boolean         = false
 
   private val DefaultBootstrapServer: PeerNode = PeerNode
     .fromAddress(
@@ -116,7 +119,7 @@ object Configuration {
                              else config.flatMap(_.server.flatMap(_.dataDir)).getOrElse(dataDir)
                            )
         _      = System.setProperty("rnode.data.dir", effectiveDataDir.toString)
-        result <- Task.pure(apply(effectiveDataDir, options, config))
+        result <- Task.pure(apply(effectiveDataDir, command, options, config))
         _      <- log.info(s"Starting with profile ${profile.name}")
       } yield result
     } else {
@@ -169,7 +172,10 @@ object Configuration {
             requiredSigs = -1,
             approveGenesisDuration = 100.days,
             approveGenesisInterval = 1.day,
-            deployTimestamp = None
+            deployTimestamp = None,
+            minimumBond = DefaultMinimumBond,
+            maximumBond = DefaultMaximumBond,
+            hasFaucet = DefaultHasFaucet
           ),
           LMDBBlockStore.Config(dataDir.resolve("casper-block-store"), DefaultCasperBlockStoreSize),
           options
@@ -179,31 +185,10 @@ object Configuration {
 
   private def apply(
       dataDir: Path,
+      command: Command,
       options: commandline.Options,
       config: Option[TomlConfiguration]
   ): Configuration = {
-    val command: Command = options.subcommand match {
-      case Some(options.eval)        => Eval(options.eval.fileNames())
-      case Some(options.repl)        => Repl
-      case Some(options.diagnostics) => Diagnostics
-      case Some(options.deploy)      =>
-        //TODO: change the defaults before main net
-        import options.deploy._
-        Deploy(
-          from.getOrElse("0x"),
-          PhloLimit(phloLimit()),
-          PhloPrice(phloPrice()),
-          nonce.getOrElse(0),
-          location()
-        )
-      case Some(options.deployDemo) => DeployDemo
-      case Some(options.propose)    => Propose
-      case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
-      case Some(options.run)        => Run
-      case _                        => Help
-    }
-
     import commandline.Options._
 
     def getOpt[A](
@@ -291,6 +276,11 @@ object Configuration {
       DefaultValidatorSigAlgorithm
     )
     val walletsFile: Option[String] = getOpt(_.run.walletsFile, _.validators.flatMap(_.walletsFile))
+    val minimumBond =
+      get(_.run.minimumBond, _.validators.flatMap(_.minimumBond), DefaultMinimumBond)
+    val maximumBond =
+      get(_.run.maximumBond, _.validators.flatMap(_.maximumBond), DefaultMaximumBond)
+    val hasFaucet = get(_.run.hasFaucet, _.validators.flatMap(_.hasFaucet), DefaultHasFaucet)
     val maxNumOfConnections = get(
       _.run.maxNumOfConnections,
       _.server.flatMap(_.maxNumOfConnections),
@@ -345,6 +335,9 @@ object Configuration {
         numValidators,
         dataDir.resolve("genesis"),
         walletsFile,
+        minimumBond,
+        maximumBond,
+        hasFaucet,
         requiredSigs,
         shardId,
         standalone,
@@ -387,11 +380,19 @@ object Configuration {
       case Some(options.deployDemo) => DeployDemo
       case Some(options.propose)    => Propose
       case Some(options.showBlock)  => ShowBlock(options.showBlock.hash())
-      case Some(options.showBlocks) => ShowBlocks
+      case Some(options.showBlocks) =>
+        import options.showBlocks._
+        ShowBlocks(depth.getOrElse(1))
       case Some(options.run)        => Run
       case Some(options.dataAtName) => DataAtName(options.dataAtName.name())
       case Some(options.contAtName) => ContAtName(options.contAtName.name())
-      case _                        => Help
+      case Some(options.bondingDeployGen) =>
+        import options.bondingDeployGen._
+        BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())
+      case Some(options.faucetBondingDeployGen) =>
+        import options.faucetBondingDeployGen._
+        FaucetBondingDeployGen(amount(), sigAlgorithm(), privateKey(), publicKey())
+      case _ => Help
     }
 }
 
