@@ -1,0 +1,9 @@
+#!/bin/bash
+
+NET=t$DRONE_BUILD_NUMBER.rchain.coop
+PEERCMD="run --bootstrap rnode://cb74ba04085574e9f0102cc13d39f0c72219c5bb@bootstrap.${NET}?protocol=40400&discovery=40404"
+
+python3 -u ./scripts/p2p-test-tool.py -bt -p2 -m2048m -n$NET --peer-command "$PEERCMD"
+rc=$?
+./scripts/p2p-test-tool.py -n$NET -r
+exit $rc
