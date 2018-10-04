@@ -1555,9 +1555,3 @@ class MixedStoreActionsTests
     with StorageActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll
-
-class FineGrainedRSpaceTests
-    extends FineGrainedTestsBase
-    with StorageActionsTests
-    with JoinOperationsTests
-    with BeforeAndAfterAll

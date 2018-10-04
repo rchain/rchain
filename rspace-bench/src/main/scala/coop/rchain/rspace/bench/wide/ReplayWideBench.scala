@@ -40,7 +40,7 @@ class ReplayWideBench {
 
 @State(Scope.Benchmark)
 class ReplayFineBenchState extends ReplayWideBenchState {
-  override def createRuntime(): Runtime = Runtime.create(dbDir, mapSize, StoreType.FineGrainedLMDB)
+  override def createRuntime(): Runtime = Runtime.create(dbDir, mapSize, StoreType.LMDB)
 }
 
 abstract class ReplayWideBenchState extends WideBenchBaseState {
