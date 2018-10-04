@@ -148,16 +148,13 @@ object Runtime {
         )
     }
 
-  /**
-    * TODO this needs to go away when double locking is good enough
-    */
   def setupRSpace(
       dataDir: Path,
       mapSize: Long,
       storeType: StoreType
   ): (RhoContext, RhoISpace, RhoReplayISpace) = {
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-    def createCoarseRSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
+    def createSpace(context: RhoContext): (RhoContext, RhoISpace, RhoReplayISpace) = {
       val space: RhoISpace = RSpace.create[
         Id,
         Par,
@@ -180,47 +177,22 @@ object Runtime {
     }
     storeType match {
       case InMem =>
-        createCoarseRSpace(Context.createInMemory())
+        createSpace(Context.createInMemory())
       case LMDB =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.create(dataDir, mapSize, true))
-      case FineGrainedLMDB =>
-        if (Files.notExists(dataDir)) {
-          Files.createDirectories(dataDir)
-        }
-        val context: RhoContext = Context.createFineGrained(dataDir, mapSize)
-        val store               = context.createStore(Branch.MASTER)
-        val space: RhoISpace = RSpace.createFineGrained[
-          Id,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](store, Branch.MASTER)
-        val replaySpace: RhoReplayISpace = FineGrainedReplayRSpace.create[
-          Id,
-          Par,
-          BindPattern,
-          OutOfPhlogistonsError.type,
-          ListParWithRandom,
-          ListParWithRandomAndPhlos,
-          TaggedContinuation
-        ](context, Branch.REPLAY)
-        (context, space, replaySpace)
+        createSpace(Context.create(dataDir, mapSize, true))
       case Mixed =>
         if (Files.notExists(dataDir)) {
           Files.createDirectories(dataDir)
         }
-        createCoarseRSpace(Context.createMixed(dataDir, mapSize))
+        createSpace(Context.createMixed(dataDir, mapSize))
     }
   }
 
   // TODO: remove default store type
-  def create(dataDir: Path, mapSize: Long, storeType: StoreType = FineGrainedLMDB): Runtime = {
+  def create(dataDir: Path, mapSize: Long, storeType: StoreType = LMDB): Runtime = {
     val (context, space, replaySpace) = setupRSpace(dataDir, mapSize, storeType)
 
     val errorLog                                  = new ErrorLog()
