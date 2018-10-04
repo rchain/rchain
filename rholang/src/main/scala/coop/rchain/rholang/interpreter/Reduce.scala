@@ -175,6 +175,19 @@ object Reduce {
         evalImpl(term, newRand)
       }
 
+      def handle2(start : Int)(texpr : (Expr, Int)) : M[Unit] = {
+        val (expr, idx) = texpr
+        val newRand =
+          if (starts(6) == 1)
+            rand
+          else if (starts(6) > 256)
+            rand.splitShort((start + idx).toShort)
+          else
+            rand.splitByte((start + idx).toByte)
+
+        exprHandler(expr, newRand)
+      }
+
       def mkTermHandler[A](
           impl: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit])
       )(term: A, rand: Blake2b512Random): M[Unit] =
@@ -202,23 +215,12 @@ object Reduce {
         }
 
       List(
-        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(texpr => {
-          val (expr, idx) = texpr
-          val newRand =
-            if (starts(6) == 1)
-              rand
-            else if (starts(6) > 256)
-              rand.splitShort((starts(5) + idx).toShort)
-            else
-              rand.splitByte((starts(5) + idx).toByte)
-
-          exprHandler(expr, newRand)
-        })
         Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(0))),
         Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(1))),
         Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(2))),
         Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(3))),
         Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(mkTermHandler(evalExplicit), starts(4))),
+        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(handle2(starts(5)))
       ).parSequence.as(Unit)
     }
 
