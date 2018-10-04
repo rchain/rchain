@@ -145,7 +145,7 @@ object Reduce {
         else
           rand.splitByte((starts(startIdx) + idx).toByte)
 
-      def apply[A](input: Seq[A], handler: (A, Blake2b512Random) => M[Unit]): EvalJob =
+      private def mkJob[A](input: Seq[A], handler: (A, Blake2b512Random) => M[Unit]): EvalJob =
         new EvalJob() {
           override def run(
               rand: Blake2b512Random,
@@ -159,6 +159,45 @@ object Reduce {
           override def size = input.size
         }
 
+      def apply(
+          exprs: Seq[Expr]
+      )(implicit env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) = {
+
+        def exprHandler(expr: Expr, rand: Blake2b512Random): M[Unit] =
+          expr.exprInstance match {
+            case EVarBody(EVar(v)) =>
+              (for {
+                varref <- eval(v)
+                _      <- eval(varref)(env, rand, costAccountingAlg)
+              } yield ()).handleError(fTell.tell)
+            case e: EMethodBody =>
+              (for {
+                p <- evalExprToPar(Expr(e))
+                _ <- eval(p)(env, rand, costAccountingAlg)
+              } yield ()).handleError(fTell.tell)
+            case _ => s.unit
+          }
+
+        mkJob(exprs, exprHandler)
+      }
+
+      def apply[A](
+          terms: Seq[A],
+          handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+      )(implicit env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) = {
+        def mkTermHandler(
+            impl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+        )(term: A, rand: Blake2b512Random): M[Unit] =
+          impl(term)(env, rand, costAccountingAlg)
+            .handleErrorWith {
+              case e: OutOfPhlogistonsError.type =>
+                s.raiseError(e)
+              case e =>
+                fTell.tell(e) *> s.unit
+            }
+
+        mkJob(terms, mkTermHandler(handler))
+      }
     }
 
     /** WanderUnordered is the non-deterministic analogue
@@ -185,39 +224,13 @@ object Reduce {
         }
       }
 
-      def mkTermHandler[A](
-          impl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
-      )(term: A, rand: Blake2b512Random): M[Unit] =
-        impl(term)(env, rand, costAccountingAlg)
-          .handleErrorWith {
-            case e: OutOfPhlogistonsError.type =>
-              s.raiseError(e)
-            case e =>
-              fTell.tell(e) *> s.unit
-          }
-
-      def exprHandler(expr: Expr, rand: Blake2b512Random): M[Unit] =
-        expr.exprInstance match {
-          case EVarBody(EVar(v)) =>
-            (for {
-              varref <- eval(v)
-              _      <- eval(varref)(env, rand, costAccountingAlg)
-            } yield ()).handleError(fTell.tell)
-          case e: EMethodBody =>
-            (for {
-              p <- evalExprToPar(Expr(e))
-              _ <- eval(p)(env, rand, costAccountingAlg)
-            } yield ()).handleError(fTell.tell)
-          case _ => s.unit
-        }
-
       val jobs = List(
-        EvalJob(par.sends, mkTermHandler[Send](evalExplicit)),
-        EvalJob(par.receives, mkTermHandler[Receive](evalExplicit)),
-        EvalJob(par.news, mkTermHandler[New](evalExplicit)),
-        EvalJob(par.matches, mkTermHandler[Match](evalExplicit)),
-        EvalJob(par.bundles, mkTermHandler[Bundle](evalExplicit)),
-        EvalJob(filteredExprs, exprHandler)
+        EvalJob[Send](par.sends, evalExplicit),
+        EvalJob[Receive](par.receives, evalExplicit),
+        EvalJob[New](par.news, evalExplicit),
+        EvalJob[Match](par.matches, evalExplicit),
+        EvalJob[Bundle](par.bundles, evalExplicit),
+        EvalJob(filteredExprs)
       )
 
       val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
