@@ -399,7 +399,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val bondingDeployGen = new Subcommand("generateBondingDeploys") {
     descr(
-      "Creates the rholang source files needed for bonding. These files must be" +
+      "Creates the rholang source files needed for bonding assuming you have a " +
+        "pre-wallet from the REV issuance. These files must be" +
         "deployed to a node operated by a presently bonded validator. The rho files" +
         "are created in the working directory where the command is executed. Note: " +
         "for security reasons it is best to deploy `unlock*.rho` and `forward*.rho` first" +
@@ -439,6 +440,44 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
   }
   addSubcommand(bondingDeployGen)
+
+  val faucetBondingDeployGen = new Subcommand("generateFaucetBondingDeploys") {
+    descr(
+      "Creates the rholang source files needed for bonding by making use of " +
+        "test net faucet. These files must be" +
+        "deployed to a node operated by a presently bonded validator. The rho files" +
+        "are created in the working directory where the command is executed. Note: " +
+        "for security reasons it is best to deploy `forward*.rho` first" +
+        "and then `bond*.rho` in a separate block afterwards (i.e. only deploy `bond*.rho` " +
+        "after `forward*.rho` has safely been included in a propsed block)."
+    )
+
+    val amount = opt[Long](
+      descr = "The amount of REV to bond. Must be less than or equal to the wallet balance.",
+      validate = _ > 0,
+      required = true
+    )
+
+    val sigAlgorithm = opt[String](
+      descr =
+        "Signature algorithm to be used with the provided keys. Must be one of ed25519 or secp256k1.",
+      validate = (s: String) => { s == "ed25519" || s == "secp256k1" },
+      required = true
+    )
+
+    val publicKey = opt[String](
+      descr = "Hex-encoded public key to be used as the validator id when bonding.",
+      validate = hexCheck,
+      required = true
+    )
+
+    val privateKey = opt[String](
+      descr = "Hex-encoded private key associated with the supplied public key.",
+      validate = hexCheck,
+      required = true
+    )
+  }
+  addSubcommand(faucetBondingDeployGen)
 
   verify()
 }

@@ -439,6 +439,37 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.tearDown()
   }
 
+  it should "allow bonding via the faucet" in {
+    val node = HashSetCasperTestNode.standalone(genesis, validatorKeys.head)
+    import node.casperEff
+    import coop.rchain.catscontrib.effect.implicits._
+
+    implicit val runtimeManager = node.runtimeManager
+    val (sk, pk)                = Ed25519.newKeyPair
+    val pkStr                   = Base16.encode(pk)
+    val amount                  = 314L
+    val forwardCode             = BondingUtil.bondingForwarderDeploy(pkStr, pkStr)
+    val bondingCode             = BondingUtil.faucetBondDeploy[Id](amount, "ed25519", pkStr, sk)
+
+    val forwardDeploy =
+      ProtoUtil.sourceDeploy(forwardCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+    val bondingDeploy =
+      ProtoUtil.sourceDeploy(bondingCode, System.currentTimeMillis(), accounting.MAX_VALUE)
+    val Created(block1) = casperEff.deploy(forwardDeploy) *> casperEff.createBlock
+    val block1Status    = casperEff.addBlock(block1)
+    val Created(block2) = casperEff.deploy(bondingDeploy) *> casperEff.createBlock
+    val block2Status    = casperEff.addBlock(block2)
+
+    val oldBonds = block1.getBody.getPostState.bonds
+    val newBonds = block2.getBody.getPostState.bonds
+
+    block1Status shouldBe Valid
+    block2Status shouldBe Valid
+    (oldBonds.size + 1) shouldBe newBonds.size
+
+    node.tearDown()
+  }
+
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     val nodes = HashSetCasperTestNode.network(validatorKeys.take(2), genesis)
 
