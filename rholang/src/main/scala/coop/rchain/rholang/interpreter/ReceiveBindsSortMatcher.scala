@@ -2,9 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
 import coop.rchain.models.{Par, ReceiveBind, Var}
-import coop.rchain.models.rholang.sort.ReceiveSortMatcher.sortBind
+import coop.rchain.models.rholang.sorter.ReceiveSortMatcher.sortBind
 import cats.implicits._
-import coop.rchain.models.rholang.sort._
+import coop.rchain.models.rholang.sorter._
 import coop.rchain.models.rholang.implicits._
 
 object ReceiveBindsSortMatcher {

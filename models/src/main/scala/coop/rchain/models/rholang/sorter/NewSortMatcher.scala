@@ -1,10 +1,10 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.{Expr, New}
 import cats.implicits._
 
-private[sort] object NewSortMatcher extends Sortable[New] {
+private[sorter] object NewSortMatcher extends Sortable[New] {
   def sortMatch[F[_]: Sync](n: New): F[ScoredTerm[New]] =
     for {
       sortedPar <- Sortable.sortMatch(n.p)

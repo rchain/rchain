@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.Expr.ExprInstance
@@ -7,7 +7,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models._
 import cats.implicits._
 
-private[sort] object GroundSortMatcher extends Sortable[ExprInstance] {
+private[sorter] object GroundSortMatcher extends Sortable[ExprInstance] {
   def sortMatch[F[_]: Sync](g: ExprInstance): F[ScoredTerm[ExprInstance]] =
     g match {
       case gb: GBool =>

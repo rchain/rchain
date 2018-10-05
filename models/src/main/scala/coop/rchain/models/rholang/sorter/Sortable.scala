@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 import cats.effect.Sync
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance.GBool

@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.Var
@@ -6,7 +6,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, Empty, FreeVar, Wildcard}
 import cats.implicits._
 import cats.syntax._
 
-private[sort] object VarSortMatcher extends Sortable[Var] {
+private[sorter] object VarSortMatcher extends Sortable[Var] {
   def sortMatch[F[_]: Sync](v: Var): F[ScoredTerm[Var]] =
     v.varInstance match {
       case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level)).pure[F]
