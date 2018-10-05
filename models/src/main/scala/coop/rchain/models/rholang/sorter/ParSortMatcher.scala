@@ -31,9 +31,14 @@ private[sorter] object ParSortMatcher extends Sortable[Par] {
       )
       parScore = Node(
         Score.PAR,
-        sends.map(_.score) ++ receives.map(_.score) ++ exprs.map(_.score) ++ news
-          .map(_.score) ++ matches.map(_.score) ++ bundles.map(_.score) ++ ids
-          .map(_.score) ++ connectives.map(_.score): _*
+        sends.map(_.score) ++
+          receives.map(_.score) ++
+          exprs.map(_.score) ++
+          news.map(_.score) ++
+          matches.map(_.score) ++
+          bundles.map(_.score) ++
+          connectives.map(_.score) ++
+          ids.map(_.score): _*
       )
     } yield ScoredTerm(sortedPar, parScore)
 }
