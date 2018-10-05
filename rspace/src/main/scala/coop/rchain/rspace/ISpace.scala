@@ -5,6 +5,8 @@ import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
 
+case class Result[R](value: R, persistent: Boolean)
+
 /** The interface for RSpace
   *
   * @tparam C a type representing a channel
@@ -41,7 +43,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]]
+  ): F[Either[E, Option[(Result[K], Seq[Result[R]])]]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
       implicit m: Match[P, E, A, R]
@@ -72,7 +74,7 @@ trait ISpace[F[_], C, P, E, A, R, K] {
     */
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]]
+  ): F[Either[E, Option[(Result[K], Seq[Result[R]])]]]
 
   /** Creates a checkpoint.
     *
