@@ -14,40 +14,34 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
   val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
+  val nonReadableErr = "ReduceError: Trying to read from non-readable channel."
+
   "rho:io:stdout" should "not get intercepted" in {
     val intercept =
       """new stdout(`rho:io:stdout`) in { stdout!("foo", "bar") | for (...@x <- stdout) { stdout!(x) } }"""
 
-    failure(intercept).getMessage.stripLineEnd should endWith(
-      "ReduceError: Trying to read from non-readable channel."
-    )
+    failure(intercept).getMessage.stripLineEnd should endWith(nonReadableErr)
   }
 
   "rho:io:stdoutAck" should "not get intercepted" in {
     val intercept =
       """new ackCh, stdoutAck(`rho:io:stdoutAck`) in { stdoutAck!("foo") | for (@x <- stdoutAck) { stdoutAck!(x, *ackCh) } }"""
 
-    failure(intercept).getMessage.stripLineEnd should endWith(
-      "ReduceError: Trying to read from non-readable channel."
-    )
+    failure(intercept).getMessage.stripLineEnd should endWith(nonReadableErr)
   }
 
   "rho:io:stderr" should "not get intercepted" in {
     val intercept =
       """new stderr(`rho:io:stderr`) in { stderr!("foo", "bar") | for (...@x <- stderr) { stderr!(x) } }"""
 
-    failure(intercept).getMessage.stripLineEnd should endWith(
-      "ReduceError: Trying to read from non-readable channel."
-    )
+    failure(intercept).getMessage.stripLineEnd should endWith(nonReadableErr)
   }
 
   "rho:io:stderrAck" should "not get intercepted" in {
     val intercept =
       """new ackCh, stderrAck(`rho:io:stderrAck`) in { stderrAck!("foo") | for (@x <- stderrAck) { stderrAck!(x, *ackCh) } }"""
 
-    failure(intercept).getMessage.stripLineEnd should endWith(
-      "ReduceError: Trying to read from non-readable channel."
-    )
+    failure(intercept).getMessage.stripLineEnd should endWith(nonReadableErr)
   }
 
   private def failure(rho: String): Throwable =
