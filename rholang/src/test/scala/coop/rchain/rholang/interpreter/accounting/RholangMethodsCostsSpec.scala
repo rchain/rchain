@@ -805,7 +805,7 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
     import coop.rchain.rholang.interpreter.storage.implicits._
     implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
     dbDir = Files.createTempDirectory("rholang-interpreter-test-")
-    context = Context.create(dbDir, mapSize = 1024L * 1024L * 1024L)
+    context = Context.createInMemory()
     space = RSpace.create[
       Id,
       Par,
