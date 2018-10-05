@@ -9,7 +9,7 @@ matrix:
     jdk: openjdk8
     env:
       - SUBPROJECT=core
-    scala: 2.12.4
+    scala: 2.12.7
     sbt_args: -no-colors
     install:
       - ./scripts/install_sbt.sh
@@ -25,7 +25,7 @@ matrix:
     jdk: openjdk10
     env:
       - SUBPROJECT=core-java10
-    scala: 2.12.4
+    scala: 2.12.7
     sbt_args: -no-colors
     before_install:
       - rm "${JAVA_HOME}/lib/security/cacerts"
