@@ -31,7 +31,7 @@ object Main {
       for {
         conf        <- Configuration(args)
         minPoolSize = Math.max(Runtime.getRuntime.availableProcessors(), 2)
-        maxPoolSize = Math.max(conf.server.threadPoolSize, minPoolSize)
+        maxPoolSize = Math.max(conf.server.maxThreadPoolSize, minPoolSize)
         scheduler   = Scheduler.cached("node-io", minPoolSize, maxPoolSize)
         _           <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)
       } yield ()

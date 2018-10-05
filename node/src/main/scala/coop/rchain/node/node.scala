@@ -43,7 +43,7 @@ import monix.execution.schedulers.SchedulerService
 class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
-  private val grpcScheduler = Scheduler.cached("grpc-io", 0, 2000)
+  private val grpcScheduler = Scheduler.cached("grpc-io", 0, 64)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
