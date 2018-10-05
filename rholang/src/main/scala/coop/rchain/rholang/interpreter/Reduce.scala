@@ -126,13 +126,17 @@ object Reduce {
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
-      def run(rand: Blake2b512Random, starts: Vector[Int], startIdx: Int): M[List[Unit]]
+      def run(starts: Vector[Int], startIdx: Int)(
+          env: Env[Par],
+          rand: Blake2b512Random,
+          costAccountingAlg: CostAccountingAlg[M]
+      ): M[List[Unit]]
       def size: Int
     }
 
     private object EvalJob {
 
-      def split(
+      private def split(
           starts: Vector[Int],
           rand: Blake2b512Random,
           startIdx: Int,
@@ -145,50 +149,53 @@ object Reduce {
         else
           rand.splitByte((starts(startIdx) + idx).toByte)
 
-      private def mkJob[A](input: Seq[A], handler: (A, Blake2b512Random) => M[Unit]): EvalJob =
+      private def mkJob[A](
+          input: Seq[A],
+          handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+      ): EvalJob =
         new EvalJob() {
-          override def run(
+          override def run(starts: Vector[Int], startIdx: Int)(
+              env: Env[Par],
               rand: Blake2b512Random,
-              starts: Vector[Int],
-              startIdx: Int
+              costAccountingAlg: CostAccountingAlg[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
-              case (term, idx) => handler(term, split(starts, rand, startIdx, idx))
+              case (term, idx) =>
+                handler(term)(env, split(starts, rand, startIdx, idx), costAccountingAlg)
             }
 
           override def size = input.size
         }
 
-      def apply(
-          exprs: Seq[Expr]
-      )(implicit env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) = {
-
-        def exprHandler(expr: Expr, rand: Blake2b512Random): M[Unit] =
+      def apply(exprs: Seq[Expr]) = {
+        def handler(
+            expr: Expr
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
-                varref <- eval(v)
+                varref <- eval(v)(env, costAccountingAlg)
                 _      <- eval(varref)(env, rand, costAccountingAlg)
               } yield ()).handleError(fTell.tell)
             case e: EMethodBody =>
               (for {
-                p <- evalExprToPar(Expr(e))
+                p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
                 _ <- eval(p)(env, rand, costAccountingAlg)
               } yield ()).handleError(fTell.tell)
             case _ => s.unit
           }
 
-        mkJob(exprs, exprHandler)
+        mkJob(exprs, handler)
       }
 
       def apply[A](
           terms: Seq[A],
-          handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
-      )(implicit env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) = {
-        def mkTermHandler(
-            impl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
-        )(term: A, rand: Blake2b512Random): M[Unit] =
-          impl(term)(env, rand, costAccountingAlg)
+          handlerImpl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+      ) = {
+        def handler(
+            term: A
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
+          handlerImpl(term)(env, rand, costAccountingAlg)
             .handleErrorWith {
               case e: OutOfPhlogistonsError.type =>
                 s.raiseError(e)
@@ -196,8 +203,9 @@ object Reduce {
                 fTell.tell(e) *> s.unit
             }
 
-        mkJob(terms, mkTermHandler(handler))
+        mkJob(terms, handler)
       }
+
     }
 
     /** WanderUnordered is the non-deterministic analogue
@@ -236,7 +244,7 @@ object Reduce {
       val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
       jobs.zipWithIndex
-        .map { case (job, idx) => job.run(rand, starts, idx) }
+        .map { case (job, idx) => job.run(starts, idx)(env, rand, costAccountingAlg) }
         .parSequence
         .as(Unit)
     }
