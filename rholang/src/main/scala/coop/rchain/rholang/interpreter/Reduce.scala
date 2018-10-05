@@ -126,7 +126,7 @@ object Reduce {
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
-      def run(randSplitter: Int => Blake2b512Random)(
+      def run(mkRand: Int => Blake2b512Random)(
           env: Env[Par],
           costAccountingAlg: CostAccountingAlg[M]
       ): M[List[Unit]]
@@ -139,14 +139,14 @@ object Reduce {
           input: Seq[A],
           handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
       ): EvalJob =
-        new EvalJob() {
-          override def run(randSplitter: Int => Blake2b512Random)(
+        new EvalJob {
+          override def run(mkRand: Int => Blake2b512Random)(
               env: Env[Par],
               costAccountingAlg: CostAccountingAlg[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) =>
-                handler(term)(env, randSplitter(idx), costAccountingAlg)
+                handler(term)(env, mkRand(idx), costAccountingAlg)
             }
 
           override def size = input.size
@@ -238,9 +238,9 @@ object Reduce {
 
       jobs.zipWithIndex
         .map {
-          case (job, idx) => {
-            val splitter = split(starts.last, starts(idx), rand)(_)
-            job.run(splitter)(env, costAccountingAlg)
+          case (job, jobIdx) => {
+            def mkRand(termIdx: Int) = split(starts.last, starts(jobIdx), rand)(termIdx)
+            job.run(mkRand)(env, costAccountingAlg)
           }
         }
         .parSequence
