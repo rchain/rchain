@@ -93,7 +93,7 @@ class BlocksResponseAPITest
   implicit val casperEffect: MultiParentCasper[Id] =
     NoOpsCasperEffect[Id](
       HashMap.empty[BlockHash, BlockMessage],
-      Estimator.tips[Id](chain, genesis),
+      Estimator.tips[Id](chain, genesis.blockHash),
       chain
     )(syncId, blockStoreEffect)
   implicit val logEff = new LogStub[Id]

@@ -92,7 +92,7 @@ class CasperPacketHandlerSpec extends WordSpec {
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
           blockDag: BlockDag,
-          estimate: BlockMessage
+          estimateBlockHash: BlockHash
       ): Float = 1.0f
     }
   }

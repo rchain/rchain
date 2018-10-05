@@ -25,16 +25,16 @@ object ProtoUtil {
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
   def isInMainChain(
       dag: BlockDag,
-      candidate: BlockMessage,
+      candidateBlockHash: BlockHash,
       targetBlockHash: BlockHash
   ): Boolean =
-    if (candidate.blockHash == targetBlockHash) {
+    if (candidateBlockHash == targetBlockHash) {
       true
     } else {
       dag.dataLookup.get(targetBlockHash) match {
         case Some(targetBlockMeta) =>
           targetBlockMeta.parents.headOption match {
-            case Some(mainParentHash) => isInMainChain(dag, candidate, mainParentHash)
+            case Some(mainParentHash) => isInMainChain(dag, candidateBlockHash, mainParentHash)
             case None                 => false
           }
         case None => false
@@ -169,8 +169,9 @@ object ProtoUtil {
   def weightMapTotal(weights: Map[ByteString, Long]): Long =
     weights.values.sum
 
-  def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Long = {
-    val sortedWeights = weightMap(blockMessage).values.toVector.sorted
+  def minTotalValidatorWeight(dag: BlockDag, blockHash: BlockHash, maxCliqueMinSize: Int): Long = {
+    // todo(abner) refactor
+    val sortedWeights = dag.dataLookup(blockHash).weightMap.values.toVector.sorted
     sortedWeights.take(maxCliqueMinSize).sum
   }
 
@@ -184,6 +185,14 @@ object ProtoUtil {
       case None             => none[BlockMessage].pure[F]
     }
   }
+
+  def weightFromValidatorByDag(dag: BlockDag, blockHash: BlockHash, validator: Validator): Long =
+    dag
+      .dataLookup(blockHash)
+      .parents
+      .headOption
+      .map(bh => dag.dataLookup(bh).weightMap.getOrElse(validator, 0L))
+      .getOrElse(dag.dataLookup(blockHash).weightMap.getOrElse(validator, 0L))
 
   def weightFromValidator[F[_]: Monad: BlockStore](
       b: BlockMessage,
@@ -384,7 +393,7 @@ object ProtoUtil {
   ): BlockMessage = {
 
     val header = {
-      //TODO refactor casper code to avoid the usage of Option fields in the block datastructures
+      //TODO refactor casper code to avoid the usage of Option fields in the block data structures
       // https://rchain.atlassian.net/browse/RHOL-572
       assert(block.header.isDefined, "A block without a header doesn't make sense")
       block.header.get
