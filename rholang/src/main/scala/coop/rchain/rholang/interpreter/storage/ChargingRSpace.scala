@@ -11,7 +11,8 @@ import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint}
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, Result}
+import coop.rchain.rspace.util._
 
 import scala.collection.immutable.Seq
 
@@ -39,7 +40,7 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+        (Result[TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
@@ -66,7 +67,7 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+        (Result[TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
         for {

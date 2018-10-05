@@ -11,6 +11,9 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rspace.util._
+import coop.rchain.rspace.Result
+
 import monix.eval.Task
 
 import scala.util.Try
@@ -29,7 +32,7 @@ object SystemProcesses {
   private implicit class ProduceOps(
       res: Id[
         Either[OutOfPhlogistonsError.type, Option[
-          (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+          (Result[TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
         ]]
       ]
   ) {
@@ -37,7 +40,7 @@ object SystemProcesses {
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
+        case (cont, channels) => _dispatch(dispatcher)(cont, channels.map(_.value))
       })
   }
 
