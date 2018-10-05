@@ -707,18 +707,20 @@ object Reduce {
                        case (GString(lhs), GString(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 STRING_APPEND_COST * (lhs.length + rhs.length)
+                                 appendCost(lhs.length, rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 PREPEND_COST * (lhs.size() + rhs.size())
+                                 appendCost(lhs.size(), rhs.size())
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
-                           _ <- costAccountingAlg.charge(PREPEND_COST * (lhs.ps.length + rhs.ps.length))
+                           _ <- costAccountingAlg.charge(
+                                 appendCost(lhs.ps.length, rhs.ps.length)
+                               )
                          } yield
                            Expr(
                              EListBody(
