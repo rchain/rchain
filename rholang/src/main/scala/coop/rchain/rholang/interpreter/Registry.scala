@@ -156,7 +156,9 @@ class RegistryImpl[F[_]](
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(
+        // Value to be registered
         EVar(FreeVar(0)),
+        // Return channel to receive URI
         EVar(FreeVar(1))
       ),
       freeCount = 2
@@ -178,20 +180,24 @@ class RegistryImpl[F[_]](
     )
   )
 
-  private val registerSignedRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
-  private val registerSignedPatterns = List(
+  private val publicRegisterSignedRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
+  private val publicRegisterSignedPatterns = List(
     BindPattern(
       Seq(
+        // Public Key
         EVar(FreeVar(0)),
+        // Nonce, Value tuple
         EVar(FreeVar(1)),
+        // Signature
         EVar(FreeVar(2)),
+        // Return channel
         EVar(FreeVar(3))
       ),
       freeCount = 4
     )
   )
   // Testing only
-  private val registerSignedChannels = List[Par](
+  private val publicRegisterSignedChannels = List[Par](
     GPrivate(ByteString.copyFrom(Array[Byte](19)))
   )
 
@@ -223,9 +229,9 @@ class RegistryImpl[F[_]](
             TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef))
           )
       _ <- space.install(
-            registerSignedChannels,
-            registerSignedPatterns,
-            TaggedContinuation(ScalaBodyRef(registerSignedRef))
+            publicRegisterSignedChannels,
+            publicRegisterSignedPatterns,
+            TaggedContinuation(ScalaBodyRef(publicRegisterSignedRef))
           )
     } yield Unit
 

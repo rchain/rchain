@@ -310,12 +310,7 @@ object Runtime {
         (FixedChannels.SECP256K1_VERIFY, 4, None, SECP256K1_VERIFY),
         (FixedChannels.REG_LOOKUP, 2, None, REG_PUBLIC_LOOKUP),
         (FixedChannels.REG_INSERT_RANDOM, 2, None, REG_PUBLIC_REGISTER_RANDOM),
-        (
-          FixedChannels.REG_INSERT_SIGNED,
-          4,
-          None,
-          REG_PUBLIC_REGISTER_SIGNED
-        )
+        (FixedChannels.REG_INSERT_SIGNED, 4, None, REG_PUBLIC_REGISTER_SIGNED)
       )
     }
 
