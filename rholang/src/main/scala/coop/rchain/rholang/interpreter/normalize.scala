@@ -42,12 +42,15 @@ object GroundNormalizeMatcher {
       case gb: GroundBool => BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)
       case gi: GroundInt =>
         GInt(gi.longliteral_.toLong) //TODO raise NumberFormatException in a pure way
-      case gs: GroundString => GString(gs.stringliteral_)
+      case gs: GroundString => GString(stripString(gs.stringliteral_))
       case gu: GroundUri    => GUri(stripUri(gu.uriliteral_))
     }
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
   def stripUri(raw: String): String = raw.substring(1, raw.length - 1)
+  // Similarly, we need to remove quotes from strings, since we are using
+  // a custom string token
+  def stripString(raw: String): String = raw.substring(1, raw.length - 1)
 }
 
 object RemainderNormalizeMatcher {
