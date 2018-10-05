@@ -299,7 +299,7 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
       _       <- startReportJvmMetrics.toEffect
       _ <- TransportLayer[Effect].receive(
             pm => HandleMessages.handle[Effect](pm, defaultTimeout),
-            packet => packetHandler.handlePacket(null, packet).as(()) // FIX-ME
+            blob => packetHandler.handlePacket(blob.sender, blob.packet).as(())
           )
       _ <- NodeDiscovery[Task].discover.executeOn(loopScheduler).start.toEffect
       _ <- Log[Effect].info(s"Listening for traffic on $address.")

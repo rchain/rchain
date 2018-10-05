@@ -123,12 +123,14 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     * This implmementation is temporary, it sequentially sends blob to each peers.
     * TODO Provide solution that stacks blob on a queue that is later consumed
     */
-  def stream(peers: Seq[PeerNode], packet: Packet): Task[Unit] =
+  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
     peers.toList
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(TLBlob().withPacket(packet))
+            stub.stream(
+              TLBlob().withSender(ProtocolHelper.node(blob.sender)).withPacket(blob.packet)
+            )
           }.attempt.flatMap {
             case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
@@ -193,18 +195,18 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       parallelism: Int
   )(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleStreamed: Packet => Task[Unit]
+      handleStreamed: Blob => Task[Unit]
   ): Task[Cancelable] = {
 
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attempt.void
-      case Ask(protocol, sender) if !sender.complete =>
+      case Ask(protocol, handle) if !handle.complete =>
         dispatch(protocol).attempt.map {
-          case Left(e)         => sender.failWith(e)
-          case Right(response) => sender.reply(response)
+          case Left(e)         => handle.failWith(e)
+          case Right(response) => handle.reply(response)
         }.void
-      case StreamMessage(packet) => handleStreamed(packet)
+      case StreamMessage(blob) => handleStreamed(blob)
       case _                 => Task.unit // sender timeout
     }
 
@@ -217,7 +219,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
 
   def receive(
       dispatch: Protocol => Task[CommunicationResponse],
-      handleStreamed: Packet => Task[Unit]
+      handleStreamed: Blob => Task[Unit]
   ): Task[Unit] =
     cell.modify { s =>
       for {

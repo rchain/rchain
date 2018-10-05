@@ -81,7 +81,8 @@ message TLResponse {
 }
 
 message TLBlob {
-  Packet packet = 1;
+  Node   sender = 1;
+  Packet packet = 2;
 }
 
 message TLBlobResponse {

@@ -8,15 +8,17 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared._
 import coop.rchain.comm.protocol.routing._
 
+case class Blob(sender: PeerNode, packet: Packet)
+
 trait TransportLayer[F[_]] {
   def roundTrip(peer: PeerNode, msg: Protocol, timeout: FiniteDuration): F[CommErr[Protocol]]
   def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]]
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]]
   def receive(
       dispatch: Protocol => F[CommunicationResponse],
-      handleStreamed: Packet => F[Unit]
+      handleStreamed: Blob => F[Unit]
   ): F[Unit]
-  def stream(peers: Seq[PeerNode], packet: Packet): F[Unit]
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit]
   def disconnect(peer: PeerNode): F[Unit]
   def shutdown(msg: Protocol): F[Unit]
 }
@@ -53,12 +55,12 @@ sealed abstract class TransportLayerInstances {
       ): EitherT[F, CommError, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(peers, msg))
 
-      def stream(peers: Seq[PeerNode], packet: Packet): EitherT[F, CommError, Unit] =
-        EitherT.liftF(evF.stream(peers, packet))
+      def stream(peers: Seq[PeerNode], blob: Blob): EitherT[F, CommError, Unit] =
+        EitherT.liftF(evF.stream(peers, blob))
 
       def receive(
           dispatch: Protocol => EitherT[F, CommError, CommunicationResponse],
-          handleStreamed: Packet => EitherT[F, CommError, Unit]
+          handleStreamed: Blob => EitherT[F, CommError, Unit]
       ): EitherT[F, CommError, Unit] = {
         val dis: Protocol => F[CommunicationResponse] = msg =>
           dispatch(msg).value.flatMap {
@@ -68,8 +70,8 @@ sealed abstract class TransportLayerInstances {
               ).pure[F]
             case Right(m) => m.pure[F]
           }
-        val hb: Packet => F[Unit] = msg =>
-          handleStreamed(msg).value.flatMap {
+        val hb: Blob => F[Unit] = (b) =>
+          handleStreamed(b).value.flatMap {
             case Left(err) =>
               Log[F].error(s"Error while handling streamed Packet message. Error: ${err.message}")
             case Right(_) => ().pure[F]

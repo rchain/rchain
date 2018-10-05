@@ -247,15 +247,15 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           ): F[Unit] =
             transportLayer.stream(
               List(remote),
-              Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter"))
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
             )
 
           run()
 
           streamDispatcher.received should have length 1
-          val (_, packet) = streamDispatcher.received.head
-          packet.typeId shouldBe ("N/A")
-          packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          val (_, blob) = streamDispatcher.received.head
+          blob.packet.typeId shouldBe ("N/A")
+          blob.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
 
@@ -269,18 +269,18 @@ abstract class TransportLayerSpec[F[_]: Monad, E <: Environment]
           ): F[Unit] =
             transportLayer.stream(
               List(remote1, remote2),
-              Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter"))
+              Blob(local, Packet("N/A", ProtocolHelper.toProtocolBytes("points don't matter")))
             )
 
           run()
 
           streamDispatcher.received should have length 2
-          val (_, packet1) = streamDispatcher.received(0)
-          val (_, packet2) = streamDispatcher.received(1)
-          packet1.typeId shouldBe ("N/A")
-          packet1.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
-          packet2.typeId shouldBe ("N/A")
-          packet2.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          val (_, blob1) = streamDispatcher.received(0)
+          val (_, blob2) = streamDispatcher.received(1)
+          blob1.packet.typeId shouldBe ("N/A")
+          blob1.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
+          blob2.packet.typeId shouldBe ("N/A")
+          blob2.packet.content shouldBe (ProtocolHelper.toProtocolBytes("points don't matter"))
         }
       }
     }

@@ -41,7 +41,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
 
   trait Runtime[A] {
     protected def protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse]
-    protected def streamDispatcher: Dispatcher[F, Packet, Unit]
+    protected def streamDispatcher: Dispatcher[F, Blob, Unit]
     def run(): Result
     trait Result {
       def localNode: PeerNode
@@ -52,7 +52,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   abstract class TwoNodesRuntime[A](
       val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
         Dispatcher.withoutMessageDispatcher[F],
-      val streamDispatcher: Dispatcher[F, Packet, Unit] = Dispatcher.devNullPacketDispatcher[F]
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
@@ -89,7 +89,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   abstract class TwoNodesRemoteDeadRuntime[A](
       val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
         Dispatcher.withoutMessageDispatcher[F],
-      val streamDispatcher: Dispatcher[F, Packet, Unit] = Dispatcher.devNullPacketDispatcher[F]
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
     def execute(transportLayer: TransportLayer[F], local: PeerNode, remote: PeerNode): F[A]
 
@@ -119,7 +119,7 @@ abstract class TransportLayerRuntime[F[_]: Monad, E <: Environment] {
   abstract class ThreeNodesRuntime[A](
       val protocolDispatcher: Dispatcher[F, Protocol, CommunicationResponse] =
         Dispatcher.withoutMessageDispatcher[F],
-      val streamDispatcher: Dispatcher[F, Packet, Unit] = Dispatcher.devNullPacketDispatcher[F]
+      val streamDispatcher: Dispatcher[F, Blob, Unit] = Dispatcher.devNullPacketDispatcher[F]
   ) extends Runtime[A] {
     def execute(
         transportLayer: TransportLayer[F],
@@ -205,7 +205,6 @@ final class Dispatcher[F[_]: Applicative, R, S](
 ) {
   def dispatch(peer: PeerNode): R => F[S] =
     p => {
-      println(s"received $p")
       delay.foreach(Thread.sleep)
       if (!ignore(p))
         receivedMessages.synchronized(receivedMessages += ((peer, p)))
@@ -245,9 +244,8 @@ object Dispatcher {
       ignore = _.message.isDisconnect
     )
 
-  def devNullPacketDispatcher[F[_]: Applicative]: Dispatcher[F, Packet, Unit] =
-    new Dispatcher[F, Packet, Unit](
+  def devNullPacketDispatcher[F[_]: Applicative]: Dispatcher[F, Blob, Unit] =
+    new Dispatcher[F, Blob, Unit](
       kp(())
     )
-
 }
