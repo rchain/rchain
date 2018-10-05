@@ -109,7 +109,7 @@ trait IStore[C, P, A, K] {
   private[rspace] def getTrieUpdateCount: Long =
     _trieUpdateCount.get()
 
-  protected def processTrieUpdate(update: TrieUpdate[C, P, A, K]): Unit
+  protected def processTrieUpdate(txn: TrieTransaction, update: TrieUpdate[C, P, A, K]): Unit
 
   private[rspace] def clearTrieUpdates(): Unit = {
     _trieUpdates.update(const(Seq.empty))
@@ -120,8 +120,9 @@ trait IStore[C, P, A, K] {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
-    collapse(trieUpdates).foreach(processTrieUpdate)
+    val collapsedUpdates = collapse(trieUpdates)
     trieStore.withTxn(trieStore.createTxnWrite()) { txn =>
+      collapsedUpdates.foreach(processTrieUpdate(txn, _))
       trieStore
         .persistAndGetRoot(txn, trieBranch)
         .getOrElse(throw new Exception("Could not get root hash"))

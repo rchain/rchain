@@ -187,12 +187,17 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
-  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+  def insert[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(implicit
+                                                                                    codecK: Codec[K],
+                                                                                    codecV: Codec[V]
+  ): Unit =
+    store.withTxn(store.createTxnWrite()) { insert(store, _, branch, key, value) }
+
+  def insert[T, K, V](store: ITrieStore[T, K, V], txn: T, branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
-  ): Unit =
-    store.withTxn(store.createTxnWrite()) { (txn: T) =>
+  ): Unit = {
       // Get the current root hash
       val currentRootHash: Blake2b256Hash =
         store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
@@ -456,11 +461,17 @@ package object history {
     }
 
   def delete[T, K, V](store: ITrieStore[T, K, V], branch: Branch, key: K, value: V)(
+    implicit
+    codecK: Codec[K],
+    codecV: Codec[V]
+  ): Boolean =
+    store.withTxn(store.createTxnWrite()) { delete(store, _, branch, key, value) }
+
+  def delete[T, K, V](store: ITrieStore[T, K, V], txn: T, branch: Branch, key: K, value: V)(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]
-  ): Boolean =
-    store.withTxn(store.createTxnWrite()) { (txn: T) =>
+  ): Boolean = {
       // We take the current root hash, preventing other threads from operating on the Trie
       val currentRootHash: Blake2b256Hash =
         store.getRoot(txn, branch).getOrElse(throw new InsertException("could not get root"))
