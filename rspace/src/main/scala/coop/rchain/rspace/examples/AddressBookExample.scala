@@ -10,7 +10,7 @@ import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Language.ignore
-import coop.rchain.rspace.util.runKs
+import coop.rchain.rspace.util._
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.Seq

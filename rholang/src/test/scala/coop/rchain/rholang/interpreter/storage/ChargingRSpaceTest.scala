@@ -17,6 +17,7 @@ import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest._
 import coop.rchain.rspace.{Match, _}
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.util._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -185,11 +186,14 @@ object ChargingRSpaceTest {
           ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
+      (Result[TaggedContinuation], immutable.Seq[Result[ListParWithRandomAndPhlos]])
     ]]] =
       rspace
         .consume(channels, patterns, continuation, persist)
-        .map(_.map { case (cont, data) => cont -> data.map(_.withCost(RSPACE_MATCH_PCOST)) })
+        .map(_.map {
+          case (cont, data) =>
+            cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+        })
 
     override def produce(channel: Par, data: ListParWithRandom, persist: Boolean)(
         implicit m: Match[
@@ -199,11 +203,14 @@ object ChargingRSpaceTest {
           ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (TaggedContinuation, immutable.Seq[ListParWithRandomAndPhlos])
+      (Result[TaggedContinuation], immutable.Seq[Result[ListParWithRandomAndPhlos]])
     ]]] =
       rspace
         .produce(channel, data, persist)
-        .map(_.map { case (cont, pars) => cont -> pars.map(_.withCost(RSPACE_MATCH_PCOST)) })
+        .map(_.map {
+          case (cont, data) =>
+            cont -> data.map(r => r.copy(value = r.value.withCost(RSPACE_MATCH_PCOST)))
+        })
 
     override def close(): Id[Unit] = rspace.close()
     override val store: IStore[Par, BindPattern, ListParWithRandom, TaggedContinuation] =

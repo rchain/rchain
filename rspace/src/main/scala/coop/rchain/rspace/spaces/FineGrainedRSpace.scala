@@ -39,7 +39,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   override def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]] =
+  ): F[Either[E, Option[(Result[K], Seq[Result[R]])]]] =
     syncF.delay {
       Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
         if (channels.isEmpty) {
@@ -128,7 +128,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
               logger.debug(
                 s"consume: data found for <patterns: $patterns> at <channels: $channels>"
               )
-              Right(Some((continuation, dataCandidates.map(_.datum.a))))
+              Right(
+                Some(
+                  (
+                    Result(continuation, persist),
+                    dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                  )
+                )
+              )
           }
         }
       }
@@ -136,7 +143,7 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
 
   override def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]] =
+  ): F[Either[E, Option[(Result[K], Seq[Result[R]])]]] =
     syncF.delay {
       Kamon.withSpan(produceSpan.start(), finishSpan = true) {
         val span = Kamon.currentSpan()
@@ -243,7 +250,14 @@ class FineGrainedRSpace[F[_], C, P, E, A, R, K] private[rspace] (
                     }
                 }
               logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              Right(Some(continuation, dataCandidates.map(_.datum.a)))
+              Right(
+                Some(
+                  (
+                    Result(continuation, persistK),
+                    dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+                  )
+                )
+              )
             case Right(None) =>
               logger.debug(s"produce: no matching continuation found")
               span.mark("acquire-write-lock")

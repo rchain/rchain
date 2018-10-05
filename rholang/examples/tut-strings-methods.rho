@@ -1,0 +1,17 @@
+new stdout(`rho:io:stdout`) in {
+
+  // prints 11
+  stdout!("Hello World".length()) |
+
+  // prints llo Wo
+  stdout!("Hello World".slice(2, 8)) |
+
+  // prints Hello World
+  stdout!("Hello " ++ "World") |
+
+  // prints a40be5 as a byte array, not a string
+  stdout!("A40BE5".hexToBytes()) |
+
+  // evaluates to something, but not something useful
+  stdout!("Hello World".hexToBytes())
+}

@@ -1,0 +1,6 @@
+// tuples only support random access
+new stdout(`rho:io:stdout`) in {
+
+  // prints 2 because tuples are 0-indexed
+  stdout!((1,2,3).nth(1))
+}
