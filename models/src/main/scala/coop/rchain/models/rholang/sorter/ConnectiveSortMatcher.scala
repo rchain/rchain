@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -6,7 +6,7 @@ import coop.rchain.models.{Connective, Par, VarRef}
 import coop.rchain.models.rholang.implicits._
 import cats.implicits._
 
-private[sort] object ConnectiveSortMatcher extends Sortable[Connective] {
+private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
   def sortMatch[F[_]: Sync](c: Connective): F[ScoredTerm[Connective]] =
     c.connectiveInstance match {
       case ConnAndBody(cb) =>

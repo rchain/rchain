@@ -1,10 +1,10 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.models.{Bundle, Expr}
 
-private[sort] object BundleSortMatcher extends Sortable[Bundle] {
+private[sorter] object BundleSortMatcher extends Sortable[Bundle] {
   def sortMatch[F[_]: Sync](b: Bundle): F[ScoredTerm[Bundle]] = {
 
     val score: Int = if (b.writeFlag && b.readFlag) {
