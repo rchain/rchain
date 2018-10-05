@@ -133,7 +133,6 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
             GInt(7),
             GInt(8).prepend(EVar(FreeVar(2)), 0)
           ),
-          connectiveUsed = true,
           remainder = Some(FreeVar(0))
         ),
         depth = 0
