@@ -10,7 +10,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   _
 }
 import org.scalatest._
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._

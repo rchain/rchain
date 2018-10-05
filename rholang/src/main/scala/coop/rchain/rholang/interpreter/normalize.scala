@@ -22,7 +22,7 @@ import coop.rchain.models.rholang.implicits._
 import scala.collection.immutable.{BitSet, Vector}
 import scala.collection.convert.ImplicitConversionsToScala._
 import monix.eval.Coeval
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 sealed trait VarSort
 case object ProcSort extends VarSort
