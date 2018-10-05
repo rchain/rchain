@@ -126,9 +126,8 @@ object Reduce {
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
-      def run(randSplitter: (Blake2b512Random, Int) => Blake2b512Random)(
+      def run(randSplitter: Int => Blake2b512Random)(
           env: Env[Par],
-          rand: Blake2b512Random,
           costAccountingAlg: CostAccountingAlg[M]
       ): M[List[Unit]]
       def size: Int
@@ -141,14 +140,13 @@ object Reduce {
           handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
       ): EvalJob =
         new EvalJob() {
-          override def run(randSplitter: (Blake2b512Random, Int) => Blake2b512Random)(
+          override def run(randSplitter: Int => Blake2b512Random)(
               env: Env[Par],
-              rand: Blake2b512Random,
               costAccountingAlg: CostAccountingAlg[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) =>
-                handler(term)(env, randSplitter(rand, idx), costAccountingAlg)
+                handler(term)(env, randSplitter(idx), costAccountingAlg)
             }
 
           override def size = input.size
@@ -211,7 +209,7 @@ object Reduce {
         rand: Blake2b512Random,
         costAccountingAlg: CostAccountingAlg[M]
     ): M[Unit] = {
-      def split(totalSize: Int, termSize: Int)(rand: Blake2b512Random, idx: Int): Blake2b512Random =
+      def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
         if (totalSize == 1)
           rand
         else if (totalSize > 256)
@@ -241,8 +239,8 @@ object Reduce {
       jobs.zipWithIndex
         .map {
           case (job, idx) => {
-            val splitter = split(starts.last, starts(idx))(_, _)
-            job.run(splitter)(env, rand, costAccountingAlg)
+            val splitter = split(starts.last, starts(idx), rand)(_)
+            job.run(splitter)(env, costAccountingAlg)
           }
         }
         .parSequence
