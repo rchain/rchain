@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import com.google.protobuf.ByteString
 import com.google.protobuf.ByteString.ByteIterator

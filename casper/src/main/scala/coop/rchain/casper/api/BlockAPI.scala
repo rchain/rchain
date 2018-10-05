@@ -14,13 +14,13 @@ import coop.rchain.casper._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{BindPattern, Par}
-import coop.rchain.models.rholang.sort.Sortable
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.{Log, SyncLock}
 import coop.rchain.models.serialization.implicits.serializePar
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
-import coop.rchain.models.rholang.sort.Sortable._
+import coop.rchain.models.rholang.sorter.Sortable._
 import scodec.Codec
 
 import scala.collection.immutable

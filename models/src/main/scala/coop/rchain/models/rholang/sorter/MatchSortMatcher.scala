@@ -1,10 +1,10 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.{Expr, Match, MatchCase}
 import cats.implicits._
 
-private[sort] object MatchSortMatcher extends Sortable[Match] {
+private[sorter] object MatchSortMatcher extends Sortable[Match] {
   def sortMatch[F[_]: Sync](m: Match): F[ScoredTerm[Match]] = {
 
     def sortCase(matchCase: MatchCase): F[ScoredTerm[MatchCase]] =

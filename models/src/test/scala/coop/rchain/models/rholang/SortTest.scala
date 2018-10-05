@@ -5,7 +5,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort._
+import coop.rchain.models.rholang.sorter._
 import monix.eval.Coeval
 import org.scalatest._
 

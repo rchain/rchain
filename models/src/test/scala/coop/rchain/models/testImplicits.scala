@@ -5,7 +5,7 @@ import coop.rchain.models.Expr.ExprInstance
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Gen.{const, frequency, resize, sized}
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 import scala.collection.immutable.BitSet
 import monix.eval.Coeval

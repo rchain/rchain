@@ -1,4 +1,4 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.Expr.ExprInstance
@@ -7,7 +7,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import cats.implicits._
 
-private[sort] object ExprSortMatcher extends Sortable[Expr] {
+private[sorter] object ExprSortMatcher extends Sortable[Expr] {
 
   def sortMatch[F[_]: Sync](e: Expr): F[ScoredTerm[Expr]] = {
     def constructExpr(exprInstance: ExprInstance, score: Tree[ScoreAtom]) =
