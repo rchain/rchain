@@ -117,6 +117,8 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       attempt <- if (!validFormat) InvalidUnslashableBlock.pure[F]
                 else if (!validSig) InvalidUnslashableBlock.pure[F]
                 else if (!validSender) InvalidUnslashableBlock.pure[F]
+                else if (validatorId.exists(id => ByteString.copyFrom(id.publicKey) == b.sender))
+                  addEffects(Valid, b).map(_ => Valid)
                 else attemptAdd(b)
       _ <- attempt match {
             case MissingBlocks => ().pure[F]

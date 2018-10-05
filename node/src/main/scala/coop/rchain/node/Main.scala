@@ -33,13 +33,13 @@ object Main {
         minPoolSize = Math.max(Runtime.getRuntime.availableProcessors(), 2)
         maxPoolSize = Math.max(conf.server.maxThreadPoolSize, minPoolSize)
         scheduler   = Scheduler.cached("node-io", minPoolSize, maxPoolSize)
-        _           <- Task.defer(mainProgram(conf, scheduler)).executeOn(scheduler)
+        _           <- Task.defer(mainProgram(conf)(scheduler)).executeOn(scheduler)
       } yield ()
 
     exec.unsafeRunSync(Scheduler.singleThread("main-io"))
   }
 
-  private def mainProgram(conf: Configuration, scheduler: Scheduler): Task[Unit] = {
+  private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     implicit val replService: GrpcReplClient =
       new GrpcReplClient(
         conf.grpcServer.host,
@@ -75,10 +75,9 @@ object Main {
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
       case Run               => nodeProgram(conf, scheduler)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
-        BondingUtil.writeRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)(
-          Task.catsAsync,
-          scheduler
-        )
+        BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
+      case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
+        BondingUtil.writeFaucetBasedRhoFiles[Task](amount, sigAlgorithm, secKey, pubKey)
       case _ => conf.printHelp()
     }
 

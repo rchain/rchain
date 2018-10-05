@@ -13,6 +13,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.util._
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec
@@ -816,6 +817,8 @@ object Registry {
     ByteString
       .copyFrom(Base16.decode("a4fd447dedfc960485983ee817632cf36d79f45fd1796019edfb4a84a81d1697"))
   )
+
+  val emptyMap: Par = EMapBody(ParMap(SortedParMap.empty))
 
   def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
 

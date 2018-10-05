@@ -46,7 +46,7 @@ object Configuration {
   private val DefaultTimeout                    = 2000
   private val DefaultGenesisValidator           = false
   private val DefaultMapSize: Long              = 1024L * 1024L * 1024L
-  private val DefaultStoreType: StoreType       = FineGrainedLMDB
+  private val DefaultStoreType: StoreType       = LMDB
   private val DefaultCasperBlockStoreSize: Long = 1024L * 1024L * 1024L
   private val DefaultNumValidators              = 5
   private val DefaultValidatorSigAlgorithm      = "ed25519"
@@ -389,6 +389,9 @@ object Configuration {
       case Some(options.bondingDeployGen) =>
         import options.bondingDeployGen._
         BondingDeployGen(bondKey(), ethAddr(), amount(), privateKey(), publicKey())
+      case Some(options.faucetBondingDeployGen) =>
+        import options.faucetBondingDeployGen._
+        FaucetBondingDeployGen(amount(), sigAlgorithm(), privateKey(), publicKey())
       case _ => Help
     }
 }

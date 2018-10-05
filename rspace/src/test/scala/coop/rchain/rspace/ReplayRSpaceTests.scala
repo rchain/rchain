@@ -38,7 +38,7 @@ trait ReplayRSpaceTests
       patterns: List[P],
       continuationCreator: Int => K,
       persist: Boolean
-  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, Seq[R])]] =
+  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(Result[K], Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
     }
@@ -50,7 +50,9 @@ trait ReplayRSpaceTests
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
-  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, immutable.Seq[R])]] =
+  )(
+      implicit matcher: Match[P, Nothing, A, R]
+  ): List[Option[(Result[K], immutable.Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.produce(channelCreator(i), datumCreator(i), persist).right.get
     }
@@ -912,39 +914,6 @@ trait InMemoryReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase
   }
 }
 
-trait FineGrainedReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
-  override def withTestSpaces[S](
-      f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      oC: Ordering[C]
-  ): S = {
-
-    implicit val syncF: Sync[Id] = coop.rchain.catscontrib.effect.implicits.syncId
-
-    val dbDir   = Files.createTempDirectory("rchain-storage-test-")
-    val context = Context.createFineGrained[C, P, A, K](dbDir, 1024L * 1024L * 4096L)
-    val space = RSpace.createFineGrained[Id, C, P, E, A, A, K](
-      context.createStore(Branch.MASTER),
-      Branch.MASTER
-    )
-    val replaySpace = FineGrainedReplayRSpace.create[Id, C, P, E, A, A, K](context, Branch.REPLAY)
-
-    try {
-      f(space, replaySpace)
-    } finally {
-      space.close()
-      replaySpace.close()
-      context.close()
-      dbDir.recursivelyDelete()
-    }
-  }
-}
-
 trait FaultyStoreReplayRSpaceTestsBase[C, P, E, A, K] extends ReplayRSpaceTestsBase[C, P, E, A, K] {
   override def withTestSpaces[S](
       f: (IdISpace[C, P, E, A, A, K], IReplaySpace[Id, C, P, E, A, A, K]) => S
@@ -991,11 +960,7 @@ class InMemoryRSpaceTests
     extends InMemoryReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ReplayRSpaceTests {}
 
-class FineGrainedReplayRSpaceTests
-    extends FineGrainedReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
-    with ReplayRSpaceTests {}
-
-class FaultyFineGrainedReplayRSpaceTests
+class FaultyReplayRSpaceTests
     extends FaultyStoreReplayRSpaceTestsBase[String, Pattern, Nothing, String, String]
     with ScalaFutures {
 

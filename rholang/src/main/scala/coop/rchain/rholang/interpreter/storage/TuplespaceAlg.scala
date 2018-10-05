@@ -7,6 +7,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.rholang.interpreter.Dispatch
 import coop.rchain.rholang.interpreter.errors.{OutOfPhlogistonsError, ReduceError}
 import coop.rchain.rspace.pure.PureRSpace
+import coop.rchain.rspace.util._
 import cats.implicits._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}

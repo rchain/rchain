@@ -29,19 +29,6 @@ class WideBench {
   @Threads(1)
   @Warmup(iterations = 2)
   @Measurement(iterations = 5)
-  def wideReduceCoarse(bh: Blackhole, state: CoarseBenchState): Unit = {
-    implicit val scheduler = state.scheduler
-    val result             = state.runTask.unsafeRunSync
-    bh.consume(processErrors(result))
-  }
-
-  @Benchmark
-  @BenchmarkMode(Array(Mode.SingleShotTime))
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  @Fork(value = 1)
-  @Threads(1)
-  @Warmup(iterations = 2)
-  @Measurement(iterations = 5)
   def wideReduceFine(bh: Blackhole, state: FineBenchState): Unit = {
     implicit val scheduler = state.scheduler
     val result             = state.runTask.unsafeRunSync
@@ -51,11 +38,6 @@ class WideBench {
 
 @State(Scope.Benchmark)
 class FineBenchState extends WideBenchState {
-  override def createRuntime() = Runtime.create(dbDir, mapSize, StoreType.FineGrainedLMDB)
-}
-
-@State(Scope.Benchmark)
-class CoarseBenchState extends WideBenchState {
   override def createRuntime() = Runtime.create(dbDir, mapSize, StoreType.LMDB)
 }
 

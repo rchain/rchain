@@ -112,7 +112,7 @@ object RevIssuanceTest {
       pubKey: String,
       secKey: Array[Byte]
   )(implicit runtimeManager: RuntimeManager): DeployData = {
-    val code = BondingUtil.walletTransferDeploy(
+    val code = BondingUtil.issuanceWalletTransferDeploy(
       nonce,
       amount,
       destination,

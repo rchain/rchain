@@ -154,27 +154,4 @@ object Context {
     new MixedContext[C, P, A, K](env, trieStore)
   }
 
-  def createFineGrained[C, P, A, K](
-      path: Path,
-      mapSize: Long,
-      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K]
-  ): LMDBContext[C, P, A, K] = {
-
-    implicit val codecC: Codec[C] = sc.toCodec
-    implicit val codecP: Codec[P] = sp.toCodec
-    implicit val codecA: Codec[A] = sa.toCodec
-    implicit val codecK: Codec[K] = sk.toCodec
-
-    val env = Context.env(path, mapSize, flags)
-
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env, path)
-
-    new LMDBContext[C, P, A, K](env, path, trieStore)
-  }
 }

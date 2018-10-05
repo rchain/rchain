@@ -65,3 +65,9 @@ case class BondingDeployGen(
     secKey: String,
     pubKey: String
 ) extends Command
+case class FaucetBondingDeployGen(
+    amount: Long,
+    sigAlgorithm: String,
+    secKey: String,
+    pubKey: String
+) extends Command

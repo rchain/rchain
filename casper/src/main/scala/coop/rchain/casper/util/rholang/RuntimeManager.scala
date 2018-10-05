@@ -233,9 +233,10 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
 object RuntimeManager {
   type StateHash = ByteString
 
-  def fromRuntime(active: Runtime): RuntimeManager = {
+  def fromRuntime(active: Runtime)(implicit scheduler: Scheduler): RuntimeManager = {
     active.space.clear()
     active.replaySpace.clear()
+    active.injectEmptyRegistryRoot[Task].unsafeRunSync
     val hash       = ByteString.copyFrom(active.space.createCheckpoint().root.bytes.toArray)
     val replayHash = ByteString.copyFrom(active.replaySpace.createCheckpoint().root.bytes.toArray)
     assert(hash == replayHash)
