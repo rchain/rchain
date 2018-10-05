@@ -143,6 +143,18 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParGround)
   }
 
+  it should "use sorted subtrees and their scores in results" in {
+    val s1  = Send(Par())
+    val s2  = Send(Par(receives = List(Receive(List(), Par()))))
+    val p21 = Par(sends = List(s2, s1))
+    val p12 = Par(sends = List(s1, s2))
+
+    assume(p12 == sort(p12).term)
+    assume(p21 != sort(p21).term)
+    assert(sort(p12).term == sort(p21).term)
+    assert(sort(p12) == sort(p21)) //compare .score and all the other properties
+  }
+
   it should "keep order when adding numbers" in {
     val parExpr: Par =
       EPlus(EPlus(GInt(1), GInt(3)), GInt(2))

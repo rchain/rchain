@@ -7,22 +7,24 @@ import cats.implicits._
 private[sorter] object ParSortMatcher extends Sortable[Par] {
   def sortMatch[F[_]: Sync](par: Par): F[ScoredTerm[Par]] =
     for {
-      sends       <- par.sends.toList.traverse(Sortable[Send].sortMatch[F])
-      receives    <- par.receives.toList.traverse(Sortable[Receive].sortMatch[F])
-      exprs       <- par.exprs.toList.traverse(Sortable[Expr].sortMatch[F])
-      news        <- par.news.toList.traverse(Sortable[New].sortMatch[F])
-      matches     <- par.matches.toList.traverse(Sortable[Match].sortMatch[F])
-      bundles     <- par.bundles.toList.traverse(Sortable[Bundle].sortMatch[F])
-      connectives <- par.connectives.toList.traverse(Sortable[Connective].sortMatch[F])
-      ids         = par.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+      sends    <- par.sends.toList.traverse(Sortable[Send].sortMatch[F]).map(_.sorted)
+      receives <- par.receives.toList.traverse(Sortable[Receive].sortMatch[F]).map(_.sorted)
+      exprs    <- par.exprs.toList.traverse(Sortable[Expr].sortMatch[F]).map(_.sorted)
+      news     <- par.news.toList.traverse(Sortable[New].sortMatch[F]).map(_.sorted)
+      matches  <- par.matches.toList.traverse(Sortable[Match].sortMatch[F]).map(_.sorted)
+      bundles  <- par.bundles.toList.traverse(Sortable[Bundle].sortMatch[F]).map(_.sorted)
+      connectives <- par.connectives.toList
+                      .traverse(Sortable[Connective].sortMatch[F])
+                      .map(_.sorted)
+      ids = par.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
       sortedPar = Par(
-        sends = sends.sorted.map(_.term),
-        receives = receives.sorted.map(_.term),
-        exprs = exprs.sorted.map(_.term),
-        news = news.sorted.map(_.term),
-        matches = matches.sorted.map(_.term),
-        bundles = bundles.sorted.map(_.term),
-        connectives = connectives.sorted.map(_.term),
+        sends = sends.map(_.term),
+        receives = receives.map(_.term),
+        exprs = exprs.map(_.term),
+        news = news.map(_.term),
+        matches = matches.map(_.term),
+        bundles = bundles.map(_.term),
+        connectives = connectives.map(_.term),
         ids = ids.map(_.term),
         locallyFree = par.locallyFree,
         connectiveUsed = par.connectiveUsed
