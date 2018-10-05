@@ -64,7 +64,7 @@ trait Registry[F[_]] {
 
   def publicRegisterSigned(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 
-  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
+  def registerInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit]
 }
 
 class RegistryImpl[F[_]](
@@ -101,8 +101,8 @@ class RegistryImpl[F[_]](
   private val lookupPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
       ),
       freeCount = 2
     )
@@ -113,9 +113,9 @@ class RegistryImpl[F[_]](
   private val insertPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2))
       ),
       freeCount = 3
     )
@@ -125,8 +125,8 @@ class RegistryImpl[F[_]](
   private val deletePatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
       ),
       freeCount = 2
     )
@@ -140,40 +140,40 @@ class RegistryImpl[F[_]](
   private val publicLookupPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
       ),
       freeCount = 2
     )
   )
 
   private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-  private val publicRegisterInsertCallbackRef: Long =
-    Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+  private val registerInsertCallbackRef: Long =
+    Runtime.BodyRefs.REG_REGISTER_INSERT_CALLBACK
   // Testing only
   private val publicRegisterRandomChannels =
     List[Par](GPrivate(ByteString.copyFrom(Array[Byte](18))))
   private val publicRegisterRandomPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1))
       ),
       freeCount = 2
     )
   )
 
-  private val publicRegisterInsertCallbackPatterns = List(
+  private val registerInsertCallbackPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true)
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2))
       ),
       freeCount = 3
     ),
     BindPattern(
-      Seq(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+      Seq(EVar(FreeVar(0))),
       freeCount = 1
     )
   )
@@ -182,9 +182,9 @@ class RegistryImpl[F[_]](
   private val registerSignedPatterns = List(
     BindPattern(
       Seq(
-        Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-        Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true),
+        EVar(FreeVar(0)),
+        EVar(FreeVar(1)),
+        EVar(FreeVar(2)),
         EVar(FreeVar(3))
       ),
       freeCount = 4
@@ -231,31 +231,31 @@ class RegistryImpl[F[_]](
 
   private val prefixRetReplacePattern = BindPattern(
     Seq(
-      Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true)
+      EVar(FreeVar(0)),
+      EVar(FreeVar(1)),
+      EVar(FreeVar(2))
     ),
     freeCount = 3
   )
   private val prefixValueRetReplacePattern = BindPattern(
     Seq(
-      Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(3))), connectiveUsed = true)
+      EVar(FreeVar(0)),
+      EVar(FreeVar(1)),
+      EVar(FreeVar(2)),
+      EVar(FreeVar(3))
     ),
     freeCount = 4
   )
   private val parentKeyDataReplacePattern = BindPattern(
     Seq(
-      Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(1))), connectiveUsed = true),
-      Par(exprs = Seq(EVar(FreeVar(2))), connectiveUsed = true)
+      EVar(FreeVar(0)),
+      EVar(FreeVar(1)),
+      EVar(FreeVar(2))
     ),
     freeCount = 3
   )
   private val triePattern = BindPattern(
-    Seq(Par(exprs = Seq(EVar(FreeVar(0))), connectiveUsed = true)),
+    Seq(EVar(FreeVar(0))),
     freeCount = 1
   )
 
@@ -848,8 +848,8 @@ class RegistryImpl[F[_]](
               _ <- handleResult(
                     space.consume(
                       Seq[Par](curryChan, resultChan),
-                      publicRegisterInsertCallbackPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
+                      registerInsertCallbackPatterns,
+                      TaggedContinuation(ScalaBodyRef(registerInsertCallbackRef)),
                       false
                     )
                   )
@@ -893,8 +893,8 @@ class RegistryImpl[F[_]](
               _ <- handleResult(
                     space.consume(
                       Seq[Par](curryChan, resultChan),
-                      publicRegisterInsertCallbackPatterns,
-                      TaggedContinuation(ScalaBodyRef(publicRegisterInsertCallbackRef)),
+                      registerInsertCallbackPatterns,
+                      TaggedContinuation(ScalaBodyRef(registerInsertCallbackRef)),
                       false
                     )
                   )
@@ -909,7 +909,7 @@ class RegistryImpl[F[_]](
       case _ => F.unit
     }
 
-  def publicRegisterInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
+  def registerInsertCallback(args: RootSeq[ListParWithRandomAndPhlos]): F[Unit] =
     args match {
       case Seq(
           ListParWithRandomAndPhlos(Seq(urn, expectedValue, ret), _, callCost),
@@ -945,18 +945,17 @@ object Registry {
   )
 
   object FixedRefs {
-    val lookupRef: Long               = Runtime.BodyRefs.REG_LOOKUP
-    val lookupCallbackRef: Long       = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
-    val insertRef: Long               = Runtime.BodyRefs.REG_INSERT
-    val deleteRef: Long               = Runtime.BodyRefs.REG_DELETE
-    val insertCallbackRef: Long       = Runtime.BodyRefs.REG_INSERT_CALLBACK
-    val nonceInsertCallbackRef: Long  = Runtime.BodyRefs.REG_NONCE_INSERT_CALLBACK
-    val deleteRootCallbackRef: Long   = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
-    val deleteCallbackRef: Long       = Runtime.BodyRefs.REG_DELETE_CALLBACK
-    val publicLookupRef: Long         = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
-    val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-    val publicRegisterInsertCallbackRef: Long =
-      Runtime.BodyRefs.REG_PUBLIC_REGISTER_INSERT_CALLBACK
+    val lookupRef: Long                 = Runtime.BodyRefs.REG_LOOKUP
+    val lookupCallbackRef: Long         = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
+    val insertRef: Long                 = Runtime.BodyRefs.REG_INSERT
+    val deleteRef: Long                 = Runtime.BodyRefs.REG_DELETE
+    val insertCallbackRef: Long         = Runtime.BodyRefs.REG_INSERT_CALLBACK
+    val nonceInsertCallbackRef: Long    = Runtime.BodyRefs.REG_NONCE_INSERT_CALLBACK
+    val deleteRootCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
+    val deleteCallbackRef: Long         = Runtime.BodyRefs.REG_DELETE_CALLBACK
+    val publicLookupRef: Long           = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
+    val publicRegisterRandomRef: Long   = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
+    val registerInsertCallbackRef: Long = Runtime.BodyRefs.REG_REGISTER_INSERT_CALLBACK
     val publicRegisterSignedRef: Long =
       Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
   }

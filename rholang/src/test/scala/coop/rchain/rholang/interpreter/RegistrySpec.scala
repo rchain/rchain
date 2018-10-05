@@ -30,18 +30,18 @@ trait RegistryTester extends PersistentStoreTester {
 
   def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
     Map(
-      lookupRef                       -> registry.lookup,
-      lookupCallbackRef               -> registry.lookupCallback,
-      insertRef                       -> registry.insert,
-      insertCallbackRef               -> registry.insertCallback,
-      nonceInsertCallbackRef          -> registry.nonceInsertCallback,
-      deleteRef                       -> registry.delete,
-      deleteRootCallbackRef           -> registry.deleteRootCallback,
-      deleteCallbackRef               -> registry.deleteCallback,
-      publicLookupRef                 -> registry.publicLookup,
-      publicRegisterRandomRef         -> registry.publicRegisterRandom,
-      publicRegisterInsertCallbackRef -> registry.publicRegisterInsertCallback,
-      publicRegisterSignedRef         -> registry.publicRegisterSigned
+      lookupRef                 -> registry.lookup,
+      lookupCallbackRef         -> registry.lookupCallback,
+      insertRef                 -> registry.insert,
+      insertCallbackRef         -> registry.insertCallback,
+      nonceInsertCallbackRef    -> registry.nonceInsertCallback,
+      deleteRef                 -> registry.delete,
+      deleteRootCallbackRef     -> registry.deleteRootCallback,
+      deleteCallbackRef         -> registry.deleteCallback,
+      publicLookupRef           -> registry.publicLookup,
+      publicRegisterRandomRef   -> registry.publicRegisterRandom,
+      registerInsertCallbackRef -> registry.registerInsertCallback,
+      publicRegisterSignedRef   -> registry.publicRegisterSigned
     )
 
   def withRegistryAndTestSpace[R](
