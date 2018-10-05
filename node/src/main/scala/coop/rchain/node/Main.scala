@@ -29,11 +29,9 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf        <- Configuration(args)
-        minPoolSize = Math.max(Runtime.getRuntime.availableProcessors(), 2)
-        maxPoolSize = Math.max(conf.server.maxThreadPoolSize, minPoolSize)
-        scheduler   = Scheduler.cached("node-io", minPoolSize, maxPoolSize)
-        _           <- Task.defer(mainProgram(conf)(scheduler)).executeOn(scheduler)
+        conf      <- Configuration(args)
+        scheduler = Scheduler.fixedPool("node-io", conf.server.threadPoolSize)
+        _         <- Task.defer(mainProgram(conf)(scheduler)).executeOn(scheduler)
       } yield ()
 
     exec.unsafeRunSync(Scheduler.singleThread("main-io"))

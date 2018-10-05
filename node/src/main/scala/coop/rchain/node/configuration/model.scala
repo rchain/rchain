@@ -22,7 +22,7 @@ case class Server(
     storeType: StoreType,
     maxNumOfConnections: Int,
     maxMessageSize: Int,
-    maxThreadPoolSize: Int
+    threadPoolSize: Int
 )
 
 case class GrpcServer(

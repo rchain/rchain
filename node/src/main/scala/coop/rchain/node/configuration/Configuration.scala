@@ -58,7 +58,7 @@ object Configuration {
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
-  private val DefaultThreadPoolSize: Int        = 3800
+  private val DefaultThreadPoolSize: Int        = Math.max(Runtime.getRuntime.availableProcessors(), 2)
   private val DefaultMinimumBond: Long          = 1L
   private val DefaultMaximumBond: Long          = Long.MaxValue
   private val DefaultHasFaucet: Boolean         = false
