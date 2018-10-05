@@ -215,18 +215,17 @@ class RuntimeManager private (val emptyStateHash: ByteString, runtimeContainer: 
     implicit val rand: Blake2b512Random = Blake2b512Random(
       DeployData.toByteArray(ProtoUtil.stripDeployData(deploy.raw.get))
     )
-    Try(reducer.inj(deploy.term.get).unsafeRunSync) match {
-      case Success(_) =>
-        val errors = errorLog.readAndClearErrorVector()
-        val cost   = CostAccount.toProto(reducer.getAvailablePhlos().unsafeRunSync)
-        cost -> errors
+    reducer.inj(deploy.term.get)
+      .attempt
+      .flatMap(
+        result => {
+          val oldErrors = errorLog.readAndClearErrorVector()
+          val newErrors = result.swap.toSeq.toVector
+          val allErrors = oldErrors |+| newErrors
 
-      case Failure(ex) =>
-        val otherErrors = errorLog.readAndClearErrorVector()
-        val errors      = otherErrors :+ ex
-        val cost        = CostAccount.toProto(reducer.getAvailablePhlos().unsafeRunSync)
-        cost -> errors
-    }
+          reducer.getAvailablePhlos().map(phlos => CostAccount.toProto(phlos) -> allErrors)
+        })
+      .unsafeRunSync
   }
 }
 
