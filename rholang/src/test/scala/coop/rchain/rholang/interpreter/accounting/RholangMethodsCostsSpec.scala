@@ -33,10 +33,8 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
         implicit val errorLog = new ErrorLog()
         val table = Table(
           ("list", "index"),
-          (List.empty[Par], 0),
-          (List.empty[Par], 10),
           (List[Par](GInt(1)), 0),
-          (List[Par](GInt(1), GInt(2)), 100),
+          (List[Par](GInt(1), GInt(2)), 1),
           (Seq.fill[Par](10000)(GInt(1)).toList, 1000)
         )
         forAll(table) {
@@ -44,9 +42,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             withReducer { reducer =>
               val nthMethod    = methodCall("nth", EList(list), List(GInt(arg)))
               implicit val env = Env[Par]()
-              reducer.evalExprToPar(nthMethod).attempt.runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === Cost(10))
+              for {
+                _    <- reducer.evalExprToPar(nthMethod)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === Cost(10))
             }
         }
       }
@@ -74,11 +73,12 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           withReducer { reducer =>
             val toByteArrayMethod = methodCall("toByteArray", par, List.empty)
             implicit val env      = Env[Par]()
-            reducer.evalExprToPar(toByteArrayMethod).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            // because we substitute before calling toByteArray
-            val substitutionCost = Cost(par)
-            assert(cost - substitutionCost === toByteArrayCost(par))
+            for {
+              _    <- reducer.evalExprToPar(toByteArrayMethod)
+              cost <- methodCallCost(reducer)
+              // because we substitute before calling toByteArray
+              substitutionCost = Cost(par)
+            } yield assert(cost - substitutionCost === toByteArrayCost(par))
           }
         }
       }
@@ -101,9 +101,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("hexToBytes", GString(encodedStr), List.empty)
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === hexToByteCost(encodedStr))
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === hexToByteCost(encodedStr))
           }
         }
       }
@@ -128,9 +129,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("union", toRholangMap(baseMap), List(toRholangMap(argMap)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === unionCost(argMap.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === unionCost(argMap.size))
             }
         }
       }
@@ -153,9 +155,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("union", toRholangSet(baseSet), List(toRholangSet(argSet)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === unionCost(argSet.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === unionCost(argSet.size))
             }
         }
       }
@@ -180,9 +183,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("diff", toRholangMap(baseMap), List(toRholangMap(argMap)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === diffCost(argMap.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === diffCost(argMap.size))
             }
         }
       }
@@ -205,9 +209,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("diff", toRholangSet(baseSet), List(toRholangSet(argSet)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === diffCost(argSet.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === diffCost(argSet.size))
             }
         }
       }
@@ -230,9 +235,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("add", toRholangSet(set), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === ADD_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === ADD_COST)
             }
         }
       }
@@ -256,9 +262,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("delete", toRholangSet(set), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === REMOVE_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === REMOVE_COST)
             }
         }
       }
@@ -280,9 +287,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("delete", toRholangMap(map), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === REMOVE_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === REMOVE_COST)
             }
         }
       }
@@ -306,9 +314,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("contains", toRholangSet(set), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === LOOKUP_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === LOOKUP_COST)
             }
         }
       }
@@ -330,9 +339,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("contains", toRholangMap(map), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === LOOKUP_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === LOOKUP_COST)
             }
         }
       }
@@ -356,9 +366,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("get", toRholangMap(map), List(elem))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === LOOKUP_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === LOOKUP_COST)
             }
         }
       }
@@ -382,9 +393,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("getOrElse", toRholangMap(map), List(elem, Par()))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === LOOKUP_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === LOOKUP_COST)
             }
         }
       }
@@ -408,9 +420,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("set", toRholangMap(map), List(elem, Par()))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === LOOKUP_COST)
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === LOOKUP_COST)
             }
         }
       }
@@ -432,9 +445,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("keys", toRholangMap(map), List())
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === KEYS_METHOD_COST)
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === KEYS_METHOD_COST)
           }
         }
       }
@@ -456,9 +470,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("size", toRholangMap(map), List())
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === sizeMethodCost(map.size))
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === sizeMethodCost(map.size))
           }
         }
       }
@@ -478,9 +493,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("size", toRholangSet(set), List())
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === sizeMethodCost(set.size))
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === sizeMethodCost(set.size))
           }
         }
       }
@@ -502,9 +518,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("length", toRholangList(vector), List())
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === LENGTH_METHOD_COST)
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === LENGTH_METHOD_COST)
           }
         }
       }
@@ -523,9 +540,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
           val method       = methodCall("length", Par(exprs = Seq(string)), List())
           implicit val env = Env[Par]()
           withReducer { reducer =>
-            reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-            val cost = methodCallCost(reducer)
-            assert(cost === OP_CALL_COST)
+            for {
+              _    <- reducer.evalExprToPar(method)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === OP_CALL_COST)
           }
         }
       }
@@ -549,9 +567,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("slice", toRholangList(list), List(GInt(from), GInt(to)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === sliceCost(to))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === sliceCost(to))
             }
         }
       }
@@ -562,7 +581,7 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
         implicit val errorLog = new ErrorLog()
         val strings = Table[String, Int, Int, Int](
           ("string", "from", "to", "cost"),
-          ("", 0, 1, 0),
+          ("", 0, 0, 0),
           ("", 1, 0, 0),
           ("abcd", 2, 4, 4),
           (Seq.fill(10000)("").mkString, 10, 100, 90)
@@ -573,9 +592,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
               methodCall("slice", Par(exprs = Seq(GString(string))), List(GInt(from), GInt(to)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).attempt.runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === sliceCost(to))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === sliceCost(to))
             }
         }
       }
@@ -596,9 +616,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = methodCall("slice", Par(exprs = Seq(array)), List(GInt(from), GInt(to)))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).attempt.runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === sliceCost(to))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === sliceCost(to))
             }
         }
       }
@@ -620,9 +641,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPlusPlus(toRholangList(left), toRholangList(right))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === appendCost(left.length, right.length))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === appendCost(left.length, right.length))
             }
         }
       }
@@ -642,9 +664,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPlusPlus(left, right)
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === appendCost(left.value.size(), right.value.size()))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === appendCost(left.value.size(), right.value.size()))
             }
         }
       }
@@ -667,9 +690,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPlusPlus(GString(left), GString(right))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === appendCost(left.length, right.length))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === appendCost(left.length, right.length))
             }
         }
       }
@@ -692,9 +716,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPlusPlus(toRholangMap(left), toRholangMap(right))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === unionCost(right.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === unionCost(right.size))
             }
         }
       }
@@ -717,9 +742,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPlusPlus(toRholangSet(left), toRholangSet(right))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === unionCost(right.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === unionCost(right.size))
             }
         }
       }
@@ -745,9 +771,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
             val method       = EPercentPercent(GString(string), toRholangMap(map))
             implicit val env = Env[Par]()
             withReducer { reducer =>
-              reducer.evalExprToPar(method).runSyncUnsafe(1.second)
-              val cost = methodCallCost(reducer)
-              assert(cost === interpolateCost(string.length, map.size))
+              for {
+                _    <- reducer.evalExprToPar(method)
+                cost <- methodCallCost(reducer)
+              } yield assert(cost === interpolateCost(string.length, map.size))
             }
         }
       }
@@ -757,11 +784,10 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
   def methodCall(method: String, target: Par, arguments: List[Par]): Expr =
     EMethod(method, target, arguments)
 
-  def methodCallCost(reducer: ChargingReducer[Task]): Cost =
+  def methodCallCost(reducer: ChargingReducer[Task]): Task[Cost] =
     reducer
       .getAvailablePhlos()
       .map(ca => Cost(Integer.MAX_VALUE) - ca.cost - METHOD_CALL_COST)
-      .runSyncUnsafe(1.second)
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])
@@ -791,10 +817,13 @@ class RholangMethodsCostsSpec extends WordSpec with TripleEqualsSupport with Bef
 
   def emptyString: String = ""
 
-  def withReducer[R](f: ChargingReducer[Task] => R)(implicit errLog: ErrorLog): R = {
+  def withReducer[R](f: ChargingReducer[Task] => Task[R])(implicit errLog: ErrorLog): R = {
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
-    reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
-    f(reducer)
+    val test = for {
+      _   <- reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE))
+      res <- f(reducer)
+    } yield res
+    test.runSyncUnsafe(3.seconds)
   }
 
   private var dbDir: Path         = null
