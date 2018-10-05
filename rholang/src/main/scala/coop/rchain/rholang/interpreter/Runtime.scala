@@ -271,10 +271,10 @@ object Runtime {
     }
 
     val urnMap: Map[String, Par] = Map(
-      "rho:io:stdout"                -> FixedChannels.STDOUT,
-      "rho:io:stdoutAck"             -> FixedChannels.STDOUT_ACK,
-      "rho:io:stderr"                -> FixedChannels.STDERR,
-      "rho:io:stderrAck"             -> FixedChannels.STDERR_ACK,
+      "rho:io:stdout"                -> Bundle(FixedChannels.STDOUT, writeFlag = true),
+      "rho:io:stdoutAck"             -> Bundle(FixedChannels.STDOUT_ACK, writeFlag = true),
+      "rho:io:stderr"                -> Bundle(FixedChannels.STDERR, writeFlag = true),
+      "rho:io:stderrAck"             -> Bundle(FixedChannels.STDERR_ACK, writeFlag = true),
       "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
       "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
     )
