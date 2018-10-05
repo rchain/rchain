@@ -126,7 +126,7 @@ object Reduce {
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
-      def run(starts: Vector[Int], startIdx: Int)(
+      def run(totalSize: Int, termSize: Int)(
           env: Env[Par],
           rand: Blake2b512Random,
           costAccountingAlg: CostAccountingAlg[M]
@@ -136,32 +136,30 @@ object Reduce {
 
     private object EvalJob {
 
-      private def split(
-          starts: Vector[Int],
+      private def split(totalSize: Int, termSize: Int)(
           rand: Blake2b512Random,
-          startIdx: Int,
           idx: Int
       ): Blake2b512Random =
-        if (starts.last == 1)
+        if (totalSize == 1)
           rand
-        else if (starts.last > 256)
-          rand.splitShort((starts(startIdx) + idx).toShort)
+        else if (totalSize > 256)
+          rand.splitShort((termSize + idx).toShort)
         else
-          rand.splitByte((starts(startIdx) + idx).toByte)
+          rand.splitByte((termSize + idx).toByte)
 
       private def mkJob[A](
           input: Seq[A],
           handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
       ): EvalJob =
         new EvalJob() {
-          override def run(starts: Vector[Int], startIdx: Int)(
+          override def run(totalSize: Int, termSize: Int)(
               env: Env[Par],
               rand: Blake2b512Random,
               costAccountingAlg: CostAccountingAlg[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) =>
-                handler(term)(env, split(starts, rand, startIdx, idx), costAccountingAlg)
+                handler(term)(env, split(totalSize, termSize)(rand, idx), costAccountingAlg)
             }
 
           override def size = input.size
@@ -244,7 +242,7 @@ object Reduce {
       val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
 
       jobs.zipWithIndex
-        .map { case (job, idx) => job.run(starts, idx)(env, rand, costAccountingAlg) }
+        .map { case (job, idx) => job.run(starts.last, starts(idx))(env, rand, costAccountingAlg) }
         .parSequence
         .as(Unit)
     }
