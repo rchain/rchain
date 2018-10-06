@@ -17,5 +17,10 @@ new builtinsStore, activeStore in {
       builtinsStore!(builtins) |
       ret!(builtins.get(title))
     }
+  } |
+  contract @(*StopGap, "done")() = {
+    for (_ <- activeStore) {
+      activeStore!(false)
+    }
   }
 }
