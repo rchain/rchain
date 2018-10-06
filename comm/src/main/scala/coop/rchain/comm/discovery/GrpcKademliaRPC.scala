@@ -33,6 +33,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
                   .nonCancelingTimeout(timeout)
                   .attempt
       _ <- Task.delay(channel.shutdown())
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield pongErr.fold(kp(false), kp(true))
 
   def lookup(key: Seq[Byte], peer: PeerNode): Task[Seq[PeerNode]] =
@@ -48,6 +49,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
                       .nonCancelingTimeout(timeout)
                       .attempt
       _ <- Task.delay(channel.shutdown())
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield
       responseErr.fold(
         kp(Seq.empty[PeerNode]),
@@ -61,6 +63,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .executor(scheduler)
         .addService(
           KademliaGrpcMonix
             .bindService(new SimpleKademliaRPCService(pingHandler, lookupHandler), scheduler)
@@ -75,6 +78,7 @@ class GrpcKademliaRPC(src: PeerNode, port: Int, timeout: FiniteDuration)(
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.udpPort)
+              .executor(scheduler)
               .usePlaintext()
               .build()
           }

@@ -61,6 +61,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       c <- Task.delay {
             NettyChannelBuilder
               .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
+              .executor(scheduler)
               .maxInboundMessageSize(maxMessageSize)
               .negotiationType(NegotiationType.TLS)
               .sslContext(clientSslContext)
@@ -110,6 +111,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                  case Some(PeerUnavailable()) => disconnect(peer)
                  case _                       => Task.unit
                }
+      _ <- Task.unit.asyncBoundary // return control to caller thread
     } yield result
 
   private def transport(peer: PeerNode, enforce: Boolean)(
@@ -197,18 +199,19 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     def dispatchInternal: ServerMessage => Task[Unit] = {
       // TODO: consider logging on failure (Left)
       case Tell(protocol) => dispatch(protocol).attempt.void
-      case Ask(protocol, sender) =>
+      case Ask(protocol, sender) if !sender.complete =>
         dispatch(protocol).attempt.map {
           case Left(e)         => sender.failWith(e)
           case Right(response) => sender.reply(response)
         }.void
       case BlobMessage(blob) => handleBlob(blob)
+      case _                 => Task.unit // sender timeout
     }
 
     Task.delay {
       new TcpServerObservable(port, serverSslContext, maxMessageSize)
         .mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()
+        .subscribe()(Scheduler.computation(parallelism, "tl-dispatcher"))
     }
   }
 
@@ -224,7 +227,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
                        new RuntimeException("TransportLayer server is already started")
                      )
                    case _ =>
-                     val parallelism = Runtime.getRuntime.availableProcessors()
+                     val parallelism = Math.max(Runtime.getRuntime.availableProcessors(), 2)
                      receiveInternal(parallelism)(dispatch, handleBlob)
                  }
       } yield s.copy(server = Some(server))

@@ -1,6 +1,5 @@
 package coop.rchain.node.api
 
-import cats._
 import cats.effect.Sync
 
 import coop.rchain.blockstorage.BlockStore
@@ -36,6 +35,7 @@ object GrpcServer {
     Task.delay {
       NettyServerBuilder
         .forPort(port)
+        .executor(scheduler)
         .maxMessageSize(maxMessageSize)
         .addService(ReplGrpcMonix.bindService(new ReplGrpcService(runtime), scheduler))
         .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, scheduler))
@@ -49,6 +49,7 @@ object GrpcServer {
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
+        .executor(scheduler)
         .maxMessageSize(maxMessageSize)
         .addService(CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, scheduler))
         .build

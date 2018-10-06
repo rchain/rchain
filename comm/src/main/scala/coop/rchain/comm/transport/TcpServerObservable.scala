@@ -23,13 +23,13 @@ class TcpServerObservable(
     serverSslContext: SslContext,
     maxMessageSize: Int,
     tellBufferSize: Int = 1024,
-    askBufferSize: Int = 128,
+    askBufferSize: Int = 1024,
     blobBufferSize: Int = 32,
     askTimeout: FiniteDuration = 5.second
-) extends Observable[ServerMessage] {
+)(implicit scheduler: Scheduler)
+    extends Observable[ServerMessage] {
 
   def unsafeSubscribeFn(subscriber: Subscriber[ServerMessage]): Cancelable = {
-    implicit val scheduler: Scheduler = subscriber.scheduler
 
     val subjectTell        = ConcurrentSubject.publishToOne[ServerMessage](DropNew(tellBufferSize))
     val subjectAsk         = ConcurrentSubject.publishToOne[ServerMessage](DropNew(askBufferSize))
@@ -41,26 +41,30 @@ class TcpServerObservable(
       def tell(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            Task.fromFuture(subjectTell.onNext(Tell(protocol)).map(_ => noResponse))
+            Task.delay {
+              subjectTell.onNext(Tell(protocol))
+              noResponse
+            }
           }
 
       def ask(request: TLRequest): Task[TLResponse] =
         request.protocol
           .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-            val p = ReplyPromise(askTimeout)
-            val result = for {
-              _     <- Task.fromFuture(subjectAsk.onNext(Ask(protocol, p)))
-              reply <- p.task
-            } yield
-              reply match {
+            Task
+              .create[CommunicationResponse] { (s, cb) =>
+                val reply = Reply(cb)
+                subjectAsk.onNext(Ask(protocol, reply))
+                s.scheduleOnce(askTimeout)(reply.failWith(new TimeoutException))
+                Cancelable.empty
+              }
+              .map {
                 case NotHandled(error)            => internalServerError(error.message)
                 case HandledWitoutMessage         => noResponse
                 case HandledWithMessage(response) => returnProtocol(response)
               }
-
-            result.onErrorRecover {
-              case _: TimeoutException => internalServerError(CommError.timeout.message)
-            }
+              .onErrorRecover {
+                case _: TimeoutException => internalServerError(CommError.timeout.message)
+              }
           }
 
       def stream(request: TLBlob): Task[TLBlobResponse] = Task.delay {
@@ -87,6 +91,7 @@ class TcpServerObservable(
 
     val server = NettyServerBuilder
       .forPort(port)
+      .executor(scheduler)
       .maxMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
       .addService(RoutingGrpcMonix.bindService(service, scheduler))

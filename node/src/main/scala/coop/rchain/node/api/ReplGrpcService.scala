@@ -38,8 +38,7 @@ import Interpreter._
 import coop.rchain.rholang.interpreter.accounting.CostAccount
 import storage.StoragePrinter
 
-private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Scheduler)
-    extends ReplGrpcMonix.Repl {
+private[api] class ReplGrpcService(runtime: Runtime) extends ReplGrpcMonix.Repl {
   def exec(reader: Reader): Task[ReplResponse] =
     Task
       .coeval(buildNormalizedTerm(reader))
@@ -53,7 +52,7 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
         case Right(term) =>
           runEvaluate(runtime, term).attempt.map {
             case Left(ex) => s"Caught boxed exception: $ex"
-            case Right(EvaluateResult(cost, errors)) => {
+            case Right(EvaluateResult(cost, errors)) =>
               val errorStr =
                 if (errors.isEmpty)
                   ""
@@ -63,7 +62,6 @@ private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Schedul
                     .mkString("Errors received during evaluation:\n", "\n", "\n")
               s"Deployment cost: $cost\n" +
                 s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
-            }
           }
       }
       .map(ReplResponse(_))

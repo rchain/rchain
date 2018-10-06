@@ -29,15 +29,12 @@ object Main {
 
     val exec: Task[Unit] =
       for {
-        conf     <- Configuration(args)
-        poolSize = conf.server.threadPoolSize
-        //TODO create separate scheduler for casper
-        scheduler = Scheduler.fixedPool("node-io", poolSize)
-        _         <- Task.unit.asyncBoundary(scheduler)
-        _         <- mainProgram(conf)(scheduler)
+        conf      <- Configuration(args)
+        scheduler = Scheduler.fixedPool("node-io", conf.server.threadPoolSize)
+        _         <- Task.defer(mainProgram(conf)(scheduler)).executeOn(scheduler)
       } yield ()
 
-    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
+    exec.unsafeRunSync(Scheduler.singleThread("main-io"))
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -74,7 +71,7 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf)
+      case Run               => nodeProgram(conf, scheduler)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
@@ -92,10 +89,10 @@ object Main {
     )
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
+  private def nodeProgram(conf: Configuration, scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host).main.value
+      result <- new NodeRuntime(conf, host, scheduler).main.value
       _ <- result match {
             case Right(_) =>
               Task.unit
