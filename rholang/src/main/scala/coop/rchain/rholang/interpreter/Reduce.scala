@@ -748,19 +748,20 @@ object Reduce {
                        case (GString(lhs), GString(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.length, rhs.length)
+                                 stringAppendCost(lhs.length, rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.size(), rhs.size())
+                                 byteArrayAppendCost(lhs)
                                )
+                           _ = println(s"byteArray ${lhs} append cost ${byteArrayAppendCost(lhs)}")
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.ps.length, rhs.ps.length)
+                                 listAppendCost(rhs.value.ps.toVector)
                                )
                          } yield
                            Expr(
