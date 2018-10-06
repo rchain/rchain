@@ -2,16 +2,22 @@
 
 //requires MakeMint, BasicWallet
 
-contract @"BasicWalletFaucet"(@mint, return) = {
-  new this in {
-    contract this(@amount, @algorithm, @publicKey, return) = {
-      new walletPurseCh in {
-        @(mint, "makePurse")!(amount, *walletPurseCh) |
-        for(@walletPurse <- walletPurseCh) {
-          @"BasicWallet"!(walletPurse, algorithm, publicKey, *return)
-        }
+new BasicWalletFaucet, StopGap(`rho:StopGap`), ack, bwret in {
+  @(*StopGap, "set")!("BasicWalletFaucet", bundle+{*BasicWalletFaucet}, *ack) |
+  @(*StopGap, "get")!("BasicWallet", bwret) |
+  for (_ <- ack; BasicWallet <- bwret) {
+    contract BasicWalletFaucet(@mint, return) = {
+      new this in {
+        contract this(@amount, @algorithm, @publicKey, return) = {
+          new walletPurseCh, ret in {
+            @(mint, "makePurse")!(amount, *walletPurseCh) |
+            for(@walletPurse <- walletPurseCh) {
+              BasicWallet!(walletPurse, algorithm, publicKey, *return)
+            }
+          }
+        } |
+        return!(*this)
       }
-    } |
-    return!(*this)
+    }
   }
 }

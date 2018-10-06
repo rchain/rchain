@@ -1,0 +1,14 @@
+new builtins in {
+  builtins!({}) |
+  contract @(*StopGap, "set")(@title, @value) = {
+    for (builtinsMap <- builtins) {
+      builtins!(builtinsMap.set(title, value))
+    }
+  } |
+  contract @(*StopGap, "get")(@title, ret) = {
+    for (builtinsMap <- builtins) {
+      builtins!(builtinsMap) |
+      ret!(builtinsMap.get(title))
+    }
+  }
+}

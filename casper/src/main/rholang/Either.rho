@@ -3,42 +3,49 @@
 //Requires ListOps
 //Represents Either[A, B] as ("Left", A) or ("Right", B)
 
-//Right-biased flatMap; f must also return an Either
-contract @("Either", "flatMap")(@either, f, return) = {
-  match either {
-    ("Right", value) => { f!(value, *return) }
-    ("Left", _)      => { return!(either) }
-  }
-} |
-
-//Right-biased map to transform an Either
-contract @("Either", "map")(@either, f, return) = {
-  match either {
-    ("Right", value) => {
-      new mappedResultCh in {
-        f!(value, *mappedResultCh) |
-        for(@mappedResult <- mappedResultCh) {
-          return!(("Right", mappedResult))
+new flatMap, map, compose, ack1, ack2, ack3, foldRet, StopGap(`rho:StopGap`) in {
+  @(*StopGap, "set")!("Either.flatMap", bundle+{*flatMap}, *ack1) |
+  @(*StopGap, "set")!("Either.map", bundle+{*map}, *ack2) |
+  @(*StopGap, "set")!("Either.compose", bundle+{*compose}, *ack3) |
+  @(*StopGap, "get")!("ListOps.fold", *foldret) |
+  for (_ <- ack1; _ <- ack2; _ <- ack3; fold <- foldret) {
+    //Right-biased flatMap; f must also return an Either
+    contract flatMap(@either, f, return) = {
+      match either {
+        ("Right", value) => { f!(value, *return) }
+        ("Left", _)      => { return!(either) }
+      }
+    } |
+    //Right-biased map to transform an Either
+    contract map(@either, f, return) = {
+      match either {
+        ("Right", value) => {
+          new mappedResultCh in {
+            f!(value, *mappedResultCh) |
+            for(@mappedResult <- mappedResultCh) {
+              return!(("Right", mappedResult))
+            }
+          }
         }
+        ("Left", _) => return!(either)
+      }
+    } |
+
+    //Composes a list of functions returning Either into a
+    //single result by using flatMap. Similar to following Scala code:
+    //for {
+    //  r0 <- Right(input)
+    //  r1 <- f1(r0)
+    //  r2 <- f2(r1)
+    //  ...
+    //} yield fn
+    contract compose(@input, @functions, return) = {
+      new combinator, foldret in {
+        contract combinator(@head, @accumulatedValue, return) = {
+          flatMap!(accumulatedValue, head, *return)
+        } |
+        fold!(functions, ("Right", input), *combinator, *return)
       }
     }
-    ("Left", _) => return!(either)
-  }
-} |
-
-//Composes a list of functions returning Either into a
-//single result by using flatMap. Similar to following Scala code:
-//for {
-//  r0 <- Right(input)
-//  r1 <- f1(r0)
-//  r2 <- f2(r1)
-//  ...
-//} yield fn
-contract @("Either", "compose")(@input, @functions, return) = {
-  new combinator in {
-    contract combinator(@head, @accumulatedValue, return) = {
-      @("Either", "flatMap")!(accumulatedValue, head, *return)
-    } |
-    @("ListOps", "fold")!(functions, ("Right", input), *combinator, *return)
   }
 }
