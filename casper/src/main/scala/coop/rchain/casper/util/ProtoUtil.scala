@@ -170,7 +170,6 @@ object ProtoUtil {
     weights.values.sum
 
   def minTotalValidatorWeight(dag: BlockDag, blockHash: BlockHash, maxCliqueMinSize: Int): Long = {
-    // todo(abner) refactor
     val sortedWeights = dag.dataLookup(blockHash).weightMap.values.toVector.sorted
     sortedWeights.take(maxCliqueMinSize).sum
   }

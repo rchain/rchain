@@ -79,7 +79,7 @@ object Estimator {
   // TODO: Fix to stop at genesis/LFB
   def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Long]] = {
     def hashParents(hash: BlockHash): F[List[BlockHash]] =
-      blockDag.dataLookup(hash).parents.pure[F] // todo(abner)
+      blockDag.dataLookup(hash).parents.pure[F]
 
     def addValidatorWeightDownSupportingChain(
         scoreMap: Map[BlockHash, Long],
