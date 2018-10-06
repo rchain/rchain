@@ -1,14 +1,21 @@
-new builtins in {
-  builtins!({}) |
-  contract @(*StopGap, "set")(@title, @value) = {
-    for (builtinsMap <- builtins) {
-      builtins!(builtinsMap.set(title, value))
+new builtinsStore, activeStore in {
+  builtinsStore!({}) |
+  activeStore!(true) |
+  contract @(*StopGap, "set")(@title, @value, ack) = {
+    for (builtins <- builtinsStore; @active <- activeStore) {
+      activeStore!(active) |
+      if (active) {
+        builtinsStore!(builtins.set(title, value))
+      } else {
+        builtinsStore!(builtins)
+      }|
+      ack!(Nil)
     }
   } |
   contract @(*StopGap, "get")(@title, ret) = {
-    for (builtinsMap <- builtins) {
-      builtins!(builtinsMap) |
-      ret!(builtinsMap.get(title))
+    for (builtins <- builtinsStore) {
+      builtinsStore!(builtins) |
+      ret!(builtins.get(title))
     }
   }
 }
