@@ -90,7 +90,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
         for {
           forkchoice <- Estimator.tips[F](
                          chain.withLatestMessages(HashMap.empty[Validator, BlockMessage]),
-                         genesis
+                         genesis.blockHash
                        )
           _ = forkchoice.head should be(genesis)
         } yield ()
@@ -164,7 +164,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
-          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis)
+          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis.blockHash)
           _          = forkchoice.head should be(b6)
           _          = forkchoice(1) should be(b8)
         } yield ()
@@ -241,7 +241,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Blo
 
       def checkForkchoice[F[_]: Monad: BlockStore]: F[Unit] =
         for {
-          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis)
+          forkchoice <- Estimator.tips[F](chain.withLatestMessages(latestBlocks), genesis.blockHash)
           _          = forkchoice.head should be(b8)
           _          = forkchoice(1) should be(b7)
         } yield ()

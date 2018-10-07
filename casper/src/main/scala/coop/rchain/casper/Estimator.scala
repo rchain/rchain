@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.casper.util.ProtoUtil.{parentHashes, unsafeGetBlock, weightFromValidator}
+import coop.rchain.casper.util.ProtoUtil.{parentHashes, weightFromValidatorByDag}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
@@ -25,7 +25,7 @@ object Estimator {
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDag,
-      genesis: BlockMessage
+      genesisBlockHash: BlockHash
   ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
     def sortChildren(
@@ -70,7 +70,7 @@ object Estimator {
 
     for {
       scoresMap           <- buildScoresMap[F](blockDag)
-      sortedChildrenHash  = sortChildren(IndexedSeq(genesis.blockHash), blockDag.childMap, scoresMap)
+      sortedChildrenHash  = sortChildren(IndexedSeq(genesisBlockHash), blockDag.childMap, scoresMap)
       maybeSortedChildren <- sortedChildrenHash.toList.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
@@ -79,9 +79,7 @@ object Estimator {
   // TODO: Fix to stop at genesis/LFB
   def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Long]] = {
     def hashParents(hash: BlockHash): F[List[BlockHash]] =
-      for {
-        b <- unsafeGetBlock[F](hash)
-      } yield parentHashes(b).toList
+      blockDag.dataLookup(hash).parents.pure[F]
 
     def addValidatorWeightDownSupportingChain(
         scoreMap: Map[BlockHash, Long],
@@ -91,13 +89,13 @@ object Estimator {
       for {
         updatedScoreMap <- DagOperations
                             .bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents)
-                            .foldLeftF(scoreMap) {
-                              case (acc, hash) =>
-                                for {
-                                  b               <- unsafeGetBlock[F](hash)
-                                  currScore       = acc.getOrElse(hash, 0L)
-                                  validatorWeight <- weightFromValidator[F](b, validator)
-                                } yield acc.updated(hash, currScore + validatorWeight)
+                            .foldLeft(scoreMap) {
+                              case (acc, hash) => {
+                                val currScore = acc.getOrElse(hash, 0L)
+                                val validatorWeight =
+                                  weightFromValidatorByDag(blockDag, hash, validator)
+                                acc.updated(hash, currScore + validatorWeight)
+                              }
                             }
       } yield updatedScoreMap
 
@@ -116,20 +114,18 @@ object Estimator {
       childMap
         .get(latestBlockHash)
         .toList
-        .foldM(scoreMap) {
+        .foldLeft(scoreMap) {
           case (acc, children) =>
-            children.filter(scoreMap.contains).toList.foldM(acc) {
+            children.filter(scoreMap.contains).toList.foldLeft(acc) {
               case (acc2, cHash) =>
-                for {
-                  c <- ProtoUtil.unsafeGetBlock[F](cHash)
-                  result = if (ProtoUtil.parentHashes(c).size > 1 && c.sender != validator) {
+                blockDag.dataLookup.get(cHash) match {
+                  case Some(blockMetaData)
+                      if blockMetaData.parents.size > 1 && blockMetaData.sender != validator =>
                     val currScore       = acc2.getOrElse(cHash, 0L)
-                    val validatorWeight = ProtoUtil.weightMap(c).getOrElse(validator, 0L)
+                    val validatorWeight = blockMetaData.weightMap.getOrElse(validator, 0L)
                     acc2.updated(cHash, currScore + validatorWeight)
-                  } else {
-                    acc2
-                  }
-                } yield result
+                  case _ => acc2
+                }
             }
         }
 
@@ -143,12 +139,12 @@ object Estimator {
                                                           validator,
                                                           latestBlock.blockHash
                                                         )
-                          postImplicitlySupportedScoreMap <- addValidatorWeightToImplicitlySupported(
-                                                              postValidatorWeightScoreMap,
-                                                              blockDag.childMap,
-                                                              validator,
-                                                              latestBlock.blockHash
-                                                            )
+                          postImplicitlySupportedScoreMap = addValidatorWeightToImplicitlySupported(
+                            postValidatorWeightScoreMap,
+                            blockDag.childMap,
+                            validator,
+                            latestBlock.blockHash
+                          )
                         } yield postImplicitlySupportedScoreMap
                     }
     } yield scoresMap
