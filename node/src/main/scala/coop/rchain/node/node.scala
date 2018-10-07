@@ -43,7 +43,7 @@ import monix.execution.schedulers.SchedulerService
 class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
 
   private val loopScheduler = Scheduler.fixedPool("loop", 4)
-  private val grpcScheduler = Scheduler.cached("grpc-io", 0, 64)
+  private val grpcScheduler = Scheduler.cached("grpc-io", 4, 64)
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -173,18 +173,20 @@ class NodeRuntime(conf: Configuration, host: String, scheduler: Scheduler) {
       jvmMetrics: JvmMetrics[Task],
       connectionsCell: ConnectionsCell[Task]
   ): Effect[Servers] = {
-    implicit val s: SchedulerService = grpcScheduler
+    implicit val s: Scheduler = scheduler
     for {
       grpcServerExternal <- GrpcServer
                              .acquireExternalServer[Effect](
                                conf.grpcServer.portExternal,
-                               conf.server.maxMessageSize
+                               conf.server.maxMessageSize,
+                               grpcScheduler
                              )
       grpcServerInternal <- GrpcServer
                              .acquireInternalServer(
                                conf.grpcServer.portInternal,
                                conf.server.maxMessageSize,
-                               runtime
+                               runtime,
+                               grpcScheduler
                              )
                              .toEffect
       prometheusReporter = new NewPrometheusReporter()

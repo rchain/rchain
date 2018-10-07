@@ -211,7 +211,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     Task.delay {
       new TcpServerObservable(port, serverSslContext, maxMessageSize)
         .mapParallelUnordered(parallelism)(dispatchInternal)
-        .subscribe()(Scheduler.computation(parallelism, "tl-dispatcher"))
+        .subscribe()(Scheduler.fixedPool("tl-dispatcher", parallelism))
     }
   }
 

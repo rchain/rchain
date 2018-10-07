@@ -21,8 +21,7 @@ case class Server(
     mapSize: Long,
     storeType: StoreType,
     maxNumOfConnections: Int,
-    maxMessageSize: Int,
-    threadPoolSize: Int
+    maxMessageSize: Int
 )
 
 case class GrpcServer(

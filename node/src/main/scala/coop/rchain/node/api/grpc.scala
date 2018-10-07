@@ -25,8 +25,13 @@ object GrpcServer {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  def acquireInternalServer(port: Int, maxMessageSize: Int, runtime: Runtime)(
-      implicit scheduler: Scheduler,
+  def acquireInternalServer(
+      port: Int,
+      maxMessageSize: Int,
+      runtime: Runtime,
+      grpcExecutor: Scheduler
+  )(
+      implicit worker: Scheduler,
       nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
@@ -35,23 +40,28 @@ object GrpcServer {
     Task.delay {
       NettyServerBuilder
         .forPort(port)
-        .executor(scheduler)
+        .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
-        .addService(ReplGrpcMonix.bindService(new ReplGrpcService(runtime), scheduler))
-        .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, scheduler))
+        .addService(
+          ReplGrpcMonix.bindService(new ReplGrpcService(runtime, worker), grpcExecutor)
+        )
+        .addService(DiagnosticsGrpcMonix.bindService(diagnostics.grpc, grpcExecutor))
         .build
     }
 
   def acquireExternalServer[F[_]: Sync: Capture: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
       port: Int,
-      maxMessageSize: Int
-  )(implicit scheduler: Scheduler): F[Server] =
+      maxMessageSize: Int,
+      grpcExecutor: Scheduler
+  )(implicit worker: Scheduler): F[Server] =
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
-        .executor(scheduler)
+        .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
-        .addService(CasperMessageGrpcMonix.bindService(DeployGrpcService.instance, scheduler))
+        .addService(
+          CasperMessageGrpcMonix.bindService(DeployGrpcService.instance(worker), grpcExecutor)
+        )
         .build
     }
 
