@@ -58,7 +58,6 @@ object Configuration {
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
   private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
-  private val DefaultThreadPoolSize: Int        = Math.max(Runtime.getRuntime.availableProcessors(), 2)
   private val DefaultMinimumBond: Long          = 1L
   private val DefaultMaximumBond: Long          = Long.MaxValue
   private val DefaultHasFaucet: Boolean         = false
@@ -142,8 +141,7 @@ object Configuration {
             DefaultMapSize,
             DefaultStoreType,
             DefaultMaxNumOfConnections,
-            DefaultMaxMessageSize,
-            DefaultThreadPoolSize
+            DefaultMaxMessageSize
           ),
           GrpcServer(
             options.grpcHost.getOrElse(DefaultGrpcHost),
@@ -290,9 +288,6 @@ object Configuration {
     val maxMessageSize: Int =
       get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
 
-    val threadPoolSize =
-      get(_.run.threadPoolSize, _.server.flatMap(_.threadPoolSize), DefaultThreadPoolSize)
-
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
     val server = Server(
@@ -309,8 +304,7 @@ object Configuration {
       mapSize,
       storeType,
       maxNumOfConnections,
-      maxMessageSize,
-      threadPoolSize
+      maxMessageSize
     )
     val grpcServer = GrpcServer(
       grpcHost,

@@ -27,14 +27,18 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner"
+    )
+
     val exec: Task[Unit] =
       for {
-        conf      <- Configuration(args)
-        scheduler = Scheduler.fixedPool("node-io", conf.server.threadPoolSize)
-        _         <- Task.defer(mainProgram(conf)(scheduler)).executeOn(scheduler)
+        conf <- Configuration(args)
+        _    <- Task.defer(mainProgram(conf))
       } yield ()
 
-    exec.unsafeRunSync(Scheduler.singleThread("main-io"))
+    exec.unsafeRunSync
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -71,7 +75,7 @@ object Main {
       case ShowBlocks(depth) => DeployRuntime.showBlocks[Task](depth)
       case DataAtName(name)  => DeployRuntime.listenForDataAtName[Task](name)
       case ContAtName(names) => DeployRuntime.listenForContinuationAtName[Task](names)
-      case Run               => nodeProgram(conf, scheduler)
+      case Run               => nodeProgram(conf)
       case BondingDeployGen(bondKey, ethAddress, amount, secKey, pubKey) =>
         BondingUtil.writeIssuanceBasedRhoFiles[Task](bondKey, ethAddress, amount, secKey, pubKey)
       case FaucetBondingDeployGen(amount, sigAlgorithm, secKey, pubKey) =>
@@ -89,7 +93,7 @@ object Main {
     )
   }
 
-  private def nodeProgram(conf: Configuration, scheduler: Scheduler): Task[Unit] =
+  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
       result <- new NodeRuntime(conf, host, scheduler).main.value
