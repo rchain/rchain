@@ -716,23 +716,27 @@ object Reduce {
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
-                         for {
-                           result <- rhs.iterator
-                                      .map {
-                                        case (k, v) =>
-                                          for {
-                                            keyExpr   <- evalSingleExpr(k)
-                                            valueExpr <- evalSingleExpr(v)
-                                            result    <- evalToStringPair(keyExpr, valueExpr)
-                                          } yield result
-                                      }
-                                      .toList
-                                      .sequence[M, (String, String)]
-                                      .map(
-                                        keyValuePairs => GString(interpolate(lhs, keyValuePairs))
-                                      )
-                           _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
-                         } yield result
+                         if (lhs.nonEmpty || rhs.nonEmpty) {
+                           for {
+                             result <- rhs.iterator
+                                        .map {
+                                          case (k, v) =>
+                                            for {
+                                              keyExpr   <- evalSingleExpr(k)
+                                              valueExpr <- evalSingleExpr(v)
+                                              result    <- evalToStringPair(keyExpr, valueExpr)
+                                            } yield result
+                                        }
+                                        .toList
+                                        .sequence[M, (String, String)]
+                                        .map(
+                                          keyValuePairs => GString(interpolate(lhs, keyValuePairs))
+                                        )
+                             _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
+                           } yield result
+                         } else {
+                           s.pure(GString(lhs))
+                         }
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
@@ -756,7 +760,6 @@ object Reduce {
                            _ <- costAccountingAlg.charge(
                                  byteArrayAppendCost(lhs)
                                )
-                           _ = println(s"byteArray ${lhs} append cost ${byteArrayAppendCost(lhs)}")
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
