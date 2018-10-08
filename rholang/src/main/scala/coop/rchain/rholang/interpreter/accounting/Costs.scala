@@ -39,7 +39,7 @@ trait Costs {
   final val ADD_COST    = Cost(3) // map/set add is eC
 
   // decoding to bytes is linear with respect to the length of the string
-  def hexToByteCost(str: String): Cost = Cost(str.size)
+  def hexToBytesCost(str: String): Cost = Cost(str.size)
 
   // Both Set#remove and Map#remove have complexity of eC
   def diffCost(numElements: Int): Cost = REMOVE_COST * numElements
@@ -53,7 +53,7 @@ trait Costs {
   // According to scala doc Vector#append is eC so it's n*eC.
   def listAppendCost(right: Vector[Par]): Cost = Cost(right.size)
   // String append creates a char[] of size n + m and then copies all elements to it.
-  def stringAppendCost(n: Int, m: Int): Cost   = Cost(n + m)
+  def stringAppendCost(n: Int, m: Int): Cost = Cost(n + m)
 
   // To interpolate we traverse whole base string and for each placeholder
   // we look for matching key in the interpolation map

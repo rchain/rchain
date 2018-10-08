@@ -950,7 +950,7 @@ object Reduce {
                   s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
                 )
               for {
-                _           <- costAccountingAlg.charge(hexToByteCost(encoded))
+                _           <- costAccountingAlg.charge(hexToBytesCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
@@ -975,7 +975,7 @@ object Reduce {
           p.singleExpr() match {
             case Some(Expr(GString(utf8string))) =>
               for {
-                _ <- costAccountingAlg.charge(hexToByteCost(utf8string))
+                _ <- costAccountingAlg.charge(hexToBytesCost(utf8string))
               } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
