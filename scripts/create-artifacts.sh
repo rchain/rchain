@@ -11,7 +11,7 @@ then
         node/universal:packageZipTarball
 elif [ "$SUBPROJECT" = core-java10 -a -n "$TRAVIS_TAG" ]
 then
-    sbt -Dsbt.log.noformat=true clean \
+    DEBIAN_JRE_PKG="openjdk-11-jre-headless" sbt -Dsbt.log.noformat=true clean \
         rholang/bnfc:generate \
         node/debian:packageBin \
         node/rpm:packageBin \
