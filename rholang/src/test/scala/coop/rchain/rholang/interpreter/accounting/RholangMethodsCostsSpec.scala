@@ -126,7 +126,7 @@ class RholangMethodsCostsSpec
           Seq.fill(1000)("a").mkString("")
         )
         val base     = "a"
-        val baseCost = hexToByteCost(base)
+        val baseCost = hexToBytesCost(base)
         forAll(strings) { str =>
           val encodedStr = new String(str.getBytes("UTF-8"))
           val method     = methodCall("hexToBytes", GString(encodedStr), List.empty)
@@ -136,6 +136,28 @@ class RholangMethodsCostsSpec
             factor,
             method
           )
+        }
+      }
+    }
+  }
+
+  "toUtf8Bytes" when {
+    "called on String" should {
+      "charge proportionally to the length of the String" in {
+        val utf8Strings = Table(
+          "string",
+          "a",
+          "",
+          "abcd",
+          Seq.fill(100)("a").mkString("")
+        )
+
+        val refString = "a"
+        val refCost   = hexToBytesCost(refString)
+        forAll(utf8Strings) { string =>
+          val factor = string.length.toDouble / refString.size
+          val method = methodCall("toUtf8Bytes", GString(string), List.empty)
+          testProportional(refCost, factor, method)
         }
       }
     }
