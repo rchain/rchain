@@ -1,7 +1,7 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
-
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper.SafetyOracle
@@ -11,7 +11,6 @@ import coop.rchain.casper.protocol.{DeployData, DeployServiceResponse, _}
 import coop.rchain.catscontrib.Taskable
 import coop.rchain.models.Par
 import coop.rchain.shared._
-
 import com.google.protobuf.empty.Empty
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -56,5 +55,8 @@ private[api] object DeployGrpcService {
         Observable
           .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))
           .flatMap(Observable.fromIterable)
+
+      override def findBlockWithDeploy(request: FindDeployInBlockQuery): Task[BlockQueryResponse] =
+        defer(BlockAPI.findBlockWithDeploy[F](request.user, request.timestamp))
     }
 }

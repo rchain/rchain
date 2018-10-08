@@ -94,6 +94,35 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     blockInfo.shardId should be(shardId)
   }
 
+  "findBlockWithDeploy" should "return successful block info response" in withStore {
+    implicit blockStore =>
+      val (
+        logEff: LogStub[Id],
+        casperRef: Id[MultiParentCasperRef[Id]],
+        turanOracleEffect: SafetyOracle[Id]
+        )             = effectsForSimpleCasperSetup(blockStore)
+      val user      = ByteString.EMPTY
+      val timestamp = 1L
+      val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+      val blockInfo = blockQueryResponse.blockInfo.get
+      blockQueryResponse.status should be("Success")
+      blockInfo.blockHash should be(secondHashString)
+      blockInfo.blockSize should be(secondBlock.serializedSize.toString)
+      blockInfo.blockNumber should be(blockNumber)
+      blockInfo.version should be(version)
+      blockInfo.deployCount should be(deployCount)
+      blockInfo.faultTolerance should be(faultTolerance)
+      blockInfo.mainParentHash should be(genesisHashString)
+      blockInfo.parentsHashList should be(parentsString)
+      blockInfo.sender should be(secondBlockSenderString)
+      blockInfo.shardId should be(shardId)
+  }
 
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Id]
@@ -145,5 +174,46 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     blockQueryResponse.status should be(
       s"Error: Failure to find block with hash ${badTestHashQuery}"
     )
+  }
+
+  "findBlockWithDeploy" should "return error when no block matching query exists" in withStore {
+    implicit blockStore =>
+      val (
+        logEff: LogStub[Id],
+        casperRef: Id[MultiParentCasperRef[Id]],
+        turanOracleEffect: SafetyOracle[Id]
+      )             = emptyEffects(blockStore)
+      val user      = ByteString.EMPTY
+      val timestamp = 0L
+      val blockQueryResponse = BlockAPI.findBlockWithDeploy[Id](user, timestamp)(
+        syncId,
+        casperRef,
+        logEff,
+        turanOracleEffect,
+        blockStore
+      )
+      blockQueryResponse.status should be(
+        s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
+      )
+  }
+
+  private def emptyEffects(
+      blockStore: BlockStore[Id]
+  ): (LogStub[Id], Id[MultiParentCasperRef[Id]], SafetyOracle[Id]) = {
+    implicit val casperEffect = NoOpsCasperEffect(
+      HashMap[BlockHash, BlockMessage](
+        (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
+        (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+      )
+    )(syncId, blockStore)
+    implicit val logEff = new LogStub[Id]()(syncId)
+    implicit val casperRef = {
+      val tmp = MultiParentCasperRef.of[Id]
+      tmp.set(casperEffect)
+      tmp
+    }
+    implicit val turanOracleEffect: SafetyOracle[Id] =
+      SafetyOracle.turanOracle[Id](syncId)
+    (logEff, casperRef, turanOracleEffect)
   }
 }

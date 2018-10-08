@@ -271,6 +271,56 @@ object BlockAPI {
     )
   }
 
+  private def findBlockWithDeploy[F[_]: Monad: Log: BlockStore](
+      blockHashes: Vector[BlockHash],
+      user: ByteString,
+      timestamp: Long
+  ): F[Option[BlockMessage]] =
+    blockHashes match {
+      case blockHash +: rem =>
+        for {
+          block <- ProtoUtil.unsafeGetBlock[F](blockHash)
+          result <- if (ProtoUtil.containsDeploy(block, user, timestamp)) {
+                     Option[BlockMessage](block).pure[F]
+                   } else {
+                     findBlockWithDeploy[F](rem, user, timestamp)
+                   }
+        } yield result
+      case _ => none[BlockMessage].pure[F]
+    }
+
+  def findBlockWithDeploy[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
+      user: ByteString,
+      timestamp: Long
+  ): F[BlockQueryResponse] = {
+    def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
+      for {
+        dag        <- MultiParentCasper[F].blockDag
+        maybeBlock <- findBlockWithDeploy[F](dag.topoSort.flatten, user, timestamp)
+        blockQueryResponse <- maybeBlock match {
+                               case Some(block) =>
+                                 for {
+                                   blockInfo <- getFullBlockInfo[F](block)
+                                 } yield
+                                   BlockQueryResponse(
+                                     status = "Success",
+                                     blockInfo = Some(blockInfo)
+                                   )
+                               case None =>
+                                 BlockQueryResponse(
+                                   status =
+                                     s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
+                                       .buildString(user)} with timestamp ${timestamp.toString}"
+                                 ).pure[F]
+                             }
+      } yield blockQueryResponse
+
+    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
+      casperResponse(_),
+      BlockQueryResponse(status = "Error: Casper instance not available")
+    )
+  }
+
   def showBlock[F[_]: Monad: MultiParentCasperRef: Log: SafetyOracle: BlockStore](
       q: BlockQuery
   ): F[BlockQueryResponse] = {

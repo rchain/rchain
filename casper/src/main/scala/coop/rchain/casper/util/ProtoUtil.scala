@@ -217,6 +217,13 @@ object ProtoUtil {
       ProtoUtil.unsafeGetBlock[F](parentHash)
     }
 
+  // TODO: Ensure deploy.get and raw.get are safe
+  def containsDeploy(b: BlockMessage, user: ByteString, timestamp: Long): Boolean =
+    deploys(b).exists { d =>
+      val deployData = d.deploy.get.raw.get
+      deployData.user == user && deployData.timestamp == timestamp
+    }
+
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.fold(Seq.empty[ProcessedDeploy])(_.deploys)
 
