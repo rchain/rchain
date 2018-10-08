@@ -16,7 +16,7 @@ new BasicWalletFaucet, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`), ack, 
             }
           }
         } |
-        return!(*this)
+        return!(bundle+{*this})
       }
     }
   }

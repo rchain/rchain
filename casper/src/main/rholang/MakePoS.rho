@@ -174,7 +174,7 @@ new MakePoS, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`),
           }
         } |
 
-        return!(*this)
+        return!(bundle+{*this})
       }
     }
   }

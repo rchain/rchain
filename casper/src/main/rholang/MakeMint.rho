@@ -58,10 +58,10 @@ new int2NN, MakeMint, NonNegativeNumber, sgset(`rho:stopgap:set`),
                 }
               }
             } |
-            return!(*thisPurse)
+            return!(bundle+{*thisPurse})
           }
         } |
-        return!(*thisMint)
+        return!(bundle+{*thisMint})
       }
     }
   }

@@ -69,7 +69,7 @@ new BasicWallet, sgset(`rho:stopgap:set`), ack in {
                     }
                   }
                 } |
-                return!([*basicWallet])
+                return!([bundle+{*basicWallet}])
               }
             }
           }
