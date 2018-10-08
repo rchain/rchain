@@ -554,21 +554,56 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
       dependencyFreeBlocks = blockBuffer
         .filter(block => dependencyFree.contains(block.blockHash))
         .toList
-      attempts <- dependencyFreeBlocks.traverse(b => attemptAdd(b))
+      attempts <- dependencyFreeBlocks.traverse { b =>
+                   for {
+                     status <- attemptAdd(b)
+                   } yield (b, status)
+                 }
       _ <- if (attempts.isEmpty) {
             ().pure[F]
           } else {
-            Capture[F].capture {
-              dependencyFreeBlocks.map {
-                blockBuffer -= _
-              }
-            } *>
-              blockBufferDependencyDagState.set(dependencyFree.foldLeft(blockBufferDependencyDag) {
-                case (acc, hash) =>
-                  DoublyLinkedDagOperations.remove(acc, hash)
-              }) *> reAttemptBuffer
+            for {
+              _ <- removeAdded(blockBufferDependencyDag, attempts)
+              _ <- reAttemptBuffer
+            } yield ()
           }
     } yield ()
+
+  private def removeAdded(
+      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
+      attempts: List[(BlockMessage, BlockStatus)]
+  ): F[Unit] =
+    for {
+      successfulAdds <- attempts
+                         .filter {
+                           case (_, status) => status.inDag
+                         }
+                         .pure[F]
+      _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
+      _ <- removeFromBlockBufferDependencyDag(blockBufferDependencyDag, successfulAdds)
+    } yield ()
+
+  private def unsafeRemoveFromBlockBuffer(
+      successfulAdds: List[(BlockMessage, BlockStatus)]
+  ): F[Unit] =
+    Sync[F]
+      .delay {
+        successfulAdds.map {
+          blockBuffer -= _._1
+        }
+      }
+      .as(Unit)
+
+  private def removeFromBlockBufferDependencyDag(
+      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
+      successfulAdds: List[(BlockMessage, BlockStatus)]
+  ): F[Unit] =
+    blockBufferDependencyDagState.set(
+      successfulAdds.foldLeft(blockBufferDependencyDag) {
+        case (acc, successfulAdd) =>
+          DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
+      }
+    )
 
   def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
 }
