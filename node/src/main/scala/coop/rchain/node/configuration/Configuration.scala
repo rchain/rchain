@@ -288,8 +288,13 @@ object Configuration {
     )
 
     val maxMessageSize: Int =
-      Math.max(MinMessageSizeMaximumValue,
-      Math.min(MaxMessageSizeMaximumValue, get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)))
+      Math.max(
+        MaxMessageSizeMinimumValue,
+        Math.min(
+          MaxMessageSizeMaximumValue,
+          get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+        )
+      )
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
