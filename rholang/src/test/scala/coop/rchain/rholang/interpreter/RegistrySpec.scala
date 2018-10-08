@@ -549,8 +549,13 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
   "Signed Insert" should "work like plain insert if the signatures match" in {
     // Secret key:
     // d039d5c634ad95d968fc18368d81b97aaecd32fc7cf6eec07a97c5ac9f9fcb5b11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
-    // Publick key:
+    // Public key:
     // 11afb9a5fa2b3e194b701987b3531a93dbdf790dac26f8a2502cfa5d529f6b4d
+    // The signatures here are over the serialized representation of the nonce, value tuple.
+    // To recreate the signatures, you can do something like the following:
+    // val key = Base16.decode("<secret key goes here>")
+    // val toSign: Par = ETuple(Seq(GInt(789), GString("entry")))
+    // val sig = Ed25519.sign(toSign.toByteArray, key)
     val registerString =
       """
       new rr(`rho:registry:insertSigned:ed25519`), rl(`rho:registry:lookup`), ack in {
