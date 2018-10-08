@@ -57,7 +57,9 @@ object Configuration {
   private val DefaultRequiredSigns              = 0
   private val DefaultApprovalProtocolDuration   = 5.minutes
   private val DefaultApprovalProtocolInterval   = 5.seconds
-  private val DefaultMaxMessageSize: Int        = 100 * 1024 * 1024
+  private val DefaultMaxMessageSize: Int        = 4 * 1024 * 1024
+  private val MaxMessageSizeMinimumValue: Int   = 1 * 1024 * 1024
+  private val MaxMessageSizeMaximumValue: Int   = 10 * 1024 * 1024
   private val DefaultMinimumBond: Long          = 1L
   private val DefaultMaximumBond: Long          = Long.MaxValue
   private val DefaultHasFaucet: Boolean         = false
@@ -286,7 +288,8 @@ object Configuration {
     )
 
     val maxMessageSize: Int =
-      get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)
+      Math.max(MinMessageSizeMaximumValue,
+      Math.min(MaxMessageSizeMaximumValue, get(_.run.maxMessageSize, _.server.flatMap(_.maxMessageSize), DefaultMaxMessageSize)))
 
     val shardId = get(_.run.shardId, _.validators.flatMap(_.shardId), DefaultShardId)
 
