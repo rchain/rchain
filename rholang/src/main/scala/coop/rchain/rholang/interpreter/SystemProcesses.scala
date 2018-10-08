@@ -11,6 +11,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
+import coop.rchain.rspace.util._
 import monix.eval.Task
 
 import scala.util.Try
@@ -53,6 +54,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -74,6 +76,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -106,6 +109,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -128,6 +132,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -151,6 +156,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -172,6 +178,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -193,6 +200,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>

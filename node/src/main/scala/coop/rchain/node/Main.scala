@@ -27,17 +27,18 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner"
+    )
+
     val exec: Task[Unit] =
       for {
-        conf     <- Configuration(args)
-        poolSize = conf.server.threadPoolSize
-        //TODO create separate scheduler for casper
-        scheduler = Scheduler.fixedPool("node-io", poolSize)
-        _         <- Task.unit.asyncBoundary(scheduler)
-        _         <- mainProgram(conf)(scheduler)
+        conf <- Configuration(args)
+        _    <- Task.defer(mainProgram(conf))
       } yield ()
 
-    exec.unsafeRunSync(Scheduler.fixedPool("main-io", 1))
+    exec.unsafeRunSync
   }
 
   private def mainProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
@@ -95,7 +96,7 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] =
     for {
       host   <- conf.fetchHost
-      result <- new NodeRuntime(conf, host).main.value
+      result <- new NodeRuntime(conf, host, scheduler).main.value
       _ <- result match {
             case Right(_) =>
               Task.unit

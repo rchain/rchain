@@ -39,7 +39,7 @@ trait SafetyOracle[F[_]] {
     * @param estimate Block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
-  def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): Float
+  def normalizedFaultTolerance(blockDag: BlockDag, estimateBlockHash: BlockHash): Float
 }
 
 object SafetyOracle extends SafetyOracleInstances {
@@ -49,43 +49,51 @@ object SafetyOracle extends SafetyOracleInstances {
 sealed abstract class SafetyOracleInstances {
   def turanOracle[F[_]: Monad]: SafetyOracle[F] =
     new SafetyOracle[F] {
-      def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): Float = {
-        val totalWeight        = computeTotalWeight(blockDag, estimate)
-        val minMaxCliqueWeight = computeMinMaxCliqueWeight(blockDag, estimate)
+      def normalizedFaultTolerance(blockDag: BlockDag, estimateBlockHash: BlockHash): Float = {
+        val totalWeight        = computeTotalWeight(blockDag, estimateBlockHash)
+        val minMaxCliqueWeight = computeMinMaxCliqueWeight(blockDag, estimateBlockHash)
         val faultTolerance     = 2 * minMaxCliqueWeight - totalWeight
         faultTolerance.toFloat / totalWeight
       }
 
       // To have a maximum clique of half the total weight,
       // you need at least twice the weight of the candidateWeights to be greater than the total weight
-      private def computeMinMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): Long = {
-        val candidateWeights = computeCandidateWeights(blockDag, estimate)
-        val totalWeight      = computeTotalWeight(blockDag, estimate)
+      private def computeMinMaxCliqueWeight(
+          blockDag: BlockDag,
+          estimateBlockHash: BlockHash
+      ): Long = {
+        val candidateWeights = computeCandidateWeights(blockDag, estimateBlockHash)
+        val totalWeight      = computeTotalWeight(blockDag, estimateBlockHash)
         if (2L * candidateWeights.values.sum < totalWeight) {
           0L
         } else {
           val vertexCount = candidateWeights.keys.size
-          val edgeCount   = agreementGraphEdgeCount(blockDag, estimate, candidateWeights)
-          minTotalValidatorWeight(estimate, maxCliqueMinSize(vertexCount, edgeCount))
+          val edgeCount   = agreementGraphEdgeCount(blockDag, estimateBlockHash, candidateWeights)
+          minTotalValidatorWeight(
+            blockDag,
+            estimateBlockHash,
+            maxCliqueMinSize(vertexCount, edgeCount)
+          )
         }
       }
 
-      private def computeTotalWeight(blockDag: BlockDag, estimate: BlockMessage): Long = {
-        val mainParentWeightMap = computeMainParentWeightMap(blockDag, estimate)
+      private def computeTotalWeight(blockDag: BlockDag, estimateBlockHash: BlockHash): Long = {
+        val mainParentWeightMap = computeMainParentWeightMap(blockDag, estimateBlockHash)
         weightMapTotal(mainParentWeightMap)
       }
 
       private def computeCandidateWeights(
           blockDag: BlockDag,
-          estimate: BlockMessage
+          estimateBlockHash: BlockHash
       ): Map[Validator, Long] = {
-        val weights = computeMainParentWeightMap(blockDag, estimate)
+        val weights = computeMainParentWeightMap(blockDag, estimateBlockHash)
         val candidateWeights = weights.toList.flatMap {
           case (validator, stake) =>
             val maybeLatestMessage = blockDag.latestMessages.get(validator)
             maybeLatestMessage match {
               case Some(latestMessage) =>
-                val isCompatible = computeCompatibility(blockDag, estimate, latestMessage.blockHash)
+                val isCompatible =
+                  computeCompatibility(blockDag, estimateBlockHash, latestMessage.blockHash)
                 if (isCompatible) {
                   Some((validator, stake))
                 } else {
@@ -100,11 +108,11 @@ sealed abstract class SafetyOracleInstances {
 
       private def computeMainParentWeightMap(
           blockDag: BlockDag,
-          estimate: BlockMessage
+          estimateBlockHash: BlockHash
       ): Map[BlockHash, Long] =
-        blockDag.dataLookup(estimate.blockHash).parents.headOption match {
+        blockDag.dataLookup(estimateBlockHash).parents.headOption match {
           case Some(parent) => blockDag.dataLookup(parent).weightMap
-          case None         => blockDag.dataLookup(estimate.blockHash).weightMap
+          case None         => blockDag.dataLookup(estimateBlockHash).weightMap
         }
 
       private def findMaximumClique(
@@ -127,7 +135,7 @@ sealed abstract class SafetyOracleInstances {
 
       private def agreementGraphEdgeCount(
           blockDag: BlockDag,
-          estimate: BlockMessage,
+          estimateBlockHash: BlockHash,
           candidates: Map[Validator, Long]
       ): Int = {
         def findAgreeingJustificationHash(
@@ -137,7 +145,8 @@ sealed abstract class SafetyOracleInstances {
           justificationHashes.find(justificationHash => {
             blockDag.dataLookup.get(justificationHash) match {
               case Some(justificationMetadata) =>
-                val compatible = computeCompatibility(blockDag, estimate, justificationHash)
+                val compatible =
+                  computeCompatibility(blockDag, estimateBlockHash, justificationHash)
                 compatible && justificationMetadata.sender == validator
               case None => false
             }
@@ -196,7 +205,7 @@ sealed abstract class SafetyOracleInstances {
               val potentialDisagreements   = filterChildren(justificationBlockSecond, second)
               potentialDisagreements.forall(
                 potentialDisagreement =>
-                  computeCompatibility(blockDag, estimate, potentialDisagreement)
+                  computeCompatibility(blockDag, estimateBlockHash, potentialDisagreement)
               )
             case None => false
           }
@@ -221,10 +230,10 @@ sealed abstract class SafetyOracleInstances {
       // TODO: Change to isInBlockDAG
       private def computeCompatibility(
           blockDag: BlockDag,
-          candidate: BlockMessage,
+          candidateBlockHash: BlockHash,
           targetBlockHash: BlockHash
       ): Boolean =
-        isInMainChain(blockDag, candidate, targetBlockHash)
+        isInMainChain(blockDag, candidateBlockHash, targetBlockHash)
 
       // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
       private def maxCliqueMinSize(vertices: Int, edges: Int) = {

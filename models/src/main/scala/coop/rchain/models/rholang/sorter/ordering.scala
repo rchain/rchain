@@ -1,8 +1,8 @@
-package coop.rchain.models.rholang.sort
+package coop.rchain.models.rholang.sorter
 
 import cats.effect.Sync
 import coop.rchain.models.Par
-import coop.rchain.models.rholang.sort.ScoredTerm._
+import coop.rchain.models.rholang.sorter.ScoredTerm._
 import monix.eval.Coeval
 import cats.implicits._
 

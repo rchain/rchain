@@ -1,44 +1,40 @@
 package coop.rchain.comm.transport
 
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
 
-import scala.concurrent.{Future, Promise}
-import scala.concurrent.duration.FiniteDuration
+import coop.rchain.comm.protocol.routing.Protocol
 
-import coop.rchain.comm.protocol.routing.{Blob, Protocol}
-
-import monix.eval.Task
-import monix.execution.Scheduler
+import monix.eval.Callback
 
 trait ServerMessage
 // TODO rename to AksMesage and TellMesssage
-final case class Ask(msg: Protocol, sender: SenderHandle) extends ServerMessage
+final case class Ask(msg: Protocol, handle: SenderHandle) extends ServerMessage
 final case class Tell(msg: Protocol)                      extends ServerMessage
-final case class BlobMessage(blob: Blob)                  extends ServerMessage
+final case class StreamMessage(blob: Blob)                extends ServerMessage
 
 trait SenderHandle {
-  def reply(msg: CommunicationResponse): Boolean
-  def failWith(e: Throwable): Boolean
+  def reply(msg: CommunicationResponse): Unit
+  def failWith(e: Throwable): Unit
+  def complete: Boolean
 }
 
-final class ReplyPromise(timeout: FiniteDuration)(implicit scheduler: Scheduler)
-    extends SenderHandle {
-  private val promise = Promise[CommunicationResponse]
+final class Reply(callback: Callback[CommunicationResponse]) extends SenderHandle {
+  // contract: the callback can be called only once
+  private val called = new AtomicBoolean(false)
 
-  lazy val future: Future[CommunicationResponse] = {
-    val err  = new TimeoutException
-    val task = scheduler.scheduleOnce(timeout.length, timeout.unit, () => promise.tryFailure(err))
-    promise.future.andThen { case _ => task.cancel() }
-  }
+  def reply(msg: CommunicationResponse): Unit =
+    if (!called.getAndSet(true)) {
+      callback.onSuccess(msg)
+    }
 
-  lazy val task: Task[CommunicationResponse] = Task.fromFuture(future)
+  def failWith(e: Throwable): Unit =
+    if (!called.getAndSet(true)) {
+      callback.onError(e)
+    }
 
-  def reply(msg: CommunicationResponse): Boolean = promise.trySuccess(msg)
-
-  def failWith(e: Throwable): Boolean = promise.tryFailure(e)
+  def complete: Boolean = called.get()
 }
 
-object ReplyPromise {
-  def apply(timeout: FiniteDuration)(implicit scheduler: Scheduler): ReplyPromise =
-    new ReplyPromise(timeout)
+object Reply {
+  def apply(callback: Callback[CommunicationResponse]): Reply = new Reply(callback)
 }

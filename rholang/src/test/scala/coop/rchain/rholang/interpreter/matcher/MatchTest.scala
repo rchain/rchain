@@ -7,7 +7,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.rholang.sort.Sortable
+import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -435,8 +435,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val target: Expr = ParSet(Seq(GInt(1), GInt(2), GInt(3), GInt(4), GInt(5)))
     val pattern: Expr =
       ParSet(
-        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg()))),
-        connectiveUsed = true
+        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(FreeVar(1)), EVar(Wildcard(WildcardMsg())))
       )
     //the captures and their order are somewhat arbitrary and could potentially by changed
     val expectedResult = Some(Map[Int, Par](0 -> GInt(4), 1 -> GInt(3)))
@@ -447,10 +446,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     assertSpatialMatch(targetPar, patternPar, expectedResult)
 
     val nonMatchingPattern: Expr =
-      ParSet(
-        Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))),
-        connectiveUsed = true
-      )
+      ParSet(Seq(GInt(2), GInt(5), EVar(FreeVar(0)), EVar(Wildcard(WildcardMsg()))))
     assertSpatialMatch(target, nonMatchingPattern, None)
   }
 
@@ -458,7 +454,7 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val targetElements = Seq[Par](GInt(1), GInt(2), GInt(3), GInt(4), GInt(5))
     val target: Expr   = ParSet(targetElements)
     val pattern: Expr =
-      ParSet(Seq(GInt(1), GInt(4)), connectiveUsed = true, remainder = Wildcard(WildcardMsg()))
+      ParSet(Seq(GInt(1), GInt(4)), remainder = Wildcard(WildcardMsg()))
     val expectedResult = Some(Map[Int, Par]())
     assertSpatialMatch(target, pattern, expectedResult)
 
@@ -479,7 +475,6 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     val pattern: Expr =
       ParSet(
         Seq(GInt(1), GInt(4), EVar(FreeVar(0))),
-        connectiveUsed = true,
         remainder = Var(FreeVar(1))
       )
     //the captures and their order are somewhat arbitrary and could potentially by changed

@@ -5,13 +5,12 @@ import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.CostAccount._
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg, _}
+import coop.rchain.rholang.interpreter.accounting.{CostAccountingAlg, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
-import coop.rchain.rspace.pure.PureRSpace
-import coop.rchain.rspace.{Blake2b256Hash, Checkpoint}
+import coop.rchain.rspace.util._
+import coop.rchain.rspace.{Blake2b256Hash, Checkpoint, ContResult, Result}
 
 import scala.collection.immutable.Seq
 
@@ -39,14 +38,14 @@ object ChargingRSpace {
           continuation: TaggedContinuation,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostConsume(channels, patterns, continuation)
         for {
           _       <- costAlg.charge(storageCost)
           matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
           consRes <- Sync[F].delay(space.consume(channels, patterns, continuation, persist)(matchF))
-          _       <- handleResult(consRes, storageCost, persist)
+          _       <- handleResult(consRes)
         } yield consRes
       }
 
@@ -66,50 +65,71 @@ object ChargingRSpace {
           data: ListParWithRandom,
           persist: Boolean
       ): F[Either[errors.OutOfPhlogistonsError.type, Option[
-        (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
+        (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
       ]]] = {
         val storageCost = storageCostProduce(channel, data)
         for {
           _       <- costAlg.charge(storageCost)
           matchF  <- costAlg.get().map(ca => matchListPar(ca.cost))
           prodRes <- Sync[F].delay(space.produce(channel, data, persist)(matchF))
-          _       <- handleResult(prodRes, storageCost, persist)
+          _       <- handleResult(prodRes)
         } yield prodRes
       }
 
       private def handleResult(
           result: Either[OutOfPhlogistonsError.type, Option[
-            (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
-          ]],
-          storageCost: Cost,
-          persist: Boolean
+            (
+                ContResult[Par, BindPattern, TaggedContinuation],
+                Seq[Result[ListParWithRandomAndPhlos]]
+            )
+          ]]
       ): F[Unit] =
         result match {
           case Left(oope) =>
             // if we run out of phlos during the match we have to zero phlos available
             costAlg.get().flatMap(ca => costAlg.charge(ca.cost)) >> Sync[F].raiseError(oope)
-          case Right(Some((_, dataList))) =>
+
+          case Right(None) => Sync[F].unit
+
+          case Right(Some((cont, dataList))) =>
             val rspaceMatchCost = Cost(
               dataList
-                .map(_.cost)
+                .map(_.value.cost)
                 .toList
-                .combineAll
+                .sum
             )
 
-            costAlg
-              .charge(rspaceMatchCost)
-              .flatMap { _ =>
-                // we refund the storage cost if there was a match and the persist flag is false
-                // this means that the data didn't stay in the tuplespace
-                if (persist)
-                  Sync[F].unit
-                else {
-                  costAlg.refund(storageCost)
-                }
-              }
-          case Right(None) =>
-            Sync[F].unit
+            val refundForConsume =
+              if (cont.persistent) Cost(0)
+              else
+                storageCostConsume(cont.channels, cont.patterns, cont.value)
+
+            val refundForProduces = refundForRemovingProduces(
+              dataList,
+              cont.channels
+            )
+
+            for {
+              _           <- costAlg.charge(rspaceMatchCost)
+              refundValue = refundForConsume + refundForProduces
+              _ <- if (refundValue == Cost(0))
+                    Sync[F].unit
+                  else costAlg.refund(refundValue)
+            } yield ()
         }
+
+      private def refundForRemovingProduces(
+          dataList: Seq[Result[ListParWithRandomAndPhlos]],
+          channels: Seq[Par]
+      ): Cost =
+        dataList
+          .zip(channels)
+          .filterNot { case (data, _) => data.persistent }
+          .map {
+            case (data, channel) =>
+              storageCostProduce(channel, ListParWithRandom(data.pars, data.randomState))
+          }
+          .foldLeft(Cost(0))(_ + _)
 
       override def createCheckpoint(): F[Checkpoint] =
         Sync[F].delay(space.createCheckpoint())

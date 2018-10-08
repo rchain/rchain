@@ -14,6 +14,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.BodyRefs
 import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.util._
 import org.lightningj.util.ZBase32
 
 import scala.annotation.tailrec

@@ -30,33 +30,47 @@ trait Costs {
   final val MULTIPLICATION_COST: Cost = Cost(9)
   final val DIVISION_COST: Cost       = Cost(9)
 
-  final val STRING_APPEND_COST = Cost(3)
-
   // operations on collections
   // source: https://docs.scala-lang.org/overviews/collections/performance-characteristics.html
   final val LOOKUP_COST = Cost(3) // map/set lookup is eC
   final val REMOVE_COST = Cost(3) // map/set remove is eC
   final val ADD_COST    = Cost(3) // map/set add is eC
 
-  final val PREPEND_COST = Cost(2) // list prepend is C
-
   // decoding to bytes is linear with respect to the length of the string
   def hexToByteCost(str: String): Cost = Cost(str.size)
+
+  def diffCost(numElements: Int): Cost = REMOVE_COST * numElements
+
+  def unionCost(numElements: Int): Cost = ADD_COST * numElements
+
+  def appendCost(n: Int, m: Int): Cost = Cost(n + m)
+
+  // To interpolate we traverse whole base string and for each placeholder
+  // we look for matching key in the interpolation map
+  def interpolateCost(strLength: Int, mapSize: Int): Cost = Cost(strLength * mapSize)
 
   // serializing any Par into a Array[Byte]:
   // + allocates byte array of the same size as `serializedSize`
   // + then it copies all elements of the Par
   def toByteArrayCost[T <: GeneratedMessage](a: T): Cost = Cost(a.serializedSize)
+  //TODO: adjust the cost of size method
+  def sizeMethodCost(size: Int): Cost = Cost(size)
+  // slice(from, to) needs to drop `from` elements and then append `to - from` elements
+  // we charge proportionally to `to` and fail if the method call is incorrect, for example
+  // if underlying string is shorter then the `to` value.
+  def sliceCost(to: Int): Cost = Cost(to)
 
-  //TODO(mateusz.gorski): adjust the cost of the nth method call.
-  def nthMethodCost(nth: Int): Cost = Cost(nth)
+  final val NTH_METHOD_CALL_COST: Cost = Cost(10)
 
-  final val METHOD_CALL_COST  = Cost(10)
-  final val OP_CALL_COST      = Cost(10)
-  final val VAR_EVAL_COST     = Cost(10)
-  final val SEND_EVAL_COST    = Cost(11)
-  final val RECEIVE_EVAL_COST = Cost(11)
-  final val CHANNEL_EVAL_COST = Cost(11)
+  final val KEYS_METHOD_COST: Cost = Cost(10)
+
+  final val LENGTH_METHOD_COST = Cost(10)
+  final val METHOD_CALL_COST   = Cost(10)
+  final val OP_CALL_COST       = Cost(10)
+  final val VAR_EVAL_COST      = Cost(10)
+  final val SEND_EVAL_COST     = Cost(11)
+  final val RECEIVE_EVAL_COST  = Cost(11)
+  final val CHANNEL_EVAL_COST  = Cost(11)
 
   // The idea is that evaluation of `new x1, x2, …, xn in { }` should be charged depending
   // on the # of bindings and constant cost of evaluating `new … in  { … }` construct
@@ -74,5 +88,10 @@ trait Costs {
     def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
   }
 
-  final val MAX_VALUE = PhloLimit(Long.MaxValue)
+  // Even though we use Long for phlo limit we can't use Long.MaxValue here.
+  // This is because in tests, when  we refund deployment we add phlos to the deployment's limit
+  // which may result in overflow when we start with maximum value.
+  // In normal scenario this will never happen because user would need to provide equivalent of Long.MaxValue
+  // in REVs and this is more than there is REVs available.
+  final val MAX_VALUE = PhloLimit(Integer.MAX_VALUE)
 }

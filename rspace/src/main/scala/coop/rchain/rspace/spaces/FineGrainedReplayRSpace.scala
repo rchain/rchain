@@ -40,7 +40,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
   def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]] =
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
       try {
         Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
@@ -73,7 +73,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       persist: Boolean
   )(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] = {
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     val span = Kamon.currentSpan()
     def runMatcher(comm: COMM): Option[Seq[DataCandidate[C, R]]] = {
 
@@ -122,7 +122,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         replays: ReplayData,
         consumeRef: Consume,
         comms: Multiset[COMM]
-    ): Option[(K, Seq[R])] = {
+    ): Option[(ContResult[C, P, K], Seq[Result[R]])] = {
       span.mark("handle-matches-begin")
       consumeCommCounter.increment()
       val commRef = COMM(consumeRef, mats.map(_.datum.source))
@@ -143,7 +143,12 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
       replayData.put(replaysLessCommRef(replays, commRef))
       span.mark("handle-matches-end")
-      Some((continuation, mats.map(_.datum.a)))
+      Some(
+        (
+          ContResult(continuation, persist, channels, patterns),
+          mats.map(dc => Result(dc.datum.a, dc.datum.persist))
+        )
+      )
     }
 
     @tailrec
@@ -196,7 +201,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
   def produce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): F[Either[E, Option[(K, Seq[R])]]] =
+  ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
       try {
         Kamon.withSpan(produceSpan.start(), finishSpan = true) {
@@ -218,7 +223,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     }
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, E, A, R]
-  ): Either[E, Option[(K, Seq[R])]] = {
+  ): Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]] = {
     val span = Kamon.currentSpan()
     @tailrec
     def runMatcher(
@@ -281,12 +286,11 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         replays: ReplayData,
         produceRef: Produce,
         comms: Multiset[COMM]
-    ): Option[(K, Seq[R])] =
-      // TODO: why is matching done here?
+    ): Option[(ContResult[C, P, K], Seq[Result[R]])] =
       mat match {
         case ProduceCandidate(
             channels,
-            WaitingContinuation(_, continuation, persistK, consumeRef),
+            WaitingContinuation(patterns, continuation, persistK, consumeRef),
             continuationIndex,
             dataCandidates
             ) =>
@@ -320,7 +324,12 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           replayData.put(replaysLessCommRef(replays, commRef))
           span.mark("handle-match-end")
-          Some((continuation, dataCandidates.map(_.datum.a)))
+          Some(
+            (
+              ContResult(continuation, persistK, channels, patterns),
+              dataCandidates.map(dc => Result(dc.datum.a, dc.datum.persist))
+            )
+          )
       }
 
     store.withTxn(store.createTxnRead()) { txn =>

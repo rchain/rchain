@@ -4,8 +4,9 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
+import coop.rchain.models.rholang.SortTest.sort
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.models.rholang.sort._
+import coop.rchain.models.rholang.sorter._
 import monix.eval.Coeval
 import org.scalatest._
 
@@ -16,23 +17,26 @@ object SortTest {
 }
 
 class ScoredTermSpec extends FlatSpec with Matchers {
-  "ScoredTerm" should "Sort so that shorter nodes come first" in {
+
+  behavior of "ScoredTerm"
+
+  it should "sort so that shorter nodes come first" in {
     val unsortedTerms =
       Seq(ScoredTerm("foo", Leaves(1, 2, 2, 3)), ScoredTerm("bar", Leaves(1, 2, 2)))
     val sortedTerms = Seq(ScoredTerm("bar", Leaves(1, 2, 2)), ScoredTerm("foo", Leaves(1, 2, 2, 3)))
     unsortedTerms.sorted should be(sortedTerms)
   }
-  "ScoredTerm" should "Sort so that smaller leafs stay first" in {
+  it should "sort so that smaller leafs stay first" in {
     val unsortedTerms = Seq(ScoredTerm("foo", Leaf(1)), ScoredTerm("bar", Leaf(2)))
     val sortedTerms   = Seq(ScoredTerm("foo", Leaf(1)), ScoredTerm("bar", Leaf(2)))
     unsortedTerms.sorted should be(sortedTerms)
   }
-  "ScoredTerm" should "Sort so that smaller leafs are put first" in {
+  it should "sort so that smaller leafs are put first" in {
     val unsortedTerms = Seq(ScoredTerm("foo", Leaf(2)), ScoredTerm("bar", Leaf(1)))
     val sortedTerms   = Seq(ScoredTerm("bar", Leaf(1)), ScoredTerm("foo", Leaf(2)))
     unsortedTerms.sorted should be(sortedTerms)
   }
-  "ScoredTerm" should "Sort so that smaller nodes are put first" in {
+  it should "sort so that smaller nodes are put first" in {
     val unsortedTerms = Seq(
       ScoredTerm("foo", Node(Seq(Leaves(1, 2), Leaves(2, 2)))),
       ScoredTerm("bar", Node(Seq(Leaves(1, 1), Leaves(2, 2))))
@@ -73,31 +77,34 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
       locallyFree = BitSet(0, 1, 2),
       connectiveUsed = true
     )
-    val result = SortTest.sort(parVars)
+    val result = sort(parVars)
     result.term should be(sortedParVars.get)
   }
 }
 
 class ParSortMatcherSpec extends FlatSpec with Matchers {
-  "Par" should "Sort so that smaller integers come first" in {
+
+  behavior of "Par"
+
+  it should "sort so that smaller integers come first" in {
     val parGround =
       Par(exprs = List(GInt(2), GInt(1), GInt(-1), GInt(-2), GInt(0)))
     val sortedParGround: Option[Par] =
       Par(exprs = List(GInt(-2), GInt(-1), GInt(0), GInt(1), GInt(2)))
-    val result = SortTest.sort(parGround)
+    val result = sort(parGround)
     result.term should be(sortedParGround.get)
   }
 
-  "Par" should "Sort in order of boolean, int, string, uri" in {
+  it should "sort in order of boolean, int, string, uri" in {
     val parGround =
       Par(exprs = List(GUri("https://www.rchain.coop/"), GInt(47), GString("Hello"), GBool(true)))
     val sortedParGround: Option[Par] =
       Par(exprs = List(GBool(true), GInt(47), GString("Hello"), GUri("https://www.rchain.coop/")))
-    val result = SortTest.sort(parGround)
+    val result = sort(parGround)
     result.term should be(sortedParGround.get)
   }
 
-  "Par" should "Sort and deduplicate sets insides" in {
+  it should "sort and deduplicate sets insides" in {
     val parGround: Par =
       ParSet(
         Seq[Par](
@@ -116,11 +123,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           ParSet(Seq[Par](GInt(1), GInt(2)))
         )
       )
-    val result = SortTest.sort(parGround)
+    val result = sort(parGround)
     result.term should be(sortedParGround)
   }
 
-  "Par" should "Sort map insides by key and last write should win" in {
+  it should "sort map insides by key and last write should win" in {
     val parGround: Par =
       ParMap(
         Seq[(Par, Par)](
@@ -132,18 +139,30 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val sortedParGround: Par =
       ParMap(Seq[(Par, Par)]((GInt(1), GInt(1)), (GInt(2), GInt(1))))
 
-    val result = SortTest.sort(parGround)
+    val result = sort(parGround)
     result.term should be(sortedParGround)
   }
 
-  "Par" should "Keep order when adding numbers" in {
+  it should "use sorted subtrees and their scores in results" in {
+    val s1  = Send(Par())
+    val s2  = Send(Par(receives = List(Receive(List(), Par()))))
+    val p21 = Par(sends = List(s2, s1))
+    val p12 = Par(sends = List(s1, s2))
+
+    assume(p12 == sort(p12).term)
+    assume(p21 != sort(p21).term)
+    assert(sort(p12).term == sort(p21).term)
+    assert(sort(p12) == sort(p21)) //compare .score and all the other properties
+  }
+
+  it should "keep order when adding numbers" in {
     val parExpr: Par =
       EPlus(EPlus(GInt(1), GInt(3)), GInt(2))
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(parExpr.get)
   }
 
-  "Par" should "Sort according to PEMDAS" in {
+  it should "sort according to PEMDAS" in {
     val parExpr =
       Par(
         exprs = List(
@@ -162,11 +181,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMinus(GInt(4), GInt(3))
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "Sort comparisons in order of LT, LTE, GT, GTE, EQ, NEQ" in {
+  it should "sort comparisons in order of LT, LTE, GT, GTE, EQ, NEQ" in {
     val parExpr =
       Par(
         exprs = List(
@@ -189,11 +208,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           ENeq(GInt(1), GInt(5))
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "sort methods after other expressions" in {
+  it should "sort methods after other expressions" in {
     val parExpr =
       Par(
         exprs = List(
@@ -210,11 +229,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "sort methods based on methodName, target, and arguments" in {
+  it should "sort methods based on methodName, target, and arguments" in {
     val parExpr =
       Par(
         exprs = List(
@@ -233,11 +252,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2))
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "Sort Sends based on their persistence, channel, data" in {
+  it should "sort Sends based on their persistence, channel, data" in {
     val parExpr =
       Par(
         sends = List(
@@ -256,11 +275,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(GInt(5), List(GInt(3)), true, BitSet())
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "Sort Receives based on persistence, channels, patterns and then body" in {
+  it should "sort Receives based on persistence, channels, patterns and then body" in {
     val parExpr =
       Par(
         receives = List(
@@ -335,11 +354,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Receive(List(ReceiveBind(List(GInt(0)), GInt(3))), Par(), true, 0, BitSet())
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
-  "Par" should "Sort Match based on their value and then cases" in {
+  it should "sort Match based on their value and then cases" in {
     val parMatch =
       Par(
         matches = List(
@@ -372,11 +391,11 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Match(GInt(5), List(MatchCase(GInt(5), GInt(5)), MatchCase(GInt(4), GInt(4))), BitSet())
         )
       )
-    val result = SortTest.sort(parMatch)
+    val result = sort(parMatch)
     result.term should be(sortedParMatch.get)
   }
 
-  "Par" should "Sort News based on bindCount, uri's and then body" in {
+  it should "sort News based on bindCount, uri's and then body" in {
     val parNew =
       Par(
         news = List(
@@ -397,20 +416,20 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           New(bindCount = 2, p = Par())
         )
       )
-    val result = SortTest.sort(parNew)
+    val result = sort(parNew)
     result.term should be(sortedParNew.get)
   }
 
-  "Par" should "Sort EVars based on their type and then levels" in {
+  it should "sort EVars based on their type and then levels" in {
     val parGround =
       Par(exprs = List(EVar(FreeVar(2)), EVar(FreeVar(1)), EVar(BoundVar(2)), EVar(BoundVar(1))))
     val sortedParGround: Option[Par] =
       Par(exprs = List(EVar(BoundVar(1)), EVar(BoundVar(2)), EVar(FreeVar(1)), EVar(FreeVar(2))))
-    val result = SortTest.sort(parGround)
+    val result = sort(parGround)
     result.term should be(sortedParGround.get)
   }
 
-  "Par" should "Sort exprs in order of ground, vars, arithmetic, comparisons, logical" in {
+  it should "sort exprs in order of ground, vars, arithmetic, comparisons, logical" in {
     val parExpr =
       Par(
         exprs = List(
@@ -431,7 +450,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(GBool(false), GBool(true))
         )
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr.get)
   }
 
@@ -458,7 +477,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       )
 
     val bundle = Bundle(parExpr)
-    val result = SortTest.sort(bundle)
+    val result = sort(bundle)
     result.term should be(Bundle(sortedParExpr))
   }
 
@@ -491,7 +510,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         readFlag = true
       )
     )
-    val result = SortTest.sort(nestedBundle)
+    val result = sort(nestedBundle)
     result.term should be(
       Bundle(
         Bundle(
@@ -564,7 +583,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         ),
         connectiveUsed = true
       )
-    val result = SortTest.sort(parExpr)
+    val result = sort(parExpr)
     result.term should be(sortedParExpr)
   }
 }

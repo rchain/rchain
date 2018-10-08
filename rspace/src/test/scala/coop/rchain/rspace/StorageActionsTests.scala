@@ -376,7 +376,9 @@ trait StorageActionsTests
 
     continuations.forall(_.right.get.isDefined) shouldBe true
 
-    continuations.foreach(runK)
+    continuations
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     captor.results should contain theSameElementsAs List(
       List("datum3"),
@@ -404,7 +406,9 @@ trait StorageActionsTests
       r2 shouldBe defined
       r3 shouldBe defined
 
-      List(r1, r2, r3).foreach(runK)
+      List(r1, r2, r3)
+        .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+        .foreach(runK)
 
       getK(r1).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
       getK(r2).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
@@ -433,7 +437,9 @@ trait StorageActionsTests
     r2 shouldBe defined
     r3 shouldBe defined
 
-    List(r1, r2, r3).foreach(runK)
+    List(r1, r2, r3)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     getK(r1).results shouldBe List(List("datum1"))
     getK(r2).results shouldBe List(List("datum2"))
@@ -526,7 +532,9 @@ trait StorageActionsTests
     r5 shouldBe Right(None)
     r6 shouldBe defined
 
-    List(r4, r6).foreach(runK)
+    List(r4, r6)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
     getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
@@ -576,7 +584,9 @@ trait StorageActionsTests
     val r3 = space.produce("ch1", "datum1", persist = false)
     val r4 = space.produce("ch2", "datum2", persist = false)
 
-    List(r1, r2, r3, r4).foreach(runK)
+    List(r1, r2, r3, r4)
+      .map(unpackEither[Id, String, Pattern, Nothing, StringsCaptor, String])
+      .foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getData(txn, List("ch1")) shouldBe Nil

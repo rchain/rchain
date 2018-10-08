@@ -38,7 +38,9 @@ trait ReplayRSpaceTests
       patterns: List[P],
       continuationCreator: Int => K,
       persist: Boolean
-  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, Seq[R])]] =
+  )(
+      implicit matcher: Match[P, Nothing, A, R]
+  ): List[Option[(ContResult[C, P, K], Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.consume(channelsCreator(i), patterns, continuationCreator(i), persist).right.get
     }
@@ -50,7 +52,9 @@ trait ReplayRSpaceTests
       channelCreator: Int => C,
       datumCreator: Int => A,
       persist: Boolean
-  )(implicit matcher: Match[P, Nothing, A, R]): List[Option[(K, immutable.Seq[R])]] =
+  )(
+      implicit matcher: Match[P, Nothing, A, R]
+  ): List[Option[(ContResult[C, P, K], immutable.Seq[Result[R]])]] =
     (if (shuffle) Random.shuffle(range.toList) else range.toList).map { i: Int =>
       space.produce(channelCreator(i), datumCreator(i), persist).right.get
     }

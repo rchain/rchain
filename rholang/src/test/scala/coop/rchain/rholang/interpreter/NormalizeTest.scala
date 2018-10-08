@@ -10,7 +10,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   _
 }
 import org.scalatest._
-import coop.rchain.models.rholang.sort.ordering._
+import coop.rchain.models.rholang.sorter.ordering._
 
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -133,7 +133,6 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
             GInt(7),
             GInt(8).prepend(EVar(FreeVar(2)), 0)
           ),
-          connectiveUsed = true,
           remainder = Some(FreeVar(0))
         ),
         depth = 0
