@@ -3,11 +3,12 @@
 //Requires ListOps
 //Represents Either[A, B] as ("Left", A) or ("Right", B)
 
-new flatMap, map, compose, ack1, ack2, ack3, foldRet, StopGap(`rho:StopGap`) in {
-  @(*StopGap, "set")!("Either.flatMap", bundle+{*flatMap}, *ack1) |
-  @(*StopGap, "set")!("Either.map", bundle+{*map}, *ack2) |
-  @(*StopGap, "set")!("Either.compose", bundle+{*compose}, *ack3) |
-  @(*StopGap, "get")!("ListOps.fold", *foldret) |
+new flatMap, map, compose, ack1, ack2, ack3, foldRet, sgset(`rho:stopgap:set`), 
+    sgget(`rho:stopgap:get`) in {
+  sgset!("Either.flatMap", *flatMap, *ack1) |
+  sgset!("Either.map", *map, *ack2) |
+  sgset!("Either.compose", *compose, *ack3) |
+  sgget!("ListOps.fold", *foldret) |
   for (_ <- ack1; _ <- ack2; _ <- ack3; fold <- foldret) {
     //Right-biased flatMap; f must also return an Either
     contract flatMap(@either, f, return) = {

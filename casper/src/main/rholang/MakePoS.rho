@@ -1,15 +1,17 @@
 //scalapackage coop.rchain.rholang.proofofstake
 
-new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret in {
-  @(*StopGap, "set")!("MakePos", bundle+{*MakePos}, *ack) |
-  @(*StopGap, "get")!("ListOps.range", *rangeret) |
-  @(*StopGap, "get")!("ListOps.map", *mapret) |
-  @(*StopGap, "get")!("ListOps.fold", *foldret) |
-  @(*StopGap, "get")!("Either.compose", *composeret) |
+new MakePoS, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`),
+    ack, rangeret, mapret, foldret, composeret in {
+  sgset!("MakePos", *MakePos, *ack) |
+  sgget!("ListOps.range", *rangeret) |
+  sgget!("ListOps.map", *mapret) |
+  sgget!("ListOps.fold", *foldret) |
+  sgget!("Either.compose", *composeret) |
   
   for (_ <- ack; range <- rangeret, map <- mapret; fold <- foldret; compose <- composeret) {
     contract MakePoS(@purse, @minimumBond, @maximumBond, @initBonds, return) = {
-      new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution in {
+      new this, bondsCh, joiningFeeCh, clonePurse, depositPurse, updateBonds, feeDistribution,
+          validateBondAmount, validateBondingRate in {
         bondsCh!(initBonds) |
         joiningFeeCh!!(minimumBond) | //joining fee equal to minimum bond amount
 
@@ -19,9 +21,9 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
         //during processing.
         contract clonePurse(@givenPurse, return) = {
           new balanceCh, resultCh in {
-            @(givenPurse, "getBalance")!(*balanceCh) |
+            givenPurse!("getBalance", *balanceCh) |
             for(@balance <- balanceCh) {
-              @(givenPurse, "split")!(balance, *resultCh) |
+              givenPurse!("split", balance, *resultCh) |
               for(@result <- resultCh) {
                 match result {
                   [] => { return!(("Left", "Could not extract funds from given purse")) }
@@ -32,9 +34,12 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
           }
         } |
 
-        contract @(*this, "validateBondAmount")(@bondPurse, return) = {
+        contract validateBondAmount(@bondPurse, return) = {
+          this!("validateBondAmount", bondPurse, *return)
+        } |
+        contract this("validateBondAmount", @bondPurse, return) = {
           new balanceCh in {
-            @(bondPurse, "getBalance")!(*balanceCh) |
+            bondPurse!("getBalance", *balanceCh) |
             for(@balance <- balanceCh; @joiningFee <- joiningFeeCh) {
               if      (balance - joiningFee < minimumBond) { return!(("Left", "Bond less than minimum!")) }
               else if (balance - joiningFee > maximumBond) { return!(("Left", "Bond greater than maximum!")) }
@@ -43,14 +48,17 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
           }
         } |
 
-        contract @(*this, "validateBondingRate")(@bondPurse, return) = {
+        contract validateBondingRate(@bondPurse, return) = {
+          this!("validateBondingRate", bondPurse, *return)
+        } |
+        contract this("validateBondingRate", @bondPurse, return) = {
           //TODO: figure out rate-limiting of bonding
           return!(("Right", bondPurse))
         } |
 
         contract depositPurse(@bondPurse, @amount, return) = {
           new successCh in {
-            @(purse, "deposit")!(amount, bondPurse, *successCh) |
+            purse!("deposit", amount, bondPurse, *successCh) |
             for(@success <- successCh) {
               if (success) { return!(("Right", bondPurse)) }
               else         { return!(("Left", "Deposit failed.")) }
@@ -58,13 +66,13 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
           }
         } |
 
-        contract @(*this, "isBonded")(@publicKey, return) = {
+        contract this("isBonded", @publicKey, return) = {
           for(@bonds <- bondsCh) {
             bondsCh!(bonds) | return!(bonds.contains(publicKey))
           }
         } |
 
-        contract @(*this, "getBonds")(return) = {
+        contract this("getBonds", return) = {
           for(@bonds <- bondsCh) {
             bondsCh!(bonds) | return!(bonds)
           }
@@ -121,14 +129,14 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
           }
         } |
 
-        contract @(*this, "bond")(@publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
+        contract this("bond", @publicKey, @sigVerify, @givenBondPurse, @rewardsForwarder, return) = {
           //TODO: Validate that givenBondPurse comes from the same mint as purse
 
           new resultCh, bondPurseCh, validatePublicKey, depositClonePurse in {
             //lambda-expression-like construction to insert key validation into the composition
             for(@x, ret <- validatePublicKey){
               new isBondedCh in {
-                @(*this, "isBonded")!(publicKey, *isBondedCh) |
+                this!("isBonded", publicKey, *isBondedCh) |
                 for(@isBonded <- isBondedCh) {
                   if (isBonded) { ret!(("Left", "Public key ${pk} already bonded." %% {"pk" : publicKey})) }
                   else          { ret!(("Right", x)) }
@@ -143,8 +151,8 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
                     depositPurse!(bondPurse, bondAmount, *ret)
                   } |
                   compose!(bondPurse, [
-                            (*this, "validateBondAmount"), 
-                            (*this, "validateBondingRate"),
+                            *validateBondAmount, 
+                            *validateBondingRate,
                             *validatePublicKey,
                             *depositClonePurse
                             ], *resultCh) |
@@ -154,7 +162,7 @@ new MakePoS, StopGap(`rho:StopGap`), ack, rangeret, mapret, foldret, composeret 
 
                       ("Left", message) => {
                         //return funds to original purse since an error occurred
-                        @(givenBondPurse, "deposit")!(bondAmount, bondPurse, *resultCh) |
+                        givenBondPurse!("deposit", bondAmount, bondPurse, *resultCh) |
                         for(_ <- resultCh) { return!((false, message)) }
                       }
                     }

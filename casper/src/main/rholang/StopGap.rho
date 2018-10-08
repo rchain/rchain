@@ -1,24 +1,24 @@
-new builtinsStore, activeStore in {
+new builtinsStore, activeStore, sgset, sgget, sgdone in {
   builtinsStore!({}) |
   activeStore!(true) |
-  contract @(*StopGap, "set")(@title, @value, ack) = {
+  contract sgset(@title, @value, ack) = {
     for (builtins <- builtinsStore; @active <- activeStore) {
       activeStore!(active) |
       if (active) {
-        builtinsStore!(builtins.set(title, value))
+        builtinsStore!(builtins.set(title, bundle+{value}))
       } else {
         builtinsStore!(builtins)
       }|
       ack!(Nil)
     }
   } |
-  contract @(*StopGap, "get")(@title, ret) = {
+  contract sgget(@title, ret) = {
     for (builtins <- builtinsStore) {
       builtinsStore!(builtins) |
       ret!(builtins.get(title))
     }
   } |
-  contract @(*StopGap, "done")() = {
+  contract sgdone() = {
     for (_ <- activeStore) {
       activeStore!(false)
     }

@@ -1,19 +1,19 @@
 //scalapackage coop.rchain.rholang.collection
 new prepend, append, partialFold, fold, reverse, parMap, unorderedParMap,
-    foreach, indexOf, zip, range, StopGap(`rho:StopGap`),
+    foreach, indexOf, zip, range, sgset(`rho:stopgap:set`), sgget(`rho:stopgap:get`),
     ack1, ack2, ack3, ack4, ack5, ack6, ack7, ack8, ack9, ack10, ack11 in {
 
-  @(*StopGap, "set")!("ListOps.prepend", bundle+{prepend}, *ack1) |
-  @(*StopGap, "set")!("ListOps.append", bundle+{append}, *ack2) |
-  @(*StopGap, "set")!("ListOps.partialFold", bundle+{partialFold}, *ack3) |
-  @(*StopGap, "set")!("ListOps.fold", bundle+{fold}, *ack4) |
-  @(*StopGap, "set")!("ListOps.reverse", bundle+{reverse}, *ack5) |
-  @(*StopGap, "set")!("ListOps.parMap", bundle+{parMap}, *ack6) |
-  @(*StopGap, "set")!("ListOps.unorderedParMap", bundle+{unorderedParMap}, *ack7) |
-  @(*StopGap, "set")!("ListOps.foreach", bundle+{foreach}, *ack8) |
-  @(*StopGap, "set")!("ListOps.indexOf", bundle+{indexOf}, *ack9) |
-  @(*StopGap, "set")!("ListOps.zip", bundle+{zip}, *ack10) |
-  @(*StopGap, "set")!("ListOps.range", bundle+{range}, *ack11) |
+  sgset!("ListOps.prepend", prepend}, *ack1) |
+  sgset!("ListOps.append", append}, *ack2) |
+  sgset!("ListOps.partialFold", partialFold}, *ack3) |
+  sgset!("ListOps.fold", fold}, *ack4) |
+  sgset!("ListOps.reverse", reverse}, *ack5) |
+  sgset!("ListOps.parMap", parMap}, *ack6) |
+  sgset!("ListOps.unorderedParMap", unorderedParMap}, *ack7) |
+  sgset!("ListOps.foreach", foreach}, *ack8) |
+  sgset!("ListOps.indexOf", indexOf}, *ack9) |
+  sgset!("ListOps.zip", zip}, *ack10) |
+  sgset!("ListOps.range", range}, *ack11) |
 
   for(_ <- ack1; _ <- ack2; _ <- ack3; _ <- ack4; _ <- ack5; _ <- ack6; 
       _ <- ack7; _ <- ack8; _ <- ack9; _ <- ack10; _ <- ack11) {

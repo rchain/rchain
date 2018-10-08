@@ -1,12 +1,12 @@
 //scalapackage coop.rchain.rholang.math
 
 //This is a contract to explicitly implement the int >= 0 behavioural type
-new NonNegativeNumber, StopGap(`rho:StopGap`), ack in {
-  @(*StopGap, "set")!("NonNegativeNumber", bundle+{*NonNegativeNumber}, *ack) |
+new NonNegativeNumber, sgset(`rho:stopgap:set`), ack in {
+  sgset!("NonNegativeNumber", *NonNegativeNumber, *ack) |
   for (_ <- ack) {
     contract NonNegativeNumber(@init, return) = {
       new this, valueStore in {
-        contract @(*this, "add")(@x, success) = {
+        contract this("add", @x, success) = {
           if (x >= 0) {
             for(@v <- valueStore){
               if (v + x > v) {
@@ -20,7 +20,7 @@ new NonNegativeNumber, StopGap(`rho:StopGap`), ack in {
             success!(false)
           }
         } |
-        contract @(*this, "sub")(@x, success) = {
+        contract this("sub", @x, success) = {
           if (x >= 0) {
             for(@v <- valueStore) {
               if (x <= v) {
@@ -33,7 +33,7 @@ new NonNegativeNumber, StopGap(`rho:StopGap`), ack in {
             success!(false)
           }
         } |
-        contract @(*this, "value")(return) = {
+        contract this("value", return) = {
           for(@v <- valueStore) {
             valueStore!(v) | return!(v)
           }
