@@ -58,7 +58,7 @@ service TransportLayer {
   rpc Tell (TLRequest) returns (TLResponse) {}
   rpc Ask (TLRequest) returns (TLResponse) {}
   // this eventually will become streamed API, for now regular call
-  rpc Stream (TLBlob) returns (TLBlobResponse) {}
+  rpc Stream (stream Chunk) returns (ChunkResponse) {}
 }
 
 message TLRequest {
@@ -80,11 +80,22 @@ message TLResponse {
   }
 }
 
-message TLBlob {
+message ChunkHeader {
   Node   sender = 1;
-  Packet packet = 2;
+  string typeId = 2;
 }
 
-message TLBlobResponse {
+message ChunkData {
+  bytes contentData = 1;
+}
+
+message Chunk {
+  oneof content {
+    ChunkHeader header = 1;
+    ChunkData   data   = 2;
+  }
+}
+
+message ChunkResponse {
 
 }

@@ -14,7 +14,7 @@ import scala.util._
 import io.grpc._, io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslContextBuilder}
 import coop.rchain.comm.protocol.routing.RoutingGrpcMonix.TransportLayerStub
-import monix.eval._, monix.execution._
+import monix.eval._, monix.execution._, monix.reactive._
 import scala.concurrent.TimeoutException
 
 class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxMessageSize: Int)(
@@ -119,6 +119,19 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
   ): Task[CommErr[Option[Protocol]]] =
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
+  def chunkIt(blob: Blob): List[Chunk] = {
+
+    def header: Chunk =
+      Chunk().withHeader(
+        ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
+      )
+
+    // FIX-ME actually chunk the data
+    def data: List[Chunk] = List(Chunk().withData(ChunkData().withContentData(blob.packet.content)))
+
+    header +: data
+  }
+
   /**
     * This implmementation is temporary, it sequentially sends blob to each peers.
     * TODO Provide solution that stacks blob on a queue that is later consumed
@@ -128,9 +141,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
       .traverse(
         peer =>
           withClient(peer, enforce = false) { stub =>
-            stub.stream(
-              TLBlob().withSender(ProtocolHelper.node(blob.sender)).withPacket(blob.packet)
-            )
+            stub.stream(Observable(chunkIt(blob): _*))
           }.attempt.flatMap {
             case Left(error) => log.debug(s"Error while streaming packet, error: $error")
             case Right(_)    => Task.unit
@@ -207,7 +218,7 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
           case Right(response) => handle.reply(response)
         }.void
       case StreamMessage(blob) => handleStreamed(blob)
-      case _                 => Task.unit // sender timeout
+      case _                   => Task.unit // sender timeout
     }
 
     Task.delay {
