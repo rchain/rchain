@@ -423,7 +423,7 @@ object Validate {
     for {
       latestMessages        <- ProtoUtil.toLatestMessage[F](b.justifications, dag)
       dagViewOfBlockCreator = dag.copy(latestMessages = latestMessages)
-      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis.blockHash)
+      estimate              <- Estimator.tips[F](dagViewOfBlockCreator, genesis)
       computedParents       <- ProtoUtil.chooseNonConflicting[F](estimate, genesis, dag)
       computedParentHashes  = computedParents.map(_.blockHash)
       status <- if (parentHashes == computedParentHashes)

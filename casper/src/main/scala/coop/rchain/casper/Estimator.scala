@@ -25,7 +25,7 @@ object Estimator {
     */
   def tips[F[_]: Monad: BlockStore](
       blockDag: BlockDag,
-      genesisBlockHash: BlockHash
+      genesis: BlockMessage
   ): F[IndexedSeq[BlockMessage]] = {
     @tailrec
     def sortChildren(
@@ -69,17 +69,25 @@ object Estimator {
       newBlocks == blocks
 
     for {
-      scoresMap           <- buildScoresMap[F](blockDag)
-      sortedChildrenHash  = sortChildren(IndexedSeq(genesisBlockHash), blockDag.childMap, scoresMap)
+      scoresMap           <- buildScoresMap[F](blockDag, genesis)
+      sortedChildrenHash  = sortChildren(IndexedSeq(genesis.blockHash), blockDag.childMap, scoresMap)
       maybeSortedChildren <- sortedChildrenHash.toList.traverse(BlockStore[F].get)
       sortedChildren      = maybeSortedChildren.flatten.toVector
     } yield sortedChildren
   }
 
   // TODO: Fix to stop at genesis/LFB
-  def buildScoresMap[F[_]: Monad: BlockStore](blockDag: BlockDag): F[Map[BlockHash, Long]] = {
-    def hashParents(hash: BlockHash): F[List[BlockHash]] =
-      blockDag.dataLookup(hash).parents.pure[F]
+  def buildScoresMap[F[_]: Monad: BlockStore](
+      blockDag: BlockDag,
+      genesis: BlockMessage
+  ): F[Map[BlockHash, Long]] = {
+    def hashParents(hash: BlockHash, genesisBlockNumber: Long): F[List[BlockHash]] = {
+      val currentBlockNumber = blockDag.dataLookup(hash).blockNum
+      if (currentBlockNumber < genesisBlockNumber)
+        List.empty[BlockHash].pure[F]
+      else
+        blockDag.dataLookup(hash).parents.pure[F]
+    }
 
     def addValidatorWeightDownSupportingChain(
         scoreMap: Map[BlockHash, Long],
@@ -88,7 +96,9 @@ object Estimator {
     ): F[Map[BlockHash, Long]] =
       for {
         updatedScoreMap <- DagOperations
-                            .bfTraverseF[F, BlockHash](List(latestBlockHash))(hashParents)
+                            .bfTraverseF[F, BlockHash](List(latestBlockHash))(
+                              hashParents(_, ProtoUtil.blockNumber(genesis))
+                            )
                             .foldLeft(scoreMap) {
                               case (acc, hash) => {
                                 val currScore = acc.getOrElse(hash, 0L)
