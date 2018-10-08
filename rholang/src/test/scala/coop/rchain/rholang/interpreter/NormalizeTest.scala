@@ -688,6 +688,50 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  def linearInput(channel: Proc): PInput = {
+    val listBindings1 = new ListName()
+    listBindings1.add(new NameQuote(new PNil()))
+    val listLinearBind1 = new ListLinearBind()
+    listLinearBind1.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(channel))
+    )
+    val linearSimple = new LinearSimple(listLinearBind1)
+    val receipt      = new ReceiptLinear(linearSimple)
+    val body         = new PNil()
+    new PInput(receipt, body)
+  }
+
+  "PInput" should "allow for patterns containing logical connectives in the receive bind" in {
+    def check(input: PInput, conn: Connective): Assertion =
+      assert(
+        ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par === Par(
+          receives = Seq(
+            Receive(
+              binds = Seq(
+                ReceiveBind(
+                  patterns = Seq(
+                    Par(connectives = Seq(conn))
+                  ),
+                  source = Par()
+                )
+              ),
+              body = Par()
+            )
+          )
+        )
+      )
+
+    check(
+      linearInput(new PConjunction(new PNil(), new PNil())),
+      Connective(ConnAndBody(ConnectiveBody(Seq(Par(), Par()))))
+    )
+    check(
+      linearInput(new PDisjunction(new PNil(), new PNil())),
+      Connective(ConnOrBody(ConnectiveBody(Seq(Par(), Par()))))
+    )
+    check(linearInput(new PNegation(new PNil())), Connective(ConnNotBody(Par())))
+  }
+
   "PInput" should "bind whole list to the list remainder" in {
     // for (@[...a] <- @0) { … }
     val listBindings = new ListName()
@@ -1463,5 +1507,9 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val expectedResult: Par = EVar(BoundVar(0)).prepend(EVar(BoundVar(0)), 0)
     result.chan should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+
+  "NameQuote" should "not compile if it contains patterns" in {
+    pending
   }
 }
