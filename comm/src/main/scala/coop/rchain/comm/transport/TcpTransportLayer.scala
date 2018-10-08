@@ -120,14 +120,15 @@ class TcpTransportLayer(host: String, port: Int, cert: String, key: String, maxM
     withClient(peer, enforce)(f).attempt.map(processResponse(peer, _))
 
   def chunkIt(blob: Blob): List[Chunk] = {
-
     def header: Chunk =
       Chunk().withHeader(
         ChunkHeader().withSender(ProtocolHelper.node(blob.sender)).withTypeId(blob.packet.typeId)
       )
-
-    // FIX-ME actually chunk the data
-    def data: List[Chunk] = List(Chunk().withData(ChunkData().withContentData(blob.packet.content)))
+    val buffer = 2 * 1024 // 2 kbytes for protobuf related stuff
+    def data: List[Chunk] =
+      blob.packet.content.toByteArray.sliding(maxMessageSize - buffer, 1).toList.map { data =>
+        Chunk().withData(ChunkData().withContentData(ProtocolHelper.toProtocolBytes(data)))
+      }
 
     header +: data
   }
