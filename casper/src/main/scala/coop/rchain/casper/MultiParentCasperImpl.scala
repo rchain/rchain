@@ -576,7 +576,7 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
     for {
       successfulAdds <- attempts
                          .filter {
-                           case (_, status) => successfulAddStatus(status)
+                           case (_, status) => status.inDag
                          }
                          .pure[F]
       _ <- unsafeRemoveFromBlockBuffer(successfulAdds)
@@ -586,12 +586,13 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
   private def unsafeRemoveFromBlockBuffer(
       successfulAdds: List[(BlockMessage, BlockStatus)]
   ): F[Unit] =
-    Sync[F].delay {
-      successfulAdds.map {
-        blockBuffer -= _._1
+    Sync[F]
+      .delay {
+        successfulAdds.map {
+          blockBuffer -= _._1
+        }
       }
-      ()
-    }
+      .as(Unit)
 
   private def removeFromBlockBufferDependencyDag(
       blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
@@ -603,26 +604,6 @@ class MultiParentCasperImpl[F[_]: Sync: Capture: ConnectionsCell: TransportLayer
           DoublyLinkedDagOperations.remove(acc, successfulAdd._1.blockHash)
       }
     )
-
-  private def successfulAddStatus(status: BlockStatus): Boolean =
-    status == Valid ||
-      status == AdmissibleEquivocation ||
-      status == IgnorableEquivocation ||
-      status == InvalidUnslashableBlock ||
-      status == MissingBlocks ||
-      status == InvalidBlockNumber ||
-      status == InvalidRepeatDeploy ||
-      status == InvalidParents ||
-      status == InvalidFollows ||
-      status == InvalidSequenceNumber ||
-      status == InvalidShardId ||
-      status == JustificationRegression ||
-      status == NeglectedInvalidBlock ||
-      status == NeglectedEquivocation ||
-      status == InvalidTransaction ||
-      status == InvalidBondsCache ||
-      status == InvalidBlockHash ||
-      status == InvalidDeployCount
 
   def getRuntimeManager: F[Option[RuntimeManager]] = Applicative[F].pure(Some(runtimeManager))
 }
