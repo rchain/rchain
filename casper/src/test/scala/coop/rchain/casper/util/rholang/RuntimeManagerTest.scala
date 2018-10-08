@@ -2,12 +2,15 @@ package coop.rchain.casper.util.rholang
 
 import java.nio.file.Files
 
+import cats.{Id, Monad}
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.{accounting, Runtime}
 import coop.rchain.rholang.math.NonNegativeNumber
 import coop.rchain.shared.StoreType
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.catscontrib.Capture._
 
 class RuntimeManagerTest extends FlatSpec with Matchers {
   val storageSize      = 1024L * 1024
@@ -63,12 +66,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "emptyStateHash" should "not remember previous hot store state" in {
+    implicit val timeEff = new LogicalTime[Id]
+
     val testStorageDirectory = Files.createTempDirectory("casper-runtime-manager-test")
 
     val testRuntime1        = Runtime.create(testStorageDirectory, storageSize)
     val testRuntimeManager1 = RuntimeManager.fromRuntime(testRuntime1)
     val hash1               = testRuntimeManager1.emptyStateHash
-    val deploy              = ProtoUtil.basicDeploy(0)
+    val deploy              = ProtoUtil.basicDeploy[Id](0)
     val _                   = testRuntimeManager1.computeState(hash1, deploy :: Nil)
     testRuntime1.close()
 

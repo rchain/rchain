@@ -8,6 +8,7 @@ import coop.rchain.casper.{BlockDag, BlockMetadata, PrettyPrinter}
 import coop.rchain.casper.EquivocationRecord.SequenceNumber
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil.basicDeployData
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
@@ -15,6 +16,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.{PCost, Par}
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
+import coop.rchain.shared.Time
 
 import scala.collection.immutable
 
@@ -422,35 +424,27 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
-  def basicDeployData(id: Int): DeployData = {
-    //TODO this should be removed once we assign the deploy with exact user
-    Thread.sleep(1)
-    val timestamp = System.currentTimeMillis()
-    val term      = s"@${id}!($id)"
+  def basicDeployData[F[_]: Monad: Time](id: Int): F[DeployData] =
+    for {
+      now  <- Time[F].currentMillis
+      term = s"@${id}!($id)"
+    } yield
+      DeployData()
+        .withUser(ByteString.EMPTY)
+        .withTimestamp(now)
+        .withTerm(term)
+        .withPhloLimit(accounting.MAX_VALUE)
 
-    DeployData()
-      .withUser(ByteString.EMPTY)
-      .withTimestamp(timestamp)
-      .withTerm(term)
-      .withPhloLimit(accounting.MAX_VALUE)
-  }
+  def basicDeploy[F[_]: Monad: Time](id: Int): F[Deploy] =
+    for {
+      d    <- basicDeployData[F](id)
+      term = InterpreterUtil.mkTerm(d.term).right.get
+    } yield Deploy(term = Some(term), raw = Some(d))
 
-  def basicDeploy(id: Int): Deploy = {
-    val d    = basicDeployData(id)
-    val term = InterpreterUtil.mkTerm(d.term).right.get
-    Deploy(
-      term = Some(term),
-      raw = Some(d)
-    )
-  }
-
-  def basicProcessedDeploy(id: Int): ProcessedDeploy = {
-    val deploy = basicDeploy(id)
-    ProcessedDeploy(
-      deploy = Some(deploy),
-      errored = false
-    )
-  }
+  def basicProcessedDeploy[F[_]: Monad: Time](id: Int): F[ProcessedDeploy] =
+    for {
+      deploy <- basicDeploy[F](id)
+    } yield ProcessedDeploy(deploy = Some(deploy))
 
   def sourceDeploy(source: String, timestamp: Long, phlos: PhloLimit): DeployData =
     DeployData(

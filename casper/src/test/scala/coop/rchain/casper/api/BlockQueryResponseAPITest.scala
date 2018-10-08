@@ -4,21 +4,22 @@ import cats._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.MultiParentCasperRef.MultiParentCasperRef
 import coop.rchain.casper._
 import coop.rchain.casper.helper.{BlockStoreFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.models.Par
-import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib.effect.implicits.syncId
+import coop.rchain.catscontrib.Capture._
 
 import scala.collection.immutable.HashMap
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFixture {
+  implicit val timeEff = new LogicalTime[Id]
+
   val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
@@ -38,13 +39,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   }
   val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
 
-  val secondHashString                 = "123456789101112131415161718192"
-  val blockHash: BlockHash             = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber                      = 1L
-  val timestamp                        = 1527191665L
-  val ps: RChainState                  = RChainState().withBlockNumber(blockNumber)
-  val deployCount                      = 10
-  val randomDeploys                    = (0 until deployCount).map(ProtoUtil.basicProcessedDeploy(_))
+  val secondHashString     = "123456789101112131415161718192"
+  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
+  val blockNumber          = 1L
+  val timestamp            = 1527191665L
+  val ps: RChainState      = RChainState().withBlockNumber(blockNumber)
+  val deployCount          = 10
+  val randomDeploys =
+    (0 until deployCount).map(ProtoUtil.basicProcessedDeploy[Id](_)(syncId, timeEff))
   val body: Body                       = Body().withPostState(ps).withDeploys(randomDeploys)
   val parentsString                    = List(genesisHashString, "0000000001")
   val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
@@ -65,30 +67,11 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStore { implicit blockStore =>
-    val dag = BlockDag.empty
-      .copy(
-        dataLookup = Map(
-          ProtoUtil.stringToByteString(genesisHashString) -> BlockMetadata
-            .fromBlock(genesisBlock),
-          ProtoUtil.stringToByteString(secondHashString) -> BlockMetadata.fromBlock(secondBlock)
-        )
-      )
-    implicit val casperEffect = NoOpsCasperEffect(
-      HashMap[BlockHash, BlockMessage](
-        (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-        (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-      ),
-      Vector(BlockMessage()),
-      dag
-    )(syncId, blockStore)
-    implicit val logEff = new LogStub[Id]()(syncId)
-    implicit val casperRef = {
-      val tmp = MultiParentCasperRef.of[Id]
-      tmp.set(casperEffect)
-      tmp
-    }
-    implicit val turanOracleEffect: SafetyOracle[Id] =
-      SafetyOracle.turanOracle[Id](syncId)
+    val (
+      logEff: LogStub[Id],
+      casperRef: Id[MultiParentCasperRef[Id]],
+      turanOracleEffect: SafetyOracle[Id]
+    )     = effectsForSimpleCasperSetup(blockStore)
     val q = BlockQuery(hash = secondBlockQuery)
     val blockQueryResponse = BlockAPI.showBlock[Id](q)(
       syncId,
@@ -111,12 +94,28 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     blockInfo.shardId should be(shardId)
   }
 
-  "showBlock" should "return error when no block exists" in withStore { implicit blockStore =>
+
+  private def effectsForSimpleCasperSetup(
+      blockStore: BlockStore[Id]
+  ): (LogStub[Id], Id[MultiParentCasperRef[Id]], SafetyOracle[Id]) = {
+    val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
+    val secondHash  = ProtoUtil.stringToByteString(secondHashString)
+    val dag = BlockDag.empty
+      .copy(
+        dataLookup = Map(
+          genesisHash -> BlockMetadata
+            .fromBlock(genesisBlock),
+          secondHash -> BlockMetadata.fromBlock(secondBlock)
+        ),
+        topoSort = Vector(Vector(genesisHash), Vector(secondHash))
+      )
     implicit val casperEffect = NoOpsCasperEffect(
       HashMap[BlockHash, BlockMessage](
         (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
         (ProtoUtil.stringToByteString(secondHashString), secondBlock)
-      )
+      ),
+      Vector(BlockMessage()),
+      dag
     )(syncId, blockStore)
     implicit val logEff = new LogStub[Id]()(syncId)
     implicit val casperRef = {
@@ -126,6 +125,15 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with BlockStoreFi
     }
     implicit val turanOracleEffect: SafetyOracle[Id] =
       SafetyOracle.turanOracle[Id](syncId)
+    (logEff, casperRef, turanOracleEffect)
+  }
+
+  "showBlock" should "return error when no block exists" in withStore { implicit blockStore =>
+    val (
+      logEff: LogStub[Id],
+      casperRef: Id[MultiParentCasperRef[Id]],
+      turanOracleEffect: SafetyOracle[Id]
+    )     = emptyEffects(blockStore)
     val q = BlockQuery(hash = badTestHashQuery)
     val blockQueryResponse = BlockAPI.showBlock[Id](q)(
       syncId,
