@@ -275,8 +275,8 @@ object Runtime {
       "rho:io:stdoutAck"             -> Bundle(FixedChannels.STDOUT_ACK, writeFlag = true),
       "rho:io:stderr"                -> Bundle(FixedChannels.STDERR, writeFlag = true),
       "rho:io:stderrAck"             -> Bundle(FixedChannels.STDERR_ACK, writeFlag = true),
-      "rho:registry:lookup"          -> FixedChannels.REG_LOOKUP,
-      "rho:registry:insertArbitrary" -> FixedChannels.REG_INSERT_RANDOM
+      "rho:registry:lookup"          -> Bundle(FixedChannels.REG_LOOKUP, writeFlag = true),
+      "rho:registry:insertArbitrary" -> Bundle(FixedChannels.REG_INSERT_RANDOM, writeFlag = true)
     )
 
     lazy val dispatchTable: RhoDispatchMap =

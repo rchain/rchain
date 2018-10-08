@@ -14,35 +14,37 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
   val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
 
-  val reduceError = "ReduceError: Trying to read from non-readable channel."
+  val channelReadOnlyError = "ReduceError: Trying to read from non-readable channel."
 
   "rho:io:stdout" should "not get intercepted" in {
-    val intercept =
-      """new s(`rho:io:stdout`) in { for(x <- s) { Nil } }"""
-
-    failure(intercept).getMessage.stripLineEnd should endWith(reduceError)
+    checkError("""new s(`rho:io:stdout`) in { for(x <- s) { Nil } }""", channelReadOnlyError)
   }
 
   "rho:io:stdoutAck" should "not get intercepted" in {
-    val intercept =
-      """new s(`rho:io:stdoutAck`) in { for(x <- s) { Nil } }"""
-
-    failure(intercept).getMessage.stripLineEnd should endWith(reduceError)
+    checkError("""new s(`rho:io:stdoutAck`) in { for(x <- s) { Nil } }""", channelReadOnlyError)
   }
 
   "rho:io:stderr" should "not get intercepted" in {
-    val intercept =
-      """new s(`rho:io:stderr`) in { for(x <- s) { Nil } }"""
-
-    failure(intercept).getMessage.stripLineEnd should endWith(reduceError)
+    checkError("""new s(`rho:io:stderr`) in { for(x <- s) { Nil } }""", channelReadOnlyError)
   }
 
   "rho:io:stderrAck" should "not get intercepted" in {
-    val intercept =
-      """new s(`rho:io:stderrAck`) in { for(x <- s) { Nil } }"""
-
-    failure(intercept).getMessage.stripLineEnd should endWith(reduceError)
+    checkError("""new s(`rho:io:stderrAck`) in { for(x <- s) { Nil } }""", channelReadOnlyError)
   }
+
+  "rho:registry:lookup" should "not get intercepted" in {
+    checkError("""new l(`rho:registry:lookup`) in { for(x <- l) { Nil } }""", channelReadOnlyError)
+  }
+
+  "rho:registry:insertArbitrary" should "not get intercepted" in {
+    checkError(
+      """new i(`rho:registry:insertArbitrary`) in { for(x <- i) { Nil } }""",
+      channelReadOnlyError
+    )
+  }
+
+  private def checkError(rho: String, error: String): Unit =
+    failure(rho).getMessage.stripLineEnd should endWith(error)
 
   private def failure(rho: String): Throwable =
     execute(rho).swap.getOrElse(fail(s"Expected $rho to fail - it didn't."))
