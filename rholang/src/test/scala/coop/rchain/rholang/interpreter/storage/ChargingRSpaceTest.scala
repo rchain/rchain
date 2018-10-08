@@ -6,6 +6,7 @@ import cats.Id
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
@@ -15,13 +16,13 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAl
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest._
-import coop.rchain.rspace.{Match, _}
 import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace.util._
+import coop.rchain.rspace.{Match, _}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{fixture, Matchers, Outcome}
+import coop.rchain.rholang.interpreter.storage.ChargingRSpace._
 
 import scala.collection.immutable
 import scala.concurrent.duration._
@@ -37,9 +38,9 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val cont                                             = continuation()
     val storageCost                                      = ChargingRSpace.storageCostConsume(channels, patterns, cont)
     val minimumPhlos                                     = storageCost
-    setInitPhlos(costAlg, minimumPhlos)
 
     val test = for {
+      _         <- costAlg.set(CostAccount(0, minimumPhlos))
       _         <- chargingRSpace.consume(channels, patterns, cont, false)
       phlosLeft <- costAlg.get()
       // we expect Cost = 1 because there will be no match
@@ -60,16 +61,14 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val produceStorageCost                               = ChargingRSpace.storageCostProduce(channels.head, data)
     val minimumPhlos                                     = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST
 
-    setInitPhlos(costAlg, minimumPhlos)
-
     val test = for {
+      _                 <- costAlg.set(CostAccount(0, minimumPhlos))
       _                 <- chargingRSpace.produce(channels.head, data, false)
       phlosAfterProduce <- costAlg.get()
       _                 = phlosAfterProduce.cost shouldBe (minimumPhlos - produceStorageCost)
       res               <- chargingRSpace.consume(channels, patterns, cont, false)
       phlosLeft         <- costAlg.get()
-      // we expect Cost(15), because we will be refunded for storing the consume
-      _ = phlosLeft.cost shouldBe (consumeStorageCost)
+      _                 = phlosLeft.cost shouldBe (consumeStorageCost + produceStorageCost)
     } yield ()
 
     test.runSyncUnsafe(1.second)
@@ -81,9 +80,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     val data                                             = NilPar
     val produceStorageCost                               = ChargingRSpace.storageCostProduce(channel, data)
 
-    setInitPhlos(costAlg, produceStorageCost - Cost(1))
-
     val test = for {
+      _ <- costAlg.set(CostAccount(0, produceStorageCost - Cost(1)))
       _ <- chargingRSpace.produce(channel, data, false)
     } yield ()
 
@@ -95,6 +93,13 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   }
 
   it should "charge COMM on a join properly when parts of the join are deployed separately" in {
+    // first deploy:
+    // for(x <- @x; y <- @y) { P }
+    // second deploy:
+    // @x!(data)
+    // third deploy:
+    // @y!(data)
+    // last deployment should be refunded with the cost of storing two previous deployments
     fixture =>
       val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
       val channels                                         = channelsN(2)
@@ -106,9 +111,8 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       val joinCost                                         = ChargingRSpace.storageCostConsume(channels, patterns, cont)
       val minimumPhlos                                     = firstProdCost + secondProdCost + joinCost + (RSPACE_MATCH_COST * 2)
 
-      setInitPhlos(costAlg, minimumPhlos)
-
       val test = for {
+        _                   <- costAlg.set(CostAccount(0, minimumPhlos))
         _                   <- chargingRSpace.consume(channels, patterns, cont, false)
         phlosAfterConsume   <- costAlg.get()
         _                   = phlosAfterConsume.cost shouldBe (minimumPhlos - joinCost)
@@ -119,13 +123,217 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
         //_                 = phlosAfterFirstSend.cost shouldBe (phlosAfterConsume - firstProdCost + RSPACE_MATCH_COST.cost).cost
         _         <- chargingRSpace.produce(channels(1), data, false)
         phlosLeft <- costAlg.get()
-        _         = phlosLeft.cost shouldBe (secondProdCost)
+        _         = phlosLeft.cost shouldBe (minimumPhlos - (RSPACE_MATCH_COST * 2))
       } yield ()
 
       test.runSyncUnsafe(1.second)
   }
 
-  type ChargingRSpace = RhoPureSpace[Task]
+  it should "not charge for storage if linear terms create a COMM" in { fixture =>
+    // for(x <- @x) | @x!(10)
+    // we should not charge for storing any of the terms
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val channels                                         = channelsN(1)
+    val patterns                                         = patternsN(1)
+    val cont                                             = continuation()
+
+    val data = ListParWithRandom().withPars(Vector(GInt(1)))
+    val consumeStorageCost = storageCostConsume(
+      channels,
+      patterns,
+      cont
+    )
+    val produceStorageCost = storageCostProduce(channels.head, data)
+
+    val initPhlos = consumeStorageCost + produceStorageCost + RSPACE_MATCH_COST
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(channels, patterns, cont, false)
+      _         <- chargingRSpace.produce(channels.head, data, false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (consumeStorageCost + produceStorageCost)
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "charge for storing persistent produce that create a COMM" in { fixture =>
+    // for(x <- @x) { P } | @x!!(100)
+    // we should charge for storing non-linear produce
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val channels                                         = channelsN(1)
+    val pattern                                          = BindPattern(Vector(EVar(FreeVar(0))))
+    val cont                                             = continuation()
+
+    val data        = ListParWithRandom().withPars(Vector(GInt(1)))
+    val consumeCost = storageCostConsume(channels, List(pattern), cont)
+    val produceCost = storageCostProduce(channels.head, data)
+
+    val initPhlos = Cost(1000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(channels, List(pattern), cont, false)
+      _         <- chargingRSpace.produce(channels.head, data, true)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos - produceCost - RSPACE_MATCH_COST)
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "charge for storing persistent consume that create a COMM" in { fixture =>
+    // for(x <= @x) { P } | @x!(100)
+    // we should charge for storing non-linear continuation
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val channels                                         = channelsN(1)
+    val pattern                                          = patternsN(1)
+    val cont                                             = continuation()
+
+    val data        = ListParWithRandom().withPars(Vector(GInt(1)))
+    val consumeCost = storageCostConsume(channels, pattern, cont)
+
+    val initPhlos = Cost(1000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(channels, pattern, cont, true)
+      _         <- chargingRSpace.produce(channels.head, data, false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos - consumeCost - RSPACE_MATCH_COST)
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "refund for linear data in join" in { fixture =>
+    // idea for the test is that we have persistent and non persistent produce in first deploy:
+    // @"x"!!(1) | @"y"!(10)
+    // and consume on joined channels in another:
+    // for(x <- @"x"; y <- @"y") { … }
+    // In this case we shouldn't charge for storing consume and refund for removing produce on @"y"
+
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val List(x, y)                                       = channelsN(2)
+    val patterns                                         = patternsN(2)
+    val cont                                             = continuation()
+
+    val dataX = ListParWithRandom().withPars(Vector(GInt(1)))
+    val dataY = ListParWithRandom().withPars(Vector(GInt(10)))
+
+    val produceYCost = ChargingRSpace.storageCostProduce(y, dataY)
+
+    val initPhlos = Cost(1000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.produce(x, dataX, persist = true)
+      _         <- chargingRSpace.produce(y, dataY, persist = false)
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(List(x, y), patterns, cont, false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos + produceYCost - (RSPACE_MATCH_COST * 2))
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "refund for removing consume" in { fixture =>
+    // first deploy:
+    // for(x <- @x) { P }
+    // second deploy:
+    // @x!(100)
+    // we should refund for removing continuation from tuplespace
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val List(x)                                          = channelsN(1)
+    val patterns                                         = patternsN(1)
+    val cont                                             = continuation()
+
+    val data = ListParWithRandom().withPars(Vector(GInt(1)))
+
+    val consumeCost = ChargingRSpace.storageCostConsume(List(x), patterns, cont)
+
+    val initPhlos = Cost(1000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(List(x), patterns, cont, false)
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.produce(x, data, persist = false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos + consumeCost - RSPACE_MATCH_COST)
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "refund for removing produce" in { fixture =>
+    // first deploy:
+    // @x!(100)
+    // second deploy:
+    // for(x <- @x) { P }
+    // we should refund for removing @x!(100) from tuplespace
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val List(x)                                          = channelsN(1)
+    val patterns                                         = patternsN(1)
+    val cont                                             = continuation()
+
+    val data = ListParWithRandom().withPars(Vector(GInt(1)))
+
+    val produceCost = ChargingRSpace.storageCostProduce(x, data)
+
+    val initPhlos = Cost(1000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.produce(x, data, persist = false)
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.consume(List(x), patterns, cont, false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos + produceCost - RSPACE_MATCH_COST)
+    } yield ()
+
+    test.runSyncUnsafe(1.second)
+  }
+
+  it should "refund for clearing tuplespace" in { fixture =>
+    // first deploy:
+    // @x!(100) | @y!(10) | for(x <- @x; y <- @y; z <- @z) { P }
+    // second deploy:
+    // @z!(1)
+    // since second deploy triggers continuation we should refund with the cost of storing first deploy
+    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
+    val List(x, y, z)                                    = channelsN(3)
+    val patterns                                         = patternsN(3)
+    val cont                                             = continuation()
+
+    val dataX = ListParWithRandom().withPars(Vector(GInt(1)))
+    val dataY = ListParWithRandom().withPars(Vector(GInt(10)))
+    val dataZ = ListParWithRandom().withPars(Vector(GInt(100)))
+
+    val produceXCost = ChargingRSpace.storageCostProduce(x, dataX)
+    val produceYCost = ChargingRSpace.storageCostProduce(y, dataY)
+    val consumeCost  = ChargingRSpace.storageCostConsume(List(x, y, z), patterns, cont)
+
+    val initPhlos = Cost(10000)
+
+    val test = for {
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.produce(x, dataX, false)
+      _         <- chargingRSpace.produce(y, dataY, false)
+      _         <- chargingRSpace.consume(List(x, y, z), patterns, cont, false)
+      _         <- costAlg.set(CostAccount(0, initPhlos))
+      _         <- chargingRSpace.produce(z, dataZ, false)
+      phlosLeft <- costAlg.get()
+      _         = phlosLeft.cost shouldBe (initPhlos + produceXCost + produceYCost + consumeCost - (RSPACE_MATCH_COST * 3))
+    } yield ()
+
+    test.runSyncUnsafe(5.seconds)
+  }
+
+  type ChargingRSpace        = RhoPureSpace[Task]
+  override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
     implicit val costAlg    = CostAccountingAlg.unsafe[Task](CostAccount(0))
@@ -138,13 +346,12 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
       pureRSpace.close()
     }
   }
+
   final case class TestFixture(
       chargingRSpace: ChargingRSpace,
       costAlg: CostAccountingAlg[Task],
       pureRSpace: RhoISpace
   )
-
-  override type FixtureParam = TestFixture
 }
 
 object ChargingRSpaceTest {
@@ -153,21 +360,22 @@ object ChargingRSpaceTest {
   val NilPar                 = ListParWithRandom().withPars(Seq(Par()))
   val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-  private def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
-
   def channelsN(n: Int): List[Par] =
     (1 to n).map(x => byteName(x.toByte)).toList
+
+  private def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+
   def patternsN(n: Int): List[BindPattern] =
     (1 to n)
       .map(
-        _ => BindPattern(Vector(EVar(Var(FreeVar(0)))))
+        _ => BindPattern(Vector(EVar(Var(FreeVar(0)))), freeCount = 1)
       )
       .toList
-  def continuation(par: Par = Par(), r: Blake2b512Random = rand): TaggedContinuation =
+  def continuation(
+      par: Par = Par().withExprs(Seq(GInt(1))),
+      r: Blake2b512Random = rand
+  ): TaggedContinuation =
     TaggedContinuation(ParBody(ParWithRandom(par, r)))
-
-  def setInitPhlos(costAlg: CostAccountingAlg[Task], init: Cost): Unit =
-    costAlg.set(CostAccount(0, init)).runSyncUnsafe(1.second)
 
   // This test ISpace wraps regular RhoISpace but adds predictable match cost
   def createTestISpace(): RhoISpace = new RhoISpace {
@@ -186,7 +394,10 @@ object ChargingRSpaceTest {
           ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (Result[TaggedContinuation], immutable.Seq[Result[ListParWithRandomAndPhlos]])
+      (
+          ContResult[Par, BindPattern, TaggedContinuation],
+          immutable.Seq[Result[ListParWithRandomAndPhlos]]
+      )
     ]]] =
       rspace
         .consume(channels, patterns, continuation, persist)
@@ -203,7 +414,10 @@ object ChargingRSpaceTest {
           ListParWithRandomAndPhlos
         ]
     ): Id[Either[errors.OutOfPhlogistonsError.type, Option[
-      (Result[TaggedContinuation], immutable.Seq[Result[ListParWithRandomAndPhlos]])
+      (
+          ContResult[Par, BindPattern, TaggedContinuation],
+          immutable.Seq[Result[ListParWithRandomAndPhlos]]
+      )
     ]]] =
       rspace
         .produce(channel, data, persist)

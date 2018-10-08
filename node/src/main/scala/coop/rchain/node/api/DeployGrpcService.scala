@@ -14,42 +14,47 @@ import coop.rchain.shared._
 
 import com.google.protobuf.empty.Empty
 import monix.eval.Task
+import monix.execution.Scheduler
 import monix.reactive.Observable
 
 private[api] object DeployGrpcService {
-  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable]
-    : CasperMessageGrpcMonix.DeployService =
+  def instance[F[_]: Sync: MultiParentCasperRef: Log: SafetyOracle: BlockStore: Taskable](
+      worker: Scheduler
+  ): CasperMessageGrpcMonix.DeployService =
     new CasperMessageGrpcMonix.DeployService {
 
+      private def defer[A](task: F[A]): Task[A] =
+        Task.defer(task.toTask).executeOn(worker)
+
       override def doDeploy(d: DeployData): Task[DeployServiceResponse] =
-        BlockAPI.deploy[F](d).toTask
+        defer(BlockAPI.deploy[F](d))
 
       override def createBlock(e: Empty): Task[DeployServiceResponse] =
-        BlockAPI.createBlock[F].toTask
+        defer(BlockAPI.createBlock[F])
 
       override def addBlock(b: BlockMessage): Task[DeployServiceResponse] =
-        BlockAPI.addBlock[F](b).toTask
+        defer(BlockAPI.addBlock[F](b))
 
       override def showBlock(q: BlockQuery): Task[BlockQueryResponse] =
-        BlockAPI.showBlock[F](q).toTask
+        defer(BlockAPI.showBlock[F](q))
 
       override def showBlocks(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
-          .fromTask(BlockAPI.showBlocks[F](request.depth).toTask)
+          .fromTask(defer(BlockAPI.showBlocks[F](request.depth)))
           .flatMap(Observable.fromIterable)
 
       // TODO: Handle error case
       override def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
-        BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get).toTask
+        defer(BlockAPI.getListeningNameDataResponse[F](request.depth, request.name.get))
 
       override def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[ListeningNameContinuationResponse] =
-        BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names).toTask
+        defer(BlockAPI.getListeningNameContinuationResponse[F](request.depth, request.names))
 
       override def showMainChain(request: BlocksQuery): Observable[BlockInfoWithoutTuplespace] =
         Observable
-          .fromTask(BlockAPI.showMainChain[F](request.depth).toTask)
+          .fromTask(defer(BlockAPI.showMainChain[F](request.depth)))
           .flatMap(Observable.fromIterable)
     }
 }

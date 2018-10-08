@@ -89,7 +89,7 @@ object InterpreterUtil {
                 ).leftCast[BlockException] -> knownStateHashes).pure[F]
               case ReplayStatusMismatch(replay: DeployStatus, orig: DeployStatus) =>
                 Log[F].warn(
-                  s"Found replay status mismatch; replay failure is $replay.isFailed and orig failure is $orig.isFailed"
+                  s"Found replay status mismatch; replay failure is ${replay.isFailed} and orig failure is ${orig.isFailed}"
                 ) *> (Right(none[StateHash]).leftCast[BlockException] -> knownStateHashes).pure[F]
               case UnknownFailure =>
                 Log[F].warn(s"Found unknown failure") *> (Right(none[StateHash])

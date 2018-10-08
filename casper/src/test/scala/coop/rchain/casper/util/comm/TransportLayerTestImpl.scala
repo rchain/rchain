@@ -34,14 +34,15 @@ class TransportLayerTestImpl[F[_]: Monad](
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
-  // FIX-ME handleBlob not handled (pun)
+  // FIX-ME handleStreamed not handled (pun)
   def receive(
       dispatch: Protocol => F[CommunicationResponse],
-      handleBlob: Blob => F[Unit]
+      handleStreamed: Blob => F[Unit]
   ): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
-  def streamBlob(peers: Seq[PeerNode], msg: Blob): F[Unit] = ???
+  // FIX-ME
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = ???
 
   def disconnect(peer: PeerNode): F[Unit] = ???
 

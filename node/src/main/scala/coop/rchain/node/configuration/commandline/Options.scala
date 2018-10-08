@@ -251,7 +251,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       opt[Int](descr = "Maximum size of message that can be sent via transport layer")
 
     val threadPoolSize =
-      opt[Int](descr = "Maximum number of threads used by rnode")
+      opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
 
     val casperBlockStoreSize =
       opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")

@@ -75,3 +75,4 @@ integration-testing/.pytest_cache
 integration-testing/.virtualenv
 integration-testing.log
 *.log
+.virtualenv

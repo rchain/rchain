@@ -125,6 +125,74 @@ object Reduce {
     )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
+    private trait EvalJob {
+      def run(mkRand: Int => Blake2b512Random)(
+          env: Env[Par],
+          costAccountingAlg: CostAccountingAlg[M]
+      ): M[List[Unit]]
+      def size: Int
+    }
+
+    private object EvalJob {
+
+      private def mkJob[A](
+          input: Seq[A],
+          handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+      ): EvalJob =
+        new EvalJob {
+          override def run(mkRand: Int => Blake2b512Random)(
+              env: Env[Par],
+              costAccountingAlg: CostAccountingAlg[M]
+          ): M[List[Unit]] =
+            Parallel.parTraverse(input.zipWithIndex.toList) {
+              case (term, idx) =>
+                handler(term)(env, mkRand(idx), costAccountingAlg)
+            }
+
+          override def size = input.size
+        }
+
+      def apply(exprs: Seq[Expr]) = {
+        def handler(
+            expr: Expr
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
+          expr.exprInstance match {
+            case EVarBody(EVar(v)) =>
+              (for {
+                varref <- eval(v)(env, costAccountingAlg)
+                _      <- eval(varref)(env, rand, costAccountingAlg)
+              } yield ()).handleError(fTell.tell)
+            case e: EMethodBody =>
+              (for {
+                p <- evalExprToPar(Expr(e))(env, costAccountingAlg)
+                _ <- eval(p)(env, rand, costAccountingAlg)
+              } yield ()).handleError(fTell.tell)
+            case _ => s.unit
+          }
+
+        mkJob(exprs, handler)
+      }
+
+      def apply[A](
+          terms: Seq[A],
+          handlerImpl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+      ) = {
+        def handler(
+            term: A
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
+          handlerImpl(term)(env, rand, costAccountingAlg)
+            .handleErrorWith {
+              case e: OutOfPhlogistonsError.type =>
+                s.raiseError(e)
+              case e =>
+                fTell.tell(e) *> s.unit
+            }
+
+        mkJob(terms, handler)
+      }
+
+    }
+
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
       *
@@ -141,6 +209,14 @@ object Reduce {
         rand: Blake2b512Random,
         costAccountingAlg: CostAccountingAlg[M]
     ): M[Unit] = {
+      def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
+        if (totalSize == 1)
+          rand
+        else if (totalSize > 256)
+          rand.splitShort((termSize + idx).toShort)
+        else
+          rand.splitByte((termSize + idx).toByte)
+
       val filteredExprs = par.exprs.filter { expr =>
         expr.exprInstance match {
           case _: EVarBody    => true
@@ -148,62 +224,27 @@ object Reduce {
           case _              => false
         }
       }
-      val starts = Vector(
-        par.sends.size,
-        par.receives.size,
-        par.news.size,
-        par.matches.size,
-        par.bundles.size,
-        filteredExprs.size
-      ).scanLeft(0)(_ + _)
-      def handle[A](
-          eval: (A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]),
-          start: Int
-      )(ta: (A, Int)): M[Unit] = {
-        val newRand =
-          if (starts(6) == 1)
-            rand
-          else if (starts(6) > 256)
-            rand.splitShort((start + ta._2).toShort)
-          else
-            rand.splitByte((start + ta._2).toByte)
-        eval(ta._1)(env, newRand, costAccountingAlg).handleErrorWith {
-          case e: OutOfPhlogistonsError.type =>
-            s.raiseError(e)
-          case e =>
-            fTell.tell(e) *> s.unit
-        }
-      }
-      List(
-        Parallel.parTraverse(par.sends.zipWithIndex.toList)(handle(evalExplicit, starts(0))),
-        Parallel.parTraverse(par.receives.zipWithIndex.toList)(handle(evalExplicit, starts(1))),
-        Parallel.parTraverse(par.news.zipWithIndex.toList)(handle(evalExplicit, starts(2))),
-        Parallel.parTraverse(par.matches.zipWithIndex.toList)(handle(evalExplicit, starts(3))),
-        Parallel.parTraverse(par.bundles.zipWithIndex.toList)(handle(evalExplicit, starts(4))),
-        Parallel.parTraverse(filteredExprs.zipWithIndex.toList)(texpr => {
-          val (expr, idx) = texpr
-          val newRand =
-            if (starts(6) == 1)
-              rand
-            else if (starts(6) > 256)
-              rand.splitShort((starts(5) + idx).toShort)
-            else
-              rand.splitByte((starts(5) + idx).toByte)
-          expr.exprInstance match {
-            case EVarBody(EVar(v)) =>
-              (for {
-                varref <- eval(v)
-                _      <- eval(varref)(env, newRand, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
-            case e: EMethodBody =>
-              (for {
-                p <- evalExprToPar(Expr(e))
-                _ <- eval(p)(env, newRand, costAccountingAlg)
-              } yield ()).handleError(fTell.tell)
-            case _ => s.unit
+
+      val jobs = List(
+        EvalJob[Send](par.sends, evalExplicit),
+        EvalJob[Receive](par.receives, evalExplicit),
+        EvalJob[New](par.news, evalExplicit),
+        EvalJob[Match](par.matches, evalExplicit),
+        EvalJob[Bundle](par.bundles, evalExplicit),
+        EvalJob(filteredExprs)
+      )
+
+      val starts = jobs.map(_.size).scanLeft(0)(_ + _).toVector
+
+      jobs.zipWithIndex
+        .map {
+          case (job, jobIdx) => {
+            def mkRand(termIdx: Int) = split(starts.last, starts(jobIdx), rand)(termIdx)
+            job.run(mkRand)(env, costAccountingAlg)
           }
-        })
-      ).parSequence.as(Unit)
+        }
+        .parSequence
+        .as(Unit)
     }
 
     override def inj(
