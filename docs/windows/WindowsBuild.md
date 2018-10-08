@@ -1,6 +1,7 @@
 # RNode windows build
 ## Important
-Currently some errors inside coop.rchain.kalium-0.8.1-SNAPSHOT.jar blocks starting of the node. We will update this guide as soon as those issues will be fixed.
+During windows build you may see the following error: "java.util.regex.PatternSyntaxException: Unclosed group near index 9". This is an issue inside scalamft formatter, https://github.com/scalameta/sbt-scalafmt/issues/5
+To fix it just disable scalafmt: find "scalafmtOnCompile := true" line in the "build.sbt" file, and replace "true" with "false".
 
 ## 1. Install Haskell Platform
 https://www.haskell.org/platform/
