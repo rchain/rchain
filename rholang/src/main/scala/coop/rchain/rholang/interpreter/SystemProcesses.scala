@@ -12,8 +12,6 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
 import coop.rchain.rspace.util._
-import coop.rchain.rspace.Result
-
 import monix.eval.Task
 
 import scala.util.Try
@@ -32,7 +30,7 @@ object SystemProcesses {
   private implicit class ProduceOps(
       res: Id[
         Either[OutOfPhlogistonsError.type, Option[
-          (Result[TaggedContinuation], Seq[Result[ListParWithRandomAndPhlos]])
+          (TaggedContinuation, Seq[ListParWithRandomAndPhlos])
         ]]
       ]
   ) {
@@ -40,7 +38,7 @@ object SystemProcesses {
         dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
     ): Task[Unit] =
       res.fold(err => Task.raiseError(OutOfPhlogistonsError), _.fold(Task.unit) {
-        case (cont, channels) => _dispatch(dispatcher)(cont, channels.map(_.value))
+        case (cont, channels) => _dispatch(dispatcher)(cont, channels)
       })
   }
 
@@ -56,6 +54,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -77,6 +76,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Par.defaultInstance), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -109,6 +109,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
   }
@@ -131,6 +132,7 @@ object SystemProcesses {
             ListParWithRandom(Seq(Expr(GBool(verified))), rand),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -154,6 +156,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -175,6 +178,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
@@ -196,6 +200,7 @@ object SystemProcesses {
             ),
             false
           )(MATCH_UNLIMITED_PHLOS)
+          .map(unpackOption(_))
           .foldResult(dispatcher)
       }
     case _ =>
