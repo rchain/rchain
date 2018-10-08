@@ -29,7 +29,7 @@ new int2NN, MakeMint, NonNegativeNumber, sgset(`rho:stopgap:set`),
         contract internalMakePurse(@balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
           new thisPurse in {
-            contract thisPurse(=*decr, @amount, success) = { @(balance, "sub")!(amount, *success) } |
+            contract thisPurse(@=*decr, @amount, success) = { @(balance, "sub")!(amount, *success) } |
             contract thisPurse("getBalance", return) = { @(balance, "value")!(*return) } |
             contract thisPurse("sprout", return) = { @(*thisMint, "makePurse")!(0, *return) } |
             contract thisPurse("split", @amount, return) = {
