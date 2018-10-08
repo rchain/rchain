@@ -425,6 +425,27 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PSend" should "not compile if name contains connectives" in {
+    val data = new ListProc(); data.add(new PNil())
+    def send(name: NameQuote): PSend =
+      new PSend(name, new SendSingle(), data)
+
+    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PDisjunction(new PNil(), new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+
+    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PConjunction(new PNil(), new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+
+    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PNegation(new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result    = ProcNormalizeMatcher.normalizeMatch[Coeval](parGround, inputs).value
@@ -737,6 +758,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
     }
+  }
+
+  "PInput" should "not compile when connectives are used in the channel" in {
+
   }
 
   "PNew" should "Bind new variables" in {

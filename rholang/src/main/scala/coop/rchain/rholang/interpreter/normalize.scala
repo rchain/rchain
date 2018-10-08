@@ -263,6 +263,21 @@ object NameNormalizeMatcher {
 }
 
 object ProcNormalizeMatcher {
+  def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
+      listProc: ListProc,
+      toError: String => E
+  ): F[Unit] =
+    listProc
+      .collectFirst {
+        case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
+        case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
+        case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
+      }
+      .map { case (c, line, col) => s"$c at $line:$col" }
+      .fold(Sync[F].unit)(
+        errMsg => Sync[F].raiseError(toError(errMsg))
+      )
+
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M]
   ): M[ProcVisitOutputs] = Sync[M].defer {
@@ -295,15 +310,6 @@ object ProcNormalizeMatcher {
           input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
           rightResult.knownFree
         )
-
-    def containsConnective(listProc: ListProc): Option[String] =
-      listProc
-        .collectFirst {
-          case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
-          case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
-          case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
-        }
-        .map { case (c, line, col) => s"$c at $line:$col" }
 
     def normalizeIfElse(
         valueProc: Proc,
@@ -617,60 +623,53 @@ object ProcNormalizeMatcher {
         normalizeMatch[M](p.proc_, input)
 
       case p: PSend =>
-        containsConnective(p.listproc_) match {
-          case Some(errMsg) =>
-            sync.raiseError(
-              SendDataConnectivesNotAllowedError(errMsg)
-            )
-          case None =>
-            for {
-              nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
-                                  p.name_,
-                                  NameVisitInputs(input.env, input.knownFree)
-                                )
-              initAcc = (
-                Vector[Par](),
-                ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
-                BitSet(),
-                false
-              )
-
-              dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
-                              (acc, e) => {
-                                normalizeMatch[M](e, acc._2).map(
-                                  procMatchResult =>
-                                    (
-                                      procMatchResult.par +: acc._1,
-                                      ProcVisitInputs(
-                                        VectorPar(),
-                                        input.env,
-                                        procMatchResult.knownFree
-                                      ),
-                                      acc._3 | procMatchResult.par.locallyFree,
-                                      acc._4 || procMatchResult.par.connectiveUsed
-                                    )
-                                )
-                              }
+        for {
+          _ <- failOnConnectivesUsed(p.listproc_, SendDataConnectivesNotAllowedError(_))
+          nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
+                              p.name_,
+                              NameVisitInputs(input.env, input.knownFree)
                             )
-              persistent = p.send_ match {
-                case _: SendSingle   => false
-                case _: SendMultiple => true
-              }
-            } yield
-              ProcVisitOutputs(
-                input.par.prepend(
-                  Send(
-                    nameMatchResult.chan,
-                    dataResults._1,
-                    persistent,
-                    ParLocallyFree
-                      .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
-                    ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
-                  )
-                ),
-                dataResults._2.knownFree
+          initAcc = (
+            Vector[Par](),
+            ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
+            BitSet(),
+            false
+          )
+          dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
+                          (acc, e) => {
+                            normalizeMatch[M](e, acc._2).map(
+                              procMatchResult =>
+                                (
+                                  procMatchResult.par +: acc._1,
+                                  ProcVisitInputs(
+                                    VectorPar(),
+                                    input.env,
+                                    procMatchResult.knownFree
+                                  ),
+                                  acc._3 | procMatchResult.par.locallyFree,
+                                  acc._4 || procMatchResult.par.connectiveUsed
+                                )
+                            )
+                          }
+                        )
+          persistent = p.send_ match {
+            case _: SendSingle   => false
+            case _: SendMultiple => true
+          }
+        } yield
+          ProcVisitOutputs(
+            input.par.prepend(
+              Send(
+                nameMatchResult.chan,
+                dataResults._1,
+                persistent,
+                ParLocallyFree
+                  .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
+                ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
               )
-        }
+            ),
+            dataResults._2.knownFree
+          )
 
       case p: PContr => {
         // A free variable can only be used once in any of the parameters.
