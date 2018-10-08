@@ -47,6 +47,25 @@ class RholangMethodsCostsSpec
           test(method, NTH_METHOD_CALL_COST)
         }
       }
+
+      "not charge when index is out of bound" in {
+        val table = Table(
+          ("list", "index"),
+          (listN(0), 1)
+        )
+        forAll(table) { (pars, n) =>
+          implicit val errLog = new ErrorLog()
+          implicit val env    = Env[Par]()
+          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          withReducer[Assertion] { reducer =>
+            for {
+              err  <- reducer.evalExprToPar(method).attempt
+              _    = assert(err.isLeft)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === Cost(0))
+          }
+        }
+      }
     }
 
     "called on tuples" should {
@@ -60,6 +79,25 @@ class RholangMethodsCostsSpec
         forAll(table) { (pars: Vector[Par], n: Int) =>
           val method = methodCall("nth", EList(pars), List(GInt(n)))
           test(method, NTH_METHOD_CALL_COST)
+        }
+      }
+
+      "not charge when index is out of bound" in {
+        val table = Table(
+          ("list", "index"),
+          (listN(0), 1)
+        )
+        forAll(table) { (pars, n) =>
+          implicit val errLog = new ErrorLog()
+          implicit val env    = Env[Par]()
+          val method          = methodCall("nth", EList(pars), List(GInt(n)))
+          withReducer[Assertion] { reducer =>
+            for {
+              err  <- reducer.evalExprToPar(method).attempt
+              _    = assert(err.isLeft)
+              cost <- methodCallCost(reducer)
+            } yield assert(cost === Cost(0))
+          }
         }
       }
     }
@@ -131,7 +169,7 @@ class RholangMethodsCostsSpec
           val encodedStr = new String(str.getBytes("UTF-8"))
           val method     = methodCall("hexToBytes", GString(encodedStr), List.empty)
           val factor     = str.length.toDouble / base.length
-          testProportional[String](
+          testProportional(
             baseCost,
             factor,
             method
