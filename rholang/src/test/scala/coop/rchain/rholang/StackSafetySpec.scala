@@ -6,21 +6,13 @@ import java.nio.file.Files
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertions, FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
-class StackSafetySpec extends FlatSpec with Matchers {
+object StackSafetySpec extends Assertions {
 
-  val mapSize     = 10L * 1024L * 1024L
-  val tmpPrefix   = "rspace-store-"
-  val maxDuration = 10.seconds
-
-  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
-
-  val depth: Int = maxRecursionDepth()
-
-  def maxRecursionDepth(): Int = {
+  def findMaxRecursionDepth(): Int = {
     def count(i: Int): Int =
       try {
         count(i + 1) //apparently, the try-catch is enough for tailrec to not work. Lucky!
@@ -32,6 +24,27 @@ class StackSafetySpec extends FlatSpec with Matchers {
     println(s"Max recursion depth is $maxDepth")
     maxDepth
   }
+
+  //this wrapper allows the test suite to continue with other tests after a SOE is spotted
+  def isolateStackOverflow[T](block: => T): T =
+    try {
+      block
+    } catch {
+      case e: StackOverflowError => fail("Caused a StackOverflowError", e)
+    }
+
+}
+
+class StackSafetySpec extends FlatSpec with Matchers {
+  import StackSafetySpec._
+
+  val mapSize     = 10L * 1024L * 1024L
+  val tmpPrefix   = "rspace-store-"
+  val maxDuration = 10.seconds
+
+  val runtime = Runtime.create(Files.createTempDirectory(tmpPrefix), mapSize)
+
+  val depth: Int = findMaxRecursionDepth()
 
   //FIXME make all the test cases work with checkAll.
   //To make this happen, we're going to have to change how AST hashCode and serialization work.
@@ -151,14 +164,6 @@ class StackSafetySpec extends FlatSpec with Matchers {
             .buildNormalizedTerm(rho)
         )
       }
-    }
-
-  //this wrapper allows the test suite to continue with other tests after a SOE is spotted
-  def isolateStackOverflow[T](block: => T): T =
-    try {
-      block
-    } catch {
-      case e: StackOverflowError => fail("Caused a StackOverflowError", e)
     }
 
   private def checkSuccess(rho: String)(interpreter: String => Task[_]): Unit =
