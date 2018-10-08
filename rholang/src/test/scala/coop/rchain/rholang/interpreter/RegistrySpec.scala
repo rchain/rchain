@@ -8,7 +8,6 @@ import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -28,21 +27,23 @@ trait RegistryTester extends PersistentStoreTester {
   implicit val costAccounting =
     CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
-  def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
+  private[this] def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap = {
+    import coop.rchain.rholang.interpreter.Runtime.BodyRefs._
     Map(
-      lookupRef                 -> registry.lookup,
-      lookupCallbackRef         -> registry.lookupCallback,
-      insertRef                 -> registry.insert,
-      insertCallbackRef         -> registry.insertCallback,
-      nonceInsertCallbackRef    -> registry.nonceInsertCallback,
-      deleteRef                 -> registry.delete,
-      deleteRootCallbackRef     -> registry.deleteRootCallback,
-      deleteCallbackRef         -> registry.deleteCallback,
-      publicLookupRef           -> registry.publicLookup,
-      publicRegisterRandomRef   -> registry.publicRegisterRandom,
-      registerInsertCallbackRef -> registry.registerInsertCallback,
-      publicRegisterSignedRef   -> registry.publicRegisterSigned
+      REG_LOOKUP                   -> registry.lookup,
+      REG_LOOKUP_CALLBACK          -> registry.lookupCallback,
+      REG_INSERT                   -> registry.insert,
+      REG_INSERT_CALLBACK          -> registry.insertCallback,
+      REG_NONCE_INSERT_CALLBACK    -> registry.nonceInsertCallback,
+      REG_DELETE                   -> registry.delete,
+      REG_DELETE_ROOT_CALLBACK     -> registry.deleteRootCallback,
+      REG_DELETE_CALLBACK          -> registry.deleteCallback,
+      REG_REGISTER_INSERT_CALLBACK -> registry.registerInsertCallback,
+      REG_PUBLIC_LOOKUP            -> registry.publicLookup,
+      REG_PUBLIC_REGISTER_RANDOM   -> registry.publicRegisterRandom,
+      REG_PUBLIC_REGISTER_SIGNED   -> registry.publicRegisterSigned
     )
+  }
 
   def withRegistryAndTestSpace[R](
       f: (

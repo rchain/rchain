@@ -12,7 +12,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Registry.FixedRefs._
+import coop.rchain.rholang.interpreter.Runtime.BodyRefs
 import coop.rchain.rholang.interpreter.storage.implicits._
 import org.lightningj.util.ZBase32
 
@@ -108,8 +108,7 @@ class RegistryImpl[F[_]](
     )
   )
   // Testing only
-  private val lookupChannels  = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](10))))
-  private val insertRef: Long = Runtime.BodyRefs.REG_INSERT
+  private val lookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](10))))
   private val insertPatterns = List(
     BindPattern(
       Seq(
@@ -134,8 +133,6 @@ class RegistryImpl[F[_]](
   // Testing only
   private val deleteChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](14))))
 
-  private val publicLookupRef: Long = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
-  // Testing only
   private val publicLookupChannels = List[Par](GPrivate(ByteString.copyFrom(Array[Byte](17))))
   private val publicLookupPatterns = List(
     BindPattern(
@@ -147,10 +144,6 @@ class RegistryImpl[F[_]](
     )
   )
 
-  private val publicRegisterRandomRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-  private val registerInsertCallbackRef: Long =
-    Runtime.BodyRefs.REG_REGISTER_INSERT_CALLBACK
-  // Testing only
   private val publicRegisterRandomChannels =
     List[Par](GPrivate(ByteString.copyFrom(Array[Byte](18))))
   private val publicRegisterRandomPatterns = List(
@@ -180,7 +173,6 @@ class RegistryImpl[F[_]](
     )
   )
 
-  private val publicRegisterSignedRef: Long = Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
   private val publicRegisterSignedPatterns = List(
     BindPattern(
       Seq(
@@ -206,32 +198,32 @@ class RegistryImpl[F[_]](
       _ <- space.install(
             lookupChannels,
             lookupPatterns,
-            TaggedContinuation(ScalaBodyRef(lookupRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_LOOKUP))
           )
       _ <- space.install(
             insertChannels,
             insertPatterns,
-            TaggedContinuation(ScalaBodyRef(insertRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_INSERT))
           )
       _ <- space.install(
             deleteChannels,
             deletePatterns,
-            TaggedContinuation(ScalaBodyRef(deleteRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_DELETE))
           )
       _ <- space.install(
             publicLookupChannels,
             publicLookupPatterns,
-            TaggedContinuation(ScalaBodyRef(publicLookupRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_LOOKUP))
           )
       _ <- space.install(
             publicRegisterRandomChannels,
             publicRegisterRandomPatterns,
-            TaggedContinuation(ScalaBodyRef(publicRegisterRandomRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_RANDOM))
           )
       _ <- space.install(
             publicRegisterSignedChannels,
             publicRegisterSignedPatterns,
-            TaggedContinuation(ScalaBodyRef(publicRegisterSignedRef))
+            TaggedContinuation(ScalaBodyRef(BodyRefs.REG_PUBLIC_REGISTER_SIGNED))
           )
     } yield Unit
 
@@ -319,7 +311,7 @@ class RegistryImpl[F[_]](
             space.consume(
               Seq[Par](channel, dataSource),
               Seq(prefixRetReplacePattern, triePattern),
-              TaggedContinuation(ScalaBodyRef(lookupCallbackRef)),
+              TaggedContinuation(ScalaBodyRef(BodyRefs.REG_LOOKUP_CALLBACK)),
               false
             )
           )
@@ -359,7 +351,8 @@ class RegistryImpl[F[_]](
       value: Par,
       ret: Par,
       rand: Blake2b512Random
-  ): F[Unit] = fetchDataInsertGeneric(insertCallbackRef)(dataSource, key, value, ret, rand)
+  ): F[Unit] =
+    fetchDataInsertGeneric(BodyRefs.REG_INSERT_CALLBACK)(dataSource, key, value, ret, rand)
 
   private def fetchDataNonceInsert(
       dataSource: Par,
@@ -367,7 +360,8 @@ class RegistryImpl[F[_]](
       value: Par,
       ret: Par,
       rand: Blake2b512Random
-  ): F[Unit] = fetchDataInsertGeneric(nonceInsertCallbackRef)(dataSource, key, value, ret, rand)
+  ): F[Unit] =
+    fetchDataInsertGeneric(BodyRefs.REG_NONCE_INSERT_CALLBACK)(dataSource, key, value, ret, rand)
 
   private def fetchDataRootDelete(
       dataSource: Par,
@@ -388,7 +382,7 @@ class RegistryImpl[F[_]](
             space.consume(
               Seq[Par](channel, dataSource),
               Seq(prefixRetReplacePattern, triePattern),
-              TaggedContinuation(ScalaBodyRef(deleteRootCallbackRef)),
+              TaggedContinuation(ScalaBodyRef(BodyRefs.REG_DELETE_ROOT_CALLBACK)),
               false
             )
           )
@@ -426,7 +420,7 @@ class RegistryImpl[F[_]](
             space.consume(
               Seq[Par](keyChannel, parentChannel, dataSource),
               Seq(prefixRetReplacePattern, parentKeyDataReplacePattern, triePattern),
-              TaggedContinuation(ScalaBodyRef(deleteCallbackRef)),
+              TaggedContinuation(ScalaBodyRef(BodyRefs.REG_DELETE_CALLBACK)),
               false
             )
           )
@@ -855,7 +849,7 @@ class RegistryImpl[F[_]](
                     space.consume(
                       Seq[Par](curryChan, resultChan),
                       registerInsertCallbackPatterns,
-                      TaggedContinuation(ScalaBodyRef(registerInsertCallbackRef)),
+                      TaggedContinuation(ScalaBodyRef(BodyRefs.REG_REGISTER_INSERT_CALLBACK)),
                       false
                     )
                   )
@@ -900,7 +894,7 @@ class RegistryImpl[F[_]](
                     space.consume(
                       Seq[Par](curryChan, resultChan),
                       registerInsertCallbackPatterns,
-                      TaggedContinuation(ScalaBodyRef(registerInsertCallbackRef)),
+                      TaggedContinuation(ScalaBodyRef(BodyRefs.REG_REGISTER_INSERT_CALLBACK)),
                       false
                     )
                   )
@@ -949,22 +943,6 @@ object Registry {
     "rho:registry:insertArbitrary"      -> byteName(18),
     "rho:registry:insertSigned:ed25519" -> byteName(19)
   )
-
-  object FixedRefs {
-    val lookupRef: Long                 = Runtime.BodyRefs.REG_LOOKUP
-    val lookupCallbackRef: Long         = Runtime.BodyRefs.REG_LOOKUP_CALLBACK
-    val insertRef: Long                 = Runtime.BodyRefs.REG_INSERT
-    val deleteRef: Long                 = Runtime.BodyRefs.REG_DELETE
-    val insertCallbackRef: Long         = Runtime.BodyRefs.REG_INSERT_CALLBACK
-    val nonceInsertCallbackRef: Long    = Runtime.BodyRefs.REG_NONCE_INSERT_CALLBACK
-    val deleteRootCallbackRef: Long     = Runtime.BodyRefs.REG_DELETE_ROOT_CALLBACK
-    val deleteCallbackRef: Long         = Runtime.BodyRefs.REG_DELETE_CALLBACK
-    val publicLookupRef: Long           = Runtime.BodyRefs.REG_PUBLIC_LOOKUP
-    val publicRegisterRandomRef: Long   = Runtime.BodyRefs.REG_PUBLIC_REGISTER_RANDOM
-    val registerInsertCallbackRef: Long = Runtime.BodyRefs.REG_REGISTER_INSERT_CALLBACK
-    val publicRegisterSignedRef: Long =
-      Runtime.BodyRefs.REG_PUBLIC_REGISTER_SIGNED
-  }
 
   object CRC14 {
     val INIT_REMAINDER: Short = 0
