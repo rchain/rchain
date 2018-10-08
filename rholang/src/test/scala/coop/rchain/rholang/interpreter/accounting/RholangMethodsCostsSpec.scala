@@ -616,7 +616,7 @@ class RholangMethodsCostsSpec
     }
 
     "called on GByteArray" should {
-      "charge proportionally to the sum of lengths of both Arrays" in {
+      "charge proportionally to the logarithm of length of target byte array" in {
         val arrays = Table(
           ("left", "right"),
           (gbyteArray(1), gbyteArray(1)),
