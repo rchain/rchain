@@ -52,6 +52,7 @@ trait Costs {
   def byteArrayAppendCost(left: ByteString): Cost = Cost(math.log10(left.size()).toLong)
   // According to scala doc Vector#append is eC so it's n*eC.
   def listAppendCost(right: Vector[Par]): Cost = Cost(right.size)
+  // String append creates a char[] of size n + m and then copies all elements to it.
   def stringAppendCost(n: Int, m: Int): Cost   = Cost(n + m)
 
   // To interpolate we traverse whole base string and for each placeholder
