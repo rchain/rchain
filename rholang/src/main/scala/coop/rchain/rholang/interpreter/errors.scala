@@ -75,6 +75,11 @@ object errors {
   final case object OutOfPhlogistonsError
       extends InterpreterError("Computation ran out of phlogistons.")
 
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
+
   final case class TopLevelWildcardsNotAllowedError(wildcards: String)
       extends InterpreterError(s"Top level wildcards are not allowed: $wildcards.")
 
