@@ -119,7 +119,6 @@ object internal {
         case None =>
           val ms = HashMultiset.create[V]()
           ms.add(v)
-          //atomic
           value.putIfAbsent(k, ms)
           value
       }
@@ -129,7 +128,6 @@ object internal {
         case Some(current) =>
           current.remove(v)
           if (current.isEmpty) {
-            //atomic
             value.remove(k, current)
           }
           value
