@@ -1,66 +1,56 @@
 # Installing the prerequisites
 
 ## Step 1. Install Docker
+
 Follow the instructions on [this page](https://docs.docker.com/install/) for platform specific instalation steps
 
 ## Step 2. Python v3.6+
+
 The integration tests run on **Python v3**, which is incompatible with Python v2. 
   
 You can test the version of your default python installed on your machine:
+
 ```bash
 $ python3 --version
 ``` 
 
-If your version is lower than 3.6 you will have to either install or upgrade your Python 3 version.
+If your version is lower than 3.6 you will need to install Python 3.
 
-### Option 1: Use a package manager
-This is the simplest way to do it.
+### macOS
 
-See below (a bit outdated) instructions for a few package managers. 
-If you use something else, don't worry, Python 3 should be available for all major package managers. 
+macOS is shipped with Python 2.x, so we install Python 3.x from Homebrew:
 
-See below examples for a few platforms: 
-[Debian Linux](https://docs.python-guide.org/starting/install3/linux/), 
-[MacOS](https://docs.python-guide.org/starting/install3/osx/), 
-[Windows](https://docs.python-guide.org/starting/install3/win/#install3-windows)
-
-## Option 2: Download binaries
-Go to https://www.python.org/downloads/ and download the available libraries
-
-## Step 3: Dependencies
-Once Python is installed you can run in this directory the following command: 
 ```bash
-$ ./install_dependencies.sh
-```
-
-All the dependencies will be installed in the directory `.virtualenv` created in the current directory
-
-You can test the installation like this:
-```bash
-$ .virtualenv/bin/python --version
+$ brew update && brew install python
+$ python3 --version
 Python 3.7.0
 ```
+
+### [Debian Linux](https://docs.python-guide.org/starting/install3/linux/)
+### [Windows](https://docs.python-guide.org/starting/install3/win/#install3-windows)
+
+## Step 3: [Install pipenv](https://github.com/pypa/pipenv#installation)
+
+## Step 4: Dependencies
+
+
+Once Python is installed you can run within `integration-testing` subdirectory
+the following command:
+
 ```bash
-$ .virtualenv/bin/python -m pip show pytest docker
-Name: pytest
-Version: 3.7.1
-Summary: pytest: simple powerful testing with Python
-...
----
-Name: docker
-Version: 3.5.0
-Summary: A Python library for the Docker Engine API.
-...
-``` 
+$ pipenv install
+```
 
- ## Step 4: Create the rnode docker image
- The tests use the docker image `coop.rchain/rnode:latest` as a base image for the docker containers. Docker has to be 
- able to get this image. 
- 
- When the tests are run against the current source code one should build the docker image and publish it locally. For 
- details see [the developer information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md) 
- 
 
+## Step 4: Create the rnode docker image
+
+The tests use the docker image `coop.rchain/rnode:latest` as a base image for
+the docker containers. Docker has to be able to get this image. 
+ 
+When the tests are run against the current source code one should build the
+docker image and publish it locally. For details see [the developer
+information](https://github.com/rchain/rchain/blob/dev/DEVELOPER.md) 
+ 
 # Running the tests
 
 ## Configuration
@@ -73,27 +63,34 @@ The tests are run using *pytest*. If you want to have a deep understanding of th
 [pytest documentation](https://docs.pytest.org/en/latest/contents.html#toc) 
 
 The tests can be run using the bash script 
+
 ```bash
 $ ./run_tests.sh
 ```
 
-In order to run only specific tests can specify the test subdir where you want the discovery to start
+In order to run only specific tests can specify the test subdir where you want
+the discovery to start
 
 Examples:
 Run the tests for the complete connected network: 
+
 ```bash
 $ ./run_tests.sh test/test_complete_connected.py
 ```
 
 You can see all the options available by running
+
 ```bash
 $ ./run_tests.sh --help
 ```
 
-To stop after the first failing tests or after N failure you can use `-x` or `--maxfail`
+To stop after the first failing tests or after N failure you can use `-x` or
+`--maxfail`:
+
 ```bash
 $ ./run_tests.sh -x
 ```
+
 ```bash
 $ ./run_tests.sh --maxfail=3
 ```
