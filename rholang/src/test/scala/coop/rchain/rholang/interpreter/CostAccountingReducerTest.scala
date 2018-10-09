@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.accounting.{
 }
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, TuplespaceAlg}
+import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, Tuplespace}
 import coop.rchain.rspace.internal.{Datum, Row}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -54,7 +54,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   }
 
   it should "stop if OutOfPhloError is returned from RSpace" in {
-    val tuplespaceAlg = new TuplespaceAlg[Task] {
+    val tuplespaceAlg = new Tuplespace[Task] {
       override def produce(
           chan: Par,
           data: ListParWithRandom,
