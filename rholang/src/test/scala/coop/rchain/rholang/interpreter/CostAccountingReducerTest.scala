@@ -6,13 +6,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
-import coop.rchain.rholang.interpreter.accounting.{
-  Chargeable,
-  Cost,
-  CostAccount,
-  CostAccounting,
-  _
-}
+import coop.rchain.rholang.interpreter.accounting.{Chargeable, Cost, CostAccount, CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.{ChargingRSpace, ChargingRSpaceTest, Tuplespace}
