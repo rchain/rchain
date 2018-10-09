@@ -36,7 +36,7 @@ trait SpatialMatcher[T, P] {
 object SpatialMatcher extends SpatialMatcherInstances {
 
   def spatialMatchAndCharge[M[_]: Sync](target: Par, pattern: Par)(
-      implicit costAlg: CostAccountingAlg[M]
+      implicit costAlg: CostAccounting[M]
   ): M[Option[(FreeMap, Unit)]] =
     for {
       // phlos available before going to the matcher

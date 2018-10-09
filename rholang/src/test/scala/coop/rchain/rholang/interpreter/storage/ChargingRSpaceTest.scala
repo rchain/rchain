@@ -12,7 +12,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.{RhoContext, RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg, _}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest._
@@ -336,7 +336,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
-    implicit val costAlg    = CostAccountingAlg.unsafe[Task](CostAccount(0))
+    implicit val costAlg    = CostAccounting.unsafe[Task](CostAccount(0))
     implicit val pureRSpace = ChargingRSpaceTest.createTestISpace()
     implicit val s          = implicitly[Sync[Task]]
     val chargingRSpace      = ChargingRSpace.pureRSpace(s, costAlg, pureRSpace)
@@ -349,7 +349,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   final case class TestFixture(
       chargingRSpace: ChargingRSpace,
-      costAlg: CostAccountingAlg[Task],
+      costAlg: CostAccounting[Task],
       pureRSpace: RhoISpace
   )
 }

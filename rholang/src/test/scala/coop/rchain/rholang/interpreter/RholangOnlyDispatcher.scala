@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{ListParWithRandom, ListParWithRandomAndPhlos, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.PureRSpace
@@ -27,7 +27,7 @@ object RholangOnlyDispatcher {
     lazy val tuplespaceAlg = TuplespaceAlg.rspaceTuplespace(pureSpace, dispatcher)
     lazy val dispatcher: Dispatch[M, ListParWithRandomAndPhlos, TaggedContinuation] =
       new RholangOnlyDispatcher(chargingReducer)
-    implicit lazy val costAlg = CostAccountingAlg.unsafe[M](CostAccount(0))
+    implicit lazy val costAlg = CostAccounting.unsafe[M](CostAccount(0))
     implicit lazy val reducer: Reduce[M] =
       new Reduce.DebruijnInterpreter[M, F](tuplespaceAlg, urnMap)
     lazy val chargingReducer = new ChargingReducer[M]()
