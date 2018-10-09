@@ -98,5 +98,10 @@ trait Costs {
     def storageCost: Cost = Cost(a.map(a => a.serializedSize).sum)
   }
 
-  final val MAX_VALUE = PhloLimit(Long.MaxValue)
+  // Even though we use Long for phlo limit we can't use Long.MaxValue here.
+  // This is because in tests, when  we refund deployment we add phlos to the deployment's limit
+  // which may result in overflow when we start with maximum value.
+  // In normal scenario this will never happen because user would need to provide equivalent of Long.MaxValue
+  // in REVs and this is more than there is REVs available.
+  final val MAX_VALUE = PhloLimit(Integer.MAX_VALUE)
 }
