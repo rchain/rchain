@@ -120,4 +120,4 @@ def validators_data(config):
     logging.info(f"Using validator keys: {validator_keys}")
 
     with bonds_file(validator_keys) as f:
-        yield ValidatorsData(bonds_file=f, boostrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
+        yield ValidatorsData(bonds_file=f, bootstrap_keys=validator_keys[0], peers_keys=validator_keys[1:])
