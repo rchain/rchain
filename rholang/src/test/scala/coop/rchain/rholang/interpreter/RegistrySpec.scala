@@ -10,7 +10,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Registry.FixedRefs._
 import coop.rchain.rholang.interpreter.Runtime.RhoDispatchMap
-import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccount, CostAccounting}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.ISpace.IdISpace
@@ -26,7 +26,7 @@ import scala.concurrent.duration._
 trait RegistryTester extends PersistentStoreTester {
   implicit val errorLog = new ErrorLog()
   implicit val costAccounting =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
 
   def dispatchTableCreator(registry: Registry[Task]): RhoDispatchMap =
     Map(
