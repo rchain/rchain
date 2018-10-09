@@ -23,14 +23,13 @@ object Time extends TimeInstances {
 }
 
 sealed abstract class TimeInstances {
-  implicit def eitherTTime[E, F[_]: Monad: Time[?[_]]]: Time[EitherT[F, E, ?]] =
+  implicit def eitherTTime[E, F[_]: Monad: Time[?[_]]]: Time[EitherT[F, E, ?]] = {
+    import coop.rchain.catscontrib.eitherT._
     Time.forTrans[F, EitherT[?[_], E, ?]]
+  }
 
-  implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] =
-    new Time[StateT[F, S, ?]] {
-      override def currentMillis: StateT[F, S, Long] = StateT.liftF(Time[F].currentMillis)
-      override def nanoTime: StateT[F, S, Long]      = StateT.liftF(Time[F].nanoTime)
-      override def sleep(duration: FiniteDuration): StateT[F, S, Unit] =
-        StateT.liftF(Time[F].sleep(duration))
-    }
+  implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] = {
+    import coop.rchain.catscontrib.stateT._
+    Time.forTrans[F, StateT[?[_], S, ?]]
+  }
 }
