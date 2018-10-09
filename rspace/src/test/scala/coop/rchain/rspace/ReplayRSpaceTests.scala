@@ -804,40 +804,6 @@ trait ReplayRSpaceTests
         replaySpace.produce(channel, data, false)
       )
     }
-
-  "an exception thrown inside a consume" should "not make replay rspace unresponsive" in
-    withTestSpaces { (space, replaySpace) =>
-      val channel      = "ch1"
-      val key          = List(channel)
-      val patterns     = List(Wildcard)
-      val continuation = "continuation"
-
-      replaySpace.replayData.take()
-      replaySpace.replayData.put(null)
-
-      an[NullPointerException] shouldBe thrownBy(
-        replaySpace.consume(key, patterns, continuation, false)
-      )
-
-      val res = Future { replaySpace.consume(key, patterns, continuation, false) }.futureValue
-      res shouldBe a[Right[_, _]]
-    }
-
-  "an exception thrown inside a produce" should "not make replay rspace unresponsive" in
-    withTestSpaces { (space, replaySpace) =>
-      val channel = "ch1"
-      val data    = "datum1"
-
-      replaySpace.replayData.take()
-      replaySpace.replayData.put(null)
-
-      an[NullPointerException] shouldBe thrownBy(
-        replaySpace.produce(channel, data, false)
-      )
-
-      val res = Future { replaySpace.produce(channel, data, false) }.futureValue
-      res shouldBe a[Right[_, _]]
-    }
 }
 
 trait ReplayRSpaceTestsBase[C, P, E, A, K] extends FlatSpec with Matchers with OptionValues {

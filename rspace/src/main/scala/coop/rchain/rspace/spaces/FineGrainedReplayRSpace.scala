@@ -10,7 +10,6 @@ import coop.rchain.catscontrib._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.SyncVarOps._
 import scodec.Codec
 
 import scala.Function.const
@@ -42,28 +41,20 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
-      try {
-        Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
-          if (channels.length =!= patterns.length) {
-            val msg = "channels.length must equal patterns.length"
-            logger.error(msg)
-            throw new IllegalArgumentException(msg)
-          }
-          val span = Kamon.currentSpan()
-          span.mark("before-consume-lock")
-          consumeLock(channels) {
-            span.mark("consume-lock-acquired")
-            lockedConsume(channels, patterns, continuation, persist)
-          }
+      Kamon.withSpan(consumeSpan.start(), finishSpan = true) {
+        if (channels.length =!= patterns.length) {
+          val msg = "channels.length must equal patterns.length"
+          logger.error(msg)
+          throw new IllegalArgumentException(msg)
         }
-      } catch {
-        case ex: Throwable =>
-          // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
-          if (!replayData.isSet) {
-            replayData.put(ReplayData.empty)
-          }
-          throw ex
+        val span = Kamon.currentSpan()
+        span.mark("before-consume-lock")
+        consumeLock(channels) {
+          span.mark("consume-lock-acquired")
+          lockedConsume(channels, patterns, continuation, persist)
+        }
       }
+
     }
 
   private[this] def lockedConsume(
@@ -113,7 +104,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       logger.debug(s"""|consume: no data found,
                        |storing <(patterns, continuation): ($patterns, $continuation)>
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
-      replayData.put(replays)
       None
     }
 
@@ -141,7 +131,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             }
         }
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-      replayData.put(replaysLessCommRef(replays, commRef))
+      replaysLessCommRef(replays, commRef)
       span.mark("handle-matches-end")
       Some(
         (
@@ -176,7 +166,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     val consumeRef = Consume.create(channels, patterns, continuation, persist)
 
     span.mark("before-replay-data-lock-acquired")
-    val replays = replayData.take()
+    val replays = replayData
     span.mark("after-replay-data-lock-acquired")
 
     replays.get(consumeRef) match {
@@ -203,22 +193,13 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       implicit m: Match[P, E, A, R]
   ): F[Either[E, Option[(ContResult[C, P, K], Seq[Result[R]])]]] =
     syncF.delay {
-      try {
-        Kamon.withSpan(produceSpan.start(), finishSpan = true) {
-          val span = Kamon.currentSpan()
-          span.mark("before-produce-lock")
-          produceLock(channel) {
-            span.mark("produce-lock-acquired")
-            lockedProduce(channel, data, persist)
-          }
+      Kamon.withSpan(produceSpan.start(), finishSpan = true) {
+        val span = Kamon.currentSpan()
+        span.mark("before-produce-lock")
+        produceLock(channel) {
+          span.mark("produce-lock-acquired")
+          lockedProduce(channel, data, persist)
         }
-      } catch {
-        case ex: Throwable =>
-          // in case of an exception we need to unlock replayData to allow other threads to fail gracefully
-          if (!replayData.isSet) {
-            replayData.put(ReplayData.empty)
-          }
-          throw ex
       }
     }
   private[this] def lockedProduce(channel: C, data: A, persist: Boolean)(
@@ -277,7 +258,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       }
       logger.debug(s"""|produce: no matching continuation found
                        |storing <data: $data> at <channel: $channel>""".stripMargin)
-      replayData.put(replays)
       None
     }
 
@@ -322,7 +302,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                 }
             }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
-          replayData.put(replaysLessCommRef(replays, commRef))
+          replaysLessCommRef(replays, commRef)
           span.mark("handle-match-end")
           Some(
             (
@@ -341,7 +321,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       val produceRef = Produce.create(channel, data, persist)
 
       span.mark("before-replay-data-lock-acquired")
-      val replays = replayData.take()
+      val replays = replayData
       span.mark("after-replay-data-lock-acquired")
 
       @tailrec
@@ -394,19 +374,19 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     }
 
   def createCheckpoint(): F[Checkpoint] = syncF.delay {
-    if (replayData.get.isEmpty) {
+    if (replayData.isEmpty) {
       val root = store.createCheckpoint()
       Checkpoint(root, Seq.empty)
     } else {
       // TODO: Make error message more informative
-      val msg = s"unused comm event: replayData multimap has ${replayData.get.size} elements left"
+      val msg = s"unused comm event: replayData multimap has ${replayData.size} elements left"
       logger.error(msg)
       throw new ReplayException(msg)
     }
   }
 
   override def clear(): F[Unit] = syncF.delay {
-    replayData.update(const(ReplayData.empty))
+    replayData = ReplayData.empty
     super.clear()
   }
 }

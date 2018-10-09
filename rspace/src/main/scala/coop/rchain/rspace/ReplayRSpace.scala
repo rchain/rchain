@@ -21,13 +21,9 @@ import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
-  def getReplayData: ReplayData = replayData.get
+  def getReplayData: ReplayData = replayData
 
-  protected[rspace] val replayData: SyncVar[ReplayData] = {
-    val sv = new SyncVar[ReplayData]()
-    sv.put(ReplayData.empty)
-    sv
-  }
+  protected[rspace] var replayData: ReplayData = ReplayData.empty
 
   def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
     // create a set of the "new" IOEvents
@@ -51,7 +47,7 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
     // reset to the starting checkpoint
     reset(startRoot)
     // update the replay data
-    replayData.update(const(rigs))
+    replayData = rigs
   }
 }
 

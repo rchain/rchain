@@ -102,10 +102,11 @@ object internal {
       codecSeq(codecDatum(codecA)) ::
       codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
 
-  type MultisetMultiMap[K, V] = mutable.HashMap[K, Multiset[V]]
+  import scala.collection.concurrent.TrieMap
+  type MultisetMultiMap[K, V] = TrieMap[K, Multiset[V]]
 
   object MultisetMultiMap {
-    def empty[K, V]: MultisetMultiMap[K, V] = new mutable.HashMap[K, Multiset[V]]()
+    def empty[K, V]: MultisetMultiMap[K, V] = new TrieMap[K, Multiset[V]]()
   }
 
   implicit class RichMultisetMultiMap[K, V](val value: MultisetMultiMap[K, V]) extends AnyVal {
@@ -118,7 +119,8 @@ object internal {
         case None =>
           val ms = HashMultiset.create[V]()
           ms.add(v)
-          value.put(k, ms)
+          //atomic
+          value.putIfAbsent(k, ms)
           value
       }
 
@@ -127,7 +129,8 @@ object internal {
         case Some(current) =>
           current.remove(v)
           if (current.isEmpty) {
-            value.remove(k)
+            //atomic
+            value.remove(k, current)
           }
           value
         case None =>
