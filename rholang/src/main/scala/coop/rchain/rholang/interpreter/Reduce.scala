@@ -716,23 +716,27 @@ object Reduce {
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
-                         for {
-                           result <- rhs.iterator
-                                      .map {
-                                        case (k, v) =>
-                                          for {
-                                            keyExpr   <- evalSingleExpr(k)
-                                            valueExpr <- evalSingleExpr(v)
-                                            result    <- evalToStringPair(keyExpr, valueExpr)
-                                          } yield result
-                                      }
-                                      .toList
-                                      .sequence[M, (String, String)]
-                                      .map(
-                                        keyValuePairs => GString(interpolate(lhs, keyValuePairs))
-                                      )
-                           _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
-                         } yield result
+                         if (lhs.nonEmpty || rhs.nonEmpty) {
+                           for {
+                             result <- rhs.iterator
+                                        .map {
+                                          case (k, v) =>
+                                            for {
+                                              keyExpr   <- evalSingleExpr(k)
+                                              valueExpr <- evalSingleExpr(v)
+                                              result    <- evalToStringPair(keyExpr, valueExpr)
+                                            } yield result
+                                        }
+                                        .toList
+                                        .sequence[M, (String, String)]
+                                        .map(
+                                          keyValuePairs => GString(interpolate(lhs, keyValuePairs))
+                                        )
+                             _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
+                           } yield result
+                         } else {
+                           s.pure(GString(lhs))
+                         }
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
@@ -748,19 +752,19 @@ object Reduce {
                        case (GString(lhs), GString(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.length, rhs.length)
+                                 stringAppendCost(lhs.length, rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.size(), rhs.size())
+                                 byteArrayAppendCost(lhs)
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.ps.length, rhs.ps.length)
+                                 listAppendCost(rhs.value.ps.toVector)
                                )
                          } yield
                            Expr(
@@ -889,7 +893,6 @@ object Reduce {
             nthRaw <- evalToLong(args(0))
             nth    <- restrictToInt(nthRaw)
             v      <- evalSingleExpr(p)
-            _      <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
             result <- v.exprInstance match {
                        case EListBody(EList(ps, _, _, _)) =>
                          s.fromEither(localNth(ps, nth))
@@ -902,6 +905,7 @@ object Reduce {
                            )
                          )
                      }
+            _ <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
           } yield result
         }
     }
@@ -946,7 +950,7 @@ object Reduce {
                   s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
                 )
               for {
-                _           <- costAccountingAlg.charge(hexToByteCost(encoded))
+                _           <- costAccountingAlg.charge(hexToBytesCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
@@ -971,7 +975,7 @@ object Reduce {
           p.singleExpr() match {
             case Some(Expr(GString(utf8string))) =>
               for {
-                _ <- costAccountingAlg.charge(hexToByteCost(utf8string))
+                _ <- costAccountingAlg.charge(hexToBytesCost(utf8string))
               } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
