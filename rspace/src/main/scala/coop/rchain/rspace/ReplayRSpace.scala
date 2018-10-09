@@ -21,8 +21,6 @@ import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
-  def getReplayData: ReplayData = replayData
-
   protected[rspace] var replayData: ReplayData = ReplayData.empty
 
   def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
