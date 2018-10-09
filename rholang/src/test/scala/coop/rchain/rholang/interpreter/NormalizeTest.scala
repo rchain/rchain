@@ -430,17 +430,17 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     def send(name: NameQuote): PSend =
       new PSend(name, new SendSingle(), data)
 
-    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PDisjunction(new PNil(), new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
 
-    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PConjunction(new PNil(), new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
 
-    an[SendNameConnectivesNotAllowedError] should be thrownBy {
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
       val name = new NameQuote(new PNegation(new PNil()))
       ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
     }
@@ -688,9 +688,9 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  def linearInput(channel: Proc): PInput = {
+  def linearInput(name: Name, channel: Proc): PInput = {
     val listBindings1 = new ListName()
-    listBindings1.add(new NameQuote(new PNil()))
+    listBindings1.add(name)
     val listLinearBind1 = new ListLinearBind()
     listLinearBind1.add(
       new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(channel))
@@ -710,26 +710,31 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
               binds = Seq(
                 ReceiveBind(
                   patterns = Seq(
-                    Par(connectives = Seq(conn))
+                    Par(connectives = Seq(conn), connectiveUsed = true)
                   ),
                   source = Par()
                 )
               ),
-              body = Par()
+              body = Par(),
+              connectiveUsed = false
             )
-          )
+          ),
+          connectiveUsed = false
         )
       )
 
     check(
-      linearInput(new PConjunction(new PNil(), new PNil())),
+      linearInput(new NameQuote(new PConjunction(new PNil(), new PNil())), new PNil()),
       Connective(ConnAndBody(ConnectiveBody(Seq(Par(), Par()))))
     )
     check(
-      linearInput(new PDisjunction(new PNil(), new PNil())),
+      linearInput(new NameQuote(new PDisjunction(new PNil(), new PNil())), new PNil()),
       Connective(ConnOrBody(ConnectiveBody(Seq(Par(), Par()))))
     )
-    check(linearInput(new PNegation(new PNil())), Connective(ConnNotBody(Par())))
+    check(
+      linearInput(new NameQuote(new PNegation(new PNil())), new PNil()),
+      Connective(ConnNotBody(Par()))
+    )
   }
 
   "PInput" should "bind whole list to the list remainder" in {
@@ -805,6 +810,23 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "not compile when connectives are used in the channel" in {
+    val disjunctionLinear =
+      linearInput(new NameQuote(new PNil()), new PDisjunction(new PNil(), new PNil()))
+    val conjunctionLinear =
+      linearInput(new NameQuote(new PNil()), new PConjunction(new PNil(), new PNil()))
+    val negationLinear = linearInput(new NameQuote(new PNil()), new PNegation(new PNil()))
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](disjunctionLinear, inputs).value
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](conjunctionLinear, inputs).value
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](negationLinear, inputs).value
+    }
 
   }
 

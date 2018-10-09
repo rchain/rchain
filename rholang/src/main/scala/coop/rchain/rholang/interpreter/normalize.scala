@@ -278,6 +278,17 @@ object ProcNormalizeMatcher {
         errMsg => Sync[F].raiseError(toError(errMsg))
       )
 
+  def failOnConnectivesUsed[F[_]: Sync](par: Par, name: Name): F[Unit] =
+    if (par.connectiveUsed) {
+      name match {
+        case nq: NameQuote =>
+          val listProc = new ListProc()
+          listProc.add(nq.proc_)
+          failOnConnectivesUsed(listProc, ChannelConnectivesNotAllowedError(_))
+        case _ => Sync[F].unit
+      }
+    } else Sync[F].unit
+
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M]
   ): M[ProcVisitOutputs] = Sync[M].defer {
@@ -629,6 +640,7 @@ object ProcNormalizeMatcher {
                               p.name_,
                               NameVisitInputs(input.env, input.knownFree)
                             )
+          _ <- failOnConnectivesUsed(nameMatchResult.chan, p.name_)
           initAcc = (
             Vector[Par](),
             ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
@@ -754,6 +766,7 @@ object ProcNormalizeMatcher {
             .foldM(initAcc)((acc, e) => {
               NameNormalizeMatcher
                 .normalizeMatch[M](e._2, NameVisitInputs(input.env, acc._2))
+                .flatMap(res => failOnConnectivesUsed(res.chan, e._2).map(_ => res))
                 .map(
                   sourceResult =>
                     (
