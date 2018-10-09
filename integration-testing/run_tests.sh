@@ -9,4 +9,4 @@ echo === If you want live logs you can enable them by setting 'log_cli=true'
 echo === for more command line options use \'$0 --help\'
 echo ==========================================================================================================================
 
-PYTHONPATH=src .virtualenv/bin/python -B -m pytest -v $@
+pipenv run env PYTHONPATH=src py.test -v "$@"
