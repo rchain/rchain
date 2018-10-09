@@ -701,7 +701,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     new PInput(receipt, body)
   }
 
-  "PInput" should "allow for patterns containing logical connectives in the receive bind" in {
+  "PInput" should "allow for patterns containing logical AND in the receive bind" in {
     def check(input: PInput, conn: Connective): Assertion =
       assert(
         ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par === Par(
@@ -726,14 +726,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     check(
       linearInput(new NameQuote(new PConjunction(new PNil(), new PNil())), new PNil()),
       Connective(ConnAndBody(ConnectiveBody(Seq(Par(), Par()))))
-    )
-    check(
-      linearInput(new NameQuote(new PDisjunction(new PNil(), new PNil())), new PNil()),
-      Connective(ConnOrBody(ConnectiveBody(Seq(Par(), Par()))))
-    )
-    check(
-      linearInput(new NameQuote(new PNegation(new PNil())), new PNil()),
-      Connective(ConnNotBody(Par()))
     )
   }
 
@@ -856,6 +848,19 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     an[TopLevelConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput(new PNegation(new PNil())), inputs).value
+    }
+  }
+
+  "PInput" should "not compile when logical OR and NOT are used in the pattern of the receive" in {
+    val negInput  = linearInput(new NameQuote(new PNegation(new PNil())), new PNil())
+    val disjInput = linearInput(new NameQuote(new PDisjunction(new PNil(), new PNil())), new PNil())
+
+    an[PatternReceiveError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](negInput, inputs).value
+    }
+
+    an[PatternReceiveError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](disjInput, inputs).value
     }
   }
 

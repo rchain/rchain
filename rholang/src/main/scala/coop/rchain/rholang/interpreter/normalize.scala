@@ -269,7 +269,7 @@ object ProcNormalizeMatcher {
     case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
   }
 
-  def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
+  private def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
       listProc: ListProc,
       toError: String => E
   ): F[Unit] =
@@ -280,7 +280,7 @@ object ProcNormalizeMatcher {
         errMsg => Sync[F].raiseError(toError(errMsg))
       )
 
-  def failOnConnectivesUsed[F[_]: Sync](par: Par, name: Name): F[Unit] =
+  private def failOnConnectivesUsed[F[_]: Sync](par: Par, name: Name): F[Unit] =
     if (par.connectiveUsed) {
       name match {
         case nq: NameQuote =>
@@ -792,6 +792,30 @@ object ProcNormalizeMatcher {
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
                     .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
+                    .flatMap { result =>
+                      // We do not allow for logical OR and NOT in the pattern of the receive.
+                      // For more details look at: https://rchain.atlassian.net/browse/RHOL-885
+                      if (result.chan.connectives.isEmpty) {
+                        Sync[M].pure(result)
+                      } else {
+                        n match {
+                          case nq: NameQuote =>
+                            val listProc = new ListProc()
+                            listProc.add(nq.proc_)
+                            listProc
+                              .collectFirst {
+                                case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
+                                case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
+                              }
+                              .fold(Sync[M].pure(result)) {
+                                case (c, line, col) =>
+                                  Sync[M].raiseError(PatternReceiveError(s"$c at $line:$col"))
+                              }
+                          case _ =>
+                            Sync[M].pure(result) // this is OK because NameWildcard and NameVar cannot have connectives
+                        }
+                      }
+                    }
                     .map(
                       result =>
                         (
