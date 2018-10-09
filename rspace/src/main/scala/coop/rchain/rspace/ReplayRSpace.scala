@@ -21,7 +21,7 @@ import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
-  protected[rspace] var replayData: ReplayData = ReplayData.empty
+  protected[rspace] val replayData: ReplayData = ReplayData.empty
 
   /** Rigs this ReplaySpace with the initial state and a log of permitted operations.
     * During replay, whenever a COMM event that is not available in the log occurs, an error is going to be raised.
@@ -39,12 +39,12 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
       case _             => false
     }.toSet
     // create and prepare the ReplayData table
-    val rigs: ReplayData = ReplayData.empty
+    replayData.clear()
     log.foreach {
       case comm @ COMM(consume, produces) =>
         (consume +: produces).foreach { ioEvent =>
           if (newStuff(ioEvent)) {
-            rigs.addBinding(ioEvent, comm)
+            replayData.addBinding(ioEvent, comm)
           }
         }
       case _ =>
@@ -52,8 +52,6 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
     }
     // reset to the starting checkpoint
     reset(startRoot)
-    // update the replay data
-    replayData = rigs
   }
 }
 
