@@ -827,7 +827,36 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     an[ChannelConnectivesNotAllowedError] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](negationLinear, inputs).value
     }
+  }
 
+  "PInput" should "not compile when connectives are the top level expression in the body" in {
+    def pInput(body: Proc): PInput = {
+      val listBindings1 = new ListName()
+      listBindings1.add(new NameQuote(new PNil()))
+      val listLinearBind1 = new ListLinearBind()
+      listLinearBind1.add(
+        new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(new PNil()))
+      )
+      val linearSimple = new LinearSimple(listLinearBind1)
+      val receipt      = new ReceiptLinear(linearSimple)
+      new PInput(receipt, body)
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher
+        .normalizeMatch[Coeval](pInput(new PDisjunction(new PNil(), new PNil())), inputs)
+        .value
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher
+        .normalizeMatch[Coeval](pInput(new PConjunction(new PNil(), new PNil())), inputs)
+        .value
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pInput(new PNegation(new PNil())), inputs).value
+    }
   }
 
   "PNew" should "Bind new variables" in {
@@ -1531,7 +1560,4 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  "NameQuote" should "not compile if it contains patterns" in {
-    pending
-  }
 }

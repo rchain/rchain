@@ -876,6 +876,12 @@ object ProcNormalizeMatcher {
                          p.proc_,
                          ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree)
                        )
+          // Top level connectives are not allowed (similarly to wildcards and free variables)
+          _ <- if (bodyResult.par.connectives.nonEmpty) {
+                val listProc = new ListProc()
+                listProc.add(p.proc_)
+                failOnConnectivesUsed(listProc, TopLevelConnectivesNotAllowedError(_))
+              } else Sync[M].unit
           connective = sourcesConnectives || bodyResult.par.connectiveUsed
         } yield
           ProcVisitOutputs(
