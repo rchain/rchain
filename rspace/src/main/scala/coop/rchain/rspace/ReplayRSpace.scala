@@ -21,7 +21,7 @@ import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
-  protected[rspace] val replayData: ReplayData = ReplayData.empty
+  private[rspace] val replayData: ReplayData = ReplayData.empty
 
   /** Rigs this ReplaySpace with the initial state and a log of permitted operations.
     * During replay, whenever a COMM event that is not available in the log occurs, an error is going to be raised.
