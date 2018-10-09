@@ -81,8 +81,8 @@ object errors {
   final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
       extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
 
-  final case class SendNameConnectivesNotAllowedError(connectives: String)
-      extends InterpreterError(s"Connectives are not allowed in name position: $connectives")
+  final case class ChannelConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Connectives are not allowed in channel position: $connectives")
 
   final case class SendDataConnectivesNotAllowedError(connectives: String)
       extends InterpreterError(s"Connectives are not allowed in send data: $connectives")
