@@ -17,7 +17,7 @@ import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher._
-import coop.rchain.rholang.interpreter.storage.TuplespaceAlg
+import coop.rchain.rholang.interpreter.storage.Tuplespace
 import coop.rchain.rspace.Serialize
 import monix.eval.Coeval
 import SpatialMatcher.spatialMatchAndCharge
@@ -80,7 +80,7 @@ class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccounting[M]) {
 object Reduce {
 
   class DebruijnInterpreter[M[_], F[_]](
-      tuplespaceAlg: TuplespaceAlg[M],
+      tuplespaceAlg: Tuplespace[M],
       private val urnMap: Map[String, Par]
   )(
       implicit
