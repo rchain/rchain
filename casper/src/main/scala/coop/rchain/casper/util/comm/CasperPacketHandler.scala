@@ -381,7 +381,7 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
     ): F[Option[Packet]] =
       for {
         _ <- Log[F].info(s"Received ApprovedBlockRequest from $peer")
-      } yield Some(Packet(transport.ApprovedBlock.id, approvedBlock.toByteString))
+      } yield Some(toPacket(transport.ApprovedBlock, approvedBlock.toByteString))
 
     override def handleNoApprovedBlockAvailable(na: NoApprovedBlockAvailable): F[Option[Packet]] =
       for {
@@ -542,11 +542,10 @@ object CasperPacketHandler extends CasperPacketHandlerInstances {
         }
     }
 
-  private def noApprovedBlockAvailable(peer: PeerNode): Packet =
-    Packet(
-      transport.NoApprovedBlockAvailable.id,
-      NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
-    )
+  private def noApprovedBlockAvailable(peer: PeerNode): Packet = toPacket(
+    transport.NoApprovedBlockAvailable,
+    NoApprovedBlockAvailable("NoApprovedBlockAvailable", peer.toString).toByteString
+  )
 
 }
 

@@ -144,21 +144,21 @@ class CasperPacketHandlerSpec extends WordSpec {
         val packetHandler = new CasperPacketHandlerImpl[Task](ref)
 
         val approvedBlockRequest = ApprovedBlockRequest("test")
-        val packet               = Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
+        val packet               = toPacket(transport.ApprovedBlockRequest, approvedBlockRequest.toByteString)
         val test = for {
           packetResponse <- packetHandler.handle(local)(packet)
           _ = assert(
             packetResponse ==
               Some(
-                Packet(
-                  transport.NoApprovedBlockAvailable.id,
+                toPacket(
+                  transport.NoApprovedBlockAvailable,
                   NoApprovedBlockAvailable("NoApprovedBlockAvailable", local.toString).toByteString
                 )
               )
           )
           _               = assert(transportLayer.requests.isEmpty)
           blockRequest    = BlockRequest("base16Hash", ByteString.copyFromUtf8("base16Hash"))
-          packet2         = Packet(transport.BlockRequest.id, blockRequest.toByteString)
+          packet2         = toPacket(transport.BlockRequest, blockRequest.toByteString)
           packetResponse2 <- packetHandler.handle(local)(packet2)
           _               = assert(packetResponse2.isEmpty)
           _               = assert(transportLayer.requests.isEmpty)
@@ -213,7 +213,7 @@ class CasperPacketHandlerSpec extends WordSpec {
             validatorSk,
             validatorPk
           )
-          blockApprovalPacket = Packet(transport.BlockApproval.id, blockApproval.toByteString)
+          blockApprovalPacket = toPacket(transport.BlockApproval, blockApproval.toByteString)
           _                   <- casperPacketHandler.handle(local)(blockApprovalPacket)
           //wait until casper is defined, with 1 minute timeout (indicating failure)
           possiblyCasper  <- Task.racePair(Task.sleep(1.minute), waitUtilCasperIsDefined)
@@ -308,7 +308,7 @@ class CasperPacketHandlerSpec extends WordSpec {
           )
         )
 
-        val approvedPacket = Packet(transport.ApprovedBlock.id, approvedBlock.toByteString)
+        val approvedPacket = toPacket(transport.ApprovedBlock, approvedBlock.toByteString)
 
         val test = for {
           refCasper           <- Ref.of[Task, CasperPacketHandlerInternal[Task]](bootstrapCasper)
@@ -401,7 +401,7 @@ class CasperPacketHandlerSpec extends WordSpec {
 
       "respond to BlockMessage messages " in {
         val blockMessage = BlockMessage(ByteString.copyFrom("Test BlockMessage", "UTF-8"))
-        val packet       = Packet(transport.BlockMessage.id, blockMessage.toByteString)
+        val packet       = toPacket(transport.BlockMessage, blockMessage.toByteString)
         val test: Task[Unit] = for {
           _ <- casperPacketHandler.handle(local)(packet)
           _ = assert(casper.store.contains(blockMessage.blockHash))
@@ -413,7 +413,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       "respond to BlockRequest messages" in {
         val blockRequest =
           BlockRequest(Base16.encode(genesis.blockHash.toByteArray), genesis.blockHash)
-        val requestPacket = Packet(transport.BlockRequest.id, blockRequest.toByteString)
+        val requestPacket = toPacket(transport.BlockRequest, blockRequest.toByteString)
         val test = for {
           _     <- blockStore.put(genesis.blockHash, genesis)
           _     <- casperPacketHandler.handle(local)(requestPacket)
@@ -428,7 +428,7 @@ class CasperPacketHandlerSpec extends WordSpec {
       "respond to ApprovedBlockRequest messages" in {
         val approvedBlockRequest = ApprovedBlockRequest("test")
         val requestPacket =
-          Packet(transport.ApprovedBlockRequest.id, approvedBlockRequest.toByteString)
+          toPacket(transport.ApprovedBlockRequest, approvedBlockRequest.toByteString)
 
         val test: Task[Unit] = for {
           response <- casperPacketHandler.handle(local)(requestPacket)

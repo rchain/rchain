@@ -56,7 +56,7 @@ object BlockApproverProtocolTest {
     UnapprovedBlock(Some(ApprovedBlockCandidate(Some(block), requiredSigs)), 0L, 0L)
 
   def unapprovedToPacket(u: UnapprovedBlock): Packet =
-    Packet(transport.UnapprovedBlock.id, u.toByteString)
+    toPacket(transport.UnapprovedBlock, u.toByteString)
 
   def createProtocol(
       requiredSigs: Int,
