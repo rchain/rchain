@@ -165,11 +165,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
     val consumeRef = Consume.create(channels, patterns, continuation, persist)
 
-    span.mark("before-replay-data-lock-acquired")
-    val replays = replayData
-    span.mark("after-replay-data-lock-acquired")
-
-    replays.get(consumeRef) match {
+    replayData.get(consumeRef) match {
       case None =>
         span.mark("no-consume-ref-found")
         Right(storeWaitingContinuation(replays, consumeRef, None))
@@ -320,10 +316,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
       val produceRef = Produce.create(channel, data, persist)
 
-      span.mark("before-replay-data-lock-acquired")
-      val replays = replayData
-      span.mark("after-replay-data-lock-acquired")
-
       @tailrec
       def getCommOrProduceCandidate(
           comms: Seq[COMM]
@@ -345,7 +337,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             }
         }
 
-      replays.get(produceRef) match {
+      replayData.get(produceRef) match {
         case None =>
           span.mark("no-produce-ref-found")
           Right(storeDatum(replays, produceRef, None))
