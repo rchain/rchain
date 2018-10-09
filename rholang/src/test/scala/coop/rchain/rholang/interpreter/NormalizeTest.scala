@@ -864,6 +864,71 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PInput" should "allow for logical OR and NOT inside the patterns of the receive" in {
+    def checkPasses(proc: Proc, connective: Connective): Assertion = {
+      val listCase = new ListCase()
+      listCase.add(
+        new CaseImpl(
+          new PDisjunction(new PGround(new GroundInt("1")), new PGround(new GroundInt("2"))),
+          new PNil()
+        )
+      )
+      val mat = new PMatch(new PVarRef(new VarRefKindProc(), "x"), listCase)
+
+      val boundedInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+      val input         = linearInput(new NameQuote(mat), new PNil())
+      val result        = ProcNormalizeMatcher.normalizeMatch[Coeval](input, boundedInputs).value
+
+      result.par should be(
+        Par(
+          receives = Seq(
+            Receive(
+              binds = Seq(
+                ReceiveBind(
+                  patterns = Seq(
+                    Par(
+                      matches = Seq(
+                        Match(
+                          target = Par(
+                            connectives = Seq(Connective(VarRefBody(VarRef(0, 1)))),
+                            locallyFree = AlwaysEqual(BitSet(0))
+                          ),
+                          cases = Seq(
+                            MatchCase(
+                              Par(
+                                connectives = Seq(
+                                  Connective(ConnOrBody(ConnectiveBody(Seq(GInt(1), GInt(2)))))
+                                ),
+                                connectiveUsed = true
+                              ),
+                              Par()
+                            )
+                          ),
+                          connectiveUsed = false,
+                          locallyFree = AlwaysEqual(BitSet(0))
+                        )
+                      ),
+                      locallyFree = AlwaysEqual(BitSet(0))
+                    )
+                  ),
+                  source = Par()
+                )
+              ),
+              body = Par(),
+              locallyFree = AlwaysEqual(BitSet(0))
+            )
+          ),
+          locallyFree = BitSet(0)
+        )
+      )
+    }
+    checkPasses(
+      new PDisjunction(new PGround(new GroundInt("1")), new PGround(new GroundInt("2"))),
+      Connective(ConnOrBody(ConnectiveBody(Seq(GInt(1), GInt(2)))))
+    )
+    checkPasses(new PNegation(new PNil()), Connective(ConnNotBody(Par())))
+  }
+
   "PNew" should "Bind new variables" in {
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
