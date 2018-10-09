@@ -36,28 +36,28 @@ trait Reduce[M[_]] {
   def eval(par: Par)(
       implicit env: Env[Par],
       rand: Blake2b512Random,
-      costAccountingAlg: CostAccountingAlg[M]
+      costAccountingAlg: CostAccounting[M]
   ): M[Unit]
 
   def inj(
       par: Par
-  )(implicit rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit]
+  )(implicit rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit]
 
   /**
     * Evaluate any top level expressions in @param Par .
     */
-  def evalExpr(par: Par)(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par]
+  def evalExpr(par: Par)(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par]
 
   def evalExprToPar(
       expr: Expr
-  )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par]
+  )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par]
 }
 
 // TODO:
 // In a perfect world we would an algebra of an interpreter encoded in the terms of
 // rholang's elimination and have the `ChargingReducer` forward the calls to the plain algebra
 // and charge accordingly. This would eliminate the "charge" calls from the algebra of a language.
-class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccountingAlg[M]) {
+class ChargingReducer[M[_]](implicit R: Reduce[M], C: CostAccounting[M]) {
   def getAvailablePhlos(): M[CostAccount] =
     C.get()
 
@@ -103,7 +103,7 @@ object Reduce {
         data: Seq[Par],
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(implicit costAccountingAlg: CostAccounting[M]): M[Unit] =
       tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent)
 
     /**
@@ -122,13 +122,13 @@ object Reduce {
         body: Par,
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(implicit costAccountingAlg: CostAccounting[M]): M[Unit] =
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
       def run(mkRand: Int => Blake2b512Random)(
           env: Env[Par],
-          costAccountingAlg: CostAccountingAlg[M]
+          costAccountingAlg: CostAccounting[M]
       ): M[List[Unit]]
       def size: Int
     }
@@ -137,12 +137,12 @@ object Reduce {
 
       private def mkJob[A](
           input: Seq[A],
-          handler: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+          handler: A => (Env[Par], Blake2b512Random, CostAccounting[M]) => M[Unit]
       ): EvalJob =
         new EvalJob {
           override def run(mkRand: Int => Blake2b512Random)(
               env: Env[Par],
-              costAccountingAlg: CostAccountingAlg[M]
+              costAccountingAlg: CostAccounting[M]
           ): M[List[Unit]] =
             Parallel.parTraverse(input.zipWithIndex.toList) {
               case (term, idx) =>
@@ -155,7 +155,7 @@ object Reduce {
       def apply(exprs: Seq[Expr]) = {
         def handler(
             expr: Expr
-        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]) =
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               (for {
@@ -175,11 +175,11 @@ object Reduce {
 
       def apply[A](
           terms: Seq[A],
-          handlerImpl: A => (Env[Par], Blake2b512Random, CostAccountingAlg[M]) => M[Unit]
+          handlerImpl: A => (Env[Par], Blake2b512Random, CostAccounting[M]) => M[Unit]
       ) = {
         def handler(
             term: A
-        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]) =
+        )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]) =
           handlerImpl(term)(env, rand, costAccountingAlg)
             .handleErrorWith {
               case e: OutOfPhlogistonsError.type =>
@@ -207,7 +207,7 @@ object Reduce {
     override def eval(par: Par)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def split(totalSize: Int, termSize: Int, rand: Blake2b512Random)(idx: Int): Blake2b512Random =
         if (totalSize == 1)
@@ -249,14 +249,14 @@ object Reduce {
 
     override def inj(
         par: Par
-    )(implicit rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(implicit rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       for {
         _ <- eval(par)(Env[Par](), rand, costAccountingAlg)
       } yield ()
 
     private def evalExplicit(
         send: Send
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       eval(send)(env, rand, costAccountingAlg)
 
     /** Algorithm as follows:
@@ -274,7 +274,7 @@ object Reduce {
     private def eval(send: Send)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       for {
         evalChan <- evalExpr(send.chan)
@@ -299,13 +299,13 @@ object Reduce {
 
     private def evalExplicit(
         receive: Receive
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       eval(receive)(env, rand, costAccountingAlg)
 
     private def eval(receive: Receive)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       for {
         binds <- receive.binds.toList
@@ -347,7 +347,7 @@ object Reduce {
       */
     private def eval(
         valproc: Var
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
       costAccountingAlg.charge(VAR_EVAL_COST) *> {
         valproc.varInstance match {
           case BoundVar(level) =>
@@ -368,12 +368,12 @@ object Reduce {
 
     private def evalExplicit(
         mat: Match
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       eval(mat)(env, rand, costAccountingAlg)
     private def eval(mat: Match)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
         Range(0, freeCount).foldLeft(env)(
@@ -433,12 +433,12 @@ object Reduce {
       */
     private def evalExplicit(
         neu: New
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       eval(neu)(env, rand, costAccountingAlg)
     private def eval(neu: New)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] = {
       def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
         val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
@@ -470,7 +470,7 @@ object Reduce {
 
     private[this] def unbundleReceive(
         rb: ReceiveBind
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
       for {
         evalSrc <- evalExpr(rb.source)
         subst   <- substituteAndCharge[Par, M](evalSrc, 0, env)
@@ -489,18 +489,18 @@ object Reduce {
 
     private def evalExplicit(
         bundle: Bundle
-    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccountingAlg[M]): M[Unit] =
+    )(env: Env[Par], rand: Blake2b512Random, costAccountingAlg: CostAccounting[M]): M[Unit] =
       eval(bundle)(env, rand, costAccountingAlg)
     private def eval(bundle: Bundle)(
         implicit env: Env[Par],
         rand: Blake2b512Random,
-        costAccountingAlg: CostAccountingAlg[M]
+        costAccountingAlg: CostAccounting[M]
     ): M[Unit] =
       eval(bundle.body)
 
     def evalExprToPar(
         expr: Expr
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
       expr.exprInstance match {
         case EVarBody(EVar(v)) =>
           for {
@@ -525,7 +525,7 @@ object Reduce {
 
     private def evalExprToExpr(
         expr: Expr
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Expr] = Sync[M].defer {
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Expr] = Sync[M].defer {
       def relop(
           p1: Par,
           p2: Par,
@@ -866,7 +866,7 @@ object Reduce {
     private abstract class Method() {
       def apply(p: Par, args: Seq[Par])(
           implicit env: Env[Par],
-          costAccountingAlg: CostAccountingAlg[M]
+          costAccountingAlg: CostAccounting[M]
       ): M[Par]
     }
 
@@ -881,7 +881,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         if (args.length != 1) {
           s.raiseError(errors.MethodArgumentNumberMismatch("nth", 1, args.length))
         } else {
@@ -917,7 +917,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         if (args.nonEmpty) {
           s.raiseError(MethodArgumentNumberMismatch("toByteArray", 0, args.length))
         } else {
@@ -935,7 +935,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         if (args.nonEmpty) {
           s.raiseError(MethodArgumentNumberMismatch("hexToBytes", 0, args.length))
         } else {
@@ -964,7 +964,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         if (args.nonEmpty) {
           s.raiseError(MethodArgumentNumberMismatch("toUtf8Bytes", 0, args.length))
         } else {
@@ -992,7 +992,7 @@ object Reduce {
       def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
         base.flatMap(b => other.map(o => b | o))
 
-      def union(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccountingAlg[M]) =
+      def union(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccounting[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
               ESetBody(base @ ParSet(basePs, _, _, _)),
@@ -1030,7 +1030,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("union", 1, args.length))
@@ -1042,7 +1042,7 @@ object Reduce {
     }
 
     private[this] val diff: Method = new Method() {
-      def diff(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccountingAlg[M]) =
+      def diff(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccounting[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
               ESetBody(base @ ParSet(basePs, _, _, _)),
@@ -1069,7 +1069,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("diff", 1, args.length))
@@ -1081,7 +1081,7 @@ object Reduce {
     }
 
     private[this] val add: Method = new Method() {
-      def add(baseExpr: Expr, par: Par)(implicit costAccountingAlg: CostAccountingAlg[M]) =
+      def add(baseExpr: Expr, par: Par)(implicit costAccountingAlg: CostAccounting[M]) =
         baseExpr.exprInstance match {
           case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
@@ -1103,7 +1103,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("add", 1, args.length))
@@ -1147,7 +1147,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("delete", 1, args.length))
@@ -1173,7 +1173,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("contains", 1, args.length))
@@ -1197,7 +1197,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 1)
                 s.raiseError(MethodArgumentNumberMismatch("get", 1, args.length))
@@ -1221,7 +1221,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 2)
                 s.raiseError(MethodArgumentNumberMismatch("getOrElse", 2, args.length))
@@ -1246,7 +1246,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 2)
                 s.raiseError(MethodArgumentNumberMismatch("set", 2, args.length))
@@ -1271,7 +1271,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
                 s.raiseError(MethodArgumentNumberMismatch("keys", 0, args.length))
@@ -1298,7 +1298,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
                 s.raiseError(MethodArgumentNumberMismatch("size", 0, args.length))
@@ -1322,7 +1322,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 0)
                 s.raiseError(MethodArgumentNumberMismatch("length", 0, args.length))
@@ -1358,7 +1358,7 @@ object Reduce {
       override def apply(
           p: Par,
           args: Seq[Par]
-      )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+      )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
         for {
           _ <- if (args.length != 2)
                 s.raiseError(MethodArgumentNumberMismatch("slice", 2, args.length))
@@ -1395,7 +1395,7 @@ object Reduce {
 
     def evalSingleExpr(
         p: Par
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Expr] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Expr] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected.")
@@ -1409,7 +1409,7 @@ object Reduce {
 
     def evalToLong(
         p: Par
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Long] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Long] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected.")
@@ -1440,7 +1440,7 @@ object Reduce {
 
     def evalToBool(
         p: Par
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Boolean] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Boolean] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty || !p.bundles.isEmpty)
         s.raiseError(
           ReduceError("Error: parallel or non expression found where expression expected.")
@@ -1500,7 +1500,7 @@ object Reduce {
       */
     def evalExpr(
         par: Par
-    )(implicit env: Env[Par], costAccountingAlg: CostAccountingAlg[M]): M[Par] =
+    )(implicit env: Env[Par], costAccountingAlg: CostAccounting[M]): M[Par] =
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr))
         // Note: the locallyFree cache in par could now be invalid, but given
