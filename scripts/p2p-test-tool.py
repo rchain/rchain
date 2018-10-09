@@ -10,6 +10,7 @@ import subprocess
 import argparse
 import docker
 import os
+import shutil
 import tempfile
 import requests
 import re
@@ -130,7 +131,8 @@ args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = '/opt/docker/bin/rnode'
 # bonds_file = f'/tmp/bonds.{args.network}' alternate when dynamic bonds.txt creation/manpiulation file works
-bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
+src_bonds_file = os.path.dirname(os.path.realpath(__file__)) + '/demo-bonds.txt'
+bonds_file = f'/tmp/rnode_{args.network}_bonds.txt'
 container_bonds_file = f'{args.rnode_directory}/genesis/bonds.txt'
 
 
@@ -446,6 +448,7 @@ def create_empty_bonds_file():
 
 def boot_p2p_network():
     try:
+        shutil.copyfile(src_bonds_file, bonds_file)
         client.networks.create(args.network, driver="bridge")
         print("Starting bootstrap node.")
         # create_empty_bonds_file() # disabled until python generated keys work
@@ -631,8 +634,8 @@ def create_bootstrap_node():
         "VkEqI2rycmgp03DXsStJ7IGdBQ==\n"
         "-----END CERTIFICATE-----\n"
     )
-    tmp_file_key = '/tmp/node.key.pem'
-    tmp_file_cert = '/tmp/node.certificate.pem'
+    tmp_file_key = '/tmp/rnode_{args.network}_node.key.pem'
+    tmp_file_cert = '/tmp/rnode_{args.network}_node.certificate.pem'
     with open(tmp_file_key, 'w') as f:
         f.write(bootstrap_node_demo_key)
     with open(tmp_file_cert, 'w') as f:
