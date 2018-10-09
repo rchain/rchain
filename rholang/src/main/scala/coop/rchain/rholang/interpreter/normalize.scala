@@ -263,16 +263,18 @@ object NameNormalizeMatcher {
 }
 
 object ProcNormalizeMatcher {
+  private def findConnective(p: Proc): Option[(String, Int, Int)] = Some(p).collect {
+    case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
+    case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
+    case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
+  }
+
   def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
       listProc: ListProc,
       toError: String => E
   ): F[Unit] =
     listProc
-      .collectFirst {
-        case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
-        case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
-        case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
-      }
+      .collectFirst(Function.unlift(findConnective))
       .map { case (c, line, col) => s"$c at $line:$col" }
       .fold(Sync[F].unit)(
         errMsg => Sync[F].raiseError(toError(errMsg))
