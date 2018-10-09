@@ -85,7 +85,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     }
 
     def storeWaitingContinuation(
-        replays: ReplayData,
         consumeRef: Consume,
         maybeCommRef: Option[COMM]
     ): None.type = {
@@ -109,7 +108,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
     def handleMatches(
         mats: Seq[DataCandidate[C, R]],
-        replays: ReplayData,
         consumeRef: Consume,
         comms: Multiset[COMM]
     ): Option[(ContResult[C, P, K], Seq[Result[R]])] = {
@@ -131,7 +129,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
             }
         }
       logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-      replaysLessCommRef(replays, commRef)
+      removeBindingsFor(commRef)
       span.mark("handle-matches-end")
       Some(
         (
@@ -168,7 +166,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
     replayData.get(consumeRef) match {
       case None =>
         span.mark("no-consume-ref-found")
-        Right(storeWaitingContinuation(replays, consumeRef, None))
+        Right(storeWaitingContinuation(consumeRef, None))
       case Some(comms) =>
         span.mark("ref-found")
         val commOrDataCandidates: Either[COMM, Seq[DataCandidate[C, R]]] =
@@ -177,10 +175,10 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
         commOrDataCandidates match {
           case Left(commRef) =>
             span.mark("no-data-candidates-found")
-            Right(storeWaitingContinuation(replays, consumeRef, Some(commRef)))
+            Right(storeWaitingContinuation(consumeRef, Some(commRef)))
           case Right(dataCandidates) =>
             span.mark("data-candidates-found")
-            Right(handleMatches(dataCandidates, replays, consumeRef, comms))
+            Right(handleMatches(dataCandidates, consumeRef, comms))
         }
     }
   }
@@ -242,7 +240,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       }
 
     def storeDatum(
-        replays: ReplayData,
         produceRef: Produce,
         maybeCommRef: Option[COMM]
     ): None.type = {
@@ -259,7 +256,6 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
 
     def handleMatch(
         mat: ProduceCandidate[C, P, R, K],
-        replays: ReplayData,
         produceRef: Produce,
         comms: Multiset[COMM]
     ): Option[(ContResult[C, P, K], Seq[Result[R]])] =
@@ -298,7 +294,7 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
                 }
             }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
-          replaysLessCommRef(replays, commRef)
+          removeBindingsFor(commRef)
           span.mark("handle-match-end")
           Some(
             (
@@ -340,27 +336,27 @@ class FineGrainedReplayRSpace[F[_], C, P, E, A, R, K](store: IStore[C, P, A, K],
       replayData.get(produceRef) match {
         case None =>
           span.mark("no-produce-ref-found")
-          Right(storeDatum(replays, produceRef, None))
+          Right(storeDatum(produceRef, None))
         case Some(comms) =>
           val commOrProduceCandidate: Either[COMM, ProduceCandidate[C, P, R, K]] =
             getCommOrProduceCandidate(comms.iterator().asScala.toList)
           commOrProduceCandidate match {
             case Left(comm) =>
               span.mark("no-produce-candidate-found")
-              Right(storeDatum(replays, produceRef, Some(comm)))
+              Right(storeDatum(produceRef, Some(comm)))
             case Right(produceCandidate) =>
               span.mark("produce-candidate-found")
-              Right(handleMatch(produceCandidate, replays, produceRef, comms))
+              Right(handleMatch(produceCandidate, produceRef, comms))
           }
       }
     }
   }
 
-  private def replaysLessCommRef(
-      replays: ReplayData,
+  @inline
+  private def removeBindingsFor(
       commRef: COMM
-  ): MultisetMultiMap[IOEvent, COMM] =
-    commRef.produces.foldLeft(replays.removeBinding(commRef.consume, commRef)) {
+  ): Unit =
+    commRef.produces.foldLeft(replayData.removeBinding(commRef.consume, commRef)) {
       case (updatedReplays, produceRef) =>
         updatedReplays.removeBinding(produceRef, commRef)
     }
