@@ -279,7 +279,7 @@ object ProcNormalizeMatcher {
       )
 
   def failOnConnectivesUsed[F[_]: Sync](par: Par, name: Name): F[Unit] =
-    if (par.connectiveUsed) {
+    if (par.connectives.nonEmpty) {
       name match {
         case nq: NameQuote =>
           val listProc = new ListProc()
