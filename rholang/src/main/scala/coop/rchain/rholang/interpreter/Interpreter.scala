@@ -5,6 +5,7 @@ import java.io.Reader
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
@@ -82,9 +83,15 @@ object Interpreter {
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
           )
         } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+          def connectiveInstanceToString(conn: ConnectiveInstance): String =
+            if (conn.isConnAndBody) "/\\ (conjunction)"
+            else if (conn.isConnOrBody) "\\/ (disjunction)"
+            else if (conn.isConnNotBody) "~ (negation)"
+            else conn.toString
+
           val connectives = normalizedTerm.knownFree.logicalConnectives
             .map {
-              case (name, line, col) => s"$name at $line:$col"
+              case (connType, line, col) => s"${connectiveInstanceToString(connType)} at $line:$col"
             }
             .mkString("", ", ", "")
           sync.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
