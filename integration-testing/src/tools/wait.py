@@ -44,7 +44,7 @@ def wait_for(condition, timeout, error_message):
                     details = str(ex)
                     current_ex = str(ex)
 
-                logging.info(f"Condition not fulfilled yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...")
+                logging.info(f"Condition not satisfied yet ({details}). Time left: {time_left}s. Sleeping {iteration_duration}s...")
 
                 time.sleep(iteration_duration)
                 elapsed = elapsed + iteration_duration
