@@ -165,7 +165,7 @@ object ApproveBlockProtocol {
     private def sendUnapprovedBlock: F[Unit] =
       for {
         _ <- Log[F].info(s"APPROVAL: Beginning send of UnapprovedBlock $candidateHash to peers...")
-        _ <- CommUtil.sendToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
+        _ <- CommUtil.streamToPeers[F](transport.UnapprovedBlock, serializedUnapprovedBlock)
         _ <- Log[F].info(s"APPROVAL: Sent UnapprovedBlock $candidateHash to peers.")
       } yield ()
 
@@ -181,7 +181,7 @@ object ApproveBlockProtocol {
                   _ <- Log[F].info(
                         s"APPROVAL: Beginning send of ApprovedBlock $candidateHash to peers..."
                       )
-                  _ <- CommUtil.sendToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
+                  _ <- CommUtil.streamToPeers[F](transport.ApprovedBlock, serializedApprovedBlock)
                   _ <- Log[F].info(s"APPROVAL: Sent ApprovedBlock $candidateHash to peers.")
                 } yield ()
             }

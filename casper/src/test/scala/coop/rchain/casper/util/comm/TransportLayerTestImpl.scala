@@ -3,11 +3,12 @@ package coop.rchain.casper.util.comm
 import cats.{Id, Monad}
 import cats.effect.concurrent.Ref
 import cats.implicits._
-
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
 import coop.rchain.comm.PeerNode
+import coop.rchain.comm.rp.ProtocolHelper
+import coop.rchain.comm.rp.ProtocolHelper.protocol
 
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.mutable
@@ -34,15 +35,16 @@ class TransportLayerTestImpl[F[_]: Monad](
   def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(send(_, msg)).map(_.toSeq)
 
-  // FIX-ME handleStreamed not handled (pun)
   def receive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Unit] =
     TransportLayerTestImpl.handleQueue(dispatch, msgQueues(identity))
 
-  // FIX-ME
-  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] = ???
+  def stream(peers: Seq[PeerNode], blob: Blob): F[Unit] =
+    peers.toList
+      .traverse(peer => send(peer, protocol(blob.sender).withPacket(blob.packet)))
+      .map(_.toSeq)
 
   def disconnect(peer: PeerNode): F[Unit] = ???
 
