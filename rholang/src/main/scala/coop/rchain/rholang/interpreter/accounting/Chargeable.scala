@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.accounting
 import scalapb.GeneratedMessage
 
 trait Chargeable[A] {
-  def cost(a: A): Int
+  def cost(a: A): Long
 }
 
 object Chargeable {
@@ -11,6 +11,6 @@ object Chargeable {
 
   implicit def fromProtobuf[T <: GeneratedMessage] =
     new Chargeable[T] {
-      override def cost(a: T): Int = a.serializedSize
+      override def cost(a: T): Long = a.serializedSize.toLong
     }
 }

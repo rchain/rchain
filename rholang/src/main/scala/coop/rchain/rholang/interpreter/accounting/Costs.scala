@@ -15,6 +15,7 @@ final case class Cost(value: Long) extends AnyVal {
 object Cost {
   def apply[A](term: A)(implicit chargeable: Chargeable[A]): Cost =
     Cost(chargeable.cost(term))
+  def apply(value: Int): Cost = Cost(value.toLong)
 }
 
 trait Costs {
@@ -49,7 +50,7 @@ trait Costs {
 
   // GByteArray uses ByteString internally which in turn are implemented using
   // data structure called Rope for which append operation is O(logN)
-  def byteArrayAppendCost(left: ByteString): Cost = Cost(math.log10(left.size()).toLong)
+  def byteArrayAppendCost(left: ByteString): Cost = Cost(math.log10(left.size().toDouble).toInt)
   // According to scala doc Vector#append is eC so it's n*eC.
   def listAppendCost(right: Vector[Par]): Cost = Cost(right.size)
   // String append creates a char[] of size n + m and then copies all elements to it.

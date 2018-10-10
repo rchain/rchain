@@ -99,10 +99,10 @@ object Runtime {
   type RhoSysFunction    = Function1[Seq[ListParWithRandomAndPhlos], Task[Unit]]
   type RhoDispatchMap    = Map[Long, RhoSysFunction]
 
-  private type CPAK[F[_, _, _, _]] =
+  type CPAK[F[_, _, _, _]] =
     F[Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  private type CPARK[F[_, _, _, _, _, _]] =
+  type CPARK[F[_, _, _, _, _, _]] =
     F[
       Par,
       BindPattern,
@@ -112,7 +112,7 @@ object Runtime {
       TaggedContinuation
     ]
 
-  private type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
+  type TCPARK[M[_], F[_[_], _, _, _, _, _, _]] =
     F[
       M,
       Par,
