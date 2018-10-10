@@ -39,7 +39,7 @@ pipeline:
   compile:
     <<: *sbtenv
     commands:
-      - sbt rholang/bnfc:generate compile test:compile it:compile
+      - sbt rholang/bnfc:generate compile test:compile it:compile doc
 
   run-unit-tests:
     <<: *sbtenv
