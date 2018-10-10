@@ -21,14 +21,16 @@ import kamon._
 
 trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
 
-  def getReplayData: ReplayData = replayData.get
+  private[rspace] val replayData: ReplayData = ReplayData.empty
 
-  protected[rspace] val replayData: SyncVar[ReplayData] = {
-    val sv = new SyncVar[ReplayData]()
-    sv.put(ReplayData.empty)
-    sv
-  }
-
+  /** Rigs this ReplaySpace with the initial state and a log of permitted operations.
+    * During replay, whenever a COMM event that is not available in the log occurs, an error is going to be raised.
+    *
+    * This method is not thread safe.
+    *
+    *  @param startRoot A [Blake2b256Hash] representing the intial state
+    *  @param log A [Log] with permitted operations
+    */
   def rig(startRoot: Blake2b256Hash, log: trace.Log): Unit = {
     // create a set of the "new" IOEvents
     val newStuff: Set[Event] = log.filter {
@@ -37,12 +39,12 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
       case _             => false
     }.toSet
     // create and prepare the ReplayData table
-    val rigs: ReplayData = ReplayData.empty
+    replayData.clear()
     log.foreach {
       case comm @ COMM(consume, produces) =>
         (consume +: produces).foreach { ioEvent =>
           if (newStuff(ioEvent)) {
-            rigs.addBinding(ioEvent, comm)
+            replayData.addBinding(ioEvent, comm)
           }
         }
       case _ =>
@@ -50,8 +52,6 @@ trait IReplaySpace[F[_], C, P, E, A, R, K] extends ISpace[F, C, P, E, A, R, K] {
     }
     // reset to the starting checkpoint
     reset(startRoot)
-    // update the replay data
-    replayData.update(const(rigs))
   }
 }
 
