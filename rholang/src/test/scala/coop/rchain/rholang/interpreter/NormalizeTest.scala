@@ -42,7 +42,7 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
     GroundNormalizeMatcher.normalizeMatch(gi) should be(expectedResult)
   }
   "GroundString" should "Compile as GString" in {
-    val gs                   = new GroundString("String")
+    val gs                   = new GroundString("\"String\"")
     val expectedResult: Expr = GString("String")
     GroundNormalizeMatcher.normalizeMatch(gs) should be(expectedResult)
   }
@@ -149,7 +149,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
   "Map" should "delegate" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
-      new KeyValuePairImpl(new PGround(new GroundInt("7")), new PGround(new GroundString("Seven")))
+      new KeyValuePairImpl(
+        new PGround(new GroundInt("7")),
+        new PGround(new GroundString("\"Seven\""))
+      )
     )
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
     val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
@@ -276,13 +279,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val mapData = new ListKeyValuePair()
     mapData.add(
       new KeyValuePairImpl(
-        new PGround(new GroundString("name")),
-        new PGround(new GroundString("Alice"))
+        new PGround(new GroundString("\"name\"")),
+        new PGround(new GroundString("\"Alice\""))
       )
     )
     val pPercentPercent =
       new PPercentPercent(
-        new PGround(new GroundString("Hi ${name}")),
+        new PGround(new GroundString("\"Hi ${name}\"")),
         new PCollect(new CollectMap(mapData, new ProcRemainderEmpty()))
       )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPercentPercent, inputs).value
@@ -327,8 +330,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PPlusPlus" should "Delegate" in {
     val pPlusPlus = new PPlusPlus(
-      new PGround(new GroundString("abc")),
-      new PGround(new GroundString("def"))
+      new PGround(new GroundString("\"abc\"")),
+      new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pPlusPlus, inputs).value
     result.par should be(inputs.par.prepend(EPlusPlus(GString("abc"), GString("def")), 0))
@@ -337,8 +340,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PMinusMinus" should "Delegate" in {
     val pMinusMinus = new PMinusMinus(
-      new PGround(new GroundString("abc")),
-      new PGround(new GroundString("def"))
+      new PGround(new GroundString("\"abc\"")),
+      new PGround(new GroundString("\"def\""))
     )
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pMinusMinus, inputs).value
     result.par should be(inputs.par.prepend(EMinusMinus(GString("abc"), GString("def")), 0))

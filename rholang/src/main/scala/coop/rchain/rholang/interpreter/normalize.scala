@@ -29,7 +29,7 @@ case object ProcSort extends VarSort
 case object NameSort extends VarSort
 
 object BoolNormalizeMatcher {
-  def normalizeMatch(b: Bool): GBool =
+  def normalizeMatch(b: BoolLiteral): GBool =
     b match {
       case _: BoolTrue  => GBool(true)
       case _: BoolFalse => GBool(false)
@@ -39,14 +39,18 @@ object BoolNormalizeMatcher {
 object GroundNormalizeMatcher {
   def normalizeMatch(g: AbsynGround): Expr =
     g match {
-      case gb: GroundBool   => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
-      case gi: GroundInt    => GInt(gi.long_.toLong) //TODO raise NumberFormatException in a pure way
-      case gs: GroundString => GString(gs.string_)
-      case gu: GroundUri    => GUri(stripUri(gu.uri_))
+      case gb: GroundBool => BoolNormalizeMatcher.normalizeMatch(gb.boolliteral_)
+      case gi: GroundInt =>
+        GInt(gi.longliteral_.toLong) //TODO raise NumberFormatException in a pure way
+      case gs: GroundString => GString(stripString(gs.stringliteral_))
+      case gu: GroundUri    => GUri(stripUri(gu.uriliteral_))
     }
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
   def stripUri(raw: String): String = raw.substring(1, raw.length - 1)
+  // Similarly, we need to remove quotes from strings, since we are using
+  // a custom string token
+  def stripString(raw: String): String = raw.substring(1, raw.length - 1)
 }
 
 object RemainderNormalizeMatcher {
@@ -898,7 +902,13 @@ object ProcNormalizeMatcher {
         val newTaggedBindings = p.listnamedecl_.toVector.map {
           case n: NameDeclSimpl => (None, n.var_, NameSort, n.line_num, n.col_num)
           case n: NameDeclUrn =>
-            (Some(GroundNormalizeMatcher.stripUri(n.uri_)), n.var_, NameSort, n.line_num, n.col_num)
+            (
+              Some(GroundNormalizeMatcher.stripUri(n.uriliteral_)),
+              n.var_,
+              NameSort,
+              n.line_num,
+              n.col_num
+            )
         }
         // This sorts the None's first, and the uris by lexicographical order.
         // We do this here because the sorting affects the numbering of variables inside the body.
