@@ -46,7 +46,7 @@ object SystemProcesses {
       space: RhoISpace,
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, cost)) =>
+    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
       Task.now(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(
@@ -68,7 +68,7 @@ object SystemProcesses {
       space: RhoISpace,
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, cost)) =>
+    case Seq(ListParWithRandomAndPhlos(Seq(arg, ack), rand, _)) =>
       Task.now(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
         space
           .produce(
@@ -145,7 +145,7 @@ object SystemProcesses {
       space: RhoISpace,
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, cost)) =>
+    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
         space
           .produce(
@@ -167,7 +167,7 @@ object SystemProcesses {
       space: RhoISpace,
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, cost)) =>
+    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
         space
           .produce(
@@ -189,7 +189,7 @@ object SystemProcesses {
       space: RhoISpace,
       dispatcher: Dispatch[Task, ListParWithRandomAndPhlos, TaggedContinuation]
   ): Seq[ListParWithRandomAndPhlos] => Task[Unit] = {
-    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, cost)) =>
+    case Seq(ListParWithRandomAndPhlos(Seq(IsByteArray(input), ack), rand, _)) =>
       Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>
         space
           .produce(

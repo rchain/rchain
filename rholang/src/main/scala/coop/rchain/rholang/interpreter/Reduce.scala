@@ -103,7 +103,7 @@ object Reduce {
         data: Seq[Par],
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccounting[M]): M[Unit] =
+    ): M[Unit] =
       tuplespaceAlg.produce(chan, ListParWithRandom(data, rand), persistent)
 
     /**
@@ -122,7 +122,7 @@ object Reduce {
         body: Par,
         persistent: Boolean,
         rand: Blake2b512Random
-    )(implicit costAccountingAlg: CostAccounting[M]): M[Unit] =
+    ): M[Unit] =
       tuplespaceAlg.consume(binds, ParWithRandom(body, rand), persistent)
 
     private trait EvalJob {
@@ -716,23 +716,27 @@ object Reduce {
             v2 <- evalSingleExpr(p2)
             result <- (v1.exprInstance, v2.exprInstance) match {
                        case (GString(lhs), EMapBody(ParMap(rhs, _, _, _))) =>
-                         for {
-                           result <- rhs.iterator
-                                      .map {
-                                        case (k, v) =>
-                                          for {
-                                            keyExpr   <- evalSingleExpr(k)
-                                            valueExpr <- evalSingleExpr(v)
-                                            result    <- evalToStringPair(keyExpr, valueExpr)
-                                          } yield result
-                                      }
-                                      .toList
-                                      .sequence[M, (String, String)]
-                                      .map(
-                                        keyValuePairs => GString(interpolate(lhs, keyValuePairs))
-                                      )
-                           _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
-                         } yield result
+                         if (lhs.nonEmpty || rhs.nonEmpty) {
+                           for {
+                             result <- rhs.iterator
+                                        .map {
+                                          case (k, v) =>
+                                            for {
+                                              keyExpr   <- evalSingleExpr(k)
+                                              valueExpr <- evalSingleExpr(v)
+                                              result    <- evalToStringPair(keyExpr, valueExpr)
+                                            } yield result
+                                        }
+                                        .toList
+                                        .sequence[M, (String, String)]
+                                        .map(
+                                          keyValuePairs => GString(interpolate(lhs, keyValuePairs))
+                                        )
+                             _ <- costAccountingAlg.charge(interpolateCost(lhs.length, rhs.size))
+                           } yield result
+                         } else {
+                           s.pure(GString(lhs))
+                         }
                        case (_: GString, other) =>
                          s.raiseError(OperatorExpectedError("%%", "Map", other.typ))
                        case (other, _) =>
@@ -748,19 +752,19 @@ object Reduce {
                        case (GString(lhs), GString(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.length, rhs.length)
+                                 stringAppendCost(lhs.length, rhs.length)
                                )
                          } yield Expr(GString(lhs + rhs))
                        case (GByteArray(lhs), GByteArray(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.size(), rhs.size())
+                                 byteArrayAppendCost(lhs)
                                )
                          } yield Expr(GByteArray(lhs.concat(rhs)))
                        case (EListBody(lhs), EListBody(rhs)) =>
                          for {
                            _ <- costAccountingAlg.charge(
-                                 appendCost(lhs.ps.length, rhs.ps.length)
+                                 listAppendCost(rhs.value.ps.toVector)
                                )
                          } yield
                            Expr(
@@ -889,7 +893,6 @@ object Reduce {
             nthRaw <- evalToLong(args(0))
             nth    <- restrictToInt(nthRaw)
             v      <- evalSingleExpr(p)
-            _      <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
             result <- v.exprInstance match {
                        case EListBody(EList(ps, _, _, _)) =>
                          s.fromEither(localNth(ps, nth))
@@ -902,6 +905,7 @@ object Reduce {
                            )
                          )
                      }
+            _ <- costAccountingAlg.charge(NTH_METHOD_CALL_COST)
           } yield result
         }
     }
@@ -946,7 +950,7 @@ object Reduce {
                   s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
                 )
               for {
-                _           <- costAccountingAlg.charge(hexToByteCost(encoded))
+                _           <- costAccountingAlg.charge(hexToBytesCost(encoded))
                 encodingRes = Try(ByteString.copyFrom(Base16.decode(encoded)))
                 res <- encodingRes.fold(
                         th => s.raiseError(decodingError(th)),
@@ -955,6 +959,8 @@ object Reduce {
               } yield res
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("hexToBytes", other.typ))
+            case None =>
+              s.raiseError(ReduceError("Error: Method can only be called on singular expressions."))
           }
         }
     }
@@ -971,22 +977,15 @@ object Reduce {
           p.singleExpr() match {
             case Some(Expr(GString(utf8string))) =>
               for {
-                _ <- costAccountingAlg.charge(hexToByteCost(utf8string))
+                _ <- costAccountingAlg.charge(hexToBytesCost(utf8string))
               } yield Expr(GByteArray(ByteString.copyFrom(utf8string.getBytes("UTF-8"))))
             case Some(Expr(other)) =>
               s.raiseError(MethodNotDefined("toUtf8Bytes", other.typ))
+            case None =>
+              s.raiseError(ReduceError("Error: Method can only be called on singular expressions."))
           }
         }
     }
-
-    private[this] def method(methodName: String, expectedArgsLength: Int, args: Seq[Par])(
-        thunk: => M[Par]
-    ): M[Par] =
-      if (args.length != expectedArgsLength) {
-        s.raiseError(MethodArgumentNumberMismatch(methodName, expectedArgsLength, args.length))
-      } else {
-        thunk
-      }
 
     private[this] val union: Method = new Method() {
       def locallyFreeUnion(base: Coeval[BitSet], other: Coeval[BitSet]): Coeval[BitSet] =
@@ -1045,8 +1044,8 @@ object Reduce {
       def diff(baseExpr: Expr, otherExpr: Expr)(implicit costAccountingAlg: CostAccounting[M]) =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
           case (
-              ESetBody(base @ ParSet(basePs, _, _, _)),
-              ESetBody(other @ ParSet(otherPs, _, _, _))
+              ESetBody(ParSet(basePs, _, _, _)),
+              ESetBody(ParSet(otherPs, _, _, _))
               ) =>
             // diff is implemented in terms of foldLeft that at each step
             // removes one element from the collection.
@@ -1081,7 +1080,7 @@ object Reduce {
     }
 
     private[this] val add: Method = new Method() {
-      def add(baseExpr: Expr, par: Par)(implicit costAccountingAlg: CostAccounting[M]) =
+      def add(baseExpr: Expr, par: Par) =
         baseExpr.exprInstance match {
           case ESetBody(base @ ParSet(basePs, _, _, _)) =>
             Applicative[M].pure[Expr](
@@ -1287,10 +1286,10 @@ object Reduce {
         baseExpr.exprInstance match {
           case EMapBody(ParMap(basePs, _, _, _)) =>
             val size = basePs.size
-            Applicative[M].pure((size, GInt(size)))
+            Applicative[M].pure((size, GInt(size.toLong)))
           case ESetBody(ParSet(ps, _, _, _)) =>
             val size = ps.size
-            Applicative[M].pure((size, GInt(size)))
+            Applicative[M].pure((size, GInt(size.toLong)))
           case other =>
             s.raiseError(MethodNotDefined("size", other.typ))
         }
@@ -1471,7 +1470,7 @@ object Reduce {
 
     private def restrictToInt(long: Long): M[Int] =
       s.catchNonFatal(Math.toIntExact(long)).adaptError {
-        case e: ArithmeticException => ReduceError(s"Integer overflow for value $long")
+        case _: ArithmeticException => ReduceError(s"Integer overflow for value $long")
       }
 
     private def updateLocallyFree(par: Par): Par = {

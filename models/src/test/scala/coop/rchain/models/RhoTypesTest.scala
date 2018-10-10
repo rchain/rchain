@@ -18,7 +18,7 @@ class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
 
   //FIXME crank that up and fix the resulting errors
   implicit override val generatorDrivenConfig =
-    PropertyCheckConfig(maxSize = 250, minSuccessful = 50)
+    PropertyCheckConfiguration(minSuccessful = 50, sizeRange = 250)
 
   behavior of "Round-trip serialization"
 
