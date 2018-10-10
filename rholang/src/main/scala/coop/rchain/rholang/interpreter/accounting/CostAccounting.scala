@@ -6,26 +6,26 @@ import cats.implicits._
 import cats.{FlatMap, Monad}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 
-trait CostAccountingAlg[F[_]] {
+trait CostAccounting[F[_]] {
   def charge(cost: Cost): F[Unit]
   def get(): F[CostAccount]
   def set(cost: CostAccount): F[Unit]
   def refund(refund: Cost): F[Unit]
 }
 
-object CostAccountingAlg {
-  def of[F[_]: Sync](init: CostAccount): F[CostAccountingAlg[F]] =
-    Ref[F].of(init).map(ref => new CostAccountingAlgImpl[F](ref))
+object CostAccounting {
+  def of[F[_]: Sync](init: CostAccount): F[CostAccounting[F]] =
+    Ref[F].of(init).map(ref => new CostAccountingImpl[F](ref))
 
-  def apply[F[_]](implicit ev: CostAccountingAlg[F]): CostAccountingAlg[F] = ev
+  def apply[F[_]](implicit ev: CostAccounting[F]): CostAccounting[F] = ev
 
-  def unsafe[F[_]: Monad](init: CostAccount)(implicit F: Sync[F]): CostAccountingAlg[F] = {
+  def unsafe[F[_]: Monad](init: CostAccount)(implicit F: Sync[F]): CostAccounting[F] = {
     val ref = Ref.unsafe[F, CostAccount](init)
-    new CostAccountingAlgImpl[F](ref)
+    new CostAccountingImpl[F](ref)
   }
 
-  private class CostAccountingAlgImpl[F[_]](state: Ref[F, CostAccount])(implicit F: Sync[F])
-      extends CostAccountingAlg[F] {
+  private class CostAccountingImpl[F[_]](state: Ref[F, CostAccount])(implicit F: Sync[F])
+      extends CostAccounting[F] {
     override def charge(cost: Cost): F[Unit] = chargeInternal(_ - cost)
 
     private def chargeInternal(f: CostAccount => CostAccount): F[Unit] =

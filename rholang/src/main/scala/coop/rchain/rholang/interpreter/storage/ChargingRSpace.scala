@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoPureSpace}
-import coop.rchain.rholang.interpreter.accounting.{CostAccountingAlg, _}
+import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.implicits.matchListPar
@@ -29,7 +29,7 @@ object ChargingRSpace {
   def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
     channel.storageCost + data.pars.storageCost
 
-  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccountingAlg[F], space: RhoISpace) =
+  def pureRSpace[F[_]: Sync](implicit costAlg: CostAccounting[F], space: RhoISpace) =
     new RhoPureSpace[F] {
 
       override def consume(

@@ -61,11 +61,9 @@ class CryptoChannelsSpec
     Await.ready(reduce.eval(consume).runAsync, 3.seconds)
   }
 
-  def assertStoreContains(store: RhoIStore)(ackChannel: GString)(data: ListParWithRandom)(
-      implicit
-      serializePar: Serialize[Par],
-      serializePars: Serialize[ListParWithRandom]
-  ): Assertion = {
+  def assertStoreContains(
+      store: RhoIStore
+  )(ackChannel: GString)(data: ListParWithRandom): Assertion = {
     val channel: Par = ackChannel
     val datum        = store.toMap(List(channel)).data.head
     assert(datum.a.pars == data.pars)
@@ -77,10 +75,6 @@ class CryptoChannelsSpec
       channelName: String,
       hashFn: Array[Byte] => Array[Byte],
       fixture: FixtureParam
-  )(
-      implicit
-      serializePar: Serialize[Par],
-      serializePars: Serialize[ListParWithRandom]
   ): Any = {
     val (reduce, store) = fixture
 
