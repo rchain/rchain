@@ -1470,6 +1470,41 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par shouldBe expectedPar
     result.par.connectiveUsed should be(true)
   }
+
+  "Patterns" should "compile when used not in the top level" in {
+    def check(typ: String, position: String, pattern: String): Assertion =
+      try {
+        val rho = s"""
+         new x in {
+           for(@y <- x) {
+             match y {
+              $pattern => Nil
+             }
+           }
+         }
+       """
+        Interpreter.buildNormalizedTerm(new StringReader(rho)).value()
+        assert(true)
+      } catch {
+        case e: Throwable =>
+          fail(s"$typ in the $position $pattern should not throw errors: ${e.getMessage}")
+      }
+
+    check("wildcard", "send channel", "{_!(1)}")
+    check("wildcard", "send data", "{@=*x!(_)}")
+    check("wildcard", "send data", "{@Nil!(_)}")
+    check("logical AND", "send data", "{@Nil!(1 /\\ 2)}")
+    check("logical OR", "send data", "{@Nil!(1 \\/ 2)}")
+    check("logical NOT", "send data", "{@Nil!(~1)}")
+    check("logical AND", "send channel", "{@{Nil /\\ Nil}!(Nil)}")
+    check("logical OR", "send channel", "{@{Nil \\/ Nil}!(Nil)}")
+    check("logical NOT", "send channel", "{@{~Nil}!(Nil)}")
+    check("wildcard", "receive pattern", "{for (_ <- x) { 1 }} ")
+    check("wildcard", "body of the continuation", "{for (@1 <- x) { _ }} ")
+    check("logical OR", "body of the continuation", "{for (@1 <- x) { 10 \\/ 20 }} ")
+    check("logical AND", "body of the continuation", "{for(@1 <- x) { 10 /\\ 20 }} ")
+    check("logical NOT", "body of the continuation", "{for(@1 <- x) { ~10 }} ")
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
