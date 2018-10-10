@@ -358,7 +358,7 @@ object ProcNormalizeMatcher {
           bodyResult =>
             ProcVisitOutputs(
               input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.env.depth),
-              input.knownFree
+              input.knownFree.addLogicalConnective("~ (negation)", p.line_num, p.col_num)
             )
         )
 
@@ -382,7 +382,7 @@ object ProcNormalizeMatcher {
         } yield
           ProcVisitOutputs(
             input.par.prepend(resultConnective, input.env.depth),
-            rightResult.knownFree
+            rightResult.knownFree.addLogicalConnective("/\\ (conjunction)", p.line_num, p.col_num)
           )
 
       case p: PDisjunction =>
@@ -403,7 +403,10 @@ object ProcNormalizeMatcher {
               Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
           }
         } yield
-          ProcVisitOutputs(input.par.prepend(resultConnective, input.env.depth), input.knownFree)
+          ProcVisitOutputs(
+            input.par.prepend(resultConnective, input.env.depth),
+            input.knownFree.addLogicalConnective("\\/ (disjunction)", p.line_num, p.col_num)
+          )
 
       case p: PSimpleType =>
         p.simpletype_ match {
