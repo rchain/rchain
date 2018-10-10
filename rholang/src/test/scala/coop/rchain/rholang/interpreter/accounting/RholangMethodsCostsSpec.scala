@@ -38,11 +38,11 @@ class RholangMethodsCostsSpec
       "charge constant cost regardless of list size or value of n" in {
         val table = Table(
           ("list", "index"),
-          (listN(1), 0),
-          (listN(10), 9),
-          (listN(100), 99)
+          (listN(1), 0L),
+          (listN(10), 9L),
+          (listN(100), 99L)
         )
-        forAll(table) { (pars: Vector[Par], n: Int) =>
+        forAll(table) { (pars: Vector[Par], n: Long) =>
           val method = methodCall("nth", EList(pars), List(GInt(n)))
           test(method, NTH_METHOD_CALL_COST)
         }
@@ -51,7 +51,7 @@ class RholangMethodsCostsSpec
       "not charge when index is out of bound" in {
         val table = Table(
           ("list", "index"),
-          (listN(0), 1)
+          (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
           implicit val errLog = new ErrorLog()
@@ -72,11 +72,11 @@ class RholangMethodsCostsSpec
       "charge constant cost regardless of list size or value of n" in {
         val table = Table(
           ("list", "index"),
-          (listN(1), 0),
-          (listN(10), 9),
-          (listN(100), 99)
+          (listN(1), 0L),
+          (listN(10), 9L),
+          (listN(100), 99L)
         )
-        forAll(table) { (pars: Vector[Par], n: Int) =>
+        forAll(table) { (pars: Vector[Par], n: Long) =>
           val method = methodCall("nth", EList(pars), List(GInt(n)))
           test(method, NTH_METHOD_CALL_COST)
         }
@@ -85,7 +85,7 @@ class RholangMethodsCostsSpec
       "not charge when index is out of bound" in {
         val table = Table(
           ("list", "index"),
-          (listN(0), 1)
+          (listN(0), 1L)
         )
         forAll(table) { (pars, n) =>
           implicit val errLog = new ErrorLog()
@@ -105,8 +105,6 @@ class RholangMethodsCostsSpec
 
   def costIsProportional(base: Cost, factor: Double, expected: Cost): Assertion =
     (base.value * factor) shouldBe expected.value.toDouble
-
-  final case class Base[A](term: A, cost: Cost)
 
   def testProportional[A](
       baseCost: Cost,
@@ -532,20 +530,20 @@ class RholangMethodsCostsSpec
   "slice" when {
     "called on List" should {
       "charge proportionally to the number of elements it has to traverse" in {
-        val lists = Table[Vector[Par], (Int, Int)](
+        val lists = Table[Vector[Par], (Long, Long)](
           ("list", "slice-args"),
-          (Vector.empty[Par], (0, 1)),
-          (Vector.empty[Par], (1, 0)),
-          (Vector[Par](GInt(1)), (0, 1)),
-          (setN(100).toVector, (10, 20)),
-          (Vector[Par](toRholangMap(mapN(10, GInt(10)))), (0, 1))
+          (Vector.empty[Par], (0L, 1L)),
+          (Vector.empty[Par], (1L, 0L)),
+          (Vector[Par](GInt(1L)), (0L, 1L)),
+          (setN(100).toVector, (10L, 20L)),
+          (Vector[Par](toRholangMap(mapN(10, GInt(10L)))), (0L, 1L))
         )
         val refSlice = (0, 1)
         val baseCost = sliceCost(refSlice._2)
         forAll(lists) {
           case (list, (from, to)) =>
             val method = methodCall("slice", toRholangList(list), List(GInt(from), GInt(to)))
-            val factor = to / refSlice._2
+            val factor = to.toDouble / refSlice._2
             testProportional(baseCost, factor, method)
         }
       }
@@ -553,12 +551,12 @@ class RholangMethodsCostsSpec
 
     "called on String" should {
       "charge proportionally to the number of elements it has to traverse" in {
-        val strings = Table[String, (Int, Int)](
+        val strings = Table[String, (Long, Long)](
           ("string", "slice-args"),
-          ("", (0, 0)),
-          ("", (1, 0)),
-          ("abcd", (2, 4)),
-          (Seq.fill(100)("").mkString, (10, 100))
+          ("", (0L, 0L)),
+          ("", (1L, 0L)),
+          ("abcd", (2L, 4L)),
+          (Seq.fill(100)("").mkString, (10L, 100L))
         )
         val refSlice = (0, 1)
         val baseCost = sliceCost(refSlice._2)
@@ -566,7 +564,7 @@ class RholangMethodsCostsSpec
           case (string, (from, to)) =>
             val method =
               methodCall("slice", Par(exprs = Seq(GString(string))), List(GInt(from), GInt(to)))
-            val factor = to / refSlice._2
+            val factor = to.toDouble / refSlice._2
             testProportional(baseCost, factor, method)
         }
       }
@@ -574,19 +572,19 @@ class RholangMethodsCostsSpec
 
     "called on byte arrays" should {
       "charge proportionally to the number of elements it has to traverse" in {
-        val arrays = Table[GByteArray, Int, Int](
+        val arrays = Table[GByteArray, Long, Long](
           ("list", "from", "to"),
-          (gbyteArray(0), 0, 0),
-          (gbyteArray(1), 0, 1),
-          (gbyteArray(1000), 10, 20),
-          (GByteArray(toRholangMap(mapN(10, GInt(10))).toByteString), 0, 20)
+          (gbyteArray(0), 0L, 0L),
+          (gbyteArray(1), 0L, 1L),
+          (gbyteArray(1000), 10L, 20L),
+          (GByteArray(toRholangMap(mapN(10, GInt(10L))).toByteString), 0L, 20L)
         )
         val refSlice = (0, 1)
         val baseCost = sliceCost(refSlice._2)
         forAll(arrays) {
           case (array, from, to) =>
             val method = methodCall("slice", Par(exprs = Seq(array)), List(GInt(from), GInt(to)))
-            val factor = to / refSlice._2
+            val factor = to.toDouble / refSlice._2
             testProportional(baseCost, factor, method)
         }
       }
@@ -609,7 +607,7 @@ class RholangMethodsCostsSpec
         forAll(lists) {
           case (left, right) =>
             val method = EPlusPlus(toRholangList(left), toRholangList(right))
-            val factor = right.size / refList.size
+            val factor = right.size.toDouble / refList.size
             testProportional(refCost, factor, method)
         }
       }
@@ -630,7 +628,9 @@ class RholangMethodsCostsSpec
           case (left, right) =>
             val method = EPlusPlus(left, right)
             val factor = {
-              val f = math.log10(left.value.size) / math.log10(refByteArray.value.size)
+              val f = math.log10(left.value.size.toDouble) / math.log10(
+                refByteArray.value.size.toDouble
+              )
               if (f === Double.NegativeInfinity || f === Double.PositiveInfinity)
                 0
               else f
@@ -657,7 +657,7 @@ class RholangMethodsCostsSpec
         forAll(strings) {
           case (left, right) =>
             val method = EPlusPlus(GString(left), GString(right))
-            val factor = (left.length + right.length) / refPairLength(refPair._1, refPair._2)
+            val factor = (left.length + right.length) / refPairLength(refPair._1, refPair._2).toDouble
             testProportional(refCost, factor, method)
         }
       }
@@ -712,8 +712,8 @@ class RholangMethodsCostsSpec
   "interpolate" when {
     "called on String with a Map of values to interpolate with" should {
       "charge proportionally to the length of base String and size of the Map" in {
-        def strMapN(n: Int): Map[Par, Par] =
-          (1 to n).map(i => (GString(s"key$i"): Par, GInt(i): Par)).toMap
+        def strMapN(n: Long): Map[Par, Par] =
+          (1L to n).map(i => (GString(s"key$i"): Par, GInt(i): Par)).toMap
 
         val data = Table(
           ("string", "map"),
@@ -751,19 +751,19 @@ class RholangMethodsCostsSpec
 
   def map(pairs: Seq[(Par, Par)]): Map[Par, Par] = Map(pairs: _*)
   def emptyMap: Map[Par, Par]                    = map(Seq.empty[(Par, Par)])
-  def mapN(n: Int, value: Par): Map[Par, Par] =
-    (1 to n).map(i => (Par().withExprs(Seq(GInt(i))), value)).toMap
+  def mapN(n: Long, value: Par): Map[Par, Par] =
+    (1L to n).map(i => (Par().withExprs(Seq(GInt(i))), value)).toMap
   def toRholangMap(map: Map[Par, Par]): EMapBody =
     EMapBody(ParMap(SortedParMap(map)))
 
   def emptySet: Set[Par] = setN(0)
-  def setN(n: Int): Set[Par] =
-    (1 to n).map(i => Par().withExprs(Seq(GInt(i)))).toSet
+  def setN(n: Long): Set[Par] =
+    (1L to n).map(i => Par().withExprs(Seq(GInt(i)))).toSet
   def toRholangSet(set: Set[Par]): ESetBody =
     ESetBody(ParSet(set.toSeq))
 
-  def listN(n: Int): Vector[Par] =
-    (1 to n).map(i => Par().withExprs(Vector(GInt(i)))).toVector
+  def listN(n: Long): Vector[Par] =
+    (1L to n).map(i => Par().withExprs(Vector(GInt(i)))).toVector
   def emptyList: Vector[Par] = Vector.empty[Par]
 
   def toRholangList(vector: Vector[Par]): EListBody =

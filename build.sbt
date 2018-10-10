@@ -252,8 +252,13 @@ lazy val rholang = (project in file("rholang"))
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
-      "-Yno-adapted-args"
+      "-Yno-adapted-args",
+      "-Xfatal-warnings",
+      "-Xlint:_,-missing-interpolator" // disable "possible missing interpolator" warning
     ),
+     publishArtifact in (Compile, packageDoc) := false,
+        publishArtifact in packageDoc := false,
+        sources in (Compile,doc) := Seq.empty,
     libraryDependencies ++= commonDependencies ++ Seq(
       catsMtl,
       catsEffect,

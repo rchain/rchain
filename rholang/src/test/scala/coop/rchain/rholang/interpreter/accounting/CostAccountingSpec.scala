@@ -9,7 +9,7 @@ import org.scalatest.{Assertion, FlatSpec}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
+class CostAccountingSpec extends FlatSpec with TripleEqualsSupport {
 
   behavior of "CostAccountingAlg"
 
@@ -17,9 +17,9 @@ class CostAccountingAlgSpec extends FlatSpec with TripleEqualsSupport {
 
   def withCostAccAlg[T](
       initState: CostAccount = defaultCost
-  )(f: CostAccountingAlg[Task] => Task[T]): T = {
+  )(f: CostAccounting[Task] => Task[T]): T = {
     val test = for {
-      alg <- CostAccountingAlg.of[Task](initState)
+      alg <- CostAccounting.of[Task](initState)
       res <- f(alg)
     } yield res
     Await.result(test.runAsync, 5.seconds)

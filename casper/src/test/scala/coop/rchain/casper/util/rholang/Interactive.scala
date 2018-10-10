@@ -5,7 +5,7 @@ import coop.rchain.casper.genesis.contracts.TestSetUtil
 import monix.execution.Scheduler
 import monix.eval.Task
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccountingAlg}
+import coop.rchain.rholang.interpreter.accounting.{CostAccount, CostAccounting}
 import coop.rchain.shared.PathOps.RichPath
 import java.nio.file.{Files, Path, Paths}
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
@@ -40,7 +40,7 @@ import scala.collection.mutable
 class Interactive private (runtime: Runtime) {
   private implicit val rand = Blake2b512Random(128)
   private implicit val costAccountingAlg =
-    CostAccountingAlg.unsafe[Task](CostAccount(Integer.MAX_VALUE))
+    CostAccounting.unsafe[Task](CostAccount(Integer.MAX_VALUE))
   private implicit val scheduler = Scheduler.io("rhoang-interpreter")
 
   private val prettyPrinter = PrettyPrinter()
