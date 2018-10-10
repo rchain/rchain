@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.errors.{
   LexerError,
   SyntaxError,
   TopLevelFreeVariablesNotAllowedError,
+  TopLevelLogicalConnectivesNotAllowedError,
   TopLevelWildcardsNotAllowedError,
   UnrecognizedInterpreterError
 }
@@ -73,13 +74,20 @@ object Interpreter {
   ): M[ProcVisitOutputs] =
     ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
       if (normalizedTerm.knownFree.count > 0) {
-        if (normalizedTerm.knownFree.wildcards.isEmpty) {
+        if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
           val topLevelFreeList = normalizedTerm.knownFree.env.map {
             case (name, (_, _, line, col)) => s"$name at $line:$col"
           }
           sync.raiseError(
             TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
           )
+        } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+          val connectives = normalizedTerm.knownFree.logicalConnectives
+            .map {
+              case (name, line, col) => s"$name at $line:$col"
+            }
+            .mkString("", ", ", "")
+          sync.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
         } else {
           val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
             case (line, col) => s"_ (wildcard) at $line:$col"
