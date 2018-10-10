@@ -327,6 +327,25 @@ object ProcNormalizeMatcher {
         )
       } yield ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
 
+    def failOnInvalidConnective(
+        depth: Int,
+        nameRes: NameVisitOutputs
+    ): Either[InterpreterError, NameVisitOutputs] =
+      if (input.env.depth == 0) {
+        Either
+          .fromOption(
+            nameRes.knownFree.logicalConnectives
+              .collectFirst {
+                case (_: ConnOrBody, line, col) =>
+                  PatternReceiveError(s"\\/ (disjunction) at $line:$col")
+                case (_: ConnNotBody, line, col) =>
+                  PatternReceiveError(s"~ (negation) at $line:$col")
+              },
+            nameRes
+          )
+          .swap
+      } else Right(nameRes)
+
     p match {
       case p: PNegation =>
         normalizeMatch[M](
@@ -686,6 +705,13 @@ object ProcNormalizeMatcher {
                                    n,
                                    NameVisitInputs(input.env.pushDown(), acc._2)
                                  )
+                                 .flatMap { res =>
+                                   failOnInvalidConnective(input.env.depth, res)
+                                     .fold(
+                                       err => Sync[M].raiseError[NameVisitOutputs](err),
+                                       _.pure[M]
+                                     )
+                                 }
                                  .map(
                                    result =>
                                      (
@@ -772,16 +798,8 @@ object ProcNormalizeMatcher {
                   NameNormalizeMatcher
                     .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
                     .flatMap { res =>
-                      if (input.env.depth == 0) {
-                        res.knownFree.logicalConnectives
-                          .collectFirst {
-                            case (_: ConnOrBody, line, col) =>
-                              PatternReceiveError(s"\\/ (disjunction) at $line:$col")
-                            case (_: ConnNotBody, line, col) =>
-                              PatternReceiveError(s"~ (negation) at $line:$col")
-                          }
-                          .fold(res.pure[M])(err => Sync[M].raiseError(err))
-                      } else res.pure[M]
+                      failOnInvalidConnective(input.env.depth, res)
+                        .fold(err => Sync[M].raiseError[NameVisitOutputs](err), _.pure[M])
                     }
                     .map(
                       result =>

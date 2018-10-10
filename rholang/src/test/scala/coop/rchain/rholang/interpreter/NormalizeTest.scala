@@ -798,6 +798,34 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PContr" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(
+          new StringReader("""new x in { contract x(@{ y /\ {Nil \/ Nil}}) = { Nil } }""")
+        )
+        .value()
+    }
+
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(
+          new StringReader("""new x in { contract x(@{ y /\ ~Nil}) = { Nil } }""")
+        )
+        .value()
+    }
+  }
+
+  "PContr" should "compile when logical AND is used in the pattern of the receive" in {
+    noException should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(
+          new StringReader("""new x in { contract x(@{ y /\ {Nil /\ Nil}}) = { Nil } }""")
+        )
+        .value()
+    }
+  }
+
   "PNew" should "Bind new variables" in {
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
