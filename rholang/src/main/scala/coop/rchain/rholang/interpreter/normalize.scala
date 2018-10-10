@@ -263,32 +263,6 @@ object NameNormalizeMatcher {
 }
 
 object ProcNormalizeMatcher {
-  def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
-      listProc: ListProc,
-      toError: String => E
-  ): F[Unit] =
-    listProc
-      .collectFirst {
-        case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
-        case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
-        case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
-      }
-      .map { case (c, line, col) => s"$c at $line:$col" }
-      .fold(Sync[F].unit)(
-        errMsg => Sync[F].raiseError(toError(errMsg))
-      )
-
-  def failOnConnectivesUsed[F[_]: Sync](par: Par, name: Name): F[Unit] =
-    if (par.connectives.nonEmpty) {
-      name match {
-        case nq: NameQuote =>
-          val listProc = new ListProc()
-          listProc.add(nq.proc_)
-          failOnConnectivesUsed(listProc, TopLevelLogicalConnectivesNotAllowedError(_))
-        case _ => Sync[F].unit
-      }
-    } else Sync[F].unit
-
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M]
   ): M[ProcVisitOutputs] = Sync[M].defer {
