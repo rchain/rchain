@@ -9,7 +9,7 @@ Global / cancelable := true
 
 //disallow any unresolved version conflicts at all for faster feedback
 Global / conflictManager := ConflictManager.strict
-//resolve all version conflicts explicitlyy
+//resolve all version conflicts explicitly
 Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
