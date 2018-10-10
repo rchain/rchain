@@ -84,9 +84,6 @@ object errors {
   final case class TopLevelLogicalConnectivesNotAllowedError(connectives: String)
       extends InterpreterError(s"Top level logical connectives are not allowed: $connectives.")
 
-  final case class TopLevelConnectivesNotAllowedError(connectives: String)
-      extends InterpreterError(s"Top level connectives are not allowed: $connectives.")
-
   final case class SubstituteError(message: String) extends InterpreterError(message)
 
   final case class SetupError(message: String) extends InterpreterError(message)
