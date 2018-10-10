@@ -336,7 +336,8 @@ object ProcNormalizeMatcher {
           bodyResult =>
             ProcVisitOutputs(
               input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.env.depth),
-              input.knownFree.addLogicalConnective("~ (negation)", p.line_num, p.col_num)
+              input.knownFree
+                .addLogicalConnective(ConnNotBody(bodyResult.par), p.line_num, p.col_num)
             )
         )
 
@@ -360,7 +361,8 @@ object ProcNormalizeMatcher {
         } yield
           ProcVisitOutputs(
             input.par.prepend(resultConnective, input.env.depth),
-            rightResult.knownFree.addLogicalConnective("/\\ (conjunction)", p.line_num, p.col_num)
+            rightResult.knownFree
+              .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
           )
 
       case p: PDisjunction =>
@@ -383,7 +385,8 @@ object ProcNormalizeMatcher {
         } yield
           ProcVisitOutputs(
             input.par.prepend(resultConnective, input.env.depth),
-            input.knownFree.addLogicalConnective("\\/ (disjunction)", p.line_num, p.col_num)
+            input.knownFree
+              .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
           )
 
       case p: PSimpleType =>
@@ -768,6 +771,18 @@ object ProcNormalizeMatcher {
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
                     .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
+                    .flatMap { res =>
+                      if (input.env.depth == 0) {
+                        res.knownFree.logicalConnectives
+                          .collectFirst {
+                            case (_: ConnOrBody, line, col) =>
+                              PatternReceiveError(s"\\/ (disjunction) at $line:$col")
+                            case (_: ConnNotBody, line, col) =>
+                              PatternReceiveError(s"~ (negation) at $line:$col")
+                          }
+                          .fold(res.pure[M])(err => Sync[M].raiseError(err))
+                      } else res.pure[M]
+                    }
                     .map(
                       result =>
                         (

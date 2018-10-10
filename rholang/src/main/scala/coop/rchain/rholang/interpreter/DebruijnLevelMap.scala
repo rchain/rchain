@@ -1,4 +1,5 @@
 package coop.rchain.rholang.interpreter
+import coop.rchain.models.Connective.ConnectiveInstance
 
 // Parameterized over T, the kind of typing discipline we are enforcing.
 
@@ -10,7 +11,7 @@ class DebruijnLevelMap[T](
     val next: Int,
     val env: Map[String, (Int, T, Int, Int)],
     val wildcards: List[(Int, Int)],
-    val logicalConnectives: List[(String, Int, Int)]
+    val logicalConnectives: List[(ConnectiveInstance, Int, Int)]
 ) {
 
   def newBinding(binding: (String, T, Int, Int)): (DebruijnLevelMap[T], Int) =
@@ -63,7 +64,11 @@ class DebruijnLevelMap[T](
     DebruijnLevelMap(next, env, newWildcards, logicalConnectives)
   }
 
-  def addLogicalConnective(connective: String, line: Int, col: Int): DebruijnLevelMap[T] = {
+  def addLogicalConnective[C <: ConnectiveInstance](
+      connective: C,
+      line: Int,
+      col: Int
+  ): DebruijnLevelMap[T] = {
     val newConnectives = logicalConnectives :+ ((connective, line, col))
     DebruijnLevelMap(next, env, wildcards, newConnectives)
   }
@@ -95,7 +100,7 @@ object DebruijnLevelMap {
       next: Int,
       env: Map[String, (Int, T, Int, Int)],
       wildcards: List[(Int, Int)],
-      logicalConnectives: List[(String, Int, Int)]
+      logicalConnectives: List[(ConnectiveInstance, Int, Int)]
   ): DebruijnLevelMap[T] =
     new DebruijnLevelMap(next, env, wildcards, logicalConnectives)
 
@@ -104,11 +109,6 @@ object DebruijnLevelMap {
       0,
       Map[String, (Int, T, Int, Int)](),
       List[(Int, Int)](),
-      List[(String, Int, Int)]()
+      List[(ConnectiveInstance, Int, Int)]()
     )
-
-  def unapply[T](
-      db: DebruijnLevelMap[T]
-  ): Option[(Int, Map[String, (Int, T, Int, Int)], List[(Int, Int)])] =
-    Some((db.next, db.env, db.wildcards))
 }

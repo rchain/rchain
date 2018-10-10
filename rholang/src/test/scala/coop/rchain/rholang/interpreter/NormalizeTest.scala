@@ -776,6 +776,28 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PInput" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }"""))
+        .value()
+    }
+
+    an[PatternReceiveError] should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{~Nil} <- x) { Nil } }"""))
+        .value()
+    }
+  }
+
+  "PInput" should "compile when logical AND is used in the pattern of the receive" in {
+    noException should be thrownBy {
+      Interpreter
+        .buildNormalizedTerm(new StringReader("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }"""))
+        .value()
+    }
+  }
+
   "PNew" should "Bind new variables" in {
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
