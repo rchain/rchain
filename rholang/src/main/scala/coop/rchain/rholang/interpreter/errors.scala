@@ -75,14 +75,25 @@ object errors {
   final case object OutOfPhlogistonsError
       extends InterpreterError("Computation ran out of phlogistons.")
 
+  final case class PatternReceiveError(connectives: String)
+      extends InterpreterError(
+        s"Invalid pattern in the receive: $connectives. Only logical AND is allowed."
+      )
+
   final case class TopLevelWildcardsNotAllowedError(wildcards: String)
       extends InterpreterError(s"Top level wildcards are not allowed: $wildcards.")
 
   final case class TopLevelFreeVariablesNotAllowedError(freeVars: String)
       extends InterpreterError(s"Top level free variables are not allowed: $freeVars.")
 
+  final case class ChannelConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Connectives are not allowed in channel position: $connectives.")
+
+  final case class TopLevelConnectivesNotAllowedError(connectives: String)
+      extends InterpreterError(s"Top level connectives are not allowed: $connectives.")
+
   final case class SendDataConnectivesNotAllowedError(connectives: String)
-      extends InterpreterError(s"Connectives are not allowed in send data: $connectives")
+      extends InterpreterError(s"Connectives are not allowed in send data: $connectives.")
 
   final case class SubstituteError(message: String) extends InterpreterError(message)
 

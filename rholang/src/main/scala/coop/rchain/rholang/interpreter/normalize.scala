@@ -296,15 +296,6 @@ object ProcNormalizeMatcher {
           rightResult.knownFree
         )
 
-    def containsConnective(listProc: ListProc): Option[String] =
-      listProc
-        .collectFirst {
-          case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
-          case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
-          case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
-        }
-        .map { case (c, line, col) => s"$c at $line:$col" }
-
     def normalizeIfElse(
         valueProc: Proc,
         trueBodyProc: Proc,
@@ -617,60 +608,63 @@ object ProcNormalizeMatcher {
         normalizeMatch[M](p.proc_, input)
 
       case p: PSend =>
-        containsConnective(p.listproc_) match {
-          case Some(errMsg) =>
-            sync.raiseError(
-              SendDataConnectivesNotAllowedError(errMsg)
-            )
-          case None =>
-            for {
-              nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
-                                  p.name_,
-                                  NameVisitInputs(input.env, input.knownFree)
-                                )
-              initAcc = (
-                Vector[Par](),
-                ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
-                BitSet(),
-                false
+        for {
+          _ <- failOnConnectivesUsed(
+                p.listproc_,
+                allConnectivesFilter,
+                SendDataConnectivesNotAllowedError(_)
               )
-
-              dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
-                              (acc, e) => {
-                                normalizeMatch[M](e, acc._2).map(
-                                  procMatchResult =>
-                                    (
-                                      procMatchResult.par +: acc._1,
-                                      ProcVisitInputs(
-                                        VectorPar(),
-                                        input.env,
-                                        procMatchResult.knownFree
-                                      ),
-                                      acc._3 | procMatchResult.par.locallyFree,
-                                      acc._4 || procMatchResult.par.connectiveUsed
-                                    )
-                                )
-                              }
+          nameMatchResult <- NameNormalizeMatcher.normalizeMatch[M](
+                              p.name_,
+                              NameVisitInputs(input.env, input.knownFree)
                             )
-              persistent = p.send_ match {
-                case _: SendSingle   => false
-                case _: SendMultiple => true
-              }
-            } yield
-              ProcVisitOutputs(
-                input.par.prepend(
-                  Send(
-                    nameMatchResult.chan,
-                    dataResults._1,
-                    persistent,
-                    ParLocallyFree
-                      .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
-                    ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
-                  )
-                ),
-                dataResults._2.knownFree
+          _ <- failOnConnectivesUsed(
+                nameMatchResult.chan,
+                p.name_,
+                allConnectivesFilter,
+                ChannelConnectivesNotAllowedError(_)
               )
-        }
+          initAcc = (
+            Vector[Par](),
+            ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
+            BitSet(),
+            false
+          )
+          dataResults <- p.listproc_.toList.reverse.foldM(initAcc)(
+                          (acc, e) => {
+                            normalizeMatch[M](e, acc._2).map(
+                              procMatchResult =>
+                                (
+                                  procMatchResult.par +: acc._1,
+                                  ProcVisitInputs(
+                                    VectorPar(),
+                                    input.env,
+                                    procMatchResult.knownFree
+                                  ),
+                                  acc._3 | procMatchResult.par.locallyFree,
+                                  acc._4 || procMatchResult.par.connectiveUsed
+                                )
+                            )
+                          }
+                        )
+          persistent = p.send_ match {
+            case _: SendSingle   => false
+            case _: SendMultiple => true
+          }
+        } yield
+          ProcVisitOutputs(
+            input.par.prepend(
+              Send(
+                nameMatchResult.chan,
+                dataResults._1,
+                persistent,
+                ParLocallyFree
+                  .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
+                ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
+              )
+            ),
+            dataResults._2.knownFree
+          )
 
       case p: PContr => {
         // A free variable can only be used once in any of the parameters.
@@ -755,6 +749,15 @@ object ProcNormalizeMatcher {
             .foldM(initAcc)((acc, e) => {
               NameNormalizeMatcher
                 .normalizeMatch[M](e._2, NameVisitInputs(input.env, acc._2))
+                .flatMap(
+                  res =>
+                    failOnConnectivesUsed(
+                      res.chan,
+                      e._2,
+                      allConnectivesFilter,
+                      ChannelConnectivesNotAllowedError(_)
+                    ).map(_ => res)
+                )
                 .map(
                   sourceResult =>
                     (
@@ -778,6 +781,12 @@ object ProcNormalizeMatcher {
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
                     .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
+                    .flatMap { result =>
+                      // We do not allow for logical OR and NOT in the pattern of the receive.
+                      // For more details look at: https://rchain.atlassian.net/browse/RHOL-885
+                      failOnConnectivesUsed(result.chan, n, findOrNot, PatternReceiveError(_))
+                        .map(_ => result)
+                    }
                     .map(
                       result =>
                         (
@@ -864,6 +873,16 @@ object ProcNormalizeMatcher {
                          p.proc_,
                          ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree)
                        )
+          // Top level connectives are not allowed (similarly to wildcards and free variables)
+          _ <- if (bodyResult.par.connectives.nonEmpty) {
+                val listProc = new ListProc()
+                listProc.add(p.proc_)
+                failOnConnectivesUsed(
+                  listProc,
+                  allConnectivesFilter,
+                  TopLevelConnectivesNotAllowedError(_)
+                )
+              } else Sync[M].unit
           connective = sourcesConnectives || bodyResult.par.connectiveUsed
         } yield
           ProcVisitOutputs(
@@ -1032,6 +1051,46 @@ object ProcNormalizeMatcher {
         sync.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
     }
   }
+
+  private type ConnectivesFilter = PartialFunction[Proc, (String, Int, Int)]
+  private val findAnd: ConnectivesFilter = {
+    case p: PConjunction => ("/\\ (conjunction)", p.line_num, p.col_num)
+  }
+
+  private val findOrNot: ConnectivesFilter = {
+    case p: PNegation    => ("~ (negation)", p.line_num, p.col_num)
+    case p: PDisjunction => ("\\/ (disjunction)", p.line_num, p.col_num)
+  }
+
+  private val allConnectivesFilter = findAnd.orElse(findOrNot)
+
+  private def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
+      listProc: ListProc,
+      connFilter: ConnectivesFilter,
+      toError: String => E
+  ): F[Unit] =
+    listProc
+      .collectFirst(connFilter)
+      .map { case (c, line, col) => s"$c at $line:$col" }
+      .fold(Sync[F].unit)(
+        errMsg => Sync[F].raiseError(toError(errMsg))
+      )
+
+  private def failOnConnectivesUsed[F[_]: Sync, E <: InterpreterError](
+      par: Par,
+      name: Name,
+      connectivesFilter: ConnectivesFilter,
+      toError: String => E
+  ): F[Unit] =
+    if (par.connectiveUsed) {
+      name match {
+        case nq: NameQuote =>
+          val listProc = new ListProc()
+          listProc.add(nq.proc_)
+          failOnConnectivesUsed(listProc, connectivesFilter, toError)
+        case _ => Sync[F].unit
+      }
+    } else Sync[F].unit
 
 }
 

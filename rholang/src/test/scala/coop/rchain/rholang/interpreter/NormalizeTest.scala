@@ -425,6 +425,27 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PSend" should "not compile if name contains connectives" in {
+    val data = new ListProc(); data.add(new PNil())
+    def send(name: NameQuote): PSend =
+      new PSend(name, new SendSingle(), data)
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PDisjunction(new PNil(), new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PConjunction(new PNil(), new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      val name = new NameQuote(new PNegation(new PNil()))
+      ProcNormalizeMatcher.normalizeMatch[Coeval](send(name), inputs).value()
+    }
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(new PGround(new GroundInt("7")), new PGround(new GroundInt("8")))
     val result    = ProcNormalizeMatcher.normalizeMatch[Coeval](parGround, inputs).value
@@ -667,6 +688,47 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  def linearInput(name: Name, channel: Proc): PInput = {
+    val listBindings1 = new ListName()
+    listBindings1.add(name)
+    val listLinearBind1 = new ListLinearBind()
+    listLinearBind1.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(channel))
+    )
+    val linearSimple = new LinearSimple(listLinearBind1)
+    val receipt      = new ReceiptLinear(linearSimple)
+    val body         = new PNil()
+    new PInput(receipt, body)
+  }
+
+  "PInput" should "allow for patterns containing logical AND in the receive bind" in {
+    def check(input: PInput, conn: Connective): Assertion =
+      assert(
+        ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par === Par(
+          receives = Seq(
+            Receive(
+              binds = Seq(
+                ReceiveBind(
+                  patterns = Seq(
+                    Par(connectives = Seq(conn), connectiveUsed = true)
+                  ),
+                  source = Par()
+                )
+              ),
+              body = Par(),
+              connectiveUsed = false
+            )
+          ),
+          connectiveUsed = false
+        )
+      )
+
+    check(
+      linearInput(new NameQuote(new PConjunction(new PNil(), new PNil())), new PNil()),
+      Connective(ConnAndBody(ConnectiveBody(Seq(Par(), Par()))))
+    )
+  }
+
   "PInput" should "bind whole list to the list remainder" in {
     // for (@[...a] <- @0) { … }
     val listBindings = new ListName()
@@ -737,6 +799,134 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
     }
+  }
+
+  "PInput" should "not compile when connectives are used in the channel" in {
+    val disjunctionLinear =
+      linearInput(new NameQuote(new PNil()), new PDisjunction(new PNil(), new PNil()))
+    val conjunctionLinear =
+      linearInput(new NameQuote(new PNil()), new PConjunction(new PNil(), new PNil()))
+    val negationLinear = linearInput(new NameQuote(new PNil()), new PNegation(new PNil()))
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](disjunctionLinear, inputs).value
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](conjunctionLinear, inputs).value
+    }
+
+    an[ChannelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](negationLinear, inputs).value
+    }
+  }
+
+  "PInput" should "not compile when connectives are the top level expression in the body" in {
+    def pInput(body: Proc): PInput = {
+      val listBindings1 = new ListName()
+      listBindings1.add(new NameQuote(new PNil()))
+      val listLinearBind1 = new ListLinearBind()
+      listLinearBind1.add(
+        new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(new PNil()))
+      )
+      val linearSimple = new LinearSimple(listLinearBind1)
+      val receipt      = new ReceiptLinear(linearSimple)
+      new PInput(receipt, body)
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher
+        .normalizeMatch[Coeval](pInput(new PDisjunction(new PNil(), new PNil())), inputs)
+        .value
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher
+        .normalizeMatch[Coeval](pInput(new PConjunction(new PNil(), new PNil())), inputs)
+        .value
+    }
+
+    an[TopLevelConnectivesNotAllowedError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](pInput(new PNegation(new PNil())), inputs).value
+    }
+  }
+
+  "PInput" should "not compile when logical OR and NOT are used in the pattern of the receive" in {
+    val negInput  = linearInput(new NameQuote(new PNegation(new PNil())), new PNil())
+    val disjInput = linearInput(new NameQuote(new PDisjunction(new PNil(), new PNil())), new PNil())
+
+    an[PatternReceiveError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](negInput, inputs).value
+    }
+
+    an[PatternReceiveError] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch[Coeval](disjInput, inputs).value
+    }
+  }
+
+  "PInput" should "allow for logical OR and NOT inside the patterns of the receive" in {
+    def checkPasses(proc: Proc, connective: Connective): Assertion = {
+      val listCase = new ListCase()
+      listCase.add(
+        new CaseImpl(
+          new PDisjunction(new PGround(new GroundInt("1")), new PGround(new GroundInt("2"))),
+          new PNil()
+        )
+      )
+      val mat = new PMatch(new PVarRef(new VarRefKindProc(), "x"), listCase)
+
+      val boundedInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+      val input         = linearInput(new NameQuote(mat), new PNil())
+      val result        = ProcNormalizeMatcher.normalizeMatch[Coeval](input, boundedInputs).value
+
+      result.par should be(
+        Par(
+          receives = Seq(
+            Receive(
+              binds = Seq(
+                ReceiveBind(
+                  patterns = Seq(
+                    Par(
+                      matches = Seq(
+                        Match(
+                          target = Par(
+                            connectives = Seq(Connective(VarRefBody(VarRef(0, 1)))),
+                            locallyFree = AlwaysEqual(BitSet(0))
+                          ),
+                          cases = Seq(
+                            MatchCase(
+                              Par(
+                                connectives = Seq(
+                                  Connective(ConnOrBody(ConnectiveBody(Seq(GInt(1), GInt(2)))))
+                                ),
+                                connectiveUsed = true
+                              ),
+                              Par()
+                            )
+                          ),
+                          connectiveUsed = false,
+                          locallyFree = AlwaysEqual(BitSet(0))
+                        )
+                      ),
+                      locallyFree = AlwaysEqual(BitSet(0))
+                    )
+                  ),
+                  source = Par()
+                )
+              ),
+              body = Par(),
+              locallyFree = AlwaysEqual(BitSet(0))
+            )
+          ),
+          locallyFree = BitSet(0)
+        )
+      )
+    }
+    checkPasses(
+      new PDisjunction(new PGround(new GroundInt("1")), new PGround(new GroundInt("2"))),
+      Connective(ConnOrBody(ConnectiveBody(Seq(GInt(1), GInt(2)))))
+    )
+    checkPasses(new PNegation(new PNil()), Connective(ConnNotBody(Par())))
   }
 
   "PNew" should "Bind new variables" in {
@@ -1439,4 +1629,5 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     result.chan should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
+
 }
