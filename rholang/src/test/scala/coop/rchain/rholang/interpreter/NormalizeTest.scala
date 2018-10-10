@@ -1462,11 +1462,15 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     check("logical AND", "send channel", "{@{Nil /\\ Nil}!(Nil)}")
     check("logical OR", "send channel", "{@{Nil \\/ Nil}!(Nil)}")
     check("logical NOT", "send channel", "{@{~Nil}!(Nil)}")
-    check("wildcard", "receive pattern", "{for (_ <- x) { 1 }} ")
+    check("wildcard", "receive pattern of the consume", "{for (_ <- x) { 1 }} ")
     check("wildcard", "body of the continuation", "{for (@1 <- x) { _ }} ")
     check("logical OR", "body of the continuation", "{for (@1 <- x) { 10 \\/ 20 }} ")
     check("logical AND", "body of the continuation", "{for(@1 <- x) { 10 /\\ 20 }} ")
     check("logical NOT", "body of the continuation", "{for(@1 <- x) { ~10 }} ")
+    check("logical OR", "channel of the consume", "{for (@1 <- @{Nil /\\ Nil}) { Nil }} ")
+    check("logical AND", "channel of the consume", "{for(@1 <- @{Nil \\/ Nil}) { Nil }} ")
+    check("logical NOT", "channel of the consume", "{for(@1 <- @{~Nil}) { Nil }} ")
+    check("wildcard", "channel of the consume", "{for(@1 <- _) { Nil }} ")
   }
 }
 
