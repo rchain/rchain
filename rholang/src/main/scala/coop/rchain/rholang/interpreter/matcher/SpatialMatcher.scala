@@ -403,7 +403,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
       remainderTargets: Seq[T],
       level: Int,
       merger: (Par, Seq[T]) => Par
-  )(implicit lf: HasLocallyFree[T]): OptionalFreeMapWithCost[Unit] =
+  ): OptionalFreeMapWithCost[Unit] =
     for {
       remainderPar <- StateT.inspect[OptionWithCost, FreeMap, Par](
                        (m: FreeMap) => m.getOrElse(level, VectorPar())

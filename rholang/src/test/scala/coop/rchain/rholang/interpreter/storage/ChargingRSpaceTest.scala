@@ -32,12 +32,12 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   behavior of "ChargingRSpace"
 
   it should "charge for storing data in tuplespace" in { fixture =>
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channels                                         = channelsN(1)
-    val patterns                                         = patternsN(1)
-    val cont                                             = continuation()
-    val storageCost                                      = ChargingRSpace.storageCostConsume(channels, patterns, cont)
-    val minimumPhlos                                     = storageCost
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channels                             = channelsN(1)
+    val patterns                             = patternsN(1)
+    val cont                                 = continuation()
+    val storageCost                          = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+    val minimumPhlos                         = storageCost
 
     val test = for {
       _         <- costAlg.set(CostAccount(0, minimumPhlos))
@@ -52,14 +52,14 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   }
 
   it should "refund if data doesn't stay in tuplespace" in { fixture =>
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channels                                         = channelsN(1)
-    val patterns                                         = patternsN(1)
-    val cont                                             = continuation()
-    val consumeStorageCost                               = ChargingRSpace.storageCostConsume(channels, patterns, cont)
-    val data                                             = NilPar
-    val produceStorageCost                               = ChargingRSpace.storageCostProduce(channels.head, data)
-    val minimumPhlos                                     = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channels                             = channelsN(1)
+    val patterns                             = patternsN(1)
+    val cont                                 = continuation()
+    val consumeStorageCost                   = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+    val data                                 = NilPar
+    val produceStorageCost                   = ChargingRSpace.storageCostProduce(channels.head, data)
+    val minimumPhlos                         = produceStorageCost + consumeStorageCost + RSPACE_MATCH_COST
 
     val test = for {
       _                 <- costAlg.set(CostAccount(0, minimumPhlos))
@@ -75,10 +75,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   }
 
   it should "fail with OutOfPhloError when deploy runs out of it" in { fixture =>
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channel                                          = channelsN(1).head
-    val data                                             = NilPar
-    val produceStorageCost                               = ChargingRSpace.storageCostProduce(channel, data)
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channel                              = channelsN(1).head
+    val data                                 = NilPar
+    val produceStorageCost                   = ChargingRSpace.storageCostProduce(channel, data)
 
     val test = for {
       _ <- costAlg.set(CostAccount(0, produceStorageCost - Cost(1)))
@@ -101,15 +101,15 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // @y!(data)
     // last deployment should be refunded with the cost of storing two previous deployments
     fixture =>
-      val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-      val channels                                         = channelsN(2)
-      val patterns                                         = patternsN(2)
-      val cont                                             = continuation()
-      val data                                             = NilPar
-      val firstProdCost                                    = ChargingRSpace.storageCostProduce(channels(0), data)
-      val secondProdCost                                   = ChargingRSpace.storageCostProduce(channels(1), data)
-      val joinCost                                         = ChargingRSpace.storageCostConsume(channels, patterns, cont)
-      val minimumPhlos                                     = firstProdCost + secondProdCost + joinCost + (RSPACE_MATCH_COST * 2)
+      val TestFixture(chargingRSpace, costAlg) = fixture
+      val channels                             = channelsN(2)
+      val patterns                             = patternsN(2)
+      val cont                                 = continuation()
+      val data                                 = NilPar
+      val firstProdCost                        = ChargingRSpace.storageCostProduce(channels(0), data)
+      val secondProdCost                       = ChargingRSpace.storageCostProduce(channels(1), data)
+      val joinCost                             = ChargingRSpace.storageCostConsume(channels, patterns, cont)
+      val minimumPhlos                         = firstProdCost + secondProdCost + joinCost + (RSPACE_MATCH_COST * 2)
 
       val test = for {
         _                   <- costAlg.set(CostAccount(0, minimumPhlos))
@@ -132,10 +132,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   it should "not charge for storage if linear terms create a COMM" in { fixture =>
     // for(x <- @x) | @x!(10)
     // we should not charge for storing any of the terms
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channels                                         = channelsN(1)
-    val patterns                                         = patternsN(1)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channels                             = channelsN(1)
+    val patterns                             = patternsN(1)
+    val cont                                 = continuation()
 
     val data = ListParWithRandom().withPars(Vector(GInt(1)))
     val consumeStorageCost = storageCostConsume(
@@ -161,13 +161,12 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   it should "charge for storing persistent produce that create a COMM" in { fixture =>
     // for(x <- @x) { P } | @x!!(100)
     // we should charge for storing non-linear produce
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channels                                         = channelsN(1)
-    val pattern                                          = BindPattern(Vector(EVar(FreeVar(0))))
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channels                             = channelsN(1)
+    val pattern                              = BindPattern(Vector(EVar(FreeVar(0))))
+    val cont                                 = continuation()
 
     val data        = ListParWithRandom().withPars(Vector(GInt(1)))
-    val consumeCost = storageCostConsume(channels, List(pattern), cont)
     val produceCost = storageCostProduce(channels.head, data)
 
     val initPhlos = Cost(1000)
@@ -186,10 +185,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   it should "charge for storing persistent consume that create a COMM" in { fixture =>
     // for(x <= @x) { P } | @x!(100)
     // we should charge for storing non-linear continuation
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val channels                                         = channelsN(1)
-    val pattern                                          = patternsN(1)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val channels                             = channelsN(1)
+    val pattern                              = patternsN(1)
+    val cont                                 = continuation()
 
     val data        = ListParWithRandom().withPars(Vector(GInt(1)))
     val consumeCost = storageCostConsume(channels, pattern, cont)
@@ -214,10 +213,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // for(x <- @"x"; y <- @"y") { … }
     // In this case we shouldn't charge for storing consume and refund for removing produce on @"y"
 
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val List(x, y)                                       = channelsN(2)
-    val patterns                                         = patternsN(2)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val List(x, y)                           = channelsN(2)
+    val patterns                             = patternsN(2)
+    val cont                                 = continuation()
 
     val dataX = ListParWithRandom().withPars(Vector(GInt(1)))
     val dataY = ListParWithRandom().withPars(Vector(GInt(10)))
@@ -245,10 +244,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // second deploy:
     // @x!(100)
     // we should refund for removing continuation from tuplespace
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val List(x)                                          = channelsN(1)
-    val patterns                                         = patternsN(1)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val List(x)                              = channelsN(1)
+    val patterns                             = patternsN(1)
+    val cont                                 = continuation()
 
     val data = ListParWithRandom().withPars(Vector(GInt(1)))
 
@@ -274,10 +273,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // second deploy:
     // for(x <- @x) { P }
     // we should refund for removing @x!(100) from tuplespace
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val List(x)                                          = channelsN(1)
-    val patterns                                         = patternsN(1)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val List(x)                              = channelsN(1)
+    val patterns                             = patternsN(1)
+    val cont                                 = continuation()
 
     val data = ListParWithRandom().withPars(Vector(GInt(1)))
 
@@ -303,10 +302,10 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // second deploy:
     // @z!(1)
     // since second deploy triggers continuation we should refund with the cost of storing first deploy
-    val TestFixture(chargingRSpace, costAlg, pureRSpace) = fixture
-    val List(x, y, z)                                    = channelsN(3)
-    val patterns                                         = patternsN(3)
-    val cont                                             = continuation()
+    val TestFixture(chargingRSpace, costAlg) = fixture
+    val List(x, y, z)                        = channelsN(3)
+    val patterns                             = patternsN(3)
+    val cont                                 = continuation()
 
     val dataX = ListParWithRandom().withPars(Vector(GInt(1)))
     val dataY = ListParWithRandom().withPars(Vector(GInt(10)))
@@ -332,7 +331,6 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     test.runSyncUnsafe(5.seconds)
   }
 
-  type ChargingRSpace        = RhoPureSpace[Task]
   override type FixtureParam = TestFixture
 
   override protected def withFixture(test: OneArgTest): Outcome = {
@@ -341,20 +339,17 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     implicit val s          = implicitly[Sync[Task]]
     val chargingRSpace      = ChargingRSpace.pureRSpace(s, costAlg, pureRSpace)
     try {
-      test(TestFixture(chargingRSpace, costAlg, pureRSpace))
+      test(TestFixture(chargingRSpace, costAlg))
     } finally {
       pureRSpace.close()
     }
   }
-
-  final case class TestFixture(
-      chargingRSpace: ChargingRSpace,
-      costAlg: CostAccounting[Task],
-      pureRSpace: RhoISpace
-  )
 }
 
 object ChargingRSpaceTest {
+  type ChargingRSpace = RhoPureSpace[Task]
+  final case class TestFixture(chargingRSpace: ChargingRSpace, costAlg: CostAccounting[Task])
+
   val RSPACE_MATCH_PCOST     = 100L
   val RSPACE_MATCH_COST      = Cost(RSPACE_MATCH_PCOST)
   val NilPar                 = ListParWithRandom().withPars(Seq(Par()))

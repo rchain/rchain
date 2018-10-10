@@ -62,7 +62,7 @@ trait RegistryTester extends PersistentStoreTester {
       case TestFixture(space, _) =>
         val _                                  = errorLog.readAndClearErrorVector()
         lazy val dispatchTable: RhoDispatchMap = dispatchTableCreator(registry)
-        lazy val (dispatcher, reducer, registry) =
+        lazy val (dispatcher @ _, reducer, registry) =
           RholangAndScalaDispatcher
             .create(space, dispatchTable, Registry.testingUrnMap)
         reducer.setAvailablePhlos(Cost(Integer.MAX_VALUE)).runSyncUnsafe(1.second)
@@ -533,9 +533,6 @@ class RegistrySpec extends FlatSpec with Matchers with RegistryTester {
       } yield space.store.toMap
       Await.result(resultTask.runAsync, 3.seconds)
     }
-
-    def resultChanList(s: String) =
-      List[Par](GString(s))
 
     val expectedBundle: Par =
       Bundle(GPrivate(ByteString.copyFrom(registeredName)), writeFlag = true, readFlag = false)
