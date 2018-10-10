@@ -26,12 +26,12 @@ def run(config, network):
         exit_code, output = node.exec_run(f"sed -i -e 's/@placeholder@/{expected_string}/g' {node.remote_deploy_dir}/{contract_name}")
         logging.debug(f"Sed result: {exit_code}, output: {output}")
 
-        exit_code, output = node.deploy(contract_name)
+        exit_code, output = node.deploy_contract(contract_name)
         logging.debug(f"Deploy result: {exit_code}, output: {output}")
 
         logging.info("Propose to blockchain previously deployed smart contracts.")
 
-        exit_code, output = node.propose()
+        exit_code, output = node.propose_contract()
         logging.debug(f"Propose result: {exit_code}, output: {output}")
 
     def check_blocks(i, node, expected_string):

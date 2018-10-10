@@ -66,11 +66,11 @@ class Node:
 
         self.container.remove(force=True, v=True)
 
-    def deploy(self, contract):
+    def deploy_contract(self, contract):
         cmd = f'{rnode_binary} deploy --from "0x1" --phlo-limit 0 --phlo-price 0 --nonce 0 {rnode_deploy_dir}/{contract}'
         return self.exec_run(cmd)
 
-    def propose(self):
+    def propose_contract(self):
         return self.exec_run(f'{rnode_binary} propose')
 
     def show_blocks(self):
@@ -106,8 +106,17 @@ class Node:
             raise NonZeroExitCode(command=cmd, exit_code=exit_code, output=output)
         return output
 
-    def eval(self, file_path):
-        return self.shell_out(rnode_binary, 'eval', file_path)
+    def call_rnode(self, *node_args):
+        return self.shell_out(rnode_binary, *node_args)
+
+    def eval(self, rho_file_path):
+        return self.call_rnode('eval', rho_file_path)
+
+    def deploy(self, rho_file_path):
+        return self.call_rnode('deploy', '--from=0x1', '--phlo-limit=0', '--phlo-price=0', '--nonce=0', rho_file_path)
+
+    def propose(self):
+        return self.call_rnode('propose')
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
     __log_message_rx = re.compile(f"^{__timestamp_rx} (.*?)(?={__timestamp_rx})", re.MULTILINE | re.DOTALL)
