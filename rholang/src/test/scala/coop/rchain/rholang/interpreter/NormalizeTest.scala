@@ -669,55 +669,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  def linearInput(name: Name, channel: Proc): PInput = {
-    val listBindings1 = new ListName()
-    listBindings1.add(name)
-    val listLinearBind1 = new ListLinearBind()
-    listLinearBind1.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty, new NameQuote(channel))
-    )
-    val linearSimple = new LinearSimple(listLinearBind1)
-    val receipt      = new ReceiptLinear(linearSimple)
-    val body         = new PNil()
-    new PInput(receipt, body)
-  }
-
-  "PInput" should "allow for patterns containing logical connectives in the receive bind" in {
-    def check(input: PInput, conn: Connective): Assertion =
-      assert(
-        ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par === Par(
-          receives = Seq(
-            Receive(
-              binds = Seq(
-                ReceiveBind(
-                  patterns = Seq(
-                    Par(connectives = Seq(conn), connectiveUsed = true)
-                  ),
-                  source = Par()
-                )
-              ),
-              body = Par(),
-              connectiveUsed = false
-            )
-          ),
-          connectiveUsed = false
-        )
-      )
-
-    check(
-      linearInput(new NameQuote(new PConjunction(new PNil(), new PNil())), new PNil()),
-      Connective(ConnAndBody(ConnectiveBody(Seq(Par(), Par()))))
-    )
-    check(
-      linearInput(new NameQuote(new PDisjunction(new PNil(), new PNil())), new PNil()),
-      Connective(ConnOrBody(ConnectiveBody(Seq(Par(), Par()))))
-    )
-    check(
-      linearInput(new NameQuote(new PNegation(new PNil())), new PNil()),
-      Connective(ConnNotBody(Par()))
-    )
-  }
-
   "PInput" should "bind whole list to the list remainder" in {
     // for (@[...a] <- @0) { … }
     val listBindings = new ListName()
